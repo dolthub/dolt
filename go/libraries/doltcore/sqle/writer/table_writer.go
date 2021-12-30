@@ -65,7 +65,8 @@ type sqlTableWriter struct {
 	aiTracker         globalstate.AutoIncrementTracker
 	batched           bool
 
-	deps []writeDependency
+	upstream   []writeDependency
+	downstream []writeDependency
 
 	setter SessionRootSetter
 }
@@ -82,6 +83,20 @@ func (te *sqlTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v 
 }
 
 func (te *sqlTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	for _, dep := range te.upstream {
+		if err := dep.Insert(ctx, sqlRow); err != nil {
+			return err
+		}
+	}
+	return te.insert(ctx, sqlRow)
+}
+
+func (te *sqlTableWriter) insert(ctx *sql.Context, sqlRow sql.Row) error {
+	for _, dep := range te.downstream {
+		if err := dep.Insert(ctx, sqlRow); err != nil {
+			return err
+		}
+	}
 	if !schema.IsKeyless(te.sch) {
 		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 		if err != nil {
@@ -111,6 +126,20 @@ func (te *sqlTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+	for _, dep := range te.upstream {
+		if err := dep.Delete(ctx, sqlRow); err != nil {
+			return err
+		}
+	}
+	return te.delete(ctx, sqlRow)
+}
+
+func (te *sqlTableWriter) delete(ctx *sql.Context, sqlRow sql.Row) error {
+	for _, dep := range te.downstream {
+		if err := dep.Delete(ctx, sqlRow); err != nil {
+			return err
+		}
+	}
 	if !schema.IsKeyless(te.sch) {
 		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
 		if err != nil {
@@ -142,6 +171,20 @@ func (te *sqlTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (te *sqlTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	for _, dep := range te.upstream {
+		if err := dep.Update(ctx, oldRow, newRow); err != nil {
+			return err
+		}
+	}
+	return te.update(ctx, oldRow, newRow)
+}
+
+func (te *sqlTableWriter) update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	for _, dep := range te.downstream {
+		if err := dep.Update(ctx, oldRow, newRow); err != nil {
+			return err
+		}
+	}
 	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, oldRow, te.sch)
 	if err != nil {
 		return err
@@ -196,16 +239,32 @@ func (te *sqlTableWriter) Close(ctx *sql.Context) error {
 
 // StatementBegin implements the interface sql.TableEditor.
 func (te *sqlTableWriter) StatementBegin(ctx *sql.Context) {
+	for _, dep := range te.upstream {
+		dep.StatementBegin(ctx)
+	}
+
 	te.tableEditor.StatementStarted(ctx)
 }
 
 // DiscardChanges implements the interface sql.TableEditor.
 func (te *sqlTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	for _, dep := range te.upstream {
+		if err := dep.DiscardChanges(ctx, errorEncountered); err != nil {
+			return err
+		}
+	}
+
 	return te.tableEditor.StatementFinished(ctx, true)
 }
 
 // StatementComplete implements the interface sql.TableEditor.
 func (te *sqlTableWriter) StatementComplete(ctx *sql.Context) error {
+	for _, dep := range te.upstream {
+		if err := dep.StatementComplete(ctx); err != nil {
+			return err
+		}
+	}
+
 	return te.tableEditor.StatementFinished(ctx, false)
 }
 

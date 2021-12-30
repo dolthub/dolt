@@ -53,19 +53,7 @@ func (ws *writeSession) GetTableWriter(ctx context.Context, table string, databa
 	ws.mut.Lock()
 	defer ws.mut.Unlock()
 
-	writer, ok := ws.writers[table]
-	if ok {
-		return writer, nil
-	}
-
-	var err error
-	writer, err = ws.getTableWriter(ctx, table, database, ait, setter, batched)
-	if err != nil {
-		return nil, err
-	}
-	ws.writers[table] = writer
-
-	return writer, nil
+	return ws.getTableWriter(ctx, table, database, ait, setter, batched)
 }
 
 // Flush returns an updated root with all the changed writers.
@@ -114,6 +102,10 @@ func (ws *writeSession) flush(ctx context.Context) (*doltdb.RootValue, error) {
 		// make local copies
 		tableName, writer := n, ws.writers[n]
 
+		if writer == nil {
+			panic("nil writer")
+		}
+
 		eg.Go(func() error {
 			t, err := writer.table(ctx)
 			if err != nil {
@@ -143,6 +135,11 @@ func (ws *writeSession) flush(ctx context.Context) (*doltdb.RootValue, error) {
 
 // getTableWriter is the inner implementation for GetTableEditor, allowing recursive calls
 func (ws *writeSession) getTableWriter(ctx context.Context, table, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (*sqlTableWriter, error) {
+	wr, ok := ws.writers[table]
+	if ok {
+		return wr, nil
+	}
+
 	tbl, ok, err := ws.root.GetTable(ctx, table)
 	if err != nil {
 		return nil, err
@@ -164,7 +161,7 @@ func (ws *writeSession) getTableWriter(ctx context.Context, table, database stri
 	conv := index.NewKVToSqlRowConverterForCols(tbl.Format(), sch)
 	autoCol := autoIncrementColFromSchema(sch)
 
-	writer := &sqlTableWriter{
+	wr = &sqlTableWriter{
 		tableName:   table,
 		dbName:      database,
 		sch:         sch,
@@ -179,40 +176,73 @@ func (ws *writeSession) getTableWriter(ctx context.Context, table, database stri
 	}
 
 	if ws.opts.ForeignKeyChecksDisabled {
-		return writer, nil
+		return wr, nil
 	}
 
-	writer.deps, err = ws.foreignKeysForWriter(ctx, table)
+	// todo(andy): cycle detection?
+	wr.upstream, wr.downstream, err = ws.foreignKeysForWriter(ctx, wr)
 	if err != nil {
 		return nil, err
 	}
 
-	return writer, nil
+	ws.writers[table] = wr
+
+	return wr, nil
 }
 
-func (ws *writeSession) foreignKeysForWriter(ctx context.Context, tableName string) ([]writeDependency, error) {
-	//// these are the writers that reference us, so we need to update them
-	//for _, foreignKey := range localTableEditor.referencingTables {
-	//	if !foreignKey.IsResolved() {
-	//		continue
-	//	}
-	//	_, err := ws.getTableWriter(ctx, foreignKey.TableName, nil)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-	//// these are the writers that we reference, so we need to refer to them
-	//for _, foreignKey := range localTableEditor.referencedTables {
-	//	if !foreignKey.IsResolved() {
-	//		continue
-	//	}
-	//	_, err := ws.getTableWriter(ctx, foreignKey.ReferencedTableName, nil)
-	//	if err != nil {
-	//		return err
-	//	}
-	//}
-	//return nil
-	return nil, nil
+func (ws *writeSession) foreignKeysForWriter(ctx context.Context, wr *sqlTableWriter) (upstream, downstream []writeDependency, err error) {
+	fkc, err := ws.root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// childFKs are declared on table |tableName| and reference other tables
+	// parentFKs are declared on other tables and reference |tableName|
+	childFKs, parentFKs := fkc.KeysForTable(wr.tableName)
+	upstream = make([]writeDependency, 0, len(childFKs))
+	downstream = make([]writeDependency, 0, len(parentFKs))
+
+	for _, fk := range childFKs {
+		if !fk.IsResolved() {
+			continue
+		}
+		if fk.IsSelfReferential() {
+			// todo(andy)
+			panic("self-referential fk")
+		}
+
+		c, err := makeFkChildConstraint(ctx, wr.dbName, ws.root, fk)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		upstream = append(upstream, c)
+	}
+
+	for _, fk := range parentFKs {
+		if !fk.IsResolved() {
+			continue
+		}
+		if fk.IsSelfReferential() {
+			// todo(andy)
+			panic("self-referential fk")
+		}
+
+		childName := fk.TableName
+		childWriter, err := ws.getTableWriter(ctx, childName, wr.dbName, wr.aiTracker, wr.setter, wr.batched)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		p, err := makeFkParentConstraint(ctx, wr.dbName, ws.root, fk, childWriter)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		downstream = append(downstream, p)
+	}
+
+	return upstream, downstream, nil
 }
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
@@ -252,7 +282,7 @@ func (ws *writeSession) setRoot(ctx context.Context, root *doltdb.RootValue) err
 		}
 		writer.tableEditor = te
 
-		writer.deps, err = ws.foreignKeysForWriter(ctx, name)
+		writer.upstream, writer.downstream, err = ws.foreignKeysForWriter(ctx, writer)
 		if err != nil {
 			return err
 		}

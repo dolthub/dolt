@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -164,9 +165,12 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			require.NoError(t, err)
 
 			root := testRoot
+			//fmt.Println(debugPrintIndexes(root))
 			for _, sqlStatement := range strings.Split(test.sqlStatement, ";") {
 				var err error
+				//fmt.Println(sqlStatement)
 				root, err = executeModify(t, context.Background(), dEnv, root, sqlStatement)
+				//fmt.Println(debugPrintIndexes(root))
 				require.NoError(t, err)
 			}
 
@@ -899,4 +903,73 @@ ALTER TABLE three ADD FOREIGN KEY (v1, v2) REFERENCES two(v1, v2) ON DELETE CASC
 			assertTableEditorRows(t, root, test.expectedThree, "three")
 		})
 	}
+}
+
+func debugPrintIndexes(r *doltdb.RootValue) string {
+	if r == nil {
+		return ""
+	}
+
+	ctx := context.Background()
+	sb := strings.Builder{}
+
+	_ = r.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		sb.WriteString("table: ")
+		sb.WriteString(name)
+		sb.WriteRune('\n')
+
+		pk, _ := table.GetRowData(ctx)
+		if pk.Len() > 0 {
+			sb.WriteRune('\t')
+			sb.WriteString(fmt.Sprintf("primary (%d): ", pk.Len()))
+			sb.WriteString(printIndexRowsInline(ctx, pk))
+			sb.WriteRune('\n')
+		}
+
+		id, _ := table.GetIndexData(ctx)
+		_ = id.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+			i, _ := value.(types.Ref).TargetValue(ctx, table.ValueReadWriter())
+			idxName := string(key.(types.String))
+			idx := i.(types.Map)
+
+			if idx.Len() > 0 {
+				sb.WriteRune('\t')
+				sb.WriteString(fmt.Sprintf("%s (%d): ", idxName, idx.Len()))
+				sb.WriteString(printIndexRowsInline(ctx, idx))
+				sb.WriteRune('\n')
+			}
+
+			return false, nil
+		})
+
+		return false, nil
+	})
+
+	return sb.String()
+}
+
+func printIndexRowsInline(ctx context.Context, m types.Map) string {
+	sb := strings.Builder{}
+	_ = m.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
+		sb.WriteString("( ")
+		_ = key.WalkValues(ctx, func(v types.Value) error {
+			if _, ok := v.(types.Uint); ok {
+				return nil // skip tags
+			}
+			sb.WriteString(v.HumanReadableString())
+			sb.WriteString(" ")
+			return nil
+		})
+		_ = value.WalkValues(ctx, func(v types.Value) error {
+			if _, ok := v.(types.Uint); ok {
+				return nil // skip tags
+			}
+			sb.WriteString(v.HumanReadableString())
+			sb.WriteString(" ")
+			return nil
+		})
+		sb.WriteString(")")
+		return
+	})
+	return sb.String()
 }

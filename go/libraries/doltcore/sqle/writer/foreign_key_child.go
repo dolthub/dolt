@@ -94,7 +94,7 @@ func makeFkChildConstraint(ctx context.Context, db string, root *doltdb.RootValu
 	}, nil
 }
 
-func (c foreignKeyChild) ValidateInsert(ctx *sql.Context, row sql.Row) error {
+func (c foreignKeyChild) Insert(ctx *sql.Context, row sql.Row) error {
 	if containsNulls(c.childMap, row) {
 		return nil
 	}
@@ -119,11 +119,8 @@ func (c foreignKeyChild) ValidateInsert(ctx *sql.Context, row sql.Row) error {
 
 	return nil
 }
-func (c foreignKeyChild) Insert(ctx *sql.Context, row sql.Row) error {
-	return nil
-}
 
-func (c foreignKeyChild) ValidateUpdate(ctx *sql.Context, old, new sql.Row) error {
+func (c foreignKeyChild) Update(ctx *sql.Context, old, new sql.Row) error {
 	ok, err := c.childColumnsUnchanged(old, new)
 	if err != nil {
 		return err
@@ -133,10 +130,6 @@ func (c foreignKeyChild) ValidateUpdate(ctx *sql.Context, old, new sql.Row) erro
 	}
 
 	return c.Insert(ctx, new)
-}
-
-func (c foreignKeyChild) Update(ctx *sql.Context, old, new sql.Row) error {
-	return nil
 }
 
 func (c foreignKeyChild) ValidateDelete(ctx *sql.Context, row sql.Row) error {
