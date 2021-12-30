@@ -4,6 +4,8 @@ namespace serial;
 
 struct Timestamp {
   time:uint64;
+
+  // todo(andy): include nano extension?
 }
 
 table Ref {

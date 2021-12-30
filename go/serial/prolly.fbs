@@ -4,6 +4,25 @@ include "common.fbs";
 
 namespace serial;
 
+table Map {
+  // map keys ordered lexigraphically
+  keys:TupleArray (required);
+
+  // map values ordered by corresponding key
+  // only present in leaf nodes
+  values:TupleArray;
+
+  // pointers to prolly tree children
+  // only present in internal nodes
+  child_refs:RefArray;
+
+  // pointers to ref'd values (eg TEXT)
+  // only present in leaf nodes
+  heap_refs:RefArray;
+
+  footer:ProllyFooter (required);
+}
+
 enum TupleType : uint8 {
   Unknown,
   V1 = 1,
@@ -15,46 +34,26 @@ table TupleArray {
   format:TupleType;
 }
 
+table RefMap {
+  // map keys ordered lexigraphically
+  keys:NameArray (required);
+
+  // map values ordered by corresponding key
+  // only present in leaf nodes
+  value_refs:RefArray;
+
+  // pointers to prolly tree children
+  // only present in internal nodes
+  child_refs:RefArray;
+
+  footer:ProllyFooter (required);
+}
+
 table NameArray {
     names:[string] (required);
 }
 
-union KeyArray {
-  TupleArray,
-  NameArray
-}
-
-enum NodeType : uint8 {
-  Unknown,
-  Map = 1,
-  RefMap = 2,
-  Set = 3
-
-  // todo(andy): commit parent closure?
-}
-
-table ProllyNode {
-  // keys
-  //  - TupleArray for Map nodes
-  //  - TupleArray for Set nodes
-  //  - NameArray for RefMap nodes
-  keys:KeyArray (required);
-
-  // values
-  //  - TupleArray for Map leaf nodes
-  //  - absent for Map interal nodes
-  //  - absent for RefMap, Set nodes
-  values:TupleArray;
-
-  // refs
-  //  - subtree Refs for all internal nodes
-  //  - heap Refs for Map leaf nodes containing
-  //    TEXT or BLOB values
-  refs:RefArray;
-
-  // node type
-  node_type:NodeType;
-
+struct ProllyFooter {
   // node key count
   node_count:uint16;
 

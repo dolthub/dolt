@@ -35,12 +35,12 @@ func (rcv *StoreRoot) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *StoreRoot) Branches(obj *ProllyNode) *ProllyNode {
+func (rcv *StoreRoot) Refs(obj *RefMap) *RefMap {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(ProllyNode)
+			obj = new(RefMap)
 		}
 		obj.Init(rcv._tab.Bytes, x)
 		return obj
@@ -51,8 +51,8 @@ func (rcv *StoreRoot) Branches(obj *ProllyNode) *ProllyNode {
 func StoreRootStart(builder *flatbuffers.Builder) {
 	builder.StartObject(1)
 }
-func StoreRootAddBranches(builder *flatbuffers.Builder, branches flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(branches), 0)
+func StoreRootAddRefs(builder *flatbuffers.Builder, refs flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(refs), 0)
 }
 func StoreRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -84,12 +84,12 @@ func (rcv *DatabaseRoot) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *DatabaseRoot) Tables(obj *ProllyNode) *ProllyNode {
+func (rcv *DatabaseRoot) Tables(obj *RefMap) *RefMap {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
-			obj = new(ProllyNode)
+			obj = new(RefMap)
 		}
 		obj.Init(rcv._tab.Bytes, x)
 		return obj
@@ -159,23 +159,67 @@ func (rcv *Table) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Table) Filler() bool {
+func (rcv *Table) Name() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
-	return false
+	return nil
 }
 
-func (rcv *Table) MutateFiller(n bool) bool {
-	return rcv._tab.MutateBoolSlot(4, n)
+func (rcv *Table) Schema(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *Table) PrimaryIndex(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *Table) SecondaryIndexes(obj *RefMap) *RefMap {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefMap)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
 }
 
 func TableStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(4)
 }
-func TableAddFiller(builder *flatbuffers.Builder, filler bool) {
-	builder.PrependBoolSlot(0, filler, false)
+func TableAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+}
+func TableAddSchema(builder *flatbuffers.Builder, schema flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(schema), 0)
+}
+func TableAddPrimaryIndex(builder *flatbuffers.Builder, primaryIndex flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(primaryIndex), 0)
+}
+func TableAddSecondaryIndexes(builder *flatbuffers.Builder, secondaryIndexes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(secondaryIndexes), 0)
 }
 func TableEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

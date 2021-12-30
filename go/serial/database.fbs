@@ -8,16 +8,19 @@ include "schema.fbs";
 namespace serial;
 
 table StoreRoot {
-    branches:ProllyNode (required);
+  refs:RefMap (required);
 }
 
 table DatabaseRoot {
-  tables:ProllyNode (required);
+  tables:RefMap (required);
   foreign_keys:[ForeignKey] (required);
 }
 
 table Table {
-  filler:bool;
+  name:string (required);
+  schema:Ref (required);
+  primary_index:Ref (required);
+  secondary_indexes:RefMap (required);
 }
 
 table Commit {
