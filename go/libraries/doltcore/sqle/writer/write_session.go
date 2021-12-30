@@ -178,14 +178,13 @@ func (ws *writeSession) getTableWriter(ctx context.Context, table, database stri
 	if ws.opts.ForeignKeyChecksDisabled {
 		return wr, nil
 	}
+	ws.writers[table] = wr
 
 	// todo(andy): cycle detection?
 	wr.upstream, wr.downstream, err = ws.foreignKeysForWriter(ctx, wr)
 	if err != nil {
 		return nil, err
 	}
-
-	ws.writers[table] = wr
 
 	return wr, nil
 }
@@ -211,7 +210,13 @@ func (ws *writeSession) foreignKeysForWriter(ctx context.Context, wr *sqlTableWr
 			panic("self-referential fk")
 		}
 
-		c, err := makeFkChildConstraint(ctx, wr.dbName, ws.root, fk)
+		parentName := fk.ReferencedTableName
+		parentWriter, err := ws.getTableWriter(ctx, parentName, wr.dbName, wr.aiTracker, wr.setter, wr.batched)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		c, err := makeFkChildConstraint(ctx, wr.dbName, ws.root, fk, parentWriter)
 		if err != nil {
 			return nil, nil, err
 		}

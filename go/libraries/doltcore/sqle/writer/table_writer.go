@@ -73,15 +73,6 @@ type sqlTableWriter struct {
 
 var _ TableWriter = &sqlTableWriter{}
 
-func (te *sqlTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
-	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
-	if err != nil {
-		return err
-	}
-
-	return sql.NewUniqueKeyErr(keyString, isPk, oldRow)
-}
-
 func (te *sqlTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	for _, dep := range te.upstream {
 		if err := dep.Insert(ctx, sqlRow); err != nil {
@@ -204,6 +195,17 @@ func (te *sqlTableWriter) update(ctx *sql.Context, oldRow sql.Row, newRow sql.Ro
 	return err
 }
 
+func (te *sqlTableWriter) Contains(ctx *sql.Context, lookup sql.IndexLookup) (bool, error) {
+	idx := index.DoltIndexFromLookup(lookup)
+
+	idxKey, err := index.IndexKeyFromPointLookup(lookup)
+	if err != nil {
+		return false, err
+	}
+
+	return editor.ContainsIndexedKey(ctx, te.tableEditor, idxKey, idx.ID(), idx.Schema())
+}
+
 func (te *sqlTableWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
 	return te.aiTracker.Next(te.tableName, potentialVal, tableVal)
 }
@@ -300,6 +302,15 @@ func (te *sqlTableWriter) resolveFks(ctx *sql.Context) error {
 		}
 		return root, nil
 	})
+}
+
+func (te *sqlTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
+	oldRow, err := te.kvToSQLRow.ConvertKVTuplesToSqlRow(k, v)
+	if err != nil {
+		return err
+	}
+
+	return sql.NewUniqueKeyErr(keyString, isPk, oldRow)
 }
 
 func autoIncrementColFromSchema(sch schema.Schema) schema.Column {

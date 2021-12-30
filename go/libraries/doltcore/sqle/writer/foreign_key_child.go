@@ -46,11 +46,13 @@ type foreignKeyChild struct {
 
 	// mapping from child table to parent FK uniqueIndex.
 	childMap columnMapping
+
+	parent *sqlTableWriter
 }
 
 var _ writeDependency = foreignKeyChild{}
 
-func makeFkChildConstraint(ctx context.Context, db string, root *doltdb.RootValue, fk doltdb.ForeignKey) (writeDependency, error) {
+func makeFkChildConstraint(ctx context.Context, db string, root *doltdb.RootValue, fk doltdb.ForeignKey, parent *sqlTableWriter) (writeDependency, error) {
 	parentTbl, ok, err := root.GetTable(ctx, fk.ReferencedTableName)
 	if err != nil {
 		return nil, err
@@ -91,6 +93,7 @@ func makeFkChildConstraint(ctx context.Context, db string, root *doltdb.RootValu
 		parentIndex: parentIndex,
 		expr:        expr,
 		childMap:    childMap,
+		parent:      parent,
 	}, nil
 }
 
@@ -104,16 +107,11 @@ func (c foreignKeyChild) Insert(ctx *sql.Context, row sql.Row) error {
 		return err
 	}
 
-	iter, err := index.RowIterForIndexLookup(ctx, lookup)
+	ok, err := c.parent.Contains(ctx, lookup)
 	if err != nil {
 		return err
 	}
-
-	rows, err := sql.RowIterToRows(ctx, iter)
-	if err != nil {
-		return err
-	}
-	if len(rows) == 0 {
+	if !ok {
 		return c.violationErr(row)
 	}
 

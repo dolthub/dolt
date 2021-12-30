@@ -69,6 +69,32 @@ func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 	return lookup.(*doltIndexLookup).idx
 }
 
+func IndexKeyFromPointLookup(lookup sql.IndexLookup) (key types.Tuple, err error) {
+	if err = validatePointLookup(lookup); err != nil {
+		return key, err
+	}
+	key = lookup.(*doltIndexLookup).ranges[0].Start
+
+	return key, nil
+}
+
+func validatePointLookup(lookup sql.IndexLookup) error {
+	ranges := lookup.Ranges()
+	if len(ranges) != 1 {
+		return fmt.Errorf("expected point lookup")
+	}
+	for _, colExpr := range ranges[0] {
+		ok, err := colExpr.RepresentsEquals()
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("expected point lookup")
+		}
+	}
+	return nil
+}
+
 type doltIndexLookup struct {
 	idx       DoltIndex
 	ranges    []*noms.ReadRange
