@@ -145,6 +145,103 @@ func MapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
 func MapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+type RefMap struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &RefMap{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &RefMap{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *RefMap) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *RefMap) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *RefMap) Keys(obj *NameArray) *NameArray {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(NameArray)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *RefMap) ValueRefs(obj *RefArray) *RefArray {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefArray)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *RefMap) ChildRefs(obj *RefArray) *RefArray {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefArray)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *RefMap) Footer(obj *ProllyFooter) *ProllyFooter {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := o + rcv._tab.Pos
+		if obj == nil {
+			obj = new(ProllyFooter)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func RefMapStart(builder *flatbuffers.Builder) {
+	builder.StartObject(4)
+}
+func RefMapAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keys), 0)
+}
+func RefMapAddValueRefs(builder *flatbuffers.Builder, valueRefs flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(valueRefs), 0)
+}
+func RefMapAddChildRefs(builder *flatbuffers.Builder, childRefs flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(childRefs), 0)
+}
+func RefMapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
+	builder.PrependStructSlot(3, flatbuffers.UOffsetT(footer), 0)
+}
+func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
 type TupleArray struct {
 	_tab flatbuffers.Table
 }
@@ -255,103 +352,6 @@ func TupleArrayAddFormat(builder *flatbuffers.Builder, format TupleType) {
 	builder.PrependByteSlot(2, byte(format), 0)
 }
 func TupleArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-type RefMap struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &RefMap{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsRefMap(buf []byte, offset flatbuffers.UOffsetT) *RefMap {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &RefMap{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *RefMap) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *RefMap) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *RefMap) Keys(obj *NameArray) *NameArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(NameArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) ValueRefs(obj *RefArray) *RefArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) ChildRefs(obj *RefArray) *RefArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) Footer(obj *ProllyFooter) *ProllyFooter {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := o + rcv._tab.Pos
-		if obj == nil {
-			obj = new(ProllyFooter)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func RefMapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
-}
-func RefMapAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keys), 0)
-}
-func RefMapAddValueRefs(builder *flatbuffers.Builder, valueRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(valueRefs), 0)
-}
-func RefMapAddChildRefs(builder *flatbuffers.Builder, childRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(childRefs), 0)
-}
-func RefMapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(3, flatbuffers.UOffsetT(footer), 0)
-}
-func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 type NameArray struct {

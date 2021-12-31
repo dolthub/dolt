@@ -1,34 +1,75 @@
-// serialization format prototype using flatbuffers
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 include "common.fbs";
 
 namespace serial;
 
 table Column {
-  name:string;
+  name:string (required);
+  nullable:bool;
   primary_key:bool;
   auto_increment:bool;
   default:ColumnDefault;
-  constraints:[ColumnConstraint];
-  comment:string;
+  constraints:[ColumnConstraint] (required);
+  comment:string (required);
 }
 
 table ColumnDefault {
-  expression:string;
+  expression:string (required);
 }
 
 table ColumnConstraint {
-  expression:string;
+  name:string (required);
+  expression:string (required);
+  enforced:bool;
 }
 
 table TableSchema {
-  columns:[Column];
+  columns:[Column] (required);
+  indexes:[IndexSchema] (required);
 }
 
 table IndexSchema {
-  filler:bool;
+  name:string (required);
+  columns:[string] (required);
+  unique:bool;
+  system_defined:bool;
+  comment:string (required);
+}
+
+enum ForeignKeyReferenceOption : uint8 {
+  DefaultAction,
+  Cascade,
+  NoAction,
+  Restrict,
+  SetNull,
 }
 
 table ForeignKey {
-  filler:bool;
+  name:string (required);
+
+  child_table:string (required);
+  child_columns:[string] (required);
+  child_index:string (required);
+
+  parent_table:string (required);
+  parent_columns:[string] (required);
+  parent_index:string (required);
+
+  on_update:ForeignKeyReferenceOption;
+  on_delete:ForeignKeyReferenceOption;
+
+  // todo(andy): "resolved details"
 }
