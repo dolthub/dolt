@@ -41,11 +41,11 @@ table Map {
   //   iff table has ref'd types (eg TEXT)
   ref_array:[uint8];
 
-  // node key count
-  node_count:uint16;
-
   // subtree key count
   tree_count:uint64;
+
+  // node key count
+  node_count:uint16;
 
   // node tree level, 0 for leaf nodes
   tree_level:uint8;

@@ -18,11 +18,14 @@ import (
 	"testing"
 
 	fb "github.com/google/flatbuffers/go"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var testKeyTuples = [][]byte{
+var keys = [][]byte{
 	[]byte("zero"),
 	[]byte("one"),
 	[]byte("two"),
@@ -35,7 +38,7 @@ var testKeyTuples = [][]byte{
 	[]byte("nine"),
 }
 
-var testValueTuples = [][]byte{
+var values = [][]byte{
 	[]byte("ten"),
 	[]byte("eleven"),
 	[]byte("twelve"),
@@ -49,64 +52,110 @@ var testValueTuples = [][]byte{
 }
 
 const (
-	KeyTuplesSz = 40
+	KeyTuplesSz   = 40
 	ValueTuplesSz = 70
 
-	TupleArraySz = 100
-	LeafNodeSz = 264
+	LeafNodeSz = 232
+)
+
+var (
+	LeafNodeHash = hash.Hash{
+		0x8c, 0xfa, 0x4f, 0xf8, 0xc2,
+		0x8c, 0xf7, 0x46, 0x72, 0x7e,
+		0x5d, 0xef, 0x15, 0x16, 0xe6,
+		0xec, 0xa7, 0x2d, 0x47, 0xe,
+	}
 )
 
 func TestSerialFormat(t *testing.T) {
 	t.Run("leaf node flatbuffer", func(t *testing.T) {
+		buf := makeLeafNode(t, keys, values)
+		assert.Equal(t, LeafNodeSz, len(buf))
+		assert.Equal(t, LeafNodeHash, hash.Of(buf))
 	})
 	t.Run("test data sanity check", func(t *testing.T) {
-		require.Equal(t, KeyTuplesSz, tupleSize(testKeyTuples))
-		require.Equal(t, ValueTuplesSz, tupleSize(testValueTuples))
+		require.Equal(t, KeyTuplesSz, byteSize(keys))
+		require.Equal(t, ValueTuplesSz, byteSize(values))
 	})
+}
+
+func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
+	b := fb.NewBuilder(LeafNodeSz)
+	start := int(b.Offset())
+	assert.Equal(t, 0, start)
+
+	keySz := byteSize(keys)
+	serial.MapStartKeyTuplesVector(b, keySz)
+	start = int(b.Offset())
+	keyTuples := serializeTuples(t, b, keys)
+	assert.Equal(t, keyTuples, b.Offset())
+	assert.Equal(t, start+keySz+4, int(b.Offset()))
+
+	start = int(b.Offset())
+	serial.MapStartKeyOffsetsVector(b, len(keys))
+	keyOffsets := serializeOffsets(t, b, keys)
+	assert.Equal(t, keyOffsets, b.Offset())
+	assert.Equal(t, start+(2*len(keys))+4, int(b.Offset()))
+
+	valSz := byteSize(values)
+	serial.MapStartKeyTuplesVector(b, valSz)
+	start = int(b.Offset())
+	valTuples := serializeTuples(t, b, values)
+	assert.Equal(t, valTuples, b.Offset())
+	assert.Equal(t, start+valSz+4, int(b.Offset()))
+
+	serial.MapStartKeyOffsetsVector(b, len(values))
+	start = int(b.Offset())
+	valOffsets := serializeOffsets(t, b, values)
+	assert.Equal(t, valOffsets, b.Offset())
+	assert.Equal(t, start+(2*len(values))+4, int(b.Offset()))
+
+	start = int(b.Offset())
+	serial.MapStart(b)
+	assert.Equal(t, start, int(b.Offset()))
+	serial.MapAddKeyTuples(b, keyTuples)
+	assert.Equal(t, start+4, int(b.Offset()))
+	serial.MapAddKeyOffsets(b, keyOffsets)
+	assert.Equal(t, start+8, int(b.Offset()))
+	serial.MapAddValueTuples(b, valTuples)
+	assert.Equal(t, start+12, int(b.Offset()))
+	serial.MapAddValueOffsets(b, valOffsets)
+	assert.Equal(t, start+16, int(b.Offset()))
+	serial.MapAddTreeCount(b, 10)
+	assert.Equal(t, start+24, int(b.Offset()))
+	serial.MapAddNodeCount(b, 10)
+	assert.Equal(t, start+26, int(b.Offset()))
+	serial.MapAddTreeLevel(b, 0)
+	assert.Equal(t, start+26, int(b.Offset()))
+
+	mapEnd := serial.MapEnd(b)
+	assert.Equal(t, start+54, int(b.Offset()))
+	b.Finish(mapEnd)
+	assert.Equal(t, start+64, int(b.Offset()))
+
+	return b.FinishedBytes()
 }
 
 func serializeTuples(t *testing.T, b *fb.Builder, tt [][]byte) fb.UOffsetT {
-	//tupleSz := tupleSize(tt)
-	//start := b.Offset()
-	//serial.TupleArrayStartTuplesVector(b, tupleSz)
-	//for i := len(tt) - 1; i >= 0; i-- {
-	//	for j := len(tt[i]) - 1; j >= 0; j-- {
-	//		b.PrependByte(tt[i][j])
-	//	}
-	//}
-	//tuplesEnd := b.EndVector(tupleSz)
-	//assert.Equal(t, tupleSz + 4, int(tuplesEnd - start))
-	//
-	//offsetSz := len(tt)
-	//start = b.Offset()
-	//serial.TupleArrayStartOffsetsVector(b, len(tt))
-	//for i := len(tt) - 1; i >= 0; i-- {
-	//	b.PrependUint16(uint16(len(tt[i])))
-	//}
-	//offsetsEnd := b.EndVector(offsetSz)
-	//assert.Equal(t, (offsetSz * 2) + 4, int(offsetsEnd - start))
-	//
-	//start = b.Offset()
-	//serial.TupleArrayStart(b)
-	//assert.Equal(t, start, b.Offset())
-	//serial.TupleArrayAddTuples(b, tuplesEnd)
-	//assert.Equal(t, start + 4, b.Offset())
-	//serial.TupleArrayAddOffsets(b, offsetsEnd)
-	//assert.Equal(t, start + 8, b.Offset())
-	//serial.TupleArrayAddFormat(b, serial.TupleTypeV1)
-	//assert.Equal(t, start + 10, b.Offset())
-	//
-	//start = b.Offset()
-	//arrEnd := serial.TupleArrayEnd(b)
-	//off := b.Offset()
-	//assert.Equal(t, arrEnd, b.Offset())
-	//assert.Equal(t, start + 6, off)
-	//
-	//return arrEnd
-	return 0
+	for i := len(tt) - 1; i >= 0; i-- {
+		for j := len(tt[i]) - 1; j >= 0; j-- {
+			b.PrependByte(tt[i][j])
+		}
+	}
+	return b.EndVector(byteSize(tt))
 }
 
-func tupleSize(tt [][]byte) (sz int) {
+func serializeOffsets(t *testing.T, b *fb.Builder, tt [][]byte) fb.UOffsetT {
+	off := byteSize(tt)
+	for i := len(tt) - 1; i >= 0; i-- {
+		off -= len(tt[i])
+		b.PrependUint16(uint16(off))
+	}
+	require.Equal(t, 0, off)
+	return b.EndVector(len(tt))
+}
+
+func byteSize(tt [][]byte) (sz int) {
 	for i := range tt {
 		sz += len(tt[i])
 	}
