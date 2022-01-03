@@ -20,6 +20,7 @@ namespace serial;
 
 table StoreRoot {
   refs:RefMap (required);
+  time:Timestamp (required);
 }
 
 table DatabaseRoot {
@@ -35,31 +36,35 @@ table Table {
 }
 
 table Commit {
-  root:Ref;
-  parent_list:RefArray;
-  parent_closure:Ref;
-  meta:CommitMeta;
+  root:Ref (required);
+  parent_list:RefArray (required);
+  parent_closure:Ref (required);
+  meta:CommitMeta (required);
 }
 
 table CommitMeta {
-  name:string;
-  email:string;
-  desc:string;
-  timestamp:Timestamp;
-  user_timestamp:Timestamp;
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+
+  // todo(andy): needed?
   metaversion:uint16;
 }
 
 table Tag {
-  commit:Ref;
-  meta:TagMeta;
+  commit:Ref (required);
+  meta:TagMeta (required);
 }
 
 table TagMeta {
-  name:string;
-  email:string;
-  desc:string;
-  timestamp:Timestamp;
-  user_timestamp:Timestamp;
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+
+  // todo(andy): needed?
   metaversion:uint16;
 }

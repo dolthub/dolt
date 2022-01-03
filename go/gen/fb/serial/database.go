@@ -3,8 +3,6 @@
 package serial
 
 import (
-	"strconv"
-
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
@@ -48,15 +46,32 @@ func (rcv *StoreRoot) Refs(obj *RefMap) *RefMap {
 	return nil
 }
 
+func (rcv *StoreRoot) Time(obj *Timestamp) *Timestamp {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := o + rcv._tab.Pos
+		if obj == nil {
+			obj = new(Timestamp)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
 func StoreRootStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(2)
 }
 func StoreRootAddRefs(builder *flatbuffers.Builder, refs flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(refs), 0)
 }
+func StoreRootAddTime(builder *flatbuffers.Builder, time flatbuffers.UOffsetT) {
+	builder.PrependStructSlot(1, flatbuffers.UOffsetT(time), 0)
+}
 func StoreRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type DatabaseRoot struct {
 	_tab flatbuffers.Table
 }
@@ -132,6 +147,7 @@ func DatabaseRootStartForeignKeysVector(builder *flatbuffers.Builder, numElems i
 func DatabaseRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Table struct {
 	_tab flatbuffers.Table
 }
@@ -224,6 +240,7 @@ func TableAddSecondaryIndexes(builder *flatbuffers.Builder, secondaryIndexes fla
 func TableEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Commit struct {
 	_tab flatbuffers.Table
 }
@@ -321,6 +338,7 @@ func CommitAddMeta(builder *flatbuffers.Builder, meta flatbuffers.UOffsetT) {
 func CommitEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type CommitMeta struct {
 	_tab flatbuffers.Table
 }
@@ -434,6 +452,7 @@ func CommitMetaAddMetaversion(builder *flatbuffers.Builder, metaversion uint16) 
 func CommitMetaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type Tag struct {
 	_tab flatbuffers.Table
 }
@@ -499,6 +518,7 @@ func TagAddMeta(builder *flatbuffers.Builder, meta flatbuffers.UOffsetT) {
 func TagEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type TagMeta struct {
 	_tab flatbuffers.Table
 }

@@ -31,6 +31,7 @@ func CreateTimestamp(builder *flatbuffers.Builder, time uint64) flatbuffers.UOff
 	builder.PrependUint64(time)
 	return builder.Offset()
 }
+
 type Ref struct {
 	_tab flatbuffers.Table
 }
@@ -96,6 +97,7 @@ func RefStartHashVector(builder *flatbuffers.Builder, numElems int) flatbuffers.
 func RefEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type RefArray struct {
 	_tab flatbuffers.Table
 }

@@ -18,6 +18,9 @@ namespace serial;
 
 table Column {
   name:string (required);
+  storage_order:uint16;
+  schema_order:uint16;
+
   nullable:bool;
   primary_key:bool;
   auto_increment:bool;

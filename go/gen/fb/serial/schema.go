@@ -76,31 +76,31 @@ func (rcv *Column) Name() []byte {
 	return nil
 }
 
-func (rcv *Column) Nullable() bool {
+func (rcv *Column) StorageOrder() uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
 	}
-	return false
+	return 0
 }
 
-func (rcv *Column) MutateNullable(n bool) bool {
-	return rcv._tab.MutateBoolSlot(6, n)
+func (rcv *Column) MutateStorageOrder(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(6, n)
 }
 
-func (rcv *Column) PrimaryKey() bool {
+func (rcv *Column) SchemaOrder() uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
 	}
-	return false
+	return 0
 }
 
-func (rcv *Column) MutatePrimaryKey(n bool) bool {
-	return rcv._tab.MutateBoolSlot(8, n)
+func (rcv *Column) MutateSchemaOrder(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(8, n)
 }
 
-func (rcv *Column) AutoIncrement() bool {
+func (rcv *Column) Nullable() bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.GetBool(o + rcv._tab.Pos)
@@ -108,12 +108,36 @@ func (rcv *Column) AutoIncrement() bool {
 	return false
 }
 
-func (rcv *Column) MutateAutoIncrement(n bool) bool {
+func (rcv *Column) MutateNullable(n bool) bool {
 	return rcv._tab.MutateBoolSlot(10, n)
 }
 
-func (rcv *Column) Default(obj *ColumnDefault) *ColumnDefault {
+func (rcv *Column) PrimaryKey() bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutatePrimaryKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(12, n)
+}
+
+func (rcv *Column) AutoIncrement() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateAutoIncrement(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+func (rcv *Column) Default(obj *ColumnDefault) *ColumnDefault {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
@@ -126,7 +150,7 @@ func (rcv *Column) Default(obj *ColumnDefault) *ColumnDefault {
 }
 
 func (rcv *Column) Constraints(obj *ColumnConstraint, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -138,7 +162,7 @@ func (rcv *Column) Constraints(obj *ColumnConstraint, j int) bool {
 }
 
 func (rcv *Column) ConstraintsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -146,7 +170,7 @@ func (rcv *Column) ConstraintsLength() int {
 }
 
 func (rcv *Column) Comment() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -154,35 +178,42 @@ func (rcv *Column) Comment() []byte {
 }
 
 func ColumnStart(builder *flatbuffers.Builder) {
-	builder.StartObject(7)
+	builder.StartObject(9)
 }
 func ColumnAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
+func ColumnAddStorageOrder(builder *flatbuffers.Builder, storageOrder uint16) {
+	builder.PrependUint16Slot(1, storageOrder, 0)
+}
+func ColumnAddSchemaOrder(builder *flatbuffers.Builder, schemaOrder uint16) {
+	builder.PrependUint16Slot(2, schemaOrder, 0)
+}
 func ColumnAddNullable(builder *flatbuffers.Builder, nullable bool) {
-	builder.PrependBoolSlot(1, nullable, false)
+	builder.PrependBoolSlot(3, nullable, false)
 }
 func ColumnAddPrimaryKey(builder *flatbuffers.Builder, primaryKey bool) {
-	builder.PrependBoolSlot(2, primaryKey, false)
+	builder.PrependBoolSlot(4, primaryKey, false)
 }
 func ColumnAddAutoIncrement(builder *flatbuffers.Builder, autoIncrement bool) {
-	builder.PrependBoolSlot(3, autoIncrement, false)
+	builder.PrependBoolSlot(5, autoIncrement, false)
 }
 func ColumnAddDefault(builder *flatbuffers.Builder, default_ flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(default_), 0)
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(default_), 0)
 }
 func ColumnAddConstraints(builder *flatbuffers.Builder, constraints flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(constraints), 0)
+	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(constraints), 0)
 }
 func ColumnStartConstraintsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func ColumnAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(comment), 0)
+	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(comment), 0)
 }
 func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type ColumnDefault struct {
 	_tab flatbuffers.Table
 }
@@ -227,6 +258,7 @@ func ColumnDefaultAddExpression(builder *flatbuffers.Builder, expression flatbuf
 func ColumnDefaultEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type ColumnConstraint struct {
 	_tab flatbuffers.Table
 }
@@ -297,6 +329,7 @@ func ColumnConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
 func ColumnConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type TableSchema struct {
 	_tab flatbuffers.Table
 }
@@ -382,6 +415,7 @@ func TableSchemaStartIndexesVector(builder *flatbuffers.Builder, numElems int) f
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type IndexSchema struct {
 	_tab flatbuffers.Table
 }
@@ -490,6 +524,7 @@ func IndexSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOf
 func IndexSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type ForeignKey struct {
 	_tab flatbuffers.Table
 }

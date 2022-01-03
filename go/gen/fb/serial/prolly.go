@@ -145,6 +145,7 @@ func MapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
 func MapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type RefMap struct {
 	_tab flatbuffers.Table
 }
@@ -242,6 +243,7 @@ func RefMapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) 
 func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type TupleArray struct {
 	_tab flatbuffers.Table
 }
@@ -354,6 +356,7 @@ func TupleArrayAddFormat(builder *flatbuffers.Builder, format TupleType) {
 func TupleArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type NameArray struct {
 	_tab flatbuffers.Table
 }
@@ -410,6 +413,7 @@ func NameArrayStartNamesVector(builder *flatbuffers.Builder, numElems int) flatb
 func NameArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
+
 type ProllyFooter struct {
 	_tab flatbuffers.Struct
 }

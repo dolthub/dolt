@@ -1,9 +1,11 @@
 #!/bin/bash
 
-# todo(andy): assert directory contents
+GEN_DIR="../gen/fb/serial/"
 
-flatc -o "../gen/fb/serial/" --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
+flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   common.fbs \
   database.fbs \
   prolly.fbs \
   schema.fbs
+
+goimports -w $GEN_DIR
