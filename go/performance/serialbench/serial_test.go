@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package serialbench
 
 import (
+	"encoding/binary"
 	"testing"
 
 	fb "github.com/google/flatbuffers/go"
@@ -25,62 +26,67 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var keys = [][]byte{
-	[]byte("zero"),
-	[]byte("one"),
-	[]byte("two"),
-	[]byte("three"),
-	[]byte("four"),
-	[]byte("five"),
-	[]byte("six"),
-	[]byte("seven"),
-	[]byte("eight"),
-	[]byte("nine"),
-}
-
-var values = [][]byte{
-	[]byte("ten"),
-	[]byte("eleven"),
-	[]byte("twelve"),
-	[]byte("thirteen"),
-	[]byte("fourteen"),
-	[]byte("fifteen"),
-	[]byte("sixteen"),
-	[]byte("seventeen"),
-	[]byte("eighteen"),
-	[]byte("nineteen"),
-}
-
-const (
-	KeyTuplesSz   = 40
-	ValueTuplesSz = 70
-
-	LeafNodeSz = 232
-)
-
 var (
-	LeafNodeHash = hash.Hash{
+	SmallLeafNodeHash = hash.Hash{
 		0x8c, 0xfa, 0x4f, 0xf8, 0xc2,
 		0x8c, 0xf7, 0x46, 0x72, 0x7e,
 		0x5d, 0xef, 0x15, 0x16, 0xe6,
 		0xec, 0xa7, 0x2d, 0x47, 0xe,
 	}
+	LargeLeafNodeHash = hash.Hash{
+		0xfe, 0xea, 0xc9, 0xbc, 0x9f,
+		0x3, 0x1d, 0xa7, 0xac, 0xfc,
+		0xee, 0xf4, 0x82, 0xe8, 0xb6,
+		0x8b, 0xe0, 0x5c, 0xbc, 0xaa,
+	}
+)
+
+const (
+	SmallLeafNodeSz    = 232
+	SmallKeyTuplesSz   = 40
+	SmallValueTuplesSz = 70
+
+	// data       3200 = 800 + 3200
+	// offsets    800  = sizeof(uint16) * (200 + 200)
+	// metadata   15   = TupleFormat*2, tree_count, node_count, tree_level
+	// flatbuffer 65     (1.6% overhead)
+	// total size 4080
+	LargeLeafNodeSz    = 4080
+	LargeLeafNodeCount = 200
+	LargeKeyTuplesSz   = 800
+	LargeValueTuplesSz = 2400
 )
 
 func TestSerialFormat(t *testing.T) {
-	t.Run("leaf node flatbuffer", func(t *testing.T) {
+	t.Run("small leaf node", func(t *testing.T) {
+		keys, values := smallTestTuples()
 		buf := makeLeafNode(t, keys, values)
-		assert.Equal(t, LeafNodeSz, len(buf))
-		assert.Equal(t, LeafNodeHash, hash.Of(buf))
+		assert.Equal(t, SmallLeafNodeSz, len(buf))
+		assert.Equal(t, SmallLeafNodeHash, hash.Of(buf))
+	})
+	t.Run("large leaf node", func(t *testing.T) {
+		keys, values := largeTestTuples()
+		buf := makeLeafNode(t, keys, values)
+		assert.Equal(t, LargeLeafNodeSz, len(buf))
+		assert.Equal(t, LargeLeafNodeHash, hash.Of(buf))
 	})
 	t.Run("test data sanity check", func(t *testing.T) {
-		require.Equal(t, KeyTuplesSz, byteSize(keys))
-		require.Equal(t, ValueTuplesSz, byteSize(values))
+		keys, values := smallTestTuples()
+		require.Equal(t, SmallKeyTuplesSz, byteSize(keys))
+		require.Equal(t, SmallValueTuplesSz, byteSize(values))
+		require.Equal(t, 10, len(keys))
+		require.Equal(t, 10, len(values))
+
+		keys, values = largeTestTuples()
+		require.Equal(t, LargeKeyTuplesSz, byteSize(keys))
+		require.Equal(t, LargeValueTuplesSz, byteSize(values))
+		require.Equal(t, LargeLeafNodeCount, len(keys))
+		require.Equal(t, LargeLeafNodeCount, len(values))
 	})
 }
 
 func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
-	b := fb.NewBuilder(LeafNodeSz)
+	b := fb.NewBuilder((byteSize(keys) + byteSize(values)) * 2)
 	start := int(b.Offset())
 	assert.Equal(t, 0, start)
 
@@ -121,9 +127,9 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 	assert.Equal(t, start+12, int(b.Offset()))
 	serial.MapAddValueOffsets(b, valOffsets)
 	assert.Equal(t, start+16, int(b.Offset()))
-	serial.MapAddTreeCount(b, 10)
+	serial.MapAddTreeCount(b, uint64(len(keys)))
 	assert.Equal(t, start+24, int(b.Offset()))
-	serial.MapAddNodeCount(b, 10)
+	serial.MapAddNodeCount(b, uint16(len(keys)))
 	assert.Equal(t, start+26, int(b.Offset()))
 	serial.MapAddTreeLevel(b, 0)
 	assert.Equal(t, start+26, int(b.Offset()))
@@ -158,6 +164,48 @@ func serializeOffsets(t *testing.T, b *fb.Builder, tt [][]byte) fb.UOffsetT {
 func byteSize(tt [][]byte) (sz int) {
 	for i := range tt {
 		sz += len(tt[i])
+	}
+	return
+}
+
+func smallTestTuples() (keys, values [][]byte) {
+	keys = [][]byte{
+		[]byte("zero"),
+		[]byte("one"),
+		[]byte("two"),
+		[]byte("three"),
+		[]byte("four"),
+		[]byte("five"),
+		[]byte("six"),
+		[]byte("seven"),
+		[]byte("eight"),
+		[]byte("nine"),
+	}
+	values = [][]byte{
+		[]byte("ten"),
+		[]byte("eleven"),
+		[]byte("twelve"),
+		[]byte("thirteen"),
+		[]byte("fourteen"),
+		[]byte("fifteen"),
+		[]byte("sixteen"),
+		[]byte("seventeen"),
+		[]byte("eighteen"),
+		[]byte("nineteen"),
+	}
+	return
+}
+
+func largeTestTuples() (keys, values [][]byte) {
+	keys = make([][]byte, LargeLeafNodeCount)
+	values = make([][]byte, LargeLeafNodeCount)
+	for i := range keys {
+		keys[i] = make([]byte, 4)
+		binary.LittleEndian.PutUint32(keys[i], uint32(i))
+		values[i] = make([]byte, 12)
+		binary.LittleEndian.PutUint32(values[i][0:4], uint32(i))
+		binary.LittleEndian.PutUint32(values[i][4:8], uint32(i*2))
+		binary.LittleEndian.PutUint32(values[i][8:12], uint32(i*3))
 	}
 	return
 }
