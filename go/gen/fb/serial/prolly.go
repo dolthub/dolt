@@ -8,28 +8,28 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-type TupleType byte
+type TupleFormat uint16
 
 const (
-	TupleTypeUnknown TupleType = 0
-	TupleTypeV1      TupleType = 1
+	TupleFormatUnknown TupleFormat = 0
+	TupleFormatV1      TupleFormat = 1
 )
 
-var EnumNamesTupleType = map[TupleType]string{
-	TupleTypeUnknown: "Unknown",
-	TupleTypeV1:      "V1",
+var EnumNamesTupleFormat = map[TupleFormat]string{
+	TupleFormatUnknown: "Unknown",
+	TupleFormatV1:      "V1",
 }
 
-var EnumValuesTupleType = map[string]TupleType{
-	"Unknown": TupleTypeUnknown,
-	"V1":      TupleTypeV1,
+var EnumValuesTupleFormat = map[string]TupleFormat{
+	"Unknown": TupleFormatUnknown,
+	"V1":      TupleFormatV1,
 }
 
-func (v TupleType) String() string {
-	if s, ok := EnumNamesTupleType[v]; ok {
+func (v TupleFormat) String() string {
+	if s, ok := EnumNamesTupleFormat[v]; ok {
 		return s
 	}
-	return "TupleType(" + strconv.FormatInt(int64(v), 10) + ")"
+	return "TupleFormat(" + strconv.FormatInt(int64(v), 10) + ")"
 }
 
 type Map struct {
@@ -59,88 +59,251 @@ func (rcv *Map) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Map) Keys(obj *TupleArray) *TupleArray {
+func (rcv *Map) KeyTuples(j int) int8 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(TupleArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
 	}
-	return nil
+	return 0
 }
 
-func (rcv *Map) Values(obj *TupleArray) *TupleArray {
+func (rcv *Map) KeyTuplesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateKeyTuples(j int, n int8) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *Map) KeyOffsets(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(TupleArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
 	}
-	return nil
+	return 0
 }
 
-func (rcv *Map) ChildRefs(obj *RefArray) *RefArray {
+func (rcv *Map) KeyOffsetsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateKeyOffsets(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+func (rcv *Map) KeyFormat() TupleFormat {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		return TupleFormat(rcv._tab.GetUint16(o + rcv._tab.Pos))
 	}
-	return nil
+	return 0
 }
 
-func (rcv *Map) HeapRefs(obj *RefArray) *RefArray {
+func (rcv *Map) MutateKeyFormat(n TupleFormat) bool {
+	return rcv._tab.MutateUint16Slot(8, uint16(n))
+}
+
+func (rcv *Map) ValueTuples(j int) int8 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *Map) ValueTuplesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateValueTuples(j int, n int8) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *Map) ValueOffsets(j int) uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
+	}
+	return 0
+}
+
+func (rcv *Map) ValueOffsetsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateValueOffsets(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+func (rcv *Map) ValueFormat() TupleFormat {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return TupleFormat(rcv._tab.GetUint16(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *Map) MutateValueFormat(n TupleFormat) bool {
+	return rcv._tab.MutateUint16Slot(14, uint16(n))
+}
+
+func (rcv *Map) RefArray(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *Map) RefArrayLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Map) RefArrayBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
 	return nil
 }
 
-func (rcv *Map) Footer(obj *ProllyFooter) *ProllyFooter {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+func (rcv *Map) MutateRefArray(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
-		x := o + rcv._tab.Pos
-		if obj == nil {
-			obj = new(ProllyFooter)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
 	}
-	return nil
+	return false
+}
+
+func (rcv *Map) NodeCount() uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateNodeCount(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(18, n)
+}
+
+func (rcv *Map) TreeCount() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateTreeCount(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(20, n)
+}
+
+func (rcv *Map) TreeLevel() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *Map) MutateTreeLevel(n byte) bool {
+	return rcv._tab.MutateByteSlot(22, n)
 }
 
 func MapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(10)
 }
-func MapAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keys), 0)
+func MapAddKeyTuples(builder *flatbuffers.Builder, keyTuples flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyTuples), 0)
 }
-func MapAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(values), 0)
+func MapStartKeyTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
 }
-func MapAddChildRefs(builder *flatbuffers.Builder, childRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(childRefs), 0)
+func MapAddKeyOffsets(builder *flatbuffers.Builder, keyOffsets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(keyOffsets), 0)
 }
-func MapAddHeapRefs(builder *flatbuffers.Builder, heapRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(heapRefs), 0)
+func MapStartKeyOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
-func MapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(4, flatbuffers.UOffsetT(footer), 0)
+func MapAddKeyFormat(builder *flatbuffers.Builder, keyFormat TupleFormat) {
+	builder.PrependUint16Slot(2, uint16(keyFormat), 0)
+}
+func MapAddValueTuples(builder *flatbuffers.Builder, valueTuples flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(valueTuples), 0)
+}
+func MapStartValueTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MapAddValueOffsets(builder *flatbuffers.Builder, valueOffsets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(valueOffsets), 0)
+}
+func MapStartValueOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
+}
+func MapAddValueFormat(builder *flatbuffers.Builder, valueFormat TupleFormat) {
+	builder.PrependUint16Slot(5, uint16(valueFormat), 0)
+}
+func MapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(refArray), 0)
+}
+func MapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MapAddNodeCount(builder *flatbuffers.Builder, nodeCount uint16) {
+	builder.PrependUint16Slot(7, nodeCount, 0)
+}
+func MapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
+	builder.PrependUint64Slot(8, treeCount, 0)
+}
+func MapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
+	builder.PrependByteSlot(9, treeLevel, 0)
 }
 func MapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -173,218 +336,7 @@ func (rcv *RefMap) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *RefMap) Keys(obj *NameArray) *NameArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(NameArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) ValueRefs(obj *RefArray) *RefArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) ChildRefs(obj *RefArray) *RefArray {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *RefMap) Footer(obj *ProllyFooter) *ProllyFooter {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := o + rcv._tab.Pos
-		if obj == nil {
-			obj = new(ProllyFooter)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func RefMapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
-}
-func RefMapAddKeys(builder *flatbuffers.Builder, keys flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keys), 0)
-}
-func RefMapAddValueRefs(builder *flatbuffers.Builder, valueRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(valueRefs), 0)
-}
-func RefMapAddChildRefs(builder *flatbuffers.Builder, childRefs flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(childRefs), 0)
-}
-func RefMapAddFooter(builder *flatbuffers.Builder, footer flatbuffers.UOffsetT) {
-	builder.PrependStructSlot(3, flatbuffers.UOffsetT(footer), 0)
-}
-func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type TupleArray struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsTupleArray(buf []byte, offset flatbuffers.UOffsetT) *TupleArray {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &TupleArray{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsTupleArray(buf []byte, offset flatbuffers.UOffsetT) *TupleArray {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &TupleArray{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *TupleArray) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *TupleArray) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *TupleArray) Tuples(j int) int8 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *TupleArray) TuplesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *TupleArray) MutateTuples(j int, n int8) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
-}
-
-func (rcv *TupleArray) Offsets(j int) uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
-	}
-	return 0
-}
-
-func (rcv *TupleArray) OffsetsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *TupleArray) MutateOffsets(j int, n uint16) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
-	}
-	return false
-}
-
-func (rcv *TupleArray) Format() TupleType {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return TupleType(rcv._tab.GetByte(o + rcv._tab.Pos))
-	}
-	return 0
-}
-
-func (rcv *TupleArray) MutateFormat(n TupleType) bool {
-	return rcv._tab.MutateByteSlot(8, byte(n))
-}
-
-func TupleArrayStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
-}
-func TupleArrayAddTuples(builder *flatbuffers.Builder, tuples flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(tuples), 0)
-}
-func TupleArrayStartTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
-}
-func TupleArrayAddOffsets(builder *flatbuffers.Builder, offsets flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(offsets), 0)
-}
-func TupleArrayStartOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(2, numElems, 2)
-}
-func TupleArrayAddFormat(builder *flatbuffers.Builder, format TupleType) {
-	builder.PrependByteSlot(2, byte(format), 0)
-}
-func TupleArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type NameArray struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsNameArray(buf []byte, offset flatbuffers.UOffsetT) *NameArray {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &NameArray{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsNameArray(buf []byte, offset flatbuffers.UOffsetT) *NameArray {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &NameArray{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *NameArray) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *NameArray) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *NameArray) Names(j int) []byte {
+func (rcv *RefMap) Names(j int) []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -393,7 +345,7 @@ func (rcv *NameArray) Names(j int) []byte {
 	return nil
 }
 
-func (rcv *NameArray) NamesLength() int {
+func (rcv *RefMap) NamesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -401,59 +353,100 @@ func (rcv *NameArray) NamesLength() int {
 	return 0
 }
 
-func NameArrayStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+func (rcv *RefMap) RefArray(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
 }
-func NameArrayAddNames(builder *flatbuffers.Builder, names flatbuffers.UOffsetT) {
+
+func (rcv *RefMap) RefArrayLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *RefMap) RefArrayBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *RefMap) MutateRefArray(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *RefMap) NodeCount() uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetUint16(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *RefMap) MutateNodeCount(n uint16) bool {
+	return rcv._tab.MutateUint16Slot(8, n)
+}
+
+func (rcv *RefMap) TreeCount() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *RefMap) MutateTreeCount(n uint64) bool {
+	return rcv._tab.MutateUint64Slot(10, n)
+}
+
+func (rcv *RefMap) TreeLevel() byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetByte(o + rcv._tab.Pos)
+	}
+	return 0
+}
+
+func (rcv *RefMap) MutateTreeLevel(n byte) bool {
+	return rcv._tab.MutateByteSlot(12, n)
+}
+
+func RefMapStart(builder *flatbuffers.Builder) {
+	builder.StartObject(5)
+}
+func RefMapAddNames(builder *flatbuffers.Builder, names flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(names), 0)
 }
-func NameArrayStartNamesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func RefMapStartNamesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
-func NameArrayEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func RefMapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(refArray), 0)
+}
+func RefMapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RefMapAddNodeCount(builder *flatbuffers.Builder, nodeCount uint16) {
+	builder.PrependUint16Slot(2, nodeCount, 0)
+}
+func RefMapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
+	builder.PrependUint64Slot(3, treeCount, 0)
+}
+func RefMapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
+	builder.PrependByteSlot(4, treeLevel, 0)
+}
+func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
-}
-
-type ProllyFooter struct {
-	_tab flatbuffers.Struct
-}
-
-func (rcv *ProllyFooter) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *ProllyFooter) Table() flatbuffers.Table {
-	return rcv._tab.Table
-}
-
-func (rcv *ProllyFooter) NodeCount() uint16 {
-	return rcv._tab.GetUint16(rcv._tab.Pos + flatbuffers.UOffsetT(0))
-}
-func (rcv *ProllyFooter) MutateNodeCount(n uint16) bool {
-	return rcv._tab.MutateUint16(rcv._tab.Pos+flatbuffers.UOffsetT(0), n)
-}
-
-func (rcv *ProllyFooter) TreeCount() uint64 {
-	return rcv._tab.GetUint64(rcv._tab.Pos + flatbuffers.UOffsetT(8))
-}
-func (rcv *ProllyFooter) MutateTreeCount(n uint64) bool {
-	return rcv._tab.MutateUint64(rcv._tab.Pos+flatbuffers.UOffsetT(8), n)
-}
-
-func (rcv *ProllyFooter) TreeLevel() byte {
-	return rcv._tab.GetByte(rcv._tab.Pos + flatbuffers.UOffsetT(16))
-}
-func (rcv *ProllyFooter) MutateTreeLevel(n byte) bool {
-	return rcv._tab.MutateByte(rcv._tab.Pos+flatbuffers.UOffsetT(16), n)
-}
-
-func CreateProllyFooter(builder *flatbuffers.Builder, nodeCount uint16, treeCount uint64, treeLevel byte) flatbuffers.UOffsetT {
-	builder.Prep(8, 24)
-	builder.Pad(7)
-	builder.PrependByte(treeLevel)
-	builder.PrependUint64(treeCount)
-	builder.Pad(6)
-	builder.PrependUint16(nodeCount)
-	return builder.Offset()
 }

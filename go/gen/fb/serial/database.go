@@ -6,6 +6,98 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 )
 
+type Timestamp struct {
+	_tab flatbuffers.Struct
+}
+
+func (rcv *Timestamp) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *Timestamp) Table() flatbuffers.Table {
+	return rcv._tab.Table
+}
+
+func (rcv *Timestamp) Time() uint64 {
+	return rcv._tab.GetUint64(rcv._tab.Pos + flatbuffers.UOffsetT(0))
+}
+func (rcv *Timestamp) MutateTime(n uint64) bool {
+	return rcv._tab.MutateUint64(rcv._tab.Pos+flatbuffers.UOffsetT(0), n)
+}
+
+func CreateTimestamp(builder *flatbuffers.Builder, time uint64) flatbuffers.UOffsetT {
+	builder.Prep(8, 8)
+	builder.PrependUint64(time)
+	return builder.Offset()
+}
+
+type Ref struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsRef(buf []byte, offset flatbuffers.UOffsetT) *Ref {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &Ref{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsRef(buf []byte, offset flatbuffers.UOffsetT) *Ref {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &Ref{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *Ref) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *Ref) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *Ref) Hash(j int) int8 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetInt8(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *Ref) HashLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Ref) MutateHash(j int, n int8) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateInt8(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func RefStart(builder *flatbuffers.Builder) {
+	builder.StartObject(1)
+}
+func RefAddHash(builder *flatbuffers.Builder, hash flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(hash), 0)
+}
+func RefStartHashVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func RefEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
 type StoreRoot struct {
 	_tab flatbuffers.Table
 }
@@ -281,17 +373,24 @@ func (rcv *Commit) Root(obj *Ref) *Ref {
 	return nil
 }
 
-func (rcv *Commit) ParentList(obj *RefArray) *RefArray {
+func (rcv *Commit) ParentList(obj *Ref, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(RefArray)
-		}
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
 		obj.Init(rcv._tab.Bytes, x)
-		return obj
+		return true
 	}
-	return nil
+	return false
+}
+
+func (rcv *Commit) ParentListLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
 }
 
 func (rcv *Commit) ParentClosure(obj *Ref) *Ref {
@@ -328,6 +427,9 @@ func CommitAddRoot(builder *flatbuffers.Builder, root flatbuffers.UOffsetT) {
 }
 func CommitAddParentList(builder *flatbuffers.Builder, parentList flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(parentList), 0)
+}
+func CommitStartParentListVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
 }
 func CommitAddParentClosure(builder *flatbuffers.Builder, parentClosure flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(parentClosure), 0)

@@ -12,61 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "common.fbs";
-
 namespace serial;
 
-table Map {
-  // map keys ordered lexigraphically
-  keys:TupleArray (required);
-
-  // map values ordered by corresponding key
-  // only present in leaf nodes
-  values:TupleArray;
-
-  // pointers to prolly tree children
-  // only present in internal nodes
-  child_refs:RefArray;
-
-  // pointers to ref'd values (eg TEXT)
-  // only present in leaf nodes
-  heap_refs:RefArray;
-
-  footer:ProllyFooter (required);
-}
-
-table RefMap {
-  // map keys ordered lexigraphically
-  keys:NameArray (required);
-
-  // map values ordered by corresponding key
-  // only present in leaf nodes
-  value_refs:RefArray;
-
-  // pointers to prolly tree children
-  // only present in internal nodes
-  child_refs:RefArray;
-
-  footer:ProllyFooter (required);
-}
-
-
-enum TupleType : uint8 {
+enum TupleFormat : uint16 {
   Unknown,
   V1 = 1,
 }
 
-table TupleArray {
-  tuples:[byte] (required);
-  offsets:[uint16] (required);
-  format:TupleType;
+table Map {
+  // array of map key tuples, ordered lexigraphically
+  key_tuples:[byte] (required);
+  // array of offets into |key_tuples|, zeroth offset omitted
+  key_offsets:[uint16] (required);
+  // tuple format for |key_tuples|
+  key_format:TupleFormat;
+
+  // array of map values tuples, ordered by paired key
+  value_tuples:[byte];
+  // array of offets into |value_tuples|, zeroth offset omitted
+  value_offsets:[uint16];
+  // tuple format for |value_tuples|
+  value_format:TupleFormat;
+
+  // array of ref hashes
+  // - internal nodes: contains refs for
+  //   Prolly tree children
+  // - leaf nodes: contains refs for heap values
+  //   iff table has ref'd types (eg TEXT)
+  ref_array:[uint8];
+
+  // node key count
+  node_count:uint16;
+
+  // subtree key count
+  tree_count:uint64;
+
+  // node tree level, 0 for leaf nodes
+  tree_level:uint8;
 }
 
-table NameArray {
-    names:[string] (required);
-}
+table RefMap {
+  // map keys ordered lexigraphically
+  names:[string] (required);
 
-struct ProllyFooter {
+  // array of ref hashes
+  // - internal nodes: contains refs for
+  //   Prolly tree children
+  // - leaf nodes: contains refs corresponding
+  //   to keys in |names|
+  ref_array:[uint8] (required);
+
   // node key count
   node_count:uint16;
 

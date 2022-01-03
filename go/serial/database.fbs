@@ -12,11 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "common.fbs";
 include "prolly.fbs";
 include "schema.fbs";
 
 namespace serial;
+
+struct Timestamp {
+  time:uint64;
+
+  // todo(andy): include nano extension?
+}
+
+table Ref {
+  // 20 bytes
+  hash:[byte];
+}
 
 table StoreRoot {
   refs:RefMap (required);
@@ -37,7 +47,7 @@ table Table {
 
 table Commit {
   root:Ref (required);
-  parent_list:RefArray (required);
+  parent_list:[Ref] (required);
   parent_closure:Ref (required);
   meta:CommitMeta (required);
 }
