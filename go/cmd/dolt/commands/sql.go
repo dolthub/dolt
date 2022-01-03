@@ -996,15 +996,6 @@ func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 		}
 		return nil, nil, nil
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
-		if err != nil {
-			if se, ok := vterrors.AsSyntaxError(err); ok {
-				return nil, nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
-			} else {
-				return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
-			}
-		}
-
 		_, ri, err := se.Query(ctx, query)
 		if err != nil {
 			return nil, nil, err
