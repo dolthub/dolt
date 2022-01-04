@@ -19,12 +19,20 @@ table Column {
   storage_order:uint16;
   schema_order:uint16;
 
+  type:Type (required);
   nullable:bool;
   primary_key:bool;
   auto_increment:bool;
   default:ColumnDefault;
   constraints:[ColumnConstraint] (required);
   comment:string (required);
+}
+
+// based on schema_marshalling.go:encodeTypeInfo()
+table Type {
+  type:string (required);
+  param_keys:[string] (required);
+  param_values:[string] (required);
 }
 
 table ColumnDefault {

@@ -14,19 +14,19 @@
 
 namespace serial;
 
-enum TupleFormat : uint16 {
+enum TupleFormat : uint8 {
   Unknown,
   V1 = 1,
 }
 
 table Map {
   // array of map key tuples, ordered lexigraphically
-  key_tuples:[uint8] (required);
+  key_tuples:[ubyte] (required);
   // array of offets into |key_tuples|, zeroth offset omitted
   key_offsets:[uint16] (required);
 
   // array of map values tuples, ordered by paired key
-  value_tuples:[uint8];
+  value_tuples:[ubyte];
   // array of offets into |value_tuples|, zeroth offset omitted
   value_offsets:[uint16];
 
@@ -35,15 +35,12 @@ table Map {
   //   Prolly tree children
   // - leaf nodes: contains refs for heap values
   //   iff table has ref'd types (eg TEXT)
-  ref_array:[uint8];
+  ref_array:[ubyte];
 
   // tuple format for |key_tuples|
   key_format:TupleFormat;
   // tuple format for |value_tuples|
   value_format:TupleFormat;
-
-  // node key count
-  node_count:uint16;
 
   // subtree key count
   tree_count:uint64;

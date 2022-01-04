@@ -28,30 +28,30 @@ import (
 
 var (
 	SmallLeafNodeHash = hash.Hash{
-		0x67, 0x0, 0x19, 0xd7, 0xf,
-		0xb2, 0xe9, 0x5f, 0x5e, 0xaf,
-		0xbb, 0x1e, 0x8, 0xed, 0x3,
-		0x29, 0xd3, 0xf4, 0x1a, 0xb8,
+		0x48, 0x65, 0xab, 0x77, 0x80,
+		0xf7, 0xb, 0xac, 0xf2, 0x98,
+		0x20, 0x77, 0x62, 0x5f, 0x6,
+		0x2, 0x32, 0xb5, 0xd4, 0x12,
 	}
 	LargeLeafNodeHash = hash.Hash{
-		0x2e, 0x70, 0x35, 0x93, 0x1b,
-		0xe7, 0x26, 0x80, 0x15, 0xee,
-		0x2b, 0x31, 0xfe, 0x9a, 0x41,
-		0x89, 0x6a, 0x2e, 0x5e, 0x9b,
+		0x38, 0xdb, 0x6, 0x49, 0x3e,
+		0x2a, 0xa4, 0x73, 0x67, 0xac,
+		0x55, 0xd9, 0xa7, 0x8c, 0xcd,
+		0x69, 0xe2, 0x76, 0x1e, 0xa5,
 	}
 )
 
 const (
-	SmallLeafNodeSz    = 232
+	SmallLeafNodeSz    = 224
 	SmallKeyTuplesSz   = 40
 	SmallValueTuplesSz = 70
 
 	// data       3200 = 800 + 3200
 	// offsets    800  = sizeof(uint16) * (200 + 200)
-	// metadata   15   = TupleFormat*2, tree_count, node_count, tree_level
-	// flatbuffer 65     (1.6% overhead)
-	// total size 4080
-	LargeLeafNodeSz    = 4080
+	// metadata   11   = TupleFormat * 2, tree_count, tree_level
+	// fb + pad   57   = 56 + 1 (1.4% overhead)
+	// total size 4072
+	LargeLeafNodeSz    = 4072
 	LargeLeafNodeCount = 200
 	LargeKeyTuplesSz   = 800
 	LargeValueTuplesSz = 2400
@@ -131,19 +131,17 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 	assert.Equal(t, start+16, int(b.Offset()))
 	serial.MapAddTreeCount(b, uint64(len(keys)))
 	assert.Equal(t, start+24, int(b.Offset()))
-	serial.MapAddNodeCount(b, uint16(len(keys)))
-	assert.Equal(t, start+26, int(b.Offset()))
 	serial.MapAddKeyFormat(b, serial.TupleFormatV1)
-	assert.Equal(t, start+28, int(b.Offset()))
+	assert.Equal(t, start+25, int(b.Offset()))
 	serial.MapAddValueFormat(b, serial.TupleFormatV1)
-	assert.Equal(t, start+30, int(b.Offset()))
+	assert.Equal(t, start+26, int(b.Offset()))
 	serial.MapAddTreeLevel(b, 0)
-	assert.Equal(t, start+30, int(b.Offset()))
+	assert.Equal(t, start+26, int(b.Offset()))
 
 	mapEnd := serial.MapEnd(b)
-	assert.Equal(t, start+58, int(b.Offset()))
+	assert.Equal(t, start+52, int(b.Offset()))
 	b.Finish(mapEnd)
-	assert.Equal(t, start+64, int(b.Offset()))
+	assert.Equal(t, start+56, int(b.Offset()))
 
 	return b.FinishedBytes()
 }
@@ -165,7 +163,7 @@ func validateLeafNode(t *testing.T, flatbuffer []byte, keys, values [][]byte) {
 	assert.Equal(t, serial.TupleFormatV1, m.KeyFormat())
 	assert.Equal(t, serial.TupleFormatV1, m.ValueFormat())
 	assert.Equal(t, len(keys), int(m.TreeCount()))
-	assert.Equal(t, len(keys), int(m.NodeCount()))
+	assert.Equal(t, len(keys), m.KeyOffsetsLength())
 	assert.Equal(t, 0, int(m.TreeLevel()))
 }
 
