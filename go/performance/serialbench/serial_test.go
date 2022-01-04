@@ -28,16 +28,16 @@ import (
 
 var (
 	SmallLeafNodeHash = hash.Hash{
-		0x8c, 0xfa, 0x4f, 0xf8, 0xc2,
-		0x8c, 0xf7, 0x46, 0x72, 0x7e,
-		0x5d, 0xef, 0x15, 0x16, 0xe6,
-		0xec, 0xa7, 0x2d, 0x47, 0xe,
+		0x67, 0x0, 0x19, 0xd7, 0xf,
+		0xb2, 0xe9, 0x5f, 0x5e, 0xaf,
+		0xbb, 0x1e, 0x8, 0xed, 0x3,
+		0x29, 0xd3, 0xf4, 0x1a, 0xb8,
 	}
 	LargeLeafNodeHash = hash.Hash{
-		0xfe, 0xea, 0xc9, 0xbc, 0x9f,
-		0x3, 0x1d, 0xa7, 0xac, 0xfc,
-		0xee, 0xf4, 0x82, 0xe8, 0xb6,
-		0x8b, 0xe0, 0x5c, 0xbc, 0xaa,
+		0x2e, 0x70, 0x35, 0x93, 0x1b,
+		0xe7, 0x26, 0x80, 0x15, 0xee,
+		0x2b, 0x31, 0xfe, 0x9a, 0x41,
+		0x89, 0x6a, 0x2e, 0x5e, 0x9b,
 	}
 )
 
@@ -63,12 +63,14 @@ func TestSerialFormat(t *testing.T) {
 		buf := makeLeafNode(t, keys, values)
 		assert.Equal(t, SmallLeafNodeSz, len(buf))
 		assert.Equal(t, SmallLeafNodeHash, hash.Of(buf))
+		validateLeafNode(t, buf, keys, values)
 	})
 	t.Run("large leaf node", func(t *testing.T) {
 		keys, values := largeTestTuples()
 		buf := makeLeafNode(t, keys, values)
 		assert.Equal(t, LargeLeafNodeSz, len(buf))
 		assert.Equal(t, LargeLeafNodeHash, hash.Of(buf))
+		validateLeafNode(t, buf, keys, values)
 	})
 	t.Run("test data sanity check", func(t *testing.T) {
 		keys, values := smallTestTuples()
@@ -131,15 +133,52 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 	assert.Equal(t, start+24, int(b.Offset()))
 	serial.MapAddNodeCount(b, uint16(len(keys)))
 	assert.Equal(t, start+26, int(b.Offset()))
+	serial.MapAddKeyFormat(b, serial.TupleFormatV1)
+	assert.Equal(t, start+28, int(b.Offset()))
+	serial.MapAddValueFormat(b, serial.TupleFormatV1)
+	assert.Equal(t, start+30, int(b.Offset()))
 	serial.MapAddTreeLevel(b, 0)
-	assert.Equal(t, start+26, int(b.Offset()))
+	assert.Equal(t, start+30, int(b.Offset()))
 
 	mapEnd := serial.MapEnd(b)
-	assert.Equal(t, start+54, int(b.Offset()))
+	assert.Equal(t, start+58, int(b.Offset()))
 	b.Finish(mapEnd)
 	assert.Equal(t, start+64, int(b.Offset()))
 
 	return b.FinishedBytes()
+}
+
+func validateLeafNode(t *testing.T, flatbuffer []byte, keys, values [][]byte) {
+	require.Equal(t, len(keys), len(values))
+
+	m := serial.GetRootAsMap(flatbuffer, 0)
+	ko := make([]uint16, m.KeyOffsetsLength())
+	vo := make([]uint16, m.ValueOffsetsLength())
+	for i := range ko {
+		ko[i] = m.KeyOffsets(i)
+		vo[i] = m.ValueOffsets(i)
+	}
+
+	validateTuples(t, m.KeyTuplesBytes(), ko, keys)
+	validateTuples(t, m.ValueTuplesBytes(), vo, values)
+
+	assert.Equal(t, serial.TupleFormatV1, m.KeyFormat())
+	assert.Equal(t, serial.TupleFormatV1, m.ValueFormat())
+	assert.Equal(t, len(keys), int(m.TreeCount()))
+	assert.Equal(t, len(keys), int(m.NodeCount()))
+	assert.Equal(t, 0, int(m.TreeLevel()))
+}
+
+func validateTuples(t *testing.T, buf []byte, offs []uint16, tups [][]byte) {
+	require.Equal(t, len(tups), len(offs))
+	for i, exp := range tups {
+		start, stop := offs[i], uint16(len(buf))
+		if i+1 < len(offs) {
+			stop = offs[i+1]
+		}
+		act := buf[start:stop]
+		assert.Equal(t, act, exp)
+	}
 }
 
 func serializeTuples(t *testing.T, b *fb.Builder, tt [][]byte) fb.UOffsetT {

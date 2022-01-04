@@ -21,18 +21,14 @@ enum TupleFormat : uint16 {
 
 table Map {
   // array of map key tuples, ordered lexigraphically
-  key_tuples:[byte] (required);
+  key_tuples:[uint8] (required);
   // array of offets into |key_tuples|, zeroth offset omitted
   key_offsets:[uint16] (required);
-  // tuple format for |key_tuples|
-  key_format:TupleFormat;
 
   // array of map values tuples, ordered by paired key
-  value_tuples:[byte];
+  value_tuples:[uint8];
   // array of offets into |value_tuples|, zeroth offset omitted
   value_offsets:[uint16];
-  // tuple format for |value_tuples|
-  value_format:TupleFormat;
 
   // array of ref hashes
   // - internal nodes: contains refs for
@@ -41,11 +37,16 @@ table Map {
   //   iff table has ref'd types (eg TEXT)
   ref_array:[uint8];
 
-  // subtree key count
-  tree_count:uint64;
+  // tuple format for |key_tuples|
+  key_format:TupleFormat;
+  // tuple format for |value_tuples|
+  value_format:TupleFormat;
 
   // node key count
   node_count:uint16;
+
+  // subtree key count
+  tree_count:uint64;
 
   // node tree level, 0 for leaf nodes
   tree_level:uint8;
