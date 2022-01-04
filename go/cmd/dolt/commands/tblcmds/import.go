@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -516,6 +515,8 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 	return mv, nil
 }
 
+type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
+
 func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -549,39 +550,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	g.Go(func() error {
 		defer close(parsedRowChan)
 
-		rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
-		if err != nil {
-			return err
-		}
-
-		for {
-			r, err := rd.ReadRow(ctx)
-			if err != nil {
-				if err == io.EOF {
-					return nil
-				} else if table.IsBadRow(err) {
-					dRow, _ := sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-					trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: dRow, TransformName: "reader", Details: err.Error()}
-					quit := badRowCB(trf)
-					if quit {
-						return trf
-					}
-				} else {
-					return err
-				}
-			} else {
-				dRow, err := transformToDoltRow(r, rd.GetSchema(), rdSqlSch.Schema, wr.Schema(), options.nameMapper)
-				if err != nil {
-					return err
-				}
-
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case parsedRowChan <- dRow:
-				}
-			}
-		}
+		return moveRows(ctx, wr, rd, options, parsedRowChan, badRowCB)
 	})
 
 	// Start the group that writes rows
@@ -608,6 +577,63 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 	}
 
 	return badCount, nil
+}
+
+func moveRows(
+	ctx context.Context,
+	wr mvdata.DataWriter,
+	rd table.TableReadCloser,
+	options *importOptions,
+	parsedRowChan chan sql.Row,
+	badRowCb badRowFn,
+) error {
+	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
+		if srd, ok := rd.(table.SqlRowReader); ok {
+			return srd.ReadSqlRow(ctx)
+		} else {
+			r, err := rd.ReadRow(ctx)
+			if err != nil {
+				return nil, err
+			}
+
+			return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+		}
+	}
+
+	rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
+	if err != nil {
+		return err
+	}
+
+	for {
+		sqlRow, err := getNextRow(rd)
+		if err == io.EOF {
+			return nil
+		}
+
+		if err != nil {
+			if table.IsBadRow(err) {
+				trf := &pipeline.TransformRowFailure{Row: nil, SqlRow: sqlRow, TransformName: "reader", Details: err.Error()}
+				quit := badRowCb(trf)
+				if quit {
+					return trf
+				}
+			} else {
+				return err
+			}
+		} else {
+			sqlRow, err = NameAndTypeTransform(sqlRow, rdSqlSch.Schema, wr.Schema(), options.nameMapper)
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- sqlRow:
+			}
+		}
+	}
 }
 
 func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
@@ -714,41 +740,36 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	panic("Unhandled Error type")
 }
 
-// transformToDoltRow does 1) Convert to a sql.Row 2) Matches the read and write schema with subsetting and name matching.
-// 3) Addresses any type inconsistencies.
-func transformToDoltRow(row row.Row, rdSchema schema.Schema, rdSqlSch, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	doltRow, err := sqlutil.DoltRowToSqlRow(row, rdSchema)
-	if err != nil {
-		return nil, err
-	}
-
+// NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
+// type inconsistencies.
+func NameAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
 	for i, col := range wrSchema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			switch doltRow[i].(type) {
+			switch row[i].(type) {
 			case int8:
-				val, ok := stringToBoolean(strconv.Itoa(int(doltRow[i].(int8))))
+				val, ok := stringToBoolean(strconv.Itoa(int(row[i].(int8))))
 				if ok {
-					doltRow[i] = val
+					row[i] = val
 				}
 			case string:
-				val, ok := stringToBoolean(doltRow[i].(string))
+				val, ok := stringToBoolean(row[i].(string))
 				if ok {
-					doltRow[i] = val
+					row[i] = val
 				}
 			case bool:
-				doltRow[i] = doltRow[i].(bool)
+				row[i] = row[i].(bool)
 			}
 		}
 
 		switch col.Type.(type) {
 		case sql.StringType:
 		default:
-			doltRow[i] = emptyStringToNil(doltRow[i])
+			row[i] = emptyStringToNil(row[i])
 		}
 	}
 
-	return matchReadSchemaToWriteSchema(doltRow, rdSqlSch, wrSchema, nameMapper), nil
+	return matchReadSchemaToWriteSchema(row, rdSchema, wrSchema, nameMapper), nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {

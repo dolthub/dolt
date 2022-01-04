@@ -63,12 +63,18 @@ func NewSqlEngine(
 		return nil, err
 	}
 
+	bThreads := sql.NewBackgroundThreads()
+	dbs, err = dsqle.ApplyReplicationConfig(ctx, bThreads, mrEnv, cli.CliOut, dbs...)
+	if err != nil {
+		return nil, err
+	}
+
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
 
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{Auth: au})
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{Auth: au}).WithBackgroundThreads(bThreads)
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -214,6 +220,13 @@ func (se *SqlEngine) Dbddl(ctx *sql.Context, dbddl *sqlparser.DBDDL, query strin
 
 func (se *SqlEngine) GetUnderlyingEngine() *gms.Engine {
 	return se.engine
+}
+
+func (se *SqlEngine) Close() error {
+	if se.engine != nil {
+		return se.engine.Close()
+	}
+	return nil
 }
 
 func dsqleDBsAsSqlDBs(dbs []dsqle.SqlDatabase) []sql.Database {

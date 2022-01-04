@@ -32,9 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	editor2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
@@ -145,14 +146,9 @@ var _ doltReadOnlyTableInterface = (*DoltTable)(nil)
 
 // WithIndexLookup implements sql.IndexedTable
 func (t *DoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	dil, ok := lookup.(*doltIndexLookup)
-	if !ok {
-		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
-	}
-
 	return &IndexedDoltTable{
 		table:       t,
-		indexLookup: dil,
+		indexLookup: lookup,
 	}
 }
 
@@ -200,61 +196,7 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 		return nil, err
 	}
 
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowData, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var sqlIndexes []sql.Index
-	cols := sch.GetPKCols().GetColumns()
-
-	if len(cols) > 0 {
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           "PRIMARY",
-			indexRowData: rowData,
-			indexSch:     sch,
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       true,
-			generated:    false,
-		})
-	}
-
-	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetIndexRowData(ctx, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		cols := make([]schema.Column, index.Count())
-		for i, tag := range index.IndexedColumnTags() {
-			cols[i], _ = index.GetColumn(tag)
-		}
-		sqlIndexes = append(sqlIndexes, &doltIndex{
-			cols:         cols,
-			db:           t.db,
-			id:           index.Name(),
-			indexRowData: indexRowData,
-			indexSch:     index.Schema(),
-			table:        tbl,
-			tableData:    rowData,
-			tableName:    t.Name(),
-			tableSch:     sch,
-			unique:       index.IsUnique(),
-			comment:      index.Comment(),
-			generated:    false,
-		})
-	}
-
-	return sqlIndexes, nil
+	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
 }
 
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
@@ -408,7 +350,7 @@ func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 
 type emptyRowIterator struct{}
 
-func (itr emptyRowIterator) Next() (sql.Row, error) {
+func (itr emptyRowIterator) Next(*sql.Context) (sql.Row, error) {
 	return nil, io.EOF
 }
 
@@ -434,7 +376,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 		}
 
 		return newRowIterator(ctx, t, projCols, &typedPartition)
-	case sqlutil.SinglePartition:
+	case index.SinglePartition:
 		return newRowIterator(ctx, t, projCols, &doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
@@ -445,7 +387,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed *sqlTableEditor
+	ed editor2.TableEditor
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -469,13 +411,9 @@ func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue)
 }
 
 func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	dil, ok := lookup.(*doltIndexLookup)
-	if !ok {
-		return sqlutil.NewStaticErrorTable(t, fmt.Errorf("Unrecognized indexLookup %T", lookup))
-	}
 	return &WritableIndexedDoltTable{
 		WritableDoltTable: t,
-		indexLookup:       dil,
+		indexLookup:       lookup,
 	}
 }
 
@@ -496,7 +434,7 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, error) {
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed editor2.TableEditor, err error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
@@ -504,20 +442,20 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (*sqlTableEditor, e
 		if t.ed != nil {
 			return t.ed, nil
 		}
-		var err error
-		t.ed, err = newSqlTableEditor(ctx, t)
-		return t.ed, err
 	}
-	return newSqlTableEditor(ctx, t)
-}
 
-func (t *WritableDoltTable) flushBatchedEdits(ctx *sql.Context) error {
-	if t.ed != nil {
-		err := t.ed.flush(ctx)
-		t.ed = nil
-		return err
+	vrw := t.db.ddb.ValueReadWriter()
+
+	ed, err = editor2.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	if sess.BatchMode() == dsess.Batched {
+		t.ed = ed
+	}
+
+	return ed, nil
 }
 
 // Deleter implements sql.DeletableTable
@@ -550,16 +488,12 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	numOfRows := int(rowData.Len())
-	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, table.ValueReadWriter(), t.sch)
-	if err != nil {
-		return 0, err
-	}
 	empty, err := types.NewMap(ctx, table.ValueReadWriter())
 	if err != nil {
 		return 0, err
 	}
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), schVal, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, empty, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -627,13 +561,10 @@ func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentia
 		return nil, err
 	}
 
-	return ed.aiTracker.Next(t.tableName, potentialVal, tableVal)
+	return ed.NextAutoIncrementValue(potentialVal, tableVal)
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
-	if t.ed != nil {
-		return t.ed.GetAutoIncrementValue()
-	}
 	return t.DoltTable.GetAutoIncrementValue(ctx)
 }
 
@@ -739,7 +670,7 @@ func (itr *doltTablePartitionIter) Close(*sql.Context) error {
 }
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
-func (itr *doltTablePartitionIter) Next() (sql.Partition, error) {
+func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 
@@ -875,7 +806,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
@@ -937,13 +873,17 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return t.updateFromRoot(ctx, newRoot)
 }
 
 // ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	root, err := t.getRoot(ctx)
-
 	if err != nil {
 		return err
 	}
@@ -1012,12 +952,91 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
+	// For auto columns modified to be auto increment, we have more work to do
+	if !existingCol.AutoIncrement && col.AutoIncrement {
+		updatedSch, err := updatedTable.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		initialValue := column.Type.Zero()
+
+		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
+		if err != nil {
+			return err
+		}
+
+		rowData, err := updatedTable.GetRowData(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
+		// root, which hasn't been updated yet
+		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, index.SinglePartition{RowData: rowData})
+		if err != nil {
+			return err
+		}
+
+		for {
+			r, err := rowIter.Next(ctx)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return err
+			}
+
+			cmp, err := column.Type.Compare(initialValue, r[colIdx])
+			if err != nil {
+				return err
+			}
+
+			if cmp < 0 {
+				initialValue = r[colIdx]
+			}
+		}
+
+		initialValNoms, err := col.TypeInfo.ConvertValueToNomsValue(ctx, root.VRW(), initialValue)
+		if err != nil {
+			return err
+		}
+
+		initialValNoms = increment(initialValNoms)
+
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, initialValNoms)
+		if err != nil {
+			return err
+		}
+	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
 	if err != nil {
 		return err
 	}
 
-	return t.setRoot(ctx, newRoot)
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+
+	return nil
+	// TODO: we can't make this update right now because renames happen in two passes if you rename a column mentioned in
+	//  a default value, and one of those two passes will have the old name for the column. Fix this by not analyzing
+	//  column defaults in NewDoltTable.
+	// return t.updateFromRoot(ctx, newRoot)
+}
+
+func increment(val types.Value) types.Value {
+	switch val := val.(type) {
+	case types.Int:
+		return val + 1
+	case types.Float:
+		return val + 1
+	case types.Uint:
+		return val + 1
+	default:
+		panic(fmt.Sprintf("unexpected auto inc column type %T", val))
+	}
 }
 
 // CreateIndex implements sql.IndexAlterableTable
@@ -1512,7 +1531,20 @@ func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootV
 }
 
 func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefinition) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
 
 	check = &(*check)
 	if check.Name == "" {
@@ -1523,7 +1555,7 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 		}
 	}
 
-	_, err := sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
+	_, err = sch.Checks().AddCheck(check.Name, check.CheckExpression, check.Enforced)
 	if err != nil {
 		return err
 	}
@@ -1534,11 +1566,6 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -1557,9 +1584,22 @@ func (t *AlterableDoltTable) CreateCheck(ctx *sql.Context, check *sql.CheckDefin
 }
 
 func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
-	sch := t.sch
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
 
-	err := sch.Checks().DropCheck(chName)
+	updatedTable, _, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+
+	sch, err := updatedTable.GetSchema(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = sch.Checks().DropCheck(chName)
 	if err != nil {
 		return err
 	}
@@ -1570,11 +1610,6 @@ func (t *AlterableDoltTable) DropCheck(ctx *sql.Context, chName string) error {
 	}
 
 	newTable, err := table.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}

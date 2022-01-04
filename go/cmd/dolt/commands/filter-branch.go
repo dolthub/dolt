@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
-	"github.com/dolthub/vitess/go/vt/vterrors"
 	"github.com/fatih/color"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -183,13 +182,6 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	case *sqlparser.MultiAlterDDL:
 		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
-		if se, ok := vterrors.AsSyntaxError(err); ok {
-			return nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
-		}
-		if err != nil {
-			return nil, fmt.Errorf("error parsing DDL: %v", err.Error())
-		}
 		_, itr, err = eng.Query(sqlCtx, query)
 	case *sqlparser.Select, *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Explain, *sqlparser.Union:
 		return nil, fmt.Errorf("filter-branch queries must be write queries: '%s'", query)
@@ -208,7 +200,7 @@ func processFilterQuery(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commi
 	}
 
 	for {
-		_, err = itr.Next()
+		_, err = itr.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -251,10 +243,12 @@ func rebaseSqlEngine(ctx context.Context, dEnv *env.DoltEnv, cm *doltdb.Commit) 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsqle.NewDatabase(dbName, dEnv.DbData(), opts)
 
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db)
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), db)
 
 	parallelism := runtime.GOMAXPROCS(0)
 	azr := analyzer.NewBuilder(pro).WithParallelism(parallelism).Build()

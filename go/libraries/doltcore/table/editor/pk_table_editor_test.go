@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -52,11 +51,9 @@ func TestTableEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -149,11 +146,9 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -244,11 +239,9 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -316,11 +309,9 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -405,11 +396,9 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		IsUnique: true,
 	})
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

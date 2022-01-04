@@ -34,6 +34,7 @@ import (
 func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]sqle.SqlDatabase, error) {
 	var dbs []sqle.SqlDatabase
 	var db sqle.SqlDatabase
+
 	err := mrEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
 		postCommitHooks, err := GetCommitHooks(ctx, dEnv)
 		if err != nil {

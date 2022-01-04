@@ -105,7 +105,7 @@ func (h *DoltHarness) ExecuteQuery(statement string) (schema string, results []s
 		return "", nil, err
 	}
 
-	results, err = rowsToResultStrings(rowIter)
+	results, err = rowsToResultStrings(ctx, rowIter)
 	if err != nil {
 		return "", nil, err
 	}
@@ -226,7 +226,7 @@ func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -239,13 +239,13 @@ func drainIterator(ctx *sql.Context, iter sql.RowIter) error {
 
 // This shouldn't be necessary -- the fact that an iterator can return an error but not clean up after itself in all
 // cases is a bug.
-func drainIteratorIgnoreErrors(iter sql.RowIter) {
+func drainIteratorIgnoreErrors(ctx *sql.Context, iter sql.RowIter) {
 	if iter == nil {
 		return
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			return
 		}
@@ -253,18 +253,18 @@ func drainIteratorIgnoreErrors(iter sql.RowIter) {
 }
 
 // Returns the rows in the iterator given as an array of their string representations, as expected by the test files
-func rowsToResultStrings(iter sql.RowIter) ([]string, error) {
+func rowsToResultStrings(ctx *sql.Context, iter sql.RowIter) ([]string, error) {
 	var results []string
 	if iter == nil {
 		return results, nil
 	}
 
 	for {
-		row, err := iter.Next()
+		row, err := iter.Next(ctx)
 		if err == io.EOF {
 			return results, nil
 		} else if err != nil {
-			drainIteratorIgnoreErrors(iter)
+			drainIteratorIgnoreErrors(ctx, iter)
 			return nil, err
 		} else {
 			for _, col := range row {
@@ -342,7 +342,14 @@ func schemaToSchemaString(sch sql.Schema) (string, error) {
 func sqlNewEngine(dEnv *env.DoltEnv) (*sqle.Engine, error) {
 	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
 	db := dsql.NewDatabase("dolt", dEnv.DbData(), opts)
-	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	if err != nil {
+		return nil, err
+	}
+
+	pro := dsql.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), db)
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
+
 	engine := sqle.NewDefault(pro)
 
 	return engine, nil

@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
@@ -111,10 +110,6 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 // the data is updated.
 func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column, opts editor.Options) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
-	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, newSch)
-	if err != nil {
-		return nil, err
-	}
 
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
@@ -150,16 +145,16 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 	if err != nil {
 		return nil, err
 	}
+
 	var autoVal types.Value
-	// Note: The correct way to add an auto increment value to an existing schema is to you use the
-	// ALTER TABLE CHANGE COLUMN syntax not ALTER TABLE autoincrement. (see auto_increment.bats)
 	if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
 		autoVal, err = tbl.GetAutoIncrementValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
-	updatedTable, err := doltdb.NewTable(ctx, vrw, newSchemaVal, rowData, indexData, autoVal)
+
+	updatedTable, err := doltdb.NewTable(ctx, vrw, newSch, rowData, indexData, autoVal)
 	if err != nil {
 		return nil, err
 	}

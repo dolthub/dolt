@@ -79,7 +79,7 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'UNIQUE KEY `v1` (`v1`)' ]] || false
 
-	run dolt index ls test2
+    run dolt index ls test2
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1(v1)" ]] || false
     run dolt schema show test2
@@ -117,11 +117,11 @@ SQL
     run dolt index ls test
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1(v1)" ]] || false
-	[[ "$output" =~ "v1v2(v1, v2)" ]] || false
+    [[ "$output" =~ "v1v2(v1, v2)" ]] || false
     run dolt schema show test
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'KEY `v1` (`v1`)' ]] || false
-	[[ "$output" =~ 'KEY `v1v2` (`v1`,`v2`)' ]] || false
+    [[ "$output" =~ 'KEY `v1v2` (`v1`,`v2`)' ]] || false
 }
 
 @test "index: CREATE INDEX then INSERT" {
@@ -2546,4 +2546,50 @@ SQL
     run dolt sql -r csv -q "SELECT * FROM mytable"
     [[ "$output" =~ "1,jon" ]] || false
     ! [[ "$output" =~ "2,jon" ]] || false
+}
+
+@test "index: indexes should not be used when functions modify the column" {
+    dolt sql -q "create table test (id int, c1 varchar(255), primary key(id))"
+    dolt sql -q "insert into test values (1, 'Aaaa'), (2, 'aAaa')"
+
+    run dolt sql -q "select * from test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+    
+    run dolt sql -q "select * from test where lower(c1)='aaaa'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+
+    dolt sql -q "create index test on test (c1)"
+    dolt sql -q "select * from test where lower(c1)='aaaa'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+
+    dolt sql -q "create table test2 (id int, c1 varchar(255), c2 varchar(255), primary key(id))"
+    dolt sql -q "insert into test2 values (1, 'Aaaa', 'Bbbb'), (2, 'aAaa', 'bBbb')"
+
+    run dolt sql -q "select * from test2"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+    [[ "$output" =~ "Bbbb" ]] || false
+    [[ "$output" =~ "bBbb" ]] || false
+
+    run dolt sql -q "select * from test2 where lower(c1)='aaaa' and lower(c2)='bbbb'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+    [[ "$output" =~ "Bbbb" ]] || false
+    [[ "$output" =~ "bBbb" ]] || false
+
+    dolt sql -q "create index test2 on test2 (c1,c2)"
+    run dolt sql -q "select * from test2 where lower(c1)='aaaa' and lower(c2)='bbbb'"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Aaaa" ]] || false
+    [[ "$output" =~ "aAaa" ]] || false
+    [[ "$output" =~ "Bbbb" ]] || false
+    [[ "$output" =~ "bBbb" ]] || false
 }

@@ -35,7 +35,7 @@ var doltDocsColumns = schema.NewColCollection(
 	schema.NewColumn(doltdb.DocPkColumnName, schema.DocNameTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn(doltdb.DocTextColumnName, schema.DocTextTag, types.StringKind, false),
 )
-var Schema = schema.MustSchemaFromCols(doltDocsColumns)
+var DocsSchema = schema.MustSchemaFromCols(doltDocsColumns)
 
 type Doc struct {
 	Text  []byte

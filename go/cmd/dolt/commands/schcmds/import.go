@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
@@ -285,6 +284,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	// inferred schemas have no foreign keys
 	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -295,11 +295,6 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		tbl, tblExists, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)
-		if err != nil {
-			return errhand.BuildDError("error: failed to encode schema.").AddCause(err).Build()
 		}
 
 		empty, err := types.NewMap(ctx, root.VRW())
@@ -315,7 +310,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexData, nil)
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}

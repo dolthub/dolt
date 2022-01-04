@@ -19,6 +19,8 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
@@ -121,7 +123,7 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 	}
 
 	keyTpl := key.(types.Tuple)
-	conflict, err := doltdb.ConflictFromTuple(value.(types.Tuple))
+	conflict, err := conflict.ConflictFromTuple(value.(types.Tuple))
 
 	if err != nil {
 		return nil, pipeline.NoProps, err

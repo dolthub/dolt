@@ -365,6 +365,7 @@ func execShell(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	err = runShell(ctx, se, mrEnv)
 	if err != nil {
@@ -385,6 +386,7 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -419,6 +421,7 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -445,6 +448,7 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+	defer se.Close()
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -992,15 +996,6 @@ func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 		}
 		return nil, nil, nil
 	case *sqlparser.DDL:
-		_, err := sqlparser.ParseStrictDDL(query)
-		if err != nil {
-			if se, ok := vterrors.AsSyntaxError(err); ok {
-				return nil, nil, vterrors.SyntaxError{Message: "While Parsing DDL: " + se.Message, Position: se.Position, Statement: se.Statement}
-			} else {
-				return nil, nil, fmt.Errorf("Error parsing DDL: %v.", err.Error())
-			}
-		}
-
 		_, ri, err := se.Query(ctx, query)
 		if err != nil {
 			return nil, nil, err
@@ -1084,7 +1079,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 	}
 
 	currentBatchMode := invalidBatchMode
-	if v, err := ctx.GetSessionVariable(ctx, dsqle.CurrentBatchModeKey); err == nil {
+	if v, err := ctx.GetSessionVariable(ctx, dsess.CurrentBatchModeKey); err == nil {
 		currentBatchMode = batchMode(v.(int64))
 	} else {
 		return err
@@ -1104,7 +1099,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 		}
 	}
 
-	err = ctx.SetSessionVariable(ctx, dsqle.CurrentBatchModeKey, int64(newBatchMode))
+	err = ctx.SetSessionVariable(ctx, dsess.CurrentBatchModeKey, int64(newBatchMode))
 	if err != nil {
 		return err
 	}
@@ -1135,7 +1130,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 	}
 
 	if rowIter != nil {
-		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return err
 		}
@@ -1177,7 +1172,7 @@ func processBatchableEditQuery(ctx *sql.Context, se *engine.SqlEngine, query str
 				returnErr = err
 			}
 		}()
-		err = mergeResultIntoStats(sqlStatement, rowIter, batchEditStats)
+		err = mergeResultIntoStats(ctx, sqlStatement, rowIter, batchEditStats)
 		if err != nil {
 			return err
 		}
@@ -1321,7 +1316,7 @@ func updateBatchEditOutput() {
 }
 
 // Updates the batch insert stats with the results of an INSERT, UPDATE, or DELETE statement.
-func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
+func mergeResultIntoStats(ctx *sql.Context, statement sqlparser.Statement, rowIter sql.RowIter, s *stats) error {
 	switch statement.(type) {
 	case *sqlparser.Insert, *sqlparser.Delete, *sqlparser.Update, *sqlparser.Load:
 		break
@@ -1330,7 +1325,7 @@ func mergeResultIntoStats(statement sqlparser.Statement, rowIter sql.RowIter, s 
 	}
 
 	for {
-		row, err := rowIter.Next()
+		row, err := rowIter.Next(ctx)
 		if err == io.EOF {
 			return nil
 		} else if err != nil {

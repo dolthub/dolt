@@ -288,6 +288,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}
@@ -304,6 +305,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
 			dEnv := dtu.CreateTestEnv()
+
 			setupTest(t, ctx, dEnv, test.setup)
 
 			resolve := cnfcmds.ResolveCmd{}

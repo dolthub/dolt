@@ -101,6 +101,12 @@ type PerformanceYAMLConfig struct {
 	QueryParallelism *int `yaml:"query_parallelism"`
 }
 
+type MetricsYAMLConfig struct {
+	Labels map[string]string `yaml:"labels"`
+	Host   *string           `yaml:"host"`
+	Port   *int              `yaml:"port"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -109,7 +115,8 @@ type YAMLConfig struct {
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	dataDir           *string               `yaml:"data_dir"`
+	DataDirStr        *string               `yaml:"data_dir"`
+	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -289,6 +296,26 @@ func (cfg YAMLConfig) DisableClientMultiStatements() bool {
 	return *cfg.BehaviorConfig.DisableClientMultiStatements
 }
 
+func (cfg YAMLConfig) MetricsLabels() map[string]string {
+	return cfg.MetricsConfig.Labels
+}
+
+func (cfg YAMLConfig) MetricsHost() string {
+	if cfg.MetricsConfig.Host == nil {
+		return defaultMetricsHost
+	}
+
+	return *cfg.MetricsConfig.Host
+}
+
+func (cfg YAMLConfig) MetricsPort() int {
+	if cfg.MetricsConfig.Host == nil {
+		return defaultMetricsPort
+	}
+
+	return *cfg.MetricsConfig.Port
+}
+
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {
@@ -327,8 +354,8 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 }
 
 func (cfg YAMLConfig) DataDir() string {
-	if cfg.dataDir != nil {
-		return *cfg.dataDir
+	if cfg.DataDirStr != nil {
+		return *cfg.DataDirStr
 	}
 	return ""
 }

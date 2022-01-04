@@ -375,3 +375,20 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "output" =~ "t1" ]] || false
 }
+
+@test "replication: async push on cli engine commit" {
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_async_replication 1
+    dolt sql -q "create table t1 (a int primary key)"
+    dolt sql -q "select dolt_commit('-am', 'cm')"
+    sleep 5
+
+    cd ..
+    dolt clone file://./rem1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}

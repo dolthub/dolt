@@ -25,19 +25,20 @@ const (
 	SkipReplicationErrorsKey = "dolt_skip_replication_errors"
 	ReplicateHeadsKey        = "dolt_replicate_heads"
 	ReplicateAllHeadsKey     = "dolt_replicate_all_heads"
-	CurrentBatchModeKey      = "batch_mode"
+	AsyncReplicationKey      = "dolt_async_replication"
 )
+
+const (
+	SysVarFalse = int8(0)
+	SysVarTrue  = int8(1)
+)
+
+func init() {
+	AddDoltSystemVariables()
+}
 
 func AddDoltSystemVariables() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
-		{
-			Name:              CurrentBatchModeKey,
-			Scope:             sql.SystemVariableScope_Session,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
-			Default:           int64(0),
-		},
 		{
 			Name:              DefaultBranchKey,
 			Scope:             sql.SystemVariableScope_Global,
@@ -86,6 +87,14 @@ func AddDoltSystemVariables() {
 			Type:              sql.NewSystemBoolType(ReplicateAllHeadsKey),
 			Default:           int8(0),
 		},
+		{
+			Name:              AsyncReplicationKey,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(AsyncReplicationKey),
+			Default:           int8(0),
+		},
 	})
 }
 
@@ -94,5 +103,5 @@ func SkipReplicationWarnings() bool {
 	if !ok {
 		panic("dolt system variables not loaded")
 	}
-	return skip == int8(1)
+	return skip == SysVarTrue
 }

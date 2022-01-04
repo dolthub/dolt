@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -409,10 +408,8 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 	_, err = tSchema.Indexes().RemoveIndex(testSchemaIndexAge)
 	require.NoError(t, err)
 	rowData, _ := createTestRowData(t, db, tSchema)
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
-	require.NoError(t, err)
 
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, tSchema, rowData)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -434,8 +431,6 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 	require.NotNil(t, index)
 	indexSch := index.Schema()
 	rowData, rows := createTestRowData(t, db, tSchema)
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
-	require.NoError(t, err)
 
 	indexExpectedRows := make([]row.Row, len(rows))
 	for i, r := range rows {
@@ -449,7 +444,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, tSchema, rowData)
 	require.NoError(t, err)
 
 	var indexRows []row.Row
@@ -494,9 +489,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	rowData, rows := createTestRowData(t, db, tSchema)
 	indexNameExpectedRows, indexAgeExpectedRows := rowsToIndexRows(t, rows, indexName, indexAge)
 
-	schemaVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
-	require.NoError(t, err)
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schemaVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, tSchema, rowData)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -619,9 +612,7 @@ func TestIndexRebuildingUniqueSuccessOneCol(t *testing.T) {
 		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
 		row.TaggedValues{1: types.Int(3), 2: types.Int(3), 3: types.Int(3)},
 	)
-	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
-	require.NoError(t, err)
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, sch, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -651,9 +642,7 @@ func TestIndexRebuildingUniqueSuccessTwoCol(t *testing.T) {
 		row.TaggedValues{1: types.Int(2), 2: types.Int(1), 3: types.Int(2)},
 		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(2)},
 	)
-	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
-	require.NoError(t, err)
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, sch, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -683,9 +672,7 @@ func TestIndexRebuildingUniqueFailOneCol(t *testing.T) {
 		row.TaggedValues{1: types.Int(2), 2: types.Int(2), 3: types.Int(2)},
 		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(3)},
 	)
-	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
-	require.NoError(t, err)
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, sch, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -716,9 +703,7 @@ func TestIndexRebuildingUniqueFailTwoCol(t *testing.T) {
 		row.TaggedValues{1: types.Int(3), 2: types.Int(2), 3: types.Int(2)},
 		row.TaggedValues{1: types.Int(4), 2: types.Int(1), 3: types.Int(2)},
 	)
-	schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, sch)
-	require.NoError(t, err)
-	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, schVal, rowData)
+	originalTable, err := createTableWithoutIndexRebuilding(context.Background(), db, sch, rowData)
 	require.NoError(t, err)
 
 	index, err := sch.Indexes().AddIndexByColTags("idx_v1", []uint64{2, 3}, schema.IndexProperties{IsUnique: true, Comment: ""})
@@ -852,9 +837,9 @@ func createTestSchema(t *testing.T) schema.Schema {
 	return sch
 }
 
-func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, schemaVal types.Value, rowData types.Map) (*doltdb.Table, error) {
+func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map) (*doltdb.Table, error) {
 	empty, _ := types.NewMap(ctx, vrw)
-	return doltdb.NewTable(ctx, vrw, schemaVal, rowData, empty, nil)
+	return doltdb.NewTable(ctx, vrw, sch, rowData, empty, nil)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {

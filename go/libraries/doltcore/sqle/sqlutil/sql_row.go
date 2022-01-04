@@ -39,8 +39,8 @@ type mapSqlIter struct {
 var _ sql.RowIter = (*mapSqlIter)(nil)
 
 // Next implements the interface sql.RowIter.
-func (m *mapSqlIter) Next() (sql.Row, error) {
-	dRow, err := m.nmr.ReadRow(m.ctx)
+func (m *mapSqlIter) Next(ctx *sql.Context) (sql.Row, error) {
+	dRow, err := m.nmr.ReadRow(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,6 @@ func MapToSqlIter(ctx context.Context, sch schema.Schema, data types.Map) (sql.R
 		return nil, err
 	}
 	return &mapSqlIter{
-		ctx: ctx,
 		nmr: mapReader,
 		sch: sch,
 	}, nil
