@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -30,7 +31,7 @@ var _ sql.Table = ConflictsTable{}
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
 type ConflictsTable struct {
 	tblName string
-	sqlSch  sql.Schema
+	sqlSch  sql.PrimaryKeySchema
 	root    *doltdb.RootValue
 	tbl     *doltdb.Table
 	rd      *merge.ConflictReader
@@ -82,17 +83,17 @@ func (ct ConflictsTable) String() string {
 
 // Schema returns the sql.Schema of the table
 func (ct ConflictsTable) Schema() sql.Schema {
-	return ct.sqlSch
+	return ct.sqlSch.Schema
 }
 
 // Partitions returns a PartitionIter which can be used to get all the data partitions
 func (ct ConflictsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(types.Map{}), nil
 }
 
 // PartitionRows returns a RowIter for the given partition
 func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return conflictRowIter{ctx, ct.rd}, nil
+	return conflictRowIter{ct.rd}, nil
 }
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
@@ -102,14 +103,13 @@ func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {
 }
 
 type conflictRowIter struct {
-	ctx *sql.Context
-	rd  *merge.ConflictReader
+	rd *merge.ConflictReader
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr conflictRowIter) Next() (sql.Row, error) {
-	cnf, _, err := itr.rd.NextConflict(itr.ctx)
+func (itr conflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+	cnf, _, err := itr.rd.NextConflict(ctx)
 
 	if err != nil {
 		return nil, err

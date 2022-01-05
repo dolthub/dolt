@@ -29,9 +29,13 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	config2 "github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
@@ -173,7 +177,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		rowErr error
 		row    sql.Row
 	)
-	for row, rowErr = rowIter.Next(); rowErr == nil; row, rowErr = rowIter.Next() {
+	for row, rowErr = rowIter.Next(ctx); rowErr == nil; row, rowErr = rowIter.Next(ctx) {
 		rows = append(rows, row)
 	}
 
@@ -184,9 +188,138 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 	return rows, nil
 }
 
+// Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
+// final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
+// schema given must match.
+func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
+	sqlRows := make([]sql.Row, len(rs))
+	compressedSch := CompressSchema(sch)
+	for i := range rs {
+		sqlRows[i], _ = sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
+	}
+	return sqlRows
+}
+
+// Rewrites the tag numbers for the schema given to start at 0, just like result set schemas. If one or more column
+// names are given, only those column names are included in the compressed schema. The column list can also be used to
+// reorder the columns as necessary.
+func CompressSchema(sch schema.Schema, colNames ...string) schema.Schema {
+	var itag uint64
+	var cols []schema.Column
+
+	if len(colNames) > 0 {
+		cols = make([]schema.Column, len(colNames))
+		for _, colName := range colNames {
+			column, ok := sch.GetAllCols().GetByName(colName)
+			if !ok {
+				panic("No column found for column name " + colName)
+			}
+			column.Tag = itag
+			cols[itag] = column
+			itag++
+		}
+	} else {
+		cols = make([]schema.Column, sch.GetAllCols().Size())
+		sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			col.Tag = itag
+			cols[itag] = col
+			itag++
+			return false, nil
+		})
+	}
+
+	colCol := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colCol)
+}
+
+// Rewrites the tag numbers for the schemas given to start at 0, just like result set schemas.
+func CompressSchemas(schs ...schema.Schema) schema.Schema {
+	var itag uint64
+	var cols []schema.Column
+
+	cols = make([]schema.Column, 0)
+	for _, sch := range schs {
+		sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+			col.Tag = itag
+			cols = append(cols, col)
+			itag++
+			return false
+		})
+	}
+
+	colCol := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colCol)
+}
+
+// Compresses each of the rows given ala compressRow
+func CompressRows(sch schema.Schema, rs ...row.Row) []row.Row {
+	compressed := make([]row.Row, len(rs))
+	for i := range rs {
+		compressed[i] = CompressRow(sch, rs[i])
+	}
+	return compressed
+}
+
+// Rewrites the tag numbers for the row given to begin at zero and be contiguous, just like result set schemas. We don't
+// want to just use the field mappings in the result set schema used by sqlselect, since that would only demonstrate
+// that the code was consistent with itself, not actually correct.
+func CompressRow(sch schema.Schema, r row.Row) row.Row {
+	var itag uint64
+	compressedRow := make(row.TaggedValues)
+
+	// TODO: this is probably incorrect and will break for schemas where the tag numbering doesn't match the declared order
+	sch.GetAllCols().IterInSortedOrder(func(tag uint64, col schema.Column) (stop bool) {
+		if val, ok := r.GetColVal(tag); ok {
+			compressedRow[itag] = val
+		}
+		itag++
+		return false
+	})
+
+	// call to compress schema is a no-op in most cases
+	r, err := row.New(types.Format_Default, CompressSchema(sch), compressedRow)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return r
+}
+
+// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
+// must be verified before subsetting. Unrecognized column names will cause a panic.
+func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
+	srcColls := sch.GetAllCols()
+
+	var cols []schema.Column
+	for _, name := range colNames {
+		if col, ok := srcColls.GetByName(name); !ok {
+			panic("Unrecognized name " + name)
+		} else {
+			cols = append(cols, col)
+		}
+	}
+	colColl := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colColl)
+}
+
+// DoltSchemaFromAlterableTable is a utility for integration tests
+func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
+	return t.sch
+}
+
+// DoltTableFromAlterableTable is a utility for integration tests
+func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
+	dt, err := t.doltTable(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return dt
+}
+
 func drainIter(ctx *sql.Context, iter sql.RowIter) error {
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(ctx)
 		if err == io.EOF {
 			break
 		} else if err != nil {

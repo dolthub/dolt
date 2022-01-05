@@ -85,7 +85,7 @@ func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(addOperationStr, "", "Set the value of one or more config parameters")
 	ap.SupportsFlag(listOperationStr, "", "List the values of all config parameters.")
 	ap.SupportsFlag(getOperationStr, "", "Get the value of one or more config parameters.")
-	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config paramaters.")
+	ap.SupportsFlag(unsetOperationStr, "", "Unset the value of one or more config parameters.")
 	return ap
 }
 

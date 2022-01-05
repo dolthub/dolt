@@ -22,9 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -81,60 +79,52 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 
 // createDocsTable creates a new in memory table that stores the given doc details.
 func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) (*doltdb.Table, error) {
-	imt := table.NewInMemTable(Schema)
+
+	rows := make([]row.Row, 0, len(docs))
 
 	// Determines if the table needs to be created at all and initializes a schema if it does.
-	createTable := false
 	for _, doc := range docs {
+
 		if doc.Text != nil {
-			createTable = true
 			docTaggedVals := row.TaggedValues{
 				schema.DocNameTag: types.String(doc.DocPk),
 				schema.DocTextTag: types.String(doc.Text),
 			}
 
-			docRow, err := row.New(types.Format_Default, Schema, docTaggedVals)
+			r, err := row.New(types.Format_Default, DocsSchema, docTaggedVals)
 			if err != nil {
 				return nil, err
 			}
-			err = imt.AppendRow(docRow)
-			if err != nil {
-				return nil, err
-			}
+			rows = append(rows, r)
 		}
 	}
 
-	if createTable {
-		rd := table.NewInMemTableReader(imt)
-		wr := noms.NewNomsMapCreator(context.Background(), vrw, Schema)
-
-		_, _, err := table.PipeRows(context.Background(), rd, wr, false)
-		if err != nil {
-			return nil, err
-		}
-		rd.Close(context.Background())
-		wr.Close(context.Background())
-
-		schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, wr.GetSchema())
-
-		if err != nil {
-			return nil, ErrMarshallingSchema
-		}
-
-		empty, err := types.NewMap(ctx, vrw)
-		if err != nil {
-			return nil, err
-		}
-
-		newDocsTbl, err := doltdb.NewTable(ctx, vrw, schVal, wr.GetMap(), empty, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		return newDocsTbl, nil
+	if len(rows) == 0 {
+		return nil, nil
 	}
 
-	return nil, nil
+	empty, err := types.NewMap(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	me := empty.Edit()
+	for _, r := range rows {
+		k, v := r.NomsMapKey(DocsSchema), r.NomsMapValue(DocsSchema)
+		me.Set(k, v)
+	}
+
+	rowMap, err := me.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newDocsTbl, err := doltdb.NewTable(ctx, vrw, DocsSchema, rowMap, empty, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return newDocsTbl, nil
 }
 
 // CreateOrUpdateDocsTable takes a root value and a set of docs and either creates the docs table or updates it with docs.

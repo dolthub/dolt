@@ -512,7 +512,10 @@ func (db Database) getTable(ctx *sql.Context, root *doltdb.RootValue, tableName 
 
 	var table sql.Table
 
-	readonlyTable := NewDoltTable(tableName, sch, tbl, db, temporary, db.editOpts)
+	readonlyTable, err := NewDoltTable(tableName, sch, tbl, db, temporary, db.editOpts)
+	if err != nil {
+		return nil, false, err
+	}
 	if doltdb.IsReadOnlySystemTable(tableName) {
 		table = readonlyTable
 	} else if doltdb.HasDoltPrefix(tableName) {
@@ -683,7 +686,7 @@ func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) er
 }
 
 // CreateTable creates a table with the name and schema given.
-func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -696,7 +699,7 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Schem
 }
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
-func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return err
@@ -755,7 +758,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 }
 
 // CreateTemporaryTable creates a table that only exists the length of a session.
-func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -767,7 +770,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 	return db.createTempSQLTable(ctx, tableName, sch)
 }
 
-func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.Schema) error {
+func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
 	// Get temporary root value
 	sess := dsess.DSessFromSess(ctx.Session)
 	tempTableRootValue, exists := db.GetTemporaryTablesRoot(ctx)

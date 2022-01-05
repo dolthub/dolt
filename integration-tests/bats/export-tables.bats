@@ -308,3 +308,134 @@ SQL
    run dolt sql -q "SELECT * FROM timetable" -r csv
    [[ "$output" =~ "1,2021-06-02 15:37:24 +0000 UTC" ]] ||  false
 }
+
+@test "export-tables: parquet file export check with parquet tools" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
+
+    run dolt table export -f test_table result.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f result.parquet ]
+
+    run parquet-tools cat --json result.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":1,"col1":"row1","col2":22}'
+    row2='{"pk":2,"col1":"row2","col2":33}'
+    row3='{"pk":3,"col1":"row3","col2":22}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+    [[ "$output" =~ "$row3" ]] || false
+}
+
+@test "export-tables: parquet file export compare pandas and pyarrow reads" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
+    dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
+
+    run dolt table export -f test_table result.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f result.parquet ]
+
+    echo "import pandas as pd
+df = pd.read_parquet('result.parquet')
+print(df)
+" > pandas.py
+    run python3 pandas.py > pandas.txt
+    [ -f pandas.txt ]
+
+    echo "import pyarrow.parquet as pq
+table = pq.read_table('result.parquet')
+print(table.to_pandas())
+" > arrow.py
+    run python3 arrow.py > pyarrow.txt
+    [ -f pyarrow.txt ]
+
+    run diff pandas.txt pyarrow.txt
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
+@test "export-tables: table export datetime, bool, enum types to parquet" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    dolt sql <<SQL
+CREATE TABLE diffTypes (
+  pk BIGINT PRIMARY KEY,
+  v1 DATE,
+  v2 TIME,
+  v3 YEAR,
+  v4 DATETIME,
+  v5 BOOL,
+  v6 ENUM('one', 'two', 'three')
+);
+INSERT INTO diffTypes VALUES
+    (1,'2020-04-08','11:11:11','2020','2020-04-08 11:11:11',true,'one'),
+    (2,'2020-04-08','12:12:12','2020','2020-04-08 12:12:12',false,'three'),
+    (3,'2021-10-09','04:12:34','2019','2019-10-09 04:12:34',true,NULL);
+SQL
+    run dolt table export diffTypes dt.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f dt.parquet ]
+
+    run parquet-tools cat --json dt.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":1,"v1":1586304000,"v2":40271000000,"v3":2020,"v4":1586344271,"v5":1,"v6":"one"}'
+    row2='{"pk":2,"v1":1586304000,"v2":43932000000,"v3":2020,"v4":1586347932,"v5":0,"v6":"three"}'
+    row3='{"pk":3,"v1":1633737600,"v2":15154000000,"v3":2019,"v4":1570594354,"v5":1}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+    [[ "$output" =~ "$row3" ]] || false
+}
+
+
+@test "export-tables: table export more types to parquet" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    dolt sql <<SQL
+CREATE TABLE test (
+  \`pk\` BIGINT NOT NULL,
+  \`int\` BIGINT,
+  \`string\` LONGTEXT,
+  \`boolean\` BOOLEAN,
+  \`float\` DOUBLE,
+  \`uint\` BIGINT UNSIGNED,
+  \`uuid\` CHAR(36) CHARACTER SET ascii COLLATE ascii_bin,
+  PRIMARY KEY (pk)
+);
+SQL
+    dolt table import -u test `batshelper 1pksupportedtypes.csv`
+
+    run dolt table export test test.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f test.parquet ]
+
+    run parquet-tools cat --json test.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":0,"int":0,"string":"asdf","boolean":1,"float":0.0,"uint":0,"uuid":"00000000-0000-0000-0000-000000000000"}'
+    row2='{"pk":1,"int":-1,"string":"qwerty","boolean":0,"float":-1.0,"uint":1,"uuid":"00000000-0000-0000-0000-000000000001"}'
+    row3='{"pk":2,"int":1,"string":"","boolean":1,"float":0.0,"uint":0,"uuid":"123e4567-e89b-12d3-a456-426655440000"}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+    [[ "$output" =~ "$row3" ]] || false
+}
+
+@test "export-tables: table export decimal and bit types to parquet" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    dolt sql -q "CREATE TABLE more (pk BIGINT NOT NULL,v DECIMAL(9,5),b BIT(10),PRIMARY KEY (pk));"
+    dolt sql -q "INSERT INTO more VALUES (1, 1234.56789, 511);"
+    dolt sql -q "INSERT INTO more VALUES (2, 5235.66789, 514);"
+
+    run dolt table export more more.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f more.parquet ]
+
+    run parquet-tools cat --json more.parquet > output.json
+    [ "$status" -eq 0 ]
+    row1='{"pk":1,"v":1234.57,"b":511}'
+    row2='{"pk":2,"v":5235.67,"b":514}'
+    [[ "$output" =~ "$row1" ]] || false
+    [[ "$output" =~ "$row2" ]] || false
+}

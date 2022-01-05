@@ -136,3 +136,38 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "no table named blame_test found" ]] || false
 }
+
+@test "blame: pk ordered output" {
+    run dolt blame blame_test
+    [ "$status" -eq 0 ]
+    [[ "${lines[3]}" =~ "| 1  | create blame_test table       | Thomas Foolery, |" ]] || false
+    [[ "${lines[4]}" =~ "| 2  | replace richard with harry    | Harry Wombat,   |" ]] || false
+    [[ "${lines[5]}" =~ "| 3  | add more people to blame_test | Johnny Moolah,  |" ]] || false
+    [[ "${lines[6]}" =~ "| 4  | add more people to blame_test | Johnny Moolah,  |" ]] || false
+}
+
+@test "blame: composite pk ordered output with correct header" {
+    dolt sql -q "create table t(pk varchar(20), val int)"
+    run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk, val)"
+    [ "$status" -eq 0 ]
+
+    dolt sql -q "INSERT INTO t VALUES ('zzz',4),('mult',1),('sub',2),('add',5)"
+    dolt add .
+    dolt commit -m "add rows"
+
+    dolt sql -q "INSERT INTO t VALUES ('dolt',0),('alt',12),('del',8),('ctl',3)"
+    dolt add .
+    dolt commit -m "add more rows"
+
+    run dolt blame t
+    [ "$status" -eq 0 ]
+    [[ "${lines[1]}" =~ "| PK   | VAL | COMMIT MSG    | AUTHOR     | TIME                         | COMMIT                           |" ]] || false
+    [[ "${lines[3]}" =~ "| add  | 5   | add rows      | Bats Tests |" ]] || false
+    [[ "${lines[4]}" =~ "| alt  | 12  | add more rows | Bats Tests |" ]] || false
+    [[ "${lines[5]}" =~ "| ctl  | 3   | add more rows | Bats Tests |" ]] || false
+    [[ "${lines[6]}" =~ "| del  | 8   | add more rows | Bats Tests |" ]] || false
+    [[ "${lines[7]}" =~ "| dolt | 0   | add more rows | Bats Tests |" ]] || false
+    [[ "${lines[8]}" =~ "| mult | 1   | add rows      | Bats Tests |" ]] || false
+    [[ "${lines[9]}" =~ "| sub  | 2   | add rows      | Bats Tests |" ]] || false
+    [[ "${lines[10]}" =~ "| zzz  | 4   | add rows      | Bats Tests |" ]] || false
+}

@@ -15,6 +15,7 @@
 package schema
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -86,7 +87,7 @@ func TestSchemaWithNoPKs(t *testing.T) {
 	})
 }
 
-func TestSchemaOverlap(t *testing.T) {
+func TestGetSharedCols(t *testing.T) {
 	colColl := NewColCollection(nonPkCols...)
 	sch, _ := SchemaFromCols(colColl)
 
@@ -94,12 +95,20 @@ func TestSchemaOverlap(t *testing.T) {
 	kinds := []types.NomsKind{types.StringKind, types.UintKind}
 	res := GetSharedCols(sch, names, kinds)
 
-	cmp := map[string]uint64{
-		addrColName: addrColTag,
-		ageColName:  ageColTag,
+	expected := []Column{
+		mustGetCol(colColl, addrColName),
+		mustGetCol(colColl, ageColName),
 	}
 
-	assert.Equal(t, res, cmp)
+	assert.Equal(t, expected, res)
+}
+
+func mustGetCol(collection *ColCollection, name string) Column {
+	col, ok := collection.GetByName(name)
+	if !ok {
+		panic(fmt.Sprintf("%s not found", name))
+	}
+	return col
 }
 
 func TestIsKeyless(t *testing.T) {

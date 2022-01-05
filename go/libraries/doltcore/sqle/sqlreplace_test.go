@@ -255,7 +255,7 @@ var systemTableReplaceTests = []ReplaceTest{
 	{
 		Name: "replace into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.Schema,
+			doltdocs.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		ReplaceQuery: "replace into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr:  "cannot insert into table",

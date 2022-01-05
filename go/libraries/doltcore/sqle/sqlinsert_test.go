@@ -26,10 +26,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -400,7 +398,7 @@ var systemTableInsertTests = []InsertTest{
 	{
 		Name: "insert into dolt_docs",
 		AdditionalSetup: CreateTableFn("dolt_docs",
-			doltdocs.Schema,
+			doltdocs.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license"))),
 		InsertQuery: "insert into dolt_docs (doc_name, doc_text) values ('README.md', 'Some text')",
 		ExpectedErr: "cannot insert into table",
@@ -433,19 +431,6 @@ var systemTableInsertTests = []InsertTest{
 		),
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
-}
-
-func mustGetDoltSchema(sch sql.Schema, tableName string, testEnv *env.DoltEnv) schema.Schema {
-	wrt, err := testEnv.WorkingRoot(context.Background())
-	if err != nil {
-		panic(err)
-	}
-
-	doltSchema, err := sqlutil.ToDoltSchema(context.Background(), wrt, tableName, sch, nil)
-	if err != nil {
-		panic(err)
-	}
-	return doltSchema
 }
 
 func TestInsertIntoSystemTables(t *testing.T) {

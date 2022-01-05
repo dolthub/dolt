@@ -73,7 +73,7 @@ func ApplyDefaults(ctx context.Context, vrw types.ValueReadWriter, doltSchema sc
 // is used to generate unique tags for the Schema
 func ParseCreateTableStatement(ctx context.Context, root *doltdb.RootValue, query string) (string, schema.Schema, error) {
 	// todo: verify create table statement
-	ddl, err := sqlparser.ParseStrictDDL(query)
+	ddl, err := sqlparser.Parse(query)
 
 	if err != nil {
 		return "", nil, err

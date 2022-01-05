@@ -58,7 +58,11 @@ var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
-	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, dEnv.FS).WithDbFactoryUrl(doltdb.InMemDoltDB)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	require.NoError(t, err)
+	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem())
+	require.NoError(t, err)
+	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
 
@@ -72,13 +76,14 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 }
 
 var defaultSkippedQueries = []string{
-	"show variables",           // we set extra variables
-	"show create table fk_tbl", // we create an extra key for the FK that vanilla gms does not
-	"show indexes from",        // we create / expose extra indexes (for foreign keys)
-	"json_arrayagg",            // TODO: aggregation ordering
-	"json_objectagg",           // TODO: aggregation ordering
-	"typestable",               // Bit type isn't working?
-	"dolt_commit_diff_",        // see broken queries in `dolt_system_table_queries.go`
+	"show variables",             // we set extra variables
+	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
+	"show indexes from",          // we create / expose extra indexes (for foreign keys)
+	"json_arrayagg",              // TODO: aggregation ordering
+	"json_objectagg",             // TODO: aggregation ordering
+	"typestable",                 // Bit type isn't working?
+	"dolt_commit_diff_",          // see broken queries in `dolt_system_table_queries.go`
+	"show global variables like", // we set extra variables
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
@@ -199,7 +204,10 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	return sqle.NewDoltDatabaseProvider(d.env.Config, d.env.FS, dbs...).WithDbFactoryUrl(doltdb.InMemDoltDB)
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
+	require.NoError(d.t, err)
+	pro := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv.FileSystem(), dbs...)
+	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
 func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
@@ -221,7 +229,7 @@ func getDbState(t *testing.T, db sqle.Database, dEnv *env.DoltEnv) dsess.Initial
 	}
 }
 
-func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) (sql.Table, error) {
+func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.PrimaryKeySchema) (sql.Table, error) {
 	var err error
 	if ro, ok := db.(sqle.ReadOnlyDatabase); ok {
 		err = ro.CreateTable(enginetest.NewContext(d).WithCurrentDB(db.Name()), name, schema)
@@ -240,7 +248,7 @@ func (d *DoltHarness) NewTable(db sql.Database, name string, schema sql.Schema) 
 
 // Dolt doesn't version tables per se, just the entire database. So ignore the name and schema and just create a new
 // branch with the given name.
-func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.Schema, asOf interface{}) sql.Table {
+func (d *DoltHarness) NewTableAsOf(db sql.VersionedDatabase, name string, schema sql.PrimaryKeySchema, asOf interface{}) sql.Table {
 	table, err := d.NewTable(db, name, schema)
 	if err != nil {
 		require.True(d.t, sql.ErrTableAlreadyExists.Is(err))

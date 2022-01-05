@@ -111,7 +111,7 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditSession.Opts)
+	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditOpts())
 	if err != nil {
 		return nil, err
 	}

@@ -55,6 +55,9 @@ const (
 
 	// SqlFile is the format of a data location that is a .sql file
 	SqlFile DataFormat = ".sql"
+
+	// ParquetFile is the format of a data location that is a .paquet file
+	ParquetFile DataFormat = ".parquet"
 )
 
 // ReadableStr returns a human readable string for a DataFormat
@@ -72,6 +75,8 @@ func (df DataFormat) ReadableStr() string {
 		return "json file"
 	case SqlFile:
 		return "sql file"
+	case ParquetFile:
+		return "parquet file"
 	default:
 		return "invalid"
 	}
@@ -90,13 +95,6 @@ type DataLocation interface {
 	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 	// an existing table.
 	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, sortedInput bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options, wr io.WriteCloser) (table.TableWriteCloser, error)
-
-	// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
-	// their primary key.
-	NewUpdatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, rdTags []uint64, opts editor.Options) (table.TableWriteCloser, error)
-
-	// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table if it has the same schema.
-	NewReplacingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error)
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table
@@ -124,6 +122,8 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 				dataFmt = JsonFile
 			case string(SqlFile):
 				dataFmt = SqlFile
+			case string(ParquetFile):
+				dataFmt = ParquetFile
 			}
 		}
 	}

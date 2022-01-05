@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
@@ -59,7 +60,7 @@ type tableInConflict struct {
 	name    string
 	size    uint64
 	done    bool
-	schemas doltdb.Conflict
+	schemas conflict.ConflictSchema
 	//cnfItr types.MapIterator
 }
 
@@ -70,7 +71,7 @@ func (p *tableInConflict) Key() []byte {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (p *tableInConflict) Next() (sql.Row, error) {
+func (p *tableInConflict) Next(*sql.Context) (sql.Row, error) {
 	if p.done {
 		return nil, io.EOF
 	}
@@ -92,7 +93,7 @@ type tablesInConflict struct {
 var _ sql.RowIter = &tableInConflict{}
 
 // Next returns the next partition or io.EOF when done
-func (p *tablesInConflict) Next() (sql.Partition, error) {
+func (p *tablesInConflict) Next(*sql.Context) (sql.Partition, error) {
 	if p.pos >= len(p.partitions) {
 		return nil, io.EOF
 	}

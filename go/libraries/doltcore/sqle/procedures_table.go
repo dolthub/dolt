@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -42,7 +43,7 @@ const (
 )
 
 // The fixed SQL schema for the `dolt_procedures` table.
-func ProceduresTableSqlSchema() sql.Schema {
+func ProceduresTableSqlSchema() sql.PrimaryKeySchema {
 	sqlSchema, err := sqlutil.FromDoltSchema(doltdb.ProceduresTableName, ProceduresTableSchema())
 	if err != nil {
 		panic(err) // should never happen
@@ -155,9 +156,9 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, err
 	}
 	var fragNameIndex sql.Index
-	for _, index := range indexes {
-		if index.ID() == "PRIMARY" {
-			fragNameIndex = index
+	for _, idx := range indexes {
+		if idx.ID() == "PRIMARY" {
+			fragNameIndex = idx
 			break
 		}
 	}
@@ -170,13 +171,18 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}
-	dil := indexLookup.(*doltIndexLookup)
-	rowIter, err := dil.RowIter(ctx, dil.IndexRowData(), nil)
+
+	rowIter, err := index.RowIterForIndexLookup(ctx, indexLookup, nil)
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}
-	defer rowIter.Close(ctx)
-	sqlRow, err := rowIter.Next()
+	defer func() {
+		if cerr := rowIter.Close(ctx); cerr != nil {
+			err = cerr
+		}
+	}()
+
+	sqlRow, err := rowIter.Next(ctx)
 	if err == nil {
 		if len(sqlRow) != 4 {
 			return sql.StoredProcedureDetails{}, false, fmt.Errorf("unexpected row in dolt_procedures:\n%v", sqlRow)
