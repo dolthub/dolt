@@ -23,6 +23,7 @@ import (
 )
 
 func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (Node, error) {
+	// todo(andy) handle nil Node, dangling ref
 	return ns.Read(ctx, mt.GetRef())
 }
 
@@ -34,13 +35,15 @@ func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nod
 		return nil, nodePair{}, err
 	}
 
-	var meta nodePair
-	if len(items) > 0 {
-		lastKey := val.Tuple(items[len(items)-metaPairCount])
-		metaKey := val.CloneTuple(ns.Pool(), lastKey)
-		metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
-		meta = nodePair{nodeItem(metaKey), nodeItem(metaVal)}
+	if len(items) == 0 {
+		// empty leaf node
+		return child, nodePair{}, nil
 	}
+
+	lastKey := val.Tuple(items[len(items)-metaPairCount])
+	metaKey := val.CloneTuple(ns.Pool(), lastKey)
+	metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
+	meta := nodePair{nodeItem(metaKey), nodeItem(metaVal)}
 
 	return child, meta, nil
 }

@@ -275,7 +275,7 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 		}
 
 		if ok {
-			// at end of currentPair leaf chunk and there are more
+			// at end of currentPair chunk and there are more
 			err := cur.fetchNode(ctx)
 			if err != nil {
 				return false, err

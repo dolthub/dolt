@@ -26,17 +26,17 @@ type memoryMap struct {
 	keyDesc val.TupleDesc
 }
 
-func newMemoryMap(keyDesc val.TupleDesc, tups ...val.Tuple) (tm memoryMap) {
+func newMemoryMap(keyDesc val.TupleDesc, tups ...val.Tuple) (mm memoryMap) {
 	if len(tups)%2 != 0 {
 		panic("tuples must be key-value pairs")
 	}
 
-	tm.keyDesc = keyDesc
+	mm.keyDesc = keyDesc
 
-	// todo(andy): fix allocation for |tm.compare|
-	tm.list = skip.NewSkipList(tm.compare)
+	// todo(andy): fix allocation for |mm.compare|
+	mm.list = skip.NewSkipList(mm.compare)
 	for i := 0; i < len(tups); i += 2 {
-		tm.list.Put(tups[i], tups[i+1])
+		mm.list.Put(tups[i], tups[i+1])
 	}
 
 	return

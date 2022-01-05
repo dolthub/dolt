@@ -14,6 +14,12 @@
 
 package val
 
+// todo(andy): more ergonomic offsets
+// type SlicedBuffer struct {
+//    buf  []byte
+//    offs []uint16
+// }
+
 type Offsets []byte
 
 // OffsetsSize returns the number of bytes needed to

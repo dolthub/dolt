@@ -18,6 +18,10 @@ import (
 	"context"
 )
 
+const (
+	nodeItemAccumulatorSz = 512
+)
+
 //  newSplitterFn makes a nodeSplitter.
 type newSplitterFn func(salt byte) nodeSplitter
 
@@ -47,7 +51,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, ns NodeS
 
 	sc := &treeChunker{
 		cur:      cur,
-		current:  make([]nodeItem, 0, 1<<10),
+		current:  make([]nodeItem, 0, nodeItemAccumulatorSz),
 		level:    level,
 		parent:   nil,
 		newSplit: newSplit,
@@ -288,6 +292,7 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 
 	var parent *nodeCursor
 	if tc.cur != nil && tc.cur.parent != nil {
+		// todo(andy): does this comment make sense? cloning a pointer?
 		// Clone the parent cursor because otherwise calling cur.forward() will affect our parent - and vice versa -
 		// in surprising ways. Instead, Skip moves forward our parent's cursor if we forward across a boundary.
 		parent = tc.cur.parent
@@ -369,7 +374,8 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	// (3) This is an internal Node of the tree with a single metaPair. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
-	assertTrue(!tc.isLeaf() && len(tc.current) == metaPairCount)
+	assertTrue(!tc.isLeaf())
+	assertTrue(len(tc.current) == metaPairCount)
 
 	mt := metaValue(tc.current[metaPairValIdx])
 	for {
