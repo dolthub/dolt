@@ -396,3 +396,15 @@ func superSchemaFromCols(cols *schema.ColCollection) *schema.SuperSchema {
 	ss, _ := schema.NewSuperSchema(sch)
 	return ss
 }
+
+func columnCollection(cols ...schema.Column) *schema.ColCollection {
+	return schema.NewColCollection(cols...)
+}
+
+func newColTypeInfo(name string, tag uint64, typeInfo typeinfo.TypeInfo, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
+	c, err := schema.NewColumnWithTypeInfo(name, tag, typeInfo, partOfPK, "", false, "", constraints...)
+	if err != nil {
+		panic("could not create column")
+	}
+	return c
+}

@@ -125,7 +125,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm, dbState.EditSession.Opts)
+	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm, dbState.EditOpts())
 
 	if err != nil {
 		return nil, err

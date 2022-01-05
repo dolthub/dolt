@@ -41,7 +41,7 @@ func newIdentityConverter(mapping *FieldMapping) *RowConverter {
 
 // NewRowConverter creates a row converter from a given FieldMapping.
 func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *FieldMapping) (*RowConverter, error) {
-	if nec, err := isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
+	if nec, err := IsNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
 		return nil, err
 	} else if !nec {
 		return newIdentityConverter(mapping), nil
@@ -71,58 +71,6 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 					return types.NullValue, nil
 				}
 				return types.String(*val), nil
-			}
-		} else {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				return typeinfo.Convert(ctx, vrw, v, srcCol.TypeInfo, destCol.TypeInfo)
-			}
-		}
-	}
-
-	return &RowConverter{mapping, false, convFuncs}, nil
-}
-
-// NewImportRowConverter creates a row converter from a given FieldMapping specifically for importing.
-func NewImportRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *FieldMapping) (*RowConverter, error) {
-	if nec, err := isNecessary(mapping.SrcSch, mapping.DestSch, mapping.SrcToDest); err != nil {
-		return nil, err
-	} else if !nec {
-		return newIdentityConverter(mapping), nil
-	}
-
-	convFuncs := make(map[uint64]types.MarshalCallback, len(mapping.SrcToDest))
-	for srcTag, destTag := range mapping.SrcToDest {
-		destCol, destOk := mapping.DestSch.GetAllCols().GetByTag(destTag)
-		srcCol, srcOk := mapping.SrcSch.GetAllCols().GetByTag(srcTag)
-
-		if !destOk || !srcOk {
-			return nil, fmt.Errorf("Could not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
-		}
-
-		if srcCol.TypeInfo.Equals(destCol.TypeInfo) {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				return v, nil
-			}
-		}
-		if typeinfo.IsStringType(destCol.TypeInfo) {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				val, err := srcCol.TypeInfo.FormatValue(v)
-				if err != nil {
-					return nil, err
-				}
-				if val == nil {
-					return types.NullValue, nil
-				}
-				return types.String(*val), nil
-			}
-		} else if destCol.TypeInfo.Equals(typeinfo.PseudoBoolType) || destCol.TypeInfo.Equals(typeinfo.Int8Type) {
-			// BIT(1) and BOOLEAN (MySQL alias for TINYINT or Int8) are both logical stand-ins for a bool type
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				intermediateVal, err := typeinfo.Convert(ctx, vrw, v, srcCol.TypeInfo, typeinfo.BoolType)
-				if err != nil {
-					return nil, err
-				}
-				return typeinfo.Convert(ctx, vrw, intermediateVal, typeinfo.BoolType, destCol.TypeInfo)
 			}
 		} else {
 			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
@@ -170,7 +118,7 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 	return row.New(inRow.Format(), rc.DestSch, outTaggedVals)
 }
 
-func isNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {
+func IsNecessary(srcSch, destSch schema.Schema, destToSrc map[uint64]uint64) (bool, error) {
 	srcCols := srcSch.GetAllCols()
 	destCols := destSch.GetAllCols()
 

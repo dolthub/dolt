@@ -23,10 +23,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
 // writeBufSize is the size of the buffer used when writing a csv file.  It is set at the package level and all
@@ -92,6 +93,20 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	for i, val := range sqlRow {
+		if val == nil {
+			colValStrs[i] = nil
+		} else {
+			v := sqlutil.SqlColToStr(ctx, val)
+			colValStrs[i] = &v
+		}
+	}
+
+	return csvw.write(colValStrs)
+}
+
+func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
+	for i, val := range r {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {

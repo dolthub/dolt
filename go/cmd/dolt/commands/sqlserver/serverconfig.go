@@ -47,6 +47,8 @@ const (
 	defaultQueryParallelism    = 2
 	defaultPersistenceBahavior = loadPerisistentGlobals
 	defaultDataDir             = "."
+	defaultMetricsHost         = ""
+	defaultMetricsPort         = -1
 )
 
 const (
@@ -112,6 +114,14 @@ type ServerConfig interface {
 	RequireSecureTransport() bool
 	// PersistenceBehavior is "load" if we include persisted system globals on server init
 	PersistenceBehavior() string
+	// DisableClientMultiStatements is true if we want the server to not
+	// process incoming ComQuery packets as if they had multiple queries in
+	// them, even if the client advertises support for MULTI_STATEMENTS.
+	DisableClientMultiStatements() bool
+	// MetricsLabels returns labels that are applied to all prometheus metrics
+	MetricsLabels() map[string]string
+	MetricsHost() string
+	MetricsPort() int
 }
 
 type commandLineServerConfig struct {
@@ -205,6 +215,22 @@ func (cfg *commandLineServerConfig) TLSCert() string {
 
 func (cfg *commandLineServerConfig) RequireSecureTransport() bool {
 	return cfg.requireSecureTransport
+}
+
+func (cfg *commandLineServerConfig) DisableClientMultiStatements() bool {
+	return false
+}
+
+func (cfg *commandLineServerConfig) MetricsLabels() map[string]string {
+	return nil
+}
+
+func (cfg *commandLineServerConfig) MetricsHost() string {
+	return defaultMetricsHost
+}
+
+func (cfg *commandLineServerConfig) MetricsPort() int {
+	return defaultMetricsPort
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

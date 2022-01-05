@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fatih/color"
@@ -50,7 +51,7 @@ import (
 )
 
 const (
-	Version = "0.34.4"
+	Version = "0.35.0"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -252,12 +253,6 @@ func runMain() int {
 	ctx := context.Background()
 	dEnv := env.Load(ctx, env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, Version)
 
-	if dEnv.DBLoadError == nil && commandNeedsMigrationCheck(args) {
-		if commands.MigrationNeeded(ctx, dEnv, args) {
-			return 1
-		}
-	}
-
 	root, err := env.GetCurrentUserHomeDir()
 	if err != nil {
 		cli.PrintErrln(color.RedString("Failed to load the HOME directory: %v", err))
@@ -311,7 +306,11 @@ func runMain() int {
 	}
 
 	start := time.Now()
+	var wg sync.WaitGroup
+	ctx, stop := context.WithCancel(ctx)
 	res := doltCommand.Exec(ctx, "dolt", args, dEnv)
+	stop()
+	wg.Wait()
 
 	if csMetrics && dEnv.DoltDB != nil {
 		metricsSummary := dEnv.DoltDB.CSMetricsSummary()

@@ -41,11 +41,11 @@ func TestSchemaTableRecreation(t *testing.T) {
 	require.NoError(t, err)
 	ctx.SetCurrentDatabase(db.Name())
 
-	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.Schema{ // schema of dolt_schemas table before the change
+	err = db.createSqlTable(ctx, doltdb.SchemasTableName, sql.NewPrimaryKeySchema(sql.Schema{ // schema of dolt_schemas table before the change
 		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-	})
+	}))
 	require.NoError(t, err)
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	require.NoError(t, err)

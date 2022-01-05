@@ -17,6 +17,8 @@ package table
 import (
 	"context"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
@@ -34,4 +36,9 @@ type TableWriter interface {
 type TableWriteCloser interface {
 	TableWriter
 	TableCloser
+}
+
+type SqlTableWriter interface {
+	TableWriteCloser
+	WriteSqlRow(ctx context.Context, r sql.Row) error
 }

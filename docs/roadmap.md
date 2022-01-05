@@ -1,7 +1,7 @@
 # Dolt feature roadmap
 
 Full details on [supported SQL
-features](https://docs.dolthub.com/interfaces/sql/sql-support) are
+features](https://docs.dolthub.com/reference/sql/support) are
 available on the docs site.
 
 This is a selection of unimplemented features we're working on. Don't see what you need on here? [Let us
@@ -9,7 +9,7 @@ know!](https://github.com/dolthub/dolt/issues) Paying customers get
 their feature requests implemented first.
 
 | Feature                                                  | ETA      |
-| -------                                                  | ---      |
+| -------------------------------------------------------- | -------- |
 | Hosted Dolt                                              | Jan 2022 |
 | Join for update                                          | Oct 2021 |
 | Backup and replication                                   | Nov 2021 |

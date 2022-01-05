@@ -241,15 +241,15 @@ func createBranch(ctx context.Context, dbData env.DbData, newBranch, startingPoi
 
 // UpdateRootsForBranch writes the roots needed for a branch checkout and returns the updated roots. |roots.Head|
 // should be the pre-checkout head. The returned roots struct has |Head| set to |branchRoot|.
-func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue) (doltdb.Roots, error) {
+func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, force bool) (doltdb.Roots, error) {
 	conflicts := set.NewStrSet([]string{})
 
-	wrkTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Working, conflicts)
+	wrkTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Working, conflicts, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
 
-	stgTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Staged, conflicts)
+	stgTblHashes, err := moveModifiedTables(ctx, roots.Head, branchRoot, roots.Staged, conflicts, force)
 	if err != nil {
 		return doltdb.Roots{}, err
 	}
@@ -272,8 +272,8 @@ func UpdateRootsForBranch(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return roots, nil
 }
 
-func CheckoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef) error {
-	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot)
+func CheckoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *doltdb.RootValue, rsw env.RepoStateWriter, branchRef ref.BranchRef, force bool) error {
+	roots, err := UpdateRootsForBranch(ctx, roots, branchRoot, force)
 	if err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func CheckoutBranchNoDocs(ctx context.Context, roots doltdb.Roots, branchRoot *d
 	return rsw.UpdateStagedRoot(ctx, roots.Staged)
 }
 
-func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error {
+func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, force bool) error {
 	branchRef := ref.NewBranchRef(brName)
 
 	db := dEnv.DoltDB
@@ -326,7 +326,7 @@ func CheckoutBranch(ctx context.Context, dEnv *env.DoltEnv, brName string) error
 		return err
 	}
 
-	err = CheckoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef)
+	err = CheckoutBranchNoDocs(ctx, roots, branchRoot, dEnv.RepoStateWriter(), branchRef, force)
 	if err != nil {
 		return err
 	}
@@ -360,7 +360,7 @@ var emptyHash = hash.Hash{}
 // When moving between branches, changes in the working set should travel with you.
 // Working set changes cannot be moved if the table differs between the old and new head,
 // in this case, we throw a conflict and error (as per Git).
-func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet) (map[string]hash.Hash, error) {
+func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *doltdb.RootValue, conflicts *set.StrSet, force bool) (map[string]hash.Hash, error) {
 	resultMap := make(map[string]hash.Hash)
 	tblNames, err := newRoot.GetTableNames(ctx)
 	if err != nil {
@@ -389,6 +389,8 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 			resultMap[tblName] = changedHash
 		} else if newHash == changedHash {
 			resultMap[tblName] = oldHash
+		} else if force {
+			resultMap[tblName] = newHash
 		} else {
 			conflicts.Add(tblName)
 		}
@@ -413,6 +415,8 @@ func moveModifiedTables(ctx context.Context, oldRoot, newRoot, changedRoot *dolt
 
 			if oldHash == emptyHash {
 				resultMap[tblName] = changedHash
+			} else if force {
+				resultMap[tblName] = oldHash
 			} else if oldHash != changedHash {
 				conflicts.Add(tblName)
 			}

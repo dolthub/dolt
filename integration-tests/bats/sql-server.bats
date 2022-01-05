@@ -78,6 +78,66 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 }
 
+@test "sql-server: read-only flag prevents modification" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # No tables at the start
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+
+    # attempt to create table (autocommit on), expect either some exception
+    server_query repo1 1 "CREATE TABLE i_should_not_exist (
+            c0 INT
+        )" "" "not authorized: user does not have permission: write"
+
+    # Expect that there are still no tables
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "No tables in working set" ]] || false
+}
+
+@test "sql-server: read-only flag still allows select" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt sql -q "create table t(c0 int)"
+    dolt sql -q "insert into t values (1)"
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a select query
+    server_query repo1 1 "select * from t" "c0\n1"
+}
+
+@test "sql-server: read-only flag prevents dolt_commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+
+    DEFAULT_DB="$1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+  read_only: true" > server.yaml
+    start_sql_server_with_config repo1 server.yaml
+
+    # make a dolt_commit query
+    skip "read-only flag does not prevent dolt_commit"
+    server_query repo1 1 "select dolt_commit('--allow-empty', '-m', 'msg')" "" "not authorized: user does not have permission: write"
+}
+
 @test "sql-server: test command line modification" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -1011,6 +1071,98 @@ while True:
 '
 }
 
+@test "sql-server: disable_client_multi_statements makes create trigger work" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+behavior:
+  disable_client_multi_statements: true
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
+@test "sql-server: client_multi_statements work" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    cd repo1
+    dolt sql -q 'create table test (id int primary key)'
+    let PORT="$$ % (65536-1024) + 1024"
+    cat >config.yml <<EOF
+log_level: debug
+user:
+  name: dolt
+listener:
+  host: "0.0.0.0"
+  port: $PORT
+EOF
+    dolt sql-server --config ./config.yml &
+    SERVER_PID=$!
+    # We do things manually here because we need to control CLIENT_MULTI_STATEMENTS.
+    python3 -c '
+import mysql.connector
+import sys
+import time
+i=0
+while True:
+  try:
+    with mysql.connector.connect(host="127.0.0.1", user="dolt", port='"$PORT"', database="repo1", connection_timeout=1) as c:
+      cursor = c.cursor()
+      cursor.execute("""
+CREATE TRIGGER test_on_insert BEFORE INSERT ON test
+FOR EACH ROW
+BEGIN
+  SIGNAL SQLSTATE '\''45000'\'' SET MESSAGE_TEXT = '\''You cannot insert into this table'\'';
+END""")
+      for (t) in cursor:
+        print(t)
+      sys.exit(0)
+  except mysql.connector.Error as err:
+    if err.errno != 2003:
+      raise err
+    else:
+      i += 1
+      time.sleep(1)
+      if i == 10:
+        raise err
+'
+}
+
 @test "sql-server: auto increment for a table should reset between drops" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -1263,4 +1415,28 @@ databases:
     start_sql_server_with_config repo1 server.yaml
 
     server_query repo1 1 "select dolt_fetch() as f" "f\n1"
+}
+
+@test "sql-server: run mysql from shell" {
+    skip "test mysql client from shell fails after v0.34.9"
+
+    cd repo1
+    dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "insert into r1t_one values (1,'aaaa'), (2,'bbbb'), (3,'cccc');"
+    dolt sql -q "create table r1t_two (id2 int primary key, col2 varchar(20));"
+    dolt commit -am "create two tables"
+
+    cd ../repo2
+    dolt sql -q "create table r2t_one (id1 int primary key, col1 varchar(20));"
+    dolt sql -q "create table r2t_two (id2 int primary key, col2 varchar(20));"
+    dolt sql -q "create table r2t_three (id3 int primary key, col3 varchar(20));"
+    dolt sql -q "insert into r2t_three values (4,'dddd'), (3,'gggg'), (2,'eeee'), (1,'ffff');"
+    dolt commit -am "create three tables"
+
+    cd ..
+    start_sql_server
+    # server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\nrepo2"
+
+    run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
+    [ "$status" -eq 0 ]
 }

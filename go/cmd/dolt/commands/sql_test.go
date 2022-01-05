@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -568,7 +569,7 @@ func TestCommitHooksNoErrors(t *testing.T) {
 	sqle.AddDoltSystemVariables()
 	sql.SystemVariables.SetGlobal(sqle.SkipReplicationErrorsKey, true)
 	sql.SystemVariables.SetGlobal(sqle.ReplicateToRemoteKey, "unknown")
-	hooks, err := GetCommitHooks(context.Background(), dEnv)
+	hooks, err := engine.GetCommitHooks(context.Background(), dEnv)
 	assert.NoError(t, err)
 	if len(hooks) < 1 {
 		t.Error("failed to produce noop hook")

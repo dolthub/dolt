@@ -34,7 +34,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/csv"
@@ -79,7 +78,7 @@ A mapping file can be used to map fields between the file being imported and the
 
 ` + MappingFileHelp + `
 
-In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimeter.
+In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (Currently only csv is supported).  For files separated by a delimiter other than a ',', the --delim parameter can be used to specify a delimiter.
 
 If the parameter {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} is supplied a sql statement will be generated showing what would be executed if this were run without the --dry-run flag
 
@@ -285,6 +284,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 	// inferred schemas have no foreign keys
 	sqlDb := sqle.NewSingleTableDatabase(tblName, sch, nil, nil)
 	sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+
 	stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, tblName)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -295,11 +295,6 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 		tbl, tblExists, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
-		}
-
-		schVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), root.VRW(), sch)
-		if err != nil {
-			return errhand.BuildDError("error: failed to encode schema.").AddCause(err).Build()
 		}
 
 		empty, err := types.NewMap(ctx, root.VRW())
@@ -315,7 +310,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), schVal, empty, indexData, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexData, nil)
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}

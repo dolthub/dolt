@@ -85,15 +85,3 @@ func (dl StreamDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataM
 
 	return nil, errors.New(string(dl.Format) + "is an unsupported format to write to stdout")
 }
-
-// NewUpdatingWriter will create a TableWriteCloser for a DataLocation that will update and append rows based on
-// their primary key.
-func (dl StreamDataLocation) NewUpdatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, _ []uint64, opts editor.Options) (table.TableWriteCloser, error) {
-	panic("Updating is not supported for stdout")
-}
-
-// NewReplacingWriter will create a TableWriteCloser for a DataLocation that will overwrite an existing table while
-// preserving schema
-func (dl StreamDataLocation) NewReplacingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, srcIsSorted bool, outSch schema.Schema, statsCB noms.StatsCB, opts editor.Options) (table.TableWriteCloser, error) {
-	panic("Replacing is not supported for stdout")
-}

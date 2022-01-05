@@ -28,9 +28,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
 
-const (
-	indexFlushThreshold = 256 * 1024
-)
+// var for testing
+var indexFlushThreshold int64 = 256 * 1024
 
 type IndexEditAccumulator interface {
 	// Delete adds a row to be deleted when these edits are eventually applied.
@@ -226,7 +225,7 @@ func (iea *indexEditAccumulatorImpl) Insert(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, value)
 
-		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > indexFlushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {
@@ -248,7 +247,7 @@ func (iea *indexEditAccumulatorImpl) Delete(ctx context.Context, keyHash, partia
 	if iea.flushingUncommitted {
 		iea.uncommittedEA.AddEdit(key, nil)
 
-		if iea.uncommitted.ops-iea.lastFlush > flushThreshold {
+		if iea.uncommitted.ops-iea.lastFlush > indexFlushThreshold {
 			iea.flushUncommitted()
 		}
 	} else if iea.uncommitted.ops > indexFlushThreshold {
@@ -411,10 +410,10 @@ func (iea *indexEditAccumulatorImpl) MaterializeEdits(ctx context.Context, nbf *
 	}
 
 	eps := make([]types.EditProvider, 0, len(flushedEPs)+1)
-	eps = append(eps, committedEP)
 	for i := 0; i < len(flushedEPs); i++ {
 		eps = append(eps, flushedEPs[i].Edits)
 	}
+	eps = append(eps, committedEP)
 
 	defer func() {
 		for _, ep := range eps {

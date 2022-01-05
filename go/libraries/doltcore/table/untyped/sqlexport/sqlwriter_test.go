@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -80,15 +79,13 @@ func TestEndToEnd(t *testing.T) {
 			root, err := dEnv.WorkingRoot(ctx)
 			require.NoError(t, err)
 
-			schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, root.VRW(), tt.sch)
-			require.NoError(t, err)
 			empty, err := types.NewMap(ctx, root.VRW())
 			require.NoError(t, err)
 			idxRef, err := types.NewRef(empty, root.VRW().Format())
 			require.NoError(t, err)
 			idxMap, err := types.NewMap(ctx, root.VRW(), types.String(dtestutils.IndexName), idxRef)
 			require.NoError(t, err)
-			tbl, err := doltdb.NewTable(ctx, root.VRW(), schVal, empty, idxMap, nil)
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), tt.sch, empty, idxMap, nil)
 			require.NoError(t, err)
 			root, err = root.PutTable(ctx, tableName, tbl)
 			require.NoError(t, err)

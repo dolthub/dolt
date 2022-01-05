@@ -312,7 +312,7 @@ func docCnfsOnWorkingRoot(ctx context.Context, dEnv *env.DoltEnv) (bool, error) 
 		return false, nil
 	}
 
-	return docTbl.HasConflicts()
+	return docTbl.HasConflicts(ctx)
 }
 
 func PrintDiffsNotStaged(

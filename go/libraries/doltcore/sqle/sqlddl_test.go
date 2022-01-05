@@ -1000,8 +1000,8 @@ func TestRenameColumn(t *testing.T) {
 		},
 		{
 			name:        "column name collision",
-			query:       "alter table people rename column id to age",
-			expectedErr: "A column with the name age already exists",
+			query:       "alter table people rename column id to AGE",
+			expectedErr: "Column \"AGE\" already exists",
 		},
 	}
 
@@ -1164,7 +1164,7 @@ func TestAlterSystemTables(t *testing.T) {
 		CreateTestDatabase(dEnv, t)
 
 		dtestutils.CreateTestTable(t, dEnv, "dolt_docs",
-			doltdocs.Schema,
+			doltdocs.DocsSchema,
 			NewRow(types.String("LICENSE.md"), types.String("A license")))
 		dtestutils.CreateTestTable(t, dEnv, doltdb.DoltQueryCatalogTableName,
 			dtables.DoltQueryCatalogSchema,
@@ -1519,7 +1519,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_unq VALUES ('6', 5)")
 	if assert.Error(t, err) {
-		assert.True(t, sql.ErrUniqueKeyViolation.Is(err))
+		assert.True(t, sql.ErrUniqueKeyViolation.Is(err.(sql.WrappedInsertError).Cause))
 	}
 	root, err = ExecuteSql(t, dEnv, root, "INSERT INTO child_non_unq VALUES ('6', 5)")
 	require.NoError(t, err)

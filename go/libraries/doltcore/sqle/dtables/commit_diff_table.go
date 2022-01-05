@@ -45,7 +45,7 @@ type CommitDiffTable struct {
 	ddb               *doltdb.DoltDB
 	ss                *schema.SuperSchema
 	joiner            *rowconv.Joiner
-	sqlSch            sql.Schema
+	sqlSch            sql.PrimaryKeySchema
 	workingRoot       *doltdb.RootValue
 	fromCommitFilter  *expression.Equals
 	toCommitFilter    *expression.Equals
@@ -100,7 +100,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		return nil, err
 	}
 
-	sqlSch = append(sqlSch, &sql.Column{
+	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
 		Name:     diffTypeColName,
 		Type:     sql.Text,
 		Default:  defaultVal,
@@ -182,7 +182,7 @@ func (dt *CommitDiffTable) String() string {
 }
 
 func (dt *CommitDiffTable) Schema() sql.Schema {
-	return dt.sqlSch
+	return dt.sqlSch.Schema
 }
 
 type SliceOfPartitionsItr struct {
@@ -198,7 +198,7 @@ func NewSliceOfPartitionsItr(partitions []sql.Partition) *SliceOfPartitionsItr {
 	}
 }
 
-func (itr *SliceOfPartitionsItr) Next() (sql.Partition, error) {
+func (itr *SliceOfPartitionsItr) Next(*sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 

@@ -74,35 +74,47 @@ RowLoop:
 }
 
 func (asTr *AutoSizingFWTTransformer) handleRow(r pipeline.RowWithProps, outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {
+	var err error
 	if asTr.rowBuffer == nil {
 		asTr.processRow(r, outChan, badRowChan)
 	} else if asTr.numSamples <= 0 || len(asTr.rowBuffer) < asTr.numSamples {
-		_, err := r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool, err error) {
-			if !types.IsNull(val) {
-				strVal := val.(types.String)
-				printWidth := StringWidth(string(strVal))
-				numRunes := len([]rune(string(strVal)))
-
-				if printWidth > asTr.printWidths[tag] {
-					asTr.printWidths[tag] = printWidth
-				}
-
-				if numRunes > asTr.maxRunes[tag] {
-					asTr.maxRunes[tag] = numRunes
-				}
-			}
-			return false, nil
-		})
-
-		if err != nil {
-			badRowChan <- &pipeline.TransformRowFailure{Row: r.Row, TransformName: "fwt", Details: err.Error()}
-			return
-		}
-
-		asTr.rowBuffer = append(asTr.rowBuffer, r)
+		err = asTr.formatAndAddToBuffer(r)
 	} else {
 		asTr.flush(outChan, badRowChan, stopChan)
+		err = asTr.formatAndAddToBuffer(r)
 	}
+
+	if err != nil {
+		badRowChan <- &pipeline.TransformRowFailure{Row: r.Row, TransformName: "fwt", Details: err.Error()}
+		return
+	}
+}
+
+func (asTr *AutoSizingFWTTransformer) formatAndAddToBuffer(r pipeline.RowWithProps) error {
+	_, err := r.Row.IterSchema(asTr.sch, func(tag uint64, val types.Value) (stop bool, err error) {
+		if !types.IsNull(val) {
+			strVal := val.(types.String)
+			printWidth := StringWidth(string(strVal))
+			numRunes := len([]rune(string(strVal)))
+
+			if printWidth > asTr.printWidths[tag] {
+				asTr.printWidths[tag] = printWidth
+			}
+
+			if numRunes > asTr.maxRunes[tag] {
+				asTr.maxRunes[tag] = numRunes
+			}
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	asTr.rowBuffer = append(asTr.rowBuffer, r)
+
+	return nil
 }
 
 func (asTr *AutoSizingFWTTransformer) flush(outChan chan<- pipeline.RowWithProps, badRowChan chan<- *pipeline.TransformRowFailure, stopChan <-chan struct{}) {

@@ -16,6 +16,30 @@ teardown() {
     [[ "$output" =~ "Initialize data repository" ]] || false
 }
 
+@test "log: log respects branches" {
+    dolt branch branch1
+    dolt commit --allow-empty -m "commit 1 main"
+    dolt commit	--allow-empty -m "commit 2 main"
+    dolt commit	--allow-empty -m "commit 3 main"
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "branch1" ]] || false
+    dolt checkout branch1
+    dolt commit	--allow-empty -m "commit 1 branch1"
+    dolt commit --allow-empty -m "commit 2 branch1"
+    dolt commit --allow-empty -m "commit 3 branch1"
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "main" ]] || false
+    [[ "$output" =~ "branch1" ]] || false
+    dolt checkout main
+    run	dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "branch1" ]] || false
+}
+
 @test "log: with -n specified" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"
     dolt add test
@@ -285,4 +309,27 @@ teardown() {
     [ $status -eq 0 ]
     regex='commit .* .*\n'
     [[ "$output" =~ $regex ]] || false
+}
+
+@test "log: check pager" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    dolt commit --allow-empty -m "commit 1"
+    dolt commit	--allow-empty -m "commit 2"
+    dolt commit	--allow-empty -m "commit 3"
+    dolt commit --allow-empty -m "commit 4"
+    dolt commit	--allow-empty -m "commit 5"
+    dolt commit	--allow-empty -m "commit 6"
+    dolt commit --allow-empty -m "commit 7"
+    dolt commit	--allow-empty -m "commit 8"
+    dolt commit	--allow-empty -m "commit 9"
+    dolt commit --allow-empty -m "commit 10"
+    dolt commit	--allow-empty -m "commit 11"
+    dolt commit	--allow-empty -m "commit 12"
+    dolt commit	--allow-empty -m "commit 13"
+    dolt commit --allow-empty -m "commit 14"
+    dolt commit	--allow-empty -m "commit 15"
+    dolt commit	--allow-empty -m "commit 16"
+
+    run expect $BATS_TEST_DIRNAME/log.expect
+    [ "$status" -eq 0 ]
 }

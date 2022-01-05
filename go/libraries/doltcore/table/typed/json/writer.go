@@ -20,11 +20,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"time"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -33,6 +36,7 @@ const jsonHeader = `{"rows": [`
 const jsonFooter = `]}`
 
 var WriteBufSize = 256 * 1024
+var defaultString = sql.MustCreateStringWithDefaults(sqltypes.VarChar, 16383)
 
 type JSONWriter struct {
 	closer      io.Closer
@@ -80,6 +84,73 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 				return true, err
 			}
 			val = types.String(*v)
+
+		case typeinfo.BitTypeIdentifier,
+			typeinfo.BoolTypeIdentifier,
+			typeinfo.VarStringTypeIdentifier,
+			typeinfo.UintTypeIdentifier,
+			typeinfo.IntTypeIdentifier,
+			typeinfo.FloatTypeIdentifier:
+			// use primitive type
+		}
+
+		colValMap[col.Name] = val
+
+		return false, nil
+	}); err != nil {
+		return err
+	}
+
+	data, err := marshalToJson(colValMap)
+	if err != nil {
+		return errors.New("marshaling did not work")
+	}
+
+	if jsonw.rowsWritten != 0 {
+		_, err := jsonw.bWr.WriteRune(',')
+
+		if err != nil {
+			return err
+		}
+	}
+
+	newErr := iohelp.WriteAll(jsonw.bWr, data)
+	if newErr != nil {
+		return newErr
+	}
+	jsonw.rowsWritten++
+
+	return nil
+}
+
+func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
+	allCols := jsonw.sch.GetAllCols()
+	colValMap := make(map[string]interface{}, allCols.Size())
+	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		val := row[allCols.TagToIdx[tag]]
+		if val == nil {
+			return false, nil
+		}
+
+		switch col.TypeInfo.GetTypeIdentifier() {
+		case typeinfo.DecimalTypeIdentifier,
+			typeinfo.EnumTypeIdentifier,
+			typeinfo.InlineBlobTypeIdentifier,
+			typeinfo.SetTypeIdentifier,
+			typeinfo.TimeTypeIdentifier,
+			typeinfo.TupleTypeIdentifier,
+			typeinfo.UuidTypeIdentifier,
+			typeinfo.VarBinaryTypeIdentifier,
+			typeinfo.YearTypeIdentifier:
+			val, err = defaultString.Convert(val)
+			if err != nil {
+				return true, err
+			}
+		case typeinfo.DatetimeTypeIdentifier:
+			val, err = col.TypeInfo.FormatValue(types.Timestamp(val.(time.Time)))
+			if err != nil {
+				return true, err
+			}
 
 		case typeinfo.BitTypeIdentifier,
 			typeinfo.BoolTypeIdentifier,

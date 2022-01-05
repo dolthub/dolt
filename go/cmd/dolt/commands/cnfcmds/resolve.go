@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
@@ -138,11 +137,6 @@ func autoResolve(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.
 	}
 
 	if err != nil {
-		if err == doltdb.ErrNoConflicts {
-			cli.Println("no conflicts to resolve.")
-			return nil
-		}
-
 		return errhand.BuildDError("error: failed to resolve").AddCause(err).Build()
 	}
 
