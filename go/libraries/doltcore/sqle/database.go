@@ -1159,34 +1159,6 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	return deleter.Close(ctx)
 }
 
-func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
-	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return 0, err
-	}
-
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	idx := int64(1)
-	if rows.Len() > 0 {
-		keyTpl, _, err := rows.Last(ctx)
-		if err != nil {
-			return 0, err
-		}
-		if keyTpl != nil {
-			key, err := keyTpl.(types.Tuple).Get(1)
-			if err != nil {
-				return 0, err
-			}
-			idx = int64(key.(types.Int)) + 1
-		}
-	}
-	return idx, nil
-}
-
 // TableEditSession returns the TableEditSession for this database from the given context.
 func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (writer.WriteSession, error) {
 	sess := dsess.DSessFromSess(ctx.Session)

@@ -51,19 +51,6 @@ func (cap *fixedCapacity) capacityExceeded(size int) bool {
 
 var _ TableEditAccumulator = (*BulkImportTEA)(nil)
 
-// Options are properties that define different functionality for the tableEditSession.
-type Options struct {
-	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	Deaf                     DbEaFactory
-}
-
-func TestEditorOptions(vrw types.ValueReadWriter) Options {
-	return Options{
-		ForeignKeyChecksDisabled: false,
-		Deaf:                     NewInMemDeaf(vrw.Format()),
-	}
-}
-
 // BulkImportTEA is a TableEditAccumulator implementation used to improve the perf of bulk edits.  It does not implement
 // commit and rollback
 type BulkImportTEA struct {

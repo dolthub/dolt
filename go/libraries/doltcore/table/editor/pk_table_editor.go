@@ -87,6 +87,19 @@ func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema
 	return newPkTableEditor(ctx, t, tableSch, name, opts)
 }
 
+// Options are properties that define different functionality for the tableEditSession.
+type Options struct {
+	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
+	Deaf                     DbEaFactory
+}
+
+func TestEditorOptions(vrw types.ValueReadWriter) Options {
+	return Options{
+		ForeignKeyChecksDisabled: false,
+		Deaf:                     NewInMemDeaf(vrw.Format()),
+	}
+}
+
 // pkTableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
 // collision etc. in the Close() method, as well as during Insert / Update.
 //

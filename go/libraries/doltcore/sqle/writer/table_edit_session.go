@@ -26,17 +26,28 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
+// WriteSession encapsulates writes made within a SQL session.
+// It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
+	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx context.Context, table, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
+
+	// UpdateRoot takes a callback to update this WriteSession's root. WriteSession flushes
+	// the pending writes in the session before calling the callback.
 	UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error
+
+	// Flush flushes the pending writes in the session.
 	Flush(ctx context.Context) (*doltdb.RootValue, error)
 
+	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
+
+	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
 }
 
-// tableEditSession handles all edit operations on a table that may also update other tables. Serves as coordination
-// for SessionedTableEditors.
+// tableEditSession handles all edit operations on a table that may also update other tables.
+// Serves as coordination for SessionedTableEditors.
 type tableEditSession struct {
 	opts editor.Options
 
@@ -47,10 +58,10 @@ type tableEditSession struct {
 
 var _ WriteSession = &tableEditSession{}
 
-// CreateTableEditSession creates and returns a tableEditSession. Inserting a nil root is not an error, as there are
+// NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func CreateTableEditSession(root *doltdb.RootValue, opts editor.Options) WriteSession {
+func NewWriteSession(root *doltdb.RootValue, opts editor.Options) WriteSession {
 	return &tableEditSession{
 		opts:       opts,
 		root:       root,

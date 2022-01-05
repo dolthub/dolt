@@ -977,7 +977,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.WriteSession = writer.CreateTableEditSession(nil, editOpts)
+	sessionState.WriteSession = writer.NewWriteSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1026,7 +1026,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableWriteSession = writer.CreateTableEditSession(newRoot, dbState.WriteSession.GetOptions())
+	dbState.TempTableWriteSession = writer.NewWriteSession(newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }
