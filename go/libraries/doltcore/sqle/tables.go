@@ -457,11 +457,11 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		return nil, err
 	}
 
-	var setter writer.SessionRootSetter = ds.SetRoot
-
 	if t.temporary {
+		setter := ds.SetTempTableRoot
 		ed, err = state.TempTableWriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	} else {
+		setter := ds.SetRoot
 		ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
 	}
 	if err != nil {

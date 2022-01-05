@@ -352,7 +352,6 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	t.Skip("todo(andy)")
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
