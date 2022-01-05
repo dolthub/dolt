@@ -17,9 +17,11 @@ package dsess
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type InitialDbState struct {
@@ -41,19 +43,19 @@ type InitialDbState struct {
 }
 
 type DatabaseSessionState struct {
-	dbName               string
-	headCommit           *doltdb.Commit
-	headRoot             *doltdb.RootValue
-	WorkingSet           *doltdb.WorkingSet
-	dbData               env.DbData
-	EditSession          *editor.TableEditSession
-	detachedHead         bool
-	readOnly             bool
-	dirty                bool
-	readReplica          *env.Remote
-	TempTableRoot        *doltdb.RootValue
-	TempTableEditSession *editor.TableEditSession
-	tmpTablesDir         string
+	dbName                string
+	headCommit            *doltdb.Commit
+	headRoot              *doltdb.RootValue
+	WorkingSet            *doltdb.WorkingSet
+	dbData                env.DbData
+	WriteSession          writer.WriteSession
+	detachedHead          bool
+	readOnly              bool
+	dirty                 bool
+	readReplica           *env.Remote
+	TempTableRoot         *doltdb.RootValue
+	TempTableWriteSession writer.WriteSession
+	tmpTablesDir          string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
@@ -77,5 +79,5 @@ func (d DatabaseSessionState) GetRoots() doltdb.Roots {
 }
 
 func (d DatabaseSessionState) EditOpts() editor.Options {
-	return d.EditSession.Opts
+	return d.WriteSession.GetOptions()
 }

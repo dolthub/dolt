@@ -250,7 +250,7 @@ func (c *Config) getAWSCredFile(dbParams map[string]string) string {
 }
 
 // specOptsForConfig Uses config data from the global config and db configuration to
-// generate the spec.SpecOptions which should be used in calls to spec.For*Opts()
+// generate the spec.SpecOptions which should be used in calls to spec.For*opts()
 func specOptsForConfig(c *Config, dbc *DbConfig) spec.SpecOptions {
 	dbParams := dbc.Options
 
