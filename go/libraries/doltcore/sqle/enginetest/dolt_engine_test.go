@@ -194,8 +194,8 @@ func TestScripts(t *testing.T) {
 	skipped := []string{
 		"create index r_c0 on r (c0);",
 		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
-		"SELECT group_concat(attribute) FROM t where o_id=2",
-		"SELECT group_concat(o_id) FROM t WHERE attribute='color'",
+		"SELECT group_concat(`attribute`) FROM t where o_id=2",
+		"SELECT group_concat(o_id) FROM t WHERE `attribute`='color'",
 
 		// TODO(aaron): go-mysql-server GroupBy with grouping
 		// expressions currently has a bug where it does not insert
@@ -208,8 +208,16 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+func TestComplexIndexQueries(t *testing.T) {
+	enginetest.TestComplexIndexQueries(t, newDoltHarness(t))
+}
+
 func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
+}
+
+func TestPkOrdinals(t *testing.T) {
+	enginetest.TestPkOrdinals(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
@@ -308,6 +316,10 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 
 func TestColumnDefaults(t *testing.T) {
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
+}
+
+func TestAlterTable(t *testing.T) {
+	enginetest.TestAlterTable(t, newDoltHarness(t))
 }
 
 func TestVariables(t *testing.T) {

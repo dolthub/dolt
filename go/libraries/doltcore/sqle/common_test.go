@@ -55,7 +55,7 @@ func executeSelect(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 
 	sqlRows := make([]sql.Row, 0)
 	var r sql.Row
-	for r, err = iter.Next(); err == nil; r, err = iter.Next() {
+	for r, err = iter.Next(sqlCtx); err == nil; r, err = iter.Next(sqlCtx) {
 		sqlRows = append(sqlRows, r)
 	}
 
@@ -82,7 +82,7 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	}
 
 	for {
-		_, err := iter.Next()
+		_, err := iter.Next(sqlCtx)
 		if err == io.EOF {
 			break
 		}
@@ -97,35 +97,6 @@ func executeModify(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, root *d
 	}
 
 	return db.GetRoot(sqlCtx)
-}
-
-// Returns the dolt rows given transformed to sql rows. Exactly the columns in the schema provided are present in the
-// final output rows, even if the input rows contain different columns. The tag numbers for columns in the row and
-// schema given must match.
-func ToSqlRows(sch schema.Schema, rs ...row.Row) []sql.Row {
-	sqlRows := make([]sql.Row, len(rs))
-	compressedSch := CompressSchema(sch)
-	for i := range rs {
-		sqlRows[i], _ = sqlutil.DoltRowToSqlRow(CompressRow(sch, rs[i]), compressedSch)
-	}
-	return sqlRows
-}
-
-// SubsetSchema returns a schema that is a subset of the schema given, with keys and constraints removed. Column names
-// must be verified before subsetting. Unrecognized column names will cause a panic.
-func SubsetSchema(sch schema.Schema, colNames ...string) schema.Schema {
-	srcColls := sch.GetAllCols()
-
-	var cols []schema.Column
-	for _, name := range colNames {
-		if col, ok := srcColls.GetByName(name); !ok {
-			panic("Unrecognized name " + name)
-		} else {
-			cols = append(cols, col)
-		}
-	}
-	colColl := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colColl)
 }
 
 func schemaNewColumn(t *testing.T, name string, tag uint64, sqlType sql.Type, partOfPK bool, constraints ...schema.ColConstraint) schema.Column {
@@ -172,7 +143,7 @@ func mustSqlSchema(sch schema.Schema) sql.Schema {
 		panic(err)
 	}
 
-	return sqlSchema
+	return sqlSchema.Schema
 }
 
 // Convenience function to return a row or panic on an error

@@ -15,12 +15,10 @@
 package dtables
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -62,34 +60,33 @@ func (dt *CommitsTable) Schema() sql.Schema {
 // Partitions is a sql.Table interface function that returns a partition
 // of the data. Currently the data is unpartitioned.
 func (dt *CommitsTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(types.Map{}), nil
 }
 
 // PartitionRows is a sql.Table interface function that gets a row iterator for a partition.
-func (dt *CommitsTable) PartitionRows(sqlCtx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	return NewCommitsRowItr(sqlCtx, dt.ddb)
+func (dt *CommitsTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
+	return NewCommitsRowItr(ctx, dt.ddb)
 }
 
 // CommitsRowItr is a sql.RowItr which iterates over each commit as if it's a row in the table.
 type CommitsRowItr struct {
-	ctx context.Context
 	itr doltdb.CommitItr
 }
 
 // NewCommitsRowItr creates a CommitsRowItr from the current environment.
-func NewCommitsRowItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, error) {
-	itr, err := doltdb.CommitItrForAllBranches(sqlCtx, ddb)
+func NewCommitsRowItr(ctx *sql.Context, ddb *doltdb.DoltDB) (CommitsRowItr, error) {
+	itr, err := doltdb.CommitItrForAllBranches(ctx, ddb)
 	if err != nil {
 		return CommitsRowItr{}, err
 	}
 
-	return CommitsRowItr{ctx: sqlCtx, itr: itr}, nil
+	return CommitsRowItr{itr: itr}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr CommitsRowItr) Next() (sql.Row, error) {
-	h, cm, err := itr.itr.Next(itr.ctx)
+func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
+	h, cm, err := itr.itr.Next(ctx)
 	if err != nil {
 		return nil, err
 	}

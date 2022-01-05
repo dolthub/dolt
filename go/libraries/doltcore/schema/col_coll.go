@@ -143,6 +143,29 @@ func (cc *ColCollection) Append(cols ...Column) *ColCollection {
 	return NewColCollection(allCols...)
 }
 
+// IndexOf returns the index of the column with the name given (case-insensitive) or -1 if it's not found
+func (cc *ColCollection) IndexOf(colName string) (int, error) {
+	idx := -1
+
+	var i = 0
+	err := cc.Iter(func(tag uint64, col Column) (stop bool, err error) {
+		defer func() {
+			i++
+		}()
+		if strings.ToLower(col.Name) == strings.ToLower(colName) {
+			idx = i
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err != nil {
+		return -1, err
+	}
+
+	return idx, nil
+}
+
 // Iter iterates over all the columns in the supplied ordering
 func (cc *ColCollection) Iter(cb func(tag uint64, col Column) (stop bool, err error)) error {
 	for _, col := range cc.cols {

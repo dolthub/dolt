@@ -60,6 +60,13 @@ type BehaviorYAMLConfig struct {
 	AutoCommit *bool
 	// PersistenceBehavior regulates loading persisted system variable configuration.
 	PersistenceBehavior *string `yaml:"persistence_behavior"`
+	// Disable processing CLIENT_MULTI_STATEMENTS support on the
+	// sql server.  Dolt's handling of CLIENT_MULTI_STATEMENTS is currently
+	// broken. If a client advertises to support it (mysql cli client
+	// does), and then sends statements that contain embedded unquoted ';'s
+	// (such as a CREATE TRIGGER), then those incoming queries will be
+	// misprocessed.
+	DisableClientMultiStatements *bool `yaml:"disable_client_multi_statements"`
 }
 
 // UserYAMLConfig contains server configuration regarding the user account clients must use to connect
@@ -94,6 +101,12 @@ type PerformanceYAMLConfig struct {
 	QueryParallelism *int `yaml:"query_parallelism"`
 }
 
+type MetricsYAMLConfig struct {
+	Labels map[string]string `yaml:"labels"`
+	Host   *string           `yaml:"host"`
+	Port   *int              `yaml:"port"`
+}
+
 // YAMLConfig is a ServerConfig implementation which is read from a yaml file
 type YAMLConfig struct {
 	LogLevelStr       *string               `yaml:"log_level"`
@@ -102,7 +115,8 @@ type YAMLConfig struct {
 	ListenerConfig    ListenerYAMLConfig    `yaml:"listener"`
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
-	dataDir           *string               `yaml:"data_dir"`
+	DataDirStr        *string               `yaml:"data_dir"`
+	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -120,6 +134,7 @@ func serverConfigAsYAMLConfig(cfg ServerConfig) YAMLConfig {
 			boolPtr(cfg.ReadOnly()),
 			boolPtr(cfg.AutoCommit()),
 			strPtr(cfg.PersistenceBehavior()),
+			boolPtr(cfg.DisableClientMultiStatements()),
 		},
 		UserConfig: UserYAMLConfig{strPtr(cfg.User()), strPtr(cfg.Password())},
 		ListenerConfig: ListenerYAMLConfig{
@@ -270,6 +285,37 @@ func (cfg YAMLConfig) MaxConnections() uint64 {
 	return *cfg.ListenerConfig.MaxConnections
 }
 
+// DisableClientMultiStatements returns true if the server should run in a mode
+// where the CLIENT_MULTI_STATEMENTS option are ignored and every incoming
+// ComQuery packet is assumed to be a standalone query.
+func (cfg YAMLConfig) DisableClientMultiStatements() bool {
+	if cfg.BehaviorConfig.DisableClientMultiStatements == nil {
+		return false
+	}
+
+	return *cfg.BehaviorConfig.DisableClientMultiStatements
+}
+
+func (cfg YAMLConfig) MetricsLabels() map[string]string {
+	return cfg.MetricsConfig.Labels
+}
+
+func (cfg YAMLConfig) MetricsHost() string {
+	if cfg.MetricsConfig.Host == nil {
+		return defaultMetricsHost
+	}
+
+	return *cfg.MetricsConfig.Host
+}
+
+func (cfg YAMLConfig) MetricsPort() int {
+	if cfg.MetricsConfig.Host == nil {
+		return defaultMetricsPort
+	}
+
+	return *cfg.MetricsConfig.Port
+}
+
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {
@@ -308,8 +354,8 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 }
 
 func (cfg YAMLConfig) DataDir() string {
-	if cfg.dataDir != nil {
-		return *cfg.dataDir
+	if cfg.DataDirStr != nil {
+		return *cfg.DataDirStr
 	}
 	return ""
 }

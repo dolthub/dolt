@@ -127,21 +127,19 @@ teardown() {
 }
 
 @test "dolt diff other" {
+    dolt diff other
     run dolt diff other
     [ "$status" -eq 0 ]
-    echo $output
-    echo lines[3]
-    echo ${lines[3]}
-    [[ "${lines[3]}"  =~ "  CREATE TABLE abc ("       ]] || false
-    [[ "${lines[4]}"  =~ "    \`pk\` BIGINT NOT NULL" ]] || false
-    [[ "${lines[5]}"  =~ "    \`a\` LONGTEXT"         ]] || false
-    [[ "${lines[6]}"  =~ "    \`b\` DOUBLE"           ]] || false
-    [[ "${lines[7]}"  =~ "-   \`w\` BIGINT"           ]] || false
-    [[ "${lines[8]}"  =~ "-   \`z\` BIGINT"           ]] || false
-    [[ "${lines[9]}"  =~ "+   \`x\` BIGINT"           ]] || false
-    [[ "${lines[10]}" =~ "+   \`y\` BIGINT"           ]] || false
-    [[ "${lines[11]}" =~ "     PRIMARY KEY (pk)"      ]] || false
-    [[ "${lines[12]}" =~ "  );"                       ]] || false
+    [[ "${lines[3]}"  =~ 'CREATE TABLE `abc` ('   ]] || false
+    [[ "${lines[4]}"  =~ "\`pk\` bigint NOT NULL" ]] || false
+    [[ "${lines[5]}"  =~ "\`a\` longtext"         ]] || false
+    [[ "${lines[6]}"  =~ "\`b\` double"           ]] || false
+    [[ "${lines[7]}"  =~ "-  \`w\` bigint"        ]] || false
+    [[ "${lines[8]}"  =~ "-  \`z\` bigint"        ]] || false
+    [[ "${lines[9]}"  =~ "+  \`x\` bigint"        ]] || false
+    [[ "${lines[10]}" =~ "+  \`y\` bigint"        ]] || false
+    [[ "${lines[11]}" =~ 'PRIMARY KEY (`pk`)'     ]] || false
+    [[ "${lines[12]}" =~ ")"                      ]] || false
     [[ "${lines[13]}" =~ "+-----+----+------+-----+------+------+------+------+" ]] || false
     [[ "${lines[14]}" =~ "|  <  | pk | a    | b   |      |      | w    | z    |" ]] || false
     [[ "${lines[15]}" =~ "|  >  | pk | a    | b   | x    | y    |      |      |" ]] || false

@@ -73,6 +73,30 @@ teardown() {
     [[ "${lines[3]}" =~ "2" ]]
 }
 
+@test "sql-server-remotes: async push on sql-session commit" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
+    dolt config --local --add sqlserver.global.dolt_async_replication 1
+    start_sql_server repo1
+
+    multi_query repo1 1 "
+        SELECT DOLT_COMMIT('-am', 'Step 1');"
+
+    # threads guarenteed to flush after we stop server
+    stop_sql_server
+
+    cd ../repo2
+    dolt pull remote1
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" =~ "pk" ]]
+    [[ "${lines[1]}" =~ "0" ]]
+    [[ "${lines[2]}" =~ "1" ]]
+    [[ "${lines[3]}" =~ "2" ]]
+}
+
 @test "sql-server-remotes: pull new commits on read" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 

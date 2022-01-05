@@ -27,23 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set. For
-// creating tables, use ToDoltSchema.
-func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
-	var cols []schema.Column
-	for i, col := range sqlSchema {
-		convertedCol, err := ToDoltCol(uint64(i), col)
-		if err != nil {
-			return nil, err
-		}
-		cols = append(cols, convertedCol)
-	}
-
-	colColl := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colColl), nil
-}
-
-func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
+func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
 	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
 
 	var i int
@@ -72,19 +56,30 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.Schema, error) {
 		return false, nil
 	})
 
-	return sqle.ResolveDefaults(tableName, cols)
+	sqlSch, err := sqle.ResolveDefaults(tableName, cols)
+	if err != nil {
+		return sql.PrimaryKeySchema{}, err
+	}
+
+	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()...), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.
 // For result set schemas, see ToDoltResultSchema.
-func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string, sqlSchema sql.Schema, headRoot *doltdb.RootValue) (schema.Schema, error) {
+func ToDoltSchema(
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tableName string,
+	sqlSchema sql.PrimaryKeySchema,
+	headRoot *doltdb.RootValue,
+) (schema.Schema, error) {
 	var cols []schema.Column
 	var err error
 
 	// generate tags for all columns
 	var names []string
 	var kinds []types.NomsKind
-	for _, col := range sqlSchema {
+	for _, col := range sqlSchema.Schema {
 		names = append(names, col.Name)
 		ti, err := typeinfo.FromSqlType(col.Type)
 		if err != nil {
@@ -98,11 +93,11 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 		return nil, err
 	}
 
-	if len(tags) != len(sqlSchema) {
+	if len(tags) != len(sqlSchema.Schema) {
 		return nil, fmt.Errorf("number of tags should equal number of columns")
 	}
 
-	for i, col := range sqlSchema {
+	for i, col := range sqlSchema.Schema {
 		convertedCol, err := ToDoltCol(tags[i], col)
 		if err != nil {
 			return nil, err
@@ -117,7 +112,17 @@ func ToDoltSchema(ctx context.Context, root *doltdb.RootValue, tableName string,
 		return nil, err
 	}
 
-	return schema.SchemaFromCols(colColl)
+	sch, err := schema.SchemaFromCols(colColl)
+	if err != nil {
+		return nil, err
+	}
+
+	err = sch.SetPkOrdinals(sqlSchema.PkOrdinals)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, nil
 }
 
 // ToDoltCol returns the dolt column corresponding to the SQL column given

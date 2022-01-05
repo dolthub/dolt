@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -41,11 +40,9 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -151,11 +148,9 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -260,11 +255,9 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -343,11 +336,9 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(context.Background(), db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -444,11 +435,9 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		IsUnique: false,
 	})
 	require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
@@ -599,15 +588,9 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 		IsUnique: false,
 	})
 	require.NoError(t, err)
-	//idxv2, err := tableSch.Indexes().AddIndexByColNames("idx_v2", []string{"v2"}, schema.IndexProperties{
-	//	IsUnique: false,
-	//})
-	//require.NoError(t, err)
-	tableSchVal, err := encoding.MarshalSchemaAsNomsValue(ctx, db, tableSch)
-	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSchVal, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

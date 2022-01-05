@@ -24,7 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -53,7 +53,7 @@ func (s StatusTable) Schema() sql.Schema {
 }
 
 func (s StatusTable) Partitions(*sql.Context) (sql.PartitionIter, error) {
-	return sqlutil.NewSinglePartitionIter(types.Map{}), nil
+	return index.SinglePartitionIterFromNomsMap(types.Map{}), nil
 }
 
 func (s StatusTable) PartitionRows(context *sql.Context, _ sql.Partition) (sql.RowIter, error) {
@@ -89,21 +89,21 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 
 	stagedTables, unstagedTables, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
 	if err != nil {
-		return &StatusItr{}, err
+		return nil, err
 	}
 
 	docsOnDisk, err := drw.GetDocsOnDisk()
 	if err != nil {
-		return &StatusItr{}, err
+		return nil, err
 	}
 	stagedDocDiffs, unStagedDocDiffs, err := diff.GetDocDiffs(ctx, roots, docsOnDisk)
 	if err != nil {
-		return &StatusItr{}, err
+		return nil, err
 	}
 
 	workingTblsInConflict, _, _, err := merge.GetTablesInConflict(ctx, roots)
 	if err != nil {
-		return &StatusItr{}, err
+		return nil, err
 	}
 
 	docs, err := drw.GetDocsOnDisk()
@@ -112,7 +112,7 @@ func newStatusItr(ctx *sql.Context, st *StatusTable) (*StatusItr, error) {
 	}
 	workingDocsInConflict, err := merge.GetDocsInConflict(ctx, roots.Working, docs)
 	if err != nil {
-		return &StatusItr{}, err
+		return nil, err
 	}
 
 	tLength := len(stagedTables) + len(unstagedTables) + len(stagedDocDiffs.Docs) + len(unStagedDocDiffs.Docs) + len(workingTblsInConflict) + len(workingDocsInConflict.Docs)
@@ -211,7 +211,7 @@ func handleWorkingDocConflicts(workingDocs *diff.DocDiffs, itr *StatusItr, idx i
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *StatusItr) Next() (sql.Row, error) {
+func (itr *StatusItr) Next(*sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.tables) {
 		return nil, io.EOF
 	}

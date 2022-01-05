@@ -259,8 +259,8 @@ const (
 
 Run
 
-  dolt config --global user.email "you@example.com"
-  dolt config --global user.name "Your Name"
+  dolt config --global --add user.email "you@example.com"
+  dolt config --global --add user.name "Your Name"
 
 to set your account's default identity.
 Omit --global to set the identity only in this repository.

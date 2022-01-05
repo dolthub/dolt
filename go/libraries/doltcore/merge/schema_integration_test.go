@@ -471,6 +471,7 @@ func fkCollection(fks ...doltdb.ForeignKey) *doltdb.ForeignKeyCollection {
 func testMergeSchemas(t *testing.T, test mergeSchemaTest) {
 	dEnv := dtestutils.CreateTestEnv()
 	ctx := context.Background()
+
 	for _, c := range setupCommon {
 		c.exec(t, ctx, dEnv)
 	}

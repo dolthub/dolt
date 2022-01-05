@@ -154,8 +154,7 @@ CREATE TABLE test (
     c3 BIGINT,
     c4 BIGINT,
     c5 BIGINT,
-    PRIMARY KEY (pk1),
-    PRIMARY KEY (pk2)
+    PRIMARY KEY (pk1, pk2)
 );
 SQL
     [ "$status" -eq 0 ]
@@ -401,11 +400,11 @@ SQL
 
     run dolt sql -q "alter table test1 rename column b to a"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
     
     run dolt sql -q "alter table test1 add column A int"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "name" ]] || false
+    [[ "$output" =~ "already exists" ]] || false
 
     run dolt sql -q "alter table test1 change column b A bigint"
     [ "$status" -eq 1 ]

@@ -32,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -207,7 +208,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			}
 			if wrapper.HasMoreRows() {
 				sqlCtx := sql.NewContext(ctx)
-				err = commands.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(sqlCtx, 0, wrapper.Schema(), wrapper, commands.HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 					return
@@ -280,7 +281,7 @@ func (s *MysqlRowWrapper) Schema() sql.Schema {
 	return s.schema
 }
 
-func (s *MysqlRowWrapper) Next() (sql.Row, error) {
+func (s *MysqlRowWrapper) Next(*sql.Context) (sql.Row, error) {
 	if s.finished {
 		return nil, io.EOF
 	}
