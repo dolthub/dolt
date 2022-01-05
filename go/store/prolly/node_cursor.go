@@ -386,7 +386,7 @@ func (cur *nodeCursor) copy(other *nodeCursor) {
 		cur.parent.copy(other.parent)
 	} else {
 		assertTrue(other.parent == nil)
-	}	
+	}
 }
 
 func assertTrue(b bool) {
