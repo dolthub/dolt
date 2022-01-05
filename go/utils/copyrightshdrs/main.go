@@ -73,6 +73,9 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/types/null_value.go", NomsPath: "go/types/number.go", HadCopyrightNotice: true},
 	{Path: "store/types/tuple.go", NomsPath: "go/types/struct.go", HadCopyrightNotice: true},
 	{Path: "store/types/uint.go", NomsPath: "go/types/number.go", HadCopyrightNotice: true},
+	{Path: "store/prolly/node_cursor.go", NomsPath: "go/types/sequence_cursor.go", HadCopyrightNotice: true},
+	{Path: "store/prolly/node_splitter.go", NomsPath: "go/types/rolling_value_hasher.go", HadCopyrightNotice: true},
+	{Path: "store/prolly/tree_chunker.go", NomsPath: "go/types/sequence_chunker.go", HadCopyrightNotice: true},
 
 	// These included source files from noms did not have copyright notices.
 	{Path: "store/types/common_supertype.go", NomsPath: "go/types/common_supertype.go", HadCopyrightNotice: false},
