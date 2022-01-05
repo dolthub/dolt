@@ -201,13 +201,29 @@ func (ws *writeSession) foreignKeysForWriter(ctx context.Context, wr *sqlTableWr
 	upstream = make([]writeDependency, 0, len(childFKs))
 	downstream = make([]writeDependency, 0, len(parentFKs))
 
+	// recursive/self-referential foreign-keys are duplicated
+	// between |parentFKs| and |childFKs|
+	for _, fk := range parentFKs {
+		if !fk.IsResolved() {
+			continue
+		}
+		if !fk.IsSelfReferential() {
+			continue
+		}
+
+		r, err := makeFkRecursiveConstraint(ctx, wr.dbName, ws.root, fk, wr)
+		if err != nil {
+			return nil, nil, err
+		}
+		upstream = append(upstream, r)
+	}
+
 	for _, fk := range childFKs {
 		if !fk.IsResolved() {
 			continue
 		}
 		if fk.IsSelfReferential() {
-			// todo(andy)
-			panic("self-referential fk")
+			continue
 		}
 
 		parentName := fk.ReferencedTableName
@@ -229,8 +245,7 @@ func (ws *writeSession) foreignKeysForWriter(ctx context.Context, wr *sqlTableWr
 			continue
 		}
 		if fk.IsSelfReferential() {
-			// todo(andy)
-			panic("self-referential fk")
+			continue
 		}
 
 		childName := fk.TableName

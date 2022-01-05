@@ -65,6 +65,7 @@ type sqlTableWriter struct {
 	aiTracker         globalstate.AutoIncrementTracker
 	batched           bool
 
+	// todo(andy): unclear if this is necessary
 	upstream   []writeDependency
 	downstream []writeDependency
 

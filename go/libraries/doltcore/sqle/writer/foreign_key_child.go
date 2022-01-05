@@ -31,22 +31,23 @@ type writeDependency interface {
 	sql.RowDeleter
 }
 
-// columnMapping defines a childMap from a table schema to an uniqueIndex schema.
-// The ith entry in a columnMapping corresponds to the ith column of the
-// uniqueIndex schema, and contains the array uniqueIndex of the corresponding
+// indexMapping defines a mapping from a table schema to an index schema.
+// The ith entry in a indexMapping corresponds to the ith column of the
+// index schema, and contains the array index of the corresponding
 // table schema column.
-type columnMapping []int
+type indexMapping []int
 
 // foreignKeyChild enforces the child side of a Foreign Key
-// constraint. It does not maintain the Foreign Key uniqueIndex.
+// constraint. It does not maintain the Foreign Key index.
 type foreignKeyChild struct {
 	fk          doltdb.ForeignKey
 	parentIndex index.DoltIndex
 	expr        []sql.ColumnExpressionType
 
-	// mapping from child table to parent FK uniqueIndex.
-	childMap columnMapping
+	// mapping from child table to parent FK index.
+	childMap indexMapping
 
+	// table writer for parent table
 	parent *sqlTableWriter
 }
 
@@ -102,7 +103,7 @@ func (c foreignKeyChild) Insert(ctx *sql.Context, row sql.Row) error {
 		return nil
 	}
 
-	lookup, err := c.parentIndexLookup(ctx, row)
+	lookup, err := c.childLookupParent(ctx, row)
 	if err != nil {
 		return err
 	}
@@ -119,19 +120,7 @@ func (c foreignKeyChild) Insert(ctx *sql.Context, row sql.Row) error {
 }
 
 func (c foreignKeyChild) Update(ctx *sql.Context, old, new sql.Row) error {
-	ok, err := c.childColumnsUnchanged(old, new)
-	if err != nil {
-		return err
-	}
-	if ok {
-		return nil
-	}
-
 	return c.Insert(ctx, new)
-}
-
-func (c foreignKeyChild) ValidateDelete(ctx *sql.Context, row sql.Row) error {
-	return nil
 }
 
 func (c foreignKeyChild) Delete(ctx *sql.Context, row sql.Row) error {
@@ -159,7 +148,7 @@ func (c foreignKeyChild) childColumnsUnchanged(old, new sql.Row) (bool, error) {
 	return indexColumnsUnchanged(c.expr, c.childMap, old, new)
 }
 
-func (c foreignKeyChild) parentIndexLookup(ctx *sql.Context, row sql.Row) (sql.IndexLookup, error) {
+func (c foreignKeyChild) childLookupParent(ctx *sql.Context, row sql.Row) (sql.IndexLookup, error) {
 	builder := sql.NewIndexBuilder(ctx, c.parentIndex)
 
 	for i, j := range c.childMap {
@@ -175,10 +164,10 @@ func (c foreignKeyChild) violationErr(row sql.Row) error {
 	return sql.ErrForeignKeyChildViolation.New(c.fk.Name, c.fk.TableName, c.fk.ReferencedTableName, s)
 }
 
-func indexMapForIndex(sch schema.Schema, idxName string) (mapping columnMapping) {
+func indexMapForIndex(sch schema.Schema, idxName string) (mapping indexMapping) {
 	idx := sch.Indexes().GetByName(idxName)
 	indexTags := idx.IndexedColumnTags()
-	mapping = make(columnMapping, len(indexTags))
+	mapping = make(indexMapping, len(indexTags))
 	cols := sch.GetAllCols().GetColumns()
 
 	for i, col := range cols {
@@ -192,7 +181,7 @@ func indexMapForIndex(sch schema.Schema, idxName string) (mapping columnMapping)
 	return
 }
 
-func indexColumnsUnchanged(expr []sql.ColumnExpressionType, indexMap columnMapping, old, new sql.Row) (bool, error) {
+func indexColumnsUnchanged(expr []sql.ColumnExpressionType, indexMap indexMapping, old, new sql.Row) (bool, error) {
 	for i, j := range indexMap {
 		cmp, err := expr[i].Type.Compare(old[j], new[j])
 		if err != nil {
@@ -205,7 +194,7 @@ func indexColumnsUnchanged(expr []sql.ColumnExpressionType, indexMap columnMappi
 	return true, nil
 }
 
-func containsNulls(mapping columnMapping, row sql.Row) bool {
+func containsNulls(mapping indexMapping, row sql.Row) bool {
 	for _, j := range mapping {
 		if row[j] == nil {
 			return true

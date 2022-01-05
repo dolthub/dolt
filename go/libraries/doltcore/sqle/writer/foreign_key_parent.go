@@ -26,16 +26,16 @@ import (
 
 // foreignKeyParent enforces the parent side of a Foreign Key
 // constraint, and executes reference option logic.
-// It does not maintain the Foreign Key uniqueIndex.
+// It does not maintain the Foreign Key index.
 type foreignKeyParent struct {
 	fk         doltdb.ForeignKey
 	childIndex index.DoltIndex
 	expr       []sql.ColumnExpressionType
 
-	// mapping from parent table to child FK uniqueIndex.
-	parentMap columnMapping
-	// mapping from child table to child FK uniqueIndex.
-	childMap columnMapping
+	// mapping from parent table to child FK index.
+	parentMap indexMapping
+	// mapping from child table to child FK index.
+	childMap indexMapping
 
 	child *sqlTableWriter
 }
@@ -105,7 +105,7 @@ func (p foreignKeyParent) Update(ctx *sql.Context, old, new sql.Row) error {
 		return nil
 	}
 
-	lookup, err := p.childIndexLookup(ctx, old)
+	lookup, err := p.parentLookupChild(ctx, old)
 	if err != nil {
 		return err
 	}
@@ -115,20 +115,7 @@ func (p foreignKeyParent) Update(ctx *sql.Context, old, new sql.Row) error {
 		return err
 	}
 
-	if isRestrict(p.fk.OnUpdate) {
-		rows, err := sql.RowIterToRows(ctx, iter)
-		if err != nil {
-			return err
-		}
-		if len(rows) > 0 {
-			return p.violationErr(new)
-		}
-	}
-
-	return p.executeUpdateReferenceOption(ctx, new, iter)
-}
-
-func (p foreignKeyParent) executeUpdateReferenceOption(ctx *sql.Context, parent sql.Row, iter sql.RowIter) error {
+	parent := new
 	for {
 		before, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -151,6 +138,11 @@ func (p foreignKeyParent) executeUpdateReferenceOption(ctx *sql.Context, parent 
 				return err
 			}
 
+		case doltdb.ForeignKeyReferenceOption_DefaultAction,
+			doltdb.ForeignKeyReferenceOption_NoAction,
+			doltdb.ForeignKeyReferenceOption_Restrict:
+			return p.violationErr(new)
+
 		default:
 			panic("unexpected reference option")
 		}
@@ -162,7 +154,7 @@ func (p foreignKeyParent) Delete(ctx *sql.Context, row sql.Row) error {
 		return nil
 	}
 
-	lookup, err := p.childIndexLookup(ctx, row)
+	lookup, err := p.parentLookupChild(ctx, row)
 	if err != nil {
 		return err
 	}
@@ -172,20 +164,6 @@ func (p foreignKeyParent) Delete(ctx *sql.Context, row sql.Row) error {
 		return err
 	}
 
-	if isRestrict(p.fk.OnDelete) {
-		rows, err := sql.RowIterToRows(ctx, iter)
-		if err != nil {
-			return err
-		}
-		if len(rows) > 0 {
-			return p.violationErr(row)
-		}
-	}
-
-	return p.executeDeleteReferenceOption(ctx, row, iter)
-}
-
-func (p foreignKeyParent) executeDeleteReferenceOption(ctx *sql.Context, parent sql.Row, iter sql.RowIter) error {
 	for {
 		before, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -206,6 +184,11 @@ func (p foreignKeyParent) executeDeleteReferenceOption(ctx *sql.Context, parent 
 			if err = p.child.delete(ctx, before); err != nil {
 				return err
 			}
+
+		case doltdb.ForeignKeyReferenceOption_DefaultAction,
+			doltdb.ForeignKeyReferenceOption_NoAction,
+			doltdb.ForeignKeyReferenceOption_Restrict:
+			return p.violationErr(row)
 
 		default:
 			panic("unexpected reference option")
@@ -233,13 +216,12 @@ func (p foreignKeyParent) parentColumnsUnchanged(old, new sql.Row) (bool, error)
 	return indexColumnsUnchanged(p.expr, p.parentMap, old, new)
 }
 
-func (p foreignKeyParent) childIndexLookup(ctx *sql.Context, row sql.Row) (sql.IndexLookup, error) {
+// parentLookupChild constructs an IndexLookup on the
+func (p foreignKeyParent) parentLookupChild(ctx *sql.Context, row sql.Row) (sql.IndexLookup, error) {
 	builder := sql.NewIndexBuilder(ctx, p.childIndex)
-
 	for i, j := range p.parentMap {
 		builder.Equals(ctx, p.expr[i].Expression, row[j])
 	}
-
 	return builder.Build(ctx)
 }
 
@@ -249,25 +231,19 @@ func (p foreignKeyParent) violationErr(row sql.Row) error {
 	return sql.ErrForeignKeyParentViolation.New(p.fk.Name, p.fk.TableName, p.fk.ReferencedTableName, s)
 }
 
-func isRestrict(referenceOption doltdb.ForeignKeyReferenceOption) bool {
-	return referenceOption == doltdb.ForeignKeyReferenceOption_DefaultAction ||
-		referenceOption == doltdb.ForeignKeyReferenceOption_NoAction ||
-		referenceOption == doltdb.ForeignKeyReferenceOption_Restrict
-}
-
-func childRowSetNull(childMap columnMapping, child sql.Row) (updated sql.Row) {
-	updated = child.Copy()
-	for _, j := range childMap {
-		updated[j] = nil
-	}
-	return
-}
-
-func childRowCascade(parentMap, childMap columnMapping, parent, child sql.Row) (updated sql.Row) {
+func childRowCascade(parentMap, childMap indexMapping, parent, child sql.Row) (updated sql.Row) {
 	updated = child.Copy()
 	for i := range parentMap {
 		pi, ci := parentMap[i], childMap[i]
 		updated[ci] = parent[pi]
+	}
+	return
+}
+
+func childRowSetNull(childMap indexMapping, child sql.Row) (updated sql.Row) {
+	updated = child.Copy()
+	for _, j := range childMap {
+		updated[j] = nil
 	}
 	return
 }
