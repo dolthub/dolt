@@ -74,8 +74,8 @@ type Table struct {
 }
 
 // NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexData types.Map, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, sch, rowData, indexData, autoIncVal)
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewNomsTable(ctx, vrw, sch, rowData, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
@@ -277,13 +277,13 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 }
 
 // GetIndexData returns the internal index map which goes from index name to a ref of the row data map.
-func (t *Table) GetIndexData(ctx context.Context) (types.Map, error) {
+func (t *Table) GetIndexData(ctx context.Context) (durable.IndexSet, error) {
 	return t.table.GetIndexes(ctx)
 }
 
 // SetIndexData replaces the current internal index map, and returns an updated Table.
-func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table, error) {
-	table, err := t.table.SetIndexes(ctx, indexesMap)
+func (t *Table) SetIndexData(ctx context.Context, indexes durable.IndexSet) (*Table, error) {
+	table, err := t.table.SetIndexes(ctx, indexes)
 	if err != nil {
 		return nil, err
 	}
@@ -292,92 +292,66 @@ func (t *Table) SetIndexData(ctx context.Context, indexesMap types.Map) (*Table,
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
 func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	if !ok {
-		return types.EmptyMap, fmt.Errorf("index `%s` is missing its data", indexName)
-	}
-
-	indexMap, err := indexMapRef.(types.Ref).TargetValue(ctx, t.ValueReadWriter())
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	return indexMap.(types.Map), nil
+	return indexes.GetIndex(ctx, indexName)
 }
 
 // SetIndexRowData replaces the current row data for the given index and returns an updated Table.
 func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData types.Map) (*Table, error) {
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	indexRowDataRef, err := WriteValAndGetRef(ctx, t.ValueReadWriter(), indexRowData)
-	if err != nil {
-		return nil, err
-	}
-	indexesMap, err = indexesMap.Edit().Set(types.String(indexName), indexRowDataRef).Map(ctx)
-	if err != nil {
+	if err = indexes.PutIndex(ctx, indexName, indexRowData); err != nil {
 		return nil, err
 	}
 
-	return t.SetIndexData(ctx, indexesMap)
+	return t.SetIndexData(ctx, indexes)
 }
 
 // DeleteIndexRowData removes the underlying map of an index, along with its key entry. This should only be used
 // when removing an index altogether. If the intent is to clear an index's data, then use SetIndexRowData with
 // an empty map.
 func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Table, error) {
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	key := types.String(indexName)
-	if has, err := indexesMap.Has(ctx, key); err != nil {
+	if err = indexes.DropIndex(ctx, indexName); err != nil {
 		return nil, err
-	} else if has {
-		indexesMap, err = indexesMap.Edit().Remove(key).Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return t, nil
 	}
 
-	return t.SetIndexData(ctx, indexesMap)
+	return t.SetIndexData(ctx, indexes)
 }
 
 // RenameIndexRowData changes the name for the index data. Does not verify that the new name is unoccupied. If the old
 // name does not exist, then this returns the called table without error.
 func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexName string) (*Table, error) {
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	oldKey := types.String(oldIndexName)
-	newKey := types.String(newIndexName)
-	if indexRowData, ok, err := indexesMap.MaybeGet(ctx, oldKey); err != nil {
+	im, err := indexes.GetIndex(ctx, oldIndexName)
+	if err != nil {
 		return nil, err
-	} else if ok {
-		indexesMap, err = indexesMap.Edit().Set(newKey, indexRowData).Remove(oldKey).Map(ctx)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		return t, nil
 	}
 
-	return t.SetIndexData(ctx, indexesMap)
+	if err = indexes.DropIndex(ctx, oldIndexName); err != nil {
+		return nil, err
+	}
+
+	if err = indexes.PutIndex(ctx, newIndexName, im); err != nil {
+		return nil, err
+	}
+
+	return t.SetIndexData(ctx, indexes)
 }
 
 // VerifyIndexRowData verifies that the index with the given name's data matches what the index expects.
@@ -392,30 +366,22 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	indexesMap, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return err
 	}
 
-	indexMapRef, ok, err := indexesMap.MaybeGet(ctx, types.String(indexName))
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("index `%s` is missing its data", indexName)
-	}
-
-	indexMapValue, err := indexMapRef.(types.Ref).TargetValue(ctx, t.ValueReadWriter())
+	im, err := indexes.GetIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
 
-	iter, err := indexMapValue.(types.Map).Iterator(ctx)
+	iter, err := im.Iterator(ctx)
 	if err != nil {
 		return err
 	}
 
-	return index.VerifyMap(ctx, iter, indexMapValue.(types.Map).Format())
+	return index.VerifyMap(ctx, iter, im.Format())
 }
 
 // GetAutoIncrementValue returns the current AUTO_INCREMENT value for this table.

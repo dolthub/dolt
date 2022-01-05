@@ -69,8 +69,7 @@ func createTestSchema(t *testing.T) schema.Schema {
 }
 
 func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*Table, error) {
-	empty, _ := types.NewMap(context.Background(), vrw)
-	tbl, err := NewTable(context.Background(), vrw, tSchema, rowData, empty, nil)
+	tbl, err := NewTable(context.Background(), vrw, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err

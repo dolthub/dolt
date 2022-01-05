@@ -42,7 +42,7 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -150,7 +150,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -257,7 +257,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -338,7 +338,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(db)
@@ -437,7 +437,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
@@ -590,7 +590,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

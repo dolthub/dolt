@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -81,11 +82,12 @@ func TestEndToEnd(t *testing.T) {
 
 			empty, err := types.NewMap(ctx, root.VRW())
 			require.NoError(t, err)
-			idxRef, err := types.NewRef(empty, root.VRW().Format())
+
+			indexes := durable.NewIndexSet(ctx, root.VRW())
+			err = indexes.PutIndex(ctx, dtestutils.IndexName, empty)
 			require.NoError(t, err)
-			idxMap, err := types.NewMap(ctx, root.VRW(), types.String(dtestutils.IndexName), idxRef)
-			require.NoError(t, err)
-			tbl, err := doltdb.NewTable(ctx, root.VRW(), tt.sch, empty, idxMap, nil)
+
+			tbl, err := doltdb.NewTable(ctx, root.VRW(), tt.sch, empty, indexes, nil)
 			require.NoError(t, err)
 			root, err = root.PutTable(ctx, tableName, tbl)
 			require.NoError(t, err)

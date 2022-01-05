@@ -78,10 +78,7 @@ func CreateEnvWithSeedData(t *testing.T) *env.DoltEnv {
 	ai := sch.Indexes().AllIndexes()
 	sch.Indexes().Merge(ai...)
 
-	empty, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)

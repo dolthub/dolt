@@ -53,7 +53,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
@@ -148,7 +148,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -241,7 +241,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -311,7 +311,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(context.Background(), db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(context.Background(), db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
 	tableEditor, err := newPkTableEditor(context.Background(), table, tableSch, tableName, opts)
@@ -398,7 +398,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	require.NoError(t, err)
 	emptyMap, err := types.NewMap(ctx, db)
 	require.NoError(t, err)
-	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, emptyMap, nil)
+	table, err := doltdb.NewTable(ctx, db, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

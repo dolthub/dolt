@@ -838,8 +838,7 @@ func createTestSchema(t *testing.T) schema.Schema {
 }
 
 func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	empty, _ := types.NewMap(ctx, vrw)
-	return doltdb.NewTable(ctx, vrw, sch, rowData, empty, nil)
+	return doltdb.NewTable(ctx, vrw, sch, rowData, nil, nil)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {
