@@ -387,8 +387,8 @@ DELIM
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from t"
-    [[ "$output" =~ "1,a" ]] || false
-    [[ "$output" =~ "2,b" ]] || false
+    [[ "${lines[1]}" = "1,a" ]] || false
+    [[ "${lines[2]}" = "2,b" ]] || false
 
     run dolt table import -u --continue t file2.csv
     [ "$status" -eq 0 ]
@@ -398,9 +398,9 @@ DELIM
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
 
     run dolt sql -r csv -q "select * from t"
-    [[ "$output" =~ "1,c" ]] || false
-    [[ "$output" =~ "2,g" ]] || false
-    [[ "$output" =~ "3,v" ]] || false
+    [[ "${lines[1]}" = "1,c" ]] || false
+    [[ "${lines[2]}" = "2,g" ]] || false
+    [[ "${lines[3]}" = "3,v" ]] || false
 
     run dolt table import -u --continue t file3.csv
     [ "$status" -eq 0 ]
@@ -409,11 +409,11 @@ DELIM
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
 
     run dolt sql -r csv -q "select * from t"
-    [[ "$output" =~ "0,d" ]] || false
-    [[ "$output" =~ "1,d" ]] || false
-    [[ "$output" =~ "2,g" ]] || false
-    [[ "$output" =~ "3,v" ]] || false
-    [[ "$output" =~ "4,f" ]] || false
+    [[ "${lines[1]}" = "0,d" ]] || false
+    [[ "${lines[2]}" = "1,d" ]] || false
+    [[ "${lines[3]}" = "2,g" ]] || false
+    [[ "${lines[4]}" = "3,v" ]] || false
+    [[ "${lines[5]}" = "4,f" ]] || false
 
     run dolt sql -q "select count(*) from t"
     [[ "$output" =~ "5" ]] || false
