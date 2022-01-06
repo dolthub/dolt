@@ -44,7 +44,8 @@ const (
 	tableWriterStatUpdateRate = 64 * 1024
 )
 
-type sqlEngineMover struct {
+// sqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
+type sqlEngineTableWriter struct {
 	se     *engine.SqlEngine
 	sqlCtx *sql.Context
 
@@ -61,7 +62,7 @@ type sqlEngineMover struct {
 	importOption TableImportOp
 }
 
-func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineTableWriter, error) {
 	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
 	if err != nil {
 		return nil, err
@@ -97,7 +98,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 		return nil, err
 	}
 
-	return &sqlEngineMover{
+	return &sqlEngineTableWriter{
 		se:        se,
 		sqlCtx:    sqlCtx,
 		contOnErr: options.ContinueOnErr,
@@ -113,7 +114,7 @@ func NewSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, writeSch schema.S
 }
 
 // Used by Dolthub API
-func NewSqlEngineMoverWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Database, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineMover, error) {
+func NewSqlEngineTableWriterWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Database, writeSch schema.Schema, options *MoverOptions, statsCB noms.StatsCB) (*sqlEngineTableWriter, error) {
 	dsess.DSessFromSess(ctx.Session).EnableBatchedMode()
 
 	err := ctx.Session.SetSessionVariable(ctx, sql.AutoCommitSessionVar, false)
@@ -126,7 +127,7 @@ func NewSqlEngineMoverWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Da
 		return nil, err
 	}
 
-	return &sqlEngineMover{
+	return &sqlEngineTableWriter{
 		se:        engine.NewRebasedSqlEngine(eng, map[string]dsqle.SqlDatabase{db.Name(): db}),
 		sqlCtx:    ctx,
 		contOnErr: options.ContinueOnErr,
@@ -142,7 +143,7 @@ func NewSqlEngineMoverWithEngine(ctx *sql.Context, eng *sqle.Engine, db dsqle.Da
 }
 
 // StartWriting implements the DataWriter interface.
-func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
+func (s *sqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) (err error) {
 	err = s.forceDropTableIfNeeded()
 	if err != nil {
 		return err
@@ -236,18 +237,18 @@ func (s *sqlEngineMover) WriteRows(ctx context.Context, inputChannel chan sql.Ro
 }
 
 // Commit implements the DataWriter interface.
-func (s *sqlEngineMover) Commit(ctx context.Context) error {
+func (s *sqlEngineTableWriter) Commit(ctx context.Context) error {
 	_, _, err := s.se.Query(s.sqlCtx, "COMMIT")
 	return err
 }
 
 // GetSchema implements the DataWriter interface.
-func (s *sqlEngineMover) Schema() sql.Schema {
+func (s *sqlEngineTableWriter) Schema() sql.Schema {
 	return s.wrSch.Schema
 }
 
 // forceDropTableIfNeeded drop the given table in case the -f parameter is passed.
-func (s *sqlEngineMover) forceDropTableIfNeeded() error {
+func (s *sqlEngineTableWriter) forceDropTableIfNeeded() error {
 	if s.force {
 		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", s.tableName))
 		return err
@@ -257,7 +258,7 @@ func (s *sqlEngineMover) forceDropTableIfNeeded() error {
 }
 
 // createOrEmptyTableIfNeeded either creates or truncates the table given a -c or -r parameter.
-func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
+func (s *sqlEngineTableWriter) createOrEmptyTableIfNeeded() error {
 	switch s.importOption {
 	case CreateOp:
 		return s.createTable()
@@ -270,7 +271,7 @@ func (s *sqlEngineMover) createOrEmptyTableIfNeeded() error {
 }
 
 // createTable creates a table.
-func (s *sqlEngineMover) createTable() error {
+func (s *sqlEngineTableWriter) createTable() error {
 	cr := plan.NewCreateTable(sql.UnresolvedDatabase(s.database), s.tableName, false, false, &plan.TableSpec{Schema: s.wrSch})
 	analyzed, err := s.se.Analyze(s.sqlCtx, cr)
 	if err != nil {
@@ -293,7 +294,7 @@ func (s *sqlEngineMover) createTable() error {
 }
 
 // getInsertNode returns the sql.Node to be iterated on given the import option.
-func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, error) {
+func (s *sqlEngineTableWriter) getInsertNode(inputChannel chan sql.Row) (sql.Node, error) {
 	switch s.importOption {
 	case CreateOp, ReplaceOp:
 		return s.createInsertImportNode(inputChannel, s.contOnErr, false, nil) // contonerr translates to ignore
@@ -306,7 +307,7 @@ func (s *sqlEngineMover) getInsertNode(inputChannel chan sql.Row) (sql.Node, err
 
 // createInsertImportNode creates the relevant/analyzed insert node given the import option. This insert node is wrapped
 // with an error handler.
-func (s *sqlEngineMover) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
+func (s *sqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignore bool, replace bool, onDuplicateExpression []sql.Expression) (sql.Node, error) {
 	src := NewChannelRowSource(s.wrSch.Schema, source)
 	dest := plan.NewUnresolvedTable(s.tableName, s.database)
 

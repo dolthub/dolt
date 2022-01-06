@@ -1,4 +1,4 @@
-// Copyright 2023 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,31 +24,31 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 )
 
-type ErrgroupPipeline struct {
+// DataMoverPipeline is an errgroup based pipeline that reads rows from a reader and writes them to a destination with
+// a writer.
+type DataMoverPipeline struct {
 	g   *errgroup.Group
 	ctx context.Context
-
-	parsedRowChan chan sql.Row
-	rd            table.SqlRowReader
-	wr            table.SqlTableWriter
+	rd  table.SqlRowReader
+	wr  table.SqlTableWriter
 }
 
-func NewErrGroupPipeline(ctx context.Context, rd table.SqlRowReader, wr table.SqlTableWriter) *ErrgroupPipeline {
+func NewDataMoverPipeline(ctx context.Context, rd table.SqlRowReader, wr table.SqlTableWriter) *DataMoverPipeline {
 	g, ctx := errgroup.WithContext(ctx)
-	return &ErrgroupPipeline{
+	return &DataMoverPipeline{
 		g:   g,
 		ctx: ctx,
-
-		parsedRowChan: make(chan sql.Row),
-		rd:            rd,
-		wr:            wr,
+		rd:  rd,
+		wr:  wr,
 	}
 }
 
-func (e *ErrgroupPipeline) Execute() error {
+func (e *DataMoverPipeline) Execute() error {
+	parsedRowChan := make(chan sql.Row)
+
 	e.g.Go(func() (err error) {
 		defer func() {
-			close(e.parsedRowChan)
+			close(parsedRowChan)
 			if cerr := e.rd.Close(e.ctx); cerr != nil {
 				err = cerr
 			}
@@ -67,7 +67,7 @@ func (e *ErrgroupPipeline) Execute() error {
 			select {
 			case <-e.ctx.Done():
 				return e.ctx.Err()
-			case e.parsedRowChan <- row:
+			case parsedRowChan <- row:
 			}
 		}
 	})
@@ -79,7 +79,7 @@ func (e *ErrgroupPipeline) Execute() error {
 			}
 		}()
 
-		for r := range e.parsedRowChan {
+		for r := range parsedRowChan {
 			select {
 			case <-e.ctx.Done():
 				return e.ctx.Err()

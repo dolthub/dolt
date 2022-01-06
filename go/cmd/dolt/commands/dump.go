@@ -222,7 +222,7 @@ func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, fi
 		return errhand.BuildDError("Error creating writer for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
-	pipeline := mvdata.NewErrGroupPipeline(ctx, rd, wr)
+	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
 
 	err = pipeline.Execute()
 	if err != nil {

@@ -203,7 +203,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	pipeline := mvdata.NewErrGroupPipeline(ctx, rd, wr)
+	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
 
 	err = pipeline.Execute()
 	if err != nil {

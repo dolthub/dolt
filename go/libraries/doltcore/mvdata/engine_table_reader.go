@@ -18,13 +18,16 @@ import (
 	"context"
 	"fmt"
 
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 )
 
@@ -76,6 +79,27 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 
 	return &sqlEngineTableReader{
 		se:     se,
+		sqlCtx: sqlCtx,
+
+		sch:  doltSchema,
+		iter: iter,
+	}, nil
+}
+
+// Used by Dolthub API
+func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db dsqle.Database, root *doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
+	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM %s", tableName))
+	if err != nil {
+		return nil, err
+	}
+
+	doltSchema, err := sqlutil.ToDoltSchema(sqlCtx, root, tableName, sql.NewPrimaryKeySchema(sch), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &sqlEngineTableReader{
+		se:     engine.NewRebasedSqlEngine(se, map[string]dsqle.SqlDatabase{db.Name(): db}),
 		sqlCtx: sqlCtx,
 
 		sch:  doltSchema,

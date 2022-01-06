@@ -272,8 +272,20 @@ func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value 
 			return "TRUE", nil
 		}
 		return "FALSE", nil
-	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier, typeinfo.DatetimeTypeIdentifier:
+	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
+	case typeinfo.DatetimeTypeIdentifier:
+		reparsed, err := ti.ParseValue(ctx, nil, &str)
+		if err != nil {
+			return "", err
+		}
+
+		strp, err := ti.FormatValue(reparsed)
+		if err != nil {
+			return "", err
+		}
+
+		return singleQuote + *strp + singleQuote, nil
 	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:
