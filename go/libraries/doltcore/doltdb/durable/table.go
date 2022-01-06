@@ -112,7 +112,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 		indexes = NewIndexSet(ctx, vrw)
 	}
 
-	indexesRef, err := refFromNomsValue(ctx, vrw, MapFromIndexSet(indexes))
+	indexesRef, err := refFromNomsValue(ctx, vrw, mapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +281,7 @@ func (t nomsTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, err
 		indexes = NewIndexSet(ctx, t.vrw)
 	}
 
-	indexesRef, err := refFromNomsValue(ctx, t.vrw, MapFromIndexSet(indexes))
+	indexesRef, err := refFromNomsValue(ctx, t.vrw, mapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}

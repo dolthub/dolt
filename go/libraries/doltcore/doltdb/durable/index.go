@@ -40,10 +40,6 @@ func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	}
 }
 
-func MapFromIndexSet(ic IndexSet) types.Map {
-	return ic.(nomsIndexSet).indexes
-}
-
 type nomsIndexSet struct {
 	indexes types.Map
 	vrw     types.ValueReadWriter
@@ -89,4 +85,8 @@ func (c nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, err
 	}
 
 	return nomsIndexSet{indexes: im, vrw: c.vrw}, nil
+}
+
+func mapFromIndexSet(ic IndexSet) types.Map {
+	return ic.(nomsIndexSet).indexes
 }
