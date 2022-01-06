@@ -712,18 +712,9 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.CreateWriterErr:
-		if err.Cause == mvdata.ErrNoPK {
-			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.destTableName)
-			builder.AddDetails("A primary key is required and can be specified by:\n" +
-				"\tusing -pk option to designate a field as the primary key by name.\n" +
-				"\tusing -schema to provide a schema descriptor file.")
-			return builder.Build()
-		} else {
-			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.destTableName)
-			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.destTableName)
-			return bdr.AddCause(err.Cause).Build()
-		}
-
+		bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.destTableName)
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.destTableName)
+		return bdr.AddCause(err.Cause).Build()
 	case mvdata.CreateSorterErr:
 		bdr := errhand.BuildDError("Error creating sorting reader.")
 		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.destTableName)

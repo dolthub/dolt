@@ -87,6 +87,8 @@ teardown() {
     dolt sql -q "INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);"
 
     run dolt dump
+        echo $output
+
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f doltdump.sql ]

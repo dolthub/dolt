@@ -107,10 +107,7 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 	if len(path) == 0 {
 		return StreamDataLocation{Format: dataFmt, Reader: cli.InStream, Writer: cli.OutStream}
 	} else if fileFmtStr == "" {
-		if doltdb.IsValidTableName(path) {
-			return TableDataLocation{path}
-		} else {
-			switch strings.ToLower(filepath.Ext(path)) {
+		switch strings.ToLower(filepath.Ext(path)) {
 			case string(CsvFile):
 				dataFmt = CsvFile
 			case string(PsvFile):
@@ -123,7 +120,6 @@ func NewDataLocation(path, fileFmtStr string) DataLocation {
 				dataFmt = SqlFile
 			case string(ParquetFile):
 				dataFmt = ParquetFile
-			}
 		}
 	}
 

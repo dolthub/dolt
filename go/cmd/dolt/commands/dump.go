@@ -17,6 +17,12 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
@@ -32,11 +38,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -185,7 +189,6 @@ type dumpOptions struct {
 
 type tableOptions struct {
 	tableName  string
-	src        mvdata.TableDataLocation
 	dest       mvdata.DataLocation
 	srcOptions interface{}
 }
@@ -195,13 +198,10 @@ func (m tableOptions) WritesToTable() bool {
 }
 
 func (m tableOptions) SrcName() string {
-	return m.src.Name
+	return m.tableName
 }
 
 func (m tableOptions) DestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -209,9 +209,6 @@ func (m tableOptions) DestName() string {
 }
 
 func (m dumpOptions) DumpDestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -220,20 +217,132 @@ func (m dumpOptions) DumpDestName() string {
 
 // dumpTable dumps table in file given specific table and file location info
 func dumpTable(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
-	mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
-	if verr != nil {
-		return verr
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, tblOpts.tableName)
+	if err != nil {
+		return errhand.BuildDError("Error creating reader for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
-	if verr != nil {
-		return verr
+	wr, err := getTableWriter(ctx, dEnv, tblOpts, rd.GetSchema(), filePath)
+	if err != nil {
+		return errhand.BuildDError("Error creating writer for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
-	if skipped > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+
+	err = dump(ctx, rd, wr, root.VRW())
+	if err != nil {
+		return errhand.BuildDError("Error with dumping %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
 	return nil
+}
+
+func getNextRowFunc(rd table.TableReadCloser) func(ctx context.Context) (sql.Row, error) {
+	if srd, ok := rd.(table.SqlRowReader); ok {
+		return srd.ReadSqlRow
+	}
+
+	f := func(ctx context.Context) (sql.Row, error) {
+		r, err := rd.ReadRow(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
+	}
+
+	return f
+}
+
+
+func dump(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, vrw types.ValueReadWriter) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	parsedRowChan := make(chan sql.Row)
+
+	getNextRow := getNextRowFunc(rd)
+
+	g.Go(func() (err error) {
+		defer func() {
+			close(parsedRowChan)
+			if cerr := rd.Close(ctx); cerr != nil {
+				err = cerr
+			}
+		}()
+
+		for {
+			row, err := getNextRow(ctx)
+			if err == io.EOF {
+				return nil
+			}
+
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case parsedRowChan <- row:
+			}
+		}
+	})
+
+	g.Go(func() (err error) {
+		defer func() {
+			if cerr := wr.Close(ctx); cerr != nil {
+				err = cerr
+			}
+		}()
+
+		for r := range parsedRowChan {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+				err := writeRow(ctx, wr, vrw, r)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return g.Wait()
+}
+
+func writeRow(ctx context.Context, wr table.TableWriteCloser, vrw types.ValueReadWriter, row sql.Row) error {
+	if swr, ok := wr.(table.SqlTableWriter); ok {
+		return swr.WriteSqlRow(ctx, row)
+	} else {
+		dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, row, wr.GetSchema())
+		if err != nil {
+			return err
+		}
+
+		return wr.WriteRow(ctx, dRow)
+	}
+}
+
+func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, outSch schema.Schema, filePath string) (table.TableWriteCloser, errhand.VerboseError) {
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+
+	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(err).Build()
+	}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
+	}
+
+	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, outSch, opts, writer)
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
+	}
+
+	return wr, nil
 }
 
 // checkAndCreateOpenDestFile returns filePath to created dest file after checking for any existing file and handles it
@@ -272,13 +381,6 @@ func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.Read
 		return dest.Exists(ctx, root, fs)
 	}
 	return false, nil
-}
-
-func importStatsCB(stats types.AppliedEditStats) {
-	noEffect := stats.NonExistentDeletes + stats.SameVal
-	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
-	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
 // getDumpDestination returns a dump destination corresponding to the input parameters
@@ -359,7 +461,6 @@ func getDumpOptions(fileName string, rf string) *dumpOptions {
 func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions {
 	return &tableOptions{
 		tableName: tblName,
-		src:       mvdata.TableDataLocation{Name: tblName},
 		dest:      destination,
 	}
 }
@@ -396,10 +497,10 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 }
 
 // NewDumpDataMover returns dataMover with tableOptions given source table and destination file info
-func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
+func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
 	var err error
 
-	rd, _, err := tblOpts.src.NewReader(ctx, root, dEnv.FS, tblOpts.srcOptions)
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, tblOpts.tableName)
 	if err != nil {
 		return nil, errhand.BuildDError("Error creating reader for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}

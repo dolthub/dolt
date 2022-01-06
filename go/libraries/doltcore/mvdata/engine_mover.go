@@ -39,6 +39,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	// tableWriterStatUpdateRate is the number of writes that will process before the updated stats are displayed.
+	tableWriterStatUpdateRate = 64 * 1024
+)
+
 type sqlEngineMover struct {
 	se     *engine.SqlEngine
 	sqlCtx *sql.Context
