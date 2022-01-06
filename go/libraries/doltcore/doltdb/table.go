@@ -219,7 +219,7 @@ func (t *Table) HashOf() (hash.Hash, error) {
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
-	table, err := t.table.SetTableRows(ctx, updatedRows)
+	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter()))
 	if err != nil {
 		return nil, err
 	}
@@ -228,6 +228,17 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, 
 
 // GetNomsRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
+	idx, err := t.table.GetTableRows(ctx)
+	if err != nil {
+		return types.Map{}, err
+	}
+
+	return durable.NomsMapFromIndex(idx), nil
+}
+
+
+// GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
+func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
 }
 
