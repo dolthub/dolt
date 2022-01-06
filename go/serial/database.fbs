@@ -14,6 +14,7 @@
 
 include "prolly.fbs";
 include "schema.fbs";
+include "table.fbs";
 
 namespace serial;
 
@@ -36,13 +37,6 @@ table StoreRoot {
 table DatabaseRoot {
   tables:RefMap (required);
   foreign_keys:[ForeignKey] (required);
-}
-
-table Table {
-  name:string (required);
-  schema:Ref (required);
-  primary_index:Ref (required);
-  secondary_indexes:RefMap (required);
 }
 
 table Commit {

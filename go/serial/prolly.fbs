@@ -26,8 +26,10 @@ table Map {
   key_offsets:[uint16] (required);
 
   // array of map values tuples, ordered by paired key
+  // |value_tuples| is only present in leaf nodes
   value_tuples:[ubyte];
   // array of offets into |value_tuples|, zeroth offset omitted
+  // |value_offsets| is only present in leaf nodes
   value_offsets:[uint16];
 
   // array of ref hashes
@@ -42,7 +44,7 @@ table Map {
   // tuple format for |value_tuples|
   value_format:TupleFormat;
 
-  // subtree key count
+  // subtree member count
   tree_count:uint64;
 
   // node tree level, 0 for leaf nodes
@@ -58,12 +60,20 @@ table RefMap {
   //   Prolly tree children
   // - leaf nodes: contains refs corresponding
   //   to keys in |names|
-  ref_array:[uint8] (required);
+  ref_array:[ubyte] (required);
 
-  // node key count
-  node_count:uint16;
+  // subtree member count
+  tree_count:uint64;
 
-  // subtree key count
+  // node tree level, 0 for leaf nodes
+  tree_level:uint8;
+}
+
+table CommitClosure {
+  // array of commit ref hashes
+  ref_array:[ubyte] (required);
+
+  // subtree member count
   tree_count:uint64;
 
   // node tree level, 0 for leaf nodes
