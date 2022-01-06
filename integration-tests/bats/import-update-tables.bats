@@ -360,3 +360,61 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
+
+@test "import-update-tables: Subsequent updates with --continue correctly work" {
+   dolt sql -q "create table t (pk int primary key, val varchar(1))"
+   cat <<DELIM > file1.csv
+pk,val
+1,a
+2,b
+DELIM
+   cat <<DELIM > file2.csv
+pk,val
+1,c
+2,gps
+3,v
+DELIM
+  cat <<DELIM > file3.csv
+pk,val
+1,d
+4,fg
+dsadas,de
+DELIM
+
+    run dolt table import -u --continue t file1.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from t"
+    [ "${lines[1]}" = "1,a" ]
+    [ "${lines[2]}" = "2,b" ]
+
+    run dolt table import -u --continue t file2.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 1, Modifications: 2, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+
+    run dolt sql -r csv -q "select * from t"
+    [ "${lines[1]}" = "1,c" ]
+    [ "${lines[2]}" = "2,g" ]
+    [ "${lines[3]}" = "3,v" ]
+
+    run dolt table import -u --continue t file3.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 2, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+
+    run dolt sql -r csv -q "select * from t order by pk"
+    [ "${lines[1]}" = "0,d" ]
+    [ "${lines[2]}" = "1,d" ]
+    [ "${lines[3]}" = "2,g" ]
+    [ "${lines[4]}" = "3,v" ]
+    [ "${lines[5]}" = "4,f" ]
+
+    run dolt sql -q "select count(*) from t"
+    [[ "$output" =~ "5" ]] || false
+}

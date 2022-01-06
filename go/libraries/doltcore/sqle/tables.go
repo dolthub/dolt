@@ -34,9 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	editor2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -387,7 +387,7 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 type WritableDoltTable struct {
 	*DoltTable
 	db Database
-	ed editor2.TableEditor
+	ed writer.TableWriter
 }
 
 var _ doltTableInterface = (*WritableDoltTable)(nil)
@@ -434,24 +434,41 @@ func (t *WritableDoltTable) Inserter(ctx *sql.Context) sql.RowInserter {
 	return te
 }
 
-func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed editor2.TableEditor, err error) {
-	sess := dsess.DSessFromSess(ctx.Session)
+func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWriter, err error) {
+	ds := dsess.DSessFromSess(ctx.Session)
+
+	var batched = ds.BatchMode() == dsess.Batched
 
 	// In batched mode, reuse the same table editor. Otherwise, hand out a new one
-	if sess.BatchMode() == dsess.Batched {
+	if batched {
 		if t.ed != nil {
 			return t.ed, nil
 		}
 	}
 
-	vrw := t.db.ddb.ValueReadWriter()
+	ws, err := ds.WorkingSet(ctx, t.db.name)
+	if err != nil {
+		return nil, err
+	}
+	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
 
-	ed, err = editor2.NewSqlTableEditor(ctx, sess, t, t.db, t.db.gs, t.sch, vrw)
+	state, _, err := ds.LookupDbState(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
-	if sess.BatchMode() == dsess.Batched {
+	if t.temporary {
+		setter := ds.SetTempTableRoot
+		ed, err = state.TempTableWriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+	} else {
+		setter := ds.SetRoot
+		ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if batched {
 		t.ed = ed
 	}
 
@@ -493,7 +510,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
 	if err != nil {
 		return 0, err
 	}

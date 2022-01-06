@@ -15,6 +15,7 @@
 package dsess
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -157,7 +159,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.EditSession.Flush(ctx)
+	newRoot, err := dbState.WriteSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
@@ -205,7 +207,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic), nil
+	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -577,7 +579,9 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.EditSession.SetRoot(ctx, newRoot)
+	err = sessionState.WriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return newRoot, nil
+	})
 	if err != nil {
 		return err
 	}
@@ -736,7 +740,7 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.EditSession.Opts, tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic))
 
 	return nil
 }
@@ -771,7 +775,12 @@ func (sess *Session) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *
 		return err
 	}
 	dbState.TempTableRoot = newRoot
-	return dbState.TempTableEditSession.SetRoot(ctx, newRoot)
+
+	err = dbState.TempTableWriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
+		return newRoot, nil
+	})
+
+	return err
 }
 
 // GetHeadCommit returns the parent commit of the current session.
@@ -853,11 +862,15 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 	if intVal == 0 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = true
+			opts := dbState.WriteSession.GetOptions()
+			opts.ForeignKeyChecksDisabled = true
+			dbState.WriteSession.SetOptions(opts)
 		}
 	} else if intVal == 1 {
 		for _, dbState := range sess.dbStates {
-			dbState.EditSession.Opts.ForeignKeyChecksDisabled = false
+			opts := dbState.WriteSession.GetOptions()
+			opts.ForeignKeyChecksDisabled = false
+			dbState.WriteSession.SetOptions(opts)
 		}
 	} else {
 		return fmt.Errorf("variable 'foreign_key_checks' can't be set to the value of '%d'", intVal)
@@ -964,7 +977,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.EditSession = editor.CreateTableEditSession(nil, editOpts)
+	sessionState.WriteSession = writer.NewWriteSession(nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1013,7 +1026,7 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableEditSession = editor.CreateTableEditSession(newRoot, dbState.EditSession.Opts)
+	dbState.TempTableWriteSession = writer.NewWriteSession(newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

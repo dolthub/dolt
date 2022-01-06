@@ -115,7 +115,6 @@ func TestKeylessTableReader(t *testing.T) {
 	dEnv := dtu.CreateTestEnv()
 	ctx := context.Background()
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	empty := dtu.MustMap(t, vrw)
 
 	compareRows := func(t *testing.T, expected []sql.Row, rdr table.SqlTableReader) {
 		for _, exp := range expected {
@@ -131,7 +130,7 @@ func TestKeylessTableReader(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			rowMap := makeBag(vrw, sch, test.rows...)
-			tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
+			tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
 			require.NoError(t, err)
 			rdr, err := table.NewTableReader(ctx, tbl)
 			require.NoError(t, err)
@@ -139,7 +138,7 @@ func TestKeylessTableReader(t *testing.T) {
 		})
 		t.Run(test.name+"_buffered", func(t *testing.T) {
 			rowMap := makeBag(vrw, sch, test.rows...)
-			tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
+			tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
 			require.NoError(t, err)
 			rdr, err := table.NewBufferedTableReader(ctx, tbl)
 			require.NoError(t, err)

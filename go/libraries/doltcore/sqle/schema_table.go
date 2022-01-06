@@ -194,6 +194,34 @@ func migrateOldSchemasTableToNew(
 	return root, rowsToAdd, nil
 }
 
+func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, error) {
+	tbl, _, err := root.GetTable(ctx, doltdb.SchemasTableName)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	idx := int64(1)
+	if rows.Len() > 0 {
+		keyTpl, _, err := rows.Last(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if keyTpl != nil {
+			key, err := keyTpl.(types.Tuple).Get(1)
+			if err != nil {
+				return 0, err
+			}
+			idx = int64(key.(types.Int)) + 1
+		}
+	}
+	return idx, nil
+}
+
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
 func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType string, name string) (sql.Row, bool, error) {
 	indexes, err := tbl.GetIndexes(ctx)

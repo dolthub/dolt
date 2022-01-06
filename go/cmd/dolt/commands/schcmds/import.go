@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
@@ -302,15 +303,15 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}
 
-		indexData := empty
+		var indexSet durable.IndexSet
 		if tblExists {
-			indexData, err = tbl.GetIndexData(ctx)
+			indexSet, err = tbl.GetIndexData(ctx)
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
 		}
 
-		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexData, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexSet, nil)
 		if err != nil {
 			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 		}

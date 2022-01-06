@@ -735,22 +735,12 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 		return nil, err
 	}
 
-	emptyRef, err := WriteValAndGetRef(ctx, root.VRW(), empty)
-	if err != nil {
-		return nil, err
-	}
-
-	ed := empty.Edit()
+	indexes := durable.NewIndexSet(ctx, root.VRW())
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
-		// create an empty indexRowData map for every index
-		ed.Set(types.String(index.Name()), emptyRef)
+		// create an empty map for every index
+		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
 		return
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err := ed.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
