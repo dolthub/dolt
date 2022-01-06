@@ -19,7 +19,7 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220105235252-5eb0285b73f6
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220106172102-e15917d40607
 	github.com/dolthub/ishell v0.0.0-20210205014355-16a4ce758446
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
@@ -80,6 +80,7 @@ require (
 )
 
 require (
+	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/prometheus/client_golang v1.11.0
 	github.com/xitongsys/parquet-go v1.6.1
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
@@ -100,7 +101,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jstemmer/go-junit-report v0.9.1 // indirect
-	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6 // indirect
 	github.com/klauspost/compress v1.10.10 // indirect
 	github.com/mattn/go-colorable v0.1.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
