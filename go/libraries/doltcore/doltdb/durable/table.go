@@ -44,7 +44,7 @@ var (
 
 // Table is a Dolt table that can be persisted.
 type Table interface {
-	// HashOf returns the hash.Hash of this table
+	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
 	// GetSchemaHash returns the hash.Hash of this table's schema.

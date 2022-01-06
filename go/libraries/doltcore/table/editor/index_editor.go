@@ -320,7 +320,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 			return nil, err
 		}
 
-		indexes, err = indexes.PutIndex(ctx, index.Name(), rebuiltIndexRowData)
+		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), rebuiltIndexRowData)
 		if err != nil {
 			return nil, err
 		}

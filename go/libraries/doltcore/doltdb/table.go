@@ -297,17 +297,22 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Ma
 		return types.EmptyMap, err
 	}
 
-	return indexes.GetIndex(ctx, indexName)
+	idx, err := indexes.GetIndex(ctx, indexName)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return durable.NomsMapFromIndex(idx), nil
 }
 
 // SetIndexRowData replaces the current row data for the given index and returns an updated Table.
-func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowData types.Map) (*Table, error) {
+func (t *Table) SetIndexRowData(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
 	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	indexes, err = indexes.PutIndex(ctx, indexName, indexRowData)
+	indexes, err = indexes.PutNomsIndex(ctx, indexName, idx)
 	if err != nil {
 		return nil, err
 	}
@@ -375,11 +380,12 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return err
 	}
 
-	im, err := indexes.GetIndex(ctx, indexName)
+	idx, err := indexes.GetIndex(ctx, indexName)
 	if err != nil {
 		return err
 	}
 
+	im := durable.NomsMapFromIndex(idx)
 	iter, err := im.Iterator(ctx)
 	if err != nil {
 		return err

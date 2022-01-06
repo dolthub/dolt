@@ -18,18 +18,61 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/store/hash"
+
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type Index interface {
+	// HashOf returns the hash.Hash of this table.
+	HashOf() (hash.Hash, error)
+
+	// Count returns the cardinality of the index.
+	Count() uint64
+}
+
 type IndexSet interface {
+	// HashOf returns the hash.Hash of this table.
+	HashOf() (hash.Hash, error)
+
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, name string) (types.Map, error)
+	GetIndex(ctx context.Context, name string) (Index, error)
 
 	// PutIndex puts an index into the set.
-	PutIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error)
+	PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error)
+
+	// PutNomsIndex puts a noms index into the set.
+	// todo(andy): this is a temporary stop-gap while abstracting types.Map
+	PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error)
 
 	// DropIndex removes an index from the set.
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
+}
+
+type nomsIndex struct {
+	index types.Map
+	vrw   types.ValueReadWriter
+}
+
+func NomsMapFromIndex(i Index) types.Map {
+	return i.(nomsIndex).index
+}
+
+func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
+	return nomsIndex{
+		index: m,
+		vrw:   vrw,
+	}
+}
+
+var _ Index = nomsIndex{}
+
+func (i nomsIndex) HashOf() (hash.Hash, error) {
+	return i.index.Hash(i.vrw.Format())
+}
+
+func (i nomsIndex) Count() uint64 {
+	return i.index.Len()
 }
 
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
@@ -47,44 +90,60 @@ type nomsIndexSet struct {
 
 var _ IndexSet = nomsIndexSet{}
 
-func (c nomsIndexSet) GetIndex(ctx context.Context, name string) (types.Map, error) {
-	v, ok, err := c.indexes.MaybeGet(ctx, types.String(name))
+// HashOf implementes IndexSet.
+func (s nomsIndexSet) HashOf() (hash.Hash, error) {
+	return s.indexes.Hash(s.vrw.Format())
+}
+
+// GetIndex implementes IndexSet.
+func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) {
+	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
 	}
 	if err != nil {
-		return types.Map{}, err
+		return nil, err
 	}
 
-	v, err = v.(types.Ref).TargetValue(ctx, c.vrw)
+	v, err = v.(types.Ref).TargetValue(ctx, s.vrw)
 	if err != nil {
-		return types.Map{}, err
+		return nil, err
 	}
 
-	return v.(types.Map), nil
+	return nomsIndex{
+		index: v.(types.Map),
+		vrw:   s.vrw,
+	}, nil
 }
 
-func (c nomsIndexSet) PutIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
-	ref, err := refFromNomsValue(ctx, c.vrw, idx)
-	if err != nil {
-		return nil, err
-	}
-
-	im, err := c.indexes.Edit().Set(types.String(name), ref).Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return nomsIndexSet{indexes: im, vrw: c.vrw}, nil
+// PutIndex implementes IndexSet.
+func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
+	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw))
 }
 
-func (c nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
-	im, err := c.indexes.Edit().Remove(types.String(name)).Map(ctx)
+// PutIndex implementes IndexSet.
+func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
+	ref, err := refFromNomsValue(ctx, s.vrw, idx.(nomsIndex).index)
 	if err != nil {
 		return nil, err
 	}
 
-	return nomsIndexSet{indexes: im, vrw: c.vrw}, nil
+	im, err := s.indexes.Edit().Set(types.String(name), ref).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+}
+
+// DropIndex implementes IndexSet.
+func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
+	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
 }
 
 func mapFromIndexSet(ic IndexSet) types.Map {
