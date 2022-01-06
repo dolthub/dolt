@@ -39,6 +39,30 @@ table DatabaseRoot {
   foreign_keys:[ForeignKey] (required);
 }
 
+table WorkingSet {
+  // todo(andy): |name| is included in current
+  // WorkingSet struct, is it necessary?
+  name:string (required);
+  working_root:Ref (required);
+  staged_root:Ref (required);
+  merge_state:MergeState;
+  meta:WorkingSetMeta (required);
+}
+
+table MergeState {
+  pre_merge_root:Ref (required);
+  candidate_merge_commit:Ref (required);
+}
+
+table WorkingSetMeta {
+  name:string (required);
+  email:string (required);
+  // todo(andy): is description required?
+  desc:string;
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+}
+
 table Commit {
   root:Ref (required);
   parent_list:[Ref] (required);
@@ -52,9 +76,6 @@ table CommitMeta {
   desc:string (required);
   timestamp:Timestamp (required);
   user_timestamp:Timestamp (required);
-
-  // todo(andy): needed?
-  metaversion:uint16;
 }
 
 table Tag {
@@ -68,7 +89,4 @@ table TagMeta {
   desc:string (required);
   timestamp:Timestamp (required);
   user_timestamp:Timestamp (required);
-
-  // todo(andy): needed?
-  metaversion:uint16;
 }

@@ -254,6 +254,280 @@ func DatabaseRootEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
+type WorkingSet struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) *WorkingSet {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &WorkingSet{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsWorkingSet(buf []byte, offset flatbuffers.UOffsetT) *WorkingSet {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &WorkingSet{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *WorkingSet) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *WorkingSet) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *WorkingSet) Name() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *WorkingSet) WorkingRoot(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *WorkingSet) StagedRoot(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *WorkingSet) MergeState(obj *MergeState) *MergeState {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(MergeState)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *WorkingSet) Meta(obj *WorkingSetMeta) *WorkingSetMeta {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(WorkingSetMeta)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func WorkingSetStart(builder *flatbuffers.Builder) {
+	builder.StartObject(5)
+}
+func WorkingSetAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+}
+func WorkingSetAddWorkingRoot(builder *flatbuffers.Builder, workingRoot flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(workingRoot), 0)
+}
+func WorkingSetAddStagedRoot(builder *flatbuffers.Builder, stagedRoot flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(stagedRoot), 0)
+}
+func WorkingSetAddMergeState(builder *flatbuffers.Builder, mergeState flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(mergeState), 0)
+}
+func WorkingSetAddMeta(builder *flatbuffers.Builder, meta flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(meta), 0)
+}
+func WorkingSetEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type MergeState struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &MergeState{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &MergeState{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *MergeState) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *MergeState) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *MergeState) PreMergeRoot(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *MergeState) CandidateMergeCommit(obj *Ref) *Ref {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Ref)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func MergeStateStart(builder *flatbuffers.Builder) {
+	builder.StartObject(2)
+}
+func MergeStateAddPreMergeRoot(builder *flatbuffers.Builder, preMergeRoot flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(preMergeRoot), 0)
+}
+func MergeStateAddCandidateMergeCommit(builder *flatbuffers.Builder, candidateMergeCommit flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(candidateMergeCommit), 0)
+}
+func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type WorkingSetMeta struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsWorkingSetMeta(buf []byte, offset flatbuffers.UOffsetT) *WorkingSetMeta {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &WorkingSetMeta{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsWorkingSetMeta(buf []byte, offset flatbuffers.UOffsetT) *WorkingSetMeta {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &WorkingSetMeta{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *WorkingSetMeta) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *WorkingSetMeta) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *WorkingSetMeta) Name() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *WorkingSetMeta) Email() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *WorkingSetMeta) Desc() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *WorkingSetMeta) Timestamp(obj *Timestamp) *Timestamp {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := o + rcv._tab.Pos
+		if obj == nil {
+			obj = new(Timestamp)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *WorkingSetMeta) UserTimestamp(obj *Timestamp) *Timestamp {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		x := o + rcv._tab.Pos
+		if obj == nil {
+			obj = new(Timestamp)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func WorkingSetMetaStart(builder *flatbuffers.Builder) {
+	builder.StartObject(5)
+}
+func WorkingSetMetaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+}
+func WorkingSetMetaAddEmail(builder *flatbuffers.Builder, email flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(email), 0)
+}
+func WorkingSetMetaAddDesc(builder *flatbuffers.Builder, desc flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(desc), 0)
+}
+func WorkingSetMetaAddTimestamp(builder *flatbuffers.Builder, timestamp flatbuffers.UOffsetT) {
+	builder.PrependStructSlot(3, flatbuffers.UOffsetT(timestamp), 0)
+}
+func WorkingSetMetaAddUserTimestamp(builder *flatbuffers.Builder, userTimestamp flatbuffers.UOffsetT) {
+	builder.PrependStructSlot(4, flatbuffers.UOffsetT(userTimestamp), 0)
+}
+func WorkingSetMetaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
 type Commit struct {
 	_tab flatbuffers.Table
 }
@@ -439,20 +713,8 @@ func (rcv *CommitMeta) UserTimestamp(obj *Timestamp) *Timestamp {
 	return nil
 }
 
-func (rcv *CommitMeta) Metaversion() uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		return rcv._tab.GetUint16(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *CommitMeta) MutateMetaversion(n uint16) bool {
-	return rcv._tab.MutateUint16Slot(14, n)
-}
-
 func CommitMetaStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(5)
 }
 func CommitMetaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
@@ -468,9 +730,6 @@ func CommitMetaAddTimestamp(builder *flatbuffers.Builder, timestamp flatbuffers.
 }
 func CommitMetaAddUserTimestamp(builder *flatbuffers.Builder, userTimestamp flatbuffers.UOffsetT) {
 	builder.PrependStructSlot(4, flatbuffers.UOffsetT(userTimestamp), 0)
-}
-func CommitMetaAddMetaversion(builder *flatbuffers.Builder, metaversion uint16) {
-	builder.PrependUint16Slot(5, metaversion, 0)
 }
 func CommitMetaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
@@ -619,20 +878,8 @@ func (rcv *TagMeta) UserTimestamp(obj *Timestamp) *Timestamp {
 	return nil
 }
 
-func (rcv *TagMeta) Metaversion() uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		return rcv._tab.GetUint16(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *TagMeta) MutateMetaversion(n uint16) bool {
-	return rcv._tab.MutateUint16Slot(14, n)
-}
-
 func TagMetaStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(5)
 }
 func TagMetaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
@@ -648,9 +895,6 @@ func TagMetaAddTimestamp(builder *flatbuffers.Builder, timestamp flatbuffers.UOf
 }
 func TagMetaAddUserTimestamp(builder *flatbuffers.Builder, userTimestamp flatbuffers.UOffsetT) {
 	builder.PrependStructSlot(4, flatbuffers.UOffsetT(userTimestamp), 0)
-}
-func TagMetaAddMetaversion(builder *flatbuffers.Builder, metaversion uint16) {
-	builder.PrependUint16Slot(5, metaversion, 0)
 }
 func TagMetaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
