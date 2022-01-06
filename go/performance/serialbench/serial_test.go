@@ -42,19 +42,23 @@ var (
 )
 
 const (
-	SmallLeafNodeSz    = 224
-	SmallKeyTuplesSz   = 40
-	SmallValueTuplesSz = 70
+	SmallLeafNodeSz     = 224
+	SmallKeyTuplesSz    = 40
+	SmallValueTuplesSz  = 70
+	SmallKeyOffsetsSz   = 18
+	SmallValueOffsetsSz = 18
 
-	// data       3200 = 800 + 3200
-	// offsets    800  = sizeof(uint16) * (200 + 200)
-	// metadata   11   = TupleFormat * 2, tree_count, tree_level
-	// fb + pad   57   = 56 + 1 (1.4% overhead)
-	// total size 4072
-	LargeLeafNodeSz    = 4072
-	LargeLeafNodeCount = 200
-	LargeKeyTuplesSz   = 800
-	LargeValueTuplesSz = 2400
+	// data        3200 = 800 + 3200
+	// offsets     796  = sizeof(uint16) * (199 + 199)
+	// metadata    11   = TupleFormat * 2, tree_count, tree_level
+	// flatbuffers 65   = (1.6% overhead)
+	// total size  4072
+	LargeLeafNodeSz     = 4072
+	LargeLeafNodeCount  = 200
+	LargeKeyTuplesSz    = 800
+	LargeValueTuplesSz  = 2400
+	LargeKeyOffsetsSz   = 398
+	LargeValueOffsetsSz = 398
 )
 
 func TestSerialFormat(t *testing.T) {
@@ -63,14 +67,26 @@ func TestSerialFormat(t *testing.T) {
 		buf := makeLeafNode(t, keys, values)
 		assert.Equal(t, SmallLeafNodeSz, len(buf))
 		assert.Equal(t, SmallLeafNodeHash, hash.Of(buf))
-		validateLeafNode(t, buf, keys, values)
+
+		m := serial.GetRootAsMap(buf, 0)
+		validateLeafNode(t, m, keys, values)
+		assert.Equal(t, SmallKeyTuplesSz, len(m.KeyTuplesBytes()))
+		assert.Equal(t, SmallValueTuplesSz, len(m.ValueTuplesBytes()))
+		assert.Equal(t, SmallKeyOffsetsSz, m.KeyOffsetsLength()*2)
+		assert.Equal(t, SmallValueOffsetsSz, m.ValueOffsetsLength()*2)
 	})
 	t.Run("large leaf node", func(t *testing.T) {
 		keys, values := largeTestTuples()
 		buf := makeLeafNode(t, keys, values)
 		assert.Equal(t, LargeLeafNodeSz, len(buf))
 		assert.Equal(t, LargeLeafNodeHash, hash.Of(buf))
-		validateLeafNode(t, buf, keys, values)
+
+		m := serial.GetRootAsMap(buf, 0)
+		validateLeafNode(t, m, keys, values)
+		assert.Equal(t, LargeKeyTuplesSz, len(m.KeyTuplesBytes()))
+		assert.Equal(t, LargeValueTuplesSz, len(m.ValueTuplesBytes()))
+		assert.Equal(t, LargeKeyOffsetsSz, m.KeyOffsetsLength()*2)
+		assert.Equal(t, LargeValueOffsetsSz, m.ValueOffsetsLength()*2)
 	})
 	t.Run("test data sanity check", func(t *testing.T) {
 		keys, values := smallTestTuples()
@@ -159,10 +175,8 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 	return b.FinishedBytes()
 }
 
-func validateLeafNode(t *testing.T, flatbuffer []byte, keys, values [][]byte) {
+func validateLeafNode(t *testing.T, m *serial.Map, keys, values [][]byte) {
 	require.Equal(t, len(keys), len(values))
-
-	m := serial.GetRootAsMap(flatbuffer, 0)
 
 	assert.Equal(t, len(keys)-1, m.KeyOffsetsLength())
 	kb := make([]uint16, m.KeyOffsetsLength()+2)
