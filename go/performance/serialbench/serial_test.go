@@ -101,12 +101,12 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 
 	start = int(b.Offset())
 	// zeroth offset ommitted
-	ol := len(keys)-1
+	ol := len(keys) - 1
 	serial.MapStartKeyOffsetsVector(b, ol)
 	keyOffsets := serializeOffsets(t, b, keys)
 	assert.Equal(t, keyOffsets, b.Offset())
-	offsetsSz := (2*(len(keys)-1))+4
-	assert.Equal(t, padToMultiple(start+offsetsSz,4), int(b.Offset()))
+	offsetsSz := (2 * (len(keys) - 1)) + 4
+	assert.Equal(t, padToMultiple(start+offsetsSz, 4), int(b.Offset()))
 
 	valSz := byteSize(values)
 	serial.MapStartValueOffsetsVector(b, valSz)
@@ -120,8 +120,8 @@ func makeLeafNode(t *testing.T, keys, values [][]byte) []byte {
 	start = int(b.Offset())
 	valOffsets := serializeOffsets(t, b, values)
 	assert.Equal(t, valOffsets, b.Offset())
-	offsetsSz = (2*(len(values)-1))+4
-	assert.Equal(t, padToMultiple(start+offsetsSz,4), int(b.Offset()))
+	offsetsSz = (2 * (len(values) - 1)) + 4
+	assert.Equal(t, padToMultiple(start+offsetsSz, 4), int(b.Offset()))
 
 	start = int(b.Offset())
 	serial.MapStart(b)
@@ -211,7 +211,7 @@ func serializeOffsets(t *testing.T, b *fb.Builder, tt [][]byte) fb.UOffsetT {
 	}
 	// zeroth offset ommitted
 	require.Equal(t, len(tt[0]), off)
-	return b.EndVector(len(tt)-1)
+	return b.EndVector(len(tt) - 1)
 }
 
 func byteSize(tt [][]byte) (sz int) {
