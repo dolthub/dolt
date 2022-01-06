@@ -114,7 +114,7 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 	}
 
 	// Create the new Table and rebuild all the indexes
-	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), newSchema, empty, empty, nil)
+	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), newSchema, empty, nil, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -533,12 +534,13 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 			require.NoError(t, err)
 		}
 
-		indexData, err := types.NewMap(ctx, root.VRW())
+		var indexData durable.IndexSet
 		require.NoError(t, err)
 		if tbl != nil {
 			indexData, err = tbl.GetIndexData(ctx)
 			require.NoError(t, err)
 		}
+
 		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, rowData, indexData, nil)
 		require.NoError(t, err)
 

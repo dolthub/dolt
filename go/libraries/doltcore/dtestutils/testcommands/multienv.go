@@ -20,6 +20,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -330,11 +332,8 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 	if err != nil {
 		errhand(err)
 	}
-	empty, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		errhand(err)
-	}
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
 	if err != nil {
 		errhand(err)
 	}
@@ -361,7 +360,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 	}
 }
 
-func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
+func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return doltdb.ErrNomsIO
