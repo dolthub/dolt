@@ -91,7 +91,16 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	panic("todo")
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
+		return err
+	}
+
+	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
+	if err != nil {
+		return err
+	}
+
+	return iohelp.WriteLine(w.wr, stmt)
 }
 
 func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {

@@ -81,7 +81,6 @@ func TestBasics(t *testing.T) {
 		expectedIsFileType bool
 	}{
 		{NewDataLocation("", ".csv"), "stream", false},
-		{NewDataLocation(testTableName, ""), DoltDB.ReadableStr() + ":" + testTableName, false},
 		{NewDataLocation("file.csv", ""), CsvFile.ReadableStr() + ":file.csv", true},
 		{NewDataLocation("file.psv", ""), PsvFile.ReadableStr() + ":file.psv", true},
 		{NewDataLocation("file.json", ""), JsonFile.ReadableStr() + ":file.json", true},
@@ -225,11 +224,6 @@ func TestCreateRdWr(t *testing.T) {
 
 		if numBad != 0 || pipeErr != nil {
 			t.Fatal("Failed to write data. bad:", numBad, err)
-		}
-
-		if wr, ok := wr.(DataMoverCloser); ok {
-			root, err = wr.Flush(context.Background())
-			assert.NoError(t, err)
 		}
 
 		rd, _, err := loc.NewReader(context.Background(), root, dEnv.FS, JSONOptions{TableName: testTableName, SchFile: testSchemaFileName})

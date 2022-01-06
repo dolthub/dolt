@@ -428,7 +428,7 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
 	var err error
 
 	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
@@ -505,7 +505,7 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 
 type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
 
-func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
+func move(ctx context.Context, rd table.SqlRowReader, wr mvdata.DataWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Setup the necessary data points for the import job
@@ -570,31 +570,18 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 func moveRows(
 	ctx context.Context,
 	wr mvdata.DataWriter,
-	rd table.TableReadCloser,
+	rd table.SqlRowReader,
 	options *importOptions,
 	parsedRowChan chan sql.Row,
 	badRowCb badRowFn,
 ) error {
-	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
-		if srd, ok := rd.(table.SqlRowReader); ok {
-			return srd.ReadSqlRow(ctx)
-		} else {
-			r, err := rd.ReadRow(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-		}
-	}
-
 	rdSqlSch, err := sqlutil.FromDoltSchema(options.destTableName, rd.GetSchema())
 	if err != nil {
 		return err
 	}
 
 	for {
-		sqlRow, err := getNextRow(rd)
+		sqlRow, err := rd.ReadSqlRow(ctx)
 		if err == io.EOF {
 			return nil
 		}

@@ -46,7 +46,7 @@ func (dl StreamDataLocation) Exists(ctx context.Context, root *doltdb.RootValue,
 }
 
 // NewReader creates a TableReadCloser for the DataLocation
-func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.TableReadCloser, sorted bool, err error) {
+func (dl StreamDataLocation) NewReader(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS, opts interface{}) (rdCl table.SqlRowReader, sorted bool, err error) {
 	switch dl.Format {
 	case CsvFile:
 		delim := ","

@@ -20,9 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -32,14 +30,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var exportDocs = cli.CommandDocumentationContent{
@@ -203,12 +198,14 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error creating reader for %s.", exOpts.SrcName()).AddCause(err).Build(), usage)
 	}
 
-	wr, verr := getTableWriter(ctx, root, dEnv, rd.GetSchema(), exOpts, importStatsCB)
+	wr, verr := getTableWriter(ctx, root, dEnv, rd.GetSchema(), exOpts)
 	if verr != nil {
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	err = export(ctx, rd, wr, root.VRW())
+	pipeline := mvdata.NewErrGroupPipeline(ctx, rd, wr)
+
+	err = pipeline.Execute()
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build(), usage)
 	}
@@ -217,7 +214,7 @@ func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, exOpts *exportOptions, statsCB noms.StatsCB) (table.TableWriteCloser, errhand.VerboseError) {
+func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, exOpts *exportOptions) (table.SqlTableWriter, errhand.VerboseError) {
 	ow, err := exOpts.checkOverwrite(ctx, root, dEnv.FS)
 	if err != nil {
 		return nil, errhand.VerboseErrorFromError(err)
@@ -247,92 +244,4 @@ func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltE
 	}
 
 	return wr, nil
-}
-
-func getNextRowFunc(rd table.TableReadCloser) func(ctx context.Context) (sql.Row, error) {
-	if srd, ok := rd.(table.SqlRowReader); ok {
-		return srd.ReadSqlRow
-	}
-
-	f := func(ctx context.Context) (sql.Row, error) {
-		r, err := rd.ReadRow(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-	}
-
-	return f
-}
-
-func writeRow(ctx context.Context, wr table.TableWriteCloser, vrw types.ValueReadWriter, row sql.Row) error {
-	if swr, ok := wr.(table.SqlTableWriter); ok {
-		return swr.WriteSqlRow(ctx, row)
-	} else {
-		dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, row, wr.GetSchema())
-		if err != nil {
-			return err
-		}
-
-		return wr.WriteRow(ctx, dRow)
-	}
-}
-
-func export(ctx context.Context, rd table.TableReadCloser, wr table.TableWriteCloser, vrw types.ValueReadWriter) error {
-	g, ctx := errgroup.WithContext(ctx)
-
-	parsedRowChan := make(chan sql.Row)
-
-	getNextRow := getNextRowFunc(rd)
-
-	g.Go(func() (err error) {
-		defer func() {
-			close(parsedRowChan)
-			if cerr := rd.Close(ctx); cerr != nil {
-				err = cerr
-			}
-		}()
-
-		for {
-			row, err := getNextRow(ctx)
-			if err == io.EOF {
-				return nil
-			}
-
-			if err != nil {
-				return err
-			}
-
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case parsedRowChan <- row:
-			}
-		}
-	})
-
-	g.Go(func() (err error) {
-		defer func() {
-			if cerr := wr.Close(ctx); cerr != nil {
-				err = cerr
-			}
-		}()
-
-		for r := range parsedRowChan {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				err := writeRow(ctx, wr, vrw, r)
-				if err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	})
-
-	return g.Wait()
 }
