@@ -129,7 +129,6 @@ func init() {
 
 func TestExists(t *testing.T) {
 	testLocations := []DataLocation{
-		NewDataLocation(testTableName, ""),
 		NewDataLocation("file.csv", ""),
 		NewDataLocation("file.psv", ""),
 		NewDataLocation("file.json", ""),
@@ -146,11 +145,7 @@ func TestExists(t *testing.T) {
 				t.Error("Shouldn't exist before creation")
 			}
 
-			if tableVal, isTable := loc.(TableDataLocation); isTable {
-				var err error
-				root, err = root.CreateEmptyTable(context.Background(), tableVal.Name, fakeSchema)
-				assert.NoError(t, err)
-			} else if fileVal, isFile := loc.(FileDataLocation); isFile {
+			if fileVal, isFile := loc.(FileDataLocation); isFile {
 				err := fs.WriteFile(fileVal.Path, []byte("test"))
 				assert.NoError(t, err)
 			}
@@ -214,7 +209,7 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Unexpected error opening file for writer.", wrErr)
 		}
 
-		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, true, fakeSchema, nil, opts, writer)
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, fakeSchema, opts, writer)
 		if wErr != nil {
 			t.Fatal("Unexpected error creating writer.", wErr)
 		}

@@ -19,7 +19,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -87,6 +88,10 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	return iohelp.WriteLine(w.wr, stmt)
+}
+
+func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	panic("todo")
 }
 
 func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
