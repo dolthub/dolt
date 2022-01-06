@@ -226,8 +226,8 @@ func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, 
 	return &Table{table: table}, nil
 }
 
-// GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
-func (t *Table) GetRowData(ctx context.Context) (types.Map, error) {
+// GetNomsRowData retrieves the underlying map which is a map from a primary key to a list of field values.
+func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 	return t.table.GetTableRows(ctx)
 }
 

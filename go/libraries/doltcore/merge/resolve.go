@@ -189,7 +189,7 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 		return nil, err
 	}
 
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

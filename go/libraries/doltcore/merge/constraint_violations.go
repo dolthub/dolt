@@ -429,7 +429,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	if err != nil {
 		return nil, false, err
 	}
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, false, err
 	}

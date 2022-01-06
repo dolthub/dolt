@@ -277,7 +277,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tt.expectedSchema.Indexes().AddIndex(index)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 
 			var foundRows []row.Row

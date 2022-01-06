@@ -104,7 +104,7 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 
 		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
-		newTableData, err := newTable.GetRowData(context.Background())
+		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
 
 		require.Equal(t, newTableData.Len(), uint64(100))
@@ -210,7 +210,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 
 		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
-		newTableData, err := newTable.GetRowData(context.Background())
+		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
 
 		require.Equal(t, newTableData.Len(), uint64(100))
@@ -289,7 +289,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 
 	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	newTableData, err := newTable.GetRowData(context.Background())
+	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 
 	seen := make([]bool, 10)
@@ -321,7 +321,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 
 	sameTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	sameTableData, err := sameTable.GetRowData(context.Background())
+	sameTableData, err := sameTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 	assert.True(t, sameTableData.Equals(newTableData))
 }
@@ -384,7 +384,7 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 
 	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	newTableData, err := newTable.GetRowData(context.Background())
+	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 
 	seen := make([]bool, 10)
@@ -478,7 +478,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 
 	table, err = tableEditor.Table(ctx)
 	require.NoError(t, err)
-	tableData, err := table.GetRowData(ctx)
+	tableData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 
 	seen := make([]bool, 13)

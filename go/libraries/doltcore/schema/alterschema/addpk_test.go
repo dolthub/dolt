@@ -120,7 +120,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Assert the new index map is not empty
-		newMap, err := table.GetRowData(ctx)
+		newMap, err := table.GetNomsRowData(ctx)
 		assert.NoError(t, err)
 		assert.False(t, newMap.Empty())
 		assert.Equal(t, newMap.Len(), uint64(2))

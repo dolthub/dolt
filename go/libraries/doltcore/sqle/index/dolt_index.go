@@ -52,7 +52,7 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 }
 
 func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
-	tableRows, err := t.GetRowData(ctx)
+	tableRows, err := t.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		return nil, err
 	}
 
-	tableRows, err := t.GetRowData(ctx)
+	tableRows, err := t.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -1237,7 +1237,7 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 			buf.WriteString("\n")
 
 			buf.WriteString("Data:\n")
-			data, err := table.GetRowData(ctx)
+			data, err := table.GetNomsRowData(ctx)
 			if err != nil {
 				panic(err)
 			}

@@ -165,7 +165,7 @@ func ResolveForeignKey(
 		UnresolvedFKDetails:    doltdb.UnresolvedFKDetails{},
 	}
 
-	tableData, err := table.GetRowData(ctx)
+	tableData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}

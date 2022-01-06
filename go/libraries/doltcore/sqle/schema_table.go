@@ -160,7 +160,7 @@ func migrateOldSchemasTableToNew(
 		return nil, nil, err
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -200,7 +200,7 @@ func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, err
 		return 0, err
 	}
 
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -290,7 +290,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType 
 		return nil, errDoltSchemasTableFormat
 	}
 
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

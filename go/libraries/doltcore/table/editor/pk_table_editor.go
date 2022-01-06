@@ -144,7 +144,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		writeMutex: &sync.Mutex{},
 	}
 	var err error
-	rowData, err := t.GetRowData(ctx)
+	rowData, err := t.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, ind
 		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
 	)
 
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

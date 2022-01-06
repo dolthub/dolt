@@ -230,7 +230,7 @@ func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	m, err := table.GetRowData(ctx)
+	m, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -270,7 +270,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 
 	if err != nil {
 		return nil, err
@@ -500,7 +500,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -983,7 +983,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		rowData, err := updatedTable.GetRowData(ctx)
+		rowData, err := updatedTable.GetNomsRowData(ctx)
 		if err != nil {
 			return err
 		}

@@ -655,7 +655,7 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
 
-	rowData, err := tbl.GetRowData(context.Background())
+	rowData, err := tbl.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 
 	var sqlRows []sql.Row

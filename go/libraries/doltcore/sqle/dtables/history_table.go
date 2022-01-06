@@ -326,7 +326,7 @@ func newRowItrForTableAtCommit(
 		return &rowItrForTableAtCommit{empty: true}, nil
 	}
 
-	m, err := tbl.GetRowData(ctx)
+	m, err := tbl.GetNomsRowData(ctx)
 
 	if err != nil {
 		return nil, err

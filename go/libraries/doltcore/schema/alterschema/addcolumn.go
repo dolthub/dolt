@@ -177,7 +177,7 @@ func validateNewColumn(ctx context.Context, root *doltdb.RootValue, tbl *doltdb.
 }
 
 func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, tag uint64, newSchema schema.Schema) (*doltdb.Table, error) {
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
