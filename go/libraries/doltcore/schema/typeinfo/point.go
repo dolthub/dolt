@@ -37,7 +37,7 @@ var PointType = &pointType{sql.PointType{}}
 
 func ConvertStringToSQLPoint(s string) (interface{}, error) {
 	// Get everything between parentheses
-	s = s[len("POINT("):len(s)-1]
+	s = s[len("POINT(") : len(s)-1]
 	// Split into x and y strings; maybe should length check
 	vals := strings.Split(s, ",")
 	// Parse x as float64

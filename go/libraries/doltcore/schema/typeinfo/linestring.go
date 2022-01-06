@@ -36,7 +36,7 @@ var LinestringType = &linestringType{sql.LinestringType{}}
 
 func ConvertStringToSQLLinestring(s string) (interface{}, error) {
 	// Get everything between parentheses
-	s = s[len("LINESTRING("):len(s)-1]
+	s = s[len("LINESTRING(") : len(s)-1]
 	// Split into points
 	vals := strings.Split(s, ",POINT")
 	// Parse points

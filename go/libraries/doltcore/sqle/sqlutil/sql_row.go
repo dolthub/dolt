@@ -304,7 +304,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
 		case sql.Point:
 			// TODO: Convert to byte array to match MySQL; leave for readability
-			return fmt.Sprintf("POINT(%s,%s)",strconv.FormatFloat(typedCol.X, 'g', -1, 64), strconv.FormatFloat(typedCol.Y, 'g', -1, 64))
+			return fmt.Sprintf("POINT(%s,%s)", strconv.FormatFloat(typedCol.X, 'g', -1, 64), strconv.FormatFloat(typedCol.Y, 'g', -1, 64))
 		case sql.Linestring:
 			var s = make([]string, len(typedCol.Points))
 			for i, p := range typedCol.Points {

@@ -36,7 +36,7 @@ var PolygonType = &polygonType{sql.PolygonType{}}
 
 func ConvertStringToSQLPolygon(s string) (interface{}, error) {
 	// Get everything between parentheses
-	s = s[len("POLYGON("):len(s)-1]
+	s = s[len("POLYGON(") : len(s)-1]
 	// Split into lines
 	vals := strings.Split(s, ",LINESTRING")
 	// Parse points
