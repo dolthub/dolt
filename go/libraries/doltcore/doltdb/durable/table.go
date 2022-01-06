@@ -269,7 +269,7 @@ func (t nomsTable) GetIndexes(ctx context.Context) (IndexSet, error) {
 		return nil, err
 	}
 
-	return &nomsIndexSet{
+	return nomsIndexSet{
 		indexes: im.(types.Map),
 		vrw:     t.vrw,
 	}, nil

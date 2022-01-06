@@ -26,23 +26,22 @@ type IndexSet interface {
 	GetIndex(ctx context.Context, name string) (types.Map, error)
 
 	// PutIndex puts an index into the set.
-	// todo(andy): should this be immutable
-	PutIndex(ctx context.Context, name string, idx types.Map) error
+	PutIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error)
 
 	// DropIndex removes an index from the set.
-	DropIndex(ctx context.Context, name string) error
+	DropIndex(ctx context.Context, name string) (IndexSet, error)
 }
 
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	empty, _ := types.NewMap(ctx, vrw)
-	return &nomsIndexSet{
+	return nomsIndexSet{
 		indexes: empty,
 		vrw:     vrw,
 	}
 }
 
 func MapFromIndexSet(ic IndexSet) types.Map {
-	return ic.(*nomsIndexSet).indexes
+	return ic.(nomsIndexSet).indexes
 }
 
 type nomsIndexSet struct {
@@ -50,9 +49,9 @@ type nomsIndexSet struct {
 	vrw     types.ValueReadWriter
 }
 
-var _ IndexSet = &nomsIndexSet{}
+var _ IndexSet = nomsIndexSet{}
 
-func (c *nomsIndexSet) GetIndex(ctx context.Context, name string) (types.Map, error) {
+func (c nomsIndexSet) GetIndex(ctx context.Context, name string) (types.Map, error) {
 	v, ok, err := c.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
@@ -69,17 +68,25 @@ func (c *nomsIndexSet) GetIndex(ctx context.Context, name string) (types.Map, er
 	return v.(types.Map), nil
 }
 
-func (c *nomsIndexSet) PutIndex(ctx context.Context, name string, idx types.Map) (err error) {
+func (c nomsIndexSet) PutIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
 	ref, err := refFromNomsValue(ctx, c.vrw, idx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.indexes, err = c.indexes.Edit().Set(types.String(name), ref).Map(ctx)
-	return err
+	im, err := c.indexes.Edit().Set(types.String(name), ref).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: c.vrw}, nil
 }
 
-func (c *nomsIndexSet) DropIndex(ctx context.Context, name string) (err error) {
-	c.indexes, err = c.indexes.Edit().Remove(types.String(name)).Map(ctx)
-	return err
+func (c nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
+	im, err := c.indexes.Edit().Remove(types.String(name)).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: c.vrw}, nil
 }

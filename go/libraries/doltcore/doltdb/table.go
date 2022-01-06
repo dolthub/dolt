@@ -307,7 +307,8 @@ func (t *Table) SetIndexRowData(ctx context.Context, indexName string, indexRowD
 		return nil, err
 	}
 
-	if err = indexes.PutIndex(ctx, indexName, indexRowData); err != nil {
+	indexes, err = indexes.PutIndex(ctx, indexName, indexRowData)
+	if err != nil {
 		return nil, err
 	}
 
@@ -323,7 +324,8 @@ func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Tabl
 		return nil, err
 	}
 
-	if err = indexes.DropIndex(ctx, indexName); err != nil {
+	indexes, err = indexes.DropIndex(ctx, indexName)
+	if err != nil {
 		return nil, err
 	}
 
@@ -343,11 +345,13 @@ func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexNa
 		return nil, err
 	}
 
-	if err = indexes.DropIndex(ctx, oldIndexName); err != nil {
+	indexes, err = indexes.DropIndex(ctx, oldIndexName)
+	if err != nil {
 		return nil, err
 	}
 
-	if err = indexes.PutIndex(ctx, newIndexName, im); err != nil {
+	indexes, err = indexes.PutIndex(ctx, newIndexName, im)
+	if err != nil {
 		return nil, err
 	}
 
