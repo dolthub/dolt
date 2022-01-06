@@ -9,7 +9,8 @@ rm $GEN_DIR/*.go
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   database.fbs \
   prolly.fbs \
-  schema.fbs
+  schema.fbs \
+  table.fbs
 
 # prefix files with copyright header
 for FILE in $GEN_DIR/*.go;
