@@ -60,9 +60,9 @@ type Table interface {
 	SetTableRows(ctx context.Context, rows types.Map) (Table, error)
 
 	// GetIndexes returns the secondary indexes for this table.
-	GetIndexes(ctx context.Context) (types.Map, error)
+	GetIndexes(ctx context.Context) (IndexSet, error)
 	// SetIndexes sets the secondary indexes for this table.
-	SetIndexes(ctx context.Context, indexes types.Map) (Table, error)
+	SetIndexes(ctx context.Context, indexes IndexSet) (Table, error)
 
 	// GetConflicts returns the merge conflicts for this table.
 	GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error)
@@ -92,7 +92,7 @@ type nomsTable struct {
 var _ Table = nomsTable{}
 
 // NewNomsTable makes a new Table.
-func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexData types.Map, autoIncVal types.Value) (Table, error) {
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexes IndexSet, autoIncVal types.Value) (Table, error) {
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,11 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 		return nil, err
 	}
 
-	indexesRef, err := refFromNomsValue(ctx, vrw, indexData)
+	if indexes == nil {
+		indexes = NewIndexSet(ctx, vrw)
+	}
+
+	indexesRef, err := refFromNomsValue(ctx, vrw, MapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}
@@ -251,30 +255,33 @@ func (t nomsTable) GetTableRows(ctx context.Context) (types.Map, error) {
 }
 
 // GetIndexes implements Table.
-func (t nomsTable) GetIndexes(ctx context.Context) (types.Map, error) {
-	indexesVal, ok, err := t.tableStruct.MaybeGet(indexesKey)
+func (t nomsTable) GetIndexes(ctx context.Context) (IndexSet, error) {
+	iv, ok, err := t.tableStruct.MaybeGet(indexesKey)
 	if err != nil {
-		return types.EmptyMap, err
+		return nil, err
 	}
 	if !ok {
-		newEmptyMap, err := types.NewMap(ctx, t.vrw)
-		if err != nil {
-			return types.EmptyMap, err
-		}
-		return newEmptyMap, nil
+		return NewIndexSet(ctx, t.vrw), nil
 	}
 
-	indexesMap, err := indexesVal.(types.Ref).TargetValue(ctx, t.vrw)
+	im, err := iv.(types.Ref).TargetValue(ctx, t.vrw)
 	if err != nil {
-		return types.EmptyMap, err
+		return nil, err
 	}
 
-	return indexesMap.(types.Map), nil
+	return nomsIndexSet{
+		indexes: im.(types.Map),
+		vrw:     t.vrw,
+	}, nil
 }
 
 // SetIndexes implements Table.
-func (t nomsTable) SetIndexes(ctx context.Context, indexesMap types.Map) (Table, error) {
-	indexesRef, err := refFromNomsValue(ctx, t.vrw, indexesMap)
+func (t nomsTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
+	if indexes == nil {
+		indexes = NewIndexSet(ctx, t.vrw)
+	}
+
+	indexesRef, err := refFromNomsValue(ctx, t.vrw, MapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}

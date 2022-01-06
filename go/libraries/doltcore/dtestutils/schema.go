@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -111,9 +112,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	rowMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	empty, err := types.NewMap(ctx, vrw)
-	require.NoError(t, err)
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, empty, nil)
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
@@ -128,7 +127,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 }
 
-func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData types.Map, tableName string, autoVal types.Value) error {
+func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return doltdb.ErrNomsIO
