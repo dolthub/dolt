@@ -578,9 +578,7 @@ func (vps *verticalPipelineStages) getFixWidthStageFunc(samples int) func(contex
 	bufferring := true
 	buffer := make([]pipeline.ItemWithProps, 0, samples)
 	var maxWidth int
-	//var fwf fwt.FixedWidthFormatter
 	return func(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-		// only needed for formatting the column names
 		if items == nil {
 			bufferring = false
 			return buffer, nil
@@ -621,10 +619,9 @@ func (vps *verticalPipelineStages) getFixWidthStageFunc(samples int) func(contex
 func (vps *verticalPipelineStages) formatHeads(width int, items []string) ([]string, error) {
 	results := make([]string, len(items))
 	for i, item := range items {
-		// add empty spaces in front if string length is less than with
 		diff := width - len(item)
 		if diff < 0 {
-			return nil, errors.New("err")
+			return nil, errors.New("column width exceeded maximum width for column")
 		}
 		results[i] = fmt.Sprintf("%*s", width, item)
 	}
