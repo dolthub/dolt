@@ -72,7 +72,7 @@ func (rdr pkTableReader) Close(_ context.Context) error {
 }
 
 func newPkTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (pkTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return pkTableReader{}, err
 	}
@@ -99,7 +99,7 @@ func newPkTableReaderForRows(ctx context.Context, rows types.Map, sch schema.Sch
 }
 
 func newPkTableReaderFrom(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, val types.Value) (SqlTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ type partitionTableReader struct {
 var _ SqlTableReader = &partitionTableReader{}
 
 func newPkTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

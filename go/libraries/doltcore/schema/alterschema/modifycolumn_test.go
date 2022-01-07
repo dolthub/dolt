@@ -195,7 +195,7 @@ func TestModifyColumn(t *testing.T) {
 			tt.expectedSchema.SetPkOrdinals(sch.GetPkOrdinals())
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 
 			var foundRows []row.Row
@@ -213,7 +213,7 @@ func TestModifyColumn(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 
-			updatedIndexRows, err := updatedTable.GetIndexRowData(context.Background(), index.Name())
+			updatedIndexRows, err := updatedTable.GetNomsIndexRowData(context.Background(), index.Name())
 			require.NoError(t, err)
 			expectedIndexRows, err := editor.RebuildIndex(context.Background(), updatedTable, index.Name(), opts)
 			require.NoError(t, err)
