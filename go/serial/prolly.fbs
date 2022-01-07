@@ -19,7 +19,7 @@ enum TupleFormat : uint8 {
   V1 = 1,
 }
 
-table Map {
+table TupleMap {
   // array of map key tuples, ordered lexigraphically
   key_tuples:[ubyte] (required);
   // array of offets into |key_tuples|, zeroth offset omitted

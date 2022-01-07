@@ -46,34 +46,34 @@ func (v TupleFormat) String() string {
 	return "TupleFormat(" + strconv.FormatInt(int64(v), 10) + ")"
 }
 
-type Map struct {
+type TupleMap struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsMap(buf []byte, offset flatbuffers.UOffsetT) *Map {
+func GetRootAsTupleMap(buf []byte, offset flatbuffers.UOffsetT) *TupleMap {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &Map{}
+	x := &TupleMap{}
 	x.Init(buf, n+offset)
 	return x
 }
 
-func GetSizePrefixedRootAsMap(buf []byte, offset flatbuffers.UOffsetT) *Map {
+func GetSizePrefixedRootAsTupleMap(buf []byte, offset flatbuffers.UOffsetT) *TupleMap {
 	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &Map{}
+	x := &TupleMap{}
 	x.Init(buf, n+offset+flatbuffers.SizeUint32)
 	return x
 }
 
-func (rcv *Map) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *TupleMap) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *Map) Table() flatbuffers.Table {
+func (rcv *TupleMap) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *Map) KeyTuples(j int) byte {
+func (rcv *TupleMap) KeyTuples(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -82,7 +82,7 @@ func (rcv *Map) KeyTuples(j int) byte {
 	return 0
 }
 
-func (rcv *Map) KeyTuplesLength() int {
+func (rcv *TupleMap) KeyTuplesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -90,7 +90,7 @@ func (rcv *Map) KeyTuplesLength() int {
 	return 0
 }
 
-func (rcv *Map) KeyTuplesBytes() []byte {
+func (rcv *TupleMap) KeyTuplesBytes() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -98,7 +98,7 @@ func (rcv *Map) KeyTuplesBytes() []byte {
 	return nil
 }
 
-func (rcv *Map) MutateKeyTuples(j int, n byte) bool {
+func (rcv *TupleMap) MutateKeyTuples(j int, n byte) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -107,7 +107,7 @@ func (rcv *Map) MutateKeyTuples(j int, n byte) bool {
 	return false
 }
 
-func (rcv *Map) KeyOffsets(j int) uint16 {
+func (rcv *TupleMap) KeyOffsets(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -116,7 +116,7 @@ func (rcv *Map) KeyOffsets(j int) uint16 {
 	return 0
 }
 
-func (rcv *Map) KeyOffsetsLength() int {
+func (rcv *TupleMap) KeyOffsetsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -124,7 +124,7 @@ func (rcv *Map) KeyOffsetsLength() int {
 	return 0
 }
 
-func (rcv *Map) MutateKeyOffsets(j int, n uint16) bool {
+func (rcv *TupleMap) MutateKeyOffsets(j int, n uint16) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -133,7 +133,7 @@ func (rcv *Map) MutateKeyOffsets(j int, n uint16) bool {
 	return false
 }
 
-func (rcv *Map) ValueTuples(j int) byte {
+func (rcv *TupleMap) ValueTuples(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -142,7 +142,7 @@ func (rcv *Map) ValueTuples(j int) byte {
 	return 0
 }
 
-func (rcv *Map) ValueTuplesLength() int {
+func (rcv *TupleMap) ValueTuplesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -150,7 +150,7 @@ func (rcv *Map) ValueTuplesLength() int {
 	return 0
 }
 
-func (rcv *Map) ValueTuplesBytes() []byte {
+func (rcv *TupleMap) ValueTuplesBytes() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -158,7 +158,7 @@ func (rcv *Map) ValueTuplesBytes() []byte {
 	return nil
 }
 
-func (rcv *Map) MutateValueTuples(j int, n byte) bool {
+func (rcv *TupleMap) MutateValueTuples(j int, n byte) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -167,7 +167,7 @@ func (rcv *Map) MutateValueTuples(j int, n byte) bool {
 	return false
 }
 
-func (rcv *Map) ValueOffsets(j int) uint16 {
+func (rcv *TupleMap) ValueOffsets(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -176,7 +176,7 @@ func (rcv *Map) ValueOffsets(j int) uint16 {
 	return 0
 }
 
-func (rcv *Map) ValueOffsetsLength() int {
+func (rcv *TupleMap) ValueOffsetsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -184,7 +184,7 @@ func (rcv *Map) ValueOffsetsLength() int {
 	return 0
 }
 
-func (rcv *Map) MutateValueOffsets(j int, n uint16) bool {
+func (rcv *TupleMap) MutateValueOffsets(j int, n uint16) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -193,7 +193,7 @@ func (rcv *Map) MutateValueOffsets(j int, n uint16) bool {
 	return false
 }
 
-func (rcv *Map) RefArray(j int) byte {
+func (rcv *TupleMap) RefArray(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -202,7 +202,7 @@ func (rcv *Map) RefArray(j int) byte {
 	return 0
 }
 
-func (rcv *Map) RefArrayLength() int {
+func (rcv *TupleMap) RefArrayLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -210,7 +210,7 @@ func (rcv *Map) RefArrayLength() int {
 	return 0
 }
 
-func (rcv *Map) RefArrayBytes() []byte {
+func (rcv *TupleMap) RefArrayBytes() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -218,7 +218,7 @@ func (rcv *Map) RefArrayBytes() []byte {
 	return nil
 }
 
-func (rcv *Map) MutateRefArray(j int, n byte) bool {
+func (rcv *TupleMap) MutateRefArray(j int, n byte) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -227,7 +227,7 @@ func (rcv *Map) MutateRefArray(j int, n byte) bool {
 	return false
 }
 
-func (rcv *Map) KeyFormat() TupleFormat {
+func (rcv *TupleMap) KeyFormat() TupleFormat {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return TupleFormat(rcv._tab.GetByte(o + rcv._tab.Pos))
@@ -235,11 +235,11 @@ func (rcv *Map) KeyFormat() TupleFormat {
 	return 0
 }
 
-func (rcv *Map) MutateKeyFormat(n TupleFormat) bool {
+func (rcv *TupleMap) MutateKeyFormat(n TupleFormat) bool {
 	return rcv._tab.MutateByteSlot(14, byte(n))
 }
 
-func (rcv *Map) ValueFormat() TupleFormat {
+func (rcv *TupleMap) ValueFormat() TupleFormat {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return TupleFormat(rcv._tab.GetByte(o + rcv._tab.Pos))
@@ -247,11 +247,11 @@ func (rcv *Map) ValueFormat() TupleFormat {
 	return 0
 }
 
-func (rcv *Map) MutateValueFormat(n TupleFormat) bool {
+func (rcv *TupleMap) MutateValueFormat(n TupleFormat) bool {
 	return rcv._tab.MutateByteSlot(16, byte(n))
 }
 
-func (rcv *Map) TreeCount() uint64 {
+func (rcv *TupleMap) TreeCount() uint64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
@@ -259,11 +259,11 @@ func (rcv *Map) TreeCount() uint64 {
 	return 0
 }
 
-func (rcv *Map) MutateTreeCount(n uint64) bool {
+func (rcv *TupleMap) MutateTreeCount(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(18, n)
 }
 
-func (rcv *Map) TreeLevel() byte {
+func (rcv *TupleMap) TreeLevel() byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
@@ -271,56 +271,56 @@ func (rcv *Map) TreeLevel() byte {
 	return 0
 }
 
-func (rcv *Map) MutateTreeLevel(n byte) bool {
+func (rcv *TupleMap) MutateTreeLevel(n byte) bool {
 	return rcv._tab.MutateByteSlot(20, n)
 }
 
-func MapStart(builder *flatbuffers.Builder) {
+func TupleMapStart(builder *flatbuffers.Builder) {
 	builder.StartObject(9)
 }
-func MapAddKeyTuples(builder *flatbuffers.Builder, keyTuples flatbuffers.UOffsetT) {
+func TupleMapAddKeyTuples(builder *flatbuffers.Builder, keyTuples flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyTuples), 0)
 }
-func MapStartKeyTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TupleMapStartKeyTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func MapAddKeyOffsets(builder *flatbuffers.Builder, keyOffsets flatbuffers.UOffsetT) {
+func TupleMapAddKeyOffsets(builder *flatbuffers.Builder, keyOffsets flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(keyOffsets), 0)
 }
-func MapStartKeyOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TupleMapStartKeyOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
-func MapAddValueTuples(builder *flatbuffers.Builder, valueTuples flatbuffers.UOffsetT) {
+func TupleMapAddValueTuples(builder *flatbuffers.Builder, valueTuples flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(valueTuples), 0)
 }
-func MapStartValueTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TupleMapStartValueTuplesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func MapAddValueOffsets(builder *flatbuffers.Builder, valueOffsets flatbuffers.UOffsetT) {
+func TupleMapAddValueOffsets(builder *flatbuffers.Builder, valueOffsets flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(valueOffsets), 0)
 }
-func MapStartValueOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TupleMapStartValueOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
-func MapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOffsetT) {
+func TupleMapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(refArray), 0)
 }
-func MapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TupleMapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func MapAddKeyFormat(builder *flatbuffers.Builder, keyFormat TupleFormat) {
+func TupleMapAddKeyFormat(builder *flatbuffers.Builder, keyFormat TupleFormat) {
 	builder.PrependByteSlot(5, byte(keyFormat), 0)
 }
-func MapAddValueFormat(builder *flatbuffers.Builder, valueFormat TupleFormat) {
+func TupleMapAddValueFormat(builder *flatbuffers.Builder, valueFormat TupleFormat) {
 	builder.PrependByteSlot(6, byte(valueFormat), 0)
 }
-func MapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
+func TupleMapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
 	builder.PrependUint64Slot(7, treeCount, 0)
 }
-func MapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
+func TupleMapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
 	builder.PrependByteSlot(8, treeLevel, 0)
 }
-func MapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func TupleMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
