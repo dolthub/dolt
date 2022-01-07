@@ -21,26 +21,20 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type DoltIndex interface {
-	sql.Index
-	Schema() schema.Schema
-	IndexSchema() schema.Schema
-	TableData() types.Map
-	IndexRowData() types.Map
-}
-
 func NewRangePartitionIter(lookup sql.IndexLookup) sql.PartitionIter {
 	dlu := lookup.(*doltIndexLookup)
+	rows := durable.NomsMapFromIndex(dlu.IndexRowData())
+
 	return &rangePartitionIter{
 		ranges:  dlu.ranges,
 		curr:    0,
 		mu:      &sync.Mutex{},
-		rowData: dlu.IndexRowData(),
+		rowData: rows,
 	}
 }
 

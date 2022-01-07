@@ -458,7 +458,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 	}
 
-	idxv1Data, err := table.GetIndexRowData(ctx, "idx_v1")
+	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(3), idxv1Data.Len()) {
 		iterIndex := 0
@@ -476,7 +476,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 	}
 
-	idxv2Data, err := table.GetIndexRowData(ctx, "idx_v2")
+	idxv2Data, err := table.GetNomsIndexRowData(ctx, "idx_v2")
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(3), idxv2Data.Len()) {
 		iterIndex := 0

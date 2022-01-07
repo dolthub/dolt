@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -230,12 +231,12 @@ func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 
-	m, err := table.GetNomsRowData(ctx)
+	m, err := table.GetRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	return m.Len(), nil
+	return m.Count(), nil
 }
 
 // Format returns the NomsBinFormat for the underlying table
@@ -270,14 +271,12 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		return nil, err
 	}
 
-	rowData, err := table.GetNomsRowData(ctx)
-
+	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	numElements := rowData.Len()
-
+	numElements := rowData.Count()
 	if numElements == 0 {
 		return newDoltTablePartitionIter(rowData, doltTablePartition{0, 0, rowData}), nil
 	}
@@ -375,9 +374,9 @@ func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partiti
 			return emptyRowIterator{}, nil
 		}
 
-		return newRowIterator(ctx, t, projCols, &typedPartition)
+		return newRowIterator(ctx, t, projCols, typedPartition)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, &doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -500,11 +499,11 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	rowData, err := table.GetNomsRowData(ctx)
+	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
-	numOfRows := int(rowData.Len())
+	numOfRows := int(rowData.Count())
 	empty, err := types.NewMap(ctx, table.ValueReadWriter())
 	if err != nil {
 		return 0, err
@@ -673,11 +672,11 @@ var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
 type doltTablePartitionIter struct {
 	i          int
 	mu         *sync.Mutex
-	rowData    types.Map
+	rowData    durable.Index
 	partitions []doltTablePartition
 }
 
-func newDoltTablePartitionIter(rowData types.Map, partitions ...doltTablePartition) *doltTablePartitionIter {
+func newDoltTablePartitionIter(rowData durable.Index, partitions ...doltTablePartition) *doltTablePartitionIter {
 	return &doltTablePartitionIter{0, &sync.Mutex{}, rowData, partitions}
 }
 
@@ -701,7 +700,7 @@ func (itr *doltTablePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	return partition, nil
 }
 
-var _ sql.Partition = (*doltTablePartition)(nil)
+var _ sql.Partition = doltTablePartition{}
 
 const NoUpperBound = 0xffffffffffffffff
 
@@ -710,7 +709,7 @@ type doltTablePartition struct {
 	start uint64
 	// all elements in the partition will be less than end (exclusive)
 	end     uint64
-	rowData types.Map
+	rowData durable.Index
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
@@ -721,7 +720,8 @@ func (p doltTablePartition) Key() []byte {
 // IteratorForPartition returns a types.MapIterator implementation which will iterate through the values
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
-func (p doltTablePartition) IteratorForPartition(ctx context.Context, m types.Map) (types.MapTupleIterator, error) {
+func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
+	m := durable.NomsMapFromIndex(idx)
 	return m.RangeIterator(ctx, p.start, p.end)
 }
 
@@ -983,7 +983,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		rowData, err := updatedTable.GetNomsRowData(ctx)
+		rowData, err := updatedTable.GetRowData(ctx)
 		if err != nil {
 			return err
 		}

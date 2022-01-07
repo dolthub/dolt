@@ -136,7 +136,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	}
 
 	for i, index := range sch.Indexes().AllIndexes() {
-		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+		indexData, err := tbl.GetNomsIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}

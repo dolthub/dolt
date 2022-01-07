@@ -169,11 +169,11 @@ func ResolveForeignKey(
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}
-	tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
+	tableIndexData, err := table.GetNomsIndexRowData(ctx, tableIndex.Name())
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}
-	refTableIndexData, err := refTbl.GetIndexRowData(ctx, refTableIndex.Name())
+	refTableIndexData, err := refTbl.GetNomsIndexRowData(ctx, refTableIndex.Name())
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}

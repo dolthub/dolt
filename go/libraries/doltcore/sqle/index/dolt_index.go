@@ -21,10 +21,20 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+type DoltIndex interface {
+	sql.Index
+	Schema() schema.Schema
+	IndexSchema() schema.Schema
+	TableData() durable.Index
+	IndexRowData() durable.Index
+	Format() *types.NomsBinFormat
+}
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
@@ -52,7 +62,7 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 }
 
 func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
-	tableRows, err := t.GetNomsRowData(ctx)
+	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +90,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		return nil, err
 	}
 
-	tableRows, err := t.GetNomsRowData(ctx)
+	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -114,8 +124,8 @@ type doltIndex struct {
 
 	indexSch  schema.Schema
 	tableSch  schema.Schema
-	indexRows types.Map
-	tableRows types.Map
+	indexRows durable.Index
+	tableRows durable.Index
 	unique    bool
 	comment   string
 
@@ -292,19 +302,23 @@ func (di doltIndex) Table() string {
 }
 
 // TableData returns the map of Table data for this index (the map of the target Table, not the index storage Table)
-func (di doltIndex) TableData() types.Map {
+func (di doltIndex) TableData() durable.Index {
 	return di.tableRows
 }
 
 // IndexRowData returns the map of index row data.
-func (di doltIndex) IndexRowData() types.Map {
+func (di doltIndex) IndexRowData() durable.Index {
 	return di.indexRows
+}
+
+func (di doltIndex) Format() *types.NomsBinFormat {
+	return di.vrw.Format()
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
 // start at the very beginning.
 func (di doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
-	nbf := di.indexRows.Format()
+	nbf := di.vrw.Format()
 	if len(keys) > len(di.columns) {
 		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")
 	}

@@ -442,7 +442,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 			RowData:   rowData,
 		}, false, nil
 	}
-	indexData, err := tbl.GetIndexRowData(ctx, idx.Name())
+	indexData, err := tbl.GetNomsIndexRowData(ctx, idx.Name())
 	if err != nil {
 		return nil, false, err
 	}

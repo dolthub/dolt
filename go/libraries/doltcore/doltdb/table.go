@@ -236,7 +236,6 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 	return durable.NomsMapFromIndex(idx), nil
 }
 
-
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
 func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 	return t.table.GetTableRows(ctx)
@@ -301,8 +300,8 @@ func (t *Table) SetIndexData(ctx context.Context, indexes durable.IndexSet) (*Ta
 	return &Table{table: table}, nil
 }
 
-// GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
-func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
+// GetNomsIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
+func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
 	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
@@ -314,6 +313,16 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (types.Ma
 	}
 
 	return durable.NomsMapFromIndex(idx), nil
+}
+
+// GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
+func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.Index, error) {
+	indexes, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return indexes.GetIndex(ctx, indexName)
 }
 
 // SetIndexRowData replaces the current row data for the given index and returns an updated Table.

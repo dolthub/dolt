@@ -507,7 +507,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		}
 	}
 
-	idxv1Data, err := table.GetIndexRowData(ctx, "idx_v1")
+	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")
 	require.NoError(t, err)
 
 	seen = make([]bool, 13)
@@ -539,7 +539,7 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		}
 	}
 
-	idxv2Data, err := table.GetIndexRowData(ctx, "idx_v2")
+	idxv2Data, err := table.GetNomsIndexRowData(ctx, "idx_v2")
 	require.NoError(t, err)
 
 	seen = make([]bool, 13)
@@ -614,7 +614,7 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	table, err = tableEditor.Table(ctx)
 	require.NoError(t, err)
 
-	idxv1Data, err := table.GetIndexRowData(ctx, "idx_v1")
+	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")
 	require.NoError(t, err)
 
 	seen := make([]bool, 3)

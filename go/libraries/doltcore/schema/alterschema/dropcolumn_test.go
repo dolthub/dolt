@@ -155,12 +155,12 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			assert.NotNil(t, index)
 			if tt.expectedIndex {
 				tt.expectedSchema.Indexes().AddIndex(index)
-				indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
+				indexRowData, err := updatedTable.GetNomsIndexRowData(ctx, dtestutils.IndexName)
 				require.NoError(t, err)
 				assert.Greater(t, indexRowData.Len(), uint64(0))
 			} else {
 				assert.Nil(t, sch.Indexes().GetByName(dtestutils.IndexName))
-				_, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
+				_, err := updatedTable.GetNomsIndexRowData(ctx, dtestutils.IndexName)
 				assert.Error(t, err)
 			}
 			require.Equal(t, tt.expectedSchema, sch)

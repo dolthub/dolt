@@ -833,7 +833,7 @@ func TestModifyColumnType(t *testing.T) {
 
 			foundRows = nil
 			idx := sch.Indexes().AllIndexes()[0]
-			idxRowData, err := table.GetIndexRowData(ctx, idx.Name())
+			idxRowData, err := table.GetNomsIndexRowData(ctx, idx.Name())
 			require.NoError(t, err)
 			err = idxRowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 				r, err := row.FromNoms(idx.Schema(), key.(types.Tuple), value.(types.Tuple))

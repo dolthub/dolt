@@ -450,9 +450,9 @@ func TestMergeCommits(t *testing.T) {
 		if !mergedRows.Equals(expectedRows) {
 			t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
 		}
-		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
+		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), index.Name())
 		assert.NoError(t, err)
-		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
+		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
 		assert.NoError(t, err)
 		if expectedRows.Len() != mergedIndexRows.Len() || !mergedIndexRows.Equals(expectedIndexRows) {
 			t.Error("index contents are incorrect")

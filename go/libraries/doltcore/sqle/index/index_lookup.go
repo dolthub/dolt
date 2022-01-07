@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -28,8 +29,9 @@ import (
 func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
+	rows := durable.NomsMapFromIndex(lookup.IndexRowData())
 
-	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), columns)
+	return RowIterForRanges(ctx, idx, lookup.ranges, rows, columns)
 }
 
 func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData types.Map, columns []string) (sql.RowIter, error) {
@@ -110,7 +112,7 @@ func (il *doltIndexLookup) String() string {
 	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
 }
 
-func (il *doltIndexLookup) IndexRowData() types.Map {
+func (il *doltIndexLookup) IndexRowData() durable.Index {
 	return il.idx.IndexRowData()
 }
 

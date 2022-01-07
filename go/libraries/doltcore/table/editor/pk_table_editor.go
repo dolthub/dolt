@@ -151,7 +151,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 	te.tea = opts.Deaf.NewTableEA(ctx, rowData)
 
 	for i, index := range tableSch.Indexes().AllIndexes() {
-		indexData, err := t.GetIndexRowData(ctx, index.Name())
+		indexData, err := t.GetNomsIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +195,7 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 		return false, err
 	}
 
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
+	idxMap, err := tbl.GetNomsIndexRowData(ctx, indexName)
 	if err != nil {
 		return false, err
 	}
@@ -222,7 +222,7 @@ func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, ind
 		return nil, err
 	}
 
-	idxMap, err := tbl.GetIndexRowData(ctx, indexName)
+	idxMap, err := tbl.GetNomsIndexRowData(ctx, indexName)
 	if err != nil {
 		return nil, err
 	}
