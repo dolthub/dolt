@@ -62,7 +62,7 @@ type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
-	HasEdits() bool
+	hasEdits() bool
 
 	GetAutoIncrementValue() types.Value
 	SetAutoIncrementValue(v types.Value) (err error)
@@ -85,19 +85,6 @@ func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema
 		return newKeylessTableEditor(ctx, t, tableSch, name, opts)
 	}
 	return newPkTableEditor(ctx, t, tableSch, name, opts)
-}
-
-// Options are properties that define different functionality for the tableEditSession.
-type Options struct {
-	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
-	Deaf                     DbEaFactory
-}
-
-func TestEditorOptions(vrw types.ValueReadWriter) Options {
-	return Options{
-		ForeignKeyChecksDisabled: false,
-		Deaf:                     NewInMemDeaf(vrw.Format()),
-	}
 }
 
 // pkTableEditor supports making multiple row edits (inserts, updates, deletes) to a table. It does error checking for key
@@ -665,7 +652,7 @@ func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
 
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
-	if !te.HasEdits() {
+	if !te.hasEdits() {
 		return te.t, nil
 	}
 
@@ -851,7 +838,7 @@ func (te *pkTableEditor) setDirty(dirty bool) {
 // write operations were eventually rolled back (such as through an error on StatementFinished), so it is still possible
 // for this to return true when the table editor does not actually contain any new edits. This is preferable to
 // potentially returning false when there are edits.
-func (te *pkTableEditor) HasEdits() bool {
+func (te *pkTableEditor) hasEdits() bool {
 	return atomic.LoadUint32(&te.dirty) != 0
 }
 

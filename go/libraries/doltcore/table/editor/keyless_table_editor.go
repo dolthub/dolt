@@ -246,7 +246,7 @@ func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new r
 	return kte.acc.increment(key, val)
 }
 
-func (kte *keylessTableEditor) HasEdits() bool {
+func (kte *keylessTableEditor) hasEdits() bool {
 	return kte.dirty
 }
 

@@ -35,7 +35,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -860,7 +859,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
-	editSession := dbState.WriteSession
+	editSession := dbState.EditSession
 
 	newRoot, err := editSession.Flush(ctx)
 	if err != nil {
@@ -874,7 +873,7 @@ func (db Database) Flush(ctx *sql.Context) error {
 
 	// Flush any changes made to temporary tables
 	// TODO: Shouldn't always be updating both roots. Needs to update either both roots or neither of them, atomically
-	tempTableEditSession := dbState.TempTableWriteSession
+	tempTableEditSession := dbState.TempTableEditSession
 	if tempTableEditSession != nil {
 		newTempTableRoot, err := tempTableEditSession.Flush(ctx)
 		if err != nil {
@@ -1106,20 +1105,37 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return existingErr
 	}
 
+	// If rows exist, then grab the highest id and add 1 to get the new id
+	indexToUse := int64(1)
 	ts, err := db.TableEditSession(ctx, tbl.IsTemporary())
 	if err != nil {
 		return err
 	}
 
-	root, err := ts.Flush(ctx)
+	te, err := ts.GetTableEditor(ctx, doltdb.SchemasTableName, tbl.sch)
 	if err != nil {
 		return err
 	}
-
-	// If rows exist, then grab the highest id and add 1 to get the new id
-	idx, err := nextSchemasTableIndex(ctx, root)
+	dTable, err := te.Table(ctx)
 	if err != nil {
 		return err
+	}
+	rowData, err := dTable.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+	if rowData.Len() > 0 {
+		keyTpl, _, err := rowData.Last(ctx)
+		if err != nil {
+			return err
+		}
+		if keyTpl != nil {
+			key, err := keyTpl.(types.Tuple).Get(1)
+			if err != nil {
+				return err
+			}
+			indexToUse = int64(key.(types.Int)) + 1
+		}
 	}
 
 	// Insert the new row into the db
@@ -1130,7 +1146,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, indexToUse})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
@@ -1160,7 +1176,7 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 }
 
 // TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (writer.WriteSession, error) {
+func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (*editor.TableEditSession, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbState, _, err := sess.LookupDbState(ctx, db.Name())
 	if err != nil {
@@ -1168,9 +1184,9 @@ func (db Database) TableEditSession(ctx *sql.Context, isTemporary bool) (writer.
 	}
 
 	if isTemporary {
-		return dbState.TempTableWriteSession, nil
+		return dbState.TempTableEditSession, nil
 	}
-	return dbState.WriteSession, nil
+	return dbState.EditSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
