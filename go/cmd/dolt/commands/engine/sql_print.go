@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -39,6 +40,7 @@ const (
 	FormatCsv
 	FormatJson
 	FormatNull // used for profiling
+	FormatVertical
 )
 
 const (
@@ -71,6 +73,8 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 		p = createTabularPipeline(ctx, sqlSch, rowIter)
 	case FormatNull:
 		p = createNullPipeline(ctx, sqlSch, rowIter)
+	case FormatVertical:
+		p = createVerticalPipeline(ctx, sqlSch, rowIter)
 	}
 
 	p.Start(ctx)
@@ -538,4 +542,121 @@ func genRowSepString(fwf fwt.FixedWidthFormatter) string {
 	rowSepRunes[pos+1] = '\n'
 
 	return string(rowSepRunes)
+}
+
+// vertical format pipeline creation and pipeline functions
+func createVerticalPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) *pipeline.Pipeline {
+	const samplesForAutoSizing = 10000
+	vps := &verticalPipelineStages{}
+
+	p := pipeline.NewPipeline(
+		pipeline.NewStage("read", nil, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
+		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
+		pipeline.NewStage("fix_width", noParallelizationInitFunc, vps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
+		pipeline.NewStage("cell_borders", noParallelizationInitFunc, vps.getSeparatorFunc(), 0, 1000, readBatchSize),
+		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
+	)
+
+	writeIn, _ := p.GetInputChannel("fix_width")
+	headers := make([]string, len(sch))
+	for i, col := range sch {
+		headers[i] = col.Name
+	}
+
+	writeIn <- []pipeline.ItemWithProps{
+		pipeline.NewItemWithProps(headers, pipeline.NewImmutableProps(map[string]interface{}{"headers": true})),
+	}
+
+	return p
+}
+
+type verticalPipelineStages struct {
+	heads []string
+}
+
+func (vps *verticalPipelineStages) getFixWidthStageFunc(samples int) func(context.Context, []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+	bufferring := true
+	buffer := make([]pipeline.ItemWithProps, 0, samples)
+	var maxWidth int
+	//var fwf fwt.FixedWidthFormatter
+	return func(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+		// only needed for formatting the column names
+		if items == nil {
+			bufferring = false
+			return buffer, nil
+		}
+		if bufferring {
+			for _, item := range items {
+				props := item.GetProperties()
+				if _, ok := props.Get("headers"); ok {
+					head := item.GetItem().([]string)
+
+					for _, headStr := range head {
+						strWidth := fwt.StringWidth(headStr)
+						if strWidth > maxWidth {
+							maxWidth = strWidth
+						}
+					}
+					vps.heads, _ = vps.formatHeads(maxWidth, head)
+				} else {
+					buffer = append(buffer, item)
+				}
+
+			}
+
+			if len(buffer) > samples {
+				bufferring = false
+				ret := buffer
+
+				// clear the buffer
+				buffer = buffer[:0]
+				return ret, nil
+			}
+			return nil, nil
+		}
+		return items, nil
+	}
+}
+
+func (vps *verticalPipelineStages) formatHeads(width int, items []string) ([]string, error) {
+	results := make([]string, len(items))
+	for i, item := range items {
+		// add empty spaces in front if string length is less than with
+		diff := width - len(item)
+		if diff < 0 {
+			return nil, errors.New("err")
+		}
+		results[i] = fmt.Sprintf("%*s", width, item)
+	}
+	return results, nil
+}
+
+func (vps *verticalPipelineStages) getSeparatorFunc() func(context.Context, []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+	return func(_ context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+		empty := ""
+		if items == nil {
+			return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&empty)}, nil
+		}
+
+		sb := &strings.Builder{}
+		sb.Grow(2048)
+		var sep string
+		idx := 0
+		for _, item := range items {
+			idx += 1
+			sep = fmt.Sprintf("*************************** %d. row ***************************\n", idx)
+			sb.WriteString(sep)
+
+			cols := item.GetItem().([]string)
+
+			for i, str := range cols {
+				sb.WriteString(vps.heads[i])
+				sb.WriteString(": ")
+				sb.WriteString(str)
+				sb.WriteString("\n")
+			}
+		}
+		str := sb.String()
+		return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
+	}
 }
