@@ -1,4 +1,4 @@
-name: Test Go
+name: Test New Format
 
 on:
   pull_request:
