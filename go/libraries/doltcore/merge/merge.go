@@ -73,7 +73,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 
 	var ancRows types.Map
 	if ancHasTable {
-		ancRows, err = ancTbl.GetRowData(ctx)
+		ancRows, err = ancTbl.GetNomsRowData(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -183,12 +183,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	mergeRows, err := mergeTbl.GetRowData(ctx)
+	mergeRows, err := mergeTbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -257,13 +257,13 @@ func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.Root
 }
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 
 	if err != nil {
 		return MergeStats{}, err
 	}
 
-	mergeRows, err := mergeTbl.GetRowData(ctx)
+	mergeRows, err := mergeTbl.GetNomsRowData(ctx)
 
 	if err != nil {
 		return MergeStats{}, err

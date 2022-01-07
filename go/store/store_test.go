@@ -273,7 +273,7 @@ func BenchmarkMapItr(b *testing.B) {
 	require.NoError(b, err)
 	require.True(b, ok)
 
-	m, err := tbl.GetRowData(ctx)
+	m, err := tbl.GetNomsRowData(ctx)
 	require.NoError(b, err)
 	require.True(b, uint64(b.N) < m.Len(), "b.N:%d >= numRows:%d", b.N, m.Len())
 

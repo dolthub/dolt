@@ -277,7 +277,7 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, err
 	}
 
-	tableRowData, err := tbl.GetRowData(ctx)
+	tableRowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -304,7 +304,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 		return t, nil
 	}
 
-	tableRowData, err := t.GetRowData(ctx)
+	tableRowData, err := t.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -320,7 +320,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 			return nil, err
 		}
 
-		indexes, err = indexes.PutIndex(ctx, index.Name(), rebuiltIndexRowData)
+		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), rebuiltIndexRowData)
 		if err != nil {
 			return nil, err
 		}

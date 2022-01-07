@@ -165,15 +165,15 @@ func ResolveForeignKey(
 		UnresolvedFKDetails:    doltdb.UnresolvedFKDetails{},
 	}
 
-	tableData, err := table.GetRowData(ctx)
+	tableData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}
-	tableIndexData, err := table.GetIndexRowData(ctx, tableIndex.Name())
+	tableIndexData, err := table.GetNomsIndexRowData(ctx, tableIndex.Name())
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}
-	refTableIndexData, err := refTbl.GetIndexRowData(ctx, refTableIndex.Name())
+	refTableIndexData, err := refTbl.GetNomsIndexRowData(ctx, refTableIndex.Name())
 	if err != nil {
 		return nil, doltdb.ForeignKey{}, err
 	}

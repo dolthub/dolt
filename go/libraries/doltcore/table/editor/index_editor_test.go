@@ -415,7 +415,7 @@ func TestIndexRebuildingWithZeroIndexes(t *testing.T) {
 	opts := TestEditorOptions(db)
 	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable, opts)
 	require.NoError(t, err)
-	_, err = rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
+	_, err = rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexName)
 	require.Error(t, err)
 
 	_, err = RebuildIndex(context.Background(), originalTable, testSchemaIndexName, opts)
@@ -452,7 +452,7 @@ func TestIndexRebuildingWithOneIndex(t *testing.T) {
 	opts := TestEditorOptions(db)
 	rebuildAllTable, err := RebuildAllIndexes(context.Background(), originalTable, opts)
 	require.NoError(t, err)
-	indexRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
+	indexRowData, err := rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexName)
 	require.NoError(t, err)
 	_ = indexRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
@@ -501,7 +501,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		rebuildAllTable, err = RebuildAllIndexes(context.Background(), rebuildAllTable, opts)
 		require.NoError(t, err)
 
-		indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
+		indexNameRowData, err := rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexName)
 		require.NoError(t, err)
 		_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -512,7 +512,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 		assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 		indexRows = nil
 
-		indexAgeRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexAge)
+		indexAgeRowData, err := rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexAge)
 		require.NoError(t, err)
 		_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 			indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))
@@ -554,7 +554,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)
 
-	indexNameRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexName)
+	indexNameRowData, err := rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexName)
 	require.NoError(t, err)
 	_ = indexNameRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexNameSch, key.(types.Tuple), value.(types.Tuple))
@@ -565,7 +565,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	assert.ElementsMatch(t, indexNameExpectedRows, indexRows)
 	indexRows = nil
 
-	indexAgeRowData, err := rebuildAllTable.GetIndexRowData(context.Background(), testSchemaIndexAge)
+	indexAgeRowData, err := rebuildAllTable.GetNomsIndexRowData(context.Background(), testSchemaIndexAge)
 	require.NoError(t, err)
 	_ = indexAgeRowData.IterAll(context.Background(), func(key, value types.Value) error {
 		indexRow, err := row.FromNoms(indexAgeSch, key.(types.Tuple), value.(types.Tuple))

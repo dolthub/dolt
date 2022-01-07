@@ -494,7 +494,7 @@ func TestAddColumn(t *testing.T) {
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -648,7 +648,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -813,7 +813,7 @@ func TestModifyColumnType(t *testing.T) {
 			require.NoError(t, err)
 			sch, err := table.GetSchema(ctx)
 			require.NoError(t, err)
-			rowData, err := table.GetRowData(ctx)
+			rowData, err := table.GetNomsRowData(ctx)
 			require.NoError(t, err)
 
 			var foundRows [][]types.Value
@@ -833,7 +833,7 @@ func TestModifyColumnType(t *testing.T) {
 
 			foundRows = nil
 			idx := sch.Indexes().AllIndexes()[0]
-			idxRowData, err := table.GetIndexRowData(ctx, idx.Name())
+			idxRowData, err := table.GetNomsIndexRowData(ctx, idx.Name())
 			require.NoError(t, err)
 			err = idxRowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 				r, err := row.FromNoms(idx.Schema(), key.(types.Tuple), value.(types.Tuple))
@@ -917,7 +917,7 @@ func TestDropColumn(t *testing.T) {
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -1033,7 +1033,7 @@ func TestRenameColumn(t *testing.T) {
 			assert.NoError(t, err)
 			require.True(t, ok)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			assert.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
@@ -1135,7 +1135,7 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := newTable.GetRowData(ctx)
+			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {

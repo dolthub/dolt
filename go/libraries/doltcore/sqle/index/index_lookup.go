@@ -16,10 +16,14 @@ package index
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/types"
@@ -32,8 +36,8 @@ func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []stri
 	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), columns)
 }
 
-func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData types.Map, columns []string) (sql.RowIter, error) {
-	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), rowData, ranges)
+func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
+	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), durable.NomsMapFromIndex(rowData), ranges)
 
 	covers := indexCoversCols(idx, columns)
 	if covers {
@@ -67,6 +71,61 @@ type IndexLookupKeyIterator interface {
 
 func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 	return lookup.(*doltIndexLookup).idx
+}
+
+func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
+	rp := part.(rangePartition)
+	ranges := []*noms.ReadRange{rp.partitionRange}
+	return RowIterForRanges(ctx, idx.(DoltIndex), ranges, rp.rowData, projectedCols)
+}
+
+func NewRangePartitionIter(lookup sql.IndexLookup) sql.PartitionIter {
+	dlu := lookup.(*doltIndexLookup)
+	return &rangePartitionIter{
+		ranges:  dlu.ranges,
+		curr:    0,
+		mu:      &sync.Mutex{},
+		rowData: dlu.IndexRowData(),
+	}
+}
+
+type rangePartitionIter struct {
+	ranges  []*noms.ReadRange
+	curr    int
+	mu      *sync.Mutex
+	rowData durable.Index
+}
+
+// Close is required by the sql.PartitionIter interface. Does nothing.
+func (itr *rangePartitionIter) Close(*sql.Context) error {
+	return nil
+}
+
+// Next returns the next partition if there is one, or io.EOF if there isn't.
+func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
+	itr.mu.Lock()
+	defer itr.mu.Unlock()
+
+	if itr.curr >= len(itr.ranges) {
+		return nil, io.EOF
+	}
+
+	var bytes [4]byte
+	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
+	part := rangePartition{itr.ranges[itr.curr], bytes[:], itr.rowData}
+	itr.curr += 1
+
+	return part, nil
+}
+
+type rangePartition struct {
+	partitionRange *noms.ReadRange
+	keyBytes       []byte
+	rowData        durable.Index
+}
+
+func (rp rangePartition) Key() []byte {
+	return rp.keyBytes
 }
 
 type doltIndexLookup struct {
@@ -110,7 +169,7 @@ func (il *doltIndexLookup) String() string {
 	return fmt.Sprintf("doltIndexLookup:%s", il.idx.ID())
 }
 
-func (il *doltIndexLookup) IndexRowData() types.Map {
+func (il *doltIndexLookup) IndexRowData() durable.Index {
 	return il.idx.IndexRowData()
 }
 
