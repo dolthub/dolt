@@ -15,7 +15,6 @@
 package dsess
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -579,9 +578,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.WriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return newRoot, nil
-	})
+	err = sessionState.WriteSession.SetRoot(ctx, newRoot)
 	if err != nil {
 		return err
 	}
@@ -776,10 +773,7 @@ func (sess *Session) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *
 	}
 	dbState.TempTableRoot = newRoot
 
-	err = dbState.TempTableWriteSession.UpdateRoot(ctx, func(ctx context.Context, _ *doltdb.RootValue) (*doltdb.RootValue, error) {
-		return newRoot, nil
-	})
-
+	err = dbState.TempTableWriteSession.SetRoot(ctx, newRoot)
 	return err
 }
 
