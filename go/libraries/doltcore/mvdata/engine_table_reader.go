@@ -88,7 +88,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 
 // Used by Dolthub API
 func NewSqlEngineTableReaderWithEngine(sqlCtx *sql.Context, se *sqle.Engine, db dsqle.Database, root *doltdb.RootValue, tableName string) (*sqlEngineTableReader, error) {
-	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM %s", tableName))
+	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}
