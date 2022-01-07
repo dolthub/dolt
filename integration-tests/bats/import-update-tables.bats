@@ -55,6 +55,36 @@ CREATE TABLE persons (
     Age int CHECK (Age>=18)
 );
 SQL
+
+    cat <<SQL > nibrs_month_sch.sql
+CREATE TABLE \`test\` (
+  \`STATE_ID\` smallint NOT NULL,
+  \`NIBRS_MONTH_ID\` bigint NOT NULL,
+  \`AGENCY_ID\` bigint NOT NULL,
+  \`AGENCY_TABLE_TYPE_ID\` smallint NOT NULL,
+  \`MONTH_NUM\` smallint NOT NULL,
+  \`DATA_YEAR\` smallint NOT NULL,
+  \`REPORTED_STATUS\` varchar(1) collate utf8mb4_0900_ai_ci,
+  \`REPORT_DATE\` timestamp,
+  \`UPDATE_FLAG\` char(1) collate utf8mb4_0900_ai_ci,
+  \`ORIG_FORMAT\` char(1) collate utf8mb4_0900_ai_ci,
+  \`DATA_HOME\` varchar(1) collate utf8mb4_0900_ai_ci,
+  \`DDOCNAME\` varchar(50) collate utf8mb4_0900_ai_ci,
+  \`DID\` bigint,
+  \`MONTH_PUB_STATUS\` int,
+  \`INC_DATA_YEAR\` int,
+  PRIMARY KEY (\`STATE_ID\`,\`NIBRS_MONTH_ID\`,\`DATA_YEAR\`),
+  KEY \`AGENCY_TABLE_TYPE_ID\` (\`AGENCY_TABLE_TYPE_ID\`),
+  KEY \`DATA_YEAR_INDEX\` (\`DATA_YEAR\`),
+  KEY \`NIBRS_MONTH_ID_INDEX\` (\`NIBRS_MONTH_ID\`),
+  KEY \`STATE_ID_INDEX\` (\`STATE_ID\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SQL
+
+    cat <<CSV > nibrs_month_csv.csv
+DATA_YEAR,NIBRS_MONTH_ID,AGENCY_ID,MONTH_NUM,DATA_YEAR,REPORTED_STATUS,REPORT_DATE,UPDATE_FLAG,ORIG_FORMAT,DATA_HOME,DDOCNAME,DID,MONTH_PUB_STATUS,STATE_ID,AGENCY_TABLE_TYPE_ID
+2019,9128595,9305,3,2019,I,2019-07-18,Y,F,C,2019_03_MN0510000_NIBRS,49502383,0,27,2
+CSV
 }
 
 teardown() {
@@ -417,4 +447,14 @@ DELIM
 
     run dolt sql -q "select count(*) from t"
     [[ "$output" =~ "5" ]] || false
+}
+
+@test "import-update-tables: string too large for column regression" {
+    skip "table import -u regression in dolt v0.35.3 as of v0.34.5"
+    dolt sql < nibrs_month_sch.sql
+    dolt table import -u test nibrs_month_csv.csv
+    run dolt table import -u test nibrs_month_csv.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
 }
