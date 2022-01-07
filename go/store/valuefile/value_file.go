@@ -229,6 +229,7 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
+	// todo(andy): add types.Format_DOLT_1
 	default:
 		return hash.Hash{}, nil, fmt.Errorf("unknown noms format: %s", string(data))
 	}
