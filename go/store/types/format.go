@@ -23,7 +23,7 @@ import (
 
 func init() {
 	// check for new format feature flag
-	if v, ok := os.LookupEnv("SITE_TITLE"); ok && v != "" {
+	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
 		constants.FormatDefaultString = constants.FormatDolt1String
 	}
 
