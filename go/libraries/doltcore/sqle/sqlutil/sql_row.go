@@ -16,10 +16,11 @@ package sqlutil
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -262,6 +263,57 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
+
+// WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
+// This function assumes v is a valid spatial type
+func WriteEWKBHeader(v interface{}, buf []byte) {
+	// Write endianness byte (always little endian)
+	buf[4] = 1
+
+	// Parse data
+	switch v := v.(type) {
+	case sql.Point:
+		// Write SRID and type
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 1)
+	case sql.Linestring:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 2)
+	case sql.Polygon:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 3)
+	}
+}
+
+// WriteEWKBPointData converts a Point into a byte array in EWKB format
+// Very similar to function in GMS
+func WriteEWKBPointData(p sql.Point, buf []byte) {
+	binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
+	binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
+}
+
+// WriteEWKBLineData converts a Line into a byte array in EWKB format
+func WriteEWKBLineData(l sql.Linestring, buf[] byte) {
+	// Write length of linestring
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
+	// Append each point
+	for i, p := range l.Points {
+		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+	}
+}
+
+// WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
+func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
+	// Write length of polygon
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
+	// Write each line
+	start, stop := 0, 4
+	for _, l := range p.Lines {
+		start, stop = stop, stop + 4 + 16 * len(l.Points)
+		WriteEWKBLineData(l, buf[start:stop])
+	}
+}
+
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string
 func SqlColToStr(ctx context.Context, col interface{}) string {
 	if col != nil {
@@ -303,20 +355,24 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
 		case sql.Point:
-			// TODO: Convert to byte array to match MySQL; leave for readability
-			return fmt.Sprintf("POINT(%s,%s)", strconv.FormatFloat(typedCol.X, 'g', -1, 64), strconv.FormatFloat(typedCol.Y, 'g', -1, 64))
+			buf := make([]byte, 25)
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBPointData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
 		case sql.Linestring:
-			var s = make([]string, len(typedCol.Points))
-			for i, p := range typedCol.Points {
-				s[i] = SqlColToStr(ctx, p)
-			}
-			return fmt.Sprintf("LINESTRING(%s)", strings.Join(s, ","))
+			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBLineData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
 		case sql.Polygon:
-			var s = make([]string, len(typedCol.Lines))
-			for i, l := range typedCol.Lines {
-				s[i] = SqlColToStr(ctx, l)
+			size := 0
+			for _, l := range typedCol.Lines {
+				size += 4 + 16 * len(l.Points)
 			}
-			return fmt.Sprintf("POLYGON(%s)", strings.Join(s, ","))
+			buf := make([]byte, 9 + 4 + size)
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBPolyData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
 		case sql.JSONValue:
 			s, err := typedCol.ToString(sql.NewContext(ctx))
 			if err != nil {
