@@ -22,6 +22,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"strconv"
 
@@ -29,7 +30,7 @@ import (
 )
 
 // Linestring is a Noms Value wrapper around a string.
-type Linestring string
+type Linestring []byte
 
 // Value interface
 func (v Linestring) Value(ctx context.Context) (Value, error) {
@@ -37,12 +38,15 @@ func (v Linestring) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Linestring) Equals(other Value) bool {
-	return v == other
+	if v2, ok := other.(Linestring); ok {
+		return bytes.Equal(v, v2)
+	}
+	return false
 }
 
 func (v Linestring) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Linestring); ok {
-		return v < v2, nil
+		return bytes.Compare(v, v2) == -1, nil
 	}
 	return LinestringKind < other.Kind(), nil
 }

@@ -16,9 +16,8 @@ package typeinfo
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
-	"strings"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -34,39 +33,32 @@ var _ TypeInfo = (*linestringType)(nil)
 
 var LinestringType = &linestringType{sql.LinestringType{}}
 
-func ConvertStringToSQLLinestring(s string) (interface{}, error) {
-	// Get everything between parentheses
-	s = s[len("LINESTRING(") : len(s)-1]
-	// Split into points
-	vals := strings.Split(s, ",POINT")
-	// Parse points
-	var points = make([]sql.Point, len(vals))
-	for i, s := range vals {
-		// Re-add delimiter
-		if i != 0 {
-			s = "POINT" + s
-		}
-		// Convert to Point type
-		point, err := ConvertStringToSQLPoint(s)
-		// TODO: This is never true
-		if err != nil {
-			return nil, err
-		}
-		// TODO: necessary? should throw error
-		if point == nil {
-			return nil, nil
-		}
-		points[i] = point.(sql.Point)
+// ConvertEWKBToLine converts the data portion of a WKB point to Point array
+// Very similar logic to the function in GMS
+func ConvertEWKBToLine(buf []byte, isBig bool, srid uint32) sql.Linestring {
+	// Read length of linestring
+	var numPoints uint32
+	if isBig {
+		numPoints = binary.BigEndian.Uint32(buf[:4])
+	} else {
+		numPoints = binary.LittleEndian.Uint32(buf[:4])
 	}
-	// Create sql.Linestring object
-	return sql.Linestring{Points: points}, nil
+
+	// Parse points
+	points := make([]sql.Point, numPoints)
+	for i := uint32(0); i < numPoints; i++ {
+		points[i] = ConvertEWKBToPoint(buf[4 + 16 * i : 4 + 16 * (i + 1)], isBig, srid)
+	}
+
+	return sql.Linestring{SRID: srid, Points: points}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Expect a types.Linestring, return a sql.Linestring
 	if val, ok := v.(types.Linestring); ok {
-		return ConvertStringToSQLLinestring(string(val))
+		srid, isBig, _ := ParseEWKBHeader(val)
+		return ConvertEWKBToLine(val[9:], isBig, srid), nil
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -88,18 +80,14 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLLinestringToString(l sql.Linestring) (types.Linestring, error) {
-	// Convert each sql.Point into types.Point
-	var pointStrs = make([]string, len(l.Points))
+// WriteEWKBLineData converts a Line into a byte array in EWKB format
+func WriteEWKBLineData(l sql.Linestring, buf[] byte) {
+	// Write length of linestring
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
+	// Append each point
 	for i, p := range l.Points {
-		pointStr, err := ConvertSQLPointToString(p)
-		if err != nil {
-			return "", err
-		}
-		pointStrs[i] = string(pointStr)
+		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
 	}
-	lineStr := fmt.Sprintf("LINESTRING(%s)", strings.Join(pointStrs, ","))
-	return types.Linestring(lineStr), nil
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
@@ -115,7 +103,14 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return nil, err
 	}
 
-	return ConvertSQLLinestringToString(line.(sql.Linestring))
+	// Allocate buffer for line
+	buf := make([]byte, 9 + 4 + 16 * len(line.(sql.Linestring).Points))
+
+	// Write header and data to buffer
+	WriteEWKBHeader(line, buf)
+	WriteEWKBLineData(line.(sql.Linestring), buf[9:])
+
+	return types.Linestring(buf), nil
 }
 
 // Equals implements TypeInfo interface.

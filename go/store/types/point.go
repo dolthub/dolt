@@ -22,6 +22,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"strconv"
 
@@ -29,7 +30,7 @@ import (
 )
 
 // Point is a Noms Value wrapper around the primitive string type (for now).
-type Point string // TODO: 16 bytes to fit 2 float64
+type Point []byte // TODO: fixed size?
 
 // Value interface
 func (v Point) Value(ctx context.Context) (Value, error) {
@@ -37,12 +38,15 @@ func (v Point) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Point) Equals(other Value) bool {
-	return v == other
+	if v2, ok := other.(Point); ok {
+		return bytes.Equal(v, v2)
+	}
+	return false
 }
 
 func (v Point) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Point); ok {
-		return v < v2, nil
+		return bytes.Compare(v, v2)  == -1, nil
 	}
 	return PointKind < other.Kind(), nil
 }

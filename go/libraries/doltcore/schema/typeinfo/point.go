@@ -16,13 +16,11 @@ package typeinfo
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
-	"strconv"
-	"strings"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"math"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
@@ -35,30 +33,35 @@ var _ TypeInfo = (*pointType)(nil)
 
 var PointType = &pointType{sql.PointType{}}
 
-func ConvertStringToSQLPoint(s string) (interface{}, error) {
-	// Get everything between parentheses
-	s = s[len("POINT(") : len(s)-1]
-	// Split into x and y strings; maybe should length check
-	vals := strings.Split(s, ",")
-	// Parse x as float64
-	x, err := strconv.ParseFloat(vals[0], 64)
-	if err != nil {
-		return nil, err
+func ParseEWKBHeader(buf []byte) (uint32, bool, uint32) {
+	srid := binary.LittleEndian.Uint32(buf[0:4]) // First 4 bytes is SRID always in little endian
+	isBig := buf[4] == 0 // Next byte is endianness
+	geomType := binary.LittleEndian.Uint32(buf[5:9]) // Next 4 bytes is type
+	return srid, isBig, geomType
+}
+
+// ConvertEWKBToPoint converts the data portion of a WKB point to sql.Point
+// Very similar logic to the function in GMS
+func ConvertEWKBToPoint(buf []byte, isBig bool, srid uint32) sql.Point {
+	// Read floats x and y
+	var x, y float64
+	if isBig {
+		x = math.Float64frombits(binary.BigEndian.Uint64(buf[:8]))
+		y = math.Float64frombits(binary.BigEndian.Uint64(buf[8:]))
+	} else {
+		x = math.Float64frombits(binary.LittleEndian.Uint64(buf[:8]))
+		y = math.Float64frombits(binary.LittleEndian.Uint64(buf[8:]))
 	}
-	// Parse y as float64
-	y, err := strconv.ParseFloat(vals[1], 64)
-	if err != nil {
-		return nil, err
-	}
-	// Create sql.Point object
-	return sql.Point{X: x, Y: y}, nil
+	return sql.Point{SRID: srid, X: x, Y: y}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
-		return ConvertStringToSQLPoint(string(val))
+		// Assume buf is correct length (25)
+		srid, isBig, _ := ParseEWKBHeader(val) // TODO: geomType should be impossible to fail
+		return ConvertEWKBToPoint(val[9:], isBig, srid), nil
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -80,14 +83,34 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	}
 }
 
-func ConvertSQLPointToString(p sql.Point) (types.Point, error) {
-	// Convert point to string / types.Point
-	x := strconv.FormatFloat(p.X, 'g', -1, 64)
-	y := strconv.FormatFloat(p.Y, 'g', -1, 64)
-	pointStr := fmt.Sprintf("POINT(%s,%s)", x, y)
+// TODO: define constants for WKB?
 
-	// Create types.Point
-	return types.Point(pointStr), nil
+// WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
+// This function assumes v is a valid spatial type
+func WriteEWKBHeader(v interface{}, buf []byte) {
+	// Write endianness byte (always little endian)
+	buf[4] = 1
+
+	// Parse data
+	switch v := v.(type) {
+	case sql.Point:
+		// Write SRID and type
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 1)
+	case sql.Linestring:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 2)
+	case sql.Polygon:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 3)
+	}
+}
+
+// WriteEWKBPointData converts a Point into a byte array in EWKB format
+// Very similar to function in GMS
+func WriteEWKBPointData(p sql.Point, buf []byte) {
+	binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
+	binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
@@ -103,7 +126,14 @@ func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.Valu
 		return nil, err
 	}
 
-	return ConvertSQLPointToString(point.(sql.Point))
+	// Allocate buffer for point 4 + 1 + 4 + 16
+	buf := make([]byte, 25)
+
+	// Write header and data to buffer
+	WriteEWKBHeader(point, buf)
+	WriteEWKBPointData(point.(sql.Point), buf[9:])
+
+	return types.Point(buf), nil
 }
 
 // Equals implements TypeInfo interface.

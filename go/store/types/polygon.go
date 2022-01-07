@@ -22,6 +22,7 @@
 package types
 
 import (
+	"bytes"
 	"context"
 	"strconv"
 
@@ -29,7 +30,7 @@ import (
 )
 
 // Polygon is a Noms Value wrapper around a string.
-type Polygon string
+type Polygon []byte
 
 // Value interface
 func (v Polygon) Value(ctx context.Context) (Value, error) {
@@ -37,12 +38,15 @@ func (v Polygon) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Polygon) Equals(other Value) bool {
-	return v == other
+	if v2, ok := other.(Polygon); ok {
+		return bytes.Equal(v, v2)
+	}
+	return false
 }
 
 func (v Polygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	if v2, ok := other.(Polygon); ok {
-		return v < v2, nil
+		return bytes.Compare(v, v2) == -1, nil
 	}
 	return PolygonKind < other.Kind(), nil
 }
