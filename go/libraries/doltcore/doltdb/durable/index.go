@@ -17,20 +17,23 @@ package durable
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// Index represents a Table index.
 type Index interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
 	// Count returns the cardinality of the index.
 	Count() uint64
+
+	// todo(andy); add Format() *types.NomsBinFormat
 }
 
+// IndexSet stores a collection secondary Indexes.
 type IndexSet interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
@@ -90,12 +93,12 @@ type nomsIndexSet struct {
 
 var _ IndexSet = nomsIndexSet{}
 
-// HashOf implementes IndexSet.
+// HashOf implements IndexSet.
 func (s nomsIndexSet) HashOf() (hash.Hash, error) {
 	return s.indexes.Hash(s.vrw.Format())
 }
 
-// GetIndex implementes IndexSet.
+// GetIndex implements IndexSet.
 func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
@@ -116,12 +119,12 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) 
 	}, nil
 }
 
-// PutIndex implementes IndexSet.
+// PutIndex implements IndexSet.
 func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
 	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw))
 }
 
-// PutIndex implementes IndexSet.
+// PutIndex implements IndexSet.
 func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
 	ref, err := refFromNomsValue(ctx, s.vrw, idx.(nomsIndex).index)
 	if err != nil {
@@ -136,7 +139,7 @@ func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (Ind
 	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
 }
 
-// DropIndex implementes IndexSet.
+// DropIndex implements IndexSet.
 func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
 	if err != nil {
