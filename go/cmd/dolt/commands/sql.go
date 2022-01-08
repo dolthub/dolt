@@ -749,7 +749,8 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
-		LineTerminator: ";",
+		// LineTerminators[0] has to be default line terminator, which is `;`
+		LineTerminators: []string{";","\\g","\\G"},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -823,7 +824,11 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				returnFormat := se.GetReturnFormat()
+				if shell.LineTerminator() == "\\G" {
+					returnFormat = engine.FormatVertical
+				}
+				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
