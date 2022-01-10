@@ -1419,6 +1419,9 @@ databases:
 
 @test "sql-server: run mysql from shell" {
     skiponwindows "Has dependencies that are not installed on Windows CI"
+    if [[ `uname` == 'Darwin' ]]; then
+      skip "Unsupported in MacOS CI"
+    fi
 
     cd repo1
     dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
