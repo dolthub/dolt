@@ -1418,7 +1418,7 @@ databases:
 }
 
 @test "sql-server: run mysql from shell" {
-    skip "test mysql client from shell fails after v0.34.9"
+    skiponwindows "Has dependencies that are not installed on Windows CI"
 
     cd repo1
     dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
@@ -1434,8 +1434,7 @@ databases:
     dolt commit -am "create three tables"
 
     cd ..
-    start_sql_server
-    # server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\nrepo2"
+    start_sql_server_with_args --user dolt -ltrace --no-auto-commit
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
