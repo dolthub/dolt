@@ -17,8 +17,9 @@ package durable
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/hash"
 
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -30,7 +31,8 @@ type Index interface {
 	// Count returns the cardinality of the index.
 	Count() uint64
 
-	// todo(andy); add Format() *types.NomsBinFormat
+	// Format returns the types.NomsBinFormat for this index.
+	Format() *types.NomsBinFormat
 }
 
 // IndexSet stores a collection secondary Indexes.
@@ -76,6 +78,32 @@ func (i nomsIndex) HashOf() (hash.Hash, error) {
 
 func (i nomsIndex) Count() uint64 {
 	return i.index.Len()
+}
+
+func (i nomsIndex) Format() *types.NomsBinFormat {
+	return i.vrw.Format()
+}
+
+type prollyIndex struct {
+	index prolly.Map
+}
+
+func ProllyMapFromIndex(i Index) prolly.Map {
+	return i.(prollyIndex).index
+}
+
+var _ Index = prollyIndex{}
+
+func (i prollyIndex) HashOf() (hash.Hash, error) {
+	return i.index.HashOf(), nil
+}
+
+func (i prollyIndex) Count() uint64 {
+	return i.index.Count()
+}
+
+func (i prollyIndex) Format() *types.NomsBinFormat {
+	return i.index.Format()
 }
 
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {

@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -40,8 +41,8 @@ type sqlRowIter struct {
 
 var _ sql.RowIter = sqlRowIter{}
 
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
-	rows := partition.rowData
+func newProllyRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
+	rows := durable.ProllyMapFromIndex(partition.rowData)
 
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -110,7 +111,7 @@ func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap []int
 	return
 }
 
-func (it sqlRowIter) Next() (sql.Row, error) {
+func (it sqlRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	key, value, err := it.iter.Next(it.ctx)
 	if err != nil {
 		return nil, err

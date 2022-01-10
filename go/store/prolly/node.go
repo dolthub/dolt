@@ -29,6 +29,8 @@ const (
 	maxNodeDataSize = uint64(math.MaxUint16)
 )
 
+var emptyNode = Node([]byte{0, 0, 0, 0, 0, 0, 0, 0, 0})
+
 // Node is a node in a prolly tree. Nodes are byte slices containing node items and
 //   a footer. The footer contains offsets, an item count for the node, a cumulative
 //   item count for the subtree rooted at this node, and this node's tree level.

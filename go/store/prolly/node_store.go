@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -33,6 +35,9 @@ type NodeStore interface {
 
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
+
+	// Format returns the types.NomsBinFormat of this NodeStore.
+	Format() *types.NomsBinFormat
 }
 
 type nodeStore struct {
@@ -65,4 +70,9 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 // Pool implements NodeStore.
 func (ns nodeStore) Pool() pool.BuffPool {
 	return ns.bp
+}
+
+func (ns nodeStore) Format() *types.NomsBinFormat {
+	// todo(andy): read from |ns.store|
+	return types.Format_DOLT_1
 }

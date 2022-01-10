@@ -81,11 +81,11 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		KeyDesc: mut.m.keyDesc,
 		Reverse: false,
 	}
-	return mut.IterValueRange(ctx, rng)
+	return mut.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
-func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
 		if rng.Reverse {
