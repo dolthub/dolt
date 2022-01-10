@@ -25,6 +25,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -632,4 +633,12 @@ func TestWriteEmptyUnionList(t *testing.T) {
 		},
 		mustValue(NewList(context.Background(), vrw)),
 	)
+}
+
+func TestNomsBinFormat(t *testing.T) {
+	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
+		assert.Equal(t, Format_DOLT_1, Format_Default)
+	} else {
+		assert.Equal(t, Format_LD_1, Format_Default)
+	}
 }

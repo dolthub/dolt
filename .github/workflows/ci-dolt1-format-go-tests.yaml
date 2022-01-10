@@ -1,0 +1,60 @@
+name: Test New Format
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Go tests (new format)
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-18.04]
+    steps:
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.17
+      id: go
+    - uses: actions/checkout@v2
+    - name: Test All with New Format
+      # allow unittests to fail with new format
+      continue-on-error: true
+      working-directory: ./go
+      run: |
+        files=$(go list ./...)
+
+        SAVEIFS=$IFS
+        IFS=$'\n'
+
+        file_arr=($files)
+
+        IFS=$SAVEIFS
+
+        file_list=
+        for (( i=0; i<${#file_arr[@]}; i++ ))
+        do
+          echo "Testing Package: ${file_arr[$i]}"
+          if [ "$MATRIX_OS" == 'ubuntu-18.04' ]
+          then
+            go test -timeout 30m -race "${file_arr[$i]}"
+          else
+            go test -timeout 30m "${file_arr[$i]}"
+          fi
+          succeeded=$(echo "$?")
+          if [ "$succeeded" -ne 0 ]; then
+            echo "Testing failed in package ${file_arr[$i]}"
+            exit 1;
+          fi
+        done
+      env:
+        MATRIX_OS: ${{ matrix.os }}
+        DOLT_FORMAT_FEATURE_FLAG: "true"
