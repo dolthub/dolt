@@ -61,7 +61,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	table, err := sqlTbl.(*WritableDoltTable).doltTable(ctx)
 	require.NoError(t, err)
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 	expectedVals := []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;"},
@@ -84,7 +84,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	table, err = tbl.doltTable(ctx)
 	require.NoError(t, err)
 
-	rowData, err = table.GetRowData(ctx)
+	rowData, err = table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 	expectedVals = []sql.Row{
 		{"view", "view1", "SELECT v1 FROM test;", int64(1)},

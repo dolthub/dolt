@@ -208,7 +208,7 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.M
 			return types.EmptyMap, nil, err
 		}
 	} else {
-		data, err = tbl.GetRowData(ctx)
+		data, err = tbl.GetNomsRowData(ctx)
 		if err != nil {
 			return types.EmptyMap, nil, err
 		}

@@ -276,7 +276,7 @@ func TestAddColumnToTable(t *testing.T) {
 			tt.expectedSchema.Indexes().AddIndex(index)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := updatedTable.GetRowData(ctx)
+			rowData, err := updatedTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 
 			var foundRows []row.Row
@@ -294,7 +294,7 @@ func TestAddColumnToTable(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expectedRows, foundRows)
 
-			indexRowData, err := updatedTable.GetIndexRowData(ctx, dtestutils.IndexName)
+			indexRowData, err := updatedTable.GetNomsIndexRowData(ctx, dtestutils.IndexName)
 			require.NoError(t, err)
 			assert.Greater(t, indexRowData.Len(), uint64(0))
 		})

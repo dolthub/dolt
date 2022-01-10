@@ -114,7 +114,7 @@ func TestTableEditorConcurrency(t *testing.T) {
 
 		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
-		newTableData, err := newTable.GetRowData(context.Background())
+		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
 		if assert.Equal(t, uint64(tableEditorConcurrencyFinalCount), newTableData.Len()) {
 			iterIndex := 0
@@ -207,7 +207,7 @@ func TestTableEditorConcurrencyPostInsert(t *testing.T) {
 
 		newTable, err := tableEditor.Table(context.Background())
 		require.NoError(t, err)
-		newTableData, err := newTable.GetRowData(context.Background())
+		newTableData, err := newTable.GetNomsRowData(context.Background())
 		require.NoError(t, err)
 		if assert.Equal(t, uint64(tableEditorConcurrencyFinalCount), newTableData.Len()) {
 			iterIndex := 0
@@ -272,7 +272,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 
 	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	newTableData, err := newTable.GetRowData(context.Background())
+	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(10), newTableData.Len()) {
 		iterIndex := 0
@@ -293,7 +293,7 @@ func TestTableEditorWriteAfterFlush(t *testing.T) {
 
 	sameTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	sameTableData, err := sameTable.GetRowData(context.Background())
+	sameTableData, err := sameTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 	assert.True(t, sameTableData.Equals(newTableData))
 }
@@ -356,7 +356,7 @@ func TestTableEditorDuplicateKeyHandling(t *testing.T) {
 
 	newTable, err := tableEditor.Table(context.Background())
 	require.NoError(t, err)
-	newTableData, err := newTable.GetRowData(context.Background())
+	newTableData, err := newTable.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(10), newTableData.Len()) {
 		iterIndex := 0
@@ -439,7 +439,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 
 	table, err = tableEditor.Table(ctx)
 	require.NoError(t, err)
-	tableData, err := table.GetRowData(ctx)
+	tableData, err := table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(3), tableData.Len()) {
 		iterIndex := 0
@@ -458,7 +458,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 	}
 
-	idxv1Data, err := table.GetIndexRowData(ctx, "idx_v1")
+	idxv1Data, err := table.GetNomsIndexRowData(ctx, "idx_v1")
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(3), idxv1Data.Len()) {
 		iterIndex := 0
@@ -476,7 +476,7 @@ func TestTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		})
 	}
 
-	idxv2Data, err := table.GetIndexRowData(ctx, "idx_v2")
+	idxv2Data, err := table.GetNomsIndexRowData(ctx, "idx_v2")
 	require.NoError(t, err)
 	if assert.Equal(t, uint64(3), idxv2Data.Len()) {
 		iterIndex := 0

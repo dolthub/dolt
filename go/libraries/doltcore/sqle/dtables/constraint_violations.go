@@ -85,7 +85,7 @@ func (cvt *ConstraintViolationsTable) Schema() sql.Schema {
 
 // Partitions implements the interface sql.Table.
 func (cvt *ConstraintViolationsTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return index.SinglePartitionIterFromNomsMap(types.EmptyMap), nil
+	return index.SinglePartitionIterFromNomsMap(nil), nil
 }
 
 // PartitionRows implements the interface sql.Table.

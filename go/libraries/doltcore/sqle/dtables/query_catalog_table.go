@@ -130,7 +130,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		return SavedQuery{}, nil, err
 	}
 
-	data, err := tbl.GetRowData(ctx)
+	data, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return SavedQuery{}, nil, err
 	}
@@ -190,7 +190,7 @@ func RetrieveFromQueryCatalog(ctx context.Context, root *doltdb.RootValue, id st
 		return SavedQuery{}, doltdb.ErrTableNotFound
 	}
 
-	m, err := tbl.GetRowData(ctx)
+	m, err := tbl.GetNomsRowData(ctx)
 
 	if err != nil {
 		return SavedQuery{}, err

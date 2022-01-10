@@ -325,7 +325,7 @@ func TestKeylessMergeConflicts(t *testing.T) {
 
 // |expected| is a tupleSet to compensate for random storage order
 func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected tupleSet) {
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	require.NoError(t, err)
 
 	assert.Equal(t, int(rowData.Len()), len(expected))

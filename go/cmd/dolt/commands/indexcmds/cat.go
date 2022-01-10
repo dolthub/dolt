@@ -132,7 +132,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if index == nil {
 		return HandleErr(errhand.BuildDError("The index `%s` does not exist on table `%s`.", indexName, tableName).Build(), nil)
 	}
-	indexRowData, err := table.GetIndexRowData(ctx, index.Name())
+	indexRowData, err := table.GetNomsIndexRowData(ctx, index.Name())
 	if err != nil {
 		return HandleErr(errhand.BuildDError("The index `%s` does not have a data map.", indexName).Build(), nil)
 	}

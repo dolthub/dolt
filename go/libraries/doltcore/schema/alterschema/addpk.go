@@ -57,7 +57,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	}
 	newCollection := schema.NewColCollection(newColl...)
 
-	rows, err := table.GetRowData(ctx)
+	rows, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 		return nil, err
 	}
 
-	oldRowData, err := oldTable.GetRowData(ctx)
+	oldRowData, err := oldTable.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
