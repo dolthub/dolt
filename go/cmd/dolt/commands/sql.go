@@ -455,13 +455,21 @@ func execQuery(
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	returnFormat := se.GetReturnFormat()
+	if strings.HasSuffix(query, "\\G") {
+		query = strings.TrimSuffix(query, "\\G")
+		returnFormat = engine.FormatVertical
+	} else if strings.HasSuffix(query, "\\g") {
+		query = strings.TrimSuffix(query, "\\g")
+	}
+
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+		err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -641,6 +649,14 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			shouldProcessQuery = false
 		}
 		if shouldProcessQuery {
+			returnFormat := se.GetReturnFormat()
+			if strings.HasSuffix(query, "\\G") {
+				query = strings.TrimSuffix(query, "\\G")
+				returnFormat = engine.FormatVertical
+			} else if strings.HasSuffix(query, "\\g") {
+				query = strings.TrimSuffix(query, "\\g")
+			}
+
 			sqlSch, rowIter, err := processQuery(ctx, query, se)
 			if err != nil {
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
@@ -652,7 +668,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
-				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(ctx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}
@@ -797,7 +813,11 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		//TODO: Handle comments and enforce the current line terminator
 		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
 			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
-			shell.SetLineTerminator(matches[1])
+
+			// the current LineTerminator is used to terminate this query, so it could be attached to delimiting character
+			nlt := strings.TrimSuffix(matches[1], shell.LineTerminator())
+
+			shell.SetLineTerminator(nlt)
 			return
 		}
 
@@ -1129,6 +1149,14 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
+	returnFormat := se.GetReturnFormat()
+	if strings.HasSuffix(query, "\\G") {
+		query = strings.TrimSuffix(query, "\\G")
+		returnFormat = engine.FormatVertical
+	} else if strings.HasSuffix(query, "\\g") {
+		query = strings.TrimSuffix(query, "\\g")
+	}
+
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
 	if err != nil {
 		return err
@@ -1148,7 +1176,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+			err = engine.PrettyPrintResults(ctx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 			if err != nil {
 				return err
 			}

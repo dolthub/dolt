@@ -1694,3 +1694,22 @@ SQL
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 15-46
 }
+
+@test "sql: query return format check" {
+    run dolt sql -q "show tables\G"
+    [ "$status" -eq 0 ]
+    [ "$output" = "*************************** 1. row ***************************
+Table: has_datetimes
+*************************** 2. row ***************************
+Table: one_pk
+*************************** 3. row ***************************
+Table: two_pk" ]
+
+    # it will work as `;`
+    run dolt sql -q "show tables\g"
+    [ "$status" -eq 0 ]
+    result=$output
+
+    run dolt sql -q "show tables;"
+    [ "$output" = "$result" ]
+}
