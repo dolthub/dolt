@@ -42,7 +42,9 @@ type NomsBinFormat struct {
 	tag *formatTag
 }
 
-type formatTag struct{}
+type formatTag struct {
+	furp byte
+}
 
 var formatTag_7_18 *formatTag = nil
 var formatTag_LD_1 = &formatTag{}
@@ -50,7 +52,7 @@ var formatTag_DOLT_1 = &formatTag{}
 
 var Format_7_18 = &NomsBinFormat{}
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
-var Format_DOLT_1 = &NomsBinFormat{tag: formatTag_DOLT_1}
+var Format_DOLT_1 = &NomsBinFormat{formatTag_DOLT_1}
 
 var Format_Default *NomsBinFormat
 
