@@ -766,7 +766,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			"quit", "exit", "quit()", "exit()",
 		},
 		// LineTerminators[0] has to be default line terminator, which is `;`
-		LineTerminators: []string{";","\\g","\\G"},
+		LineTerminators: []string{";", "\\g", "\\G"},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
