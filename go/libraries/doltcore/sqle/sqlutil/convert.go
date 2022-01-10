@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 
-	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -28,7 +27,7 @@ import (
 )
 
 func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
-	cols := make([]*sqle.ColumnWithRawDefault, sch.GetAllCols().Size())
+	cols := make(sql.Schema, sch.GetAllCols().Size())
 
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
@@ -38,30 +37,27 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 			extra = "auto_increment"
 		}
 
-		cols[i] = &sqle.ColumnWithRawDefault{
-			SqlColumn: &sql.Column{
+		var deflt *sql.ColumnDefaultValue
+		if col.Default != "" {
+			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
+		}
+
+		cols[i] = &sql.Column{
 				Name:          col.Name,
 				Type:          sqlType,
-				Default:       nil,
+				Default:       deflt,
 				Nullable:      col.IsNullable(),
 				Source:        tableName,
 				PrimaryKey:    col.IsPartOfPK,
 				AutoIncrement: col.AutoIncrement,
 				Comment:       col.Comment,
 				Extra:         extra,
-			},
-			Default: col.Default,
 		}
 		i++
 		return false, nil
 	})
 
-	sqlSch, err := sqle.ResolveDefaults(tableName, cols)
-	if err != nil {
-		return sql.PrimaryKeySchema{}, err
-	}
-
-	return sql.NewPrimaryKeySchema(sqlSch, sch.GetPkOrdinals()...), nil
+	return sql.NewPrimaryKeySchema(cols, sch.GetPkOrdinals()...), nil
 }
 
 // ToDoltSchema returns a dolt Schema from the sql schema given, suitable for use in creating a table.

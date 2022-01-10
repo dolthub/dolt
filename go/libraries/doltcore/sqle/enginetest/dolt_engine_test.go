@@ -67,28 +67,20 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []enginetest.ScriptTest{
 		{
 			Name: "CrossDB Queries",
 			SetUpScript: []string{
-				"CREATE DATABASE test",
-				"CREATE TABLE test.x (pk int primary key)",
-				"insert into test.x values (1),(2),(3)",
-				"DELETE FROM test.x WHERE pk=2",
-				"UPDATE test.x set pk=300 where pk=3",
-				"create table a (xa int primary key, ya int, za int)",
-				"insert into a values (1,2,3)",
+				"CREATE TABLE t13(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT '4')",
+				"INSERT INTO t13 (pk) VALUES (1), (2)",
+				"ALTER TABLE t13 ADD COLUMN v2 BIGINT DEFAULT 5",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "SELECT pk from test.x",
+					Query:    "INSERT INTO t2 (pk) VALUES (1), (2), (3)",
 					Expected: []sql.Row{{1}, {300}},
-				},
-				{
-					Query:    "SELECT * from a",
-					Expected: []sql.Row{{1, 2, 3}},
 				},
 			},
 		},

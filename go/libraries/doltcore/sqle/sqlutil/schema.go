@@ -29,10 +29,14 @@ import (
 )
 
 // ApplyDefaults applies the default values to the given indices, returning the resulting row.
-func ApplyDefaults(ctx context.Context, vrw types.ValueReadWriter, doltSchema schema.Schema, sqlSchema sql.Schema, indicesOfColumns []int, dRow row.Row) (row.Row, error) {
-	if len(indicesOfColumns) == 0 {
-		return dRow, nil
-	}
+func ApplyDefaults(
+		ctx context.Context,
+		vrw types.ValueReadWriter,
+		doltSchema schema.Schema,
+		sqlSchema sql.Schema,
+		colIdx int,
+		dRow row.Row ,
+) (row.Row, error) {
 	sqlCtx, ok := ctx.(*sql.Context)
 	if !ok {
 		sqlCtx = sql.NewContext(ctx)
@@ -51,7 +55,7 @@ func ApplyDefaults(ctx context.Context, vrw types.ValueReadWriter, doltSchema sc
 			oldSqlRow[i] = nil
 		}
 	}
-	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, indicesOfColumns, oldSqlRow)
+	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, colIdx, oldSqlRow)
 	if err != nil {
 		return nil, err
 	}
