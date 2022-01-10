@@ -184,7 +184,7 @@ func listTableVerbose(ctx context.Context, tbl string, root *doltdb.RootValue) (
 		return "", errhand.BuildDError("error: failed to get table").AddCause(err).Build()
 	}
 
-	rows, err := tblVal.GetRowData(ctx)
+	rows, err := tblVal.GetNomsRowData(ctx)
 
 	if err != nil {
 		return "", errhand.BuildDError("error: failed to get row data").AddCause(err).Build()

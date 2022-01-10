@@ -55,7 +55,7 @@ func TestAsyncSortedEdits(t *testing.T) {
 }
 
 func TestAsyncSortedEditsStable(t *testing.T) {
-	ase := NewAsyncSortedEdits(types.Format_LD_1, 2, 1, 1)
+	ase := NewAsyncSortedEdits(types.Format_Default, 2, 1, 1)
 	assert.NotNil(t, ase)
 	ase.AddEdit(types.Int(0), nil)
 	ase.AddEdit(types.Int(1), nil)

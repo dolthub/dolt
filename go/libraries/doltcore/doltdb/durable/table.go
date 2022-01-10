@@ -44,7 +44,7 @@ var (
 
 // Table is a Dolt table that can be persisted.
 type Table interface {
-	// HashOf returns the hash.Hash of this table
+	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
 	// GetSchemaHash returns the hash.Hash of this table's schema.
@@ -55,9 +55,9 @@ type Table interface {
 	SetSchema(ctx context.Context, sch schema.Schema) (Table, error)
 
 	// GetTableRows returns this tables rows.
-	GetTableRows(ctx context.Context) (types.Map, error)
+	GetTableRows(ctx context.Context) (Index, error)
 	// SetTableRows sets this table's rows.
-	SetTableRows(ctx context.Context, rows types.Map) (Table, error)
+	SetTableRows(ctx context.Context, rows Index) (Table, error)
 
 	// GetIndexes returns the secondary indexes for this table.
 	GetIndexes(ctx context.Context) (IndexSet, error)
@@ -112,7 +112,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 		indexes = NewIndexSet(ctx, vrw)
 	}
 
-	indexesRef, err := refFromNomsValue(ctx, vrw, MapFromIndexSet(indexes))
+	indexesRef, err := refFromNomsValue(ctx, vrw, mapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}
@@ -218,8 +218,8 @@ func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 // UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 // SetTableRows implements Table.
-func (t nomsTable) SetTableRows(ctx context.Context, updatedRows types.Map) (Table, error) {
-	rowDataRef, err := refFromNomsValue(ctx, t.vrw, updatedRows)
+func (t nomsTable) SetTableRows(ctx context.Context, updatedRows Index) (Table, error) {
+	rowDataRef, err := refFromNomsValue(ctx, t.vrw, updatedRows.(nomsIndex).index)
 
 	if err != nil {
 		return nil, err
@@ -235,23 +235,20 @@ func (t nomsTable) SetTableRows(ctx context.Context, updatedRows types.Map) (Tab
 }
 
 // GetTableRows implements Table.
-func (t nomsTable) GetTableRows(ctx context.Context) (types.Map, error) {
+func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
 
 	if err != nil {
-		return types.EmptyMap, err
+		return nil, err
 	}
 
 	rowMapRef := val.(types.Ref)
-
 	val, err = rowMapRef.TargetValue(ctx, t.vrw)
-
 	if err != nil {
-		return types.EmptyMap, err
+		return nil, err
 	}
 
-	rowMap := val.(types.Map)
-	return rowMap, nil
+	return IndexFromNomsMap(val.(types.Map), t.vrw), nil
 }
 
 // GetIndexes implements Table.
@@ -281,7 +278,7 @@ func (t nomsTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, err
 		indexes = NewIndexSet(ctx, t.vrw)
 	}
 
-	indexesRef, err := refFromNomsValue(ctx, t.vrw, MapFromIndexSet(indexes))
+	indexesRef, err := refFromNomsValue(ctx, t.vrw, mapFromIndexSet(indexes))
 	if err != nil {
 		return nil, err
 	}

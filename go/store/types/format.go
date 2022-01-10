@@ -16,11 +16,17 @@ package types
 
 import (
 	"errors"
+	"os"
 
 	"github.com/dolthub/dolt/go/store/constants"
 )
 
 func init() {
+	// check for new format feature flag
+	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
+		constants.FormatDefaultString = constants.FormatDolt1String
+	}
+
 	nbf, err := GetFormatForVersionString(constants.FormatDefaultString)
 	if err != nil {
 		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
@@ -28,17 +34,25 @@ func init() {
 	Format_Default = nbf
 }
 
+const (
+	doltFormatFeatureFlag = "DOLT_FORMAT_FEATURE_FLAG"
+)
+
 type NomsBinFormat struct {
 	tag *formatTag
 }
 
-type formatTag struct{}
+type formatTag struct {
+	furp byte
+}
 
 var formatTag_7_18 *formatTag = nil
 var formatTag_LD_1 = &formatTag{}
+var formatTag_DOLT_1 = &formatTag{}
 
 var Format_7_18 = &NomsBinFormat{}
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
+var Format_DOLT_1 = &NomsBinFormat{formatTag_DOLT_1}
 
 var Format_Default *NomsBinFormat
 
@@ -58,6 +72,8 @@ func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 		return Format_7_18, nil
 	} else if s == constants.FormatLD1String {
 		return Format_LD_1, nil
+	} else if s == constants.FormatDolt1String {
+		return Format_DOLT_1, nil
 	} else {
 		return nil, errors.New("unsupported ChunkStore version " + s)
 	}
@@ -68,6 +84,8 @@ func (nbf *NomsBinFormat) VersionString() string {
 		return constants.Format718String
 	} else if nbf.tag == formatTag_LD_1 {
 		return constants.FormatLD1String
+	} else if nbf.tag == formatTag_DOLT_1 {
+		return constants.FormatDolt1String
 	} else {
 		panic("unrecognized NomsBinFormat tag value")
 	}
