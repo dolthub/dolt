@@ -109,6 +109,9 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 
 	for i, c := range doltSchema.GetAllCols().GetColumns() {
 		val := r[i]
+		if val == nil {
+			continue
+		}
 
 		nomsVal, err := c.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
 		if err != nil {
@@ -176,6 +179,9 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	for i := 0; i < numCols; i++ {
 		schCol := allCols.GetAtIndex(i)
 		val := r[i]
+		if val == nil {
+			continue
+		}
 
 		tag := schCol.Tag
 		nomsVal, err := schCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
