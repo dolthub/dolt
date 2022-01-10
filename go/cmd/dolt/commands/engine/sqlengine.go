@@ -115,7 +115,7 @@ func NewSqlEngine(
 	return &SqlEngine{
 		dbs:            nameToDB,
 		contextFactory: newSqlContext(sess, initialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config()),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), autocommit),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -256,7 +256,7 @@ func newSqlContext(sess *dsess.DoltSession, initialDb string) func(ctx context.C
 	}
 }
 
-func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
+func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfig, autocommit bool) func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 	return func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error) {
 		ddbs := dsqle.DbsAsDSQLDBs(dbs)
 		states, err := getDbStates(ctx, ddbs)
@@ -270,7 +270,7 @@ func newDoltSession(pro dsqle.DoltDatabaseProvider, config config.ReadWriteConfi
 		}
 
 		// TODO: this should just be the session default like it is with MySQL
-		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, true)
+		err = dsess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
 		if err != nil {
 			return nil, err
 		}
