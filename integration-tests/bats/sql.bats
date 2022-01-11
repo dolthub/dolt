@@ -1695,8 +1695,8 @@ get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 15-46
 }
 
-@test "sql: query return format check" {
-    run dolt sql -q "show tables\G"
+@test "sql: sql -q query vertical format check" {
+    run dolt sql -r vertical -q "show tables"
     [ "$status" -eq 0 ]
     [ "$output" = "*************************** 1. row ***************************
 Table: has_datetimes
@@ -1704,12 +1704,11 @@ Table: has_datetimes
 Table: one_pk
 *************************** 3. row ***************************
 Table: two_pk" ]
+}
 
-    # it will work as `;`
-    run dolt sql -q "show tables\g"
+@test "sql: vertical query format in sql shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+
+    run expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
     [ "$status" -eq 0 ]
-    result=$output
-
-    run dolt sql -q "show tables;"
-    [ "$output" = "$result" ]
 }

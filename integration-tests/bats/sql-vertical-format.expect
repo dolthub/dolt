@@ -1,0 +1,37 @@
+#!/usr/bin/expect
+
+set timeout 10
+spawn dolt sql
+expect {
+  "> " { send "show tables\\G\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*Table: one_pk*" { send "DELIMITER $$;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "> " { send "show tables$$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*| Table         |*" { send "show tables\\g\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*| Table         |*" { send "DELIMITER ;$$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+   "> " { exit 0; }
+   timeout { exit 1; }
+   failed { exit 1; }
+ }
+
+
+expect eof

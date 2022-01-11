@@ -1418,7 +1418,7 @@ databases:
 }
 
 @test "sql-server: run mysql from shell" {
-    skip "test mysql client from shell fails after v0.34.9"
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
     dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
@@ -1435,7 +1435,6 @@ databases:
 
     cd ..
     start_sql_server
-    # server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\nrepo2"
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]

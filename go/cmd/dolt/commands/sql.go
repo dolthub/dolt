@@ -455,21 +455,13 @@ func execQuery(
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	returnFormat := se.GetReturnFormat()
-	if strings.HasSuffix(query, "\\G") {
-		query = strings.TrimSuffix(query, "\\G")
-		returnFormat = engine.FormatVertical
-	} else if strings.HasSuffix(query, "\\g") {
-		query = strings.TrimSuffix(query, "\\g")
-	}
-
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
 	}
 
 	if rowIter != nil {
-		err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+		err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
@@ -547,6 +539,8 @@ func GetResultFormat(format string) (engine.PrintResultFormat, errhand.VerboseEr
 		return engine.FormatJson, nil
 	case "null":
 		return engine.FormatNull, nil
+	case "vertical":
+		return engine.FormatVertical, nil
 	default:
 		return engine.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
@@ -649,14 +643,6 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			shouldProcessQuery = false
 		}
 		if shouldProcessQuery {
-			returnFormat := se.GetReturnFormat()
-			if strings.HasSuffix(query, "\\G") {
-				query = strings.TrimSuffix(query, "\\G")
-				returnFormat = engine.FormatVertical
-			} else if strings.HasSuffix(query, "\\g") {
-				query = strings.TrimSuffix(query, "\\g")
-			}
-
 			sqlSch, rowIter, err := processQuery(ctx, query, se)
 			if err != nil {
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
@@ -668,7 +654,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			}
 
 			if rowIter != nil {
-				err = engine.PrettyPrintResults(ctx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}
@@ -1149,14 +1135,6 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	returnFormat := se.GetReturnFormat()
-	if strings.HasSuffix(query, "\\G") {
-		query = strings.TrimSuffix(query, "\\G")
-		returnFormat = engine.FormatVertical
-	} else if strings.HasSuffix(query, "\\g") {
-		query = strings.TrimSuffix(query, "\\g")
-	}
-
 	sqlSch, rowIter, err := processQuery(ctx, query, se)
 	if err != nil {
 		return err
@@ -1176,7 +1154,7 @@ func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query stri
 				cli.Print("\n")
 				displayStrLen = 0
 			}
-			err = engine.PrettyPrintResults(ctx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
+			err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
 			if err != nil {
 				return err
 			}
