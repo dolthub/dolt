@@ -1418,7 +1418,7 @@ databases:
 }
 
 @test "sql-server: run mysql from shell" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip "test mysql client from shell fails after v0.34.9"
 
     cd repo1
     dolt sql -q "create table r1t_one (id1 int primary key, col1 varchar(20));"
