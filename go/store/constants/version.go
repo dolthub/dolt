@@ -39,5 +39,6 @@ var NomsGitSHA = "<developer build>"
 
 const Format718String = "7.18"
 const FormatLD1String = "__LD_1__"
+const FormatDolt1String = "__DOLT_1__"
 
 var FormatDefaultString = FormatLD1String

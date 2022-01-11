@@ -738,7 +738,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 	indexes := durable.NewIndexSet(ctx, root.VRW())
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty map for every index
-		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
+		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), empty)
 		return
 	})
 	if err != nil {
@@ -1237,7 +1237,7 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 			buf.WriteString("\n")
 
 			buf.WriteString("Data:\n")
-			data, err := table.GetRowData(ctx)
+			data, err := table.GetNomsRowData(ctx)
 			if err != nil {
 				panic(err)
 			}

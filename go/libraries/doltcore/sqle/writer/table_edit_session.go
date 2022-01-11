@@ -36,6 +36,9 @@ type WriteSession interface {
 	// the pending writes in the session before calling the callback.
 	UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error
 
+	// SetRoot sets the root for the WriteSession.
+	SetRoot(ctx context.Context, root *doltdb.RootValue) error
+
 	// Flush flushes the pending writes in the session.
 	Flush(ctx context.Context) (*doltdb.RootValue, error)
 

@@ -222,7 +222,7 @@ func applyDefaultValue(
 		newSchema schema.Schema,
 		defaultVal *sql.ColumnDefaultValue,
 ) (*doltdb.Table, error) {
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

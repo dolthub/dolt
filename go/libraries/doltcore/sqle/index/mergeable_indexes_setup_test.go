@@ -70,7 +70,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	table := dsqle.DoltTableFromAlterableTable(sqlCtx, tbl)
 
-	idxv1RowData, err := table.GetIndexRowData(context.Background(), idxv1.Name())
+	idxv1RowData, err := table.GetNomsIndexRowData(context.Background(), idxv1.Name())
 	require.NoError(t, err)
 	idxv1Cols := make([]schema.Column, idxv1.Count())
 	for i, tag := range idxv1.IndexedColumnTags() {
@@ -83,7 +83,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	idxv2v1, ok := sch.Indexes().GetByNameCaseInsensitive("idxv2v1")
 	require.True(t, ok)
-	idxv2v1RowData, err := table.GetIndexRowData(context.Background(), idxv2v1.Name())
+	idxv2v1RowData, err := table.GetNomsIndexRowData(context.Background(), idxv2v1.Name())
 	require.NoError(t, err)
 	idxv2v1Cols := make([]schema.Column, idxv2v1.Count())
 	for i, tag := range idxv2v1.IndexedColumnTags() {
