@@ -1435,6 +1435,7 @@ databases:
 
     cd ..
     start_sql_server
+    # server_query "repo1" 1 "show databases" "Database\ninformation_schema\nrepo1\nrepo2"
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
