@@ -73,14 +73,14 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "CrossDB Queries",
 			SetUpScript: []string{
-				"CREATE TABLE t13(pk BIGINT PRIMARY KEY, v1 BIGINT DEFAULT '4')",
-				"INSERT INTO t13 (pk) VALUES (1), (2)",
-				"ALTER TABLE t13 ADD COLUMN v2 BIGINT DEFAULT 5",
+				"CREATE TABLE t31 (pk BIGINT PRIMARY KEY)",
+				"INSERT INTO t31 VALUES (1), (2), (3)",
+				"ALTER TABLE t31 ADD COLUMN v1 BIGINT NOT NULL",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "INSERT INTO t2 (pk) VALUES (1), (2), (3)",
-					Expected: []sql.Row{{1}, {300}},
+					Query:    "SELECT * FROM t31 order by pk",
+					Expected: []sql.Row{{1, 0}, {2, 0}, {3, 0}},
 				},
 			},
 		},

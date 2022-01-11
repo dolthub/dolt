@@ -89,7 +89,7 @@ func updateTableWithNewSchema(
 		tbl *doltdb.Table,
 		tag uint64,
 		newSchema schema.Schema,
-		defaultVal sql.Expression,
+		defaultVal *sql.ColumnDefaultValue,
 ) (*doltdb.Table, error) {
 	var err error
 	tbl, err = tbl.UpdateSchema(ctx, newSchema)
@@ -97,11 +97,9 @@ func updateTableWithNewSchema(
 		return nil, err
 	}
 
-	if defaultVal != nil {
-		tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema, defaultVal)
-		if err != nil {
-			return nil, err
-		}
+	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema, defaultVal)
+	if err != nil {
+		return nil, err
 	}
 
 	return tbl, nil
@@ -222,7 +220,7 @@ func applyDefaultValue(
 		tbl *doltdb.Table,
 		tag uint64,
 		newSchema schema.Schema,
-		defaultVal sql.Expression,
+		defaultVal *sql.ColumnDefaultValue,
 ) (*doltdb.Table, error) {
 	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
@@ -248,7 +246,7 @@ func applyDefaultValue(
 	}
 
 	// FromDoltSchema doesn't reify the expression for a default, so set it explicitly
-	newSqlSchema.Schema[columnIndex].Default.Expression = defaultVal
+	newSqlSchema.Schema[columnIndex].Default = defaultVal
 
 	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
 		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
