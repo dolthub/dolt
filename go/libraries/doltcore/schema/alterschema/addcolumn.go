@@ -19,13 +19,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // Nullable represents whether a column can have a null value.
@@ -48,17 +49,17 @@ type ColumnOrder struct {
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func AddColumnToTable(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		tbl *doltdb.Table,
-		tblName string,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
-		nullable Nullable,
-		defaultVal *sql.ColumnDefaultValue,
-		comment string,
-		order *ColumnOrder,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tbl *doltdb.Table,
+	tblName string,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
+	nullable Nullable,
+	defaultVal *sql.ColumnDefaultValue,
+	comment string,
+	order *ColumnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -84,12 +85,12 @@ func AddColumnToTable(
 // updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
 // and returns the new table.
 func updateTableWithNewSchema(
-		ctx context.Context,
-		tblName string,
-		tbl *doltdb.Table,
-		tag uint64,
-		newSchema schema.Schema,
-		defaultVal *sql.ColumnDefaultValue,
+	ctx context.Context,
+	tblName string,
+	tbl *doltdb.Table,
+	tag uint64,
+	newSchema schema.Schema,
+	defaultVal *sql.ColumnDefaultValue,
 ) (*doltdb.Table, error) {
 	var err error
 	tbl, err = tbl.UpdateSchema(ctx, newSchema)
@@ -107,14 +108,14 @@ func updateTableWithNewSchema(
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
 func addColumnToSchema(
-		sch schema.Schema,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
-		nullable Nullable,
-		order *ColumnOrder,
-		defaultVal sql.Expression,
-		comment string,
+	sch schema.Schema,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
+	nullable Nullable,
+	order *ColumnOrder,
+	defaultVal sql.Expression,
+	comment string,
 ) (schema.Schema, error) {
 	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
 	if err != nil {
@@ -170,13 +171,13 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 
 // ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
 func validateNewColumn(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		tbl *doltdb.Table,
-		tblName string,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tbl *doltdb.Table,
+	tblName string,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
 ) error {
 	if typeInfo == nil {
 		return fmt.Errorf(`typeinfo may not be nil`)
@@ -215,12 +216,12 @@ func validateNewColumn(
 }
 
 func applyDefaultValue(
-		ctx context.Context,
-		tblName string,
-		tbl *doltdb.Table,
-		tag uint64,
-		newSchema schema.Schema,
-		defaultVal *sql.ColumnDefaultValue,
+	ctx context.Context,
+	tblName string,
+	tbl *doltdb.Table,
+	tag uint64,
+	newSchema schema.Schema,
+	defaultVal *sql.ColumnDefaultValue,
 ) (*doltdb.Table, error) {
 	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {

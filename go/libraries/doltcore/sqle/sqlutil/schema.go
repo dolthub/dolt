@@ -30,12 +30,12 @@ import (
 
 // ApplyDefaults applies the default values to the given indices, returning the resulting row.
 func ApplyDefaults(
-		ctx context.Context,
-		vrw types.ValueReadWriter,
-		doltSchema schema.Schema,
-		sqlSchema sql.Schema,
-		colIdx int,
-		dRow row.Row ,
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	doltSchema schema.Schema,
+	sqlSchema sql.Schema,
+	colIdx int,
+	dRow row.Row,
 ) (row.Row, error) {
 	sqlCtx, ok := ctx.(*sql.Context)
 	if !ok {

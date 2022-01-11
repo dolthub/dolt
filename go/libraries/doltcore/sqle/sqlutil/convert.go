@@ -43,15 +43,15 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		}
 
 		cols[i] = &sql.Column{
-				Name:          col.Name,
-				Type:          sqlType,
-				Default:       deflt,
-				Nullable:      col.IsNullable(),
-				Source:        tableName,
-				PrimaryKey:    col.IsPartOfPK,
-				AutoIncrement: col.AutoIncrement,
-				Comment:       col.Comment,
-				Extra:         extra,
+			Name:          col.Name,
+			Type:          sqlType,
+			Default:       deflt,
+			Nullable:      col.IsNullable(),
+			Source:        tableName,
+			PrimaryKey:    col.IsPartOfPK,
+			AutoIncrement: col.AutoIncrement,
+			Comment:       col.Comment,
+			Extra:         extra,
 		}
 		i++
 		return false, nil
