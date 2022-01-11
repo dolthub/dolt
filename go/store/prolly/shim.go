@@ -83,6 +83,12 @@ func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *treeChunker {
 	return ch
 }
 
+func MapDescriptorsFromScheam(sch schema.Schema) (kd, vd val.TupleDesc) {
+	kd = KeyDescriptorFromSchema(sch)
+	vd = ValueDescriptorFromSchema(sch)
+	return
+}
+
 func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

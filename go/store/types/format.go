@@ -67,6 +67,12 @@ func isFormat_7_18(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_7_18
 }
 
+var ErrUnsupportedFormat = errors.New("operation not supported for format '__DOLT_1__' ")
+
+func IsFormat_DOLT_1(nbf *NomsBinFormat) bool {
+	return nbf.tag == formatTag_DOLT_1
+}
+
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 	if s == constants.Format718String {
 		return Format_7_18, nil

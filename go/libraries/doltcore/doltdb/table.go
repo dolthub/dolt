@@ -73,9 +73,19 @@ type Table struct {
 	table durable.Table
 }
 
-// NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, sch, rowData, indexes, autoIncVal)
+// NewNomsTable creates a noms Struct which stores row data, index data, and schema.
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewNomsTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{table: dt}, nil
+}
+
+// NewTable creates a durable object which stores row data, index data, and schema.
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewTable(ctx, vrw, sch, rows, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}

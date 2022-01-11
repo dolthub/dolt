@@ -487,7 +487,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
+	newTable, err := doltdb.NewNomsTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -1128,6 +1128,12 @@ func (t *AlterableDoltTable) CreateIndex(
 	indexColumns []sql.IndexColumn,
 	comment string,
 ) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		// todo(andy): error out
+		//return types.ErrUnsupportedFormat
+		return nil
+	}
+
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
@@ -1197,6 +1203,12 @@ func (t *AlterableDoltTable) CreateIndex(
 
 // DropIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		// todo(andy): error out
+		//return types.ErrUnsupportedFormat
+		return nil
+	}
+
 	// We disallow removing internal dolt_ tables from SQL directly
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")
@@ -1283,7 +1295,14 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	columns []string,
 	refTblName string,
 	refColumns []string,
-	onUpdate, onDelete sql.ForeignKeyReferenceOption) error {
+	onUpdate, onDelete sql.ForeignKeyReferenceOption,
+) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		// todo(andy): error out
+		//return types.ErrUnsupportedFormat
+		return nil
+	}
+
 	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
 		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.ForeignKeyNameRegexStr)
 	}
@@ -1361,6 +1380,12 @@ func (t *AlterableDoltTable) CreateForeignKey(
 
 // DropForeignKey implements sql.ForeignKeyAlterableTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		// todo(andy): error out
+		//return types.ErrUnsupportedFormat
+		return nil
+	}
+
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err

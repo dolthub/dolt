@@ -112,7 +112,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	rowMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rowMap, nil, nil)
 	require.NoError(t, err)
 	tbl, err = editor.RebuildAllIndexes(ctx, tbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rows, indexData, autoVal)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}

@@ -134,7 +134,7 @@ func TestAddNewerTextAndDocPkFromRow(t *testing.T) {
 }
 
 func CreateTestTable(vrw types.ValueReadWriter, tSchema schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	tbl, err := doltdb.NewTable(context.Background(), vrw, tSchema, rowData, nil, nil)
+	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, tSchema, rowData, nil, nil)
 
 	if err != nil {
 		return nil, err

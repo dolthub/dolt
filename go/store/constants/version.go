@@ -39,6 +39,6 @@ var NomsGitSHA = "<developer build>"
 
 const Format718String = "7.18"
 const FormatLD1String = "__LD_1__"
-const FormatDolt1String = "__DOLT_1__"
+const FormatDolt1String = "if nbf.tag == formatTag_7_18 {\n\t\treturn constants.Format718String\n\t} else if nbf.tag == formatTag_LD_1 {\n\t\treturn constants.FormatLD1String\n\t} else if nbf.tag == formatTag_DOLT_1 {\n\t\treturn constants.FormatDolt1String\n\t} else {\n\t\tpanic(\"unrecognized NomsBinFormat tag value\")\n\t}"
 
 var FormatDefaultString = FormatLD1String

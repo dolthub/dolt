@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -52,6 +53,62 @@ type IndexSet interface {
 
 	// DropIndex removes an index from the set.
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
+}
+
+func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
+	switch idx.Format() {
+	case types.Format_LD_1:
+		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
+
+	case types.Format_DOLT_1:
+		b := prolly.ValueFromMap(idx.(prollyIndex).index)
+		return refFromNomsValue(ctx, vrw, b)
+
+	default:
+		return types.Ref{}, errNbfUnkown
+	}
+}
+
+func IndexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
+	v, err := r.TargetValue(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	switch vrw.Format() {
+	case types.Format_LD_1:
+		return IndexFromNomsMap(v.(types.Map), vrw), nil
+
+	case types.Format_DOLT_1:
+		pm := prolly.MapFromValue(v, sch, vrw)
+		return IndexFromProllyMap(pm), nil
+
+	default:
+		return nil, errNbfUnkown
+	}
+}
+
+func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (Index, error) {
+	switch vrw.Format() {
+	case types.Format_LD_1:
+		m, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromNomsMap(m, vrw), nil
+
+	case types.Format_DOLT_1:
+		kd, vd := prolly.MapDescriptorsFromScheam(sch)
+		ns := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromProllyMap(m), nil
+
+	default:
+		return nil, errNbfUnkown
+	}
 }
 
 type nomsIndex struct {
@@ -90,6 +147,10 @@ type prollyIndex struct {
 
 func ProllyMapFromIndex(i Index) prolly.Map {
 	return i.(prollyIndex).index
+}
+
+func IndexFromProllyMap(m prolly.Map) Index {
+	return prollyIndex{index: m}
 }
 
 var _ Index = prollyIndex{}
@@ -154,7 +215,7 @@ func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.M
 
 // PutIndex implements IndexSet.
 func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
-	ref, err := refFromNomsValue(ctx, s.vrw, idx.(nomsIndex).index)
+	ref, err := RefFromIndex(ctx, s.vrw, idx)
 	if err != nil {
 		return nil, err
 	}
