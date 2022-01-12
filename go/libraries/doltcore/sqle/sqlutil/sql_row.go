@@ -358,6 +358,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			buf := make([]byte, 25)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPointData(typedCol, buf[9:])
+			return "asdfasdf"
 			return SqlColToStr(ctx, buf)
 		case sql.Linestring:
 			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))

@@ -22,15 +22,21 @@
 package types
 
 import (
-	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Polygon is a Noms Value wrapper around a string.
-type Polygon []byte
+type Polygon struct {
+	SRID uint32
+	Lines []Linestring
+}
 
 // Value interface
 func (v Polygon) Value(ctx context.Context) (Value, error) {
@@ -38,17 +44,55 @@ func (v Polygon) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Polygon) Equals(other Value) bool {
-	if v2, ok := other.(Polygon); ok {
-		return bytes.Equal(v, v2)
+	// Compare types
+	v2, ok := other.(Polygon)
+	if !ok {
+		return false
+	}
+	// Compare SRID
+	if v.SRID != v2.SRID {
+		return false
+	}
+	// Compare lengths of lines
+	if len(v.Lines) != len(v2.Lines) {
+		return false
+	}
+	// Compare each line
+	for i := 0; i < len(v.Lines); i++ {
+		if !v.Lines[i].Equals(v2.Lines[i]) {
+			return false
+		}
 	}
 	return false
 }
 
 func (v Polygon) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	if v2, ok := other.(Polygon); ok {
-		return bytes.Compare(v, v2) == -1, nil
+	// Compare types
+	v2, ok := other.(Polygon)
+	if !ok {
+		return PolygonKind < other.Kind(), nil
 	}
-	return PolygonKind < other.Kind(), nil
+	// Compare SRID
+	if v.SRID != v2.SRID {
+		return v.SRID < v2.SRID, nil
+	}
+	// Get shorter length
+	var n int
+	len1 := len(v.Lines)
+	len2 := len(v2.Lines)
+	if len1 < len2 {
+		n = len1
+	} else {
+		n = len2
+	}
+	// Compare each point until there is one that is less
+	for i := 0; i < n; i++ {
+		if !v.Lines[i].Equals(v2.Lines[i]) {
+			return v.Lines[i].Less(nbf, v2.Lines[i])
+		}
+	}
+	// Determine based off length
+	return len1 < len2, nil
 }
 
 func (v Polygon) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
@@ -79,18 +123,65 @@ func (v Polygon) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
+// WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
+func WriteEWKBPolyData(p Polygon, buf []byte) {
+	// Write length of polygon
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
+	// Write each line
+	start, stop := 0, 4
+	for _, l := range p.Lines {
+		start, stop = stop, stop + 4 + 16 * len(l.Points)
+		WriteEWKBLineData(l, buf[start:stop])
+	}
+}
+
 func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := PolygonKind.writeTo(w, nbf)
 	if err != nil {
 		return err
 	}
 
-	w.writeString(string(v))
+	// Calculate space for polygon buffer
+	size := 0
+	for _, l := range v.Lines {
+		size += 4 + 16 * len(l.Points)
+	}
+
+	// Allocate buffer for poly
+	buf := make([]byte, 9 + 4 + size)
+
+	// Write header and data to buffer
+	WriteEWKBHeader(v, buf)
+	WriteEWKBPolyData(v, buf[9:])
+
+	w.writeString(string(buf))
 	return nil
 }
 
+// ParseEWKBToPoly converts the data portions of a WKB polygon to Point array
+// Very similar logic to the function in GMS
+func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
+	// Read length of Polygon
+	numLines := binary.LittleEndian.Uint32(buf[:4])
+
+	// Parse lines
+	s := 4
+	lines := make([]Linestring, numLines)
+	for i := uint32(0); i < numLines; i++ {
+		lines[i] = ParseEWKBLine(buf[s:], srid)
+		s += 4 * 16 * len(lines[i].Points)
+	}
+
+	return Polygon{SRID: srid, Lines: lines}
+}
+
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	return Polygon(b.ReadString()), nil
+	buf := []byte(b.ReadString())
+	srid, _, geomType := ParseEWKBHeader(buf)
+	if geomType != 3 {
+		return nil, errors.New("not a polygon")
+	}
+	return ParseEWKBToPoly(buf[9:], srid), nil
 }
 
 func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
@@ -98,5 +189,10 @@ func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v Polygon) HumanReadableString() string {
-	return strconv.Quote(string(v))
+	lines := make([]string, len(v.Lines))
+	for i, l := range v.Lines {
+		lines[i] = l.HumanReadableString()
+	}
+	s := fmt.Sprintf("SRID: %d POLYGON(%s)", strings.Join(lines, ","))
+	return strconv.Quote(s)
 }

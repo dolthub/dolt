@@ -22,15 +22,21 @@
 package types
 
 import (
-	"bytes"
 	"context"
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Linestring is a Noms Value wrapper around a string.
-type Linestring []byte
+type Linestring struct {
+	SRID uint32
+	Points []Point
+}
 
 // Value interface
 func (v Linestring) Value(ctx context.Context) (Value, error) {
@@ -38,17 +44,58 @@ func (v Linestring) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Linestring) Equals(other Value) bool {
-	if v2, ok := other.(Linestring); ok {
-		return bytes.Equal(v, v2)
+	// Compare types
+	v2, ok := other.(Linestring)
+	if !ok {
+		return false
 	}
-	return false
+	// Compare SRID
+	if v.SRID != v2.SRID {
+		return false
+	}
+	// Compare lengths of points
+	if len(v.Points) != len(v2.Points) {
+		return false
+	}
+	// Compare each point
+	for i := 0; i < len(v.Points); i++ {
+		if !v.Points[i].Equals(v2.Points[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 func (v Linestring) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
-	if v2, ok := other.(Linestring); ok {
-		return bytes.Compare(v, v2) == -1, nil
+	// Compare types
+	v2, ok := other.(Linestring)
+	if !ok {
+		return LinestringKind < other.Kind(), nil
 	}
-	return LinestringKind < other.Kind(), nil
+	// TODO: should I even take this into account?
+	// Compare SRID
+	if v.SRID != v2.SRID {
+		return v.SRID < v2.SRID, nil
+	}
+	// Get shorter length
+	var n int
+	len1 := len(v.Points)
+	len2 := len(v2.Points)
+	if len1 < len2 {
+		n = len1
+	} else {
+		n = len2
+	}
+
+	// Compare each point until there's one that is less than
+	for i := 0; i < n; i++ {
+		if !v.Points[i].Equals(v2.Points[i]) {
+			return v.Points[i].Less(nbf, v2.Points[i])
+		}
+	}
+
+	// Determine based off length
+	return len1 < len2, nil
 }
 
 func (v Linestring) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
@@ -79,18 +126,55 @@ func (v Linestring) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
+// WriteEWKBLineData converts a Line into a byte array in EWKB format
+func WriteEWKBLineData(l Linestring, buf[] byte) {
+	// Write length of linestring
+	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
+	// Append each point
+	for i, p := range l.Points {
+		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+	}
+}
+
 func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	err := LinestringKind.writeTo(w, nbf)
 	if err != nil {
 		return err
 	}
 
-	w.writeString(string(v))
+	// Allocate buffer for linestring
+	buf := make([]byte, 9 + 4 + 16 * len(v.Points))
+
+	// Write header and data to buffer
+	WriteEWKBHeader(v, buf)
+	WriteEWKBLineData(v, buf[9:])
+
+	w.writeString(string(buf))
 	return nil
 }
 
+// ParseEWKBLine converts the data portion of a WKB point to Linestring
+// Very similar logic to the function in GMS
+func ParseEWKBLine(buf []byte, srid uint32) Linestring {
+	// Read length of linestring
+	numPoints := binary.LittleEndian.Uint32(buf[:4])
+
+	// Parse points
+	points := make([]Point, numPoints)
+	for i := uint32(0); i < numPoints; i++ {
+		points[i] = ParseEWKBPoint(buf[4 + 16 * i : 4 + 16 * (i + 1)], srid)
+	}
+
+	return Linestring{SRID: srid, Points: points}
+}
+
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	return Linestring(b.ReadString()), nil
+	buf := []byte(b.ReadString())
+	srid, _, geomType := ParseEWKBHeader(buf)
+	if geomType != 2 {
+		return nil, errors.New("not a linestring")
+	}
+	return ParseEWKBLine(buf[9:], srid), nil
 
 }
 
@@ -99,5 +183,10 @@ func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v Linestring) HumanReadableString() string {
-	return strconv.Quote(string(v))
+	points := make([]string, len(v.Points))
+	for i, p := range v.Points {
+		points[i] = p.HumanReadableString()
+	}
+	s := fmt.Sprintf("SRID: %d LINESTRING(%s)", strings.Join(points, ","))
+	return strconv.Quote(s)
 }

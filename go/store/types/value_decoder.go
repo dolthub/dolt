@@ -358,13 +358,17 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.ReadJSON()
 	case PointKind:
 		r.skipKind()
-		return Point(r.ReadString()), nil
+		r.ReadString()
+		// TODO: parse ewkb to point?
+		return Point{}, nil
 	case LinestringKind:
 		r.skipKind()
-		return Linestring(r.ReadString()), nil
+		r.ReadString()
+		return Linestring{}, nil
 	case PolygonKind:
 		r.skipKind()
-		return Polygon(r.ReadString()), nil
+		r.ReadString()
+		return Polygon{}, nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

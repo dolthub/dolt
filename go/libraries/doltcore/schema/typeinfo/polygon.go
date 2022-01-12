@@ -16,7 +16,6 @@ package typeinfo
 
 import (
 	"context"
-	"encoding/binary"
 	"fmt"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -33,35 +32,20 @@ var _ TypeInfo = (*polygonType)(nil)
 
 var PolygonType = &polygonType{sql.PolygonType{}}
 
-// ConvertEWKBToPoly converts the data portions of a WKB polygon to Point array
-// Very similar logic to the function in GMS
-func ConvertEWKBToPoly(buf []byte, isBig bool, srid uint32) sql.Polygon {
-	// Read length of Polygon
-	var numLines uint32
-	if isBig {
-		numLines = binary.BigEndian.Uint32(buf[:4])
-	} else {
-		numLines = binary.LittleEndian.Uint32(buf[:4])
+// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.Linestring
+func ConvertTypesPolygonToSQLPolygon(p types.Polygon) sql.Polygon {
+	lines := make([]sql.Linestring, len(p.Lines))
+	for i, l := range p.Lines {
+		lines[i] = ConvertTypesLinestringToSQLLinestring(l)
 	}
-
-	// Parse lines
-	s := 4
-	lines := make([]sql.Linestring, numLines)
-	for i := uint32(0); i < numLines; i++ {
-		lines[i] = ConvertEWKBToLine(buf[s:], isBig, srid)
-		s += 4 * 16 * len(lines[i].Points)
-	}
-
-	return sql.Polygon{SRID: srid, Lines: lines}
+	return sql.Polygon{SRID: p.SRID, Lines: lines}
 }
-
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	// Expect a types.Polygon, return a sql.Polygon
 	if val, ok := v.(types.Polygon); ok {
-		srid, isBig, _ := ParseEWKBHeader(val)
-		return ConvertEWKBToPoly(val[9:], isBig, srid), nil
+		return ConvertTypesPolygonToSQLPolygon(val), nil
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -83,16 +67,12 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-// WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
-func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
-	// Write length of polygon
-	binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
-	// Write each line
-	start, stop := 0, 4
-	for _, l := range p.Lines {
-		start, stop = stop, stop + 4 + 16 * len(l.Points)
-		WriteEWKBLineData(l, buf[start:stop])
+func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) types.Polygon {
+	lines := make([]types.Linestring, len(p.Lines))
+	for i, l := range p.Lines {
+		lines[i] = ConvertSQLLinestringToTypesLinestring(l)
 	}
+	return types.Polygon{SRID: p.SRID, Lines: lines}
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
@@ -108,20 +88,7 @@ func (ti *polygonType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 		return nil, err
 	}
 
-	// Calculate space for polygon buffer
-	size := 0
-	for _, l := range poly.(sql.Polygon).Lines {
-		size += 4 + 16 * len(l.Points)
-	}
-
-	// Allocate buffer for poly
-	buf := make([]byte, 9 + 4 + size)
-
-	// Write header and data to buffer
-	WriteEWKBHeader(poly, buf)
-	WriteEWKBPolyData(poly.(sql.Polygon), buf[9:])
-
-	return types.Polygon(buf), nil
+	return ConvertSQLPolygonToTypesPolygon(poly.(sql.Polygon)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -167,7 +134,7 @@ func (ti *polygonType) GetTypeParams() map[string]string {
 // IsValid implements TypeInfo interface.
 func (ti *polygonType) IsValid(v types.Value) bool {
 	if val, ok := v.(types.Linestring); ok {
-		_, err := ti.sqlPolygonType.Convert(string(val))
+		_, err := ti.sqlPolygonType.Convert(val)
 		if err != nil {
 			return false
 		}
