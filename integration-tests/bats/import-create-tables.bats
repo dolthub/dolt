@@ -588,3 +588,119 @@ DELIM
     [[ "$output" =~ "Lines skipped: 2" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 }
+
+@test "import-create-tables: csv files has less columns than -s schema" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT,
+    c3 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+     cat <<DELIM > data.csv
+pk,c3
+0,2
+DELIM
+
+    run dolt table import -s schema.sql -c subset data.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0,,2" ]
+}
+
+@test "import-create-tables: csv files has more columns than -s schema" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT,
+    c2 INT,
+    c3 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    cat <<DELIM > data.csv
+pk,c3,c1,c2,c4
+0,3,1,2,4
+DELIM
+
+    run dolt table import -s schema.sql -c subset data.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0,1,2,3" ]
+}
+
+@test "import-create-tables: csv files has equal columns but different order than -s schema" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT,
+    c2 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    cat <<DELIM > data.csv
+pk,c2,c1
+0,2,1
+DELIM
+
+    run dolt table import -s schema.sql -c subset data.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0,1,2" ]
+}
+
+@test "import-create-tables: csv files has less columns filled with default value" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT DEFAULT 42,
+    c2 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+     cat <<DELIM > data.csv
+pk,c2
+0,2
+DELIM
+
+    run dolt table import -s schema.sql -c subset data.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${lines[1]}" = "0,42,2" ]
+}
+
+@test "import-create-tables: keyless table import" {
+    cat <<SQL > schema.sql
+CREATE TABLE keyless (
+    c0 INT,
+    c1 INT DEFAULT 42,
+    c2 INT
+);
+SQL
+
+    cat <<DELIM > data.csv
+c0,c2
+0,2
+DELIM
+
+    run dolt table import -s schema.sql -c keyless data.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from keyless"
+    [ "${lines[1]}" = "0,42,2" ]
+}
