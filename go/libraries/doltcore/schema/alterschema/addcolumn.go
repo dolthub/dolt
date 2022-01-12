@@ -221,5 +221,5 @@ func applyDefaultValue(ctx context.Context, tblName string, tbl *doltdb.Table, t
 		return nil, err
 	}
 
-	return tbl.UpdateRows(ctx, newRowData)
+	return tbl.UpdateNomsRows(ctx, newRowData)
 }

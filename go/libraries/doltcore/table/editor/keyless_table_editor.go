@@ -483,7 +483,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		return nil, err
 	}
 
-	return tbl.UpdateRows(ctx, rowData)
+	return tbl.UpdateNomsRows(ctx, rowData)
 }
 
 // for deletes (cardinality < 1): |ok| is set false

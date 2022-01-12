@@ -549,7 +549,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	// change the underlying data and verify that rebuild changes the data as well
 	rowData, rows = createUpdatedTestRowData(t, db, tSchema)
 	indexNameExpectedRows, indexAgeExpectedRows = rowsToIndexRows(t, rows, indexName, indexAge)
-	updatedTable, err := rebuildAllTable.UpdateRows(context.Background(), rowData)
+	updatedTable, err := rebuildAllTable.UpdateNomsRows(context.Background(), rowData)
 	require.NoError(t, err)
 	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)

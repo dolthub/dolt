@@ -116,8 +116,12 @@ type nomsIndex struct {
 	vrw   types.ValueReadWriter
 }
 
-func NomsMapFromIndex(i Index) types.Map {
-	return i.(nomsIndex).index
+func NomsMapFromIndex(i Index) (types.Map, error) {
+	n, ok := i.(nomsIndex)
+	if !ok {
+		return types.Map{}, fmt.Errorf("unable to unwrap types.Map from Index")
+	}
+	return n.index, nil
 }
 
 func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {

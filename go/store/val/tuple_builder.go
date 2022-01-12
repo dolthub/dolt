@@ -14,7 +14,12 @@
 
 package val
 
-import "github.com/dolthub/dolt/go/store/pool"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/dolthub/dolt/go/store/pool"
+)
 
 type TupleBuilder struct {
 	Desc TupleDesc
@@ -136,6 +141,13 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
+func (tb *TupleBuilder) PutTime(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+	WriteTime(tb.fields[i], v)
+	tb.pos += timeSize
+}
+
 // PutString writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
@@ -147,7 +159,7 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 
 // PutBytes writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutBytes(i int, v []byte) {
-	tb.Desc.expectEncoding(i, BytesEnc)
+	tb.Desc.expectEncoding(i, BytesEnc, JSONEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeBytes(tb.fields[i], v, tb.Desc.Types[i].Coll)
@@ -156,6 +168,10 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 
 // PutField writes an interface{} to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutField(i int, v interface{}) {
+	if v == nil {
+		return // NULL
+	}
+
 	switch tb.Desc.Types[i].Enc {
 	case Int8Enc:
 		tb.PutInt8(i, int8(convInt(v)))
@@ -181,10 +197,19 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutFloat32(i, v.(float32))
 	case Float64Enc:
 		tb.PutFloat64(i, v.(float64))
+	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
+		// todo(andy): experimental
+		tb.PutTime(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))
 	case BytesEnc:
 		tb.PutBytes(i, v.([]byte))
+	case JSONEnc:
+		bb, err := json.Marshal(v)
+		if err != nil {
+			panic(err)
+		}
+		tb.PutBytes(i, bb)
 	default:
 		panic("unknown encoding")
 	}
@@ -192,6 +217,8 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 
 func convInt(v interface{}) int {
 	switch i := v.(type) {
+	case int:
+		return i
 	case int8:
 		return int(i)
 	case uint8:
@@ -215,6 +242,10 @@ func convInt(v interface{}) int {
 
 func convUint(v interface{}) uint {
 	switch i := v.(type) {
+	case uint:
+		return i
+	case int:
+		return uint(i)
 	case int8:
 		return uint(i)
 	case uint8:

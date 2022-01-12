@@ -69,12 +69,14 @@ func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td Tuple
 
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	if td.raw != nil {
-		// todo(andy): this is broken for signed ints
-		return compareRaw(left, right, td.raw)
-	} else {
-		return td.cmp(left, right, td)
-	}
+	// todo(andy): compare raw is broken
+	//if td.raw != nil {
+	//	return compareRaw(left, right, td.raw)
+	//} else {
+	//	return td.cmp(left, right, td)
+	//}
+
+	return td.cmp(left, right, td)
 }
 
 // Count returns the number of fields in the TupleDesc.

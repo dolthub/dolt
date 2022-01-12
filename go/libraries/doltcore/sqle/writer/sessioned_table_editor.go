@@ -29,10 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// sessionedTableEditor represents a table editor obtained from a tableEditSession. This table editor may be shared
+// sessionedTableEditor represents a table editor obtained from a nomsWriteSession. This table editor may be shared
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
-	tableEditSession  *tableEditSession
+	tableEditSession  *nomsWriteSession
 	tableEditor       editor.TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid
@@ -471,7 +471,7 @@ func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, fo
 	}
 	deleteKeys[oldKeyHash] = struct{}{}
 
-	// We don't need to store the new key. If it also causes a cascade then it will become an old key as the logic
+	// We don'tbl need to store the new key. If it also causes a cascade then it will become an old key as the logic
 	// progresses. We're only interested in whether the new key is already present in the map.
 	newKeyHash, err := newKey.Hash(ste.Format())
 	if err != nil {

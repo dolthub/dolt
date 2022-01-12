@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type batchMode int8
@@ -971,12 +970,9 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
+	nbf := sessionState.dbData.Ddb.Format()
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-
-	if types.IsFormat_DOLT_1(sessionState.dbData.Ddb.Format()) {
-		return errors.New("writes not supported for NBF '__DOLT_1__' ")
-	}
-	sessionState.WriteSession = writer.NewWriteSession(nil, editOpts)
+	sessionState.WriteSession = writer.NewWriteSession(nbf, nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1016,10 +1012,6 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 // temporary tables. This should only be used on demand. That is only when a temporary table is created should we
 // create the root map and edit session map.
 func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
-	if types.IsFormat_DOLT_1(ddb.ValueReadWriter().Format()) {
-		return errors.New("writes not supported for NBF '__DOLT_1__' ")
-	}
-
 	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
 	if err != nil {
 		return err
@@ -1029,7 +1021,8 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableWriteSession = writer.NewWriteSession(newRoot, dbState.WriteSession.GetOptions())
+	nbf := newRoot.VRW().Format()
+	dbState.TempTableWriteSession = writer.NewWriteSession(nbf, newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

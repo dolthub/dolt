@@ -72,7 +72,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 		return nil, ErrEmptyDocsTable
 	}
 
-	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
+	docTbl, err = docTbl.UpdateNomsRows(ctx, updatedMap)
 
 	return docTbl, err
 }

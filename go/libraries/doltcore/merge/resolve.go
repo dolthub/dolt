@@ -224,7 +224,7 @@ func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolv
 		return nil, err
 	}
 
-	return tbl.UpdateRows(ctx, rowData)
+	return tbl.UpdateNomsRows(ctx, rowData)
 }
 
 func validateConstraintViolations(ctx context.Context, before, after *doltdb.RootValue, table string) error {

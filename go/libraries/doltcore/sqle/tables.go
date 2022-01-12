@@ -784,7 +784,10 @@ func (p doltTablePartition) Key() []byte {
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
 func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
-	m := durable.NomsMapFromIndex(idx)
+	m, err := durable.NomsMapFromIndex(idx)
+	if err != nil {
+		return nil, err
+	}
 	return m.RangeIterator(ctx, p.start, p.end)
 }
 

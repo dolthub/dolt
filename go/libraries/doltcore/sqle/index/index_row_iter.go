@@ -54,7 +54,7 @@ type indexLookupRowIterAdapter struct {
 }
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
-func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter) *indexLookupRowIterAdapter {
+func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter) (*indexLookupRowIterAdapter, error) {
 	lookupTags := make(map[uint64]int)
 	for i, tag := range idx.Schema().GetPKCols().Tags {
 		lookupTags[tag] = i
@@ -65,7 +65,10 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		lookupTags[schema.KeylessRowIdTag] = 0
 	}
 
-	rows := durable.NomsMapFromIndex(idx.TableData())
+	rows, err := durable.NomsMapFromIndex(idx.TableData())
+	if err != nil {
+		return nil, err
+	}
 
 	conv := NewKVToSqlRowConverterForCols(idx.Format(), idx.Schema())
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
@@ -84,7 +87,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 	}
 
 	go iter.queueRows(queueCtx, epoch)
-	return iter
+	return iter, nil
 }
 
 // Next returns the next row from the iterator.

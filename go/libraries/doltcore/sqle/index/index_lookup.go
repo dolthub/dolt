@@ -37,13 +37,17 @@ func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []stri
 }
 
 func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
-	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), durable.NomsMapFromIndex(rowData), ranges)
+	m, err := durable.NomsMapFromIndex(rowData)
+	if err != nil {
+		return nil, err
+	}
+	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
 	covers := indexCoversCols(idx, columns)
 	if covers {
 		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
 	} else {
-		return NewIndexLookupRowIterAdapter(ctx, idx, nrr), nil
+		return NewIndexLookupRowIterAdapter(ctx, idx, nrr)
 	}
 }
 

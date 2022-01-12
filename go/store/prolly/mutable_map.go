@@ -49,6 +49,12 @@ func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
 	return nil
 }
 
+// Delete deletes the pair keyed by |key| from the MutableMap.
+func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
+	mut.overlay.Put(key, nil)
+	return nil
+}
+
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {

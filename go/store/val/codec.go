@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"time"
 )
 
 type Type struct {
@@ -43,6 +44,9 @@ const (
 	uint64Size  ByteSize = 8
 	float32Size ByteSize = 4
 	float64Size ByteSize = 8
+
+	// todo(andy): experimental encoding
+	timeSize ByteSize = 16
 )
 
 type Collation uint16
@@ -69,13 +73,12 @@ const (
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
 
-	// TODO
-	//  TimeEnc
-	//  TimestampEnc
-	//  DateEnc
-	//  TimeEnc
-	//  DatetimeEnc
-	//  YearEnc
+	// todo(andy): experimental encodings
+	TimeEnc      Encoding = 13
+	TimestampEnc Encoding = 14
+	DateEnc      Encoding = 15
+	DatetimeEnc  Encoding = 16
+	YearEnc      Encoding = 17
 
 	sentinel Encoding = 127
 )
@@ -85,8 +88,11 @@ const (
 	StringEnc Encoding = 128
 	BytesEnc  Encoding = 129
 
+	// todo(andy): experimental encodings
+	DecimalEnc Encoding = 130
+	JSONEnc    Encoding = 131
+
 	// TODO
-	//  DecimalEnc
 	//  BitEnc
 	//  CharEnc
 	//  VarCharEnc
@@ -164,6 +170,13 @@ func ReadFloat32(val []byte) float32 {
 func ReadFloat64(val []byte) float64 {
 	expectSize(val, float64Size)
 	return math.Float64frombits(ReadUint64(val))
+}
+
+func ReadTime(buf []byte) time.Time {
+	expectSize(buf, timeSize)
+	sec := ReadInt64(buf[:8])
+	nsec := ReadInt64(buf[8:])
+	return time.Unix(sec, nsec)
 }
 
 func ReadString(val []byte, coll Collation) string {
@@ -249,6 +262,12 @@ func WriteFloat64(buf []byte, val float64) {
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
+func WriteTime(buf []byte, val time.Time) {
+	expectSize(buf, timeSize)
+	WriteInt64(buf[:8], val.Unix())
+	WriteInt64(buf[8:], val.UnixNano())
+}
+
 func writeString(buf []byte, val string, coll Collation) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
@@ -306,6 +325,8 @@ func compare(typ Type, left, right []byte) int {
 		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
 	case Float64Enc:
 		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
+	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
+		return compareTime(ReadTime(left), ReadTime(right))
 	case StringEnc:
 		return compareString(ReadString(left, typ.Coll), ReadString(right, typ.Coll), typ.Coll)
 	case BytesEnc:
@@ -424,6 +445,14 @@ func compareFloat64(l, r float64) int {
 	} else {
 		return 1
 	}
+}
+
+func compareTime(l, r time.Time) int {
+	cmp := compareInt64(l.Unix(), r.Unix())
+	if cmp != 0 {
+		return cmp
+	}
+	return compareInt64(l.UnixNano(), r.UnixNano())
 }
 
 func compareString(l, r string, coll Collation) int {

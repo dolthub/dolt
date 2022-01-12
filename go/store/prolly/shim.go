@@ -114,6 +114,22 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 }
 
 func encodingFromSqlType(typ query.Type) val.Encoding {
+	// todo(andy): replace temp encodings
+	switch typ {
+	case query.Type_DECIMAL:
+		return val.DecimalEnc
+	case query.Type_DATE:
+		return val.DateEnc
+	case query.Type_DATETIME:
+		return val.DatetimeEnc
+	case query.Type_TIME:
+		return val.TimeEnc
+	case query.Type_TIMESTAMP:
+		return val.TimestampEnc
+	case query.Type_YEAR:
+		return val.YearEnc
+	}
+
 	switch typ {
 	case query.Type_INT8:
 		return val.Int8Enc
@@ -151,7 +167,9 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.StringEnc
 	case query.Type_TEXT:
 		return val.StringEnc
+	case query.Type_JSON:
+		return val.JSONEnc
 	default:
-		panic("unknown nomds kind")
+		panic("unknown noms kind")
 	}
 }

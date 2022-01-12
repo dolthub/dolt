@@ -167,7 +167,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		return SavedQuery{}, nil, err
 	}
 
-	newTable, err := tbl.UpdateRows(ctx, updatedTable)
+	newTable, err := tbl.UpdateNomsRows(ctx, updatedTable)
 	if err != nil {
 		return SavedQuery{}, nil, err
 	}
