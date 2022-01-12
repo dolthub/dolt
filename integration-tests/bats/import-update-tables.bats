@@ -603,3 +603,32 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Error determining the output schema." ]] || false
 }
+
+@test "import-update-tables: partial update on keyless table" {
+     cat <<SQL > schema.sql
+CREATE TABLE keyless (
+    c0 INT,
+    c1 INT DEFAULT 42,
+    c2 INT
+);
+SQL
+
+    dolt sql < schema.sql
+    dolt sql -q "insert into keyless values (0,1,0)"
+
+    cat <<DELIM > data.csv
+c0,c2
+0,2
+DELIM
+
+    run dolt table import -u keyless data.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from keyless order by c0, c1 DESC"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [ "${lines[1]}" = "0,42,2" ]
+    [ "${lines[2]}" = "0,1,0" ]
+}
