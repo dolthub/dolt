@@ -1704,6 +1704,13 @@ Table: has_datetimes
 Table: one_pk
 *************************** 3. row ***************************
 Table: two_pk" ]
+
+    run dolt sql -r vertical -q "SELECT pk AS primaryKey FROM one_pk WHERE pk < 2"
+    [ "$status" -eq 0 ]
+    [ "$output" = "*************************** 1. row ***************************
+primaryKey: 0
+*************************** 2. row ***************************
+primaryKey: 1" ]
 }
 
 @test "sql: vertical query format in sql shell" {
