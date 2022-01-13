@@ -52,7 +52,7 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 	{
 		Name: "Show create table with various keys and constraints",
-		SetUpScript: []string {
+		SetUpScript: []string{
 			"create table t1(a int primary key, b varchar(10) not null default 'abc')",
 			"alter table t1 add constraint ck1 check (b like '%abc%')",
 			"create index t1b on t1(b)",
@@ -62,27 +62,27 @@ var DoltScripts = []enginetest.ScriptTest{
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:           "show create table t1",
-				Expected:        []sql.Row{
+				Query: "show create table t1",
+				Expected: []sql.Row{
 					{"t1", "CREATE TABLE `t1` (\n" +
-							"  `a` int NOT NULL,\n" +
-							"  `b` varchar(10) NOT NULL DEFAULT \"abc\",\n" +
-							"  PRIMARY KEY (`a`),\n" +
-							"  KEY `t1b` (`b`),\n" +
-							"  CONSTRAINT `ck1` CHECK (`b` LIKE \"%abc%\")\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						"  `a` int NOT NULL,\n" +
+						"  `b` varchar(10) NOT NULL DEFAULT \"abc\",\n" +
+						"  PRIMARY KEY (`a`),\n" +
+						"  KEY `t1b` (`b`),\n" +
+						"  CONSTRAINT `ck1` CHECK (`b` LIKE \"%abc%\")\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 				},
 			},
 			{
-				Query:           "show create table t2",
-				Expected:        []sql.Row{
+				Query: "show create table t2",
+				Expected: []sql.Row{
 					{"t2", "CREATE TABLE `t2` (\n" +
-							"  `c` int NOT NULL,\n" +
-							"  `d` varchar(10),\n" +
-							"  PRIMARY KEY (`c`),\n" +
-							"  UNIQUE KEY `d_1` (`d`),\n" +
-							"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						"  `c` int NOT NULL,\n" +
+						"  `d` varchar(10),\n" +
+						"  PRIMARY KEY (`c`),\n" +
+						"  UNIQUE KEY `d_1` (`d`),\n" +
+						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 				},
 			},
 		},
