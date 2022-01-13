@@ -55,7 +55,7 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 	}
 
 	// Convert all of the keyed row data to keyless row data
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

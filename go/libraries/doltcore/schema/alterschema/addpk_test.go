@@ -57,7 +57,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Get the original index data
-		originalMap, err := table.GetIndexRowData(ctx, indexName)
+		originalMap, err := table.GetNomsIndexRowData(ctx, indexName)
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
@@ -71,7 +71,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Assert the new index map is not empty
-		newMap, err := table.GetIndexRowData(ctx, indexName)
+		newMap, err := table.GetNomsIndexRowData(ctx, indexName)
 		assert.NoError(t, err)
 		assert.False(t, newMap.Empty())
 		assert.Equal(t, newMap.Len(), uint64(2))
@@ -120,7 +120,7 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Assert the new index map is not empty
-		newMap, err := table.GetRowData(ctx)
+		newMap, err := table.GetNomsRowData(ctx)
 		assert.NoError(t, err)
 		assert.False(t, newMap.Empty())
 		assert.Equal(t, newMap.Len(), uint64(2))

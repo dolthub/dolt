@@ -111,7 +111,7 @@ func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol sc
 func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column, opts editor.Options) (*doltdb.Table, error) {
 	vrw := tbl.ValueReadWriter()
 
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

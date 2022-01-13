@@ -655,7 +655,7 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 	sch, err := tbl.GetSchema(context.Background())
 	require.NoError(t, err)
 
-	rowData, err := tbl.GetRowData(context.Background())
+	rowData, err := tbl.GetNomsRowData(context.Background())
 	require.NoError(t, err)
 
 	var sqlRows []sql.Row
@@ -673,7 +673,7 @@ func assertTableEditorRows(t *testing.T, root *doltdb.RootValue, expected []sql.
 
 	// we can verify that each index also has the proper contents
 	for _, index := range sch.Indexes().AllIndexes() {
-		indexRowData, err := tbl.GetIndexRowData(context.Background(), index.Name())
+		indexRowData, err := tbl.GetNomsIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		indexSch := index.Schema()
 

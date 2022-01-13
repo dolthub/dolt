@@ -84,7 +84,7 @@ func TestEndToEnd(t *testing.T) {
 			require.NoError(t, err)
 
 			indexes := durable.NewIndexSet(ctx, root.VRW())
-			indexes, err = indexes.PutIndex(ctx, dtestutils.IndexName, empty)
+			indexes, err = indexes.PutNomsIndex(ctx, dtestutils.IndexName, empty)
 			require.NoError(t, err)
 
 			tbl, err := doltdb.NewTable(ctx, root.VRW(), tt.sch, empty, indexes, nil)

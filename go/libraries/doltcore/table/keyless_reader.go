@@ -94,7 +94,7 @@ func (rdr *keylessTableReader) Close(_ context.Context) error {
 }
 
 func newKeylessTableReader(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, buffered bool) (*keylessTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func newKeylessTableReaderForRows(ctx context.Context, rows types.Map, sch schem
 }
 
 func newKeylessTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, start, end uint64) (SqlTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func newKeylessTableReaderForPartition(ctx context.Context, tbl *doltdb.Table, s
 }
 
 func newKeylessTableReaderFrom(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, val types.Value) (SqlTableReader, error) {
-	rows, err := tbl.GetRowData(ctx)
+	rows, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

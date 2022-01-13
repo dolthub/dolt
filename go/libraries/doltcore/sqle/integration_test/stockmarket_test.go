@@ -20158,13 +20158,13 @@ func TestInserts(t *testing.T) {
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
 	assert.NoError(t, err)
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
 	table, _, err = root.GetTable(ctx, "symbols")
 	assert.NoError(t, err)
-	rowData, err = table.GetRowData(ctx)
+	rowData, err = table.GetNomsRowData(ctx)
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(6879), rowData.Len())
 }
@@ -20187,19 +20187,19 @@ func TestInsertsWithIndexes(t *testing.T) {
 
 	table, _, err := root.GetTable(ctx, "daily_summary")
 	require.NoError(t, err)
-	rowData, err := table.GetIndexRowData(ctx, "idx_country")
+	rowData, err := table.GetNomsIndexRowData(ctx, "idx_country")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(7953), rowData.Len())
 
 	table, _, err = root.GetTable(ctx, "symbols")
 	require.NoError(t, err)
-	rowData, err = table.GetIndexRowData(ctx, "idx_ipoyear")
+	rowData, err = table.GetNomsIndexRowData(ctx, "idx_ipoyear")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(6879), rowData.Len())
 
 	table, _, err = root.GetTable(ctx, "join_result")
 	require.NoError(t, err)
-	rowData, err = table.GetIndexRowData(ctx, "idx_country")
+	rowData, err = table.GetNomsIndexRowData(ctx, "idx_country")
 	require.NoError(t, err)
 	assert.Equal(t, uint64(5210), rowData.Len())
 }

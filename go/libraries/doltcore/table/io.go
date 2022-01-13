@@ -27,7 +27,7 @@ import (
 
 // GetRow returns a row from |tbl| corresponding to |key| if it exists.
 func GetRow(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := tbl.GetRowData(ctx)
+	rowMap, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, false, err
 	}

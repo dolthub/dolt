@@ -145,9 +145,9 @@ UPDATE onepk SET pk1 = v1 + pk1 ORDER BY pk1 DESC;
 			idx_v2v1 := twopkSch.Indexes().GetByName("idx_v2v1")
 			require.NotNil(t, idx_v2v1)
 
-			idx_v1RowData, err := onepk.GetIndexRowData(context.Background(), idx_v1.Name())
+			idx_v1RowData, err := onepk.GetNomsIndexRowData(context.Background(), idx_v1.Name())
 			require.NoError(t, err)
-			idx_v2v1RowData, err := twopk.GetIndexRowData(context.Background(), idx_v2v1.Name())
+			idx_v2v1RowData, err := twopk.GetNomsIndexRowData(context.Background(), idx_v2v1.Name())
 			require.NoError(t, err)
 
 			if assert.Equal(t, uint64(len(test.expectedIdxv1)), idx_v1RowData.Len()) && len(test.expectedIdxv1) > 0 {
@@ -310,9 +310,9 @@ UPDATE oneuni SET v1 = v1 + pk1;
 			idx_v1v2 := twouniSch.Indexes().GetByName("idx_v1v2")
 			require.NotNil(t, idx_v1v2)
 
-			idx_v1RowData, err := oneuni.GetIndexRowData(context.Background(), idx_v1.Name())
+			idx_v1RowData, err := oneuni.GetNomsIndexRowData(context.Background(), idx_v1.Name())
 			require.NoError(t, err)
-			idx_v1v2RowData, err := twouni.GetIndexRowData(context.Background(), idx_v1v2.Name())
+			idx_v1v2RowData, err := twouni.GetNomsIndexRowData(context.Background(), idx_v1v2.Name())
 			require.NoError(t, err)
 
 			if assert.Equal(t, uint64(len(test.expectedIdxv1)), idx_v1RowData.Len()) && len(test.expectedIdxv1) > 0 {

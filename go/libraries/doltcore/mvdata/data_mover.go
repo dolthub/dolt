@@ -19,8 +19,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -63,10 +61,16 @@ type DataMoverOptions interface {
 	DestName() string
 }
 
-type DataWriter interface {
-	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) error
-	Commit(ctx context.Context) error
-	Schema() sql.Schema
+type DataMoverCloser interface {
+	table.TableWriteCloser
+	Flush(context.Context) (*doltdb.RootValue, error)
+}
+
+type DataMover struct {
+	Rd         table.TableReadCloser
+	Transforms *pipeline.TransformCollection
+	Wr         table.TableWriteCloser
+	ContOnErr  bool
 }
 
 type DataMoverCreationErrType string
