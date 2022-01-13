@@ -1695,20 +1695,24 @@ INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 
 ALTER TABLE onepk ADD COLUMN v3 BIGINT;
 ALTER TABLE twopk ADD COLUMN v3 BIGINT NOT NULL DEFAULT 7;
 SQL
+
     run dolt index cat onepk idx_v1 -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "v1,pk1" ]] || false
     [[ "$output" =~ "11,2" ]] || false
     [[ "$output" =~ "99,1" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
+
     run dolt schema show onepk
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'KEY `idx_v1` (`v1`)' ]] || false
+
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 77" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,v1,v2,v3" ]] || false
     [[ "$output" =~ "5,77,53," ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+
     run dolt sql -q "SELECT * FROM onepk WHERE v1 = 77" -r=tabular
     [ "$status" -eq "0" ]
     [[ "$output" =~ "NULL" ]] || false
@@ -1719,9 +1723,11 @@ SQL
     [[ "$output" =~ "61,53,5,77" ]] || false
     [[ "$output" =~ "65,54,4,22" ]] || false
     [[ "${#lines[@]}" = "6" ]] || false
+
     run dolt schema show twopk
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'KEY `idx_v` (`v2`,`v1`)' ]] || false
+
     run dolt sql -q "SELECT * FROM twopk WHERE v2 = 61 AND v1 = 53" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk1,pk2,v1,v2,v3" ]] || false
