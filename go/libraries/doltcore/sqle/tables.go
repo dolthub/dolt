@@ -348,10 +348,6 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		if typedPartition.end == 0 {
-			return emptyRowIterator{}, nil
-		}
-
 		return newRowIterator(ctx, t, projCols, typedPartition)
 	case index.SinglePartition:
 		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})

@@ -19,6 +19,8 @@ import (
 	"encoding/binary"
 	"math"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -172,6 +174,12 @@ func ReadFloat64(val []byte) float64 {
 	return math.Float64frombits(ReadUint64(val))
 }
 
+func ReadDecimal(val []byte) decimal.Decimal {
+	// todo(andy): temporary lossy implementation
+	//return decimal.NewFromFloat(ReadFloat64(val))
+	return decimal.NewFromFloat(ReadFloat64(val))
+}
+
 func ReadTime(buf []byte) time.Time {
 	expectSize(buf, timeSize)
 	sec := ReadInt64(buf[:8])
@@ -179,12 +187,12 @@ func ReadTime(buf []byte) time.Time {
 	return time.Unix(sec, nsec)
 }
 
-func ReadString(val []byte, coll Collation) string {
+func ReadString(val []byte) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
 
-func readBytes(val []byte, coll Collation) []byte {
+func readBytes(val []byte) []byte {
 	return val
 }
 
@@ -327,10 +335,13 @@ func compare(typ Type, left, right []byte) int {
 		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
 	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
 		return compareTime(ReadTime(left), ReadTime(right))
+	case DecimalEnc:
+		// todo(andy): temporary Decimal implementation
+		fallthrough
 	case StringEnc:
-		return compareString(ReadString(left, typ.Coll), ReadString(right, typ.Coll), typ.Coll)
+		return compareString(ReadString(left), ReadString(right), typ.Coll)
 	case BytesEnc:
-		return compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+		return compareBytes(readBytes(left), readBytes(right), typ.Coll)
 	default:
 		panic("unknown encoding")
 	}

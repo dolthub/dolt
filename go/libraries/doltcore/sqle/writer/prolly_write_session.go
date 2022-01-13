@@ -69,7 +69,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	mut := makeMutableProllyIndex(m, pkSch.Schema, sch)
 	autoCol := autoIncrementColFromSchema(sch)
 
-	return &prollyWriter{
+	wr := &prollyWriter{
 		tableName:  table,
 		dbName:     database,
 		sch:        sch,
@@ -80,7 +80,10 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 		sess:       s,
 		setter:     setter,
 		batched:    batched,
-	}, nil
+	}
+	s.tables[table] = wr
+
+	return wr, nil
 }
 
 // Flush returns an updated root with all of the changed tables.
@@ -133,7 +136,6 @@ func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 
 // flush is the inner implementation for Flush that does not acquire any locks
 func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.RootValue, error) {
-
 	var err error
 	tables := make(map[string]*doltdb.Table, len(s.tables))
 	mu := &sync.Mutex{}
@@ -158,12 +160,14 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.RootValue, erro
 		return nil, err
 	}
 
+	flushed := s.root
 	for name, tbl := range tables {
-		s.root, err = s.root.PutTable(ctx, name, tbl)
+		flushed, err = flushed.PutTable(ctx, name, tbl)
 		if err != nil {
 			return nil, err
 		}
 	}
+	s.root = flushed
 
 	return s.root, nil
 }

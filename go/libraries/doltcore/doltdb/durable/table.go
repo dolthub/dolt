@@ -232,14 +232,12 @@ func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 // database.  The root must be updated with the updated table, and the root must be committed or written.
 // SetTableRows implements Table.
 func (t nomsTable) SetTableRows(ctx context.Context, updatedRows Index) (Table, error) {
-	rowsRef, err := refFromNomsValue(ctx, t.vrw, updatedRows.(nomsIndex).index)
-
+	rowsRef, err := RefFromIndex(ctx, t.vrw, updatedRows)
 	if err != nil {
 		return nil, err
 	}
 
 	updatedSt, err := t.tableStruct.Set(tableRowsKey, rowsRef)
-
 	if err != nil {
 		return nil, err
 	}

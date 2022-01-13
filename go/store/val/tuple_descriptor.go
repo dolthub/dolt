@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type TupleDesc struct {
@@ -211,13 +212,35 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	return
 }
 
+// GetDecimal reads a float64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
+	td.expectEncoding(i, DecimalEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadString(b), true
+	}
+	return
+}
+
+// GetTime reads a float64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetTime(i int, tup Tuple) (v time.Time, ok bool) {
+	td.expectEncoding(i, TimeEnc, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadTime(b), true
+	}
+	return
+}
+
 // GetString reads a string from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, StringEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v = ReadString(b, td.Types[i].Coll)
+		v = ReadString(b)
 		ok = true
 	}
 	return
@@ -229,7 +252,7 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, BytesEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v = readBytes(b, td.Types[i].Coll)
+		v = readBytes(b)
 		ok = true
 	}
 	return
@@ -263,6 +286,10 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetFloat32(i, tup)
 	case Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
+	case DecimalEnc:
+		v, ok = td.GetDecimal(i, tup)
+	case TimeEnc, TimestampEnc, DateEnc, DatetimeEnc, YearEnc:
+		v, ok = td.GetTime(i, tup)
 	case StringEnc:
 		v, ok = td.GetString(i, tup)
 	case BytesEnc:

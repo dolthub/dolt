@@ -17,6 +17,9 @@ package writer
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -228,4 +231,54 @@ func makeColMapping(from sql.Schema, to *schema.ColCollection) (m colMapping) {
 		}
 	}
 	return
+}
+
+func debugPrintIndexes(r *doltdb.RootValue) string {
+	if r == nil {
+		return ""
+	}
+
+	ctx := context.Background()
+	sb := strings.Builder{}
+
+	_ = r.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		sb.WriteString("table: ")
+		sb.WriteString(name)
+		sb.WriteRune('\n')
+
+		pk, _ := table.GetRowData(ctx)
+		if pk.Count() > 0 {
+			sb.WriteRune('\t')
+			sb.WriteString(fmt.Sprintf("primary (%d): ", pk.Count()))
+			sb.WriteString(printIndexRowsInline(ctx, pk))
+			sb.WriteRune('\n')
+		}
+
+		return false, nil
+	})
+
+	return sb.String()
+}
+
+func printIndexRowsInline(ctx context.Context, m durable.Index) string {
+	pm := durable.ProllyMapFromIndex(m)
+	kd, vd := pm.Descriptors()
+
+	sb := strings.Builder{}
+	iter, _ := pm.IterAll(ctx)
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			return sb.String()
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(" ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString("\n")
+	}
 }

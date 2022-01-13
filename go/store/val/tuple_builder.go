@@ -16,6 +16,7 @@ package val
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -148,6 +149,15 @@ func (tb *TupleBuilder) PutTime(i int, v time.Time) {
 	tb.pos += timeSize
 }
 
+func (tb *TupleBuilder) PutDecimal(i int, v string) {
+	tb.Desc.expectEncoding(i, DecimalEnc)
+	// todo(andy): temporary implementation
+	sz := ByteSize(len(v))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
 // PutString writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
@@ -172,7 +182,8 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		return // NULL
 	}
 
-	switch tb.Desc.Types[i].Enc {
+	enc := tb.Desc.Types[i].Enc
+	switch enc {
 	case Int8Enc:
 		tb.PutInt8(i, int8(convInt(v)))
 	case Uint8Enc:
@@ -197,7 +208,12 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutFloat32(i, v.(float32))
 	case Float64Enc:
 		tb.PutFloat64(i, v.(float64))
+	case DecimalEnc:
+		tb.PutDecimal(i, v.(string))
 	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
+		if _, ok := v.(time.Time); !ok {
+			v = time.Time{} // broke
+		}
 		// todo(andy): experimental
 		tb.PutTime(i, v.(time.Time))
 	case StringEnc:
@@ -211,7 +227,7 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		}
 		tb.PutBytes(i, bb)
 	default:
-		panic("unknown encoding")
+		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
 }
 

@@ -157,7 +157,7 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 	case query.Type_FLOAT64:
 		return val.Float64Enc
 	case query.Type_BIT:
-		return val.BytesEnc
+		return val.Uint64Enc
 	case query.Type_BINARY:
 		return val.BytesEnc
 	case query.Type_VARBINARY:
@@ -172,7 +172,11 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.StringEnc
 	case query.Type_JSON:
 		return val.JSONEnc
+	case query.Type_ENUM:
+		return val.StringEnc
+	case query.Type_SET:
+		return val.StringEnc
 	default:
-		panic(fmt.Sprintf("unknown noms kind %v", typ))
+		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}
 }

@@ -67,7 +67,7 @@ func TestSingleQuery(t *testing.T) {
 }
 
 func TestSingleQueryNewFormat(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
