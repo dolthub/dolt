@@ -24,7 +24,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
-	"github.com/dolthub/go-mysql-server/sql/parse"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -94,16 +93,9 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		return nil, err
 	}
 
-	// parses to literal, no need to pass through analyzer
-	defaultVal, err := parse.StringToColumnDefaultValue(ctx, fmt.Sprintf(`"%s"`, diffTypeModified))
-	if err != nil {
-		return nil, err
-	}
-
 	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
 		Name:     diffTypeColName,
 		Type:     sql.Text,
-		Default:  defaultVal,
 		Nullable: false,
 		Source:   diffTblName,
 	})

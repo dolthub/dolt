@@ -312,3 +312,60 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
+
+@test "import-replace-tables: replacing a table with a subset of data correctly works" {
+   dolt sql <<SQL
+CREATE TABLE test (
+  pk int,
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int,
+  c5 int,
+  PRIMARY KEY (pk)
+);
+SQL
+
+    dolt sql -q "insert into test values (0,1,2,3,4,5)"
+
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c2
+0,7
+DELIM
+
+    run dolt table import -r test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,,7,,," ]
+}
+
+@test "import-replace-tables: csv files has more columns than schema" {
+    cat <<SQL > schema.sql
+CREATE TABLE subset (
+    pk INT NOT NULL,
+    c1 INT,
+    c2 INT,
+    c3 INT,
+    PRIMARY KEY (pk)
+);
+SQL
+    cat <<DELIM > data.csv
+pk,c4,c1,c2,c3
+0,4,1,2,3
+DELIM
+
+    dolt sql < schema.sql
+    dolt sql -q "insert into subset values (1000, 100, 1000, 10000)"
+
+    run dolt table import -r subset data.csv
+    [ "$status" -eq 0 ]
+
+    # schema argument subsets the data and adds empty column
+    run dolt sql -r csv -q "select * from subset ORDER BY pk"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "0,1,2,3" ]
+}

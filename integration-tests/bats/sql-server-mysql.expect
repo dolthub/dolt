@@ -42,7 +42,12 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "*4*" { send "exit\r"; }
+  "*4*" { send "select @@autocommit;\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*0 |*" { send "exit\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }

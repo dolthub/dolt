@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,7 +40,7 @@ func TestAddColumnToTable(t *testing.T) {
 		newColName     string
 		colKind        types.NomsKind
 		nullable       Nullable
-		defaultVal     string
+		defaultVal     *sql.ColumnDefaultValue
 		order          *ColumnOrder
 		expectedSchema schema.Schema
 		expectedRows   []row.Row
@@ -110,7 +112,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.StringKind,
 			nullable:   NotNull,
-			defaultVal: `("default")`,
+			defaultVal: mustStringToColumnDefault(`("default")`),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.StringKind, false, `("default")`, schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -121,7 +123,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   NotNull,
-			defaultVal: "42",
+			defaultVal: mustStringToColumnDefault("42"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "42", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -132,7 +134,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.UintKind,
 			nullable:   NotNull,
-			defaultVal: "64",
+			defaultVal: mustStringToColumnDefault("64"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.UintKind, false, "64", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -143,7 +145,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.FloatKind,
 			nullable:   NotNull,
-			defaultVal: "33.33",
+			defaultVal: mustStringToColumnDefault("33.33"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.FloatKind, false, "33.33", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -154,7 +156,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.BoolKind,
 			nullable:   NotNull,
-			defaultVal: "true",
+			defaultVal: mustStringToColumnDefault("true"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.BoolKind, false, "true", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -165,7 +167,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.UUIDKind,
 			nullable:   NotNull,
-			defaultVal: `"00000000-0000-0000-0000-000000000000"`,
+			defaultVal: mustStringToColumnDefault(`"00000000-0000-0000-0000-000000000000"`),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.UUIDKind, false, `"00000000-0000-0000-0000-000000000000"`, schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t,
@@ -177,7 +179,6 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			defaultVal: "",
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "")),
 			expectedRows: dtestutils.TypedRows,
@@ -188,7 +189,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			defaultVal: "42",
+			defaultVal: mustStringToColumnDefault("42"),
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "42")),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -199,7 +200,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			defaultVal: "42",
+			defaultVal: mustStringToColumnDefault("42"),
 			order:      &ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumn("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
@@ -217,7 +218,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName: "newCol",
 			colKind:    types.IntKind,
 			nullable:   Null,
-			defaultVal: "42",
+			defaultVal: mustStringToColumnDefault("42"),
 			order:      &ColumnOrder{After: "age"},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -235,7 +236,6 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName:  "newCol",
 			colKind:     types.IntKind,
 			nullable:    NotNull,
-			defaultVal:  "",
 			expectedErr: fmt.Sprintf("Cannot create column newCol, the tag %d was already used in table people", dtestutils.AgeTag),
 		},
 		{
@@ -244,7 +244,7 @@ func TestAddColumnToTable(t *testing.T) {
 			newColName:  "age",
 			colKind:     types.IntKind,
 			nullable:    NotNull,
-			defaultVal:  "10",
+			defaultVal:  mustStringToColumnDefault("10"),
 			expectedErr: "A column with the name age already exists",
 		},
 	}
@@ -299,6 +299,14 @@ func TestAddColumnToTable(t *testing.T) {
 			assert.Greater(t, indexRowData.Len(), uint64(0))
 		})
 	}
+}
+
+func mustStringToColumnDefault(defaultString string) *sql.ColumnDefaultValue {
+	def, err := parse.StringToColumnDefaultValue(sql.NewEmptyContext(), defaultString)
+	if err != nil {
+		panic(err)
+	}
+	return def
 }
 
 func schemaNewColumn(name string, tag uint64, kind types.NomsKind, partOfPK bool, defaultVal string, constraints ...schema.ColConstraint) schema.Column {

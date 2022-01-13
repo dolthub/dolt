@@ -183,7 +183,7 @@ func newRow(sch schema.Schema, id int, first, last string) row.Row {
 		2: types.String(last),
 	}
 
-	r, err := row.New(types.Format_LD_1, sch, vals)
+	r, err := row.New(types.Format_Default, sch, vals)
 
 	if err != nil {
 		panic(err)
