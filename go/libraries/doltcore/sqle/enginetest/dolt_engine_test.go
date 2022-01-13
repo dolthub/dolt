@@ -194,6 +194,9 @@ func TestScripts(t *testing.T) {
 		// but they no longer do.
 		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
 		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
+
+		// no support for naming unique constraints yet, engine dependent
+		"show create table t2",
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
