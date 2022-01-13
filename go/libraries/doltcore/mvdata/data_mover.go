@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -73,12 +71,6 @@ type DataMoverOptions interface {
 type DataMoverCloser interface {
 	table.TableWriteCloser
 	Flush(context.Context) (*doltdb.RootValue, error)
-}
-
-type DataWriter interface {
-	WriteRows(ctx context.Context, inputChannel chan sql.Row, badRowCb func(*pipeline.TransformRowFailure) bool) error
-	Commit(ctx context.Context) error
-	Schema() sql.Schema
 }
 
 type DataMover struct {

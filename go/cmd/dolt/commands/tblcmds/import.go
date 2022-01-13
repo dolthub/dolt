@@ -387,13 +387,7 @@ func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string,
 		return commands.HandleVErrAndExitCode(verr, usage)
 	}
 
-	wrSch, nDMErr := getWriterSchema(ctx, root, dEnv, rd.GetSchema(), mvOpts)
-	if nDMErr != nil {
-		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
-		return commands.HandleVErrAndExitCode(verr, usage)
-	}
-
-	wr, nDMErr := newImportDataWriter(ctx, dEnv, wrSch, mvOpts)
+	wr, nDMErr := newImportSqlEngineMover(ctx, dEnv, rd.GetSchema(), mvOpts)
 	if nDMErr != nil {
 		verr = newDataMoverErrToVerr(mvOpts, nDMErr)
 		return commands.HandleVErrAndExitCode(verr, usage)
@@ -460,13 +454,22 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	return rd, nil
 }
 
-func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-	wrSch, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
+func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineMover, *mvdata.DataMoverCreationError) {
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+
+	// Returns the schema of the table to be created or the existing schema
+	tableSchema, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
 	if dmce != nil {
 		return nil, dmce
 	}
 
-	err := wrSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	// Validate that the schema from files has primary keys.
+	err = tableSchema.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		preImage := imOpts.nameMapper.PreImage(col.Name)
 		_, found := rdSchema.GetAllCols().GetByName(preImage)
 		if !found {
@@ -478,36 +481,24 @@ func getWriterSchema(ctx context.Context, root *doltdb.RootValue, dEnv *env.Dolt
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	// allow subsetting of the final write schema only if it is an update operation. Every other operation must
-	// match perfectly.
-	if wrSch.GetAllCols().Size() != rdSchema.GetAllCols().Size() && imOpts.operation == mvdata.UpdateOp {
-		ret := schema.NewColCollection()
-
-		rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			wrColName := imOpts.nameMapper.Map(col.Name)
-			wrCol, ok := wrSch.GetAllCols().GetByName(wrColName)
-			if ok {
-				ret = ret.Append(wrCol)
-			}
-
-			return false, nil
-		})
-
-		newSch, err := schema.SchemaFromCols(ret)
-		if err != nil {
-			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	// construct the schema of the set of column to be updated.
+	rowOperationColColl := schema.NewColCollection()
+	rdSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		wrColName := imOpts.nameMapper.Map(col.Name)
+		wrCol, ok := tableSchema.GetAllCols().GetByName(wrColName)
+		if ok {
+			rowOperationColColl = rowOperationColColl.Append(wrCol)
 		}
 
-		return newSch, nil
+		return false, nil
+	})
+
+	rowOperationSchema, err := schema.SchemaFromCols(rowOperationColColl)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	return wrSch, nil
-}
-
-func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema.Schema, imOpts *importOptions) (mvdata.DataWriter, *mvdata.DataMoverCreationError) {
-	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
-
-	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, wrSchema, moveOps, importStatsCB)
+	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
@@ -517,7 +508,7 @@ func newImportDataWriter(ctx context.Context, dEnv *env.DoltEnv, wrSchema schema
 
 type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
 
-func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, options *importOptions) (int64, error) {
+func move(ctx context.Context, rd table.TableReadCloser, wr *mvdata.SqlEngineMover, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Setup the necessary data points for the import job
@@ -581,7 +572,7 @@ func move(ctx context.Context, rd table.TableReadCloser, wr mvdata.DataWriter, o
 
 func moveRows(
 	ctx context.Context,
-	wr mvdata.DataWriter,
+	wr *mvdata.SqlEngineMover,
 	rd table.TableReadCloser,
 	options *importOptions,
 	parsedRowChan chan sql.Row,
@@ -622,7 +613,7 @@ func moveRows(
 				return err
 			}
 		} else {
-			sqlRow, err = NameAndTypeTransform(sqlRow, rdSqlSch.Schema, wr.Schema(), options.nameMapper)
+			sqlRow, err = NameAndTypeTransform(sqlRow, wr.RowOperationSchema(), rdSqlSch, options.nameMapper)
 			if err != nil {
 				return err
 			}
@@ -742,8 +733,10 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 // NameAndTypeTransform does 1) match the read and write schema with subsetting and name matching. 2) Address any
 // type inconsistencies.
-func NameAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) (sql.Row, error) {
-	for i, col := range wrSchema {
+func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) (sql.Row, error) {
+	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
+
+	for i, col := range rowOperationSchema.Schema {
 		switch col.Type {
 		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
 			switch row[i].(type) {
@@ -769,7 +762,7 @@ func NameAndTypeTransform(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper
 		}
 	}
 
-	return matchReadSchemaToWriteSchema(row, rdSchema, wrSchema, nameMapper), nil
+	return row, nil
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
@@ -802,22 +795,12 @@ func emptyStringToNil(val interface{}) interface{} {
 	return val
 }
 
-// matchReadSchemaToWriteSchema takes the read schema and accounts for subsetting and mapper (-m) differences.
-func matchReadSchemaToWriteSchema(row sql.Row, rdSchema, wrSchema sql.Schema, nameMapper rowconv.NameMapper) sql.Row {
-	returnRow := sql.Row{}
+func applyMapperToRow(row sql.Row, rowOperationSchema, rdSchema sql.PrimaryKeySchema, nameMapper rowconv.NameMapper) sql.Row {
+	returnRow := make(sql.Row, len(rowOperationSchema.Schema))
 
-	for _, wCol := range wrSchema {
-		seen := false
-		for rIdx, rCol := range rdSchema {
-			if rCol.Name == nameMapper.PreImage(wCol.Name) {
-				returnRow = append(returnRow, row[rIdx])
-				seen = true
-			}
-		}
-
-		if !seen {
-			returnRow = append(returnRow, nil)
-		}
+	for i, col := range rowOperationSchema.Schema {
+		rdIdx := rdSchema.IndexOf(nameMapper.PreImage(col.Name), col.Source)
+		returnRow[i] = row[rdIdx]
 	}
 
 	return returnRow
