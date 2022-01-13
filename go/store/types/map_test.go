@@ -665,6 +665,7 @@ func TestMapHas(t *testing.T) {
 		ref, err := vrw.WriteValue(context.Background(), m)
 		require.NoError(t, err)
 		mval2, err := vrw.ReadValue(context.Background(), ref.TargetHash())
+		require.NoError(t, err)
 		m2 := mval2.(Map)
 		for _, entry := range tm.entries.entries {
 			k, v := entry.key, entry.value
