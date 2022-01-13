@@ -263,7 +263,6 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
-
 // WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
 // This function assumes v is a valid spatial type
 func WriteEWKBHeader(v interface{}, buf []byte) {
@@ -299,21 +298,21 @@ func WriteEWKBPointData(p interface{}, buf []byte) {
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l interface{}, buf[] byte) {
+func WriteEWKBLineData(l interface{}, buf []byte) {
 	switch l := l.(type) {
 	case sql.Linestring:
 		// Write length of linestring
 		binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
 		// Append each point
 		for i, p := range l.Points {
-			WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+			WriteEWKBPointData(p, buf[4+16*i:4+16*(i+1)])
 		}
 	case types.Linestring:
 		// Write length of linestring
 		binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
 		// Append each point
 		for i, p := range l.Points {
-			WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+			WriteEWKBPointData(p, buf[4+16*i:4+16*(i+1)])
 		}
 	}
 }
@@ -327,7 +326,7 @@ func WriteEWKBPolyData(p interface{}, buf []byte) {
 		// Write each line
 		start, stop := 0, 4
 		for _, l := range p.Lines {
-			start, stop = stop, stop + 4 + 16 * len(l.Points)
+			start, stop = stop, stop+4+16*len(l.Points)
 			WriteEWKBLineData(l, buf[start:stop])
 		}
 	case types.Polygon:
@@ -336,7 +335,7 @@ func WriteEWKBPolyData(p interface{}, buf []byte) {
 		// Write each line
 		start, stop := 0, 4
 		for _, l := range p.Lines {
-			start, stop = stop, stop + 4 + 16 * len(l.Points)
+			start, stop = stop, stop+4+16*len(l.Points)
 			WriteEWKBLineData(l, buf[start:stop])
 		}
 	}
@@ -388,16 +387,16 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			WriteEWKBPointData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case sql.Linestring:
-			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
+			buf := make([]byte, 9+4+16*len(typedCol.Points))
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBLineData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case sql.Polygon:
 			size := 0
 			for _, l := range typedCol.Lines {
-				size += 4 + 16 * len(l.Points)
+				size += 4 + 16*len(l.Points)
 			}
-			buf := make([]byte, 9 + 4 + size)
+			buf := make([]byte, 9+4+size)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPolyData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
@@ -407,16 +406,16 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			WriteEWKBPointData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case types.Linestring:
-			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
+			buf := make([]byte, 9+4+16*len(typedCol.Points))
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBLineData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case types.Polygon:
 			size := 0
 			for _, l := range typedCol.Lines {
-				size += 4 + 16 * len(l.Points)
+				size += 4 + 16*len(l.Points)
 			}
-			buf := make([]byte, 9 + 4 + size)
+			buf := make([]byte, 9+4+size)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPolyData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)

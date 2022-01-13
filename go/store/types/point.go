@@ -35,8 +35,8 @@ import (
 // Point is a Noms Value wrapper around the primitive string type (for now).
 type Point struct {
 	SRID uint32
-	X float64
-	Y float64
+	X    float64
+	Y    float64
 }
 
 // Value interface
@@ -132,10 +132,11 @@ func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	w.writeString(string(buf))
 	return nil
 }
+
 // ParseEWKBHeader converts the header potion of a EWKB byte array to srid, endianness, and geometry type
 func ParseEWKBHeader(buf []byte) (uint32, bool, uint32) {
-	srid := binary.LittleEndian.Uint32(buf[0:4]) // First 4 bytes is SRID always in little endian
-	isBig := buf[4] == 0 // Next byte is endianness
+	srid := binary.LittleEndian.Uint32(buf[0:4])     // First 4 bytes is SRID always in little endian
+	isBig := buf[4] == 0                             // Next byte is endianness
 	geomType := binary.LittleEndian.Uint32(buf[5:9]) // Next 4 bytes is type
 	return srid, isBig, geomType
 }
