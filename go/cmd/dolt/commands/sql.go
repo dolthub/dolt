@@ -746,13 +746,14 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		HistorySearchFold:      true,
 		DisableAutoSaveHistory: true,
 	}
+	supportingMysqlShellCmds := []string{"\\g", "\\G"}
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
 		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
-		// LineTerminators[0] has to be default line terminator, which is `;`
-		LineTerminators: []string{";", "\\g", "\\G"},
+		LineTerminator: ";",
+		MysqlShellCmds: supportingMysqlShellCmds,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -796,14 +797,19 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			shell.Println(color.RedString(err.Error()))
 		}
 
+		returnFormat := se.GetReturnFormat()
+		query = strings.TrimSuffix(query, shell.LineTerminator())
+		for _, sc := range supportingMysqlShellCmds {
+			if strings.HasSuffix(query, "\\G") {
+				returnFormat = engine.FormatVertical
+			}
+			query = strings.TrimSuffix(query, sc)
+		}
+
 		//TODO: Handle comments and enforce the current line terminator
 		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
 			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
-
-			// the current LineTerminator is used to terminate this query, so it could be attached to delimiting character
-			nlt := strings.TrimSuffix(matches[1], shell.LineTerminator())
-
-			shell.SetLineTerminator(nlt)
+			shell.SetLineTerminator(matches[1])
 			return
 		}
 
@@ -830,10 +836,6 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				returnFormat := se.GetReturnFormat()
-				if shell.LineTerminator() == "\\G" {
-					returnFormat = engine.FormatVertical
-				}
 				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))

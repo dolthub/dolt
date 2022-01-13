@@ -172,7 +172,8 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			"quit", "exit", "quit()", "exit()",
 		},
 		// LineTerminators[0] has to be default line terminator, which is `;`
-		LineTerminators: []string{";"},
+		LineTerminator: ";",
+		MysqlShellCmds: []string{},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
