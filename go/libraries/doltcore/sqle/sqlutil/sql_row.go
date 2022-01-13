@@ -287,30 +287,58 @@ func WriteEWKBHeader(v interface{}, buf []byte) {
 
 // WriteEWKBPointData converts a Point into a byte array in EWKB format
 // Very similar to function in GMS
-func WriteEWKBPointData(p sql.Point, buf []byte) {
-	binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
-	binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
+func WriteEWKBPointData(p interface{}, buf []byte) {
+	switch p := p.(type) {
+	case sql.Point:
+		binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
+		binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
+	case types.Point:
+		binary.LittleEndian.PutUint64(buf[0:8], math.Float64bits(p.X))
+		binary.LittleEndian.PutUint64(buf[8:16], math.Float64bits(p.Y))
+	}
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l sql.Linestring, buf[] byte) {
-	// Write length of linestring
-	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
-	// Append each point
-	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+func WriteEWKBLineData(l interface{}, buf[] byte) {
+	switch l := l.(type) {
+	case sql.Linestring:
+		// Write length of linestring
+		binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
+		// Append each point
+		for i, p := range l.Points {
+			WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+		}
+	case types.Linestring:
+		// Write length of linestring
+		binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
+		// Append each point
+		for i, p := range l.Points {
+			WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+		}
 	}
 }
 
 // WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
-func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
-	// Write length of polygon
-	binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
-	// Write each line
-	start, stop := 0, 4
-	for _, l := range p.Lines {
-		start, stop = stop, stop + 4 + 16 * len(l.Points)
-		WriteEWKBLineData(l, buf[start:stop])
+func WriteEWKBPolyData(p interface{}, buf []byte) {
+	switch p := p.(type) {
+	case sql.Polygon:
+		// Write length of polygon
+		binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
+		// Write each line
+		start, stop := 0, 4
+		for _, l := range p.Lines {
+			start, stop = stop, stop + 4 + 16 * len(l.Points)
+			WriteEWKBLineData(l, buf[start:stop])
+		}
+	case types.Polygon:
+		// Write length of polygon
+		binary.LittleEndian.PutUint32(buf[:4], uint32(len(p.Lines)))
+		// Write each line
+		start, stop := 0, 4
+		for _, l := range p.Lines {
+			start, stop = stop, stop + 4 + 16 * len(l.Points)
+			WriteEWKBLineData(l, buf[start:stop])
+		}
 	}
 }
 
@@ -358,7 +386,6 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			buf := make([]byte, 25)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPointData(typedCol, buf[9:])
-			return "asdfasdf"
 			return SqlColToStr(ctx, buf)
 		case sql.Linestring:
 			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
@@ -366,6 +393,25 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			WriteEWKBLineData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case sql.Polygon:
+			size := 0
+			for _, l := range typedCol.Lines {
+				size += 4 + 16 * len(l.Points)
+			}
+			buf := make([]byte, 9 + 4 + size)
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBPolyData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
+		case types.Point:
+			buf := make([]byte, 25)
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBPointData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
+		case types.Linestring:
+			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
+			WriteEWKBHeader(typedCol, buf)
+			WriteEWKBLineData(typedCol, buf[9:])
+			return SqlColToStr(ctx, buf)
+		case types.Polygon:
 			size := 0
 			for _, l := range typedCol.Lines {
 				size += 4 + 16 * len(l.Points)
