@@ -55,7 +55,7 @@ func ApplyDefaults(
 			oldSqlRow[i] = nil
 		}
 	}
-	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, colIdx, oldSqlRow)
+	newSqlRow, err := sqle.ApplyDefaults(sqlCtx, sqlSchema, []int{colIdx}, oldSqlRow)
 	if err != nil {
 		return nil, err
 	}
