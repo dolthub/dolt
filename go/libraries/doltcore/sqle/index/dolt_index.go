@@ -24,7 +24,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type DoltIndex interface {
@@ -68,6 +71,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	}
 
 	cols := sch.GetPKCols().GetColumns()
+	keyBld := maybeGetKeyBuilder(tableRows)
 
 	return doltIndex{
 		id:        "PRIMARY",
@@ -81,6 +85,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		indexRows: tableRows,
 		tableRows: tableRows,
 		vrw:       t.ValueReadWriter(),
+		keyBld:    keyBld,
 	}, nil
 }
 
@@ -100,6 +105,8 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		cols[i], _ = idx.GetColumn(tag)
 	}
 
+	keyBld := maybeGetKeyBuilder(indexRows)
+
 	return doltIndex{
 		id:        idx.Name(),
 		tblName:   tbl,
@@ -112,6 +119,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexRows: indexRows,
 		tableRows: tableRows,
 		vrw:       t.ValueReadWriter(),
+		keyBld:    keyBld,
 	}, nil
 }
 
@@ -129,7 +137,8 @@ type doltIndex struct {
 	unique    bool
 	comment   string
 
-	vrw types.ValueReadWriter
+	vrw    types.ValueReadWriter
+	keyBld *val.TupleBuilder
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -152,7 +161,37 @@ func (di doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexL
 		return nil, nil
 	}
 
-	// This might remain nil if the given ranges each contain an EmptyRange for one of the columns. This will just
+	if types.IsFormat_DOLT_1(di.vrw.Format()) {
+		return di.newProllyLookup(ctx, ranges...)
+	}
+
+	return di.newNomsLookup(ctx, ranges...)
+}
+
+func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	var err error
+	sqlRanges, err := pruneEmptyRanges(ranges)
+	if err != nil {
+		return nil, err
+	}
+
+	prs := make([]prolly.Range, len(sqlRanges))
+	for i, sr := range sqlRanges {
+		prs[i], err = prollyRangeFromSqlRange(sr, di.keyBld)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &doltIndexLookup{
+		idx:          di,
+		prollyRanges: prs,
+		sqlRanges:    sqlRanges,
+	}, nil
+}
+
+func (di doltIndex) newNomsLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
 	// cause the lookup to return no rows, which is the desired behavior.
 	var readRanges []*noms.ReadRange
 RangeLoop:
@@ -241,9 +280,9 @@ RangeLoop:
 	}
 
 	return &doltIndexLookup{
-		idx:       di,
-		ranges:    readRanges,
-		sqlRanges: ranges,
+		idx:        di,
+		nomsRanges: readRanges,
+		sqlRanges:  ranges,
 	}, nil
 }
 
@@ -336,4 +375,89 @@ func (di doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tup
 		vals[2*i+1] = val
 	}
 	return types.NewTuple(nbf, vals...)
+}
+
+var sharePool = pool.NewBuffPool()
+
+func maybeGetKeyBuilder(idx durable.Index) *val.TupleBuilder {
+	if types.IsFormat_DOLT_1(idx.Format()) {
+		kd, _ := durable.ProllyMapFromIndex(idx).Descriptors()
+		return val.NewTupleBuilder(kd)
+	}
+	return nil
+}
+
+func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
+	pruned = make([]sql.Range, 0, len(sqlRanges))
+	for _, sr := range sqlRanges {
+		empty := false
+		for _, colExpr := range sr {
+			empty, err = colExpr.IsEmpty()
+			if err != nil {
+				return nil, err
+			} else if empty {
+				// one of the RangeColumnExprs in |sr|
+				// is empty: prune the entire range
+				break
+			}
+		}
+		if !empty {
+			pruned = append(pruned, sr)
+		}
+	}
+	return pruned, nil
+}
+
+func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prolly.Range, err error) {
+	var lower, upper []sql.RangeCut
+	for _, expr := range sqlRange {
+		lower = append(lower, expr.LowerBound)
+		upper = append(upper, expr.UpperBound)
+	}
+
+	start := prolly.RangeCut{Inclusive: true}
+	startFields := sql.Row{}
+	for _, sc := range lower {
+		if !isBindingCut(sc) {
+			start = prolly.RangeCut{Unbound: true, Inclusive: false}
+			break
+		}
+		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
+		startFields = append(startFields, sql.GetRangeCutKey(sc))
+	}
+	if !start.Unbound {
+		start.Key = tupleFromKeys(startFields, tb)
+	}
+
+	stop := prolly.RangeCut{Inclusive: true}
+	stopFields := sql.Row{}
+	for _, sc := range upper {
+		if !isBindingCut(sc) {
+			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
+			break
+		}
+		stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
+		stopFields = append(stopFields, sql.GetRangeCutKey(sc))
+	}
+	if !stop.Unbound {
+		stop.Key = tupleFromKeys(stopFields, tb)
+	}
+
+	return prolly.Range{
+		Start:   start,
+		Stop:    stop,
+		KeyDesc: tb.Desc,
+		Reverse: false,
+	}, nil
+}
+
+func isBindingCut(cut sql.RangeCut) bool {
+	return cut != sql.BelowAll{} && cut != sql.AboveAll{}
+}
+
+func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) val.Tuple {
+	for i, v := range keys {
+		tb.PutField(i, v)
+	}
+	return tb.Build(sharePool)
 }

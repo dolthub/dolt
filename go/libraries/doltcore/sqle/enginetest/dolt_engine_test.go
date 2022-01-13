@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func init() {
@@ -63,6 +64,26 @@ func TestSingleQuery(t *testing.T) {
 	engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
+}
+
+func TestSingleQueryNewFormat(t *testing.T) {
+	//t.Skip()
+
+	var test enginetest.QueryTest
+	test = enginetest.QueryTest{
+		Query:    `SELECT s FROM myTable WHERE i = 1`,
+		Expected: []sql.Row{{int64(1), "first row"}},
+	}
+
+	_ = types.TestFormatDolt1(func() error {
+		harness := newDoltHarness(t)
+		engine := enginetest.NewEngine(t, harness)
+		engine.Analyzer.Debug = false
+		engine.Analyzer.Verbose = false
+
+		enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
+		return nil
+	})
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.

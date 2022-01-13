@@ -121,7 +121,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	return engine, dEnv, roots.Working, db, it
 }
 
-// indexTuple converts integers into the appropriate tuple for comparison against ranges
+// indexTuple converts integers into the appropriate tuple for comparison against nomsRanges
 type indexTuple struct {
 	nbf  *types.NomsBinFormat
 	cols []schema.Column

@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -33,7 +34,7 @@ func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []stri
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
-	return RowIterForRanges(ctx, idx, lookup.ranges, lookup.IndexRowData(), columns)
+	return RowIterForRanges(ctx, idx, lookup.nomsRanges, lookup.IndexRowData(), columns)
 }
 
 func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
@@ -79,25 +80,34 @@ func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 
 func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
 	rp := part.(rangePartition)
-	ranges := []*noms.ReadRange{rp.partitionRange}
-	return RowIterForRanges(ctx, idx.(DoltIndex), ranges, rp.rowData, projectedCols)
+	di := idx.(DoltIndex)
+
+	if types.IsFormat_DOLT_1(rp.rows.Format()) {
+		pr := durable.ProllyMapFromIndex(rp.rows)
+		return NewProllyRowIter(ctx, di.Schema(), pr, rp.prollyRange, projectedCols)
+	}
+
+	ranges := []*noms.ReadRange{rp.nomsRange}
+	return RowIterForRanges(ctx, di, ranges, rp.rows, projectedCols)
 }
 
 func NewRangePartitionIter(lookup sql.IndexLookup) sql.PartitionIter {
 	dlu := lookup.(*doltIndexLookup)
 	return &rangePartitionIter{
-		ranges:  dlu.ranges,
-		curr:    0,
-		mu:      &sync.Mutex{},
-		rowData: dlu.IndexRowData(),
+		nomsRanges:   dlu.nomsRanges,
+		prollyRanges: dlu.prollyRanges,
+		curr:         0,
+		mu:           &sync.Mutex{},
+		rowData:      dlu.IndexRowData(),
 	}
 }
 
 type rangePartitionIter struct {
-	ranges  []*noms.ReadRange
-	curr    int
-	mu      *sync.Mutex
-	rowData durable.Index
+	nomsRanges   []*noms.ReadRange
+	prollyRanges []prolly.Range
+	curr         int
+	mu           *sync.Mutex
+	rowData      durable.Index
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -110,32 +120,62 @@ func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
 	itr.mu.Lock()
 	defer itr.mu.Unlock()
 
-	if itr.curr >= len(itr.ranges) {
+	if types.IsFormat_DOLT_1(itr.rowData.Format()) {
+		return itr.nextProllyPartition()
+	}
+	return itr.nextNomsPartition()
+}
+
+func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
+	if itr.curr >= len(itr.prollyRanges) {
 		return nil, io.EOF
 	}
 
 	var bytes [4]byte
 	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
-	part := rangePartition{itr.ranges[itr.curr], bytes[:], itr.rowData}
+	pr := itr.prollyRanges[itr.curr]
 	itr.curr += 1
 
-	return part, nil
+	return rangePartition{
+		prollyRange: pr,
+		key:         bytes[:],
+		rows:        itr.rowData,
+	}, nil
+}
+
+func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
+	if itr.curr >= len(itr.nomsRanges) {
+		return nil, io.EOF
+	}
+
+	var bytes [4]byte
+	binary.BigEndian.PutUint32(bytes[:], uint32(itr.curr))
+	nr := itr.nomsRanges[itr.curr]
+	itr.curr += 1
+
+	return rangePartition{
+		nomsRange: nr,
+		key:       bytes[:],
+		rows:      itr.rowData,
+	}, nil
 }
 
 type rangePartition struct {
-	partitionRange *noms.ReadRange
-	keyBytes       []byte
-	rowData        durable.Index
+	nomsRange   *noms.ReadRange
+	prollyRange prolly.Range
+	key         []byte
+	rows        durable.Index
 }
 
 func (rp rangePartition) Key() []byte {
-	return rp.keyBytes
+	return rp.key
 }
 
 type doltIndexLookup struct {
-	idx       DoltIndex
-	ranges    []*noms.ReadRange
-	sqlRanges sql.RangeCollection
+	idx          DoltIndex
+	nomsRanges   []*noms.ReadRange
+	prollyRanges []prolly.Range
+	sqlRanges    sql.RangeCollection
 }
 
 var _ sql.IndexLookup = (*doltIndexLookup)(nil)

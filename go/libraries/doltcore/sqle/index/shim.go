@@ -12,16 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package sqle
+package index
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -41,15 +40,13 @@ type sqlRowIter struct {
 
 var _ sql.RowIter = sqlRowIter{}
 
-func newProllyRowIter(ctx context.Context, tbl *doltdb.Table, projections []string, partition *doltTablePartition) (sql.RowIter, error) {
-	rows := durable.ProllyMapFromIndex(partition.rowData)
-
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
+func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, rng prolly.Range, projections []string) (sql.RowIter, error) {
+	if schema.IsKeyless(sch) {
+		return nil, errors.New("format __DOLT_1__ does not support keyless tables")
 	}
 
-	iter, err := rows.IterRange(ctx, partition.rowRange)
+	iter, err := rows.IterAll(ctx)
+	//iter, err := rows.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
 	}

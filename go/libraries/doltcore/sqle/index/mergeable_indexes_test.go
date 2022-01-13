@@ -32,7 +32,7 @@ import (
 )
 
 // This tests mergeable indexes by using the SQL engine and intercepting specific calls. This way, we can verify that
-// the engine is intersecting and combining the proper number of lookups, and we can also examine the ranges before
+// the engine is intersecting and combining the proper number of lookups, and we can also examine the nomsRanges before
 // they're converted into a format that Noms understands to verify that they were handled correctly. Lastly, we ensure
 // that the final output is as expected.
 func TestMergeableIndexes(t *testing.T) {
@@ -1367,8 +1367,8 @@ func TestMergeableIndexes(t *testing.T) {
 // The correct behavior would be to return the empty range in that example. However, as the SQL engine still filters the
 // returned results, we end up with zero values actually being returned, just like we'd expect from the empty range.
 // As a consequence, I'm leaving these tests in to verify that the overall result is correct, but the intermediate
-// ranges may be incorrect.
-// TODO: disassociate NULL ranges from value ranges and fix the intermediate ranges (finalRanges).
+// nomsRanges may be incorrect.
+// TODO: disassociate NULL nomsRanges from value nomsRanges and fix the intermediate nomsRanges (finalRanges).
 func TestMergeableIndexesNulls(t *testing.T) {
 	engine, denv, root, db, indexTuples := setupIndexes(t, "test", `INSERT INTO test VALUES
 		(0, 10, 20),

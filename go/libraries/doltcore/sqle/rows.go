@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
@@ -114,6 +115,10 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []
 }
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		return ProllyRowIterFromPartition(ctx, tbl, projectedCols, partition)
+	}
+
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
@@ -161,4 +166,13 @@ func (itr *doltTableRowIter) Next() (sql.Row, error) {
 // Close required by sql.RowIter interface
 func (itr *doltTableRowIter) Close(*sql.Context) error {
 	return nil
+}
+
+func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projections []string, partition doltTablePartition) (sql.RowIter, error) {
+	rows := durable.ProllyMapFromIndex(partition.rowData)
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return index.NewProllyRowIter(ctx, sch, rows, partition.rowRange, projections)
 }
