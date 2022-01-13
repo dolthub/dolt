@@ -98,12 +98,12 @@ func WriteEWKBHeader(v interface{}, buf []byte) {
 		// Write SRID and type
 		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
 		binary.LittleEndian.PutUint32(buf[5:9], 1)
-		//case Linestring:
-		//	binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
-		//	binary.LittleEndian.PutUint32(buf[5:9], 2)
-		//case Polygon:
-		//	binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
-		//	binary.LittleEndian.PutUint32(buf[5:9], 3)
+	case Linestring:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 2)
+	case Polygon:
+		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
+		binary.LittleEndian.PutUint32(buf[5:9], 3)
 	}
 }
 
@@ -115,6 +115,7 @@ func WriteEWKBPointData(p Point, buf []byte) {
 }
 
 func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	// Mark as PointKind
 	err := PointKind.writeTo(w, nbf)
 	if err != nil {
 		return err
@@ -148,11 +149,20 @@ func ParseEWKBPoint(buf []byte, srid uint32) Point {
 	return Point{SRID: srid, X: x, Y: y}
 }
 
+func readPoint(nbf *NomsBinFormat, b *valueDecoder) (Point, error) {
+	buf := []byte(b.ReadString())
+	srid, _, geomType := ParseEWKBHeader(buf) // Assume it's always little endian
+	if geomType != 1 {
+		return Point{}, errors.New("not a point")
+	}
+	return ParseEWKBPoint(buf[9:], srid), nil
+}
+
 func (v Point) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := ParseEWKBHeader(buf) // Assume it's always little endian
 	if geomType != 1 {
-		return nil, errors.New("not a point")
+		return Point{}, errors.New("not a point")
 	}
 	return ParseEWKBPoint(buf[9:], srid), nil
 }

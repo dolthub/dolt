@@ -59,7 +59,7 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	k := reader.ReadKind()
 	switch k {
 	case types.LinestringKind:
-		return reader.ReadString(), nil
+		return reader.ReadLinestring()
 	case types.NullKind:
 		return nil, nil
 	}

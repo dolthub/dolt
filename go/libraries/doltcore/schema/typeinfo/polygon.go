@@ -59,7 +59,7 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 	k := reader.ReadKind()
 	switch k {
 	case types.PolygonKind:
-		return reader.ReadString(), nil
+		return reader.ReadPolygon()
 	case types.NullKind:
 		return nil, nil
 	}

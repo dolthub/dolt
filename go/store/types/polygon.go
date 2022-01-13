@@ -175,6 +175,15 @@ func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
 	return Polygon{SRID: srid, Lines: lines}
 }
 
+func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
+	buf := []byte(b.ReadString())
+	srid, _, geomType := ParseEWKBHeader(buf)
+	if geomType != 3 {
+		return Polygon{}, errors.New("not a polygon")
+	}
+	return ParseEWKBToPoly(buf[9:], srid), nil
+}
+
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := ParseEWKBHeader(buf)

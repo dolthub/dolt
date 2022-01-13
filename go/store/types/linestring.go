@@ -168,6 +168,15 @@ func ParseEWKBLine(buf []byte, srid uint32) Linestring {
 	return Linestring{SRID: srid, Points: points}
 }
 
+func readLinestring(nbf *NomsBinFormat, b *valueDecoder) (Linestring, error) {
+	buf := []byte(b.ReadString())
+	srid, _, geomType := ParseEWKBHeader(buf)
+	if geomType != 2 {
+		return Linestring{}, errors.New("not a linestring")
+	}
+	return ParseEWKBLine(buf[9:], srid), nil
+}
+
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := ParseEWKBHeader(buf)
@@ -175,7 +184,6 @@ func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, er
 		return nil, errors.New("not a linestring")
 	}
 	return ParseEWKBLine(buf[9:], srid), nil
-
 }
 
 func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

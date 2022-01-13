@@ -54,7 +54,7 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	k := reader.ReadKind()
 	switch k {
 	case types.PointKind:
-		return reader.ReadString(), nil
+		return reader.ReadPoint()
 	case types.NullKind:
 		return nil, nil
 	default:

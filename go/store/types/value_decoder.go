@@ -46,6 +46,9 @@ type CodecReader interface {
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
+	ReadPoint() (Point, error)
+	ReadLinestring() (Linestring, error)
+	ReadPolygon() (Polygon, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
 }
@@ -78,6 +81,18 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 		return Blob{}, err
 	}
 	return newBlob(seq), nil
+}
+
+func (r *valueDecoder) ReadPoint() (Point, error) {
+	return readPoint(r.vrw.Format(), r)
+}
+
+func (r *valueDecoder) ReadLinestring() (Linestring, error) {
+	return readLinestring(r.vrw.Format(), r)
+}
+
+func (r *valueDecoder) ReadPolygon() (Polygon, error) {
+	return readPolygon(r.vrw.Format(), r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
