@@ -2,8 +2,8 @@
 set -e
 set -o pipefail
 
-# SYSBENCH_TEST="oltp_point_select"
-SYSBENCH_TEST="covering_index_scan.lua"
+#SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="table_scan"
 
 TMP_DIR=`mktemp -d`
 cp ./lua/* "$TMP_DIR"

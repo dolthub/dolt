@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
@@ -140,9 +141,9 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 	case query.Type_UINT16:
 		return val.Uint16Enc
 	case query.Type_INT24:
-		panic("24 bit")
+		return val.Int32Enc
 	case query.Type_UINT24:
-		panic("24 bit")
+		return val.Uint32Enc
 	case query.Type_INT32:
 		return val.Int32Enc
 	case query.Type_UINT32:
@@ -155,6 +156,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.Float32Enc
 	case query.Type_FLOAT64:
 		return val.Float64Enc
+	case query.Type_BIT:
+		return val.BytesEnc
 	case query.Type_BINARY:
 		return val.BytesEnc
 	case query.Type_VARBINARY:
@@ -170,6 +173,6 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 	case query.Type_JSON:
 		return val.JSONEnc
 	default:
-		panic("unknown noms kind")
+		panic(fmt.Sprintf("unknown noms kind %v", typ))
 	}
 }

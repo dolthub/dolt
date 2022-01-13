@@ -181,10 +181,10 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutInt16(i, int16(convInt(v)))
 	case Uint16Enc:
 		tb.PutUint16(i, uint16(convUint(v)))
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
+	//case Int24Enc:
+	//	panic("24 bit")
+	//case Uint24Enc:
+	//	panic("24 bit")
 	case Int32Enc:
 		tb.PutInt32(i, int32(convInt(v)))
 	case Uint32Enc:

@@ -247,10 +247,10 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetInt16(i, tup)
 	case Uint16Enc:
 		v, ok = td.GetUint16(i, tup)
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
+	//case Int24Enc:
+	//	panic("24 bit")
+	//case Uint24Enc:
+	//	panic("24 bit")
 	case Int32Enc:
 		v, ok = td.GetInt32(i, tup)
 	case Uint32Enc:
@@ -315,10 +315,10 @@ func (td TupleDesc) Format(tup Tuple) string {
 		case Uint16Enc:
 			v, _ := td.GetUint16(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
-		case Int24Enc:
-			panic("24 bit")
-		case Uint24Enc:
-			panic("24 bit")
+		//case Int24Enc:
+		//	panic("24 bit")
+		//case Uint24Enc:
+		//	panic("24 bit")
 		case Int32Enc:
 			v, _ := td.GetInt32(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))

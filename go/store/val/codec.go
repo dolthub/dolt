@@ -59,13 +59,13 @@ type Encoding uint8
 
 // Constant Size Encodings
 const (
-	NullEnc    Encoding = 0
-	Int8Enc    Encoding = 1
-	Uint8Enc   Encoding = 2
-	Int16Enc   Encoding = 3
-	Uint16Enc  Encoding = 4
-	Int24Enc   Encoding = 5
-	Uint24Enc  Encoding = 6
+	NullEnc   Encoding = 0
+	Int8Enc   Encoding = 1
+	Uint8Enc  Encoding = 2
+	Int16Enc  Encoding = 3
+	Uint16Enc Encoding = 4
+	// Int24Enc   Encoding = 5
+	// Uint24Enc  Encoding = 6
 	Int32Enc   Encoding = 7
 	Uint32Enc  Encoding = 8
 	Int64Enc   Encoding = 9
@@ -309,10 +309,10 @@ func compare(typ Type, left, right []byte) int {
 		return compareInt16(ReadInt16(left), ReadInt16(right))
 	case Uint16Enc:
 		return compareUint16(ReadUint16(left), ReadUint16(right))
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
+	//case Int24Enc:
+	//	panic("24 bit")
+	//case Uint24Enc:
+	//	panic("24 bit")
 	case Int32Enc:
 		return compareInt32(ReadInt32(left), ReadInt32(right))
 	case Uint32Enc:
@@ -481,8 +481,8 @@ var rawCmpLookup = map[Encoding]rawCmp{
 	Uint8Enc:  {0},
 	Int16Enc:  {1, 0},
 	Uint16Enc: {1, 0},
-	Int24Enc:  {2, 1, 0},
-	Uint24Enc: {2, 1, 0},
+	//Int24Enc:  {2, 1, 0},
+	//Uint24Enc: {2, 1, 0},
 	Int32Enc:  {3, 2, 1, 0},
 	Uint32Enc: {3, 2, 1, 0},
 	Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
