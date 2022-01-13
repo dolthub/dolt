@@ -94,22 +94,12 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "CrossDB Queries",
 			SetUpScript: []string{
-				"CREATE DATABASE test",
-				"CREATE TABLE test.x (pk int primary key)",
-				"insert into test.x values (1),(2),(3)",
-				"DELETE FROM test.x WHERE pk=2",
-				"UPDATE test.x set pk=300 where pk=3",
-				"create table a (xa int primary key, ya int, za int)",
-				"insert into a values (1,2,3)",
+				"create table mytable (i bigint primary key, s varchar(200));",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "SELECT pk from test.x",
-					Expected: []sql.Row{{1}, {300}},
-				},
-				{
-					Query:    "SELECT * from a",
-					Expected: []sql.Row{{1, 2, 3}},
+					Query:    "ALTER TABLE mytable ADD COLUMN s2 TEXT COMMENT 'hello' AFTER i",
+					Expected: nil,
 				},
 			},
 		},
@@ -225,6 +215,9 @@ func TestScripts(t *testing.T) {
 		// but they no longer do.
 		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
 		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
+
+		// no support for naming unique constraints yet, engine dependent
+		"show create table t2",
 	}
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
