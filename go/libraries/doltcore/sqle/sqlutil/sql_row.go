@@ -292,12 +292,12 @@ func WriteEWKBPointData(p sql.Point, buf []byte) {
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l sql.Linestring, buf[] byte) {
+func WriteEWKBLineData(l sql.Linestring, buf []byte) {
 	// Write length of linestring
 	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
 	// Append each point
 	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+		WriteEWKBPointData(p, buf[4+16*i:4+16*(i+1)])
 	}
 }
 
@@ -308,7 +308,7 @@ func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
 	// Write each line
 	start, stop := 0, 4
 	for _, l := range p.Lines {
-		start, stop = stop, stop + 4 + 16 * len(l.Points)
+		start, stop = stop, stop+4+16*len(l.Points)
 		WriteEWKBLineData(l, buf[start:stop])
 	}
 }
@@ -366,7 +366,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 		case sql.Polygon:
 			size := 0
 			for _, l := range typedCol.Lines {
-				size += 4 + 16 * len(l.Points)
+				size += 4 + 16*len(l.Points)
 			}
 			buf := make([]byte, 9+4+size)
 			WriteEWKBHeader(typedCol, buf)
