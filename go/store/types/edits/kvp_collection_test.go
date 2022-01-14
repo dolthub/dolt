@@ -66,12 +66,12 @@ func TestKVPCollection(t *testing.T) {
 }
 
 func TestKVPCollectionDestructiveMergeStable(t *testing.T) {
-	left := NewKVPCollection(types.Format_LD_1, types.KVPSlice{
+	left := NewKVPCollection(types.Format_Default, types.KVPSlice{
 		types.KVP{Key: types.Int(0)},
 		types.KVP{Key: types.Int(1)},
 		types.KVP{Key: types.Int(2)},
 	})
-	right := NewKVPCollection(types.Format_LD_1, types.KVPSlice{
+	right := NewKVPCollection(types.Format_Default, types.KVPSlice{
 		types.KVP{Key: types.Int(0), Val: types.Int(0)},
 		types.KVP{Key: types.Int(1), Val: types.Int(0)},
 		types.KVP{Key: types.Int(2), Val: types.Int(0)},

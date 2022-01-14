@@ -136,7 +136,7 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 	}
 
 	for i, index := range sch.Indexes().AllIndexes() {
-		indexData, err := tbl.GetIndexRowData(ctx, index.Name())
+		indexData, err := tbl.GetNomsIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
 		}
@@ -368,7 +368,7 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 }
 
 func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
-	rowData, err := tbl.GetRowData(ctx)
+	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

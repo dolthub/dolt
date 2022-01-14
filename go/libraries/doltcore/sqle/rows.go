@@ -67,7 +67,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -82,7 +82,7 @@ func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, part
 	}
 }
 
-func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
@@ -113,7 +113,7 @@ func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []
 	}, nil
 }
 
-func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition *doltTablePartition) (sql.RowIter, error) {
+func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
@@ -128,13 +128,11 @@ func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []str
 	return index.NewDoltMapIter(mapIter.NextTuple, nil, conv), nil
 }
 
-func iterForPartition(ctx context.Context, partition *doltTablePartition) (types.MapTupleIterator, error) {
-	rowData := partition.rowData
+func iterForPartition(ctx context.Context, partition doltTablePartition) (types.MapTupleIterator, error) {
 	if partition.end == NoUpperBound {
-		return rowData.RangeIterator(ctx, 0, rowData.Len())
-	} else {
-		return partition.IteratorForPartition(ctx, rowData)
+		partition.end = partition.rowData.Count()
 	}
+	return partition.IteratorForPartition(ctx, partition.rowData)
 }
 
 func getTagToResColIdx(ctx context.Context, tbl *doltdb.Table, projectedCols []string) ([]schema.Column, map[uint64]int, error) {

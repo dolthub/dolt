@@ -323,7 +323,7 @@ func GetAllRows(root *doltdb.RootValue, tableName string) ([]row.Row, error) {
 		return nil, err
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 
 	if err != nil {
 		return nil, err
@@ -513,7 +513,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 		var rowData types.Map
 		if updates.NewRowData == nil {
 			if ok {
-				rowData, err = tbl.GetRowData(ctx)
+				rowData, err = tbl.GetNomsRowData(ctx)
 				require.NoError(t, err)
 			} else {
 				rowData, err = types.NewMap(ctx, root.VRW())

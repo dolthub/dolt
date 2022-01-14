@@ -337,7 +337,7 @@ func rowsFromCommit(ctx context.Context, commit *doltdb.Commit, tableName string
 		return types.EmptyMap, fmt.Errorf("no table named %s found", tableName)
 	}
 
-	rowData, err := table.GetRowData(ctx)
+	rowData, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}

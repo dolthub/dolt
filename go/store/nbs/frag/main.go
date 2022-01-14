@@ -95,7 +95,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ref, err := types.NewRef(dss, types.Format_7_18)
+	ref, err := types.NewRef(dss, types.Format_Default)
 	d.PanicIfError(err)
 	height := ref.Height()
 	fmt.Println("Store is of height", height)
@@ -132,7 +132,7 @@ func main() {
 		orderedChildren := hash.HashSlice{}
 		nextLevel := hash.HashSlice{}
 		for _, h := range current {
-			_ = currentValues[h].WalkRefs(types.Format_7_18, func(r types.Ref) error {
+			_ = currentValues[h].WalkRefs(types.Format_Default, func(r types.Ref) error {
 				target := r.TargetHash()
 				orderedChildren = append(orderedChildren, target)
 				if !visited[target] && r.Height() > 1 {

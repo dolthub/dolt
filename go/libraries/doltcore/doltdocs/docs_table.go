@@ -28,7 +28,7 @@ import (
 
 // updateDocsTable takes in docTbl param and updates it with the value in docs. It returns the updated table.
 func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*doltdb.Table, error) {
-	m, err := docTbl.GetRowData(ctx)
+	m, err := docTbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func getDocTextFromTbl(ctx context.Context, tbl *doltdb.Table, sch *schema.Schem
 
 // getDocRow returns the associated row of a particular doc from the docTbl given.
 func getDocRow(ctx context.Context, docTbl *doltdb.Table, sch schema.Schema, key types.Tuple) (r row.Row, ok bool, err error) {
-	rowMap, err := docTbl.GetRowData(ctx)
+	rowMap, err := docTbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, false, err
 	}
@@ -242,7 +242,7 @@ func getDocsFromTable(ctx context.Context, table *doltdb.Table) (Docs, error) {
 		return nil, err
 	}
 
-	rows, err := table.GetRowData(ctx)
+	rows, err := table.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err
 	}

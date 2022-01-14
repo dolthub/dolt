@@ -95,7 +95,7 @@ func TestRenameTable(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tt.expectedSchema, sch)
 
-			rowData, err := newTable.GetRowData(ctx)
+			rowData, err := newTable.GetNomsRowData(ctx)
 			require.NoError(t, err)
 			var foundRows []row.Row
 			err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {

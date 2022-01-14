@@ -27,7 +27,7 @@ import (
 
 func TestLog(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	err := dEnv.InitRepo(context.Background(), types.Format_7_18, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bigbillieb@fake.horse", env.DefaultInitBranch)
 
 	if err != nil {
 		t.Error("Failed to init repo")

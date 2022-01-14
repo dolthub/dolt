@@ -55,6 +55,36 @@ CREATE TABLE persons (
     Age int CHECK (Age>=18)
 );
 SQL
+
+    cat <<SQL > nibrs_month_sch.sql
+CREATE TABLE \`test\` (
+  \`STATE_ID\` smallint NOT NULL,
+  \`NIBRS_MONTH_ID\` bigint NOT NULL,
+  \`AGENCY_ID\` bigint NOT NULL,
+  \`AGENCY_TABLE_TYPE_ID\` smallint NOT NULL,
+  \`MONTH_NUM\` smallint NOT NULL,
+  \`DATA_YEAR\` smallint NOT NULL,
+  \`REPORTED_STATUS\` varchar(1) collate utf8mb4_0900_ai_ci,
+  \`REPORT_DATE\` timestamp,
+  \`UPDATE_FLAG\` char(1) collate utf8mb4_0900_ai_ci,
+  \`ORIG_FORMAT\` char(1) collate utf8mb4_0900_ai_ci,
+  \`DATA_HOME\` varchar(1) collate utf8mb4_0900_ai_ci,
+  \`DDOCNAME\` varchar(50) collate utf8mb4_0900_ai_ci,
+  \`DID\` bigint,
+  \`MONTH_PUB_STATUS\` int,
+  \`INC_DATA_YEAR\` int,
+  PRIMARY KEY (\`STATE_ID\`,\`NIBRS_MONTH_ID\`,\`DATA_YEAR\`),
+  KEY \`AGENCY_TABLE_TYPE_ID\` (\`AGENCY_TABLE_TYPE_ID\`),
+  KEY \`DATA_YEAR_INDEX\` (\`DATA_YEAR\`),
+  KEY \`NIBRS_MONTH_ID_INDEX\` (\`NIBRS_MONTH_ID\`),
+  KEY \`STATE_ID_INDEX\` (\`STATE_ID\`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+SQL
+
+    cat <<CSV > nibrs_month_csv.csv
+INC_DATA_YEAR,NIBRS_MONTH_ID,AGENCY_ID,MONTH_NUM,DATA_YEAR,REPORTED_STATUS,REPORT_DATE,UPDATE_FLAG,ORIG_FORMAT,DATA_HOME,DDOCNAME,DID,MONTH_PUB_STATUS,STATE_ID,AGENCY_TABLE_TYPE_ID
+2019,9128595,9305,3,2019,I,2019-07-18,Y,F,C,2019_03_MN0510000_NIBRS,49502383,0,27,2
+CSV
 }
 
 teardown() {
@@ -417,4 +447,188 @@ DELIM
 
     run dolt sql -q "select count(*) from t"
     [[ "$output" =~ "5" ]] || false
+}
+
+@test "import-update-tables: string too large for column regression" {
+    dolt sql < nibrs_month_sch.sql
+    run dolt table import -u test nibrs_month_csv.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}
+
+@test "import-update-tables: csv subsetting throws error with not null column" {
+    cat <<SQL > 1pk5col-ints-def-sch.sql
+CREATE TABLE test (
+  pk int NOT NULL COMMENT 'tag:0',
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int NOT NULL,
+  c5 int,
+  PRIMARY KEY (pk)
+);
+SQL
+     cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c1,c2,c5,c3
+0,1,2,6,3
+DELIM
+
+    dolt sql < 1pk5col-ints-def-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Field 'c4' doesn't have a default value" ]] || false
+}
+
+@test "import-update-tables: csv subsetting but with defaults" {
+   cat <<SQL > 1pk5col-ints-def-sch.sql
+CREATE TABLE test (
+  pk int NOT NULL COMMENT 'tag:0',
+  c1 int,
+  c2 int,
+  c3 int,
+  c4 int DEFAULT 42,
+  c5 int,
+  PRIMARY KEY (pk)
+);
+SQL
+     cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c1,c2,c5,c3
+0,1,2,6,3
+DELIM
+
+    dolt sql < 1pk5col-ints-def-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,2,3,42,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "import-update-tables: csv files has less columns that schema -u" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c1,c2,c5,c3
+0,1,2,6,3
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,2,3,,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "import-update-tables: csv files has same number of columns but different order than schema" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c2,c4,c5,c1,c3
+0,2,4,6,1,3
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,2,3,4,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "import-update-tables: csv files has more column than schema and different order" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c2,c4,c5,c1,c3,c7
+0,2,4,6,1,3,100
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,2,3,4,6" ]
+
+    run dolt sql -q "select count(*) from test"
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "import-update-tables: just update one column in a big table" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+pk,c2
+0,7
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    dolt sql -q "insert into test values (0,1,2,3,4,5)"
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${lines[1]}" = "0,1,7,3,4,5" ]
+}
+
+@test "import-update-tables: updating a table with no primary keys complains" {
+    cat <<DELIM > 1pk5col-ints-updt.csv
+c2
+70
+DELIM
+
+    dolt sql < 1pk5col-ints-sch.sql
+
+    run dolt table import -u test 1pk5col-ints-updt.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error determining the output schema." ]] || false
+}
+
+@test "import-update-tables: partial update on keyless table" {
+     cat <<SQL > schema.sql
+CREATE TABLE keyless (
+    c0 INT,
+    c1 INT DEFAULT 42,
+    c2 INT
+);
+SQL
+
+    dolt sql < schema.sql
+    dolt sql -q "insert into keyless values (0,1,0)"
+
+    cat <<DELIM > data.csv
+c0,c2
+0,2
+DELIM
+
+    run dolt table import -u keyless data.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from keyless order by c0, c1 DESC"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [ "${lines[1]}" = "0,42,2" ]
+    [ "${lines[2]}" = "0,1,0" ]
 }

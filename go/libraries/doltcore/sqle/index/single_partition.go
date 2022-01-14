@@ -18,7 +18,7 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -26,7 +26,7 @@ import (
 var _ sql.Partition = SinglePartition{}
 
 type SinglePartition struct {
-	RowData types.Map
+	RowData durable.Index
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition. We have only a single partition
@@ -39,10 +39,10 @@ var _ sql.PartitionIter = SinglePartitionIter{}
 
 type SinglePartitionIter struct {
 	once    *sync.Once
-	RowData types.Map
+	RowData durable.Index
 }
 
-func SinglePartitionIterFromNomsMap(rowData types.Map) SinglePartitionIter {
+func SinglePartitionIterFromNomsMap(rowData durable.Index) SinglePartitionIter {
 	return SinglePartitionIter{&sync.Once{}, rowData}
 }
 
@@ -57,10 +57,8 @@ func (itr SinglePartitionIter) Next(*sql.Context) (sql.Partition, error) {
 	itr.once.Do(func() {
 		first = true
 	})
-
 	if !first {
 		return nil, io.EOF
 	}
-
 	return SinglePartition{itr.RowData}, nil
 }
