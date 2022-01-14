@@ -30,13 +30,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/mvdata"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -149,7 +148,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		for _, tbl := range tblNames {
 			tblOpts := newTableArgs(tbl, dumpOpts.dest)
 
-			err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
+			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
 			}
@@ -184,10 +183,8 @@ type dumpOptions struct {
 }
 
 type tableOptions struct {
-	tableName  string
-	src        mvdata.TableDataLocation
-	dest       mvdata.DataLocation
-	srcOptions interface{}
+	tableName string
+	dest      mvdata.DataLocation
 }
 
 func (m tableOptions) WritesToTable() bool {
@@ -195,13 +192,10 @@ func (m tableOptions) WritesToTable() bool {
 }
 
 func (m tableOptions) SrcName() string {
-	return m.src.Name
+	return m.tableName
 }
 
 func (m tableOptions) DestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -209,9 +203,6 @@ func (m tableOptions) DestName() string {
 }
 
 func (m dumpOptions) DumpDestName() string {
-	if t, tblDest := m.dest.(mvdata.TableDataLocation); tblDest {
-		return t.Name
-	}
 	if f, fileDest := m.dest.(mvdata.FileDataLocation); fileDest {
 		return f.Path
 	}
@@ -219,21 +210,46 @@ func (m dumpOptions) DumpDestName() string {
 }
 
 // dumpTable dumps table in file given specific table and file location info
-func dumpTable(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
-	mover, verr := NewDumpDataMover(ctx, root, dEnv, tblOpts, importStatsCB, filePath)
-	if verr != nil {
-		return verr
+func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, filePath string) errhand.VerboseError {
+	rd, err := mvdata.NewSqlEngineReader(ctx, dEnv, tblOpts.tableName)
+	if err != nil {
+		return errhand.BuildDError("Error creating reader for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
-	skipped, verr := mvdata.MoveData(ctx, dEnv, mover, tblOpts)
-	if verr != nil {
-		return verr
+	wr, err := getTableWriter(ctx, dEnv, tblOpts, rd.GetSchema(), filePath)
+	if err != nil {
+		return errhand.BuildDError("Error creating writer for %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
-	if skipped > 0 {
-		cli.PrintErrln(color.YellowString("Lines skipped: %d", skipped))
+
+	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
+
+	err = pipeline.Execute()
+	if err != nil {
+		return errhand.BuildDError("Error with dumping %s.", tblOpts.SrcName()).AddCause(err).Build()
 	}
 
 	return nil
+}
+
+func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, outSch schema.Schema, filePath string) (table.SqlTableWriter, errhand.VerboseError) {
+	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+
+	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
+	if err != nil {
+		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(err).Build()
+	}
+
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
+	}
+
+	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, outSch, opts, writer)
+	if err != nil {
+		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
+	}
+
+	return wr, nil
 }
 
 // checkAndCreateOpenDestFile returns filePath to created dest file after checking for any existing file and handles it
@@ -272,13 +288,6 @@ func checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.Read
 		return dest.Exists(ctx, root, fs)
 	}
 	return false, nil
-}
-
-func importStatsCB(stats types.AppliedEditStats) {
-	noEffect := stats.NonExistentDeletes + stats.SameVal
-	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
-	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
 // getDumpDestination returns a dump destination corresponding to the input parameters
@@ -359,7 +368,6 @@ func getDumpOptions(fileName string, rf string) *dumpOptions {
 func newTableArgs(tblName string, destination mvdata.DataLocation) *tableOptions {
 	return &tableOptions{
 		tableName: tblName,
-		src:       mvdata.TableDataLocation{Name: tblName},
 		dest:      destination,
 	}
 }
@@ -387,52 +395,10 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 
 		tblOpts := newTableArgs(tbl, dumpOpts.dest)
 
-		err = dumpTable(ctx, root, dEnv, tblOpts, fPath)
+		err = dumpTable(ctx, dEnv, tblOpts, fPath)
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-// NewDumpDataMover returns dataMover with tableOptions given source table and destination file info
-func NewDumpDataMover(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, tblOpts *tableOptions, statsCB noms.StatsCB, filePath string) (retDataMover *mvdata.DataMover, retErr errhand.VerboseError) {
-	var err error
-
-	rd, srcIsSorted, err := tblOpts.src.NewReader(ctx, root, dEnv.FS, tblOpts.srcOptions)
-	if err != nil {
-		return nil, errhand.BuildDError("Error creating reader for %s.", tblOpts.SrcName()).AddCause(err).Build()
-	}
-
-	// close on err exit
-	defer func() {
-		if rd != nil {
-			rErr := rd.Close(ctx)
-			if rErr != nil {
-				retErr = errhand.BuildDError("Could not close reader for %s.", tblOpts.SrcName()).AddCause(rErr).Build()
-			}
-		}
-	}()
-
-	inSch := rd.GetSchema()
-	outSch := inSch
-
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
-
-	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
-	if err != nil {
-		return nil, errhand.BuildDError("Error opening writer for %s.", tblOpts.DestName()).AddCause(err).Build()
-	}
-
-	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, srcIsSorted, outSch, statsCB, opts, writer)
-	if err != nil {
-		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
-	}
-
-	emptyTransColl := pipeline.NewTransformCollection()
-
-	imp := &mvdata.DataMover{Rd: rd, Transforms: emptyTransColl, Wr: wr, ContOnErr: false}
-	rd = nil
-
-	return imp, nil
 }

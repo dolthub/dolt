@@ -91,16 +91,15 @@ In create, update, and replace scenarios the file's extension is used to infer t
 }
 
 type importOptions struct {
-	operation   mvdata.TableImportOp
-	tableName   string
-	contOnErr   bool
-	force       bool
-	schFile     string
-	primaryKeys []string
-	nameMapper  rowconv.NameMapper
-	src         mvdata.DataLocation
-	dest        mvdata.TableDataLocation
-	srcOptions  interface{}
+	operation     mvdata.TableImportOp
+	destTableName string
+	contOnErr     bool
+	force         bool
+	schFile       string
+	primaryKeys   []string
+	nameMapper    rowconv.NameMapper
+	src           mvdata.DataLocation
+	srcOptions    interface{}
 }
 
 func (m importOptions) WritesToTable() bool {
@@ -108,9 +107,6 @@ func (m importOptions) WritesToTable() bool {
 }
 
 func (m importOptions) SrcName() string {
-	if t, tblSrc := m.src.(mvdata.TableDataLocation); tblSrc {
-		return t.Name
-	}
 	if f, fileSrc := m.src.(mvdata.FileDataLocation); fileSrc {
 		return f.Path
 	}
@@ -118,7 +114,7 @@ func (m importOptions) SrcName() string {
 }
 
 func (m importOptions) DestName() string {
-	return m.dest.Name
+	return m.destTableName
 }
 
 func (m importOptions) ColNameMapper() rowconv.NameMapper {
@@ -131,7 +127,7 @@ func (m importOptions) FloatThreshold() float64 {
 
 func (m importOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValue, fs filesys.ReadableFS) (bool, error) {
 	if !m.force && m.operation == mvdata.CreateOp {
-		return m.dest.Exists(ctx, root, fs)
+		return root.HasTable(ctx, m.destTableName)
 	}
 	return false, nil
 }
@@ -228,19 +224,16 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		}
 	}
 
-	tableLoc := mvdata.TableDataLocation{Name: tableName}
-
 	return &importOptions{
-		operation:   moveOp,
-		tableName:   tableName,
-		contOnErr:   contOnErr,
-		force:       force,
-		schFile:     schemaFile,
-		nameMapper:  colMapper,
-		primaryKeys: pks,
-		src:         srcLoc,
-		dest:        tableLoc,
-		srcOptions:  srcOpts,
+		operation:     moveOp,
+		destTableName: tableName,
+		contOnErr:     contOnErr,
+		force:         force,
+		schFile:       schemaFile,
+		nameMapper:    colMapper,
+		primaryKeys:   pks,
+		src:           srcLoc,
+		srcOptions:    srcOpts,
 	}, nil
 
 }
@@ -284,11 +277,6 @@ func validateImportArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
 	case mvdata.FileDataLocation:
 		if !hasDelim && val.Format == mvdata.InvalidDataFormat {
 			return errhand.BuildDError("Could not infer type file '%s'\nFile extensions should match supported file types, or should be explicitly defined via the file-type parameter", path).Build()
-		}
-
-	case mvdata.TableDataLocation:
-		if hasDelim {
-			return errhand.BuildDError("delim is not a valid parameter for this type of file").Build()
 		}
 	}
 
@@ -434,7 +422,7 @@ func importStatsCB(stats types.AppliedEditStats) {
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 
-func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.TableReadCloser, *mvdata.DataMoverCreationError) {
+func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, impOpts *importOptions) (table.SqlRowReader, *mvdata.DataMoverCreationError) {
 	var err error
 
 	// Checks whether import destination table already exists. This can probably be simplified to not need a root value...
@@ -454,22 +442,17 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 	return rd, nil
 }
 
-func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineMover, *mvdata.DataMoverCreationError) {
-	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.tableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
-
-	root, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
-	}
+func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
 
 	// Returns the schema of the table to be created or the existing schema
-	tableSchema, dmce := getImportSchema(ctx, root, dEnv.FS, imOpts)
+	tableSchema, dmce := getImportSchema(ctx, dEnv, imOpts)
 	if dmce != nil {
 		return nil, dmce
 	}
 
 	// Validate that the schema from files has primary keys.
-	err = tableSchema.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	err := tableSchema.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		preImage := imOpts.nameMapper.PreImage(col.Name)
 		_, found := rdSchema.GetAllCols().GetByName(preImage)
 		if !found {
@@ -498,7 +481,7 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
-	mv, err := mvdata.NewSqlEngineMover(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
+	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
 	}
@@ -508,7 +491,7 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 
 type badRowFn func(trf *pipeline.TransformRowFailure) (quit bool)
 
-func move(ctx context.Context, rd table.TableReadCloser, wr *mvdata.SqlEngineMover, options *importOptions) (int64, error) {
+func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableWriter, options *importOptions) (int64, error) {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// Setup the necessary data points for the import job
@@ -572,32 +555,19 @@ func move(ctx context.Context, rd table.TableReadCloser, wr *mvdata.SqlEngineMov
 
 func moveRows(
 	ctx context.Context,
-	wr *mvdata.SqlEngineMover,
-	rd table.TableReadCloser,
+	wr *mvdata.SqlEngineTableWriter,
+	rd table.SqlRowReader,
 	options *importOptions,
 	parsedRowChan chan sql.Row,
 	badRowCb badRowFn,
 ) error {
-	getNextRow := func(rd table.TableReadCloser) (sql.Row, error) {
-		if srd, ok := rd.(table.SqlRowReader); ok {
-			return srd.ReadSqlRow(ctx)
-		} else {
-			r, err := rd.ReadRow(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			return sqlutil.DoltRowToSqlRow(r, rd.GetSchema())
-		}
-	}
-
-	rdSqlSch, err := sqlutil.FromDoltSchema(options.tableName, rd.GetSchema())
+	rdSqlSch, err := sqlutil.FromDoltSchema(options.destTableName, rd.GetSchema())
 	if err != nil {
 		return err
 	}
 
 	for {
-		sqlRow, err := getNextRow(rd)
+		sqlRow, err := rd.ReadSqlRow(ctx)
 		if err == io.EOF {
 			return nil
 		}
@@ -627,12 +597,17 @@ func moveRows(
 	}
 }
 
-func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Filesys, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
-	if impOpts.schFile != "" {
-		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, fs, root)
+func getImportSchema(ctx context.Context, dEnv *env.DoltEnv, impOpts *importOptions) (schema.Schema, *mvdata.DataMoverCreationError) {
+	root, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
 
-		if err == nil && tn != impOpts.tableName {
-			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.tableName)
+	if impOpts.schFile != "" {
+		tn, out, err := mvdata.SchAndTableNameFromFile(ctx, impOpts.schFile, dEnv.FS, root)
+
+		if err == nil && tn != impOpts.destTableName {
+			err = fmt.Errorf("table name '%s' from schema file %s does not match table arg '%s'", tn, impOpts.schFile, impOpts.destTableName)
 		}
 
 		if err != nil {
@@ -648,7 +623,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return nil, nil
 		}
 
-		rd, _, err := impOpts.src.NewReader(ctx, root, fs, impOpts.srcOptions)
+		rd, _, err := impOpts.src.NewReader(ctx, root, dEnv.FS, impOpts.srcOptions)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 		}
@@ -658,7 +633,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 			return rd.GetSchema(), nil
 		}
 
-		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.tableName, impOpts.primaryKeys, impOpts)
+		outSch, err := mvdata.InferSchema(ctx, root, rd, impOpts.destTableName, impOpts.primaryKeys, impOpts)
 		if err != nil {
 			return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 		}
@@ -667,7 +642,7 @@ func getImportSchema(ctx context.Context, root *doltdb.RootValue, fs filesys.Fil
 	}
 
 	// UpdateOp || ReplaceOp
-	tblRd, _, err := impOpts.dest.NewReader(ctx, root, fs, nil)
+	tblRd, err := mvdata.NewSqlEngineReader(ctx, dEnv, impOpts.destTableName)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateReaderErr, Cause: err}
 	}
@@ -680,19 +655,19 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 	switch err.ErrType {
 	case mvdata.CreateReaderErr:
 		bdr := errhand.BuildDError("Error creating reader for %s.", mvOpts.src.String())
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a reader.", mvOpts.src.String(), mvOpts.destTableName)
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.SchemaErr:
 		bdr := errhand.BuildDError("Error determining the output schema.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not determine the output schema.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(`Schema File: "%s"`, mvOpts.schFile)
 		bdr.AddDetails(`explicit pks: "%s"`, strings.Join(mvOpts.primaryKeys, ","))
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.MappingErr:
 		bdr := errhand.BuildDError("Error determining the mapping from input fields to output fields.")
-		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, determine the mapping from input fields t, output fields.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(`Mapping File: "%s"`, mvOpts.nameMapper)
 		return bdr.AddCause(err.Cause).Build()
 
@@ -703,28 +678,19 @@ func newDataMoverErrToVerr(mvOpts *importOptions, err *mvdata.DataMoverCreationE
 
 	case mvdata.CreateMapperErr:
 		bdr := errhand.BuildDError("Error creating input to output mapper.")
-		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.dest.String())
+		details := fmt.Sprintf("When attempting to move data from %s to %s, could not create a mapper.", mvOpts.src.String(), mvOpts.destTableName)
 		bdr.AddDetails(details)
 		bdr.AddCause(err.Cause)
 
 		return bdr.AddCause(err.Cause).Build()
 
 	case mvdata.CreateWriterErr:
-		if err.Cause == mvdata.ErrNoPK {
-			builder := errhand.BuildDError("Attempting to write to %s with a schema that does not contain a primary key.", mvOpts.dest.String())
-			builder.AddDetails("A primary key is required and can be specified by:\n" +
-				"\tusing -pk option to designate a field as the primary key by name.\n" +
-				"\tusing -schema to provide a schema descriptor file.")
-			return builder.Build()
-		} else {
-			bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.dest.String())
-			bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.dest.String())
-			return bdr.AddCause(err.Cause).Build()
-		}
-
+		bdr := errhand.BuildDError("Error creating writer for %s.\n", mvOpts.destTableName)
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open a writer.", mvOpts.src.String(), mvOpts.destTableName)
+		return bdr.AddCause(err.Cause).Build()
 	case mvdata.CreateSorterErr:
 		bdr := errhand.BuildDError("Error creating sorting reader.")
-		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.dest.String())
+		bdr.AddDetails("When attempting to move data from %s to %s, could not open create sorting reader.", mvOpts.src.String(), mvOpts.destTableName)
 		return bdr.AddCause(err.Cause).Build()
 	}
 
