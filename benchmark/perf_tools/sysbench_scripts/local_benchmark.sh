@@ -2,8 +2,12 @@
 set -e
 set -o pipefail
 
-#SYSBENCH_TEST="oltp_point_select"
-SYSBENCH_TEST="table_scan"
+if [ "$1" = "new" ]; then
+  echo "benchmarking with new binary format"
+  export "DOLT_FORMAT_FEATURE_FLAG"=true
+fi
+
+SYSBENCH_TEST="oltp_point_select"
 
 TMP_DIR=`mktemp -d`
 cp ./lua/* "$TMP_DIR"
@@ -63,3 +67,5 @@ sysbench \
   --mysql-user="user" \
   --mysql-password="pass" \
   "$SYSBENCH_TEST" run
+
+echo "benchmark complete at $TMP_DIR"
