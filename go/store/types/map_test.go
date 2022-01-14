@@ -2172,7 +2172,7 @@ func TestMapIndexForKey(t *testing.T) {
 		numEntries int64
 		numChecks int
 	} {
-		//{name: "multiple levels", numEntries: 1_000_000, numChecks: 10_000},
+		{name: "multiple levels", numEntries: 1_000_000, numChecks: 10_000},
 		{name: "leaves only", numEntries: 100, numChecks: 10},
 	}
 
