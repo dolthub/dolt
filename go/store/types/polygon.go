@@ -158,7 +158,7 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-// ParseEWKBToPoly converts the data portions of a WKB polygon to Point array
+// ParseEWKBToPoly converts the data portions of a WKB polygon to Polygon
 // Very similar logic to the function in GMS
 func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
 	// Read length of Polygon

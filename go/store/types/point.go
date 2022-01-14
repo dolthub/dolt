@@ -140,7 +140,7 @@ func ParseEWKBHeader(buf []byte) (uint32, bool, uint32) {
 	return srid, isBig, geomType
 }
 
-// ParseEWKBPoint converts the data portion of a WKB point to sql.Point
+// ParseEWKBPoint converts the data portion of a WKB point to Point
 // Very similar logic to the function in GMS
 func ParseEWKBPoint(buf []byte, srid uint32) Point {
 	// Read floats x and y
