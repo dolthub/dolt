@@ -263,7 +263,6 @@ func keylessDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, sq
 	return row.KeylessRow(vrw.Format(), vals[:j]...)
 }
 
-
 // WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
 // This function assumes v is a valid spatial type
 func WriteEWKBHeader(v interface{}, buf []byte) {
@@ -360,7 +359,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			WriteEWKBPointData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
 		case sql.Linestring:
-			buf := make([]byte, 9 + 4 + 16 * len(typedCol.Points))
+			buf := make([]byte, 9+4+16*len(typedCol.Points))
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBLineData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
@@ -369,7 +368,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			for _, l := range typedCol.Lines {
 				size += 4 + 16 * len(l.Points)
 			}
-			buf := make([]byte, 9 + 4 + size)
+			buf := make([]byte, 9+4+size)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPolyData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)

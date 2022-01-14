@@ -34,7 +34,7 @@ import (
 
 // Polygon is a Noms Value wrapper around a string.
 type Polygon struct {
-	SRID uint32
+	SRID  uint32
 	Lines []Linestring
 }
 
@@ -130,7 +130,7 @@ func WriteEWKBPolyData(p Polygon, buf []byte) {
 	// Write each line
 	start, stop := 0, 4
 	for _, l := range p.Lines {
-		start, stop = stop, stop + 4 + 16 * len(l.Points)
+		start, stop = stop, stop+4+16*len(l.Points)
 		WriteEWKBLineData(l, buf[start:stop])
 	}
 }
@@ -144,11 +144,11 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	// Calculate space for polygon buffer
 	size := 0
 	for _, l := range v.Lines {
-		size += 4 + 16 * len(l.Points)
+		size += 4 + 16*len(l.Points)
 	}
 
 	// Allocate buffer for poly
-	buf := make([]byte, 9 + 4 + size)
+	buf := make([]byte, 9+4+size)
 
 	// Write header and data to buffer
 	WriteEWKBHeader(v, buf)

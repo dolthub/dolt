@@ -34,7 +34,7 @@ import (
 
 // Linestring is a Noms Value wrapper around a string.
 type Linestring struct {
-	SRID uint32
+	SRID   uint32
 	Points []Point
 }
 
@@ -127,12 +127,12 @@ func (v Linestring) valueReadWriter() ValueReadWriter {
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l Linestring, buf[] byte) {
+func WriteEWKBLineData(l Linestring, buf []byte) {
 	// Write length of linestring
 	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
 	// Append each point
 	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[4 + 16 * i : 4 + 16 * (i + 1)])
+		WriteEWKBPointData(p, buf[4+16*i:4+16*(i+1)])
 	}
 }
 
@@ -143,7 +143,7 @@ func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	}
 
 	// Allocate buffer for linestring
-	buf := make([]byte, 9 + 4 + 16 * len(v.Points))
+	buf := make([]byte, 9+4+16*len(v.Points))
 
 	// Write header and data to buffer
 	WriteEWKBHeader(v, buf)
@@ -162,7 +162,7 @@ func ParseEWKBLine(buf []byte, srid uint32) Linestring {
 	// Parse points
 	points := make([]Point, numPoints)
 	for i := uint32(0); i < numPoints; i++ {
-		points[i] = ParseEWKBPoint(buf[4 + 16 * i : 4 + 16 * (i + 1)], srid)
+		points[i] = ParseEWKBPoint(buf[4+16*i:4+16*(i+1)], srid)
 	}
 
 	return Linestring{SRID: srid, Points: points}
