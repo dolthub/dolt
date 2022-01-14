@@ -44,7 +44,7 @@ func TestLeastPermissiveType(t *testing.T) {
 		expType        typeinfo.TypeInfo
 	}{
 		{"empty string", "", 0.0, typeinfo.UnknownType},
-		{"valid uuid", "bb5891e7-c649-4f0c-86fa-6d852553ec9d", 0.0, typeinfo.UuidType},
+		{"valid uuid", "00000000-0000-0000-0000-000000000000", 0.0, typeinfo.UuidType},
 		{"invalid uuid", "00000000-0000-0000-0000-00000000000z", 0.0, typeinfo.StringDefaultType},
 		{"lower bool", "true", 0.0, typeinfo.BoolType},
 		{"upper bool", "FALSE", 0.0, typeinfo.BoolType},
@@ -315,7 +315,7 @@ func testFindCommonChronologicalType(t *testing.T) {
 }
 
 var oneOfEachKindCSVStr = `uuid,int,uint,float,bool,string
-b8bb5d58-0abe-4425-89e1-c62e018a7ae5,-4,9223372036854775810,-4.1,true,this is
+00000000-0000-0000-0000-000000000000,-4,9223372036854775810,-4.1,true,this is
 f3c600cd-74d3-4c2d-b5a5-88934e7c6018,-3,9223372036854775810,-3.2,false,a test
 0b4fe00e-c690-4fbe-b014-b07f236cd7fd,-2,9223372036854775810,-2.3,TRUE,anything could
 7d85f566-4b60-4cc0-a029-cfb679c3fd8b,-1,9223372036854775810,-1.4,FALSE,be written
