@@ -183,9 +183,8 @@ type dumpOptions struct {
 }
 
 type tableOptions struct {
-	tableName  string
-	dest       mvdata.DataLocation
-	srcOptions interface{}
+	tableName string
+	dest      mvdata.DataLocation
 }
 
 func (m tableOptions) WritesToTable() bool {
