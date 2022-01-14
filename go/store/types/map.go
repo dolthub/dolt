@@ -757,3 +757,72 @@ func VisitMapLevelOrderSized(ms []Map, batchSize int, cb func(h hash.Hash) (int6
 func IsMapLeaf(m Map) bool {
 	return m.isLeaf()
 }
+
+func (m Map) IndexForKey(ctx context.Context, key Value) (int64, error) {
+	orderedKey, err := newOrderedKey(key, m.Format())
+	if err != nil {
+		return 0, err
+	}
+
+	if metaSeq, ok := m.orderedSequence.(metaSequence); ok {
+		return indexForKeyWithinSubtree(ctx, orderedKey, metaSeq, m.valueReadWriter())
+	} else if leaf, ok := m.orderedSequence.(mapLeafSequence); ok {
+		leafIdx, err := leaf.search(orderedKey)
+		if err != nil {
+			return 0, err
+		}
+
+		return int64(leafIdx), nil
+	} else {
+		return 0, errors.New("unknown sequence type")
+	}
+}
+
+func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaSequence, vrw ValueReadWriter) (int64, error) {
+	ts, err := metaSeq.tuples()
+	if err != nil {
+		return 0, err
+	}
+
+	var idx int64
+	for _, t := range ts {
+		tupleKey, err := t.key(vrw)
+		if err != nil {
+			return 0, err
+		}
+
+		isLess, err := key.Less(vrw.Format(), tupleKey)
+		if !isLess {
+			eq := tupleKey.v.Equals(key.v)
+			if eq {
+				return idx + int64(t.numLeaves()-1), nil
+			} else {
+				idx += int64(t.numLeaves())
+			}
+		} else {
+			child, err := t.getChildSequence(ctx, vrw)
+			if err != nil {
+				return 0, err
+			}
+
+			if childMetaSeq, ok := child.(metaSequence); ok {
+				subtreeIdx, err := indexForKeyWithinSubtree(ctx, key, childMetaSeq, vrw)
+				if err != nil {
+					return 0, err
+				}
+				return idx + subtreeIdx, nil
+			} else if leaf, ok := child.(mapLeafSequence); ok {
+				leafIdx, err := leaf.search(key)
+				if err != nil {
+					return 0, err
+				}
+
+				return idx + int64(leafIdx), nil
+			} else {
+				return 0, errors.New("unknown sequence type")
+			}
+		}
+	}
+
+	return idx, nil
+}
