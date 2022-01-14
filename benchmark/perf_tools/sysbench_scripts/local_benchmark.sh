@@ -2,21 +2,41 @@
 set -e
 set -o pipefail
 
-if [ "$1" = "new" ]; then
-  echo "benchmarking with new binary format"
-  export "DOLT_FORMAT_FEATURE_FLAG"=true
-fi
-
 SYSBENCH_TEST="oltp_point_select"
+WORKING_DIR=`mktemp -d`
+PPROF=0
 
-TMP_DIR=`mktemp -d`
-cp ./lua/* "$TMP_DIR"
-cd "$TMP_DIR"
+# parse options
+# superuser.com/questions/186272/
+while test $# -gt 0
+do
+    case "$1" in
 
-echo " "
-echo "running benchmark $SYSBENCH_TEST in $TMP_DIR"
-echo " "
+        # benchmark with new NomsBinFmt
+        --new-nbf) export DOLT_FORMAT_FEATURE_FLAG=true
+            ;;
 
+        # benchmark with pprof profiling
+        --pprof) PPROF=1
+            ;;
+
+        # run dolt single threaded
+        --single) export GOMAXPROCS=1
+            ;;
+
+        # specify sysbench benchmark
+        *) SYSBENCH_TEST="$1"
+            ;;
+
+    esac
+    shift
+done
+
+# collect custom sysbench scripts
+cp ./lua/* "$WORKING_DIR"
+cd "$WORKING_DIR"
+
+# make a sql-server config file
 cat <<YAML > dolt-config.yaml
 log_level: "info"
 
@@ -40,15 +60,18 @@ databases:
     path: "."
 YAML
 
+# start a server
 dolt init
 dolt sql-server --config="dolt-config.yaml" &
 SERVER_PID="$!"
 
+# stop it if it crashes
 cleanup() {
   kill -15 "$SERVER_PID"
 }
 trap cleanup EXIT
 
+# setup benchmark
 sleep 1
 sysbench \
   --mysql-host="0.0.0.0" \
@@ -58,14 +81,26 @@ sysbench \
 
 # restart server to isolate bench run
 kill -15 "$SERVER_PID"
-dolt sql-server --config="dolt-config.yaml" &
-SERVER_PID="$!"
 
+# maybe run with pprof
+if [ "$PPROF" -eq 1 ]; then
+  dolt --prof cpu sql-server --config="dolt-config.yaml" &
+else
+  dolt sql-server --config="dolt-config.yaml" &
+fi
+SERVER_PID="$!"
 sleep 1
+
+
+# run benchmark
+echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
+
 sysbench \
   --mysql-host="0.0.0.0" \
   --mysql-user="user" \
   --mysql-password="pass" \
   "$SYSBENCH_TEST" run
 
-echo "benchmark complete at $TMP_DIR"
+echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
+echo "DOLT_FORMAT_FEATURE_FLAG='$DOLT_FORMAT_FEATURE_FLAG'"
+echo ""
