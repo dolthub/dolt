@@ -25,6 +25,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -794,7 +795,7 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 		if !isLess {
 			eq := tupleKey.v.Equals(key.v)
 			if eq {
-				return idx + int64(t.numLeaves() - 1), nil
+				return idx + int64(t.numLeaves()-1), nil
 			} else {
 				idx += int64(t.numLeaves())
 			}
@@ -816,7 +817,7 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 					return 0, err
 				}
 
-				return idx+int64(leafIdx), nil
+				return idx + int64(leafIdx), nil
 			} else {
 				return 0, errors.New("unknown sequence type")
 			}

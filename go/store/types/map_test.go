@@ -2168,21 +2168,20 @@ func TestVisitMapLevelOrderSized(t *testing.T) {
 
 func TestMapIndexForKey(t *testing.T) {
 	tests := []struct {
-		name string
+		name       string
 		numEntries int64
-		numChecks int
-	} {
+		numChecks  int
+	}{
 		{name: "multiple levels", numEntries: 1_000_000, numChecks: 10_000},
 		{name: "leaves only", numEntries: 100, numChecks: 10},
 	}
-
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			kvps := make([]Value, 2*test.numEntries)
 			for i := int64(0); i < test.numEntries; i++ {
-				 kvps[i*2] = Int(i)
-				 kvps[i*2+1] = NullValue
+				kvps[i*2] = Int(i)
+				kvps[i*2+1] = NullValue
 			}
 
 			ctx := context.Background()
@@ -2192,10 +2191,10 @@ func TestMapIndexForKey(t *testing.T) {
 			require.NoError(t, err)
 
 			for i := 0; i < test.numChecks; i++ {
-				 k := rand.Int63n(test.numEntries)
-				 idx, err := m.IndexForKey(ctx, Int(k))
-				 require.NoError(t, err)
-				 require.Equal(t, k, idx)
+				k := rand.Int63n(test.numEntries)
+				idx, err := m.IndexForKey(ctx, Int(k))
+				require.NoError(t, err)
+				require.Equal(t, k, idx)
 			}
 
 			// Test before start
