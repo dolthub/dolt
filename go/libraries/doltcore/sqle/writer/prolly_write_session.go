@@ -42,6 +42,10 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
+	if tw, ok := s.tables[table]; ok {
+		return tw, nil
+	}
+
 	t, ok, err := s.root.GetTable(ctx, table)
 	if err != nil {
 		return nil, err
@@ -70,16 +74,16 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	autoCol := autoIncrementColFromSchema(sch)
 
 	wr := &prollyWriter{
-		tableName:  table,
-		dbName:     database,
-		sch:        sch,
-		mut:        mut,
-		tbl:        t,
-		autoIncCol: autoCol,
-		aiTracker:  ait,
-		sess:       s,
-		setter:     setter,
-		batched:    batched,
+		tableName: table,
+		dbName:    database,
+		sch:       sch,
+		mut:       mut,
+		tbl:       t,
+		aiCol:     autoCol,
+		aiTracker: ait,
+		sess:      s,
+		setter:    setter,
+		batched:   batched,
 	}
 	s.tables[table] = wr
 

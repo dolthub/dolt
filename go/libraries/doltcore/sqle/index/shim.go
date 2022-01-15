@@ -45,8 +45,7 @@ func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, r
 		return nil, errors.New("format __DOLT_1__ does not support keyless tables")
 	}
 
-	iter, err := rows.IterAll(ctx)
-	//iter, err := rows.IterRange(ctx, rng)
+	iter, err := rows.IterRange(ctx, rng)
 	if err != nil {
 		return nil, err
 	}

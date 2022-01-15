@@ -48,8 +48,7 @@ var (
 	foreignKeyNameRegex = regexp.MustCompile(ForeignKeyNameRegexStr)
 	indexNameRegex      = regexp.MustCompile(IndexNameRegexStr)
 
-	ErrNoConflictsResolved  = errors.New("no conflicts resolved")
-	ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
+	ErrNoConflictsResolved = errors.New("no conflicts resolved")
 )
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.

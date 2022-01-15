@@ -46,11 +46,12 @@ type prollyWriter struct {
 	tableName string
 	dbName    string
 	sch       schema.Schema
-	mut       mutableProllyIndex
+	mut       prollyIndexWriter
 
-	tbl        *doltdb.Table
-	autoIncCol schema.Column
-	aiTracker  globalstate.AutoIncrementTracker
+	tbl *doltdb.Table
+
+	aiCol     schema.Column
+	aiTracker globalstate.AutoIncrementTracker
 
 	sess    WriteSession
 	setter  SessionRootSetter
@@ -82,14 +83,6 @@ func (w *prollyWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 
 func (w *prollyWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
 	return w.aiTracker.Next(w.tableName, potentialVal, tableVal)
-}
-
-func (w *prollyWriter) GetAutoIncrementValue() (interface{}, error) {
-	v, err := w.tbl.GetAutoIncrementValue(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	return w.autoIncCol.TypeInfo.ConvertNomsValueToValue(v)
 }
 
 func (w *prollyWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
@@ -124,12 +117,36 @@ func (w *prollyWriter) StatementComplete(ctx *sql.Context) error {
 	return nil
 }
 
-func (w *prollyWriter) table(ctx context.Context) (*doltdb.Table, error) {
+func (w *prollyWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
 	m, err := w.mut.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(m))
+
+	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(m))
+	if err != nil {
+		return nil, err
+	}
+
+	if w.aiCol.AutoIncrement {
+		seq, err := w.aiTracker.Next(w.tableName, nil, nil)
+		if err != nil {
+			return nil, err
+		}
+		vrw := w.tbl.ValueReadWriter()
+
+		v, err := w.aiCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, seq)
+		if err != nil {
+			return nil, err
+		}
+
+		t, err = t.SetAutoIncrementValue(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return t, nil
 }
 
 func (w *prollyWriter) flush(ctx *sql.Context) error {
@@ -141,7 +158,7 @@ func (w *prollyWriter) flush(ctx *sql.Context) error {
 	return w.setter(ctx, w.dbName, newRoot)
 }
 
-type mutableProllyIndex struct {
+type prollyIndexWriter struct {
 	mut prolly.MutableMap
 
 	keyBld *val.TupleBuilder
@@ -151,11 +168,11 @@ type mutableProllyIndex struct {
 	valMap colMapping
 }
 
-func makeMutableProllyIndex(m prolly.Map, sqlSch sql.Schema, sch schema.Schema) mutableProllyIndex {
+func makeMutableProllyIndex(m prolly.Map, sqlSch sql.Schema, sch schema.Schema) prollyIndexWriter {
 	keyDesc, valDesc := m.Descriptors()
 	keyMap, valMap := colMappingsFromSchema(sqlSch, sch)
 
-	return mutableProllyIndex{
+	return prollyIndexWriter{
 		mut:    m.Mutate(),
 		keyBld: val.NewTupleBuilder(keyDesc),
 		keyMap: keyMap,
@@ -166,11 +183,11 @@ func makeMutableProllyIndex(m prolly.Map, sqlSch sql.Schema, sch schema.Schema) 
 
 var sharePool = pool.NewBuffPool()
 
-func (m mutableProllyIndex) Map(ctx context.Context) (prolly.Map, error) {
+func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 	return m.mut.Map(ctx)
 }
 
-func (m mutableProllyIndex) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	// todo(andy) need to check key?
 
 	for to, from := range m.keyMap {
@@ -186,7 +203,7 @@ func (m mutableProllyIndex) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	return m.mut.Put(ctx, k, v)
 }
 
-func (m mutableProllyIndex) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	for to, from := range m.keyMap {
 		m.keyBld.PutField(to, sqlRow[from])
 	}
@@ -195,7 +212,7 @@ func (m mutableProllyIndex) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return m.mut.Delete(ctx, k)
 }
 
-func (m mutableProllyIndex) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
 	// todo(andy) need to delete?
 	// todo(andy) need to check key?
 

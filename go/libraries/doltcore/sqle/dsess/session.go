@@ -548,6 +548,7 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 		return err
 	}
 
+	// todo(andy)
 	//if rootsEqual(sessionState.GetRoots().Working, newRoot) {
 	//	return nil
 	//}

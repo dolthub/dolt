@@ -62,7 +62,7 @@ YAML
 
 # start a server
 dolt init
-dolt sql-server --config="dolt-config.yaml" &
+dolt sql-server --config="dolt-config.yaml" 2> prepare.log &
 SERVER_PID="$!"
 
 # stop it if it crashes
@@ -84,9 +84,9 @@ kill -15 "$SERVER_PID"
 
 # maybe run with pprof
 if [ "$PPROF" -eq 1 ]; then
-  dolt --prof cpu sql-server --config="dolt-config.yaml" &
+  dolt --prof cpu sql-server --config="dolt-config.yaml" 2> run.log &
 else
-  dolt sql-server --config="dolt-config.yaml" &
+  dolt sql-server --config="dolt-config.yaml" 2> run.log &
 fi
 SERVER_PID="$!"
 sleep 1
