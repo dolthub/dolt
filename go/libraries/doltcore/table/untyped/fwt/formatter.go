@@ -47,7 +47,7 @@ var ErrRowCountMismatch = errors.New("number of columns passed to formatter does
 // ErrColumnTooLong is returned when the width exceeds the maximum
 var ErrColumnTooLong = errors.New("column width exceeded maximum width for column and TooLongBehavior is ErrorWhenTooLong")
 
-// FixedWithFormatter is a utility class for taking a row and generating fixed with output
+// FixedWidthFormatter is a utility class for taking a row and generating fixed with output
 type FixedWidthFormatter struct {
 	colCount   int
 	Widths     []int

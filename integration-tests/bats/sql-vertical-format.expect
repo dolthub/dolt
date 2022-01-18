@@ -1,0 +1,45 @@
+#!/usr/bin/expect
+
+set timeout 10
+spawn dolt sql
+expect {
+  "> " { send "show tables\\G\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*Table: one_pk*" { send "DELIMITER $$\\g\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "> " { send "show tables$$\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*| Table         |*" { send "show tables\\g\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "*| Table         |*" { send "DELIMITER ;\\g\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+  "> " { send "SELECT COUNT(*) FROM one_pk\\G\r"; }
+  timeout { exit 1; }
+  failed { exit 1; }
+}
+expect {
+   "*COUNT(\\*): 4*" { send "SELECT JSON_OBJECT('id', 87, 'name', 'carrot')\\G\r"; }
+   timeout { exit 1; }
+   failed { exit 1; }
+}
+expect {
+   "*JSON_OBJECT('id', 87, 'name', 'carrot'): {"id":87,"name":"carrot"}*" { exit 0 ; }
+   timeout { exit 1; }
+   failed { exit 1; }
+}
+expect eof
