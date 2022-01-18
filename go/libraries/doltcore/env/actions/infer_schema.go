@@ -159,14 +159,14 @@ func leastPermissiveType(strVal string, floatThreshold float64) typeinfo.TypeInf
 		return numType
 	}
 
-	chronoType := leastPermissiveChronoType(strVal)
-	if chronoType != typeinfo.UnknownType {
-		return chronoType
-	}
-
 	_, err := uuid.Parse(strVal)
 	if err == nil {
 		return typeinfo.UuidType
+	}
+
+	chronoType := leastPermissiveChronoType(strVal)
+	if chronoType != typeinfo.UnknownType {
+		return chronoType
 	}
 
 	strVal = strings.ToLower(strVal)
@@ -242,22 +242,23 @@ func leastPermissiveChronoType(strVal string) typeinfo.TypeInfo {
 	if strVal == "" {
 		return typeinfo.UnknownType
 	}
-	_, err := typeinfo.TimeType.ParseValue(context.Background(), nil, &strVal)
+
+	dt, err := typeinfo.DatetimeType.ParseValue(context.Background(), nil, &strVal)
+	if err == nil {
+		t := time.Time(dt.(types.Timestamp))
+		if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
+			return typeinfo.DateType
+		}
+
+		return typeinfo.DatetimeType
+	}
+
+	_, err = typeinfo.TimeType.ParseValue(context.Background(), nil, &strVal)
 	if err == nil {
 		return typeinfo.TimeType
 	}
 
-	dt, err := typeinfo.DatetimeType.ParseValue(context.Background(), nil, &strVal)
-	if err != nil {
-		return typeinfo.UnknownType
-	}
-
-	t := time.Time(dt.(types.Timestamp))
-	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 {
-		return typeinfo.DateType
-	}
-
-	return typeinfo.DatetimeType
+	return typeinfo.UnknownType
 }
 
 func chronoTypes() []typeinfo.TypeInfo {
