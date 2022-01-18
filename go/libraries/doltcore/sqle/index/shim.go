@@ -61,9 +61,11 @@ func rowIterFromMapIter(
 	projections []string,
 ) (sql.RowIter, error) {
 
-	if projections == nil {
-		projections = sch.GetAllCols().GetColumnNames()
-	}
+	//if projections == nil {
+	//	projections = sch.GetAllCols().GetColumnNames()
+	//}
+
+	projections = sch.GetAllCols().GetColumnNames()
 	keyProj, valProj := projectionMappings(sch, projections)
 
 	kd, vd := m.Descriptors()
