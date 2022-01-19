@@ -471,7 +471,7 @@ func (ste *sessionedTableEditor) shouldSkipDeleteCascade(ctx context.Context, fo
 	}
 	deleteKeys[oldKeyHash] = struct{}{}
 
-	// We don'tbl need to store the new key. If it also causes a cascade then it will become an old key as the logic
+	// We don't need to store the new key. If it also causes a cascade then it will become an old key as the logic
 	// progresses. We're only interested in whether the new key is already present in the map.
 	newKeyHash, err := newKey.Hash(ste.Format())
 	if err != nil {
