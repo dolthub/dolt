@@ -104,6 +104,11 @@ func (v Polygon) isPrimitive() bool {
 }
 
 func (v Polygon) WalkValues(ctx context.Context, cb ValueCallback) error {
+	for _, l := range v.Lines {
+		if err := l.WalkValues(ctx, cb); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -165,7 +170,7 @@ func parseEWKBToPoly(buf []byte, srid uint32) Polygon {
 	numLines := binary.LittleEndian.Uint32(buf[:LengthSize])
 
 	// Parse lines
-	s := 4
+	s := LengthSize
 	lines := make([]Linestring, numLines)
 	for i := uint32(0); i < numLines; i++ {
 		lines[i] = parseEWKBLine(buf[s:], srid)
@@ -178,7 +183,7 @@ func parseEWKBToPoly(buf []byte, srid uint32) Polygon {
 func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf)
-	if geomType != 3 {
+	if geomType != PolygonID {
 		return Polygon{}, errors.New("not a polygon")
 	}
 	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
@@ -187,7 +192,7 @@ func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf)
-	if geomType != 3 {
+	if geomType != PolygonID {
 		return nil, errors.New("not a polygon")
 	}
 	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil

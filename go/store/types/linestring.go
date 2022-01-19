@@ -111,6 +111,11 @@ func (v Linestring) isPrimitive() bool {
 }
 
 func (v Linestring) WalkValues(ctx context.Context, cb ValueCallback) error {
+	for _,p := range v.Points {
+		if err := p.WalkValues(ctx, cb); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -175,7 +180,7 @@ func parseEWKBLine(buf []byte, srid uint32) Linestring {
 func readLinestring(nbf *NomsBinFormat, b *valueDecoder) (Linestring, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf)
-	if geomType != 2 {
+	if geomType != LinestringID {
 		return Linestring{}, errors.New("not a linestring")
 	}
 	return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil
@@ -184,7 +189,7 @@ func readLinestring(nbf *NomsBinFormat, b *valueDecoder) (Linestring, error) {
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf)
-	if geomType != 2 {
+	if geomType != LinestringID {
 		return nil, errors.New("not a linestring")
 	}
 	return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil

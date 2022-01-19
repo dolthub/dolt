@@ -78,7 +78,7 @@ func (v Point) isPrimitive() bool {
 }
 
 func (v Point) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
+	return cb(v)
 }
 
 func (v Point) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
@@ -101,7 +101,7 @@ func (v Point) valueReadWriter() ValueReadWriter {
 // This function assumes v is a valid spatial type
 func writeEWKBHeader(v interface{}, buf []byte) {
 	// Write endianness byte (always little endian)
-	buf[4] = 1
+	buf[SRIDSize] = 1
 
 	// Parse data
 	switch v := v.(type) {
@@ -163,7 +163,7 @@ func parseEWKBPoint(buf []byte, srid uint32) Point {
 func readPoint(nbf *NomsBinFormat, b *valueDecoder) (Point, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf) // Assume it's always little endian
-	if geomType != 1 {
+	if geomType != PointID {
 		return Point{}, errors.New("not a point")
 	}
 	return parseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
@@ -172,7 +172,7 @@ func readPoint(nbf *NomsBinFormat, b *valueDecoder) (Point, error) {
 func (v Point) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := parseEWKBHeader(buf) // Assume it's always little endian
-	if geomType != 1 {
+	if geomType != PointID {
 		return Point{}, errors.New("not a point")
 	}
 	return parseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
