@@ -400,8 +400,8 @@ func TestAddColumn(t *testing.T) {
 			name:  "alter add uint column default",
 			query: "alter table people add (newColumn bigint unsigned default 20)",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
-				schemaNewColumnWDefVal(t, "newColumn", 4435, sql.Uint64, false, "20")),
-			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4435, types.Uint(uint64(20))),
+				schemaNewColumnWDefVal(t, "newColumn", 6535, sql.Uint64, false, "20")),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 6535, types.Uint(uint64(20))),
 		},
 		{
 			name:  "alter add string column with default",
