@@ -23,7 +23,7 @@ import (
 
 type TupleDesc struct {
 	Types []Type
-	cmp   TupleCompare
+	cmp   TupleComparator
 
 	// Under certain conditions, Tuple comparisons can be
 	// optimized by directly comparing Tuples as byte slices,
@@ -32,9 +32,13 @@ type TupleDesc struct {
 	raw rawCmp
 }
 
-type TupleCompare func(left, right Tuple, desc TupleDesc) int
+type TupleComparator interface {
+	Compare(left, right Tuple, desc TupleDesc) int
+}
 
-func defaultCompare(left, right Tuple, desc TupleDesc) (cmp int) {
+type defaultCompare struct{}
+
+func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != 0 {
@@ -44,14 +48,14 @@ func defaultCompare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-var _ TupleCompare = defaultCompare
+var _ TupleComparator = defaultCompare{}
 
 func NewTupleDescriptor(types ...Type) TupleDesc {
-	return NewTupleDescriptorWithComparator(defaultCompare, types...)
+	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
 
 // NewTupleDescriptor returns a TupleDesc from a slice of Types.
-func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td TupleDesc) {
+func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}
@@ -77,7 +81,7 @@ func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	//	return td.cmp(left, right, td)
 	//}
 
-	return td.cmp(left, right, td)
+	return td.cmp.Compare(left, right, td)
 }
 
 // Count returns the number of fields in the TupleDesc.

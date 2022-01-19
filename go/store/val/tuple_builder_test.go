@@ -171,4 +171,4 @@ func testCompare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-var _ TupleCompare = testCompare
+var _ TupleComparator = testCompare
