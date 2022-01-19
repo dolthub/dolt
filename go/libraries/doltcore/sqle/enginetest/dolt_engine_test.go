@@ -39,29 +39,16 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
-
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT 
-					myTable.i, 
-					(SELECT 
-						dolt_commit_diff_mytable.diff_type 
-					FROM 
-						dolt_commit_diff_mytable
-					WHERE (
-						dolt_commit_diff_mytable.from_commit = 'abc' AND 
-						dolt_commit_diff_mytable.to_commit = 'abc' AND
-						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
-					)) AS diff_type 
-				FROM myTable`,
-		Expected: []sql.Row{},
+		Query:    "SELECT i FROM niltable WHERE b IS NULL",
+		Expected: []sql.Row{{int64(1)}, {int64(4)}},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }

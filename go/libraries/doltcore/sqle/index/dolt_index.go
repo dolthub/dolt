@@ -426,7 +426,10 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		startFields = append(startFields, sql.GetRangeCutKey(sc))
 	}
 	if !start.Unbound {
-		start.Key = tupleFromKeys(startFields, tb)
+		start.Key, err = tupleFromKeys(startFields, tb)
+		if err != nil {
+			return prolly.Range{}, err
+		}
 	}
 
 	stop := prolly.RangeCut{Inclusive: true}
@@ -440,7 +443,10 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		stopFields = append(stopFields, sql.GetRangeCutKey(sc))
 	}
 	if !stop.Unbound {
-		stop.Key = tupleFromKeys(stopFields, tb)
+		stop.Key, err = tupleFromKeys(stopFields, tb)
+		if err != nil {
+			return prolly.Range{}, err
+		}
 	}
 
 	return prolly.Range{
@@ -455,9 +461,12 @@ func isBindingCut(cut sql.RangeCut) bool {
 	return cut != sql.BelowAll{} && cut != sql.AboveAll{}
 }
 
-func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) val.Tuple {
+func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 	for i, v := range keys {
+		if !tb.Desc.Types[i].Nullable && v == nil {
+			return nil, errors.New("cannot set non-nullable field to NULL")
+		}
 		tb.PutField(i, v)
 	}
-	return tb.Build(sharePool)
+	return tb.Build(sharePool), nil
 }

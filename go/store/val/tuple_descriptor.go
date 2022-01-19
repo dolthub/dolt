@@ -302,7 +302,7 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		panic("unknown encoding")
 	}
 	if !ok {
-		return NULL
+		return nil
 	}
 	return v
 }

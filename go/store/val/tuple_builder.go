@@ -51,6 +51,9 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 
 // Recycle resets the TupleBuilder so it can build a new Tuple.
 func (tb *TupleBuilder) Recycle() {
+	for i := 0; i < tb.Desc.Count(); i++ {
+		tb.fields[i] = nil
+	}
 	tb.pos = 0
 }
 
