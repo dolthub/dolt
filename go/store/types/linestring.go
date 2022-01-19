@@ -111,7 +111,7 @@ func (v Linestring) isPrimitive() bool {
 }
 
 func (v Linestring) WalkValues(ctx context.Context, cb ValueCallback) error {
-	for _,p := range v.Points {
+	for _, p := range v.Points {
 		if err := p.WalkValues(ctx, cb); err != nil {
 			return err
 		}

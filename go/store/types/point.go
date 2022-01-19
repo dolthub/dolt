@@ -33,14 +33,14 @@ import (
 )
 
 const (
-	SRIDSize = 4
-	EndianSize = 1
-	TypeSize = 4
+	SRIDSize       = 4
+	EndianSize     = 1
+	TypeSize       = 4
 	EWKBHeaderSize = SRIDSize + EndianSize + TypeSize
-	PointDataSize = 16
-	PointID = 1
-	LinestringID = 2
-	PolygonID = 3
+	PointDataSize  = 16
+	PointID        = 1
+	LinestringID   = 2
+	PolygonID      = 3
 )
 
 // Point is a Noms Value wrapper around the primitive string type (for now).
@@ -108,13 +108,13 @@ func writeEWKBHeader(v interface{}, buf []byte) {
 	case Point:
 		// Write SRID and type
 		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize + EndianSize:EWKBHeaderSize], PointID)
+		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], PointID)
 	case Linestring:
 		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize + EndianSize:EWKBHeaderSize], LinestringID)
+		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], LinestringID)
 	case Polygon:
 		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize + EndianSize:EWKBHeaderSize], PolygonID)
+		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], PolygonID)
 	}
 }
 
@@ -133,7 +133,7 @@ func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	}
 
 	// Allocate buffer for point 4 + 1 + 4 + 16
-	buf := make([]byte, EWKBHeaderSize + PointDataSize)
+	buf := make([]byte, EWKBHeaderSize+PointDataSize)
 
 	// Write header and data to buffer
 	writeEWKBHeader(v, buf)
@@ -145,9 +145,9 @@ func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 
 // parseEWKBHeader converts the header potion of a EWKB byte array to srid, endianness, and geometry type
 func parseEWKBHeader(buf []byte) (uint32, bool, uint32) {
-	srid := binary.LittleEndian.Uint32(buf[0:SRIDSize])     // First 4 bytes is SRID always in little endian
-	isBig := buf[SRIDSize] == 0                             // Next byte is endianness
-	geomType := binary.LittleEndian.Uint32(buf[SRIDSize + EndianSize:EWKBHeaderSize]) // Next 4 bytes is type
+	srid := binary.LittleEndian.Uint32(buf[0:SRIDSize])                               // First 4 bytes is SRID always in little endian
+	isBig := buf[SRIDSize] == 0                                                       // Next byte is endianness
+	geomType := binary.LittleEndian.Uint32(buf[SRIDSize+EndianSize : EWKBHeaderSize]) // Next 4 bytes is type
 	return srid, isBig, geomType
 }
 
