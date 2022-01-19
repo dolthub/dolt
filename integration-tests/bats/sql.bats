@@ -1694,3 +1694,28 @@ SQL
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 15-46
 }
+
+@test "sql: sql -q query vertical format check" {
+    run dolt sql -r vertical -q "show tables"
+    [ "$status" -eq 0 ]
+    [ "$output" = "*************************** 1. row ***************************
+Table: has_datetimes
+*************************** 2. row ***************************
+Table: one_pk
+*************************** 3. row ***************************
+Table: two_pk" ]
+
+    run dolt sql -r vertical -q "SELECT pk AS primaryKey FROM one_pk WHERE pk < 2"
+    [ "$status" -eq 0 ]
+    [ "$output" = "*************************** 1. row ***************************
+primaryKey: 0
+*************************** 2. row ***************************
+primaryKey: 1" ]
+}
+
+@test "sql: vertical query format in sql shell" {
+    skiponwindows "Need to install expect and make this script work on windows."
+
+    run expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
+    [ "$status" -eq 0 ]
+}
