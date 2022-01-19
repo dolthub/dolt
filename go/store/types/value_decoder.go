@@ -373,17 +373,28 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.ReadJSON()
 	case PointKind:
 		r.skipKind()
-		r.ReadString()
-		// TODO: parse ewkb to point?
-		return Point{}, nil
+		buf := []byte(r.ReadString())
+		srid, _, geomType := parseEWKBHeader(buf)
+		if geomType != PointID {
+			return nil, ErrUnknownType
+		}
+		return parseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
 	case LinestringKind:
 		r.skipKind()
-		r.ReadString()
-		return Linestring{}, nil
+		buf := []byte(r.ReadString())
+		srid, _, geomType := parseEWKBHeader(buf)
+		if geomType != LinestringID {
+			return nil, ErrUnknownType
+		}
+		return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil
 	case PolygonKind:
 		r.skipKind()
-		r.ReadString()
-		return Polygon{}, nil
+		buf := []byte(r.ReadString())
+		srid, _, geomType := parseEWKBHeader(buf)
+		if geomType != PolygonID {
+			return nil, ErrUnknownType
+		}
+		return parseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

@@ -163,9 +163,9 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-// parseEWKBToPoly converts the data portions of a WKB polygon to Polygon
+// parseEWKBPoly converts the data portions of a WKB polygon to Polygon
 // Very similar logic to the function in GMS
-func parseEWKBToPoly(buf []byte, srid uint32) Polygon {
+func parseEWKBPoly(buf []byte, srid uint32) Polygon {
 	// Read length of Polygon
 	numLines := binary.LittleEndian.Uint32(buf[:LengthSize])
 
@@ -186,7 +186,7 @@ func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
 	if geomType != PolygonID {
 		return Polygon{}, errors.New("not a polygon")
 	}
-	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
@@ -195,7 +195,7 @@ func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error
 	if geomType != PolygonID {
 		return nil, errors.New("not a polygon")
 	}
-	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
