@@ -101,12 +101,9 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
 	name = strings.ToLower(name)
 	var ok bool
-	func() {
-		p.mu.RLock()
-		defer p.mu.RUnlock()
-
-		db, ok = p.databases[name]
-	}()
+	p.mu.RLock()
+	db, ok = p.databases[name]
+	p.mu.RUnlock()
 	if ok {
 		return db, nil
 	}
@@ -115,15 +112,20 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p.mu.Lock()
-		defer p.mu.Unlock()
 
-		p.databases[name] = db
-		return db, nil
+	if !ok {
+		return nil, sql.ErrDatabaseNotFound.New(name)
 	}
 
-	return nil, sql.ErrDatabaseNotFound.New(name)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if found, ok := p.databases[name]; !ok {
+		p.databases[name] = db
+		return db, nil
+	} else {
+		return found, nil
+	}
+
 }
 
 func (p DoltDatabaseProvider) HasDatabase(name string) bool {
@@ -230,7 +232,9 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	parts := strings.SplitN(revDB, dbRevisionDelimiter, 2)
 	dbName, revSpec := parts[0], parts[1]
 
+	p.mu.RLock()
 	candidate, ok := p.databases[dbName]
+	p.mu.RUnlock()
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
 	}

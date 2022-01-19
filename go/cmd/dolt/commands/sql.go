@@ -131,7 +131,7 @@ func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(QueryFlag, "q", "SQL query to run", "Runs a single query and exits")
-	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json. Defaults to tabular. ")
+	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular. ")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
 	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
@@ -539,6 +539,8 @@ func GetResultFormat(format string) (engine.PrintResultFormat, errhand.VerboseEr
 		return engine.FormatJson, nil
 	case "null":
 		return engine.FormatNull, nil
+	case "vertical":
+		return engine.FormatVertical, nil
 	default:
 		return engine.FormatTabular, errhand.BuildDError("Invalid argument for --result-format. Valid values are tabular, csv, json").Build()
 	}
@@ -744,12 +746,14 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 		HistorySearchFold:      true,
 		DisableAutoSaveHistory: true,
 	}
+	supportingMysqlShellCmds := []string{"\\g", "\\G"}
 	shellConf := ishell.UninterpretedConfig{
 		ReadlineConfig: &rlConf,
 		QuitKeywords: []string{
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
+		MysqlShellCmds: supportingMysqlShellCmds,
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)
@@ -793,6 +797,15 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			shell.Println(color.RedString(err.Error()))
 		}
 
+		returnFormat := se.GetReturnFormat()
+		query = strings.TrimSuffix(query, shell.LineTerminator())
+		for _, sc := range supportingMysqlShellCmds {
+			if strings.HasSuffix(query, "\\G") {
+				returnFormat = engine.FormatVertical
+			}
+			query = strings.TrimSuffix(query, sc)
+		}
+
 		//TODO: Handle comments and enforce the current line terminator
 		if matches := delimiterRegex.FindStringSubmatch(query); len(matches) == 3 {
 			// If we don't match from anything, then we just pass to the SQL engine and let it complain.
@@ -823,7 +836,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				err = engine.PrettyPrintResults(sqlCtx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
+				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					shell.Println(color.RedString(err.Error()))
 				}
