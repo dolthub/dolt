@@ -123,15 +123,15 @@ func (v Polygon) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-// WriteEWKBPolyData converts a Polygon into a byte array in EWKB format
-func WriteEWKBPolyData(p Polygon, buf []byte) {
+// writeEWKBPolyData converts a Polygon into a byte array in EWKB format
+func writeEWKBPolyData(p Polygon, buf []byte) {
 	// Write length of polygon
 	binary.LittleEndian.PutUint32(buf[:LengthSize], uint32(len(p.Lines)))
 	// Write each line
 	start, stop := 0, LengthSize
 	for _, l := range p.Lines {
 		start, stop = stop, stop+LengthSize+PointDataSize*len(l.Points)
-		WriteEWKBLineData(l, buf[start:stop])
+		writeEWKBLineData(l, buf[start:stop])
 	}
 }
 
@@ -151,16 +151,16 @@ func (v Polygon) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	buf := make([]byte, EWKBHeaderSize+LengthSize+size)
 
 	// Write header and data to buffer
-	WriteEWKBHeader(v, buf)
-	WriteEWKBPolyData(v, buf[EWKBHeaderSize:])
+	writeEWKBHeader(v, buf)
+	writeEWKBPolyData(v, buf[EWKBHeaderSize:])
 
 	w.writeString(string(buf))
 	return nil
 }
 
-// ParseEWKBToPoly converts the data portions of a WKB polygon to Polygon
+// parseEWKBToPoly converts the data portions of a WKB polygon to Polygon
 // Very similar logic to the function in GMS
-func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
+func parseEWKBToPoly(buf []byte, srid uint32) Polygon {
 	// Read length of Polygon
 	numLines := binary.LittleEndian.Uint32(buf[:LengthSize])
 
@@ -168,7 +168,7 @@ func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
 	s := 4
 	lines := make([]Linestring, numLines)
 	for i := uint32(0); i < numLines; i++ {
-		lines[i] = ParseEWKBLine(buf[s:], srid)
+		lines[i] = parseEWKBLine(buf[s:], srid)
 		s += LengthSize * PointDataSize * len(lines[i].Points)
 	}
 
@@ -177,20 +177,20 @@ func ParseEWKBToPoly(buf []byte, srid uint32) Polygon {
 
 func readPolygon(nbf *NomsBinFormat, b *valueDecoder) (Polygon, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf)
+	srid, _, geomType := parseEWKBHeader(buf)
 	if geomType != 3 {
 		return Polygon{}, errors.New("not a polygon")
 	}
-	return ParseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Polygon) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf)
+	srid, _, geomType := parseEWKBHeader(buf)
 	if geomType != 3 {
 		return nil, errors.New("not a polygon")
 	}
-	return ParseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBToPoly(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Polygon) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

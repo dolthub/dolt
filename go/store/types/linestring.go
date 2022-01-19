@@ -130,13 +130,13 @@ func (v Linestring) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
-// WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l Linestring, buf []byte) {
+// writeEWKBLineData converts a Line into a byte array in EWKB format
+func writeEWKBLineData(l Linestring, buf []byte) {
 	// Write length of linestring
 	binary.LittleEndian.PutUint32(buf[:LengthSize], uint32(len(l.Points)))
 	// Append each point
 	for i, p := range l.Points {
-		WriteEWKBPointData(p, buf[LengthSize+PointDataSize*i:LengthSize+PointDataSize*(i+1)])
+		writeEWKBPointData(p, buf[LengthSize+PointDataSize*i:LengthSize+PointDataSize*(i+1)])
 	}
 }
 
@@ -150,23 +150,23 @@ func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	buf := make([]byte, EWKBHeaderSize+LengthSize+PointDataSize*len(v.Points))
 
 	// Write header and data to buffer
-	WriteEWKBHeader(v, buf)
-	WriteEWKBLineData(v, buf[EWKBHeaderSize:])
+	writeEWKBHeader(v, buf)
+	writeEWKBLineData(v, buf[EWKBHeaderSize:])
 
 	w.writeString(string(buf))
 	return nil
 }
 
-// ParseEWKBLine converts the data portion of a WKB point to Linestring
+// parseEWKBLine converts the data portion of a WKB point to Linestring
 // Very similar logic to the function in GMS
-func ParseEWKBLine(buf []byte, srid uint32) Linestring {
+func parseEWKBLine(buf []byte, srid uint32) Linestring {
 	// Read length of linestring
 	numPoints := binary.LittleEndian.Uint32(buf[:4])
 
 	// Parse points
 	points := make([]Point, numPoints)
 	for i := uint32(0); i < numPoints; i++ {
-		points[i] = ParseEWKBPoint(buf[LengthSize+PointDataSize*i:LengthSize+PointDataSize*(i+1)], srid)
+		points[i] = parseEWKBPoint(buf[LengthSize+PointDataSize*i:LengthSize+PointDataSize*(i+1)], srid)
 	}
 
 	return Linestring{SRID: srid, Points: points}
@@ -174,20 +174,20 @@ func ParseEWKBLine(buf []byte, srid uint32) Linestring {
 
 func readLinestring(nbf *NomsBinFormat, b *valueDecoder) (Linestring, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf)
+	srid, _, geomType := parseEWKBHeader(buf)
 	if geomType != 2 {
 		return Linestring{}, errors.New("not a linestring")
 	}
-	return ParseEWKBLine(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf)
+	srid, _, geomType := parseEWKBHeader(buf)
 	if geomType != 2 {
 		return nil, errors.New("not a linestring")
 	}
-	return ParseEWKBLine(buf[EWKBHeaderSize:], srid), nil
+	return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil
 }
 
 func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
