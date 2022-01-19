@@ -19,7 +19,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
@@ -82,6 +83,19 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 
 	stmt, err := sqlfmt.RowAsInsertStmt(r, w.tableName, w.sch)
 
+	if err != nil {
+		return err
+	}
+
+	return iohelp.WriteLine(w.wr, stmt)
+}
+
+func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
+		return err
+	}
+
+	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
 	if err != nil {
 		return err
 	}
