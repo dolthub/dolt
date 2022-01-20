@@ -35,14 +35,20 @@ func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
 	return &TupleBuilder{Desc: desc}
 }
 
-// Tuple materializes a Tuple from the fields written to the TupleBuilder.
+// Build materializes a Tuple from the fields written to the TupleBuilder.
 func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
 			panic("cannot write NULL to non-NULL field")
 		}
 	}
+	return tb.BuildPermissive(pool)
+}
 
+// BuildPermissive materializes a Tuple from the fields
+// written to the TupleBuilder without checking nullability.
+// todo(andy): restructure
+func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 	tb.Recycle()

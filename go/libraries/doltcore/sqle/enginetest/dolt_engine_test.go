@@ -41,8 +41,16 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    "select i from datetime_table where datetime_col = '2020-01-01T12:00:00'",
-		Expected: []sql.Row{{1}},
+		Query: `SELECT pk,tpk.pk1,tpk2.pk1,tpk.pk2,tpk2.pk2 FROM one_pk 
+						LEFT JOIN two_pk tpk ON one_pk.pk=tpk.pk1 AND one_pk.pk-1=tpk.pk2 
+						LEFT JOIN two_pk tpk2 ON tpk2.pk1=TPK.pk2 AND TPK2.pk2=tpk.pk1
+						ORDER BY 1`,
+		Expected: []sql.Row{
+			{0, nil, nil, nil, nil},
+			{1, 1, 0, 0, 1},
+			{2, nil, nil, nil, nil},
+			{3, nil, nil, nil, nil},
+		},
 	}
 
 	harness := newDoltHarness(t)

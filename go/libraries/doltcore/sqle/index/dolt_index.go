@@ -425,6 +425,7 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
 		startFields = append(startFields, sql.GetRangeCutKey(sc))
 	}
+
 	if !start.Unbound {
 		start.Key, err = tupleFromKeys(startFields, tb)
 		if err != nil {
@@ -463,10 +464,7 @@ func isBindingCut(cut sql.RangeCut) bool {
 
 func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 	for i, v := range keys {
-		if !tb.Desc.Types[i].Nullable && v == nil {
-			return nil, errors.New("cannot set non-nullable field to NULL")
-		}
 		tb.PutField(i, v)
 	}
-	return tb.Build(sharePool), nil
+	return tb.BuildPermissive(sharePool), nil
 }
