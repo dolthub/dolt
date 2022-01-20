@@ -41,8 +41,8 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    "SELECT i FROM niltable WHERE b IS NULL",
-		Expected: []sql.Row{{int64(1)}, {int64(4)}},
+		Query:    "select i from datetime_table where datetime_col = '2020-01-01T12:00:00'",
+		Expected: []sql.Row{{1}},
 	}
 
 	harness := newDoltHarness(t)

@@ -227,13 +227,24 @@ func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
 	return
 }
 
-// GetTime reads a float64 from the ith field of the Tuple.
+// GetTime reads a time.Time from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetTime(i int, tup Tuple) (v time.Time, ok bool) {
-	td.expectEncoding(i, TimeEnc, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
+	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
 	b := tup.GetField(i)
 	if b != nil {
 		v, ok = ReadTime(b), true
+	}
+	return
+}
+
+// GetSqlTime reads a string encoded Time value from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
+	td.expectEncoding(i, TimeEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadString(b), true
 	}
 	return
 }
@@ -274,10 +285,6 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetInt16(i, tup)
 	case Uint16Enc:
 		v, ok = td.GetUint16(i, tup)
-	//case Int24Enc:
-	//	panic("24 bit")
-	//case Uint24Enc:
-	//	panic("24 bit")
 	case Int32Enc:
 		v, ok = td.GetInt32(i, tup)
 	case Uint32Enc:
@@ -292,7 +299,9 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetFloat64(i, tup)
 	case DecimalEnc:
 		v, ok = td.GetDecimal(i, tup)
-	case TimeEnc, TimestampEnc, DateEnc, DatetimeEnc, YearEnc:
+	case TimeEnc:
+		v, ok = td.GetSqlTime(i, tup)
+	case TimestampEnc, DateEnc, DatetimeEnc, YearEnc:
 		v, ok = td.GetTime(i, tup)
 	case StringEnc:
 		v, ok = td.GetString(i, tup)

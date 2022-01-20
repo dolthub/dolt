@@ -146,10 +146,19 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 }
 
 func (tb *TupleBuilder) PutTime(i int, v time.Time) {
-	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc)
+	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc, YearEnc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
 	WriteTime(tb.fields[i], v)
 	tb.pos += timeSize
+}
+
+// PutString writes a string to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutSqlTime(i int, v string) {
+	tb.Desc.expectEncoding(i, TimeEnc)
+	sz := ByteSize(len(v))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	tb.pos += sz
 }
 
 func (tb *TupleBuilder) PutDecimal(i int, v string) {
@@ -195,10 +204,6 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutInt16(i, int16(convInt(v)))
 	case Uint16Enc:
 		tb.PutUint16(i, uint16(convUint(v)))
-	//case Int24Enc:
-	//	panic("24 bit")
-	//case Uint24Enc:
-	//	panic("24 bit")
 	case Int32Enc:
 		tb.PutInt32(i, int32(convInt(v)))
 	case Uint32Enc:
@@ -213,11 +218,9 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutFloat64(i, v.(float64))
 	case DecimalEnc:
 		tb.PutDecimal(i, v.(string))
-	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
-		if _, ok := v.(time.Time); !ok {
-			v = time.Time{} // broke
-		}
-		// todo(andy): experimental
+	case TimeEnc:
+		tb.PutSqlTime(i, v.(string))
+	case DateEnc, DatetimeEnc, TimestampEnc, YearEnc:
 		tb.PutTime(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))

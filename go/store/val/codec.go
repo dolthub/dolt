@@ -48,7 +48,7 @@ const (
 	float64Size ByteSize = 8
 
 	// todo(andy): experimental encoding
-	timeSize ByteSize = 16
+	timeSize ByteSize = 15
 )
 
 type Collation uint16
@@ -76,7 +76,7 @@ const (
 	Float64Enc Encoding = 12
 
 	// todo(andy): experimental encodings
-	TimeEnc      Encoding = 13
+	//TimeEnc      Encoding = 13
 	TimestampEnc Encoding = 14
 	DateEnc      Encoding = 15
 	DatetimeEnc  Encoding = 16
@@ -93,6 +93,7 @@ const (
 	// todo(andy): experimental encodings
 	DecimalEnc Encoding = 130
 	JSONEnc    Encoding = 131
+	TimeEnc    Encoding = 132
 
 	// TODO
 	//  BitEnc
@@ -180,11 +181,12 @@ func ReadDecimal(val []byte) decimal.Decimal {
 	return decimal.NewFromFloat(ReadFloat64(val))
 }
 
-func ReadTime(buf []byte) time.Time {
+func ReadTime(buf []byte) (t time.Time) {
 	expectSize(buf, timeSize)
-	sec := ReadInt64(buf[:8])
-	nsec := ReadInt64(buf[8:])
-	return time.Unix(sec, nsec)
+	if err := t.UnmarshalBinary(buf); err != nil {
+		panic(err)
+	}
+	return t
 }
 
 func ReadString(val []byte) string {
@@ -272,8 +274,9 @@ func WriteFloat64(buf []byte, val float64) {
 
 func WriteTime(buf []byte, val time.Time) {
 	expectSize(buf, timeSize)
-	WriteInt64(buf[:8], val.Unix())
-	WriteInt64(buf[8:], val.UnixNano())
+	// todo(andy): fix allocation here
+	m, _ := val.MarshalBinary()
+	copy(buf, m)
 }
 
 func writeString(buf []byte, val string, coll Collation) {
