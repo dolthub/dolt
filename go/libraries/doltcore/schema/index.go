@@ -32,6 +32,9 @@ type Index interface {
 	Comment() string
 	// Count returns the number of indexed columns in this index.
 	Count() int
+	// DeepEquals returns whether this Index is equivalent to another. This function is similar to Equals, however it
+	// does take the table's primary keys into consideration.
+	DeepEquals(other Index) bool
 	// Equals returns whether this Index is equivalent to another. This does not check for column names, thus those may
 	// be renamed and the index equivalence will be preserved. It also does not depend on the table's primary keys.
 	Equals(other Index) bool
@@ -113,6 +116,26 @@ func (ix *indexImpl) Equals(other Index) bool {
 	// we're only interested in columns the index is defined over, not the table's primary keys
 	tt := ix.IndexedColumnTags()
 	ot := other.IndexedColumnTags()
+	for i := range tt {
+		if tt[i] != ot[i] {
+			return false
+		}
+	}
+
+	return ix.IsUnique() == other.IsUnique() &&
+		ix.Comment() == other.Comment() &&
+		ix.Name() == other.Name()
+}
+
+// DeepEquals implements Index.
+func (ix *indexImpl) DeepEquals(other Index) bool {
+	if ix.Count() != other.Count() {
+		return false
+	}
+
+	// we're only interested in columns the index is defined over, not the table's primary keys
+	tt := ix.AllTags()
+	ot := other.AllTags()
 	for i := range tt {
 		if tt[i] != ot[i] {
 			return false

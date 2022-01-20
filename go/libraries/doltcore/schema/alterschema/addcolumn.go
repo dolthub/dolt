@@ -22,11 +22,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // Nullable represents whether a column can have a null value.
@@ -79,31 +76,7 @@ func AddColumnToTable(
 		return nil, err
 	}
 
-	return updateTableWithNewSchema(ctx, tblName, tbl, tag, newSchema, defaultVal)
-}
-
-// updateTableWithNewSchema updates the existing table with a new schema and new values for the new column as necessary,
-// and returns the new table.
-func updateTableWithNewSchema(
-	ctx context.Context,
-	tblName string,
-	tbl *doltdb.Table,
-	tag uint64,
-	newSchema schema.Schema,
-	defaultVal *sql.ColumnDefaultValue,
-) (*doltdb.Table, error) {
-	var err error
-	tbl, err = tbl.UpdateSchema(ctx, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	tbl, err = applyDefaultValue(ctx, tblName, tbl, tag, newSchema, defaultVal)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl, nil
+	return tbl.UpdateSchema(ctx, newSchema)
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
@@ -213,62 +186,4 @@ func validateNewColumn(
 	}
 
 	return nil
-}
-
-func applyDefaultValue(
-	ctx context.Context,
-	tblName string,
-	tbl *doltdb.Table,
-	tag uint64,
-	newSchema schema.Schema,
-	defaultVal *sql.ColumnDefaultValue,
-) (*doltdb.Table, error) {
-	rowData, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	me := rowData.Edit()
-
-	newSqlSchema, err := sqlutil.FromDoltSchema(tblName, newSchema)
-	if err != nil {
-		return nil, err
-	}
-
-	columnIndex := -1
-	for i, colTag := range newSchema.GetAllCols().Tags {
-		if colTag == tag {
-			columnIndex = i
-			break
-		}
-	}
-	if columnIndex == -1 {
-		return nil, fmt.Errorf("could not find tag `%d` in new schema", tag)
-	}
-
-	// FromDoltSchema doesn't reify the expression for a default, so set it explicitly
-	newSqlSchema.Schema[columnIndex].Default = defaultVal
-
-	err = rowData.Iter(ctx, func(k, v types.Value) (stop bool, err error) {
-		oldRow, err := row.FromNoms(newSchema, k.(types.Tuple), v.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		newRow, err := sqlutil.ApplyDefaults(ctx, tbl.ValueReadWriter(), newSchema, newSqlSchema.Schema, columnIndex, oldRow)
-		if err != nil {
-			return true, err
-		}
-		me.Set(newRow.NomsMapKey(newSchema), newRow.NomsMapValue(newSchema))
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	newRowData, err := me.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return tbl.UpdateNomsRows(ctx, newRowData)
 }

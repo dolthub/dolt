@@ -369,11 +369,46 @@ func TestAddColumn(t *testing.T) {
 		expectedErr    string
 	}{
 		{
-			name:  "alter add column",
+			name:  "alter add string column no default",
 			query: "alter table people add (newColumn varchar(80))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false)),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add float column without default",
+			query: "alter table people add (newColumn float)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumn(t, "newColumn", 4208, sql.Float32, false)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add uint column without default",
+			query: "alter table people add (newColumn bigint unsigned)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumn(t, "newColumn", 4208, sql.Uint64, false)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, nil),
+		},
+		{
+			name:  "alter add int column default",
+			query: "alter table people add (newColumn int default 2)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 4435, sql.Int32, false, "2")),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4435, types.Int(int32(2))),
+		},
+		{
+			name:  "alter add uint column default",
+			query: "alter table people add (newColumn bigint unsigned default 20)",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 6535, sql.Uint64, false, "20")),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 6535, types.Uint(uint64(20))),
+		},
+		{
+			name:  "alter add string column with default",
+			query: "alter table people add (newColumn varchar(80) default 'hi')",
+			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
+				schemaNewColumnWDefVal(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false, `"hi"`)),
+			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 4208, types.String("hi")),
 		},
 		{
 			name:  "alter add column first",
@@ -463,6 +498,11 @@ func TestAddColumn(t *testing.T) {
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumn(t, "newColumn", 4208, sql.MustCreateStringWithDefaults(sqltypes.VarChar, 80), false)),
 			expectedRows: AllPeopleRows,
+		},
+		{
+			name:        "alter table add column name clash",
+			query:       "alter table people add column(age int)",
+			expectedErr: `Column "age" already exists`,
 		},
 	}
 

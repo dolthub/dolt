@@ -317,33 +317,125 @@ func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string)
 	return ForeignKey{}, false
 }
 
-// GetByTags gets the Foreign Key defined over the parent and child columns corresponding to tags parameters.
-func (fkc *ForeignKeyCollection) GetByTags(childTags, parentTags []uint64) (match ForeignKey, ok bool) {
+// GetByTags gets the ForeignKey defined over the parent and child columns corresponding to their tags.
+func (fkc *ForeignKeyCollection) GetByTags(childTags, parentTags []uint64) (ForeignKey, bool) {
 	if len(childTags) == 0 || len(parentTags) == 0 {
-		return match, false
+		return ForeignKey{}, false
 	}
-	_ = fkc.Iter(func(fk ForeignKey) (stop bool, err error) {
+OuterLoop:
+	for _, fk := range fkc.foreignKeys {
 		if len(fk.ReferencedTableColumns) != len(parentTags) {
-			return false, nil
+			continue
 		}
 		for i, t := range fk.ReferencedTableColumns {
 			if t != parentTags[i] {
-				return false, nil
+				continue OuterLoop
 			}
 		}
 
 		if len(fk.TableColumns) != len(childTags) {
-			return false, nil
+			continue
 		}
 		for i, t := range fk.TableColumns {
 			if t != childTags[i] {
-				return false, nil
+				continue OuterLoop
 			}
 		}
-		match, ok = fk, true
-		return true, nil
-	})
-	return match, ok
+		return fk, true
+	}
+	return ForeignKey{}, false
+}
+
+// GetMatchingKey gets the ForeignKey defined over the parent and child columns. If the given foreign key is resolved,
+// then both resolved and unresolved keys are checked for a match. If the given foreign key is unresolved, then ONLY
+// unresolved keys may be found.
+//
+// This discrepancy is due to the primary uses for this function. It is assumed that the ForeignKeyCollection is an
+// ancestor collection compared to the collection that the given key comes from. Therefore, the key found in the
+// ancestor will usually be the unresolved version of the given key, hence the comparison is valid. However, if the
+// given key is unresolved, it is treated as a new key, which cannot be matched to a resolved key that previously
+// existed.
+//
+// The given schema map is keyed by table name, and is used in the event that the given key is resolved and any keys in
+// the collection are unresolved. A "dirty resolution" is performed, which matches the column names to tags, and then a
+// standard tag comparison is performed. If a table or column is not in the map, then the foreign key is ignored.
+func (fkc *ForeignKeyCollection) GetMatchingKey(fk ForeignKey, allSchemas map[string]schema.Schema) (ForeignKey, bool) {
+	if !fk.IsResolved() {
+		// The given foreign key is unresolved, so we only look for matches on unresolved keys
+	OuterLoopUnresolved:
+		for _, existingFk := range fkc.foreignKeys {
+			// For unresolved keys, the table name is important (column tags are globally unique, column names are not)
+			if existingFk.IsResolved() ||
+				fk.TableName != existingFk.TableName ||
+				fk.ReferencedTableName != existingFk.ReferencedTableName ||
+				len(fk.UnresolvedFKDetails.TableColumns) != len(existingFk.UnresolvedFKDetails.TableColumns) ||
+				len(fk.UnresolvedFKDetails.ReferencedTableColumns) != len(existingFk.UnresolvedFKDetails.ReferencedTableColumns) {
+				continue
+			}
+			for i, fkCol := range fk.UnresolvedFKDetails.TableColumns {
+				if fkCol != existingFk.UnresolvedFKDetails.TableColumns[i] {
+					continue OuterLoopUnresolved
+				}
+			}
+			for i, fkCol := range fk.UnresolvedFKDetails.ReferencedTableColumns {
+				if fkCol != existingFk.UnresolvedFKDetails.ReferencedTableColumns[i] {
+					continue OuterLoopUnresolved
+				}
+			}
+			return existingFk, true
+		}
+		return ForeignKey{}, false
+	}
+	// The given foreign key is resolved, so we may match both resolved and unresolved keys
+OuterLoopResolved:
+	for _, existingFk := range fkc.foreignKeys {
+		if existingFk.IsResolved() {
+			// When both are resolved, we do a standard tag comparison
+			if len(fk.TableColumns) != len(existingFk.TableColumns) ||
+				len(fk.ReferencedTableColumns) != len(existingFk.ReferencedTableColumns) {
+				continue
+			}
+			for i, tag := range fk.TableColumns {
+				if tag != existingFk.TableColumns[i] {
+					continue OuterLoopResolved
+				}
+			}
+			for i, tag := range fk.ReferencedTableColumns {
+				if tag != existingFk.ReferencedTableColumns[i] {
+					continue OuterLoopResolved
+				}
+			}
+			return existingFk, true
+		} else {
+			// Since the existing key is unresolved, we reference the schema map to get tags we can use
+			if len(fk.TableColumns) != len(existingFk.UnresolvedFKDetails.TableColumns) ||
+				len(fk.ReferencedTableColumns) != len(existingFk.UnresolvedFKDetails.ReferencedTableColumns) {
+				continue
+			}
+			tblSch, ok := allSchemas[existingFk.TableName]
+			if !ok {
+				continue
+			}
+			refTblSch, ok := allSchemas[existingFk.ReferencedTableName]
+			if !ok {
+				continue
+			}
+			for i, tag := range fk.TableColumns {
+				col, ok := tblSch.GetAllCols().GetByNameCaseInsensitive(existingFk.UnresolvedFKDetails.TableColumns[i])
+				if !ok || tag != col.Tag {
+					continue OuterLoopResolved
+				}
+			}
+			for i, tag := range fk.ReferencedTableColumns {
+				col, ok := refTblSch.GetAllCols().GetByNameCaseInsensitive(existingFk.UnresolvedFKDetails.ReferencedTableColumns[i])
+				if !ok || tag != col.Tag {
+					continue OuterLoopResolved
+				}
+			}
+			return existingFk, true
+		}
+	}
+	return ForeignKey{}, false
 }
 
 func (fkc *ForeignKeyCollection) Iter(cb func(fk ForeignKey) (stop bool, err error)) error {
