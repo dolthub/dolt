@@ -113,6 +113,9 @@ const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
 const csMetricsFlag = "--csmetrics"
 const stdInFlag = "--stdin"
+const stdOutFlag = "--stdout"
+const stdErrFlag = "--stderr"
+const stdOutAndErrFlag = "--out-and-err"
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -131,7 +134,8 @@ func runMain() int {
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags {
-			switch args[0] {
+			current := args[0]
+			switch current {
 			case profFlag:
 				switch args[1] {
 				case cpuProf:
@@ -219,12 +223,36 @@ func runMain() int {
 				cli.Println("Using file contents as stdin:", stdInFile)
 
 				f, err := os.Open(stdInFile)
-
 				if err != nil {
-					panic(err)
+					cli.PrintErrln("Failed to open", stdInFile, err.Error())
+					return 1
 				}
 
 				os.Stdin = f
+				args = args[2:]
+
+			case stdOutFlag, stdErrFlag, stdOutAndErrFlag:
+				filename := args[1]
+
+				f, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+				if err != nil {
+					cli.PrintErrln("Failed to open", filename, "for writing:", err.Error())
+					return 1
+				}
+
+				switch current {
+				case stdOutFlag:
+					cli.Println("Stdout being written to", filename)
+					os.Stdout = f
+				case stdErrFlag:
+					cli.Println("Stderr being written to", filename)
+					os.Stderr = f
+				case stdOutAndErrFlag:
+					cli.Println("Stdout and Stderr being written to", filename)
+					os.Stdout = f
+					os.Stderr = f
+				}
+
 				args = args[2:]
 
 			case csMetricsFlag:
