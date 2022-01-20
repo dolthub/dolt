@@ -53,7 +53,7 @@ echo '
             ],
             "args": [
               "--schema=/schema.sql",
-              "--script-dir=/scripts/lua",
+              "--useDoltHubLuaScriptsRepo",
               "--output='$format'",
               "--from-server='$fromServer'",
               "--from-version='$fromVersion'",
