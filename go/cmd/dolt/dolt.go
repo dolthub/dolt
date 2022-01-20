@@ -133,7 +133,7 @@ func runMain() int {
 	csMetrics := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
-		for !doneDebugFlags {
+		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
 			case profFlag:
 				switch args[1] {
@@ -242,16 +242,17 @@ func runMain() int {
 				switch args[0] {
 				case stdOutFlag:
 					cli.Println("Stdout being written to", filename)
-					os.Stdout = f
+					cli.CliOut = f
 				case stdErrFlag:
 					cli.Println("Stderr being written to", filename)
-					os.Stderr = f
+					cli.CliErr = f
 				case stdOutAndErrFlag:
 					cli.Println("Stdout and Stderr being written to", filename)
-					os.Stdout = f
-					os.Stderr = f
+					cli.CliOut = f
+					cli.CliErr = f
 				}
 
+				color.NoColor = true
 				args = args[2:]
 
 			case csMetricsFlag:
