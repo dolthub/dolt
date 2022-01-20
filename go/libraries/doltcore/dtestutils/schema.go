@@ -55,6 +55,8 @@ func NewRow(sch schema.Schema, values ...types.Value) row.Row {
 
 // AddColumnToSchema returns a new schema by adding the given column to the given schema. Will panic on an invalid
 // schema, e.g. tag collision.
+// Note the AddColumnToSchema relies on being called from the engine (GMS) to correctly update defaults. Directly calling
+// this method in Dolt only adds a new column to schema but does not apply the default.
 func AddColumnToSchema(sch schema.Schema, col schema.Column) schema.Schema {
 	columns := sch.GetAllCols()
 	columns = columns.Append(col)
