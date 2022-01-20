@@ -18,12 +18,24 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+const spatialTypesFeatureFlagKey = "DOLT_ENABLE_SPATIAL_TYPES"
+
+var spatialTypesFeatureFlag = false
+
+func init() {
+	// set the spatial types feature flag to true if the env var is set
+	if v, ok := os.LookupEnv(spatialTypesFeatureFlagKey); ok && v != "" {
+		spatialTypesFeatureFlag = true
+	}
+}
 
 type Identifier string
 
@@ -249,6 +261,17 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.
 func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
+	if spatialTypesFeatureFlag {
+		switch id {
+		case PointTypeIdentifier:
+			return PointType, nil
+		case LinestringTypeIdentifier:
+			return LinestringType, nil
+		case PolygonTypeIdentifier:
+			return PolygonType, nil
+		}
+	}
+
 	switch id {
 	case BitTypeIdentifier:
 		return CreateBitTypeFromParams(params)
@@ -286,12 +309,6 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateVarStringTypeFromParams(params)
 	case YearTypeIdentifier:
 		return YearType, nil
-	case PointTypeIdentifier:
-		return PointType, nil
-	case LinestringTypeIdentifier:
-		return LinestringType, nil
-	case PolygonTypeIdentifier:
-		return PolygonType, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot be made from an identifier and params`, id)
 	}
