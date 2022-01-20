@@ -1,0 +1,81 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+namespace serial;
+
+enum TupleFormat : uint8 {
+  Unknown,
+  V1 = 1,
+}
+
+table TupleMap {
+  // array of map key tuples, ordered lexigraphically
+  key_tuples:[ubyte] (required);
+  // array of offets into |key_tuples|, zeroth offset omitted
+  key_offsets:[uint16] (required);
+
+  // array of map values tuples, ordered by paired key
+  // |value_tuples| is only present in leaf nodes
+  value_tuples:[ubyte];
+  // array of offets into |value_tuples|, zeroth offset omitted
+  // |value_offsets| is only present in leaf nodes
+  value_offsets:[uint16];
+
+  // array of ref hashes
+  // - internal nodes: contains refs for
+  //   Prolly tree children
+  // - leaf nodes: contains refs for heap values
+  //   iff table has ref'd types (eg TEXT)
+  ref_array:[ubyte];
+
+  // tuple format for |key_tuples|
+  key_format:TupleFormat;
+  // tuple format for |value_tuples|
+  value_format:TupleFormat;
+
+  // subtree member count
+  tree_count:uint64;
+
+  // node tree level, 0 for leaf nodes
+  tree_level:uint8;
+}
+
+table RefMap {
+  // map keys ordered lexigraphically
+  names:[string] (required);
+
+  // array of ref hashes
+  // - internal nodes: contains refs for
+  //   Prolly tree children
+  // - leaf nodes: contains refs corresponding
+  //   to keys in |names|
+  ref_array:[ubyte] (required);
+
+  // subtree member count
+  tree_count:uint64;
+
+  // node tree level, 0 for leaf nodes
+  tree_level:uint8;
+}
+
+table CommitClosure {
+  // array of commit ref hashes
+  ref_array:[ubyte] (required);
+
+  // subtree member count
+  tree_count:uint64;
+
+  // node tree level, 0 for leaf nodes
+  tree_level:uint8;
+}
