@@ -86,7 +86,19 @@ func (w *prollyWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}
 }
 
 func (w *prollyWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	panic("unimplemented")
+	nomsVal, err := w.aiCol.TypeInfo.ConvertValueToNomsValue(ctx, w.tbl.ValueReadWriter(), val)
+	if err != nil {
+		return err
+	}
+
+	w.tbl, err = w.tbl.SetAutoIncrementValue(ctx, nomsVal)
+	if err != nil {
+		return err
+	}
+
+	w.aiTracker.Reset(w.tableName, val)
+
+	return w.flush(ctx)
 }
 
 // Close implements Closer
@@ -195,6 +207,13 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	}
 	k := m.keyBld.Build(sharePool)
 
+	ok, err := m.mut.Has(ctx, k)
+	if err != nil {
+		return err
+	} else if ok {
+		return m.primaryKeyError(k, sqlRow)
+	}
+
 	for to, from := range m.valMap {
 		m.valBld.PutField(to, sqlRow[from])
 	}
@@ -219,14 +238,40 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 	for to, from := range m.keyMap {
 		m.keyBld.PutField(to, newRow[from])
 	}
-	k := m.keyBld.Build(sharePool)
+	oldKey := m.keyBld.Build(sharePool)
+
+	if err := m.mut.Delete(ctx, oldKey); err != nil {
+		return err
+	}
+
+	for to, from := range m.keyMap {
+		m.keyBld.PutField(to, newRow[from])
+	}
+	newKey := m.keyBld.Build(sharePool)
+
+	ok, err := m.mut.Has(ctx, newKey)
+	if err != nil {
+		return err
+	} else if ok {
+		return m.primaryKeyError(newKey, newRow)
+	}
 
 	for to, from := range m.valMap {
 		m.valBld.PutField(to, newRow[from])
 	}
 	v := m.valBld.Build(sharePool)
 
-	return m.mut.Put(ctx, k, v)
+	return m.mut.Put(ctx, newKey, v)
+}
+
+func (m prollyIndexWriter) primaryKeyError(key val.Tuple, row sql.Row) error {
+	s := m.keyBld.Desc.Format(key)
+	return sql.NewUniqueKeyErr(s, true, row)
+}
+
+func (m prollyIndexWriter) uniqueKeyError(key val.Tuple, row sql.Row) error {
+	s := m.keyBld.Desc.Format(key)
+	return sql.NewUniqueKeyErr(s, false, row)
 }
 
 type colMapping []int
@@ -250,6 +295,7 @@ func makeColMapping(from sql.Schema, to *schema.ColCollection) (m colMapping) {
 	return
 }
 
+// todo(andy): removed
 func debugPrintIndexes(r *doltdb.RootValue) string {
 	if r == nil {
 		return ""

@@ -478,15 +478,18 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 	numOfRows := int(rowData.Count())
-	empty, err := types.NewMap(ctx, table.ValueReadWriter())
+
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), t.sch)
 	if err != nil {
 		return 0, err
 	}
+
 	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewNomsTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
 	if err != nil {
 		return 0, err
 	}
+
 	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
 	if err != nil {
 		return 0, err
