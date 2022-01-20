@@ -95,10 +95,8 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*pointType); ok {
-		return ti.sqlPointType.Type() == ti2.sqlPointType.Type()
-	}
-	return false
+	_, ok := other.(*pointType)
+	return ok
 }
 
 // FormatValue implements TypeInfo interface.

@@ -101,10 +101,8 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*linestringType); ok {
-		return ti.sqlLinestringType.Type() == ti2.sqlLinestringType.Type()
-	}
-	return false
+	_, ok := other.(*linestringType)
+	return ok
 }
 
 // FormatValue implements TypeInfo interface.

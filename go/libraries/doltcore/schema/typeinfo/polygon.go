@@ -101,10 +101,8 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	if ti2, ok := other.(*polygonType); ok {
-		return ti.sqlPolygonType.Type() == ti2.sqlPolygonType.Type()
-	}
-	return false
+	_, ok := other.(*polygonType)
+	return ok
 }
 
 // FormatValue implements TypeInfo interface.
