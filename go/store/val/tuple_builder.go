@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
@@ -196,10 +198,23 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 
 // PutBytes writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutBytes(i int, v []byte) {
-	tb.Desc.expectEncoding(i, BytesEnc, JSONEnc)
+	tb.Desc.expectEncoding(i, BytesEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeBytes(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
+// PutBytes writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
+	tb.Desc.expectEncoding(i, JSONEnc)
+	buf, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	sz := ByteSize(len(buf))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeBytes(tb.fields[i], buf, tb.Desc.Types[i].Coll)
 	tb.pos += sz
 }
 
@@ -242,13 +257,12 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 	case StringEnc:
 		tb.PutString(i, v.(string))
 	case BytesEnc:
+		if s, ok := v.(string); ok {
+			v = []byte(s)
+		}
 		tb.PutBytes(i, v.([]byte))
 	case JSONEnc:
-		bb, err := json.Marshal(v)
-		if err != nil {
-			panic(err)
-		}
-		tb.PutBytes(i, bb)
+		tb.PutJSON(i, v.(sql.JSONDocument).Val)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

@@ -15,10 +15,13 @@
 package val
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type TupleDesc struct {
@@ -284,6 +287,20 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+// GetBytes reads a []byte from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
+	td.expectEncoding(i, JSONEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			panic(err)
+		}
+		ok = true
+	}
+	return
+}
+
 // GetField reads the value from the ith field of the Tuple as an interface{}.
 func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 	var ok bool
@@ -320,6 +337,12 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetString(i, tup)
 	case BytesEnc:
 		v, ok = td.GetBytes(i, tup)
+	case JSONEnc:
+		var js interface{}
+		js, ok = td.GetJSON(i, tup)
+		if ok {
+			v = sql.JSONDocument{Val: js}
+		}
 	default:
 		panic("unknown encoding")
 	}
