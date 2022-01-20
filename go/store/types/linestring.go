@@ -204,6 +204,6 @@ func (v Linestring) HumanReadableString() string {
 	for i, p := range v.Points {
 		points[i] = p.HumanReadableString()
 	}
-	s := fmt.Sprintf("SRID: %d LINESTRING(%s)", strings.Join(points, ","))
+	s := fmt.Sprintf("SRID: %d LINESTRING(%s)", v.SRID, strings.Join(points, ","))
 	return strconv.Quote(s)
 }

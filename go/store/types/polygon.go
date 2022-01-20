@@ -207,6 +207,6 @@ func (v Polygon) HumanReadableString() string {
 	for i, l := range v.Lines {
 		lines[i] = l.HumanReadableString()
 	}
-	s := fmt.Sprintf("SRID: %d POLYGON(%s)", strings.Join(lines, ","))
+	s := fmt.Sprintf("SRID: %d POLYGON(%s)", v.SRID, strings.Join(lines, ","))
 	return strconv.Quote(s)
 }
