@@ -34,7 +34,7 @@ type DumpDocsCmd struct {
 	DoltCommand cli.SubCommandHandler
 }
 
-// Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
+// Name returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd *DumpDocsCmd) Name() string {
 	return "dump-docs"
 }
