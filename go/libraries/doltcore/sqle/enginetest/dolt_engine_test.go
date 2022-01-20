@@ -19,6 +19,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -39,17 +40,14 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	var test enginetest.QueryTest
-	test = enginetest.QueryTest{
-		Query: `SELECT pk,tpk.pk1,tpk2.pk1,tpk.pk2,tpk2.pk2 FROM one_pk 
-						LEFT JOIN two_pk tpk ON one_pk.pk=tpk.pk1 AND one_pk.pk-1=tpk.pk2 
-						LEFT JOIN two_pk tpk2 ON tpk2.pk1=TPK.pk2 AND TPK2.pk2=tpk.pk1
-						ORDER BY 1`,
-		Expected: []sql.Row{
-			{0, nil, nil, nil, nil},
-			{1, 1, 0, 0, 1},
-			{2, nil, nil, nil, nil},
-			{3, nil, nil, nil, nil},
+	test := enginetest.WriteQueryTest{
+		WriteQuery:          `UPDATE othertable CROSS JOIN tabletest set othertable.i2 = othertable.i2 * 10`, // cross join
+		ExpectedWriteResult: []sql.Row{{newUpdateResult(3, 3)}},
+		SelectQuery:         "SELECT * FROM othertable order by i2",
+		ExpectedSelect: []sql.Row{
+			sql.NewRow("third", 10),
+			sql.NewRow("second", 20),
+			sql.NewRow("first", 30),
 		},
 	}
 
@@ -58,7 +56,16 @@ func TestSingleQuery(t *testing.T) {
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
+	enginetest.TestQuery(t, harness, engine, test.WriteQuery, test.ExpectedWriteResult, nil, test.Bindings)
+
+	enginetest.TestQuery(t, harness, engine, test.SelectQuery, test.ExpectedSelect, nil, test.Bindings)
+}
+
+func newUpdateResult(matched, updated int) sql.OkResult {
+	return sql.OkResult{
+		RowsAffected: uint64(updated),
+		Info:         plan.UpdateInfo{matched, updated, 0},
+	}
 }
 
 func TestSingleQueryNewFormat(t *testing.T) {

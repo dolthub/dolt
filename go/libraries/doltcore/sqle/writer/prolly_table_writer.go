@@ -200,8 +200,6 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 }
 
 func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	// todo(andy) need to check key?
-
 	for to, from := range m.keyMap {
 		m.keyBld.PutField(to, sqlRow[from])
 	}
@@ -211,7 +209,7 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if err != nil {
 		return err
 	} else if ok {
-		return m.primaryKeyError(k, sqlRow)
+		return m.primaryKeyError(ctx, k)
 	}
 
 	for to, from := range m.valMap {
@@ -232,14 +230,13 @@ func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	// todo(andy) need to delete?
-	// todo(andy) need to check key?
-
 	for to, from := range m.keyMap {
-		m.keyBld.PutField(to, newRow[from])
+		m.keyBld.PutField(to, oldRow[from])
 	}
 	oldKey := m.keyBld.Build(sharePool)
 
+	// todo(andy): we can skip building, deleting |oldKey|
+	//  if we know the key fields are unchanged
 	if err := m.mut.Delete(ctx, oldKey); err != nil {
 		return err
 	}
@@ -253,7 +250,7 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 	if err != nil {
 		return err
 	} else if ok {
-		return m.primaryKeyError(newKey, newRow)
+		return m.primaryKeyError(ctx, newKey)
 	}
 
 	for to, from := range m.valMap {
@@ -264,14 +261,25 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 	return m.mut.Put(ctx, newKey, v)
 }
 
-func (m prollyIndexWriter) primaryKeyError(key val.Tuple, row sql.Row) error {
-	s := m.keyBld.Desc.Format(key)
-	return sql.NewUniqueKeyErr(s, true, row)
-}
+func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) error {
+	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
 
-func (m prollyIndexWriter) uniqueKeyError(key val.Tuple, row sql.Row) error {
+	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
+		kd := m.keyBld.Desc
+		for from, to := range m.keyMap {
+			existing[to] = kd.GetField(from, key)
+		}
+
+		vd := m.valBld.Desc
+		for from, to := range m.valMap {
+			existing[to] = vd.GetField(from, value)
+		}
+		return
+	})
+
 	s := m.keyBld.Desc.Format(key)
-	return sql.NewUniqueKeyErr(s, false, row)
+
+	return sql.NewUniqueKeyErr(s, true, existing)
 }
 
 type colMapping []int
