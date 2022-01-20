@@ -134,8 +134,7 @@ func runMain() int {
 	if len(args) > 0 {
 		var doneDebugFlags bool
 		for !doneDebugFlags {
-			current := args[0]
-			switch current {
+			switch args[0] {
 			case profFlag:
 				switch args[1] {
 				case cpuProf:
@@ -240,7 +239,7 @@ func runMain() int {
 					return 1
 				}
 
-				switch current {
+				switch args[0] {
 				case stdOutFlag:
 					cli.Println("Stdout being written to", filename)
 					os.Stdout = f
