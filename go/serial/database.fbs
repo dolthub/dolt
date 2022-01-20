@@ -1,0 +1,99 @@
+// Copyright 2021 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+include "prolly.fbs";
+include "schema.fbs";
+include "table.fbs";
+
+namespace serial;
+
+struct Timestamp {
+  time:uint64;
+
+  // todo(andy): include nano extension?
+}
+
+table Ref {
+  // 20 bytes
+  hash:[byte];
+}
+
+// StoreRoot is the top-level chunk in the store,
+// containing references to all named Refs.
+table StoreRoot {
+  // map from ref name to ref hash
+  // with map root node inlined
+  refs:RefMap (required);
+
+  // creation time
+  time:Timestamp (required);
+}
+
+// DatabaseRoot is the top-level chunk for a Database.
+table DatabaseRoot {
+  // map from table name to table ref
+  tables:RefMap (required);
+  foreign_keys:[ForeignKey] (required);
+}
+
+table WorkingSet {
+  // todo(andy): should |name| be included?
+  name:string (required);
+  working_root:Ref (required);
+  staged_root:Ref (required);
+  merge_state:MergeState;
+  meta:WorkingSetMeta (required);
+}
+
+table MergeState {
+  pre_merge_root:Ref (required);
+  candidate_merge_commit:Ref (required);
+}
+
+table WorkingSetMeta {
+  name:string (required);
+  email:string (required);
+  // todo(andy): is description required?
+  desc:string;
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+}
+
+table Commit {
+  root:Ref (required);
+  parent_list:[Ref] (required);
+  parent_closure:Ref (required);
+  meta:CommitMeta (required);
+}
+
+table CommitMeta {
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+}
+
+table Tag {
+  commit:Ref (required);
+  meta:TagMeta (required);
+}
+
+table TagMeta {
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp:Timestamp (required);
+  user_timestamp:Timestamp (required);
+}
