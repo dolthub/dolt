@@ -45,11 +45,11 @@ import (
 type prollyWriter struct {
 	tableName string
 	dbName    string
-	sch       schema.Schema
-	mut       prollyIndexWriter
 
-	tbl *doltdb.Table
+	sch schema.Schema
+	mut prollyIndexWriter
 
+	tbl       *doltdb.Table
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
 
@@ -60,7 +60,7 @@ type prollyWriter struct {
 
 var _ TableWriter = &prollyWriter{}
 
-func (w *prollyWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+func (w *prollyWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	if schema.IsKeyless(w.sch) {
 		return errors.New("operation unsupported")
 	}
@@ -74,7 +74,7 @@ func (w *prollyWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return w.mut.Delete(ctx, sqlRow)
 }
 
-func (w *prollyWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+func (w *prollyWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	if schema.IsKeyless(w.sch) {
 		return errors.New("operation unsupported")
 	}

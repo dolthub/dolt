@@ -48,7 +48,13 @@ CREATE TABLE sbtest1 (
 	text_col TEXT NOT NULL,
 	medium_text_col MEDIUMTEXT NOT NULL,
 	long_text_col LONGTEXT NOT NULL,
-	year_col INT NOT NULL,
+	enum_col ENUM('val0', 'val1', 'val2') NOT NULL,
+	set_col SET('val0', 'val1', 'val2') NOT NULL,
+	date_col DATE NOT NULL,
+	time_col TIME NOT NULL,
+	datetime_col DATETIME NOT NULL,
+	timestamp_col TIMESTAMP NOT NULL,
+	year_col YEAR NOT NULL,
 
 	PRIMARY KEY(id),
 	INDEX (big_int_col)
@@ -61,7 +67,7 @@ CREATE TABLE sbtest1 (
     end
 
     local query = [[INSERT INTO sbtest1
-(id, tiny_int_col, unsigned_tiny_int_col, small_int_col, unsigned_small_int_col, medium_int_col, unsigned_medium_int_col, int_col, unsigned_int_col, big_int_col, unsigned_big_int_col, decimal_col, float_col, double_col, bit_col, char_col, var_char_col, tiny_text_col, text_col, medium_text_col, long_text_col, year_col)
+(id, tiny_int_col, unsigned_tiny_int_col, small_int_col, unsigned_small_int_col, medium_int_col, unsigned_medium_int_col, int_col, unsigned_int_col, big_int_col, unsigned_big_int_col, decimal_col, float_col, double_col, bit_col, char_col, var_char_col, tiny_text_col, text_col, medium_text_col, long_text_col, enum_col, set_col, date_col, time_col, datetime_col, timestamp_col, year_col)
 VALUES
 ]]
 
@@ -91,6 +97,12 @@ VALUES
             "'" .. str_vals[math.random(1, 3)] .. "'" .. "," ..                -- text_col
             "'" .. str_vals[math.random(1, 3)] .. "'" .. "," ..                -- medium_text_col
             "'" .. str_vals[math.random(1, 3)] .. "'" .. "," ..                -- long_text_col
+            "'" .. str_vals[math.random(1, 3)] .. "'" .. "," ..                -- enum_col
+            "'" .. str_vals[math.random(1, 3)] .. "'" .. "," ..                -- set_col
+            "'2020-0" .. math.random(1, 9) .. "-" .. math.random(10, 28) .. "'" .. "," .. -- date_col
+            "'0" .. math.random(1, 9) .. ":" .. math.random(10, 59) .. ":00'" .. "," .. -- time_col
+            "'2020-0" .. math.random(1, 9) .. "-" .. math.random(10, 28) .. " 0" .. math.random(1, 9) .. ":" .. math.random(10, 59) .. ":00'" .. "," .. -- datetime_col
+            "'2020-0" .. math.random(1, 9) .. "-" .. math.random(10, 28) .. " 0" .. math.random(1, 9) .. ":" .. math.random(10, 59) .. ":00'" .. "," .. -- timestamp_col
             math.random(1901, 2155) .. ")"                                     -- year_col
 
         con:bulk_insert_next(row_values)

@@ -167,6 +167,15 @@ func (tb *TupleBuilder) PutSqlTime(i int, v string) {
 	tb.pos += sz
 }
 
+// PutYear writes an int16-encoded year to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutYear(i int, v int16) {
+	// todo(andy): yearSize, etc?
+	tb.Desc.expectEncoding(i, YearEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
+	WriteInt16(tb.fields[i], v)
+	tb.pos += int16Size
+}
+
 func (tb *TupleBuilder) PutDecimal(i int, v string) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
 	// todo(andy): temporary implementation
@@ -226,7 +235,9 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutDecimal(i, v.(string))
 	case TimeEnc:
 		tb.PutSqlTime(i, v.(string))
-	case DateEnc, DatetimeEnc, TimestampEnc, YearEnc:
+	case YearEnc:
+		tb.PutYear(i, v.(int16))
+	case DateEnc, DatetimeEnc, TimestampEnc:
 		tb.PutTime(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))

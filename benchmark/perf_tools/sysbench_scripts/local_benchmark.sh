@@ -72,6 +72,8 @@ cleanup() {
 trap cleanup EXIT
 
 # setup benchmark
+echo "benchmark $SYSBENCH_TEST bootstrapping at $WORKING_DIR"
+
 sleep 1
 sysbench \
   --mysql-host="0.0.0.0" \

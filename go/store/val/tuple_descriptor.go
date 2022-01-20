@@ -249,6 +249,17 @@ func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
 	return
 }
 
+// GetInt16 reads an int16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
+	td.expectEncoding(i, YearEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadInt16(b), true
+	}
+	return
+}
+
 // GetString reads a string from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
@@ -301,7 +312,9 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetDecimal(i, tup)
 	case TimeEnc:
 		v, ok = td.GetSqlTime(i, tup)
-	case TimestampEnc, DateEnc, DatetimeEnc, YearEnc:
+	case YearEnc:
+		v, ok = td.GetYear(i, tup)
+	case TimestampEnc, DateEnc, DatetimeEnc:
 		v, ok = td.GetTime(i, tup)
 	case StringEnc:
 		v, ok = td.GetString(i, tup)
