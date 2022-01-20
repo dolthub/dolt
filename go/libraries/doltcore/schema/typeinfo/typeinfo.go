@@ -186,7 +186,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
 		default:
-			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Point"`)
+			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
