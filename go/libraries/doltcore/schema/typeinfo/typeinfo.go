@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -28,13 +29,29 @@ import (
 
 const spatialTypesFeatureFlagKey = "DOLT_ENABLE_SPATIAL_TYPES"
 
-var spatialTypesFeatureFlag = true // TODO: should be false, but this lets the test pass :)
+// use SpatialTypesEnabled() to check, don't access directly
+var spatialTypesFeatureFlag = false
 
 func init() {
 	// set the spatial types feature flag to true if the env var is set
 	if v, ok := os.LookupEnv(spatialTypesFeatureFlagKey); ok && v != "" {
 		spatialTypesFeatureFlag = true
 	}
+}
+
+var spatialTypesLock = &sync.RWMutex{}
+
+func SpatialTypesEnabled() bool {
+	return spatialTypesFeatureFlag
+}
+
+func TestWithSpatialTypesEnabled(cb func()) {
+	spatialTypesLock.Lock()
+	defer spatialTypesLock.Unlock()
+
+	spatialTypesFeatureFlag = true
+	cb()
+	spatialTypesFeatureFlag = false
 }
 
 type Identifier string
@@ -261,7 +278,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.
 func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
-	if spatialTypesFeatureFlag {
+	if SpatialTypesEnabled() {
 		switch id {
 		case PointTypeIdentifier:
 			return PointType, nil
