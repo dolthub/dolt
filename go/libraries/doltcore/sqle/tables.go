@@ -1130,10 +1130,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	indexColumns []sql.IndexColumn,
 	comment string,
 ) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
@@ -1570,7 +1566,7 @@ func createIndexForTable(
 		if err != nil {
 			return nil, err
 		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+		newTable, err = newTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 		if err != nil {
 			return nil, err
 		}

@@ -102,6 +102,10 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return durable.VrwFromTable(t.table)
 }
 
+func (t *Table) GetDurableTable() durable.Table {
+	return t.table
+}
+
 // SetConflicts sets the merge conflicts for this table.
 func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (*Table, error) {
 	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
@@ -346,8 +350,23 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 	return indexes.GetIndex(ctx, indexName)
 }
 
-// SetIndexRowData replaces the current row data for the given index and returns an updated Table.
-func (t *Table) SetIndexRowData(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
+// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+func (t *Table) SetIndexRows(ctx context.Context, indexName string, idx durable.Index) (*Table, error) {
+	indexes, err := t.GetIndexData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes, err = indexes.PutIndex(ctx, indexName, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.SetIndexData(ctx, indexes)
+}
+
+// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+func (t *Table) SetNomsIndexRows(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
 	indexes, err := t.GetIndexData(ctx)
 	if err != nil {
 		return nil, err
@@ -362,7 +381,7 @@ func (t *Table) SetIndexRowData(ctx context.Context, indexName string, idx types
 }
 
 // DeleteIndexRowData removes the underlying map of an index, along with its key entry. This should only be used
-// when removing an index altogether. If the intent is to clear an index's data, then use SetIndexRowData with
+// when removing an index altogether. If the intent is to clear an index's data, then use SetNomsIndexRows with
 // an empty map.
 func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Table, error) {
 	indexes, err := t.GetIndexData(ctx)
