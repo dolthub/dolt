@@ -19,6 +19,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -113,11 +116,12 @@ func CreateIndex(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		indexRows, err := BuildSecondaryIndex(ctx, newTable, index, opts)
 		if err != nil {
 			return nil, err
 		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+
+		newTable, err = newTable.SetIndexRows(ctx, index.Name(), indexRows)
 		if err != nil {
 			return nil, err
 		}
@@ -128,4 +132,21 @@ func CreateIndex(
 		OldIndex: existingIndex,
 		NewIndex: index,
 	}, nil
+}
+
+func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, opts editor.Options) (durable.Index, error) {
+	switch tbl.Format() {
+	case types.Format_LD_1:
+		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
+		if err != nil {
+			return nil, err
+		}
+		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
+
+	case types.Format_DOLT_1:
+		return durable.BuildSecondaryIndex(ctx, tbl.ValueReadWriter(), tbl.GetDurableTable(), idx)
+
+	default:
+		return nil, fmt.Errorf("unknown NomsBinFormat")
+	}
 }

@@ -89,7 +89,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)
 	}
-	updatedTable, err := table.SetIndexRowData(ctx, indexName, indexRowData)
+	updatedTable, err := table.SetNomsIndexRows(ctx, indexName, indexRowData)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to set rebuilt index.").AddCause(err).Build(), nil)
 	}

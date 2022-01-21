@@ -52,6 +52,9 @@ type Table interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
+	// Format returns the types.NomsBinFormat for this table.
+	Format() *types.NomsBinFormat
+
 	// GetSchemaHash returns the hash.Hash of this table's schema.
 	GetSchemaHash(ctx context.Context) (hash.Hash, error)
 	// GetSchema returns this table's schema.
@@ -185,6 +188,11 @@ func (t nomsTable) valueReadWriter() types.ValueReadWriter {
 // HashOf implements Table.
 func (t nomsTable) HashOf() (hash.Hash, error) {
 	return t.tableStruct.Hash(t.vrw.Format())
+}
+
+// Format returns the types.NomsBinFormat for this index.
+func (t nomsTable) Format() *types.NomsBinFormat {
+	return t.vrw.Format()
 }
 
 // GetSchema implements Table.

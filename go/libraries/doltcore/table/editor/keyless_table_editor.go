@@ -472,7 +472,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		if idxErr != nil {
 			return nil, err
 		}
-		tbl, idxErr = tbl.SetIndexRowData(ctx, indexEds[i].Index().Name(), indexMap)
+		tbl, idxErr = tbl.SetNomsIndexRows(ctx, indexEds[i].Index().Name(), indexMap)
 		if idxErr != nil {
 			return nil, err
 		}

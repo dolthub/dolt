@@ -111,6 +111,19 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 	}
 }
 
+func BuildSecondaryIndex(ctx context.Context, vrw types.ValueReadWriter, tbl Table, idx schema.Index) (Index, error) {
+	primary, err := tbl.GetTableRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if primary.Count() > 0 {
+		return nil, fmt.Errorf("building secondary prolly indexes not supported")
+	}
+
+	return NewEmptyIndex(ctx, vrw, idx.Schema())
+}
+
 type nomsIndex struct {
 	index types.Map
 	vrw   types.ValueReadWriter
