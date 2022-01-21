@@ -102,7 +102,7 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *pointType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Point); ok {
-		buf := make([]byte, types.EWKBHeaderSize + types.PointDataSize)
+		buf := make([]byte, types.EWKBHeaderSize+types.PointDataSize)
 		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
 		types.WriteEWKBPointData(val, buf[types.EWKBHeaderSize:])
 		resStr := string(buf)
@@ -147,7 +147,7 @@ func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, 
 		return types.NullValue, nil
 	}
 	buf := []byte(*str)
-	srid, _ , geomType := types.ParseEWKBHeader(buf)
+	srid, _, geomType := types.ParseEWKBHeader(buf)
 	if geomType != types.PointID {
 		return types.NullValue, nil
 	}
