@@ -163,7 +163,7 @@ func (ti *pointType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *pointType) String() string {
-	return "Point()"
+	return "Point"
 }
 
 // ToSqlType implements TypeInfo interface.

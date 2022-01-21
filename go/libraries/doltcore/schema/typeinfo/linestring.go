@@ -169,7 +169,7 @@ func (ti *linestringType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *linestringType) String() string {
-	return "Linestring()"
+	return "Linestring"
 }
 
 // ToSqlType implements TypeInfo interface.

@@ -169,7 +169,7 @@ func (ti *polygonType) Promote() TypeInfo {
 
 // String implements TypeInfo interface.
 func (ti *polygonType) String() string {
-	return "Polygon()"
+	return "Polygon"
 }
 
 // ToSqlType implements TypeInfo interface.
