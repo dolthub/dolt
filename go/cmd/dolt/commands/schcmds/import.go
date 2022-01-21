@@ -305,7 +305,7 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 
 		var indexSet durable.IndexSet
 		if tblExists {
-			indexSet, err = tbl.GetIndexData(ctx)
+			indexSet, err = tbl.GetIndexSet(ctx)
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}

@@ -42,7 +42,7 @@ type IndexSet interface {
 	HashOf() (hash.Hash, error)
 
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, name string) (Index, error)
+	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
 
 	// PutIndex puts an index into the set.
 	PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error)
@@ -109,19 +109,6 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 	default:
 		return nil, errNbfUnkown
 	}
-}
-
-func BuildSecondaryIndex(ctx context.Context, vrw types.ValueReadWriter, tbl Table, idx schema.Index) (Index, error) {
-	primary, err := tbl.GetTableRows(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if primary.Count() > 0 {
-		return nil, fmt.Errorf("building secondary prolly indexes not supported")
-	}
-
-	return NewEmptyIndex(ctx, vrw, idx.Schema())
 }
 
 type nomsIndex struct {
@@ -205,7 +192,7 @@ func (s nomsIndexSet) HashOf() (hash.Hash, error) {
 }
 
 // GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) {
+func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
@@ -214,15 +201,9 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) 
 		return nil, err
 	}
 
-	v, err = v.(types.Ref).TargetValue(ctx, s.vrw)
-	if err != nil {
-		return nil, err
-	}
+	idxSch := sch.Indexes().GetByName(name).Schema()
 
-	return nomsIndex{
-		index: v.(types.Map),
-		vrw:   s.vrw,
-	}, nil
+	return IndexFromRef(ctx, s.vrw, idxSch, v.(types.Ref))
 }
 
 // PutIndex implements IndexSet.

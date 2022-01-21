@@ -141,7 +141,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 	}
 
-	indexData, err := tbl.GetIndexData(ctx)
+	indexData, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
