@@ -205,7 +205,7 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.pos += sz
 }
 
-// PutBytes writes a []byte to the ith field of the Tuple being built.
+// PutJSON writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
 	tb.Desc.expectEncoding(i, JSONEnc)
 	buf, err := json.Marshal(v)

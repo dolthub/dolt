@@ -17,14 +17,16 @@ package creation
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type CreateIndexReturn struct {
@@ -144,9 +146,86 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
 
 	case types.Format_DOLT_1:
-		return durable.BuildSecondaryIndex(ctx, tbl.ValueReadWriter(), tbl.GetDurableTable(), idx)
+		return BuildSecondaryProllyIndex(ctx, tbl, idx)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
 	}
 }
+
+func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index) (durable.Index, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), idx.Schema())
+	if err != nil {
+		return nil, err
+	}
+	secondary := durable.ProllyMapFromIndex(empty)
+
+	m, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	primary := durable.ProllyMapFromIndex(m)
+
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pkLen := sch.GetPKCols().Size()
+
+	// create a key builder for index key tuples
+	kd, _ := secondary.Descriptors()
+	keyBld := val.NewTupleBuilder(kd)
+	keyMap := getIndexKeyMapping(sch, idx)
+
+	mut := secondary.Mutate()
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for to, from := range keyMap {
+			if from < pkLen {
+				keyBld.PutRaw(to, k.GetField(from))
+			} else {
+				from -= pkLen
+				keyBld.PutRaw(to, v.GetField(from))
+			}
+		}
+
+		idxKey := keyBld.Build(sharePool)
+		idxVal := val.EmptyTuple
+
+		// todo(andy): periodic flushing
+		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
+			return nil, err
+		}
+	}
+
+	secondary, err = mut.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return durable.IndexFromProllyMap(secondary), nil
+}
+
+type indexMapping []int
+
+func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m indexMapping) {
+	m = make(indexMapping, len(idx.AllTags()))
+	for i, tag := range idx.AllTags() {
+		m[i] = sch.GetAllCols().TagToIdx[tag]
+	}
+	return
+}
+
+var sharePool = pool.NewBuffPool()
