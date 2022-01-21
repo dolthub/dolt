@@ -108,7 +108,7 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Linestring); ok {
-		buf := make([]byte, types.EWKBHeaderSize + types.LengthSize + types.PointDataSize * len(val.Points))
+		buf := make([]byte, types.EWKBHeaderSize+types.LengthSize+types.PointDataSize*len(val.Points))
 		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
 		types.WriteEWKBLineData(val, buf[types.EWKBHeaderSize:])
 		resStr := string(buf)
@@ -153,7 +153,7 @@ func (ti *linestringType) ParseValue(ctx context.Context, vrw types.ValueReadWri
 		return types.NullValue, nil
 	}
 	buf := []byte(*str)
-	srid, _ , geomType := types.ParseEWKBHeader(buf)
+	srid, _, geomType := types.ParseEWKBHeader(buf)
 	if geomType != types.LinestringID {
 		return types.NullValue, nil
 	}
