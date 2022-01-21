@@ -129,6 +129,12 @@ func wrapConvertValueToNomsValue(
 			vInt = *(*string)(unsafe.Pointer(&val))
 		case types.Int:
 			vInt = int64(val)
+		case types.Linestring:
+			vInt = ConvertTypesLinestringToSQLLinestring(val)
+		case types.Point:
+			vInt = ConvertTypesPointToSQLPoint(val)
+		case types.Polygon:
+			vInt = ConvertTypesPolygonToSQLPolygon(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:
