@@ -84,15 +84,15 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 }
 
 func (r *valueDecoder) ReadPoint() (Point, error) {
-	return readPoint(r.vrw.Format(), r)
+	return readPoint(nil, r)
 }
 
 func (r *valueDecoder) ReadLinestring() (Linestring, error) {
-	return readLinestring(r.vrw.Format(), r)
+	return readLinestring(nil, r)
 }
 
 func (r *valueDecoder) ReadPolygon() (Polygon, error) {
-	return readPolygon(r.vrw.Format(), r)
+	return readPolygon(nil, r)
 }
 
 func (r *valueDecoder) ReadJSON() (JSON, error) {
@@ -374,27 +374,27 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	case PointKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := parseEWKBHeader(buf)
+		srid, _, geomType := ParseEWKBHeader(buf)
 		if geomType != PointID {
 			return nil, ErrUnknownType
 		}
-		return parseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
 	case LinestringKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := parseEWKBHeader(buf)
+		srid, _, geomType := ParseEWKBHeader(buf)
 		if geomType != LinestringID {
 			return nil, ErrUnknownType
 		}
-		return parseEWKBLine(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBLine(buf[EWKBHeaderSize:], srid), nil
 	case PolygonKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := parseEWKBHeader(buf)
+		srid, _, geomType := ParseEWKBHeader(buf)
 		if geomType != PolygonID {
 			return nil, ErrUnknownType
 		}
-		return parseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

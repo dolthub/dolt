@@ -108,14 +108,11 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Linestring); ok {
-		res, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		if resStr, ok := res.(string); ok {
-			return &resStr, nil
-		}
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+		buf := make([]byte, types.EWKBHeaderSize + types.LengthSize + types.PointDataSize * len(val.Points))
+		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
+		types.WriteEWKBLineData(val, buf[types.EWKBHeaderSize:])
+		resStr := string(buf)
+		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -136,11 +133,7 @@ func (ti *linestringType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *linestringType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Linestring); ok {
-		_, err := ti.sqlLinestringType.Convert(val)
-		if err != nil {
-			return false
-		}
+	if _, ok := v.(types.Linestring); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -159,7 +152,12 @@ func (ti *linestringType) ParseValue(ctx context.Context, vrw types.ValueReadWri
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
+	buf := []byte(*str)
+	srid, _ , geomType := types.ParseEWKBHeader(buf)
+	if geomType != types.LinestringID {
+		return types.NullValue, nil
+	}
+	return types.ParseEWKBLine(buf[types.EWKBHeaderSize:], srid), nil
 }
 
 // Promote implements TypeInfo interface.

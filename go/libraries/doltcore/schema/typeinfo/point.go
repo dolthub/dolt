@@ -102,14 +102,11 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *pointType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Point); ok {
-		res, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
-		}
-		if resStr, ok := res.(string); ok {
-			return &resStr, nil
-		}
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+		buf := make([]byte, types.EWKBHeaderSize + types.PointDataSize)
+		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
+		types.WriteEWKBPointData(val, buf[types.EWKBHeaderSize:])
+		resStr := string(buf)
+		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -130,11 +127,7 @@ func (ti *pointType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *pointType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Point); ok {
-		_, err := ti.sqlPointType.Convert(val)
-		if err != nil {
-			return false
-		}
+	if _, ok := v.(types.Point); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -153,7 +146,12 @@ func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, 
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
+	buf := []byte(*str)
+	srid, _ , geomType := types.ParseEWKBHeader(buf)
+	if geomType != types.PointID {
+		return types.NullValue, nil
+	}
+	return types.ParseEWKBPoint(buf[types.EWKBHeaderSize:], srid), nil
 }
 
 // Promote implements TypeInfo interface.

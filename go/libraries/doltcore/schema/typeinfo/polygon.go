@@ -107,15 +107,16 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 
 // FormatValue implements TypeInfo interface.
 func (ti *polygonType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Linestring); ok {
-		res, err := ti.ConvertNomsValueToValue(val)
-		if err != nil {
-			return nil, err
+	if val, ok := v.(types.Polygon); ok {
+		size := types.EWKBHeaderSize + types.LengthSize
+		for _, l := range val.Lines {
+			size += types.LengthSize + types.PointDataSize * len(l.Points)
 		}
-		if resStr, ok := res.(string); ok {
-			return &resStr, nil
-		}
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
+		buf := make([]byte, size)
+		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
+		types.WriteEWKBPolyData(val, buf[types.EWKBHeaderSize:])
+		resStr := string(buf)
+		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -136,11 +137,7 @@ func (ti *polygonType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *polygonType) IsValid(v types.Value) bool {
-	if val, ok := v.(types.Linestring); ok {
-		_, err := ti.sqlPolygonType.Convert(val)
-		if err != nil {
-			return false
-		}
+	if _, ok := v.(types.Polygon); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -159,7 +156,12 @@ func (ti *polygonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter
 	if str == nil || *str == "" {
 		return types.NullValue, nil
 	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
+	buf := []byte(*str)
+	srid, _ , geomType := types.ParseEWKBHeader(buf)
+	if geomType != types.PolygonID {
+		return types.NullValue, nil
+	}
+	return types.ParseEWKBPoly(buf[types.EWKBHeaderSize:], srid), nil
 }
 
 // Promote implements TypeInfo interface.
