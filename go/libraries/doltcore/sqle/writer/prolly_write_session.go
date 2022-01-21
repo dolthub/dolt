@@ -38,6 +38,7 @@ type prollyWriteSession struct {
 
 var _ WriteSession = &prollyWriteSession{}
 
+// GetTableWriter implemented WriteSession.
 func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -90,7 +91,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	return wr, nil
 }
 
-// Flush returns an updated root with all of the changed tables.
+// Flush implemented WriteSession.
 func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -98,11 +99,7 @@ func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, erro
 	return s.flush(ctx)
 }
 
-// SetRoot uses the given root to set all open table editors to the state as represented in the root. If any
-// tables are removed in the root, but have open table editors, then the references to those are removed. If those
-// removed table's editors are used after this, then the behavior is undefined. This will lose any changes that have not
-// been flushed. If the purpose is to add a new table, foreign key, etc. (using Flush followed up with SetRoot), then
-// use UpdateRoot. Calling the two functions manually for the purposes of root modification may lead to race conditions.
+// SetRoot implemented WriteSession.
 func (s *prollyWriteSession) SetRoot(ctx context.Context, root *doltdb.RootValue) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -110,9 +107,7 @@ func (s *prollyWriteSession) SetRoot(ctx context.Context, root *doltdb.RootValue
 	return s.setRoot(ctx, root)
 }
 
-// UpdateRoot takes in a function meant to update the root (whether that be updating a table's schema, adding a foreign
-// key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
-// (assuming no errors). The prollyWriteSession will update itself in accordance with the newly returned root.
+// UpdateRoot implemented WriteSession.
 func (s *prollyWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
@@ -130,10 +125,12 @@ func (s *prollyWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context
 	return s.setRoot(ctx, mutated)
 }
 
+// GetOptions implemented WriteSession.
 func (s *prollyWriteSession) GetOptions() editor.Options {
 	return editor.Options{}
 }
 
+// SetOptions implemented WriteSession.
 func (s *prollyWriteSession) SetOptions(opts editor.Options) {
 	return
 }

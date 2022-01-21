@@ -1131,8 +1131,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	comment string,
 ) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy): error out
-		//return types.ErrUnsupportedFormat
 		return nil
 	}
 
@@ -1206,8 +1204,6 @@ func (t *AlterableDoltTable) CreateIndex(
 // DropIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy): error out
-		//return types.ErrUnsupportedFormat
 		return nil
 	}
 
@@ -1300,9 +1296,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	onUpdate, onDelete sql.ForeignKeyReferenceOption,
 ) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy): error out
-		//return types.ErrUnsupportedFormat
-		return nil
+		return types.ErrUnsupportedFormat
 	}
 
 	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
@@ -1383,9 +1377,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 // DropForeignKey implements sql.ForeignKeyAlterableTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy): error out
-		//return types.ErrUnsupportedFormat
-		return nil
+		return types.ErrUnsupportedFormat
 	}
 
 	root, err := t.getRoot(ctx)

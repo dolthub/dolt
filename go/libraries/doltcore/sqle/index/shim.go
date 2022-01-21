@@ -61,6 +61,7 @@ func rowIterFromMapIter(
 	projections []string,
 ) (sql.RowIter, error) {
 
+	// todo(andy): NomsRangeReader seemingly ignores projections
 	//if projections == nil {
 	//	projections = sch.GetAllCols().GetColumnNames()
 	//}

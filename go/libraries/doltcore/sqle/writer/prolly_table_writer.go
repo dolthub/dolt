@@ -17,9 +17,6 @@ package writer
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -32,16 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// prollyWriter is a wrapper for *doltdb.SessionedTableEditor that complies with the SQL interface.
-//
-// The prollyWriter has two levels of batching: one supported at the SQL engine layer where a single UPDATE, DELETE or
-// INSERT statement will touch many rows, and we want to avoid unnecessary intermediate writes; and one at the dolt
-// layer as a "batch mode" in DoltDatabase. In the latter mode, it's possible to mix inserts, updates and deletes in any
-// order. In general, this is unsafe and will produce incorrect results in many cases. The editor makes reasonable
-// attempts to produce correct results when interleaving insert and delete statements, but this is almost entirely to
-// support REPLACE statements, which are implemented as a DELETE followed by an INSERT. In general, not flushing the
-// editor after every SQL statement is incorrect and will return incorrect results. The single reliable exception is an
-// unbroken chain of INSERT statements, where we have taken pains to batch writes to speed things up.
 type prollyWriter struct {
 	tableName string
 	dbName    string
@@ -60,6 +47,7 @@ type prollyWriter struct {
 
 var _ TableWriter = &prollyWriter{}
 
+// Insert implements TableWriter.
 func (w *prollyWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	if schema.IsKeyless(w.sch) {
 		return errors.New("operation unsupported")
@@ -67,6 +55,7 @@ func (w *prollyWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
 	return w.mut.Insert(ctx, sqlRow)
 }
 
+// Delete implements TableWriter.
 func (w *prollyWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	if schema.IsKeyless(w.sch) {
 		return errors.New("operation unsupported")
@@ -74,6 +63,7 @@ func (w *prollyWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	return w.mut.Delete(ctx, sqlRow)
 }
 
+// Update implements TableWriter.
 func (w *prollyWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	if schema.IsKeyless(w.sch) {
 		return errors.New("operation unsupported")
@@ -81,10 +71,12 @@ func (w *prollyWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) 
 	return w.mut.Update(ctx, oldRow, newRow)
 }
 
+// NextAutoIncrementValue implements TableWriter.
 func (w *prollyWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
 	return w.aiTracker.Next(w.tableName, potentialVal, tableVal)
 }
 
+// SetAutoIncrementValue implements TableWriter.
 func (w *prollyWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
 	nomsVal, err := w.aiCol.TypeInfo.ConvertValueToNomsValue(ctx, w.tbl.ValueReadWriter(), val)
 	if err != nil {
@@ -103,7 +95,7 @@ func (w *prollyWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) 
 
 // Close implements Closer
 func (w *prollyWriter) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don'tbl flush the edits until explicitly told to do so
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
 	if w.batched {
 		return nil
 	}
@@ -111,19 +103,19 @@ func (w *prollyWriter) Close(ctx *sql.Context) error {
 	return w.flush(ctx)
 }
 
-// StatementBegin implements the interface sql.TableEditor.
+// StatementBegin implements TableWriter.
 func (w *prollyWriter) StatementBegin(ctx *sql.Context) {
 	// todo(andy)
 	return
 }
 
-// DiscardChanges implements the interface sql.TableEditor.
+// DiscardChanges implements TableWriter.
 func (w *prollyWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
 	// todo(andy)
 	return nil
 }
 
-// StatementComplete implements the interface sql.TableEditor.
+// StatementComplete implements TableWriter.
 func (w *prollyWriter) StatementComplete(ctx *sql.Context) error {
 	// todo(andy)
 	return nil
@@ -301,55 +293,4 @@ func makeColMapping(from sql.Schema, to *schema.ColCollection) (m colMapping) {
 		}
 	}
 	return
-}
-
-// todo(andy): removed
-func debugPrintIndexes(r *doltdb.RootValue) string {
-	if r == nil {
-		return ""
-	}
-
-	ctx := context.Background()
-	sb := strings.Builder{}
-
-	_ = r.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
-		sb.WriteString("table: ")
-		sb.WriteString(name)
-		sb.WriteRune('\n')
-
-		pk, _ := table.GetRowData(ctx)
-		if pk.Count() > 0 {
-			sb.WriteRune('\t')
-			sb.WriteString(fmt.Sprintf("primary (%d): ", pk.Count()))
-			sb.WriteString(printIndexRowsInline(ctx, pk))
-			sb.WriteRune('\n')
-		}
-
-		return false, nil
-	})
-
-	return sb.String()
-}
-
-func printIndexRowsInline(ctx context.Context, m durable.Index) string {
-	pm := durable.ProllyMapFromIndex(m)
-	kd, vd := pm.Descriptors()
-
-	sb := strings.Builder{}
-	iter, _ := pm.IterAll(ctx)
-	for {
-		k, v, err := iter.Next(ctx)
-		if err == io.EOF {
-			return sb.String()
-		}
-		if err != nil {
-			panic(err)
-		}
-
-		sb.WriteString("\t")
-		sb.WriteString(kd.Format(k))
-		sb.WriteString(" ")
-		sb.WriteString(vd.Format(v))
-		sb.WriteString("\n")
-	}
 }

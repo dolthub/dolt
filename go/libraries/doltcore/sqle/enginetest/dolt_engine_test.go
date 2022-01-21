@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -40,52 +39,31 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	test := enginetest.WriteQueryTest{
-		WriteQuery:          `UPDATE othertable CROSS JOIN tabletest set othertable.i2 = othertable.i2 * 10`, // cross join
-		ExpectedWriteResult: []sql.Row{{newUpdateResult(3, 3)}},
-		SelectQuery:         "SELECT * FROM othertable order by i2",
-		ExpectedSelect: []sql.Row{
-			sql.NewRow("third", 10),
-			sql.NewRow("second", 20),
-			sql.NewRow("first", 30),
-		},
-	}
-
-	harness := newDoltHarness(t)
-	engine := enginetest.NewEngine(t, harness)
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
-
-	enginetest.TestQuery(t, harness, engine, test.WriteQuery, test.ExpectedWriteResult, nil, test.Bindings)
-
-	enginetest.TestQuery(t, harness, engine, test.SelectQuery, test.ExpectedSelect, nil, test.Bindings)
-}
-
-func newUpdateResult(matched, updated int) sql.OkResult {
-	return sql.OkResult{
-		RowsAffected: uint64(updated),
-		Info:         plan.UpdateInfo{matched, updated, 0},
-	}
-}
-
-func TestSingleQueryNewFormat(t *testing.T) {
 	t.Skip()
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    `SELECT s FROM myTable WHERE i = 1`,
-		Expected: []sql.Row{{int64(1), "first row"}},
+		Query: `SELECT 
+					myTable.i, 
+					(SELECT 
+						dolt_commit_diff_mytable.diff_type 
+					FROM 
+						dolt_commit_diff_mytable
+					WHERE (
+						dolt_commit_diff_mytable.from_commit = 'abc' AND 
+						dolt_commit_diff_mytable.to_commit = 'abc' AND
+						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
+					)) AS diff_type 
+				FROM myTable`,
+		Expected: []sql.Row{},
 	}
 
-	_ = types.TestFormatDolt1(func() error {
-		harness := newDoltHarness(t)
-		engine := enginetest.NewEngine(t, harness)
-		engine.Analyzer.Debug = false
-		engine.Analyzer.Verbose = false
+	harness := newDoltHarness(t)
+	engine := enginetest.NewEngine(t, harness)
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
 
-		enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
-		return nil
-	})
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
