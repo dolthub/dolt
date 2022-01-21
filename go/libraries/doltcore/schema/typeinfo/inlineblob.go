@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -33,6 +34,7 @@ const (
 	inlineBlobTypeParam_SQL_VarBinary = "varbin"
 )
 
+// inlineBlobType handles BINARY and VARBINARY. BLOB types are handled by varBinaryType.
 type inlineBlobType struct {
 	sqlBinaryType sql.StringType
 }
@@ -178,21 +180,6 @@ func (ti *inlineBlobType) NomsKind() types.NomsKind {
 	return types.InlineBlobKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *inlineBlobType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlBinaryType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *inlineBlobType) Promote() TypeInfo {
 	return &inlineBlobType{ti.sqlBinaryType.Promote().(sql.StringType)}
@@ -221,7 +208,21 @@ func (ti *inlineBlobType) ToSqlType() sql.Type {
 func inlineBlobTypeConverter(ctx context.Context, src *inlineBlobType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			inlineBlob, ok := v.(types.InlineBlob)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting inlineblob to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			val := *(*string)(unsafe.Pointer(&inlineBlob))
+			newVal, err := strconv.ParseUint(val, 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:

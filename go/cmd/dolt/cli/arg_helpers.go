@@ -170,15 +170,13 @@ func ParseKeyValues(ctx context.Context, vrw types.ValueReadWriter, sch schema.S
 		}
 	}
 
-	convFuncs := make(map[uint64]func(context.Context, types.ValueReadWriter, *string) (types.Value, error))
+	convFuncs := make(map[uint64]typeinfo.TypeConverter)
 	err := sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if typeinfo.IsStringType(col.TypeInfo) {
-			convFuncs[tag] = func(_ context.Context, _ types.ValueReadWriter, v *string) (types.Value, error) {
-				return types.String(*v), nil
-			}
-		} else {
-			convFuncs[tag] = col.TypeInfo.ParseValue
+		tc, _, err := typeinfo.GetTypeConverter(ctx, typeinfo.StringDefaultType, col.TypeInfo)
+		if err != nil {
+			return true, err
 		}
+		convFuncs[tag] = tc
 		return false, nil
 	})
 
@@ -190,7 +188,7 @@ func ParseKeyValues(ctx context.Context, vrw types.ValueReadWriter, sch schema.S
 	for _, pkMap := range pkMaps {
 		taggedVals := make(row.TaggedValues)
 		for k, v := range pkMap {
-			val, err := convFuncs[k](ctx, vrw, &v)
+			val, err := convFuncs[k](ctx, vrw, types.String(v))
 
 			if err != nil {
 				return nil, err

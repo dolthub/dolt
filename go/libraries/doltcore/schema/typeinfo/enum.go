@@ -192,18 +192,6 @@ func (ti *enumType) NomsKind() types.NomsKind {
 	return types.UintKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *enumType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	val, err := ti.sqlEnumType.Marshal(*str)
-	if err != nil {
-		return nil, err
-	}
-	return types.Uint(val), nil
-}
-
 // Promote implements TypeInfo interface.
 func (ti *enumType) Promote() TypeInfo {
 	return &enumType{ti.sqlEnumType.Promote().(sql.EnumType)}

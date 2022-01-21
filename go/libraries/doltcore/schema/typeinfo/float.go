@@ -184,14 +184,6 @@ func (ti *floatType) NomsKind() types.NomsKind {
 	return types.FloatKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *floatType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *floatType) Promote() TypeInfo {
 	return &floatType{ti.sqlFloatType.Promote().(sql.NumberType)}
