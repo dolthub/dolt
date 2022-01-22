@@ -39,27 +39,20 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
-
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT 
-					myTable.i, 
-					(SELECT 
-						dolt_commit_diff_mytable.diff_type 
-					FROM 
-						dolt_commit_diff_mytable
-					WHERE (
-						dolt_commit_diff_mytable.from_commit = 'abc' AND 
-						dolt_commit_diff_mytable.to_commit = 'abc' AND
-						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
-					)) AS diff_type 
-				FROM myTable`,
-		Expected: []sql.Row{},
+		// In this case, the parser and analyzer collaborate to place the filter below the WINDOW function,
+		// and the window sees the filtered rows.
+		Query: "SELECT ROW_NUMBER() OVER (ORDER BY s2 ASC) idx, i2, s2 FROM othertable WHERE s2 <> 'second' ORDER BY i2 ASC",
+		Expected: []sql.Row{
+			{2, 1, "third"},
+			{1, 3, "first"},
+		},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
+	enginetest.CreateIndexes(t, harness, engine)
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 

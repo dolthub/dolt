@@ -427,6 +427,11 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	}
 
 	if !start.Unbound {
+		startFields, err = normalizeKey(startFields)
+		if err != nil {
+			return prolly.Range{}, err
+		}
+
 		start.Key, err = tupleFromKeys(startFields, tb)
 		if err != nil {
 			return prolly.Range{}, err
@@ -467,4 +472,12 @@ func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 		tb.PutField(i, v)
 	}
 	return tb.BuildPermissive(sharePool), nil
+}
+
+func normalizeKey(key sql.Row) (sql.Row, error) {
+	// todo(andy) need to convert canonical storage here
+	for i := range key {
+		key[i] = key[i]
+	}
+	return key, nil
 }

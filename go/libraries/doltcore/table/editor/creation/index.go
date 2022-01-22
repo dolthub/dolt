@@ -201,7 +201,8 @@ func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schem
 			}
 		}
 
-		idxKey := keyBld.Build(sharePool)
+		// todo(andy): build permissive?
+		idxKey := keyBld.BuildPermissive(sharePool)
 		idxVal := val.EmptyTuple
 
 		// todo(andy): periodic flushing
@@ -222,9 +223,16 @@ type indexMapping []int
 
 func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m indexMapping) {
 	m = make(indexMapping, len(idx.AllTags()))
+
 	for i, tag := range idx.AllTags() {
-		m[i] = sch.GetAllCols().TagToIdx[tag]
+		j, ok := sch.GetPKCols().TagToIdx[tag]
+		if !ok {
+			j = sch.GetNonPKCols().TagToIdx[tag]
+			j += sch.GetPKCols().Size()
+		}
+		m[i] = j
 	}
+
 	return
 }
 
