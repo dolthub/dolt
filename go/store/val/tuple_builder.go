@@ -15,6 +15,7 @@
 package val
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -53,8 +54,50 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
+
+	if err := tb.validateBuild(tup); err != nil {
+		panic(err)
+	}
+
 	tb.Recycle()
 	return
+}
+
+func (tb *TupleBuilder) validateBuild(tup Tuple) error {
+	expected := ByteSize(0)
+	values := 0
+	for i, field := range tb.fields {
+		if i >= tb.Desc.Count() {
+			break
+		}
+
+		null := field == nil
+		present := tup.mask().present(i)
+		if null == present {
+			return fmt.Errorf("expected null field")
+		}
+		if !null {
+			values++
+		}
+
+		f := tup.GetField(i)
+		if !bytes.Equal(field, f) {
+			return fmt.Errorf("expected equal fields")
+		}
+		expected += ByteSize(len(field))
+	}
+	if values != tup.mask().count() {
+		return fmt.Errorf("expected equal values")
+	}
+
+	expected += uint16Size
+	expected += OffsetsSize(values)
+	expected += maskSize(tb.Desc.Count())
+
+	if ByteSize(len(tup)) != expected {
+		return fmt.Errorf("tuple is not expected size")
+	}
+	return nil
 }
 
 // Recycle resets the TupleBuilder so it can build a new Tuple.
@@ -153,11 +196,11 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
-func (tb *TupleBuilder) PutTime(i int, v time.Time) {
-	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc, YearEnc)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+func (tb *TupleBuilder) PutTimestamp(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+timestampSize]
 	WriteTime(tb.fields[i], v)
-	tb.pos += timeSize
+	tb.pos += timestampSize
 }
 
 // PutString writes a string to the ith field of the Tuple being built.
@@ -266,7 +309,11 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 	case YearEnc:
 		tb.PutYear(i, v.(int16))
 	case DateEnc, DatetimeEnc, TimestampEnc:
-		tb.PutTime(i, v.(time.Time))
+		if _, ok := v.(time.Time); !ok {
+			// todo(andy)
+			v = time.Time{}
+		}
+		tb.PutTimestamp(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))
 	case BytesEnc:
