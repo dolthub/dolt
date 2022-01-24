@@ -119,8 +119,7 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return nil, sc, err
 	}
 
-	// TODO: We should enforce the existing primary key set pk ordinals as out of order primary
-	// key ordinal merge is not supported yet.
+	// TODO: Merge conflict should have blocked any primary key ordinal changes
 	err = sch.SetPkOrdinals(ourSch.GetPkOrdinals())
 	if err != nil {
 		return nil, sc, err
