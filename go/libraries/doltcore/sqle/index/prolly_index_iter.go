@@ -56,7 +56,7 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, proje
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := columnMappingFromIndex(idx)
-	km, vm := projectionMappings(idx.Schema(), projection)
+	km, vm := projectionMappings(idx.Schema(), idx.Schema().GetAllCols().GetColumnNames())
 
 	iter := prollyIndexIter{
 		idx:       idx,
@@ -125,6 +125,15 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 }
 
 func columnMappingFromIndex(idx DoltIndex) (m columnMapping) {
+	if idx.ID() == "PRIMARY" {
+		// todo(andy)
+		m = make(columnMapping, idx.Schema().GetPKCols().Size())
+		for i := range m {
+			m[i] = i
+		}
+		return m
+	}
+
 	def := idx.Schema().Indexes().GetByName(idx.ID())
 	pks := def.PrimaryKeyTags()
 	m = make(columnMapping, len(pks))
