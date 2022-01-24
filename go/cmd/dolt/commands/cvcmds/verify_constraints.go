@@ -58,7 +58,8 @@ func (cmd VerifyConstraintsCmd) Description() string {
 }
 
 func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
-	return nil
+	ap := cmd.ArgParser()
+	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {

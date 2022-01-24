@@ -68,7 +68,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, partition doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -83,7 +83,7 @@ func newRowIterator(ctx *sql.Context, tbl *doltdb.Table, projCols []string, part
 	}
 }
 
-func newKeylessRowIterator(ctx *sql.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
+func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err
@@ -175,4 +175,19 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 		return nil, err
 	}
 	return index.NewProllyRowIter(ctx, sch, rows, partition.rowRange, projections)
+}
+
+// Returns a |sql.RowIter| for a full table scan for the given |table|. If
+// |columns| is not empty, only columns with names appearing in |columns| will
+// have non-|nil| values in the resulting |sql.Row|s. If |columns| is empty,
+// values for all columns in the table are populated in each returned Row. The
+// returned rows always have the schema of the table, regardless of the value
+// of |columns|.  Providing a column name which does not appear in the schema
+// is not an error, but no corresponding column will appear in the results.
+func TableToRowIter(ctx context.Context, table *doltdb.Table, columns []string) (sql.RowIter, error) {
+	data, err := table.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return newRowIterator(ctx, table, columns, doltTablePartition{rowData: data, end: NoUpperBound})
 }

@@ -57,7 +57,7 @@ echo '
             ],
             "args": [
               "--schema=/schema.sql",
-              "--script-dir=/scripts/lua",
+              "--useDoltHubLuaScriptsRepo",
               "--output='$format'",
               "--mysql-exec=/usr/sbin/mysqld",
               "--mysql-protocol=unix",
