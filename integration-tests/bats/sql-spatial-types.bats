@@ -14,11 +14,10 @@ teardown() {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot be made" ]] || false
-
 }
 
 @test "sql-spatial-types: can make spatial types with flag" {
     DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "" ]] || false
+    [[ "$output" = "" ]] || false
 }
