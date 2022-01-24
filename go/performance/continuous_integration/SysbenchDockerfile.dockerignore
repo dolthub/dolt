@@ -1,0 +1,7 @@
+# Ignore everything...
+**
+
+# Except for the following
+!go
+!config.json
+!sysbench-runner-tests-entrypoint.sh
