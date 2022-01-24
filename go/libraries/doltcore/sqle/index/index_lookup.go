@@ -83,8 +83,7 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, projectedCols []
 	di := idx.(DoltIndex)
 
 	if types.IsFormat_DOLT_1(rp.rows.Format()) {
-		pr := durable.ProllyMapFromIndex(rp.rows)
-		return NewProllyRowIter(ctx, di.IndexSchema(), pr, rp.prollyRange, projectedCols)
+		return newProllyIndexIter(ctx, di, rp.prollyRange, projectedCols)
 	}
 
 	ranges := []*noms.ReadRange{rp.nomsRange}

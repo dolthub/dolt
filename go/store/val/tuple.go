@@ -102,6 +102,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		}
 		mask.set(i)
 
+		// todo(andy): remove
 		if count != 0 && pos == 0 {
 			fmt.Println("pos 0")
 		}
