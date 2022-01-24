@@ -97,7 +97,7 @@ teardown() {
     # attempt to create table (autocommit on), expect either some exception
     server_query repo1 1 "CREATE TABLE i_should_not_exist (
             c0 INT
-        )" "" "not authorized: user does not have permission: write"
+        )" "" "not authorized"
 
     # Expect that there are still no tables
     run dolt ls

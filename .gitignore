@@ -6,8 +6,10 @@ venv
 
 .DS_Store
 .sqlhistory
-benchmark/perf_tools/dolt-builds/dolt
-benchmark/perf_tools/dolt-builds/working
-benchmark/perf_tools/output
-
 test.sh
+
+# ignore cp'd sysbench runner testing files
+SysbenchDockerfile
+SysbenchDockerfile.dockerignore
+sysbench-runner-tests-entrypoint.sh
+config.json

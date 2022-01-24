@@ -172,6 +172,7 @@ func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []stri
 			"quit", "exit", "quit()", "exit()",
 		},
 		LineTerminator: ";",
+		MysqlShellCmds: []string{},
 	}
 
 	shell := ishell.NewUninterpreted(&shellConf)

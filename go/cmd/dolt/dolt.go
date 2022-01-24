@@ -51,7 +51,7 @@ import (
 )
 
 const (
-	Version = "0.35.4"
+	Version = "0.35.7"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -113,6 +113,9 @@ const jaegerFlag = "--jaeger"
 const profFlag = "--prof"
 const csMetricsFlag = "--csmetrics"
 const stdInFlag = "--stdin"
+const stdOutFlag = "--stdout"
+const stdErrFlag = "--stderr"
+const stdOutAndErrFlag = "--out-and-err"
 const cpuProf = "cpu"
 const memProf = "mem"
 const blockingProf = "blocking"
@@ -130,7 +133,7 @@ func runMain() int {
 	csMetrics := false
 	if len(args) > 0 {
 		var doneDebugFlags bool
-		for !doneDebugFlags {
+		for !doneDebugFlags && len(args) > 0 {
 			switch args[0] {
 			case profFlag:
 				switch args[1] {
@@ -219,12 +222,37 @@ func runMain() int {
 				cli.Println("Using file contents as stdin:", stdInFile)
 
 				f, err := os.Open(stdInFile)
-
 				if err != nil {
-					panic(err)
+					cli.PrintErrln("Failed to open", stdInFile, err.Error())
+					return 1
 				}
 
 				os.Stdin = f
+				args = args[2:]
+
+			case stdOutFlag, stdErrFlag, stdOutAndErrFlag:
+				filename := args[1]
+
+				f, err := os.OpenFile(filename, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, os.ModePerm)
+				if err != nil {
+					cli.PrintErrln("Failed to open", filename, "for writing:", err.Error())
+					return 1
+				}
+
+				switch args[0] {
+				case stdOutFlag:
+					cli.Println("Stdout being written to", filename)
+					cli.CliOut = f
+				case stdErrFlag:
+					cli.Println("Stderr being written to", filename)
+					cli.CliErr = f
+				case stdOutAndErrFlag:
+					cli.Println("Stdout and Stderr being written to", filename)
+					cli.CliOut = f
+					cli.CliErr = f
+				}
+
+				color.NoColor = true
 				args = args[2:]
 
 			case csMetricsFlag:

@@ -363,3 +363,75 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "Initialize data repository", cm0.Description)
 }
+
+func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+		Name: "delayed foreign key resolution with transaction commits",
+		SetUpScript: []string{
+			"SET foreign_key_checks=0;",
+			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_late FOREIGN KEY (v1) REFERENCES parent (pk));",
+			"SET foreign_key_checks=1;",
+			"CREATE TABLE parent (pk BIGINT PRIMARY KEY);",
+			"INSERT INTO parent VALUES (1), (2);",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ INSERT INTO child VALUES (1, 1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO child VALUES (2, 2);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT * FROM child ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "/* client b */ SELECT * FROM child ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{ // This uses the index, which is automatically created by the late fk resolution, so it's also tested here
+				Query:    "/* client a */ SELECT * FROM child WHERE v1 > 0 ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{ // This uses the index, which is automatically created by the late fk resolution, so it's also tested here
+				Query:    "/* client b */ SELECT * FROM child WHERE v1 > 0 ORDER BY pk;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:       "/* client a */ INSERT INTO child VALUES (3, 3);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+			{
+				Query:       "/* client b */ INSERT INTO child VALUES (3, 3);",
+				ExpectedErr: sql.ErrForeignKeyChildViolation,
+			},
+		},
+	})
+}

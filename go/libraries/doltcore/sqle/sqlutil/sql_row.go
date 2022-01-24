@@ -110,9 +110,6 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 	for i, c := range doltSchema.GetAllCols().GetColumns() {
 		val := r[i]
 		if val == nil {
-			if !c.IsNullable() {
-				return types.Tuple{}, types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", c.Name)
-			}
 			continue
 		}
 
@@ -183,9 +180,6 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		schCol := allCols.GetAtIndex(i)
 		val := r[i]
 		if val == nil {
-			if !schCol.IsNullable() {
-				return types.Tuple{}, nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
-			}
 			continue
 		}
 
@@ -232,9 +226,6 @@ func pkDoltRowFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.R
 			if err != nil {
 				return nil, err
 			}
-		} else if !schCol.IsNullable() {
-			// TODO: this isn't an error in the case of result set construction (where non-null columns can indeed be null)
-			return nil, fmt.Errorf("column <%v> received nil but is non-nullable", schCol.Name)
 		}
 	}
 	return row.New(vrw.Format(), doltSchema, taggedVals)
