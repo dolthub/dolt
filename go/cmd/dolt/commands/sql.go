@@ -90,6 +90,7 @@ const (
 	disableBatchFlag = "disable-batch"
 	multiDBDirFlag   = "multi-db-dir"
 	continueFlag     = "continue"
+	fileInputFlag    = "file"
 	welcomeMsg       = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
@@ -140,6 +141,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(disableBatchFlag, "", "When issuing multiple statements, used to override more efficient batch processing to give finer control over session")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
+	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	return ap
 }
 
@@ -198,8 +200,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 	}
 
-	_, continueOnError := apr.GetValue(continueFlag)
-
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
@@ -220,13 +220,24 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 			runInBatchMode = fi.Mode()&os.ModeCharDevice == 0
 		}
 
+		_, continueOnError := apr.GetValue(continueFlag)
+
+		input := os.Stdin
+
+		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
+			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
+			if !multiStatementMode {
+				runInBatchMode = true
+			}
+		}
+
 		if multiStatementMode {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, os.Stdin, format, currentDb)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, os.Stdin, format, currentDb)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
