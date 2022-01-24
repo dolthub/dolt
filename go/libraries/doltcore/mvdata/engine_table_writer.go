@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 
 	sqle "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -76,7 +75,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, new(auth.None), false)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
 	if err != nil {
 		return nil, err
 	}

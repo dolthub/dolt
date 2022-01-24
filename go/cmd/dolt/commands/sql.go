@@ -26,7 +26,6 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
-	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -361,7 +360,7 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -382,7 +381,7 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), false)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, false)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -417,7 +416,7 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -444,7 +443,7 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, new(auth.None), true)
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

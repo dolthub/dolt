@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	gms "github.com/dolthub/go-mysql-server"
-	"github.com/dolthub/go-mysql-server/auth"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
@@ -53,7 +52,8 @@ func NewSqlEngine(
 	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
 	initialDb string,
-	au auth.Auth,
+	isReadOnly bool,
+	tempUsers []gms.TemporaryUser,
 	autocommit bool) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -74,7 +74,7 @@ func NewSqlEngine(
 
 	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
 
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{Auth: au}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
