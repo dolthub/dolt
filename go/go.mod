@@ -19,11 +19,11 @@ require (
 	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi v0.0.0-20201005193433-3ee972b1d078
 	github.com/dolthub/fslock v0.0.3
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220120003117-69f4a35700d3
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220124134410-94f76b502865
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20220103175203-a8c7f5080008
+	github.com/dolthub/vitess v0.0.0-20220120191656-b10d0d890f78
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -80,6 +80,7 @@ require (
 )
 
 require (
+	github.com/google/flatbuffers v2.0.5+incompatible
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
 	github.com/prometheus/client_golang v1.11.0
 	github.com/xitongsys/parquet-go v1.6.1
@@ -97,7 +98,6 @@ require (
 	github.com/go-ole/go-ole v1.2.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
-	github.com/google/flatbuffers v2.0.5+incompatible // indirect
 	github.com/googleapis/gax-go/v2 v2.0.5 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
