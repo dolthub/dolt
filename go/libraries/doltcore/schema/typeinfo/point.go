@@ -173,7 +173,9 @@ func (ti *pointType) ToSqlType() sql.Type {
 func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			return types.Uint(0), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
