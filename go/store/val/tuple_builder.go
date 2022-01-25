@@ -55,9 +55,9 @@ func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 
-	if err := tb.validateBuild(tup); err != nil {
-		panic(err)
-	}
+	//if err := tb.validateBuild(tup); err != nil {
+	//	panic(err)
+	//}
 
 	tb.Recycle()
 	return
