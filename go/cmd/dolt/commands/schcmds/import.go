@@ -68,7 +68,7 @@ where source_field_name is the name of a field in the file being imported and de
 `
 
 var schImportDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Creates a new table with an inferred schema.",
+	ShortDesc: "Creates or updates a table by inferring a schema from a file containing sample data.",
 	LongDesc: `If {{.EmphasisLeft}}--create | -c{{.EmphasisRight}} is given the operation will create {{.LessThan}}table{{.GreaterThan}} with a schema that it infers from the supplied file. One or more primary key columns must be specified using the {{.EmphasisLeft}}--pks{{.EmphasisRight}} parameter.
 
 If {{.EmphasisLeft}}--update | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} any additional columns, or change the types of columns based on the file supplied.  If the {{.EmphasisLeft}}--keep-types{{.EmphasisRight}} parameter is supplied then the types for existing columns will not be modified, even if they differ from what is in the supplied file.
