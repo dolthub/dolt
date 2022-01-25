@@ -136,8 +136,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
 	ap.SupportsFlag(listSavedFlag, "l", "Lists all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
-	ap.SupportsFlag(BatchFlag, "b", "batch mode, to run more than one query with --query, separated by ';'. Piping input to sql with no arguments also uses batch mode")
-	ap.SupportsFlag(disableBatchFlag, "", "When issuing multiple statements, used to override more efficient batch processing to give finer control over session")
+	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
@@ -207,31 +206,27 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
-		runInBatchMode := true
-		multiStatementMode := apr.Contains(disableBatchFlag)
-		fi, err := os.Stdin.Stat()
+		isTty := false
+		runInBatchMode := apr.Contains(BatchFlag)
 
+		fi, err := os.Stdin.Stat()
 		if err != nil {
 			if !osutil.IsWindows {
 				return HandleVErrAndExitCode(errhand.BuildDError("Couldn't stat STDIN. This is a bug.").Build(), usage)
 			}
 		} else {
-			runInBatchMode = fi.Mode()&os.ModeCharDevice == 0
+			isTty = fi.Mode()&os.ModeCharDevice != 0
 		}
 
 		_, continueOnError := apr.GetValue(continueFlag)
 
 		input := os.Stdin
-
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
-			if !multiStatementMode {
-				runInBatchMode = true
-			}
 		}
 
-		if multiStatementMode {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
+		if isTty {
+			verr := execShell(ctx, mrEnv, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -241,7 +236,7 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execShell(ctx, mrEnv, format, currentDb)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -303,29 +298,21 @@ func queryMode(
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
 ) int {
+
+	// query mode has 3 sub modes:
+	// If --batch is provided, run with batch optimizations
+	// If --save is provided, run a single query and save it
+	// Otherwise, attempt to parse and execute multiple queries separated by ';'
 	batchMode := apr.Contains(BatchFlag)
-	multiStatementMode := apr.Contains(disableBatchFlag)
+	saveName := apr.GetValueOrDefault(saveFlag, "")
+
 	_, continueOnError := apr.GetValue(continueFlag)
 
-	if multiStatementMode {
-		batchInput := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-	} else if batchMode {
-		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
-		if verr != nil {
-			return HandleVErrAndExitCode(verr, usage)
-		}
-	} else {
+	if saveName != "" {
 		verr := execQuery(ctx, mrEnv, query, format, currentDb)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
-
-		saveName := apr.GetValueOrDefault(saveFlag, "")
 
 		if saveName != "" {
 			saveMessage := apr.GetValueOrDefault(messageFlag, "")
@@ -338,6 +325,18 @@ func queryMode(
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
+		}
+	} else if batchMode {
+		batchInput := strings.NewReader(query)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
+		}
+	} else {
+		input := strings.NewReader(query)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
+		if verr != nil {
+			return HandleVErrAndExitCode(verr, usage)
 		}
 	}
 
@@ -636,7 +635,7 @@ func saveQuery(ctx context.Context, root *doltdb.RootValue, query string, name s
 	return newRoot, nil
 }
 
-// runMultiStatementMode alows for the execution of more than one query, but it doesn't attempt any batch optimizations
+// runMultiStatementMode allows for the execution of more than one query, but it doesn't attempt any batch optimizations
 func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Reader, continueOnErr bool) error {
 	scanner := NewSqlStatementScanner(input)
 
