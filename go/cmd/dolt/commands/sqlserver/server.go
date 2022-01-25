@@ -69,6 +69,9 @@ func Serve(
 		return startError, nil
 	}
 
+	lgr := logrus.StandardLogger()
+	lgr.Out = cli.CliErr
+
 	if serverConfig.LogLevel() != LogLevel_Info {
 		var level logrus.Level
 		level, startError = logrus.ParseLevel(serverConfig.LogLevel().String())
