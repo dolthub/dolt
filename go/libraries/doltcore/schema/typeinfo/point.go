@@ -141,19 +141,6 @@ func (ti *pointType) NomsKind() types.NomsKind {
 	return types.PointKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *pointType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	buf := []byte(*str)
-	srid, _, geomType := types.ParseEWKBHeader(buf)
-	if geomType != types.PointID {
-		return types.NullValue, nil
-	}
-	return types.ParseEWKBPoint(buf[types.EWKBHeaderSize:], srid), nil
-}
-
 // Promote implements TypeInfo interface.
 func (ti *pointType) Promote() TypeInfo {
 	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}

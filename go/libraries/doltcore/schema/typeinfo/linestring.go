@@ -147,19 +147,6 @@ func (ti *linestringType) NomsKind() types.NomsKind {
 	return types.LinestringKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *linestringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	buf := []byte(*str)
-	srid, _, geomType := types.ParseEWKBHeader(buf)
-	if geomType != types.LinestringID {
-		return types.NullValue, nil
-	}
-	return types.ParseEWKBLine(buf[types.EWKBHeaderSize:], srid), nil
-}
-
 // Promote implements TypeInfo interface.
 func (ti *linestringType) Promote() TypeInfo {
 	return &linestringType{ti.sqlLinestringType.Promote().(sql.LinestringType)}

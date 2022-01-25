@@ -151,19 +151,6 @@ func (ti *polygonType) NomsKind() types.NomsKind {
 	return types.PolygonKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *polygonType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	buf := []byte(*str)
-	srid, _, geomType := types.ParseEWKBHeader(buf)
-	if geomType != types.PolygonID {
-		return types.NullValue, nil
-	}
-	return types.ParseEWKBPoly(buf[types.EWKBHeaderSize:], srid), nil
-}
-
 // Promote implements TypeInfo interface.
 func (ti *polygonType) Promote() TypeInfo {
 	return &polygonType{ti.sqlPolygonType.Promote().(sql.PolygonType)}
