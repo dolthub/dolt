@@ -535,7 +535,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE table_a(x int primary key);
 CREATE TABLE table_b(x int primary key);
@@ -559,7 +559,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
@@ -579,7 +579,7 @@ SQL
     [[ "$output" =~ "created table_a" ]] || false
 
     cd ../
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 use test1;
 show tables;
 SQL
@@ -621,7 +621,7 @@ SQL
     mkdir decoy
     touch decoy/file.txt
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
@@ -681,7 +681,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'refs/heads/main' ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 CREATE TABLE test (x int primary key);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -699,7 +699,7 @@ SQL
     [[ "$output" =~ test ]] || false
 
     dolt checkout main
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
 insert into test values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'inserted 3 values');
@@ -712,7 +712,7 @@ SQL
 
     dolt checkout main
 
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 select @@dolt_repo_$$_head_ref;
 SQL
@@ -732,7 +732,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
@@ -749,7 +749,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
@@ -768,7 +768,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -785,7 +785,7 @@ SQL
     [[ ! "$output" =~ "5" ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch -r csv <<SQL
+    run dolt sql  -r csv <<SQL
     USE \`dolt_repo_$$/$hash\`;
     select * from a1;
 SQL
@@ -799,7 +799,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -815,7 +815,7 @@ SQL
     [[ "$output" =~ 'read-only' ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
     USE \`dolt_repo_$$/$hash\`;
     delete from a1;
 SQL
@@ -828,7 +828,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -844,7 +844,7 @@ SQL
     [[ "$output" =~ 'read-only' ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
     USE \`dolt_repo_$$/$hash\`;
     update a1 set x = x*10;
 SQL
@@ -1543,7 +1543,7 @@ SQL
 }
 
 @test "sql: found_row works with update properly" {
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 set autocommit = off;
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);
