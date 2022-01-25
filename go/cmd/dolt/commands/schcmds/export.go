@@ -40,7 +40,7 @@ If ` + "`table`" + ` is given, only that table's schema will be exported, otherw
 
 If ` + "`file`" + ` is given, the exported schemas will be written to that file, otherwise they will be written to standard out.`,
 	Synopsis: []string{
-		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"[{{.LessThan}}table{{.GreaterThan}}] [{{.LessThan}}file{{.GreaterThan}}]",
 	},
 }
 
