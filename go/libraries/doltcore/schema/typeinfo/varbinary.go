@@ -37,6 +37,8 @@ const (
 // as a string that is interpreted as raw bytes, rather than as a bespoke data structure,
 // and thus this is mirrored here in its implementation. This will minimize any differences
 // that could arise.
+//
+// This type handles the BLOB types. BINARY and VARBINARY are handled by inlineBlobType.
 type varBinaryType struct {
 	sqlBinaryType sql.StringType
 }
@@ -162,21 +164,6 @@ func (ti *varBinaryType) NomsKind() types.NomsKind {
 	return types.BlobKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *varBinaryType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlBinaryType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *varBinaryType) Promote() TypeInfo {
 	return &varBinaryType{ti.sqlBinaryType.Promote().(sql.StringType)}
@@ -243,7 +230,24 @@ func hasPrefix(b types.Blob, ctx context.Context) (bool, error) {
 func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			blob, ok := v.(types.Blob)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting blob to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			val, err := fromBlob(blob)
+			if err != nil {
+				return nil, err
+			}
+			newVal, err := strconv.ParseUint(val, 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *boolType:

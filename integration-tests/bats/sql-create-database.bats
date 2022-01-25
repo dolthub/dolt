@@ -30,6 +30,27 @@ SQL
     [[ "$output" =~ "1" ]] || false
 }
 
+@test "sql-create-database: create new database w/o use" {
+      run dolt sql << SQL
+CREATE DATABASE mydb;
+CREATE TABLE mydb.test (
+    pk int primary key
+);
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "mydb" ]] || false
+
+    skip "Without use, table is not created"
+    run dolt sql -b -q "use mydb; show tables;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "test" ]] || false
+}
+
 @test "sql-create-database: drop database" {
     skiponwindows "failing with file in use error"
     
