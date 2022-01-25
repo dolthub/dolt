@@ -79,17 +79,17 @@ By default this command uses the dolt data repository in the current working dir
 }
 
 const (
-	QueryFlag        = "query"
-	FormatFlag       = "result-format"
-	saveFlag         = "save"
-	executeFlag      = "execute"
-	listSavedFlag    = "list-saved"
-	messageFlag      = "message"
-	BatchFlag        = "batch"
-	multiDBDirFlag   = "multi-db-dir"
-	continueFlag     = "continue"
-	fileInputFlag    = "file"
-	welcomeMsg       = `# Welcome to the DoltSQL shell.
+	QueryFlag      = "query"
+	FormatFlag     = "result-format"
+	saveFlag       = "save"
+	executeFlag    = "execute"
+	listSavedFlag  = "list-saved"
+	messageFlag    = "message"
+	BatchFlag      = "batch"
+	multiDBDirFlag = "multi-db-dir"
+	continueFlag   = "continue"
+	fileInputFlag  = "file"
+	welcomeMsg     = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
