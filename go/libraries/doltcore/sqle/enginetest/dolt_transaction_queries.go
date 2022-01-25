@@ -738,4 +738,57 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "Edits from different clients to table with out of order primary key set",
+		SetUpScript: []string{
+			"create table test (x int, y int, z int, primary key(z, y))",
+			"insert into test values (1, 1, 1), (2, 2, 2)",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client a */ update test set y = 3 where y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query: "/* client b */ update test set y = 5 where y = 2",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ select * from test order by x",
+				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by x",
+				Expected: []sql.Row{{1, 1, 1}, {2, 3, 2}, {2, 5, 2}},
+			},
+			{
+				Query:       "/* client b */ insert into test values (4,3,2)",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+		},
+	},
 }
