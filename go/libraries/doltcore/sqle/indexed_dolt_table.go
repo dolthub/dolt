@@ -57,7 +57,7 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.RowIterForIndexLookup(ctx, idt.indexLookup, nil)
+	panic("*IndexedDoltTable) PartitionRows(")
 }
 
 func (idt *IndexedDoltTable) IsTemporary() bool {

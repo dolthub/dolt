@@ -30,6 +30,23 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, columns []string, part sql.Partition) (sql.RowIter, error) {
+	rp := part.(rangePartition)
+	doltIdx := idx.(DoltIndex)
+
+	if types.IsFormat_DOLT_1(rp.rows.Format()) {
+		covers := indexCoversCols(doltIdx, columns)
+		if covers {
+			return newProllyCoveringIndexIter(ctx, doltIdx, rp.prollyRange)
+		} else {
+			return newProllyIndexIter(ctx, doltIdx, rp.prollyRange, columns)
+		}
+	}
+
+	ranges := []*noms.ReadRange{rp.nomsRange}
+	return RowIterForRanges(ctx, doltIdx, ranges, rp.rows, columns)
+}
+
 func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
@@ -76,18 +93,6 @@ type IndexLookupKeyIterator interface {
 
 func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 	return lookup.(*doltIndexLookup).idx
-}
-
-func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, projectedCols []string, part sql.Partition) (sql.RowIter, error) {
-	rp := part.(rangePartition)
-	di := idx.(DoltIndex)
-
-	if types.IsFormat_DOLT_1(rp.rows.Format()) {
-		return newProllyIndexIter(ctx, di, rp.prollyRange, projectedCols)
-	}
-
-	ranges := []*noms.ReadRange{rp.nomsRange}
-	return RowIterForRanges(ctx, di, ranges, rp.rows, projectedCols)
 }
 
 func NewRangePartitionIter(lookup sql.IndexLookup) sql.PartitionIter {
