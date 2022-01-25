@@ -818,6 +818,21 @@ SQL
      [[ "$output" =~ "4" ]] || false
 }
 
+@test "sql-server: create database without USE" {
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     start_multi_db_server repo1
+
+     unselected_server_query 1 "CREATE DATABASE newdb" ""
+     unselected_server_query 1 "CREATE TABLE newdb.test (a int primary key)" ""
+
+     # verify changes outside the session
+     cd newdb
+     run dolt sql -q "show tables"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "test" ]] || false
+}
+
 @test "sql-server: JSON queries" {
     cd repo1
     start_sql_server repo1
