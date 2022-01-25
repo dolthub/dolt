@@ -29,7 +29,7 @@ type prollyIndexIter struct {
 	indexIter prolly.MapRangeIter
 	primary   prolly.Map
 
-	// pkMap transforms secondary index keys
+	// pkMap transforms indexRows index keys
 	// into primary index keys
 	pkMap columnMapping
 	pkBld *val.TupleBuilder
@@ -98,7 +98,6 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		return r, nil
 	}
-
 }
 
 func (p prollyIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
@@ -149,62 +148,86 @@ func columnMappingFromIndex(idx DoltIndex) (m columnMapping) {
 	return m
 }
 
-// todo(andy)
-//type prollyCoveringIndexIter struct {
-//	idx       DoltIndex
-//	indexIter   nomsKeyIter
-//	conv      *KVToSqlRowConverter
-//	ctx       *sql.Context
-//	pkCols    *schema.ColCollection
-//	nonPKCols *schema.ColCollection
-//	nbf       *types.NomsBinFormat
-//}
-//
-//func NewProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, indexIter nomsKeyIter, resultCols []string) *prollyCoveringIndexIter {
-//	idxCols := idx.IndexSchema().GetPKCols()
-//	tblPKCols := idx.Schema().GetPKCols()
-//	sch := idx.Schema()
-//	cols := sch.GetAllCols().GetColumns()
-//	tagToSqlColIdx := make(map[uint64]int)
-//
-//	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
-//	for i, col := range cols {
-//		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
-//		if partOfIdxKey && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
-//			tagToSqlColIdx[col.Tag] = i
-//		}
-//	}
-//
-//	for i, col := range cols {
-//		_, partOfIndexKey := idxCols.GetByTag(col.Tag)
-//		_, partOfTableKeys := tblPKCols.GetByTag(col.Tag)
-//		if partOfIndexKey != partOfTableKeys {
-//			cols[i], _ = schema.NewColumnWithTypeInfo(col.Name, col.Tag, col.TypeInfo, partOfIndexKey, col.Default, col.AutoIncrement, col.Comment, col.Constraints...)
-//		}
-//	}
-//
-//	return &prollyCoveringIndexIter{
-//		idx:       idx,
-//		indexIter:   indexIter,
-//		conv:      NewKVToSqlRowConverter(idx.Format(), tagToSqlColIdx, cols, len(cols)),
-//		ctx:       ctx,
-//		pkCols:    sch.GetPKCols(),
-//		nonPKCols: sch.GetNonPKCols(),
-//		nbf:       idx.Format(),
-//	}
-//}
-//
-//// Next returns the next row from the iterator.
-//func (ci *prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-//	key, err := ci.indexIter.ReadKey(ctx)
-//
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
-//}
-//
-//func (ci *prollyCoveringIndexIter) Close(*sql.Context) error {
-//	return nil
-//}
+type prollyCoveringIndexIter struct {
+	idx       DoltIndex
+	indexIter prolly.MapRangeIter
+	keyDesc   val.TupleDesc
+
+	// keyMap transforms secondary index key tuples into SQL tuples.
+	// secondary index value tuples are assumed to be empty.
+	// todo(andy): shore up this mapping concept, different semantics different places
+	keyMap []int
+}
+
+var _ sql.RowIter = prollyCoveringIndexIter{}
+
+func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyCoveringIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
+	indexIter, err := secondary.IterRange(ctx, rng)
+	if err != nil {
+		return prollyCoveringIndexIter{}, err
+	}
+	keyDesc, _ := secondary.Descriptors()
+
+	keyMap := coveringIndexMapping(idx)
+
+	iter := prollyCoveringIndexIter{
+		idx:       idx,
+		indexIter: indexIter,
+		keyDesc:   keyDesc,
+		keyMap:    keyMap,
+	}
+
+	return iter, nil
+}
+
+// Next returns the next row from the iterator.
+func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	for {
+		k, v, err := p.indexIter.Next(ctx)
+		if err == io.EOF {
+			return nil, io.EOF
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		r := make(sql.Row, len(p.keyMap))
+		p.rowFromTuples(k, v, r)
+
+		return r, nil
+	}
+}
+
+func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
+	for to, from := range p.keyMap {
+		if from == -1 {
+			continue
+		}
+		r[to] = p.keyDesc.GetField(from, key)
+	}
+
+	return
+}
+
+func (p prollyCoveringIndexIter) Close(*sql.Context) error {
+	return nil
+}
+
+// todo(andy): there are multiple column mapping concepts with different semantics
+func coveringIndexMapping(idx DoltIndex) (keyMap []int) {
+	allCols := idx.Schema().GetAllCols()
+	idxCols := idx.IndexSchema().GetAllCols()
+
+	keyMap = make([]int, allCols.Size())
+	for i, col := range allCols.GetColumns() {
+		j, ok := idxCols.TagToIdx[col.Tag]
+		if ok {
+			keyMap[i] = j
+		} else {
+			keyMap[i] = -1
+		}
+	}
+
+	return
+}
