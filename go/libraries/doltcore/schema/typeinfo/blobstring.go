@@ -32,6 +32,10 @@ const (
 	blobStringTypeParam_Length  = "length"
 )
 
+// blobStringType handles the TEXT types. This was originally done in varStringType, however it did not properly
+// handle large strings (such as strings over several hundred megabytes), and thus this type was created. Any
+// repositories that were made before the introduction of blobStringType will still use varStringType for existing
+// columns.
 type blobStringType struct {
 	sqlStringType sql.StringType
 }
@@ -169,21 +173,6 @@ func (ti *blobStringType) NomsKind() types.NomsKind {
 	return types.BlobKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *blobStringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	strVal, err := ti.sqlStringType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := strVal.(string); ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *blobStringType) Promote() TypeInfo {
 	return &blobStringType{ti.sqlStringType.Promote().(sql.StringType)}
@@ -203,7 +192,24 @@ func (ti *blobStringType) ToSqlType() sql.Type {
 func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			blob, ok := v.(types.Blob)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting blob to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			val, err := fromBlob(blob)
+			if err != nil {
+				return nil, err
+			}
+			newVal, err := strconv.ParseUint(val, 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *boolType:
