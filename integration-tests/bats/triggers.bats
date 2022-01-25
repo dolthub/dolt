@@ -222,3 +222,17 @@ SQL
     [[ "$output" =~ "6" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
+
+@test "triggers: insert before trigger revert when query fails" {
+    dolt sql -q "CREATE TABLE seqtbl(x INT PRIMARY KEY);"
+    dolt sql -q "CREATE TABLE mytbl(i INT PRIMARY KEY, j INT);"
+    dolt sql -q "CREATE TRIGGER trig before insert on mytbl for each row begin set new.j = (select coalesce(x, 1) from seqtbl); update seqtbl set x = x + 1; end;"
+    dolt sql -q "INSERT INTO seqtbl VALUES (1);"
+    dolt sql -q "INSERT INTO mytbl VALUES (1, 0);"
+    run dolt sql -q "INSERT INTO mytbl VALUES (1, 0);"
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "duplicate primary key" ]] || false
+    run dolt sql -q "SELECT x FROM seqtbl"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "2" ]] || false
+}

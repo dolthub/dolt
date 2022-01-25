@@ -58,7 +58,11 @@ func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch
 	}()
 
 	if isOkResult(sqlSch) {
-		return printOKResult(ctx, rowIter)
+		err := printOKResult(ctx, rowIter)
+		if err != nil {
+			ctx.SetTransaction(nil)
+		}
+		return err
 	}
 
 	// For some output formats, we want to convert everything to strings to be processed by the pipeline. For others,
