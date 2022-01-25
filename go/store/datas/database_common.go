@@ -192,6 +192,9 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 			}
 		}
 		v, ok, err = p.MaybeGet(ParentsListField)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
 		if !ok || types.IsNull(v) {
 			empty, err := types.NewList(ctx, vrw)
 			if err != nil {
