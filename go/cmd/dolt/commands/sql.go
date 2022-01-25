@@ -438,11 +438,6 @@ func execMultiStatements(
 	}
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
-	if err != nil {
-		// If we encounter an error, attempt to flush what we have so far to disk before exiting
-		return errhand.BuildDError("Error processing batch").AddCause(err).Build()
-	}
-
 	return errhand.VerboseErrorFromError(err)
 }
 
@@ -677,7 +672,6 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 		query = ""
 	}
 
-	cli.Println() // need a newline after all statements are executed
 	if err := scanner.Err(); err != nil {
 		cli.Println(err.Error())
 	}
