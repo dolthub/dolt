@@ -74,7 +74,7 @@ func indexCoversCols(idx DoltIndex, cols []string) bool {
 		return false
 	}
 
-	idxCols := idx.IndexSchema().GetPKCols()
+	idxCols := idx.IndexSchema().GetAllCols()
 	covers := true
 	for _, colName := range cols {
 		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
