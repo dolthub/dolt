@@ -293,7 +293,7 @@ SQL
 @test "sql: ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
 }
 
 @test "sql: select with and and or clauses" {
@@ -1020,7 +1020,7 @@ SQL
     [[ ! "$output" =~ "one_pk" ]] || false
     run dolt sql -q "drop table poop"
     [ $status -eq 1 ]
-    [ "$output" = "table not found: poop" ]
+    [[ "$output" =~ "table not found: poop" ]] || false
 }
 
 @test "sql: explain simple select query" {
@@ -1368,6 +1368,7 @@ SQL
 
 @test "sql: stored procedures creation check" {
     dolt sql -q "
+DELIMITER //;
 CREATE PROCEDURE p1(s VARCHAR(200), N DOUBLE, m DOUBLE)
 BEGIN
   SET s = '';
@@ -1380,9 +1381,10 @@ BEGIN
   END IF;
   SET s = CONCAT(n, ' ', s, ' ', m, '.');
   SELECT s;
-END;"
+END;
+//"
     run dolt sql -q "CALL p1('', 1, 1)" -r=csv
-    [ "$status" -eq "0" ]
+   [ "$status" -eq "0" ]
     [[ "$output" =~ "1 equals 1." ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "CALL p1('', 2, 1)" -r=csv
@@ -1393,7 +1395,7 @@ END;"
     [ "$status" -eq "0" ]
     [[ "$output" =~ "1 is less than 2." ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
+    dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     # Just the beginning portion is good enough, we don't need to test the timestamps as they change
