@@ -571,7 +571,7 @@ func createVerticalPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) 
 }
 
 type verticalPipelineStages struct {
-	heads []string
+	heads  []string
 	rowIdx int
 }
 
