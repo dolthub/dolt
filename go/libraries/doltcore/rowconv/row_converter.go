@@ -56,26 +56,12 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 			return nil, fmt.Errorf("Could not find column being mapped. src tag: %d, dest tag: %d", srcTag, destTag)
 		}
 
-		if srcCol.TypeInfo.Equals(destCol.TypeInfo) {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				return v, nil
-			}
+		tc, _, err := typeinfo.GetTypeConverter(ctx, srcCol.TypeInfo, destCol.TypeInfo)
+		if err != nil {
+			return nil, err
 		}
-		if typeinfo.IsStringType(destCol.TypeInfo) {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				val, err := srcCol.TypeInfo.FormatValue(v)
-				if err != nil {
-					return nil, err
-				}
-				if val == nil {
-					return types.NullValue, nil
-				}
-				return types.String(*val), nil
-			}
-		} else {
-			convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
-				return typeinfo.Convert(ctx, vrw, v, srcCol.TypeInfo, destCol.TypeInfo)
-			}
+		convFuncs[srcTag] = func(v types.Value) (types.Value, error) {
+			return tc(ctx, vrw, v)
 		}
 	}
 

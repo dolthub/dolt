@@ -75,7 +75,7 @@ func ParseWhere(sch schema.Schema, whereClause string) (FilterFn, error) {
 		} else {
 			var err error
 			vrw := types.NewMemoryValueStore() // We don't want to persist anything, so we use an internal VRW
-			val, err = cols[0].TypeInfo.ParseValue(context.Background(), vrw, &valStr)
+			val, err = typeinfo.StringDefaultType.ConvertToType(context.Background(), vrw, cols[0].TypeInfo, types.String(valStr))
 			if err != nil {
 				return nil, errors.New("unable to convert '" + valStr + "' to " + col.TypeInfo.String())
 			}

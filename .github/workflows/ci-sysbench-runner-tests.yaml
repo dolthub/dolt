@@ -1,0 +1,15 @@
+name: Test Sysbench Runner Utility Works
+
+on: [pull_request]
+
+jobs:
+  mysql_client_integrations_job:
+    runs-on: ubuntu-18.04
+    name: Test Sysbench Runner
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Copy Dockerfile
+        run: cp -r ./go/performance/continuous_integration/. .
+      - name: Test sysbench runner
+        uses: ./.github/actions/sysbench-runner-tests

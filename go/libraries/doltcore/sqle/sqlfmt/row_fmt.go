@@ -275,7 +275,7 @@ func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value 
 	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
-		reparsed, err := ti.ParseValue(ctx, nil, &str)
+		reparsed, err := typeinfo.StringDefaultType.ConvertToType(ctx, nil, ti, types.String(str))
 		if err != nil {
 			return "", err
 		}
@@ -299,7 +299,6 @@ func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value 
 	}
 }
 
-// todo: this is a hack, varstring should handle this
 func quoteAndEscapeString(s string) string {
 	buf := &bytes.Buffer{}
 	v, err := sqltypes.NewValue(sqltypes.VarChar, []byte(s))
