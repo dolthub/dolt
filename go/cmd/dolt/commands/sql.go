@@ -86,7 +86,6 @@ const (
 	listSavedFlag    = "list-saved"
 	messageFlag      = "message"
 	BatchFlag        = "batch"
-	disableBatchFlag = "disable-batch"
 	multiDBDirFlag   = "multi-db-dir"
 	continueFlag     = "continue"
 	fileInputFlag    = "file"
@@ -105,7 +104,8 @@ type SqlCmd struct {
 	VersionStr string
 }
 
-// The SQL shell installs its own signal handlers so that you can cancel a running query without and still run a new one.
+// The SQL shell installs its own signal handlers so that you can cancel a running query without ending the entire
+// process
 func (cmd SqlCmd) InstallsSignalHandlers() bool {
 	return true
 }
@@ -601,9 +601,6 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	}
 
 	if batch {
-		if !query {
-			return errhand.BuildDError("Invalid Argument: --batch|-b must be used with --query|-q").Build()
-		}
 		if save || msg {
 			return errhand.BuildDError("Invalid Argument: --batch|-b is not compatible with --save|-s or --message|-m").Build()
 		}
