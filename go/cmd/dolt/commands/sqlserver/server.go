@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/dolthub/go-mysql-server/auth"
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
@@ -80,9 +80,9 @@ func Serve(
 	}
 	logrus.SetFormatter(LogFormat{})
 
-	permissions := auth.AllPermissions
+	isReadOnly := false
 	if serverConfig.ReadOnly() {
-		permissions = auth.ReadPerm
+		isReadOnly = true
 	}
 
 	serverConf := server.Config{Protocol: "tcp"}
@@ -95,8 +95,6 @@ func Serve(
 	}
 
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
-
-	userAuth := auth.NewNativeSingle(serverConfig.User(), serverConfig.Password(), permissions)
 
 	var mrEnv *env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
@@ -157,14 +155,20 @@ func Serve(
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
 	// to the value of mysql that we support.
 	serverConf.Address = hostPort
-	serverConf.Auth = userAuth
 	serverConf.ConnReadTimeout = readTimeout
 	serverConf.ConnWriteTimeout = writeTimeout
 	serverConf.MaxConnections = serverConfig.MaxConnections()
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", serverConf.Auth, serverConfig.AutoCommit())
+	var tempUsers []gms.TemporaryUser
+	if len(serverConfig.User()) > 0 {
+		tempUsers = append(tempUsers, gms.TemporaryUser{
+			Username: serverConfig.User(),
+			Password: serverConfig.Password(),
+		})
+	}
+	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", isReadOnly, tempUsers, serverConfig.AutoCommit())
 	if err != nil {
 		return err, nil
 	}

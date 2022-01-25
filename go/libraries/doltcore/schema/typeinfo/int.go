@@ -220,14 +220,6 @@ func (ti *intType) NomsKind() types.NomsKind {
 	return types.IntKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *intType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *intType) Promote() TypeInfo {
 	return &intType{ti.sqlIntType.Promote().(sql.NumberType)}

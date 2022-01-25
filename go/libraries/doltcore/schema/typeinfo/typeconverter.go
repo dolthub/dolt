@@ -20,9 +20,11 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 	"gopkg.in/src-d/go-errors.v1"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -129,6 +131,12 @@ func wrapConvertValueToNomsValue(
 			vInt = *(*string)(unsafe.Pointer(&val))
 		case types.Int:
 			vInt = int64(val)
+		case types.JSON:
+			var err error
+			vInt, err = json.NomsJSON(val).ToString(sql.NewEmptyContext())
+			if err != nil {
+				return nil, err
+			}
 		case types.Linestring:
 			vInt = ConvertTypesLinestringToSQLLinestring(val)
 		case types.Point:
@@ -138,7 +146,7 @@ func wrapConvertValueToNomsValue(
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:
-			vInt = time.Time(val)
+			vInt = time.Time(val).UTC()
 		case types.UUID:
 			vInt = val.String()
 		case types.Uint:

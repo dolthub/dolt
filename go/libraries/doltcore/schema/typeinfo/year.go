@@ -134,21 +134,6 @@ func (ti *yearType) NomsKind() types.NomsKind {
 	return types.IntKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *yearType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	intVal, err := ti.sqlYearType.Convert(*str)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := intVal.(int16); ok {
-		return types.Int(val), nil
-	}
-	return nil, fmt.Errorf(`"%v" cannot convert the string "%v" to a value`, ti.String(), str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *yearType) Promote() TypeInfo {
 	return &yearType{ti.sqlYearType.Promote().(sql.YearType)}

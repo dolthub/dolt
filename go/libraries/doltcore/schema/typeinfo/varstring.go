@@ -36,6 +36,11 @@ const (
 	varStringTypeParam_SQL_Text    = "text"
 )
 
+// varStringType handles CHAR and VARCHAR. The TEXT types are handled by blobStringType. For any repositories that were
+// created before the introduction of blobStringType, they will use varStringType for TEXT types. As varStringType makes
+// use of the String Value type, it does not actually support all viable lengths of a TEXT string, meaning all such
+// legacy repositories will run into issues if they attempt to insert very large strings. Any and all new repositories
+// must use blobStringType for all TEXT types to ensure proper behavior.
 type varStringType struct {
 	sqlStringType sql.StringType
 }
@@ -219,14 +224,6 @@ func (ti *varStringType) NomsKind() types.NomsKind {
 	return types.StringKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *varStringType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *varStringType) Promote() TypeInfo {
 	return &varStringType{ti.sqlStringType.Promote().(sql.StringType)}
@@ -253,11 +250,35 @@ func (ti *varStringType) ToSqlType() sql.Type {
 	return ti.sqlStringType
 }
 
+// ConvertToType converts the given string to the destination value. This is a shortcut to calling GetTypeConverter and
+// using the returned TypeConverter when this typeinfo will be used as the source typeinfo. This essentially replaces
+// the old ParseValue function.
+func (ti *varStringType) ConvertToType(ctx context.Context, vrw types.ValueReadWriter, destTi TypeInfo, val types.String) (types.Value, error) {
+	tc, _, err := varStringTypeConverter(ctx, ti, destTi)
+	if err != nil {
+		return nil, err
+	}
+	return tc(ctx, vrw, val)
+}
+
 // varStringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
 func varStringTypeConverter(ctx context.Context, src *varStringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			if v == nil || v == types.NullValue {
+				return types.NullValue, nil
+			}
+			val, ok := v.(types.String)
+			if !ok {
+				return nil, fmt.Errorf("unexpected type converting string to %s: %T", strings.ToLower(dest.String()), v)
+			}
+			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
+			if err != nil {
+				return nil, err
+			}
+			return types.Uint(newVal), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:

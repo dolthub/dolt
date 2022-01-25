@@ -185,18 +185,6 @@ func (ti *setType) NomsKind() types.NomsKind {
 	return types.UintKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *setType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil {
-		return types.NullValue, nil
-	}
-	val, err := ti.sqlSetType.Marshal(*str)
-	if err != nil {
-		return nil, err
-	}
-	return types.Uint(val), nil
-}
-
 // Promote implements TypeInfo interface.
 func (ti *setType) Promote() TypeInfo {
 	return &setType{ti.sqlSetType.Promote().(sql.SetType)}

@@ -43,9 +43,6 @@ func TestTypeInfoSuite(t *testing.T) {
 	t.Run("ForeignKindHandling", func(t *testing.T) {
 		testTypeInfoForeignKindHandling(t, typeInfoArrays, validTypeValues)
 	})
-	t.Run("FormatParseRoundTrip", func(t *testing.T) {
-		testTypeInfoFormatParseRoundTrip(t, typeInfoArrays, validTypeValues)
-	})
 	t.Run("GetTypeParams", func(t *testing.T) {
 		testTypeInfoGetTypeParams(t, typeInfoArrays)
 	})
@@ -57,6 +54,9 @@ func TestTypeInfoSuite(t *testing.T) {
 	})
 	t.Run("ToSqlType", func(t *testing.T) {
 		testTypeInfoToSqlType(t, typeInfoArrays)
+	})
+	t.Run("GetTypeConverter Inclusion", func(t *testing.T) {
+		testTypeInfoConversionsExist(t, typeInfoArrays)
 	})
 }
 
@@ -216,38 +216,6 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 	}
 }
 
-// assuming valid data, verifies that the To-From string functions can round trip
-func testTypeInfoFormatParseRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays [][]types.Value) {
-	for rowIndex, tiArray := range tiArrays {
-		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
-			for _, ti := range tiArray {
-				atLeastOneValid := false
-				t.Run(ti.String(), func(t *testing.T) {
-					for _, val := range vaArrays[rowIndex] {
-						t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
-							str, err := ti.FormatValue(val)
-							if ti.IsValid(val) {
-								atLeastOneValid = true
-								require.NoError(t, err)
-								vrw := types.NewMemoryValueStore()
-								outVal, err := ti.ParseValue(context.Background(), vrw, str)
-								require.NoError(t, err)
-								if ti == DateType { // special case as DateType removes the hh:mm:ss
-									val = types.Timestamp(time.Time(val.(types.Timestamp)).Truncate(24 * time.Hour))
-									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
-								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
-									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
-								}
-							}
-						})
-					}
-				})
-				require.True(t, atLeastOneValid, `all values reported false for "%v"`, ti.String())
-			}
-		})
-	}
-}
-
 // verify that FromTypeParams can reconstruct the exact same TypeInfo from the params
 func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
 	for _, tiArray := range tiArrays {
@@ -307,12 +275,6 @@ func testTypeInfoNullHandling(t *testing.T, tiArrays [][]TypeInfo) {
 						require.True(t, ti.IsValid(types.NullValue))
 						require.True(t, ti.IsValid(nil))
 					})
-					t.Run("ParseValue", func(t *testing.T) {
-						vrw := types.NewMemoryValueStore()
-						tVal, err := ti.ParseValue(context.Background(), vrw, nil)
-						require.NoError(t, err)
-						require.Equal(t, types.NullValue, tVal)
-					})
 				})
 			}
 		})
@@ -348,6 +310,21 @@ func testTypeInfoToSqlType(t *testing.T, tiArrays [][]TypeInfo) {
 				})
 			}
 		})
+	}
+}
+
+// ensures that all types at least have a branch to all other types, which is useful in case a developer forgets to add
+// a new type everywhere it needs to go
+func testTypeInfoConversionsExist(t *testing.T, tiArrays [][]TypeInfo) {
+	for _, tiArray1 := range tiArrays {
+		for _, tiArray2 := range tiArrays {
+			ti1 := tiArray1[0]
+			ti2 := tiArray2[0]
+			t.Run(fmt.Sprintf("%s -> %s", ti1.GetTypeIdentifier().String(), ti2.GetTypeIdentifier().String()), func(t *testing.T) {
+				_, _, err := GetTypeConverter(context.Background(), ti1, ti2)
+				require.False(t, UnhandledTypeConversion.Is(err))
+			})
+		}
 	}
 }
 

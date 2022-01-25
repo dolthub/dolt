@@ -172,14 +172,6 @@ func (ti *decimalType) NomsKind() types.NomsKind {
 	return types.DecimalKind
 }
 
-// ParseValue implements TypeInfo interface.
-func (ti *decimalType) ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error) {
-	if str == nil || *str == "" {
-		return types.NullValue, nil
-	}
-	return ti.ConvertValueToNomsValue(context.Background(), nil, *str)
-}
-
 // Promote implements TypeInfo interface.
 func (ti *decimalType) Promote() TypeInfo {
 	return &decimalType{ti.sqlDecimalType.Promote().(sql.DecimalType)}

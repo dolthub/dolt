@@ -140,9 +140,6 @@ type TypeInfo interface {
 	// NomsKind returns the NomsKind that best matches this TypeInfo.
 	NomsKind() types.NomsKind
 
-	// ParseValue parses a string and returns a go value that represents it according to this type.
-	ParseValue(ctx context.Context, vrw types.ValueReadWriter, str *string) (types.Value, error)
-
 	// Promote will promote the current TypeInfo to the largest representing TypeInfo of the same kind, such as Int8 to Int64.
 	Promote() TypeInfo
 
@@ -369,20 +366,6 @@ func FromKind(kind types.NomsKind) TypeInfo {
 	default:
 		panic(fmt.Errorf(`no default type info for NomsKind "%v"`, kind.String()))
 	}
-}
-
-// Convert takes in a types.Value, as well as the source and destination TypeInfos, and
-// converts the TypeInfo into the applicable types.Value.
-func Convert(ctx context.Context, vrw types.ValueReadWriter, v types.Value, srcTi TypeInfo, destTi TypeInfo) (types.Value, error) {
-	str, err := srcTi.FormatValue(v)
-	if err != nil {
-		return nil, err
-	}
-	val, err := destTi.ParseValue(ctx, vrw, str)
-	if err != nil {
-		return nil, err
-	}
-	return val, nil
 }
 
 // IsStringType returns whether the given TypeInfo represents a CHAR, VARCHAR, or TEXT-derivative.
