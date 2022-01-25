@@ -15,14 +15,18 @@
 package index
 
 import (
+	"context"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+const indexLookupBufSize = 1024
 
 type prollyIndexIter struct {
 	idx       DoltIndex
@@ -33,6 +37,9 @@ type prollyIndexIter struct {
 	// into primary index keys
 	pkMap columnMapping
 	pkBld *val.TupleBuilder
+
+	eg     *errgroup.Group
+	pkChan chan val.Tuple
 
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
@@ -58,34 +65,40 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, proje
 	pkMap := columnMappingFromIndex(idx)
 	km, vm := projectionMappings(idx.Schema(), idx.Schema().GetAllCols().GetColumnNames())
 
+	eg, c := errgroup.WithContext(ctx)
+
 	iter := prollyIndexIter{
 		idx:       idx,
 		indexIter: indexIter,
 		primary:   primary,
 		pkBld:     pkBld,
 		pkMap:     pkMap,
+		eg:        eg,
+		pkChan:    make(chan val.Tuple, indexLookupBufSize),
 		keyMap:    columnMapping(km),
 		valMap:    columnMapping(vm),
 	}
+
+	eg.Go(func() error {
+		return iter.queuePrimaryKeys(c)
+	})
 
 	return iter, nil
 }
 
 // Next returns the next row from the iterator.
 func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	var err error
 	for {
-		idxKey, _, err := p.indexIter.Next(ctx)
-		if err == io.EOF {
-			return nil, io.EOF
-		}
-		if err != nil {
-			return nil, err
+		var ok bool
+		var pk val.Tuple
+		select {
+		case pk, ok = <-p.pkChan:
 		}
 
-		for i, j := range p.pkMap {
-			p.pkBld.PutRaw(i, idxKey.GetField(j))
+		if !ok {
+			break
 		}
-		pk := p.pkBld.Build(sharePool)
 
 		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
 		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) (err error) {
@@ -97,6 +110,39 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 
 		return r, nil
+	}
+
+	if err = p.eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return nil, io.EOF
+}
+
+func (p prollyIndexIter) queuePrimaryKeys(ctx context.Context) error {
+	defer close(p.pkChan)
+
+	for {
+		idxKey, _, err := p.indexIter.Next(ctx)
+		if err == io.EOF {
+			// ignore io.EOF here, and return it in Next()
+			// after |p.pkChan| has been drained
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		for i, j := range p.pkMap {
+			p.pkBld.PutRaw(i, idxKey.GetField(j))
+		}
+		pk := p.pkBld.Build(sharePool)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case p.pkChan <- pk:
+		}
 	}
 }
 
