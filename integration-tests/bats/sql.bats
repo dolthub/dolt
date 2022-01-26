@@ -1368,7 +1368,7 @@ SQL
 
 @test "sql: stored procedures creation check" {
     dolt sql -q "
-DELIMITER //;
+DELIMITER // ;
 CREATE PROCEDURE p1(s VARCHAR(200), N DOUBLE, m DOUBLE)
 BEGIN
   SET s = '';
@@ -1395,7 +1395,7 @@ END;
     [ "$status" -eq "0" ]
     [[ "$output" =~ "1 is less than 2." ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
-    dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
+    run dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     # Just the beginning portion is good enough, we don't need to test the timestamps as they change
