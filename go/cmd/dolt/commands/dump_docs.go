@@ -27,7 +27,12 @@ import (
 )
 
 const (
-	fileParamName = "file"
+	fileParamName  = "file"
+	cliMdDocHeader = "" +
+		"---\n" +
+		"title: CLI\n" +
+		"---\n\n" +
+		"# CLI\n\n"
 )
 
 type DumpDocsCmd struct {
@@ -88,6 +93,12 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 		return 1
 	}
 
+	_, err = wr.Write([]byte(cliMdDocHeader))
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
 	err = cmd.dumpDocs(wr, cmd.DoltCommand.Name(), cmd.DoltCommand.Subcommands)
 
 	if err != nil {
@@ -100,18 +111,7 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return 0
 }
 
-const cliMdDocHeader = "" +
-	"---\n" +
-	"title: CLI\n" +
-	"---\n\n" +
-	"# CLI\n\n"
-
 func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
-	_, err := wr.Write([]byte(cliMdDocHeader))
-	if err != nil {
-		return err
-	}
-
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
