@@ -104,7 +104,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
-    run dolt sql << SQL
+    dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
@@ -112,6 +112,9 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (10000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
+SQL
+
+    run dolt sql << SQL
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
@@ -119,8 +122,8 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
-    [[ "${lines[26]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
-    [[ "${lines[28]}" =~ "1" ]] || false
+    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[3]}" =~ "1" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
