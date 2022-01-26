@@ -71,7 +71,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	}
 
 	m := durable.ProllyMapFromIndex(idx)
-	mut := makeMutableProllyIndex(m, pkSch.Schema, sch)
+	mut := newProllyIndexWriter(m, pkSch.Schema, sch)
 	autoCol := autoIncrementColFromSchema(sch)
 
 	wr := &prollyWriter{

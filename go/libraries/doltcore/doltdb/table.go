@@ -225,8 +225,9 @@ func (t *Table) HashOf() (hash.Hash, error) {
 	return t.table.HashOf()
 }
 
-// UpdateNomsRows replaces the current row data and returns and updated Table.  Calls to UpdateNomsRows will not be written to the
-// database.  The root must be updated with the updated table, and the root must be committed or written.
+// UpdateNomsRows replaces the current row data and returns and updated Table.
+// Calls to UpdateNomsRows will not be written to the database.  The root must
+// be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
 	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter()))
 	if err != nil {
@@ -235,8 +236,9 @@ func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Tab
 	return &Table{table: table}, nil
 }
 
-// UpdateNomsRows replaces the current row data and returns and updated Table.  Calls to UpdateNomsRows will not be written to the
-// database.  The root must be updated with the updated table, and the root must be committed or written.
+// UpdateRows replaces the current row data and returns and updated Table.
+// Calls to UpdateRows will not be written to the database. The root must
+// be updated with the updated table, and the root must be committed or written.
 func (t *Table) UpdateRows(ctx context.Context, updatedRows durable.Index) (*Table, error) {
 	table, err := t.table.SetTableRows(ctx, updatedRows)
 	if err != nil {

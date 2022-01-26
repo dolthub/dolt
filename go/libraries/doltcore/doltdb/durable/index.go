@@ -55,6 +55,7 @@ type IndexSet interface {
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
 }
 
+// RefFromIndex persists the Index and returns a types.Ref to it.
 func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
 	switch idx.Format() {
 	case types.Format_LD_1:
@@ -69,6 +70,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 	}
 }
 
+// IndexFromRef reads the types.Ref from storage and returns the Index it points to.
 func IndexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
 	v, err := r.TargetValue(ctx, vrw)
 	if err != nil {
@@ -88,6 +90,7 @@ func IndexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 	}
 }
 
+// NewEmptyIndex returns an index with no rows.
 func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (Index, error) {
 	switch vrw.Format() {
 	case types.Format_LD_1:
@@ -116,6 +119,7 @@ type nomsIndex struct {
 	vrw   types.ValueReadWriter
 }
 
+// NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
 func NomsMapFromIndex(i Index) (types.Map, error) {
 	n, ok := i.(nomsIndex)
 	if !ok {
@@ -124,6 +128,7 @@ func NomsMapFromIndex(i Index) (types.Map, error) {
 	return n.index, nil
 }
 
+// IndexFromNomsMap wraps a types.Map and returns it as an Index.
 func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
 	return nomsIndex{
 		index: m,
@@ -133,14 +138,17 @@ func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
 
 var _ Index = nomsIndex{}
 
+// HashOf implements Index.
 func (i nomsIndex) HashOf() (hash.Hash, error) {
 	return i.index.Hash(i.vrw.Format())
 }
 
+// Count implements Index.
 func (i nomsIndex) Count() uint64 {
 	return i.index.Len()
 }
 
+// Format implements Index.
 func (i nomsIndex) Format() *types.NomsBinFormat {
 	return i.vrw.Format()
 }
@@ -149,28 +157,34 @@ type prollyIndex struct {
 	index prolly.Map
 }
 
+// ProllyMapFromIndex unwraps the Index and returns the underlying prolly.Map.
 func ProllyMapFromIndex(i Index) prolly.Map {
 	return i.(prollyIndex).index
 }
 
+// IndexFromProllyMap wraps a prolly.Map and returns it as an Index.
 func IndexFromProllyMap(m prolly.Map) Index {
 	return prollyIndex{index: m}
 }
 
 var _ Index = prollyIndex{}
 
+// HashOf implements Index.
 func (i prollyIndex) HashOf() (hash.Hash, error) {
 	return i.index.HashOf(), nil
 }
 
+// Count implements Index.
 func (i prollyIndex) Count() uint64 {
 	return i.index.Count()
 }
 
+// Format implements Index.
 func (i prollyIndex) Format() *types.NomsBinFormat {
 	return i.index.Format()
 }
 
+// NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	empty, _ := types.NewMap(ctx, vrw)
 	return nomsIndexSet{

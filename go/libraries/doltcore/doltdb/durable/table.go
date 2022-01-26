@@ -101,6 +101,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 	return NewTable(ctx, vrw, sch, nomsIndex{index: rows, vrw: vrw}, indexes, autoIncVal)
 }
 
+// NewTable returns a new Table.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
 	if types.IsFormat_DOLT_1(vrw.Format()) && schema.IsKeyless(sch) {
 		return nil, errNbfUnsupported
@@ -228,8 +229,6 @@ func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 	return nomsTable{t.vrw, newTableStruct}, nil
 }
 
-// UpdateNomsRows replaces the current row data and returns and updated Table.  Calls to UpdateNomsRows will not be written to the
-// database.  The root must be updated with the updated table, and the root must be committed or written.
 // SetTableRows implements Table.
 func (t nomsTable) SetTableRows(ctx context.Context, updatedRows Index) (Table, error) {
 	rowsRef, err := RefFromIndex(ctx, t.vrw, updatedRows)

@@ -172,7 +172,7 @@ type prollyIndexWriter struct {
 	valMap colMapping
 }
 
-func makeMutableProllyIndex(m prolly.Map, sqlSch sql.Schema, sch schema.Schema) prollyIndexWriter {
+func newProllyIndexWriter(m prolly.Map, sqlSch sql.Schema, sch schema.Schema) prollyIndexWriter {
 	keyDesc, valDesc := m.Descriptors()
 	keyMap, valMap := colMappingsFromSchema(sqlSch, sch)
 
