@@ -571,7 +571,8 @@ func createVerticalPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) 
 }
 
 type verticalPipelineStages struct {
-	heads []string
+	heads  []string
+	rowIdx int
 }
 
 func (vps *verticalPipelineStages) getFixWidthStageFunc(samples int) func(context.Context, []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
@@ -596,6 +597,7 @@ func (vps *verticalPipelineStages) getFixWidthStageFunc(samples int) func(contex
 						}
 					}
 					vps.heads, _ = vps.formatHeads(maxWidth, head)
+					vps.rowIdx = 0
 				} else {
 					buffer = append(buffer, item)
 				}
@@ -638,10 +640,9 @@ func (vps *verticalPipelineStages) getSeparatorFunc() func(context.Context, []pi
 		sb := &strings.Builder{}
 		sb.Grow(2048)
 		var sep string
-		idx := 0
 		for _, item := range items {
-			idx += 1
-			sep = fmt.Sprintf("*************************** %d. row ***************************\n", idx)
+			vps.rowIdx += 1
+			sep = fmt.Sprintf("*************************** %d. row ***************************\n", vps.rowIdx)
 			sb.WriteString(sep)
 
 			cols := item.GetItem().([]string)

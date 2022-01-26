@@ -1705,12 +1705,15 @@ Table: one_pk
 *************************** 3. row ***************************
 Table: two_pk" ]
 
-    run dolt sql -r vertical -q "SELECT pk AS primaryKey FROM one_pk WHERE pk < 2"
+    dolt sql <<SQL
+INSERT INTO one_pk (pk,c1,c2,c3,c4,c5) VALUES (4,40,40,40,40,40),(5,50,50,50,50,50),(6,60,60,60,60,60),(7,70,70,70,70,70);
+INSERT INTO one_pk (pk,c1,c2,c3,c4,c5) VALUES (8,80,80,80,80,80),(9,90,90,90,90,90),(10,100,100,100,100,100),(11,110,110,110,110,110);
+INSERT INTO one_pk (pk,c1,c2,c3,c4,c5) VALUES (12,120,120,120,120,120),(13,130,130,130,130,130);
+SQL
+
+    run dolt sql -r vertical -q "SELECT pk AS primaryKey FROM one_pk"
     [ "$status" -eq 0 ]
-    [ "$output" = "*************************** 1. row ***************************
-primaryKey: 0
-*************************** 2. row ***************************
-primaryKey: 1" ]
+    [[ "$output" =~ "*************************** 14. row ***************************" ]] || false
 }
 
 @test "sql: vertical query format in sql shell" {
