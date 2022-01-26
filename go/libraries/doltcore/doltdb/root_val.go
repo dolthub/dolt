@@ -730,7 +730,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, tableRef types
 
 // CreateEmptyTable creates an empty table in this root with the name and schema given, returning the new root value.
 func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch schema.Schema) (*RootValue, error) {
-	empty, err := types.NewMap(ctx, root.VRW())
+	empty, err := durable.NewEmptyIndex(ctx, root.vrw, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -738,7 +738,7 @@ func (root *RootValue) CreateEmptyTable(ctx context.Context, tName string, sch s
 	indexes := durable.NewIndexSet(ctx, root.VRW())
 	err = sch.Indexes().Iter(func(index schema.Index) (stop bool, err error) {
 		// create an empty map for every index
-		indexes, err = indexes.PutNomsIndex(ctx, index.Name(), empty)
+		indexes, err = indexes.PutIndex(ctx, index.Name(), empty)
 		return
 	})
 	if err != nil {

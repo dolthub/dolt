@@ -18,6 +18,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -43,6 +46,9 @@ const (
 	uint64Size  ByteSize = 8
 	float32Size ByteSize = 4
 	float64Size ByteSize = 8
+
+	// todo(andy): experimental encoding
+	timeSize ByteSize = 15
 )
 
 type Collation uint16
@@ -55,13 +61,13 @@ type Encoding uint8
 
 // Constant Size Encodings
 const (
-	NullEnc    Encoding = 0
-	Int8Enc    Encoding = 1
-	Uint8Enc   Encoding = 2
-	Int16Enc   Encoding = 3
-	Uint16Enc  Encoding = 4
-	Int24Enc   Encoding = 5
-	Uint24Enc  Encoding = 6
+	NullEnc   Encoding = 0
+	Int8Enc   Encoding = 1
+	Uint8Enc  Encoding = 2
+	Int16Enc  Encoding = 3
+	Uint16Enc Encoding = 4
+	// Int24Enc   Encoding = 5
+	// Uint24Enc  Encoding = 6
 	Int32Enc   Encoding = 7
 	Uint32Enc  Encoding = 8
 	Int64Enc   Encoding = 9
@@ -69,13 +75,12 @@ const (
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
 
-	// TODO
-	//  TimeEnc
-	//  TimestampEnc
-	//  DateEnc
-	//  TimeEnc
-	//  DatetimeEnc
-	//  YearEnc
+	// todo(andy): experimental encodings
+	//TimeEnc      Encoding = 13
+	TimestampEnc Encoding = 14
+	DateEnc      Encoding = 15
+	DatetimeEnc  Encoding = 16
+	YearEnc      Encoding = 17
 
 	sentinel Encoding = 127
 )
@@ -85,8 +90,12 @@ const (
 	StringEnc Encoding = 128
 	BytesEnc  Encoding = 129
 
+	// todo(andy): experimental encodings
+	DecimalEnc Encoding = 130
+	JSONEnc    Encoding = 131
+	TimeEnc    Encoding = 132
+
 	// TODO
-	//  DecimalEnc
 	//  BitEnc
 	//  CharEnc
 	//  VarCharEnc
@@ -166,12 +175,26 @@ func ReadFloat64(val []byte) float64 {
 	return math.Float64frombits(ReadUint64(val))
 }
 
-func ReadString(val []byte, coll Collation) string {
+func ReadDecimal(val []byte) decimal.Decimal {
+	// todo(andy): temporary lossy implementation
+	//return decimal.NewFromFloat(ReadFloat64(val))
+	return decimal.NewFromFloat(ReadFloat64(val))
+}
+
+func ReadTime(buf []byte) (t time.Time) {
+	expectSize(buf, timeSize)
+	if err := t.UnmarshalBinary(buf); err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func ReadString(val []byte) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
 
-func readBytes(val []byte, coll Collation) []byte {
+func readBytes(val []byte) []byte {
 	return val
 }
 
@@ -249,6 +272,13 @@ func WriteFloat64(buf []byte, val float64) {
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
 
+func WriteTime(buf []byte, val time.Time) {
+	expectSize(buf, timeSize)
+	// todo(andy): fix allocation here
+	m, _ := val.MarshalBinary()
+	copy(buf, m)
+}
+
 func writeString(buf []byte, val string, coll Collation) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
@@ -290,10 +320,6 @@ func compare(typ Type, left, right []byte) int {
 		return compareInt16(ReadInt16(left), ReadInt16(right))
 	case Uint16Enc:
 		return compareUint16(ReadUint16(left), ReadUint16(right))
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
 	case Int32Enc:
 		return compareInt32(ReadInt32(left), ReadInt32(right))
 	case Uint32Enc:
@@ -306,10 +332,15 @@ func compare(typ Type, left, right []byte) int {
 		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
 	case Float64Enc:
 		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
+	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
+		return compareTime(ReadTime(left), ReadTime(right))
+	case DecimalEnc:
+		// todo(andy): temporary Decimal implementation
+		fallthrough
 	case StringEnc:
-		return compareString(ReadString(left, typ.Coll), ReadString(right, typ.Coll), typ.Coll)
+		return compareString(ReadString(left), ReadString(right), typ.Coll)
 	case BytesEnc:
-		return compareBytes(readBytes(left, typ.Coll), readBytes(right, typ.Coll), typ.Coll)
+		return compareBytes(readBytes(left), readBytes(right), typ.Coll)
 	default:
 		panic("unknown encoding")
 	}
@@ -426,6 +457,14 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
+func compareTime(l, r time.Time) int {
+	cmp := compareInt64(l.Unix(), r.Unix())
+	if cmp != 0 {
+		return cmp
+	}
+	return compareInt64(l.UnixNano(), r.UnixNano())
+}
+
 func compareString(l, r string, coll Collation) int {
 	// todo(andy): collations
 	return bytes.Compare([]byte(l), []byte(r))
@@ -452,8 +491,6 @@ var rawCmpLookup = map[Encoding]rawCmp{
 	Uint8Enc:  {0},
 	Int16Enc:  {1, 0},
 	Uint16Enc: {1, 0},
-	Int24Enc:  {2, 1, 0},
-	Uint24Enc: {2, 1, 0},
 	Int32Enc:  {3, 2, 1, 0},
 	Uint32Enc: {3, 2, 1, 0},
 	Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},

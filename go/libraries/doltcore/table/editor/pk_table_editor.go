@@ -687,7 +687,7 @@ func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 			return err
 		}
 
-		newTable, err := te.t.UpdateRows(ctx, updatedMap)
+		newTable, err := te.t.UpdateNomsRows(ctx, updatedMap)
 		if err != nil {
 			return err
 		}

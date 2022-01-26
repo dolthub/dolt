@@ -72,7 +72,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 		return nil, ErrEmptyDocsTable
 	}
 
-	docTbl, err = docTbl.UpdateRows(ctx, updatedMap)
+	docTbl, err = docTbl.UpdateNomsRows(ctx, updatedMap)
 
 	return docTbl, err
 }
@@ -119,7 +119,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 		return nil, err
 	}
 
-	newDocsTbl, err := doltdb.NewTable(ctx, vrw, DocsSchema, rowMap, nil, nil)
+	newDocsTbl, err := doltdb.NewNomsTable(ctx, vrw, DocsSchema, rowMap, nil, nil)
 	if err != nil {
 		return nil, err
 	}

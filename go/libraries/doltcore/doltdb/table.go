@@ -48,8 +48,7 @@ var (
 	foreignKeyNameRegex = regexp.MustCompile(ForeignKeyNameRegexStr)
 	indexNameRegex      = regexp.MustCompile(IndexNameRegexStr)
 
-	ErrNoConflictsResolved  = errors.New("no conflicts resolved")
-	ErrNoAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
+	ErrNoConflictsResolved = errors.New("no conflicts resolved")
 )
 
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
@@ -73,9 +72,19 @@ type Table struct {
 	table durable.Table
 }
 
-// NewTable creates a noms Struct which stores row data, index data, and schema.
-func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
-	dt, err := durable.NewNomsTable(ctx, vrw, sch, rowData, indexes, autoIncVal)
+// NewNomsTable creates a noms Struct which stores row data, index data, and schema.
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewNomsTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{table: dt}, nil
+}
+
+// NewTable creates a durable object which stores row data, index data, and schema.
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows durable.Index, indexes durable.IndexSet, autoIncVal types.Value) (*Table, error) {
+	dt, err := durable.NewTable(ctx, vrw, sch, rows, indexes, autoIncVal)
 	if err != nil {
 		return nil, err
 	}
@@ -216,10 +225,22 @@ func (t *Table) HashOf() (hash.Hash, error) {
 	return t.table.HashOf()
 }
 
-// UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
-// database.  The root must be updated with the updated table, and the root must be committed or written.
-func (t *Table) UpdateRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
+// UpdateNomsRows replaces the current row data and returns and updated Table.
+// Calls to UpdateNomsRows will not be written to the database.  The root must
+// be updated with the updated table, and the root must be committed or written.
+func (t *Table) UpdateNomsRows(ctx context.Context, updatedRows types.Map) (*Table, error) {
 	table, err := t.table.SetTableRows(ctx, durable.IndexFromNomsMap(updatedRows, t.ValueReadWriter()))
+	if err != nil {
+		return nil, err
+	}
+	return &Table{table: table}, nil
+}
+
+// UpdateRows replaces the current row data and returns and updated Table.
+// Calls to UpdateRows will not be written to the database. The root must
+// be updated with the updated table, and the root must be committed or written.
+func (t *Table) UpdateRows(ctx context.Context, updatedRows durable.Index) (*Table, error) {
+	table, err := t.table.SetTableRows(ctx, updatedRows)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +254,7 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 		return types.Map{}, err
 	}
 
-	return durable.NomsMapFromIndex(idx), nil
+	return durable.NomsMapFromIndex(idx)
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
@@ -312,7 +333,7 @@ func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, err
 	}
 
-	return durable.NomsMapFromIndex(idx), nil
+	return durable.NomsMapFromIndex(idx)
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
@@ -405,7 +426,11 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return err
 	}
 
-	im := durable.NomsMapFromIndex(idx)
+	im, err := durable.NomsMapFromIndex(idx)
+	if err != nil {
+		return err
+	}
+
 	iter, err := im.Iterator(ctx)
 	if err != nil {
 		return err

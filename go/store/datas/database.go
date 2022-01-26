@@ -217,3 +217,7 @@ func GetCSStatSummaryForDB(db Database) string {
 	cs := db.chunkStore()
 	return cs.StatsSummary()
 }
+
+func ChunkStoreFromDatabase(db Database) chunks.ChunkStore {
+	return db.chunkStore()
+}
