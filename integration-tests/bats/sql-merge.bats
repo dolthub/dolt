@@ -76,6 +76,22 @@ SQL
     [[ "$output" =~ "true" ]] || false
 }
 
+@test "sql-merge: DOLT_MERGE with autocommit off works in fast-forward." {
+     run dolt sql --disable-batch << SQL
+set autocommit = off;
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+SELECT DOLT_CHECKOUT('main');
+SELECT DOLT_MERGE('feature-branch');
+-- commit;
+SELECT DOLT_CHECKOUT('-b', 'new-branch');
+SQL
+    skip "That commented out commit; is necessary now. It should not be."
+    [ $status -eq 0 ]
+}
+
 @test "sql-merge: DOLT_MERGE correctly returns head and working session variables." {
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');

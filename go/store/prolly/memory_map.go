@@ -77,11 +77,11 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		KeyDesc: mm.keyDesc,
 		Reverse: false,
 	}
-	return mm.IterValueRange(ctx, rng)
+	return mm.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
-func (mm memoryMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
 		if rng.Reverse {

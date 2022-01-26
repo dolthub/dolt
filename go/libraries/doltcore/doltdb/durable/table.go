@@ -42,6 +42,11 @@ var (
 	ErrUnknownAutoIncrementValue = fmt.Errorf("auto increment set for non-numeric column type")
 )
 
+var (
+	errNbfUnkown      = fmt.Errorf("unknown NomsBinFormat")
+	errNbfUnsupported = fmt.Errorf("operation unsupported for NomsBinFormat")
+)
+
 // Table is a Dolt table that can be persisted.
 type Table interface {
 	// HashOf returns the hash.Hash of this table.
@@ -92,7 +97,16 @@ type nomsTable struct {
 var _ Table = nomsTable{}
 
 // NewNomsTable makes a new Table.
-func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+	return NewTable(ctx, vrw, sch, nomsIndex{index: rows, vrw: vrw}, indexes, autoIncVal)
+}
+
+// NewTable returns a new Table.
+func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+	if types.IsFormat_DOLT_1(vrw.Format()) && schema.IsKeyless(sch) {
+		return nil, errNbfUnsupported
+	}
+
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
@@ -103,7 +117,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 		return nil, err
 	}
 
-	rowDataRef, err := refFromNomsValue(ctx, vrw, rowData)
+	rowsRef, err := RefFromIndex(ctx, vrw, rows)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +133,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 
 	sd := types.StructData{
 		schemaRefKey: schemaRef,
-		tableRowsKey: rowDataRef,
+		tableRowsKey: rowsRef,
 		indexesKey:   indexesRef,
 	}
 
@@ -215,18 +229,14 @@ func (t nomsTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, err
 	return nomsTable{t.vrw, newTableStruct}, nil
 }
 
-// UpdateRows replaces the current row data and returns and updated Table.  Calls to UpdateRows will not be written to the
-// database.  The root must be updated with the updated table, and the root must be committed or written.
 // SetTableRows implements Table.
 func (t nomsTable) SetTableRows(ctx context.Context, updatedRows Index) (Table, error) {
-	rowDataRef, err := refFromNomsValue(ctx, t.vrw, updatedRows.(nomsIndex).index)
-
+	rowsRef, err := RefFromIndex(ctx, t.vrw, updatedRows)
 	if err != nil {
 		return nil, err
 	}
 
-	updatedSt, err := t.tableStruct.Set(tableRowsKey, rowDataRef)
-
+	updatedSt, err := t.tableStruct.Set(tableRowsKey, rowsRef)
 	if err != nil {
 		return nil, err
 	}
@@ -237,18 +247,16 @@ func (t nomsTable) SetTableRows(ctx context.Context, updatedRows Index) (Table, 
 // GetTableRows implements Table.
 func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 	val, _, err := t.tableStruct.MaybeGet(tableRowsKey)
-
 	if err != nil {
 		return nil, err
 	}
 
-	rowMapRef := val.(types.Ref)
-	val, err = rowMapRef.TargetValue(ctx, t.vrw)
+	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return IndexFromNomsMap(val.(types.Map), t.vrw), nil
+	return IndexFromRef(ctx, t.vrw, sch, val.(types.Ref))
 }
 
 // GetIndexes implements Table.

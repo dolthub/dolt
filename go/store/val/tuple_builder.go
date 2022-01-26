@@ -14,7 +14,15 @@
 
 package val
 
-import "github.com/dolthub/dolt/go/store/pool"
+import (
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/pool"
+)
 
 type TupleBuilder struct {
 	Desc TupleDesc
@@ -29,14 +37,20 @@ func NewTupleBuilder(desc TupleDesc) *TupleBuilder {
 	return &TupleBuilder{Desc: desc}
 }
 
-// Tuple materializes a Tuple from the fields written to the TupleBuilder.
+// Build materializes a Tuple from the fields written to the TupleBuilder.
 func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 	for i, typ := range tb.Desc.Types {
 		if !typ.Nullable && tb.fields[i] == nil {
 			panic("cannot write NULL to non-NULL field")
 		}
 	}
+	return tb.BuildPermissive(pool)
+}
 
+// BuildPermissive materializes a Tuple from the fields
+// written to the TupleBuilder without checking nullability.
+// todo(andy): restructure
+func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
 	tb.Recycle()
@@ -45,6 +59,9 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 
 // Recycle resets the TupleBuilder so it can build a new Tuple.
 func (tb *TupleBuilder) Recycle() {
+	for i := 0; i < tb.Desc.Count(); i++ {
+		tb.fields[i] = nil
+	}
 	tb.pos = 0
 }
 
@@ -136,6 +153,40 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
+func (tb *TupleBuilder) PutTime(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc, YearEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+	WriteTime(tb.fields[i], v)
+	tb.pos += timeSize
+}
+
+// PutString writes a string to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutSqlTime(i int, v string) {
+	tb.Desc.expectEncoding(i, TimeEnc)
+	sz := ByteSize(len(v))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
+// PutYear writes an int16-encoded year to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutYear(i int, v int16) {
+	// todo(andy): yearSize, etc?
+	tb.Desc.expectEncoding(i, YearEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
+	WriteInt16(tb.fields[i], v)
+	tb.pos += int16Size
+}
+
+func (tb *TupleBuilder) PutDecimal(i int, v string) {
+	tb.Desc.expectEncoding(i, DecimalEnc)
+	// todo(andy): temporary implementation
+	sz := ByteSize(len(v))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
 // PutString writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
@@ -154,9 +205,27 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.pos += sz
 }
 
+// PutBytes writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
+	tb.Desc.expectEncoding(i, JSONEnc)
+	buf, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	sz := ByteSize(len(buf))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeBytes(tb.fields[i], buf, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
 // PutField writes an interface{} to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutField(i int, v interface{}) {
-	switch tb.Desc.Types[i].Enc {
+	if v == nil {
+		return // NULL
+	}
+
+	enc := tb.Desc.Types[i].Enc
+	switch enc {
 	case Int8Enc:
 		tb.PutInt8(i, int8(convInt(v)))
 	case Uint8Enc:
@@ -165,10 +234,6 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutInt16(i, int16(convInt(v)))
 	case Uint16Enc:
 		tb.PutUint16(i, uint16(convUint(v)))
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
 	case Int32Enc:
 		tb.PutInt32(i, int32(convInt(v)))
 	case Uint32Enc:
@@ -181,17 +246,32 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutFloat32(i, v.(float32))
 	case Float64Enc:
 		tb.PutFloat64(i, v.(float64))
+	case DecimalEnc:
+		tb.PutDecimal(i, v.(string))
+	case TimeEnc:
+		tb.PutSqlTime(i, v.(string))
+	case YearEnc:
+		tb.PutYear(i, v.(int16))
+	case DateEnc, DatetimeEnc, TimestampEnc:
+		tb.PutTime(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))
 	case BytesEnc:
+		if s, ok := v.(string); ok {
+			v = []byte(s)
+		}
 		tb.PutBytes(i, v.([]byte))
+	case JSONEnc:
+		tb.PutJSON(i, v.(sql.JSONDocument).Val)
 	default:
-		panic("unknown encoding")
+		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
 }
 
 func convInt(v interface{}) int {
 	switch i := v.(type) {
+	case int:
+		return i
 	case int8:
 		return int(i)
 	case uint8:
@@ -215,6 +295,10 @@ func convInt(v interface{}) int {
 
 func convUint(v interface{}) uint {
 	switch i := v.(type) {
+	case uint:
+		return i
+	case int:
+		return uint(i)
 	case int8:
 		return uint(i)
 	case uint8:
