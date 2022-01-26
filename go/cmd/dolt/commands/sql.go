@@ -222,7 +222,11 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 		input := os.Stdin
 		if fileInput, ok := apr.GetValue(fileInputFlag); ok {
+			isTty = false
 			input, err = os.OpenFile(fileInput, os.O_RDONLY, os.ModePerm)
+			if err != nil {
+				return HandleVErrAndExitCode(errhand.BuildDError("couldn't open file %s", fileInput).Build(), usage)
+			}
 		}
 
 		if isTty {
