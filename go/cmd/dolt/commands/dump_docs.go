@@ -100,7 +100,18 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 	return 0
 }
 
+const cliMdDocHeader = "" +
+	"---\n" +
+	"title: CLI\n" +
+	"---\n\n" +
+	"# CLI\n\n"
+
 func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.Command) error {
+	_, err := wr.Write([]byte(cliMdDocHeader))
+	if err != nil {
+		return err
+	}
+
 	for _, curr := range subCommands {
 		var hidden bool
 		if hidCmd, ok := curr.(cli.HiddenCommand); ok {
