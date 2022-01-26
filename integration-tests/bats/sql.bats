@@ -1721,3 +1721,21 @@ primaryKey: 1" ]
     run expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
     [ "$status" -eq 0 ]
 }
+
+@test "sql: --file param" {
+    cat > script.sql <<SQL
+    create table test (a int primary key, b int);
+    insert into test values (1,1), (2,2);
+SQL
+    
+    run dolt sql --file script.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+
+    run dolt sql --file not-exists.sql
+    [ "$status" -eq 1 ]
+}
+
