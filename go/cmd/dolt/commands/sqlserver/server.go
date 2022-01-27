@@ -179,6 +179,7 @@ func Serve(
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
+	defer listener.Close()
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,

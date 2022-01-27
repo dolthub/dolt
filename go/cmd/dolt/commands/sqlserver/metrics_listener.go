@@ -70,21 +70,29 @@ func newMetricsListener(labels prometheus.Labels) *metricsListener {
 	return ml
 }
 
-func (m *metricsListener) ClientConnected() {
-	m.gaugeConcurrentConn.Add(1.0)
-	m.cntConnections.Add(1.0)
+func (ml *metricsListener) ClientConnected() {
+	ml.gaugeConcurrentConn.Add(1.0)
+	ml.cntConnections.Add(1.0)
 }
 
-func (m *metricsListener) ClientDisconnected() {
-	m.gaugeConcurrentConn.Sub(1.0)
-	m.cntDisconnects.Add(1.0)
+func (ml *metricsListener) ClientDisconnected() {
+	ml.gaugeConcurrentConn.Sub(1.0)
+	ml.cntDisconnects.Add(1.0)
 }
 
-func (m *metricsListener) QueryStarted() {
-	m.gaugeConcurrentQueries.Add(1.0)
+func (ml *metricsListener) QueryStarted() {
+	ml.gaugeConcurrentQueries.Add(1.0)
 }
 
-func (m *metricsListener) QueryCompleted(success bool, duration time.Duration) {
-	m.gaugeConcurrentQueries.Sub(1.0)
-	m.histQueryDur.Observe(duration.Seconds())
+func (ml *metricsListener) QueryCompleted(success bool, duration time.Duration) {
+	ml.gaugeConcurrentQueries.Sub(1.0)
+	ml.histQueryDur.Observe(duration.Seconds())
+}
+
+func (ml *metricsListener) Close() {
+	prometheus.Unregister(ml.cntConnections)
+	prometheus.Unregister(ml.cntDisconnects)
+	prometheus.Unregister(ml.gaugeConcurrentConn)
+	prometheus.Unregister(ml.gaugeConcurrentQueries)
+	prometheus.Unregister(ml.histQueryDur)
 }
