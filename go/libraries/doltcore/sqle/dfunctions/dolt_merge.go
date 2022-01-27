@@ -108,11 +108,6 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return conflicts, err
 	}
 
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
-	if err != nil {
-		return conflicts, err
-	}
-
 	return conflicts, nil
 }
 
@@ -176,7 +171,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 			return ws, noConflicts, err
 		}
 
-		ws, err = executeFFMerge(ctx, spec.Squash, ws, dbData, spec.MergeC)
+		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
 		return ws, noConflicts, err
 	}
 
@@ -200,6 +195,11 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 
 		return ws, hasConflicts, nil
 	} else if err != nil {
+		return ws, noConflicts, err
+	}
+
+	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	if err != nil {
 		return ws, noConflicts, err
 	}
 
@@ -239,7 +239,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 	return mergeRootToWorking(squash, ws, mergeRoot, cm, mergeStats)
 }
 
-func executeFFMerge(ctx *sql.Context, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
+func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
 	rv, err := cm2.GetRootValue()
 	if err != nil {
 		return ws, err
@@ -254,7 +254,18 @@ func executeFFMerge(ctx *sql.Context, squash bool, ws *doltdb.WorkingSet, dbData
 		}
 	}
 
-	return ws.WithWorkingRoot(rv).WithStagedRoot(rv), nil
+	ws = ws.WithWorkingRoot(rv).WithStagedRoot(rv)
+
+	// We need to assign the working set to the session but ensure that it's state is not labeled as dirty (ffs are clean
+	// merges). Hence, we go ahead and commit the working set to the transaction.
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	if err != nil {
+		return ws, err
+	}
+
+	return ws, sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 }
 
 func executeNoFFMerge(
@@ -287,14 +298,7 @@ func executeNoFFMerge(
 	// The roots need refreshing after the above
 	roots, _ := dSess.GetRoots(ctx, dbName)
 
-	var mergeParentCommits []*doltdb.Commit
-	if ws.MergeActive() {
-		mergeParentCommits = []*doltdb.Commit{ws.MergeState().Commit()}
-	}
-
-	// TODO: this does several session state updates, and it really needs to just do one
-	//  We also need to commit any pending transaction before we do this.
-	_, err = actions.CommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dbData, actions.CommitStagedProps{
+	pendingCommit, err := dSess.NewPendingCommit(ctx, dbName, roots, actions.CommitStagedProps{
 		Message:    spec.Msg,
 		Date:       spec.Date,
 		AllowEmpty: spec.AllowEmpty,
@@ -306,7 +310,16 @@ func executeNoFFMerge(
 		return nil, err
 	}
 
-	return ws, dSess.SetWorkingSet(ctx, dbName, ws.ClearMerge(), nil)
+	if pendingCommit == nil {
+		return nil, errors.New("nothing to commit")
+	}
+
+	_, err = dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
+	if err != nil {
+		return nil, err
+	}
+
+	return ws, nil
 }
 
 func createMergeSpec(ctx *sql.Context, sess *dsess.DoltSession, dbName string, apr *argparser.ArgParseResults, commitSpecStr string) (*merge.MergeSpec, error) {

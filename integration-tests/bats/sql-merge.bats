@@ -88,8 +88,59 @@ SELECT DOLT_MERGE('feature-branch');
 -- commit;
 SELECT DOLT_CHECKOUT('-b', 'new-branch');
 SQL
-    skip "That commented out commit; is necessary now. It should not be."
     [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 5 ]
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "1" ]
+    [ "${lines[3]}" = "2" ]
+    [ "${lines[4]}" = "3" ]
+}
+
+@test "sql-merge: DOLT_MERGE no-ff works with autocommit off." {
+     run dolt sql --disable-batch << SQL
+set autocommit = off;
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
+SELECT DOLT_CHECKOUT('main');
+SELECT DOLT_MERGE('feature-branch', '-no-ff');
+COMMIT;
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 5 ]
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "1" ]
+    [ "${lines[3]}" = "2" ]
+    [ "${lines[4]}" = "3" ]
+}
+
+
+@test "sql-merge: DOLT_MERGE works with autocommit off." {
+     run dolt sql --disable-batch << SQL
+set autocommit = off;
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');
+SELECT DOLT_CHECKOUT('main');
+INSERT INTO test VALUES (5);
+SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');
+SELECT DOLT_MERGE('feature-branch');
+COMMIT;
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 5 ]
+    [ "${lines[1]}" = "0" ]
+    [ "${lines[2]}" = "1" ]
+    [ "${lines[3]}" = "2" ]
+    [ "${lines[4]}" = "3" ]
 }
 
 @test "sql-merge: DOLT_MERGE correctly returns head and working session variables." {

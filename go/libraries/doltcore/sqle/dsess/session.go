@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -50,6 +51,8 @@ func init() {
 const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
 
 var transactionMergeStomp = false
+var ErrCanSwitchDueToDirtyWorkset = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
+	"Rollback or commit changes before changing working sets.")
 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
@@ -659,6 +662,11 @@ func (sess *Session) SetWorkingSet(
 		return nil
 	}
 
+	workingRoot := ws.WorkingRoot()
+	h, _ := workingRoot.HashOf()
+
+	log := ctx.Session.GetLogger()
+	log.Debugf("Set the root to string " + h.String())
 	return nil
 }
 
@@ -677,8 +685,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	if sessionState.dirty {
-		return fmt.Errorf("Cannot switch working set, session state is dirty. " +
-			"Rollback or commit changes before changing working sets.")
+		return ErrCanSwitchDueToDirtyWorkset.New()
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
