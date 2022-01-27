@@ -51,9 +51,6 @@ func TestMap(t *testing.T) {
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, prollyMap, tuples)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, prollyMap, tuples)
-			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, prollyMap, tuples)
 			})
@@ -172,33 +169,6 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	}
 }
 
-func testOrderedMapIterAllBackward(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
-	desc := getKeyDesc(om)
-	rng := Range{
-		Start:   RangeCut{Unbound: true},
-		Stop:    RangeCut{Unbound: true},
-		KeyDesc: desc,
-		Reverse: true,
-	}
-
-	ctx := context.Background()
-	iter, err := om.IterRange(ctx, rng)
-	require.NoError(t, err)
-
-	idx := len(tuples) - 1
-	for {
-		key, value, err := iter.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		require.NoError(t, err)
-		assert.Equal(t, tuples[idx][0], key)
-		assert.Equal(t, tuples[idx][1], value)
-		idx--
-	}
-	assert.Equal(t, -1, idx)
-}
-
 type rangeTest struct {
 	name      string
 	testRange Range
@@ -241,28 +211,6 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 				expCount:  (z - a) + 1,
 			},
 
-			// put it down flip it and reverse it
-			{
-				name:      "OpenRange",
-				testRange: OpenRange(stop, start, desc),
-				expCount:  nonNegative((z - a) - 1),
-			},
-			{
-				name:      "OpenStartRange",
-				testRange: OpenStartRange(stop, start, desc),
-				expCount:  z - a,
-			},
-			{
-				name:      "OpenStopRange",
-				testRange: OpenStopRange(stop, start, desc),
-				expCount:  z - a,
-			},
-			{
-				name:      "ClosedRange",
-				testRange: ClosedRange(stop, start, desc),
-				expCount:  (z - a) + 1,
-			},
-
 			// one-sided ranges
 			{
 				name:      "GreaterRange",
@@ -298,11 +246,7 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					if test.testRange.Reverse {
-						assert.True(t, desc.Compare(prev, key) > 0)
-					} else {
-						assert.True(t, desc.Compare(prev, key) < 0)
-					}
+					assert.True(t, desc.Compare(prev, key) < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)

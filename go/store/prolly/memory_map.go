@@ -75,7 +75,6 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
 		KeyDesc: mm.keyDesc,
-		Reverse: false,
 	}
 	return mm.IterRange(ctx, rng)
 }
@@ -84,11 +83,7 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
-		if rng.Reverse {
-			iter = mm.list.IterAtEnd()
-		} else {
-			iter = mm.list.IterAtStart()
-		}
+		iter = mm.list.IterAtStart()
 	} else {
 		iter = mm.list.IterAt(rng.Start.Key)
 	}

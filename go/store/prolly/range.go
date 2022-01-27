@@ -32,7 +32,6 @@ type RangeCut struct {
 type Range struct {
 	Start, Stop RangeCut
 	KeyDesc     val.TupleDesc
-	Reverse     bool
 }
 
 func (r Range) insideStart(key val.Tuple) bool {
@@ -43,9 +42,6 @@ func (r Range) insideStart(key val.Tuple) bool {
 	cmp := r.KeyDesc.Compare(key, r.Start.Key)
 	if cmp == 0 {
 		return r.Start.Inclusive
-	}
-	if r.Reverse {
-		cmp = -cmp
 	}
 	return cmp > 0
 }
@@ -58,9 +54,6 @@ func (r Range) insideStop(key val.Tuple) bool {
 	cmp := r.KeyDesc.Compare(key, r.Stop.Key)
 	if cmp == 0 {
 		return r.Stop.Inclusive
-	}
-	if r.Reverse {
-		cmp = -cmp
 	}
 	return cmp < 0
 }
@@ -76,7 +69,6 @@ func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 			Unbound: true,
 		},
 		KeyDesc: desc,
-		Reverse: false,
 	}
 }
 
@@ -91,7 +83,6 @@ func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 			Unbound: true,
 		},
 		KeyDesc: desc,
-		Reverse: false,
 	}
 }
 
@@ -106,7 +97,6 @@ func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: false,
 		},
 		KeyDesc: desc,
-		Reverse: false,
 	}
 }
 
@@ -121,7 +111,6 @@ func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: true,
 		},
 		KeyDesc: desc,
-		Reverse: false,
 	}
 }
 
@@ -139,7 +128,6 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: false,
 		},
 		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
 
@@ -155,7 +143,6 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: true,
 		},
 		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
 
@@ -171,7 +158,6 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: false,
 		},
 		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
 
@@ -187,7 +173,6 @@ func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 			Inclusive: true,
 		},
 		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
 	}
 }
 
@@ -277,12 +262,7 @@ func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 	if proKey == nil {
 		return -1
 	}
-
-	cmp := it.rng.KeyDesc.Compare(memKey, proKey)
-	if it.rng.Reverse {
-		cmp = -cmp
-	}
-	return cmp
+	return it.rng.KeyDesc.Compare(memKey, proKey)
 }
 
 func (it MapRangeIter) progress(ctx context.Context) (err error) {
@@ -308,11 +288,7 @@ func (it MapRangeIter) progress(ctx context.Context) (err error) {
 }
 
 func (it MapRangeIter) moveCursor(ctx context.Context, cur tupleCursor) error {
-	if it.rng.Reverse {
-		return cur.retreat(ctx)
-	} else {
-		return cur.advance(ctx)
-	}
+	return cur.advance(ctx)
 }
 
 func startInRange(ctx context.Context, iter MapRangeIter) error {

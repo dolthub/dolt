@@ -136,7 +136,6 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
 		KeyDesc: m.keyDesc,
-		Reverse: false,
 	}
 	return m.IterRange(ctx, rng)
 }
@@ -147,11 +146,7 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var err error
 
 	if rng.Start.Unbound {
-		if rng.Reverse {
-			cur, err = m.cursorAtEnd(ctx)
-		} else {
-			cur, err = m.cursorAtStart(ctx)
-		}
+		cur, err = m.cursorAtStart(ctx)
 	} else {
 		cur, err = m.cursorAtkey(ctx, rng.Start.Key)
 	}

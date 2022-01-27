@@ -45,9 +45,6 @@ func TestMemMap(t *testing.T) {
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, memMap, tuples)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, memMap, tuples)
-			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, memMap, tuples)
 			})
@@ -58,9 +55,6 @@ func TestMemMap(t *testing.T) {
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
 				testOrderedMapIterAll(t, memMap2, tuples2)
-			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, memMap2, tuples2)
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, memMap2, tuples2)

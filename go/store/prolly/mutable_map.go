@@ -85,7 +85,6 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
 		KeyDesc: mut.m.keyDesc,
-		Reverse: false,
 	}
 	return mut.IterRange(ctx, rng)
 }
@@ -94,11 +93,7 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
-		if rng.Reverse {
-			iter = mut.overlay.list.IterAtEnd()
-		} else {
-			iter = mut.overlay.list.IterAtStart()
-		}
+		iter = mut.overlay.list.IterAtStart()
 	} else {
 		iter = mut.overlay.list.IterAt(rng.Start.Key)
 	}
@@ -107,11 +102,7 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, e
 	var err error
 	var cur *nodeCursor
 	if rng.Start.Unbound {
-		if rng.Reverse {
-			cur, err = mut.m.cursorAtEnd(ctx)
-		} else {
-			cur, err = mut.m.cursorAtStart(ctx)
-		}
+		cur, err = mut.m.cursorAtStart(ctx)
 	} else {
 		cur, err = mut.m.cursorAtkey(ctx, rng.Start.Key)
 	}

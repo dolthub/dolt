@@ -44,9 +44,6 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("iter all from map", func(t *testing.T) {
 				testOrderedMapIterAll(t, mutableMap, tuples)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, mutableMap, tuples)
-			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, mutableMap, tuples)
 			})
@@ -57,9 +54,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
 				testOrderedMapIterAll(t, mutableMap2, tuples2)
-			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, mutableMap2, tuples2)
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, mutableMap2, tuples2)
@@ -72,9 +66,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
 				testOrderedMapIterAll(t, prollyMap, tuples2)
-			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, prollyMap, tuples2)
 			})
 			t.Run("iter value range", func(t *testing.T) {
 				testOrderedMapIterValueRange(t, prollyMap, tuples2)
