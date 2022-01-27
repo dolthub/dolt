@@ -40,7 +40,7 @@ teardown() {
 }
 
 @test "sql-batch: Piped SQL files interpreted in batch mode" {
-    run dolt sql <<SQL
+    run dolt sql -b <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
 SQL
@@ -49,7 +49,7 @@ SQL
 }
 
 @test "sql-batch: script commits up until error" {
-    run dolt sql <<SQL
+    run dolt sql -b <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
 insert into test values (a,b,c);
@@ -64,7 +64,7 @@ SQL
 }
 
 @test "sql-batch: Line number and bad query displayed on error in batch sql" {
-    run dolt sql <<SQL
+    run dolt sql -b <<SQL
 insert into test values (0,0,0,0,0,0);
 insert into test values (1,0,0,0,0,0);
 insert into test values poop;
@@ -74,7 +74,7 @@ SQL
     [[ "$output" =~ "error on line 3 for query" ]] || false
     [[ "$output" =~ "insert into test values poop" ]] || false
 
-    run dolt sql <<SQL
+    run dolt sql -b <<SQL
 insert into test values (2,0,0,0,0,0);
 
 insert into test values (3,0,
@@ -98,7 +98,7 @@ SQL
 
 @test "sql-batch: sql reset('hard') function" {
     mkdir test && cd test && dolt init
-    dolt sql <<SQL
+    dolt sql -b <<SQL
 CREATE TABLE test (
     pk int PRIMARY KEY,
     c0 int
@@ -110,14 +110,14 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
 
-    dolt sql <<SQL
+    dolt sql -b <<SQL
 INSERT INTO test VALUES (1,1);
 SQL
     run dolt status
     [ "$status" -eq 0 ]
     [[ "$output" =~ "test" ]] || false
 
-   dolt sql <<SQL
+   dolt sql -b <<SQL
 SET @@test_head=reset('hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
 SQL
@@ -126,7 +126,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "working tree clean" ]] || false
 
-    dolt sql <<SQL
+    dolt sql -b <<SQL
 INSERT INTO test VALUES (1,1);
 SET @@test_head = reset('hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
@@ -139,7 +139,7 @@ SQL
 
 @test "sql-batch: batch mode detects subqueries and decides not to do batch insert." {
   # create the second table.
-  dolt sql << SQL
+  dolt sql -b << SQL
 CREATE TABLE test2 (
   pk bigint NOT NULL,
   c1 bigint NOT NULL,
@@ -151,7 +151,7 @@ SQL
   [ "$status" -eq 0 ]
 
   # Create the table and base subquery on recently inserted row.
-  run dolt sql << SQL
+  run dolt sql -b << SQL
 INSERT INTO TEST VALUES (1,1,1,1,1,1);
 INSERT INTO TEST2 VALUES (2,2);
 INSERT INTO TEST2 VALUES (1, (SELECT c1 FROM TEST WHERE c1=1));
@@ -167,7 +167,7 @@ SQL
 }
 
 @test "sql-batch: delete and insert batching" {
-  run dolt sql -r csv << SQL
+  run dolt sql -b -r csv << SQL
 INSERT INTO TEST VALUES (1,1,1,1,1,1);
 INSERT INTO TEST VALUES (2,1,1,1,1,1);
 INSERT INTO TEST VALUES (3,1,1,1,1,1);

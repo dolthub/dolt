@@ -16,7 +16,7 @@ create view four as select 2+2 as res from dual;
 select * from four;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -50,7 +50,7 @@ create view now as select now() from dual;
 select * from four, now;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 6 ]
+    [ "${#lines[@]}" -eq 5 ]
     [[ "${lines[1]}" =~ ' res ' ]] || false
     [[ "${lines[3]}" =~ ' 4 ' ]] || false
 }
@@ -103,10 +103,10 @@ select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
+    [[ "${lines[2]}" =~ ' id ' ]] || false
+    [[ "${lines[4]}" =~ ' 1 ' ]] || false
+    [[ "${lines[5]}" =~ ' 2 ' ]] || false
+    [[ "${lines[6]}" =~ ' 3 ' ]] || false
 }
 
 @test "create-views: view referencing table selects values inserted after it was created" {
@@ -118,14 +118,14 @@ insert into my_users values (4), (5), (6);
 select * from my_users_view;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
-    [[ "${lines[6]}" =~ ' 4 ' ]] || false
-    [[ "${lines[7]}" =~ ' 5 ' ]] || false
-    [[ "${lines[8]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 12 ]
+    [[ "${lines[3]}" =~ ' id ' ]] || false
+    [[ "${lines[5]}" =~ ' 1 ' ]] || false
+    [[ "${lines[6]}" =~ ' 2 ' ]] || false
+    [[ "${lines[7]}" =~ ' 3 ' ]] || false
+    [[ "${lines[8]}" =~ ' 4 ' ]] || false
+    [[ "${lines[9]}" =~ ' 5 ' ]] || false
+    [[ "${lines[10]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: select view with alias" {
@@ -137,14 +137,14 @@ insert into my_users values (4), (5), (6);
 select v.* from my_users_view as V;
 SQL
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 11 ]
-    [[ "${lines[1]}" =~ ' id ' ]] || false
-    [[ "${lines[3]}" =~ ' 1 ' ]] || false
-    [[ "${lines[4]}" =~ ' 2 ' ]] || false
-    [[ "${lines[5]}" =~ ' 3 ' ]] || false
-    [[ "${lines[6]}" =~ ' 4 ' ]] || false
-    [[ "${lines[7]}" =~ ' 5 ' ]] || false
-    [[ "${lines[8]}" =~ ' 6 ' ]] || false
+    [ "${#lines[@]}" -eq 12 ]
+    [[ "${lines[3]}" =~ ' id ' ]] || false
+    [[ "${lines[5]}" =~ ' 1 ' ]] || false
+    [[ "${lines[6]}" =~ ' 2 ' ]] || false
+    [[ "${lines[7]}" =~ ' 3 ' ]] || false
+    [[ "${lines[8]}" =~ ' 4 ' ]] || false
+    [[ "${lines[9]}" =~ ' 5 ' ]] || false
+    [[ "${lines[10]}" =~ ' 6 ' ]] || false
 }
 
 @test "create-views: selecting from broken view fails" {

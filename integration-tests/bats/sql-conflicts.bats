@@ -75,7 +75,7 @@ teardown() {
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \+[[:space:]]+\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql --disable-batch <<SQL
+  dolt sql  <<SQL
   set autocommit = off;
   DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;
   DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
@@ -138,7 +138,7 @@ SQL
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+ours[[:space:]] ]] || false
   [[ "$output" =~ \*[[:space:]]*\|[[:space:]]+theirs[[:space:]] ]] || false
 
-  dolt sql --disable-batch << SQL
+  dolt sql  << SQL
 set autocommit = off;
 DELETE from dolt_conflicts_one_pk WHERE our_pk1 = 0;
 DELETE from dolt_conflicts_two_pk WHERE our_pk1 = 0 and our_pk2 = 0;

@@ -91,8 +91,8 @@ teardown() {
     [ "$status" -eq 0 ]
     run dolt sql <<< "insert into test (pk,c1) values ('test2', 'this; should; work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 1" ]]
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
     run dolt sql <<< "insert into test (pk,c1) values ('test3', 'this \\\\'' should \\\\'' work')"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows inserted: 1" ]]
+    [[ "$output" =~ "Query OK, 1 row affected" ]] || false
 }

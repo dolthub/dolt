@@ -164,7 +164,7 @@ SQL
 
     skip "SQL conflict resolution not working below"
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
     INSERT INTO dolt_schemas VALUES ('trigger', 'trigger3', 'CREATE TRIGGER trigger3 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 100', 3);
     DELETE FROM dolt_conflicts_dolt_schemas;
     commit;

@@ -62,7 +62,7 @@ SQL
     dolt commit -am "Initial table with one row"
     dolt branch feature
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 select dolt_checkout('feature');
 insert into test values (2), (3), (4);
 commit;
@@ -87,7 +87,7 @@ SQL
     [[ "$output" =~ "4" ]] || false
 
     # Reset our test setup
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 select dolt_checkout('feature');
 select dolt_reset('--hard');
 insert into test values (2), (3), (4);
