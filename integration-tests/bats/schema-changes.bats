@@ -37,6 +37,16 @@ teardown() {
     [[ ! "$ouput" =~ "Merge failed" ]] || false
 }
 
+@test "schema-changes: dolt schema alter column preserves table checks" {
+    run dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "alter table test rename column c1 to c0;"
+    [ "$status" -eq 0 ]
+    run dolt schema show test
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONSTRAINT \`test_check\` CHECK ((\`c2\` < 12345))" ]] || false
+}
+
 @test "schema-changes: dolt schema rename column" {
     dolt sql -q 'insert into test values (1,1,1,1,1,1)'
     run dolt sql -q "alter table test rename column c1 to c0"
@@ -54,6 +64,15 @@ teardown() {
     [[ "$output" =~ "\`c0\` bigint" ]] || false
     [[ ! "$output" =~ "\`c1\` bigint" ]] || false
     dolt sql -q "select * from test"
+}
+
+@test "schema-changes: dolt schema rename column fails when column is used in table check" {
+    run dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
+    [ "$status" -eq 0 ]
+    run dolt sql -q "alter table test rename column c2 to c0"
+    [ "$status" -eq 0 ]
+
+    skip "dolt incorrectly allows a column used in a table check expression to be renamed/removed"
 }
 
 @test "schema-changes: dolt schema delete column" {
