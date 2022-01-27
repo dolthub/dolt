@@ -32,7 +32,7 @@ type metricsListener struct {
 }
 
 func newMetricsListener(labels prometheus.Labels) *metricsListener {
-	return &metricsListener{
+	ml := &metricsListener{
 		cntConnections: prometheus.NewCounter(prometheus.CounterOpts{
 			Name:        "dss_connects",
 			Help:        "Count of server connects",
@@ -60,6 +60,14 @@ func newMetricsListener(labels prometheus.Labels) *metricsListener {
 			Buckets:     []float64{0.01, 0.1, 1.0, 10.0, 100.0, 1000.0}, // 10 ms to 16 mins 40 secs
 		}),
 	}
+
+	prometheus.MustRegister(ml.cntConnections)
+	prometheus.MustRegister(ml.cntDisconnects)
+	prometheus.MustRegister(ml.gaugeConcurrentConn)
+	prometheus.MustRegister(ml.gaugeConcurrentQueries)
+	prometheus.MustRegister(ml.histQueryDur)
+
+	return ml
 }
 
 func (m *metricsListener) ClientConnected() {
