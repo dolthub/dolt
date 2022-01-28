@@ -51,8 +51,13 @@ func TestMap(t *testing.T) {
 			t.Run("iter all from map", func(t *testing.T) {
 				testIterAll(t, prollyMap, tuples)
 			})
-			t.Run("iter value range", func(t *testing.T) {
+			t.Run("iter range", func(t *testing.T) {
 				testIterRange(t, prollyMap, tuples)
+			})
+
+			indexMap, tuples2 := makeProllySecondaryIndex(t, s)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, indexMap, tuples2)
 			})
 
 			pm := prollyMap.(Map)
@@ -64,9 +69,6 @@ func TestMap(t *testing.T) {
 }
 
 func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
-	ctx := context.Background()
-	ns := newTestNodeStore()
-
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -77,6 +79,27 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	)
 
 	tuples := randomTuplePairs(count, kd, vd)
+	om := prollyMapFromTuple(t, count, kd, vd, tuples)
+
+	return om, tuples
+}
+
+func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor()
+
+	tuples := randomCompositeTuplePairs(count, kd, vd)
+	om := prollyMapFromTuple(t, count, kd, vd, tuples)
+
+	return om, tuples
+}
+
+func prollyMapFromTuple(t *testing.T, count int, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
+	ctx := context.Background()
+	ns := newTestNodeStore()
 
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
@@ -95,7 +118,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 		ns:      ns,
 	}
 
-	return m, tuples
+	return m
 }
 
 // orderedMap is a utility type that allows us to create a common test
@@ -110,12 +133,12 @@ var _ orderedMap = Map{}
 var _ orderedMap = MutableMap{}
 var _ orderedMap = memoryMap{}
 
-func getKeyDesc(om orderedMap) val.TupleDesc {
+func keyDescFromMap(om orderedMap) val.TupleDesc {
 	switch m := om.(type) {
 	case Map:
 		return m.keyDesc
 	case MutableMap:
-		return m.m.keyDesc
+		return m.prolly.keyDesc
 	case memoryMap:
 		return m.keyDesc
 	default:
@@ -189,6 +212,54 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 		}
 		if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
 			panic("duplicate key, unlucky!")
+		}
+	}
+	return
+}
+
+func randomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
+	// preconditions
+	if count%5 != 0 {
+		panic("expected count divisible by 5")
+	}
+	if len(keyDesc.Types) < 2 {
+		panic("expected composite key")
+	}
+
+	tt := randomTuplePairs(count, keyDesc, valDesc)
+
+	tuples := make([][2]val.Tuple, len(tt)*3)
+	for i := range tuples {
+		j := i % len(tt)
+		tuples[i] = tt[j]
+	}
+
+	// permute the second column
+	swap := make([]byte, len(tuples[0][0].GetField(1)))
+	rand.Shuffle(len(tuples), func(i, j int) {
+		f1 := tuples[i][0].GetField(1)
+		f2 := tuples[i][0].GetField(1)
+		copy(swap, f1)
+		copy(f1, f2)
+		copy(f2, swap)
+	})
+
+	sortTuplePairs(tuples, keyDesc)
+
+	tuples = deduplicateTuples(keyDesc, tuples)
+
+	return tuples[:count]
+}
+
+// assumes a sorted list
+func deduplicateTuples(desc val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.Tuple) {
+	uniq = make([][2]val.Tuple, 1, len(tups))
+	uniq[0] = tups[0]
+
+	for i := 1; i < len(tups); i++ {
+		cmp := desc.Compare(tups[i-1][0], tups[i][0])
+		if cmp < 0 {
+			uniq = append(uniq, tups[i])
 		}
 	}
 	return

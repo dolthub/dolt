@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,8 +47,10 @@ func TestMemMap(t *testing.T) {
 			t.Run("iter range", func(t *testing.T) {
 				testIterRange(t, memMap, tuples)
 			})
+
+			memIndex, tuples2 := makeMemSecondaryIndex(t, s)
 			t.Run("iter prefix range", func(t *testing.T) {
-				testIterPrefixRange(t, memMap, tuples)
+				testIterPrefixRange(t, memIndex, tuples2)
 			})
 
 			memMap2, tuples2, deletes := makeMemMapWithDeletes(t, s)
@@ -62,24 +63,43 @@ func TestMemMap(t *testing.T) {
 			t.Run("iter range", func(t *testing.T) {
 				testIterRange(t, memMap2, tuples2)
 			})
-			t.Run("iter prefix range", func(t *testing.T) {
-				testIterPrefixRange(t, memMap2, tuples2)
-			})
+
+			//memIndex, tuples2, _ = makeMemSecondaryIndexWithDeletes(t, s)
+			//t.Run("iter prefix range", func(t *testing.T) {
+			//	testIterPrefixRange(t, memIndex, tuples2)
+			//})
 		})
 	}
 }
 
-var memKeyDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Uint32Enc, Nullable: false},
-)
-var memValueDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-)
-
 func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	memKeyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+	)
+	memValueDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+
 	tuples := randomTuplePairs(count, memKeyDesc, memValueDesc)
+	mm := newMemoryMap(memKeyDesc)
+	for _, pair := range tuples {
+		mm.Put(pair[0], pair[1])
+	}
+
+	return mm, tuples
+}
+
+func makeMemSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	memKeyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+	memValueDesc := val.NewTupleDescriptor()
+
+	tuples := randomCompositeTuplePairs(count, memKeyDesc, memValueDesc)
+
 	mm := newMemoryMap(memKeyDesc)
 	for _, pair := range tuples {
 		mm.Put(pair[0], pair[1])
@@ -101,7 +121,7 @@ func makeMemMapWithDeletes(t *testing.T, count int) (mut memoryMap, tuples, dele
 
 	// re-sort the remaining tuples
 	tuples = tuples[count/4:]
-	desc := getKeyDesc(om)
+	desc := keyDescFromMap(om)
 	sortTuplePairs(tuples, desc)
 
 	for _, kv := range deletes {
@@ -132,29 +152,4 @@ func testMemoryMapGetAndHas(t *testing.T, mem memoryMap, tuples, deletes [][2]va
 		})
 		require.NoError(t, err)
 	}
-}
-
-func debugFmt(tup val.Tuple, desc val.TupleDesc) (s string) {
-	if tup == nil {
-		s = "[ nil ]"
-	} else {
-		s = desc.Format(tup)
-	}
-	return
-}
-
-func fmtMany(tuples, deletes [][2]val.Tuple) string {
-	tuples = append(tuples, deletes...)
-	sortTuplePairs(tuples, memKeyDesc)
-
-	var sb strings.Builder
-	sb.WriteString("{ ")
-	for _, kv := range tuples {
-		sb.WriteString(debugFmt(kv[0], memKeyDesc))
-		sb.WriteString(": ")
-		sb.WriteString(debugFmt(kv[1], memValueDesc))
-		sb.WriteString(", ")
-	}
-	sb.WriteString("}")
-	return sb.String()
 }

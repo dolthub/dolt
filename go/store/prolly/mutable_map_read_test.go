@@ -61,9 +61,6 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("iter range with pending deletes", func(t *testing.T) {
 				testIterRange(t, mutableMap2, tuples2)
 			})
-			t.Run("iter prefix range with pending deletes", func(t *testing.T) {
-				testIterPrefixRange(t, mutableMap2, tuples2)
-			})
 
 			prollyMap, err := mutableMap2.Map(context.Background())
 			require.NoError(t, err)
@@ -75,9 +72,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter range after deletes applied", func(t *testing.T) {
 				testIterRange(t, prollyMap, tuples2)
-			})
-			t.Run("iter prefix range after deletes applied", func(t *testing.T) {
-				testIterPrefixRange(t, prollyMap, tuples2)
 			})
 		})
 	}
@@ -118,7 +112,7 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	require.NoError(t, err)
 
 	mut := MutableMap{
-		m: Map{
+		prolly: Map{
 			root:    root,
 			keyDesc: kd,
 			valDesc: vd,
@@ -149,7 +143,7 @@ func makeMutableMapWithDeletes(t *testing.T, count int) (mut MutableMap, tuples,
 
 	// re-sort the remaining tuples
 	tuples = tuples[count/4:]
-	desc := getKeyDesc(om)
+	desc := keyDescFromMap(om)
 	sortTuplePairs(tuples, desc)
 
 	for _, kv := range deletes {

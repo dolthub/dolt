@@ -34,7 +34,7 @@ type rangeTest struct {
 
 func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
-	desc := getKeyDesc(om)
+	desc := keyDescFromMap(om)
 
 	for i := 0; i < 100; i++ {
 
@@ -116,9 +116,21 @@ func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	}
 }
 
+func nonNegative(x int) int {
+	if x < 0 {
+		x = 0
+	}
+	return x
+}
+
+type prefixRangeTest struct {
+	name      string
+	testRange Range
+}
+
 func testIterPrefixRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
-	desc := getKeyDesc(om)
+	prefixDesc := getDescPrefix(keyDescFromMap(om), 1)
 
 	for i := 0; i < 100; i++ {
 
@@ -127,11 +139,51 @@ func testIterPrefixRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 		if a > z {
 			a, z = z, a
 		}
-		//start, stop := tuples[a][0], tuples[z][0]
+		start := getKeyPrefix(tuples[a][0], prefixDesc)
+		stop := getKeyPrefix(tuples[z][0], prefixDesc)
 
-		tests := []rangeTest{}
+		tests := []prefixRangeTest{
+			// two-sided ranges
+			{
+				name:      "OpenRange",
+				testRange: OpenRange(start, stop, prefixDesc),
+			},
+			{
+				name:      "OpenStartRange",
+				testRange: OpenStartRange(start, stop, prefixDesc),
+			},
+			{
+				name:      "OpenStopRange",
+				testRange: OpenStopRange(start, stop, prefixDesc),
+			},
+			{
+				name:      "ClosedRange",
+				testRange: ClosedRange(start, stop, prefixDesc),
+			},
+
+			// one-sided ranges
+			{
+				name:      "GreaterRange",
+				testRange: GreaterRange(start, prefixDesc),
+			},
+			{
+				name:      "GreaterOrEqualRange",
+				testRange: GreaterOrEqualRange(start, prefixDesc),
+			},
+			{
+				name:      "LesserRange",
+				testRange: LesserRange(stop, prefixDesc),
+			},
+			{
+				name:      "LesserOrEqualRange",
+				testRange: LesserOrEqualRange(stop, prefixDesc),
+			},
+		}
 
 		for _, test := range tests {
+			//s := fmt.Sprintf(test.testRange.format())
+			//fmt.Println(s)
+
 			iter, err := om.IterRange(ctx, test.testRange)
 			require.NoError(t, err)
 
@@ -143,21 +195,38 @@ func testIterPrefixRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 				key, _, err = iter.Next(ctx)
 
 				if key != nil {
-					assert.True(t, desc.Compare(prev, key) < 0)
+					assert.True(t, prefixDesc.Compare(prev, key) < 0)
 				}
 			}
 			assert.Equal(t, io.EOF, err)
-			assert.Equal(t, test.expCount, actCount)
-			//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
+
+			expCount := getExpectedRangeSize(test.testRange, tuples)
+			assert.Equal(t, expCount, actCount)
 		}
 	}
 }
 
-func nonNegative(x int) int {
-	if x < 0 {
-		x = 0
+func getDescPrefix(desc val.TupleDesc, sz int) val.TupleDesc {
+	return val.NewTupleDescriptor(desc.Types[:sz]...)
+}
+
+func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
+	tb := val.NewTupleBuilder(desc)
+	for i := range desc.Types {
+		tb.PutRaw(i, key.GetField(i))
 	}
-	return x
+	return tb.Build(sharedPool)
+}
+
+// computes expected range on full tuples set
+func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
+	for i := range tuples {
+		k := tuples[i][0]
+		if rng.insideStart(k) && rng.insideStop(k) {
+			sz++
+		}
+	}
+	return
 }
 
 var index = [][2]int{
