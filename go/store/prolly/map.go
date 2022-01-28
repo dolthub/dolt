@@ -140,22 +140,63 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterRange(ctx, rng)
 }
 
-// IterValueRange returns a MapRangeIter that iterates over a Range.
+// IterRange returns a MapRangeIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	var cur *nodeCursor
-	var err error
-
-	if rng.Start.Unbound {
-		cur, err = m.cursorAtStart(ctx)
-	} else {
-		cur, err = m.cursorAtkey(ctx, rng.Start.Key)
-	}
+	iter, err := m.iterFromRange(ctx, rng)
 	if err != nil {
 		return MapRangeIter{}, err
 	}
-	proCur := mapTupleCursor{cur: cur}
 
-	return NewMapRangeIter(ctx, nil, proCur, rng)
+	return NewMapRangeIter(nil, iter, rng), nil
+}
+
+func (m Map) iterFromRange(ctx context.Context, rng Range) (iter *prollyRangeIter, err error) {
+	var first *nodeCursor
+	if rng.Start.Unbound {
+		if first, err = m.cursorAtStart(ctx); err != nil {
+			return iter, err
+		}
+	} else {
+		if first, err = m.cursorAtKey(ctx, rng.Start.Key); err != nil {
+			return iter, err
+		}
+
+		key := val.Tuple(first.currentPair().key())
+		if !rng.insideStart(key) {
+			if _, err = first.advance(ctx); err != nil {
+				return iter, err
+			}
+		}
+	}
+
+	var last *nodeCursor
+	if rng.Stop.Unbound {
+		if last, err = m.cursorAtEnd(ctx); err != nil {
+			return iter, err
+		}
+	} else {
+		if last, err = m.cursorAtKey(ctx, rng.Stop.Key); err != nil {
+			return iter, err
+		}
+
+		key := val.Tuple(last.currentPair().key())
+		if !rng.insideStop(key) {
+			if _, err = last.retreat(ctx); err != nil {
+				return iter, err
+			}
+		}
+	}
+
+	if first.compare(last) > 0 {
+		// empty range
+		first = nil
+	}
+
+	return &prollyRangeIter{
+		curr: first,
+		last: last,
+		rng:  rng,
+	}, nil
 }
 
 func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
@@ -166,7 +207,7 @@ func (m Map) cursorAtEnd(ctx context.Context) (*nodeCursor, error) {
 	return newCursorAtEnd(ctx, m.ns, m.root)
 }
 
-func (m Map) cursorAtkey(ctx context.Context, key val.Tuple) (*nodeCursor, error) {
+func (m Map) cursorAtKey(ctx context.Context, key val.Tuple) (*nodeCursor, error) {
 	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
 	if err == nil {
 		cur.keepInBounds()
@@ -174,24 +215,28 @@ func (m Map) cursorAtkey(ctx context.Context, key val.Tuple) (*nodeCursor, error
 	return cur, err
 }
 
-// searchNode is a searchFn for a Map, adapted from search.Sort.
+// searchNode is a searchFn for a Map.
+// It returns the smallest integer i where nd[i] >= query
+// Adapted from search.Sort.
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
-	// Define f(-1) == false and f(n) == true.
-	// Invariant: f(i-1) == false, f(j) == true.
+	// Define:    (query > nd[-1]) and (query < nd[n])
+	// Invariant: (query > nd[i-1]) and (query <= nd[j])
+
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		less := m.compareItems(query, nd.getItem(h*stride)) <= 0
 		// i ≤ h < j
 		if !less {
-			i = h + 1 // preserves f(i-1) == false
+			i = h + 1 // preserves (query > nd[i-1])
 		} else {
-			j = h // preserves f(j) == true
+			j = h // preserves (query <= nd[j])
 		}
 	}
-	// i == j, f(i-1) == false, and
-	// f(j) (= f(i)) == true  =>  answer is i.
+	// i == j,
+	// (query > nd[i-1]) and
+	// (query <= nd[j])  =>  answer is i.
 	return i * stride
 }
 
@@ -205,26 +250,33 @@ func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
 }
 
-type mapTupleCursor struct {
-	cur *nodeCursor
+type prollyRangeIter struct {
+	curr *nodeCursor
+	last *nodeCursor
+	rng  Range
 }
 
-var _ tupleCursor = mapTupleCursor{}
+var _ rangeIter = &prollyRangeIter{}
 
-func (cur mapTupleCursor) current() (key, value val.Tuple) {
-	if cur.cur.valid() {
-		pair := cur.cur.currentPair()
-		key, value = val.Tuple(pair.key()), val.Tuple(pair.value())
+func (it *prollyRangeIter) current() (key, value val.Tuple) {
+	// |it.curr| is set to nil when its range is exhausted
+	if it.curr != nil && it.curr.valid() {
+		p := it.curr.currentPair()
+		return val.Tuple(p.key()), val.Tuple(p.value())
 	}
 	return
 }
 
-func (cur mapTupleCursor) advance(ctx context.Context) (err error) {
-	_, err = cur.cur.advance(ctx)
-	return
-}
+func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
+	_, err = it.curr.advance(ctx)
+	if err != nil {
+		return err
+	}
 
-func (cur mapTupleCursor) retreat(ctx context.Context) (err error) {
-	_, err = cur.cur.retreat(ctx)
+	if it.curr.compare(it.last) > 0 {
+		// past the end of the range
+		it.curr = nil
+	}
+
 	return
 }

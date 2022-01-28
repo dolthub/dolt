@@ -17,8 +17,6 @@ package prolly
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/skip"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -91,25 +89,11 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
 func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	var iter *skip.ListIter
-	if rng.Start.Unbound {
-		iter = mut.overlay.list.IterAtStart()
-	} else {
-		iter = mut.overlay.list.IterAt(rng.Start.Key)
-	}
-	memCur := memTupleCursor{iter: iter}
-
-	var err error
-	var cur *nodeCursor
-	if rng.Start.Unbound {
-		cur, err = mut.m.cursorAtStart(ctx)
-	} else {
-		cur, err = mut.m.cursorAtkey(ctx, rng.Start.Key)
-	}
+	proIter, err := mut.m.iterFromRange(ctx, rng)
 	if err != nil {
 		return MapRangeIter{}, err
 	}
-	proCur := mapTupleCursor{cur: cur}
+	memIter := mut.overlay.iterFromRange(rng)
 
-	return NewMapRangeIter(ctx, memCur, proCur, rng)
+	return NewMapRangeIter(memIter, proIter, rng), nil
 }

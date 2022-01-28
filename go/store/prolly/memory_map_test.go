@@ -35,7 +35,7 @@ func TestMemMap(t *testing.T) {
 	}
 
 	for _, s := range scales {
-		name := fmt.Sprintf("test memCur map at scale %d", s)
+		name := fmt.Sprintf("test memory map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
 
 			memMap, tuples := makeMemMap(t, s)

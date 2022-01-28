@@ -41,7 +41,7 @@ func TestMap(t *testing.T) {
 	}
 
 	for _, s := range scales {
-		name := fmt.Sprintf("test proCur map at scale %d", s)
+		name := fmt.Sprintf("test prolly map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
 			prollyMap, tuples := makeProllyMap(t, s)
 
@@ -163,7 +163,7 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 
 	assert.Equal(t, len(tuples), idx)
 	for i, kv := range actual {
-		require.NoError(t, err)
+		require.True(t, i < len(tuples))
 		assert.Equal(t, tuples[i][0], kv[0])
 		assert.Equal(t, tuples[i][1], kv[1])
 	}
@@ -235,6 +235,9 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 		}
 
 		for _, test := range tests {
+			//s := fmt.Sprintf(test.testRange.format())
+			//fmt.Println(s)
+
 			iter, err := om.IterRange(ctx, test.testRange)
 			require.NoError(t, err)
 
