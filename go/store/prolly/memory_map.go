@@ -93,30 +93,25 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 		iter = mm.list.IterAt(rng.Start.Key)
 	}
 
-	i := &memRangeIter{
-		iter: iter,
-		rng:  rng,
-	}
-
 	// enforce range start
-	var key, val val.Tuple
+	var key val.Tuple
 	for {
-		key, val = i.current()
-		if key == nil {
-			break // range exhausted
-		}
-		if rng.insideStart(key) && val != nil {
+		key, _ = iter.Current()
+		if key == nil || rng.insideStart(key) {
 			break // |i| inside |rng|
 		}
-		_ = i.iterate(nil)
+		iter.Advance()
 	}
 
 	// enforce range end
 	if key == nil || !rng.insideStop(key) {
-		i.iter = nil
+		iter = nil
 	}
 
-	return i
+	return &memRangeIter{
+		iter: iter,
+		rng:  rng,
+	}
 }
 
 func (mm memoryMap) mutations() mutationIter {
@@ -154,18 +149,10 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 	for {
 		it.iter.Advance()
 
-		k, v := it.current()
-
+		k, _ := it.current()
 		if k == nil || !it.rng.insideStop(k) {
 			// range exhausted
 			it.iter = nil
-			return
-		}
-
-		if v == nil {
-			// pending delete,
-			// Advance again
-			continue
 		}
 
 		return

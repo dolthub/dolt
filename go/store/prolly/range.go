@@ -59,6 +59,110 @@ func (r Range) insideStop(key val.Tuple) bool {
 	return cmp < 0
 }
 
+func NewMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
+	if memory == nil {
+		memory = emptyIter{}
+	}
+	if prolly == nil {
+		prolly = emptyIter{}
+	}
+
+	return MapRangeIter{
+		memory: memory,
+		prolly: prolly,
+		rng:    rng,
+	}
+}
+
+// MapRangeIter iterates over a Range of Tuples.
+type MapRangeIter struct {
+	memory rangeIter
+	prolly rangeIter
+	rng    Range
+}
+
+type rangeIter interface {
+	iterate(ctx context.Context) error
+	current() (key, value val.Tuple)
+}
+
+// Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
+func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	for {
+		mk, mv := it.memory.current()
+		pk, pv := it.prolly.current()
+
+		if mk == nil && pk == nil {
+			// range is exhausted
+			return nil, nil, io.EOF
+		}
+
+		cmp := it.compareKeys(pk, mk)
+		switch {
+		case cmp < 0:
+			key, value = pk, pv
+			if err = it.prolly.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+
+		case cmp > 0:
+			key, value = mk, mv
+			if err = it.memory.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+
+		case cmp == 0:
+			// |it.memory| wins ties
+			key, value = mk, mv
+			if err = it.memory.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+			if err = it.prolly.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+		}
+
+		if key != nil && value == nil {
+			// pending delete
+			continue
+		}
+
+		return key, value, nil
+	}
+}
+
+func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
+	if it.memory != nil {
+		memKey, _ = it.memory.current()
+	}
+	if it.prolly != nil {
+		proKey, _ = it.prolly.current()
+	}
+	return
+}
+
+func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
+	if memKey == nil {
+		return 1
+	}
+	if proKey == nil {
+		return -1
+	}
+	return it.rng.KeyDesc.Compare(memKey, proKey)
+}
+
+type emptyIter struct{}
+
+var _ rangeIter = emptyIter{}
+
+func (e emptyIter) iterate(ctx context.Context) (err error) {
+	return
+}
+
+func (e emptyIter) current() (key, value val.Tuple) {
+	return
+}
+
 func (r Range) format() string {
 	var sb strings.Builder
 	if r.Start.Inclusive {
@@ -204,101 +308,4 @@ func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 		},
 		KeyDesc: desc,
 	}
-}
-
-func NewMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
-	if memory == nil {
-		memory = emptyIter{}
-	}
-	if prolly == nil {
-		prolly = emptyIter{}
-	}
-
-	return MapRangeIter{
-		memory: memory,
-		prolly: prolly,
-		rng:    rng,
-	}
-}
-
-// MapRangeIter iterates over a Range of Tuples.
-type MapRangeIter struct {
-	memory rangeIter
-	prolly rangeIter
-	rng    Range
-}
-
-type rangeIter interface {
-	iterate(ctx context.Context) error
-	current() (key, value val.Tuple)
-}
-
-// Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
-func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	pk, pv := it.prolly.current()
-	mk, mv := it.memory.current()
-
-	if pk == nil && mk == nil {
-		// range is exhausted
-		return nil, nil, io.EOF
-	}
-
-	cmp := it.compareKeys(pk, mk)
-	switch {
-	case cmp < 0:
-		key, value = pk, pv
-		if err = it.prolly.iterate(ctx); err != nil {
-			return nil, nil, err
-		}
-
-	case cmp > 0:
-		key, value = mk, mv
-		if err = it.memory.iterate(ctx); err != nil {
-			return nil, nil, err
-		}
-
-	case cmp == 0:
-		// |it.memory| wins ties
-		key, value = mk, mv
-		if err = it.memory.iterate(ctx); err != nil {
-			return nil, nil, err
-		}
-		if err = it.prolly.iterate(ctx); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return key, value, nil
-}
-
-func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
-	if it.memory != nil {
-		memKey, _ = it.memory.current()
-	}
-	if it.prolly != nil {
-		proKey, _ = it.prolly.current()
-	}
-	return
-}
-
-func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
-	if memKey == nil {
-		return 1
-	}
-	if proKey == nil {
-		return -1
-	}
-	return it.rng.KeyDesc.Compare(memKey, proKey)
-}
-
-type emptyIter struct{}
-
-var _ rangeIter = emptyIter{}
-
-func (e emptyIter) iterate(ctx context.Context) (err error) {
-	return
-}
-
-func (e emptyIter) current() (key, value val.Tuple) {
-	return
 }

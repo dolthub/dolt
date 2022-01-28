@@ -161,11 +161,17 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	}
 	actual = actual[:idx]
 
-	assert.Equal(t, len(tuples), idx)
+	if !assert.Equal(t, len(tuples), idx) {
+		fmt.Println("asdf")
+	}
 	for i, kv := range actual {
 		require.True(t, i < len(tuples))
-		assert.Equal(t, tuples[i][0], kv[0])
-		assert.Equal(t, tuples[i][1], kv[1])
+		if !assert.Equal(t, tuples[i][0], kv[0]) {
+			fmt.Println("asdf")
+		}
+		if !assert.Equal(t, tuples[i][1], kv[1]) {
+			fmt.Println("asdf")
+		}
 	}
 }
 
