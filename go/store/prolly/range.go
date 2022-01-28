@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"io"
-	"strings"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -161,37 +160,6 @@ func (e emptyIter) iterate(ctx context.Context) (err error) {
 
 func (e emptyIter) current() (key, value val.Tuple) {
 	return
-}
-
-func (r Range) format() string {
-	var sb strings.Builder
-	if r.Start.Inclusive {
-		sb.WriteString("[ ")
-	} else {
-		sb.WriteString("( ")
-	}
-
-	if r.Start.Unbound {
-		sb.WriteString(" inf ")
-	} else {
-		sb.WriteString(r.KeyDesc.Format(r.Start.Key))
-	}
-
-	sb.WriteString(" : ")
-
-	if r.Stop.Unbound {
-		sb.WriteString(" inf ")
-	} else {
-		sb.WriteString(r.KeyDesc.Format(r.Stop.Key))
-	}
-
-	if r.Stop.Inclusive {
-		sb.WriteString(" ]")
-	} else {
-		sb.WriteString(" )")
-	}
-
-	return sb.String()
 }
 
 // GreaterRange defines a Range of Tuples greater than |start|.
