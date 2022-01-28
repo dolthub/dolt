@@ -135,12 +135,13 @@ COMMIT;
 SQL
     [ $status -eq 0 ]
 
-    run dolt sql -r csv -q "select * from test"
-    [ "${#lines[@]}" -eq 5 ]
+    run dolt sql -r csv -q "select * from test order by pk"
+    [ "${#lines[@]}" -eq 6 ]
     [ "${lines[1]}" = "0" ]
     [ "${lines[2]}" = "1" ]
     [ "${lines[3]}" = "2" ]
     [ "${lines[4]}" = "3" ]
+    [ "${lines[5]}" = "5" ]
 }
 
 @test "sql-merge: DOLT_MERGE correctly returns head and working session variables." {

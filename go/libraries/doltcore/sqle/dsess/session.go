@@ -662,11 +662,6 @@ func (sess *Session) SetWorkingSet(
 		return nil
 	}
 
-	workingRoot := ws.WorkingRoot()
-	h, _ := workingRoot.HashOf()
-
-	log := ctx.Session.GetLogger()
-	log.Debugf("Set the root to string " + h.String())
 	return nil
 }
 
