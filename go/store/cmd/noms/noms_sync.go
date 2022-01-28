@@ -106,7 +106,7 @@ func runSync(ctx context.Context, args []string) int {
 		defer profile.MaybeStartProfile().Stop()
 		srcCS := datas.ChunkStoreFromDatabase(sourceStore)
 		sinkCS := datas.ChunkStoreFromDatabase(sinkDB)
-		err := pull.Pull(ctx, srcCS, sinkCS, sourceRef, progressCh)
+		err := pull.Pull(ctx, srcCS, sinkCS, sourceRef.TargetHash(), progressCh)
 
 		if err != nil {
 			return err

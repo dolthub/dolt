@@ -1254,7 +1254,7 @@ func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), rf, progChan)
+		return pull.Pull(ctx, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), rf.TargetHash(), progChan)
 	}
 }
 
@@ -1285,7 +1285,7 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.PullWithoutBatching(ctx, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), stRef, progChan)
+		return pull.PullWithoutBatching(ctx, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), stRef.TargetHash(), progChan)
 	}
 }
 
