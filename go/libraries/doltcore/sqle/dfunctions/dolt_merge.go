@@ -265,7 +265,15 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 		return ws, err
 	}
 
-	return ws, sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
+	// We only fully commit our transaction when are not squashing.
+	if !squash {
+		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
+		if err != nil {
+			return ws, err
+		}
+	}
+
+	return ws, nil
 }
 
 func executeNoFFMerge(

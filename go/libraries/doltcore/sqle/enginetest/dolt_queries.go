@@ -254,4 +254,64 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "DOLT_MERGE ff & squash correctly works with autocommit off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_status",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+			},
+		},
+	},
+	{
+		Name: "DOLT_MERGE ff & squash with a checkout in between",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
+				ExpectedErr: dsess.ErrCanSwitchDueToDirtyWorkset,
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+			},
+		},
+	},
 }
