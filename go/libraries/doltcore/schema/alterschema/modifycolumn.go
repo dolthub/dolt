@@ -346,8 +346,6 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 	}
 
 	// Copy over all checks from the old schema
-	// TODO: If this code is executing for a column rename, table check constraints may have invalid expressions
-	//       after the rename. It would be better to detect that and error out (same behavior as MySQL).
 	for _, check := range sch.Checks().AllChecks() {
 		_, err := newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
 		if err != nil {
