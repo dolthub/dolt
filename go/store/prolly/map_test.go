@@ -46,18 +46,18 @@ func TestMap(t *testing.T) {
 			prollyMap, tuples := makeProllyMap(t, s)
 
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGet(t, prollyMap, tuples)
+				testGet(t, prollyMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				testOrderedMapIterAll(t, prollyMap, tuples)
+				testIterAll(t, prollyMap, tuples)
 			})
 			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, prollyMap, tuples)
+				testIterRange(t, prollyMap, tuples)
 			})
 
 			pm := prollyMap.(Map)
 			t.Run("item exists in map", func(t *testing.T) {
-				testProllyMapHas(t, pm, tuples)
+				testHas(t, pm, tuples)
 			})
 		})
 	}
@@ -98,6 +98,8 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return m, tuples
 }
 
+// orderedMap is a utility type that allows us to create a common test
+// harness for Map, memoryMap, and MutableMap.
 type orderedMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
 	IterAll(ctx context.Context) (MapRangeIter, error)
@@ -121,7 +123,7 @@ func getKeyDesc(om orderedMap) val.TupleDesc {
 	}
 }
 
-func testOrderedMapGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
@@ -134,7 +136,7 @@ func testOrderedMapGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	}
 }
 
-func testProllyMapHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
+func testHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	for _, kv := range tuples {
 		ok, err := om.Has(ctx, kv[0])
@@ -143,7 +145,7 @@ func testProllyMapHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
 	}
 }
 
-func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	iter, err := om.IterAll(ctx)
 	require.NoError(t, err)
@@ -161,107 +163,11 @@ func testOrderedMapIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	}
 	actual = actual[:idx]
 
-	if !assert.Equal(t, len(tuples), idx) {
-		fmt.Println("asdf")
-	}
+	assert.Equal(t, len(tuples), idx)
 	for i, kv := range actual {
 		require.True(t, i < len(tuples))
-		if !assert.Equal(t, tuples[i][0], kv[0]) {
-			fmt.Println("asdf")
-		}
-		if !assert.Equal(t, tuples[i][1], kv[1]) {
-			fmt.Println("asdf")
-		}
-	}
-}
-
-type rangeTest struct {
-	name      string
-	testRange Range
-	expCount  int
-}
-
-func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
-	ctx := context.Background()
-	desc := getKeyDesc(om)
-
-	for i := 0; i < 100; i++ {
-
-		cnt := len(tuples)
-		a, z := testRand.Intn(cnt), testRand.Intn(cnt)
-		if a > z {
-			a, z = z, a
-		}
-		start, stop := tuples[a][0], tuples[z][0]
-
-		tests := []rangeTest{
-			// two-sided ranges
-			{
-				name:      "OpenRange",
-				testRange: OpenRange(start, stop, desc),
-				expCount:  nonNegative((z - a) - 1),
-			},
-			{
-				name:      "OpenStartRange",
-				testRange: OpenStartRange(start, stop, desc),
-				expCount:  z - a,
-			},
-			{
-				name:      "OpenStopRange",
-				testRange: OpenStopRange(start, stop, desc),
-				expCount:  z - a,
-			},
-			{
-				name:      "ClosedRange",
-				testRange: ClosedRange(start, stop, desc),
-				expCount:  (z - a) + 1,
-			},
-
-			// one-sided ranges
-			{
-				name:      "GreaterRange",
-				testRange: GreaterRange(start, desc),
-				expCount:  nonNegative(cnt - a - 1),
-			},
-			{
-				name:      "GreaterOrEqualRange",
-				testRange: GreaterOrEqualRange(start, desc),
-				expCount:  cnt - a,
-			},
-			{
-				name:      "LesserRange",
-				testRange: LesserRange(stop, desc),
-				expCount:  z,
-			},
-			{
-				name:      "LesserOrEqualRange",
-				testRange: LesserOrEqualRange(stop, desc),
-				expCount:  z + 1,
-			},
-		}
-
-		for _, test := range tests {
-			//s := fmt.Sprintf(test.testRange.format())
-			//fmt.Println(s)
-
-			iter, err := om.IterRange(ctx, test.testRange)
-			require.NoError(t, err)
-
-			key, _, err := iter.Next(ctx)
-			actCount := 0
-			for err != io.EOF {
-				actCount++
-				prev := key
-				key, _, err = iter.Next(ctx)
-
-				if key != nil {
-					assert.True(t, desc.Compare(prev, key) < 0)
-				}
-			}
-			assert.Equal(t, io.EOF, err)
-			assert.Equal(t, test.expCount, actCount)
-			//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
-		}
+		assert.Equal(t, tuples[i][0], kv[0])
+		assert.Equal(t, tuples[i][1], kv[1])
 	}
 }
 
@@ -363,13 +269,6 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	default:
 		panic("unknown encoding")
 	}
-}
-
-func nonNegative(x int) int {
-	if x < 0 {
-		x = 0
-	}
-	return x
 }
 
 func fmtTupleList(tuples [][2]val.Tuple, kd, vd val.TupleDesc) string {

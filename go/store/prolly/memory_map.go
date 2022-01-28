@@ -93,7 +93,7 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 		iter = mm.list.IterAt(rng.Start.Key)
 	}
 
-	// enforce range start
+	// enforce range lo
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()

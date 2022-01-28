@@ -40,13 +40,16 @@ func TestMemMap(t *testing.T) {
 
 			memMap, tuples := makeMemMap(t, s)
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGet(t, memMap, tuples)
+				testGet(t, memMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				testOrderedMapIterAll(t, memMap, tuples)
+				testIterAll(t, memMap, tuples)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, memMap, tuples)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, memMap, tuples)
+			})
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, memMap, tuples)
 			})
 
 			memMap2, tuples2, deletes := makeMemMapWithDeletes(t, s)
@@ -54,10 +57,13 @@ func TestMemMap(t *testing.T) {
 				testMemoryMapGetAndHas(t, memMap2, tuples2, deletes)
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
-				testOrderedMapIterAll(t, memMap2, tuples2)
+				testIterAll(t, memMap2, tuples2)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, memMap2, tuples2)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, memMap2, tuples2)
+			})
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, memMap2, tuples2)
 			})
 		})
 	}

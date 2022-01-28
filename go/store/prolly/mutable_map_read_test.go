@@ -39,13 +39,16 @@ func TestMutableMapReads(t *testing.T) {
 
 			mutableMap, tuples := makeMutableMap(t, s)
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGet(t, mutableMap, tuples)
+				testGet(t, mutableMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				testOrderedMapIterAll(t, mutableMap, tuples)
+				testIterAll(t, mutableMap, tuples)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, mutableMap, tuples)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, mutableMap, tuples)
+			})
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, mutableMap, tuples)
 			})
 
 			mutableMap2, tuples2, deletes := makeMutableMapWithDeletes(t, s)
@@ -53,22 +56,28 @@ func TestMutableMapReads(t *testing.T) {
 				testMutableMapGetAndHas(t, mutableMap2, tuples2, deletes)
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
-				testOrderedMapIterAll(t, mutableMap2, tuples2)
+				testIterAll(t, mutableMap2, tuples2)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, mutableMap2, tuples2)
+			t.Run("iter range with pending deletes", func(t *testing.T) {
+				testIterRange(t, mutableMap2, tuples2)
+			})
+			t.Run("iter prefix range with pending deletes", func(t *testing.T) {
+				testIterPrefixRange(t, mutableMap2, tuples2)
 			})
 
 			prollyMap, err := mutableMap2.Map(context.Background())
 			require.NoError(t, err)
 			t.Run("get item from map after deletes applied", func(t *testing.T) {
-				testProllyMapHas(t, prollyMap, tuples2)
+				testHas(t, prollyMap, tuples2)
 			})
 			t.Run("iter all from map after deletes applied", func(t *testing.T) {
-				testOrderedMapIterAll(t, prollyMap, tuples2)
+				testIterAll(t, prollyMap, tuples2)
 			})
-			t.Run("iter value range after deletes applied", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, prollyMap, tuples2)
+			t.Run("iter range after deletes applied", func(t *testing.T) {
+				testIterRange(t, prollyMap, tuples2)
+			})
+			t.Run("iter prefix range after deletes applied", func(t *testing.T) {
+				testIterPrefixRange(t, prollyMap, tuples2)
 			})
 		})
 	}

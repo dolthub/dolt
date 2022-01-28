@@ -341,7 +341,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 			return true, nil
 		}
 		// if not |ok|, then every parent, grandparent, etc.,
-		// failed to retreatInBounds(): we're before the start.
+		// failed to retreatInBounds(): we're before the lo.
 		// of the prolly tree.
 	}
 

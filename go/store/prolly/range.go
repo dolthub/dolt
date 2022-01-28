@@ -162,7 +162,7 @@ func (e emptyIter) current() (key, value val.Tuple) {
 	return
 }
 
-// GreaterRange defines a Range of Tuples greater than |start|.
+// GreaterRange defines a Range of Tuples greater than |lo|.
 func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -176,7 +176,7 @@ func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |lo|.
 func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -218,7 +218,7 @@ func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenRange defines a non-inclusive Range of Tuples from |start| to |last|.
+// OpenRange defines a non-inclusive Range of Tuples from |lo| to |last|.
 func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -233,7 +233,7 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenStartRange defines a half-open Range of Tuples from |start| to |last|.
+// OpenStartRange defines a half-open Range of Tuples from |lo| to |last|.
 func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -248,7 +248,7 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenStopRange defines a half-open Range of Tuples from |start| to |last|.
+// OpenStopRange defines a half-open Range of Tuples from |lo| to |last|.
 func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
@@ -263,7 +263,7 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// ClosedRange defines an inclusive Range of Tuples from |start| to |last|.
+// ClosedRange defines an inclusive Range of Tuples from |lo| to |last|.
 func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: RangeCut{
