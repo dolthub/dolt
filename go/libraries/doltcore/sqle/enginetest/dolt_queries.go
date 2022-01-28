@@ -18,6 +18,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
@@ -448,6 +450,77 @@ var DoltMerge = []enginetest.ScriptTest{
 			{
 				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
 				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "DOLT_MERGE with conflicts can be aborted when autocommit is off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT * FROM test ORDER BY pk",
+				Expected: []sql.Row{{0, 1001}},
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "DOLT_MERGE complains when a merge overrides local changes",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:       "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErr: dfunctions.ErrUncommittedChanges,
 			},
 		},
 	},
