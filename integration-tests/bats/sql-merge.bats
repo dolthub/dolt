@@ -77,7 +77,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE with autocommit off works in fast-forward." {
-     run dolt sql --disable-batch << SQL
+     run dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -99,7 +99,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE no-ff works with autocommit off." {
-     run dolt sql --disable-batch << SQL
+     run dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -109,6 +109,7 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch', '-no-ff');
 COMMIT;
 SQL
+    echo $output
     [ $status -eq 0 ]
 
     run dolt sql -r csv -q "select * from test"
@@ -121,7 +122,7 @@ SQL
 
 
 @test "sql-merge: DOLT_MERGE works with autocommit off." {
-     run dolt sql --disable-batch << SQL
+     run dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
