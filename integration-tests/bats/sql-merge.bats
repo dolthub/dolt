@@ -71,9 +71,13 @@ SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
+
+SELECT COUNT(*) from dolt_status;
 SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 0        |" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE with autocommit off works in fast-forward." {
@@ -85,7 +89,6 @@ INSERT INTO test VALUES (3);
 SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
--- commit;
 SELECT DOLT_CHECKOUT('-b', 'new-branch');
 SQL
     [ $status -eq 0 ]
