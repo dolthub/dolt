@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datas
+package pull
 
 import (
 	"context"
@@ -63,7 +63,6 @@ type CmpChnkAndRefs struct {
 type Puller struct {
 	fmt *types.NomsBinFormat
 
-	srcDB         Database
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	rootChunkHash hash.Hash
@@ -121,9 +120,9 @@ func NewTFPullerEvent(et PullerEventType, details *TableFileEventDetails) Puller
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
 	// Sanity Check
-	exists, err := srcDB.chunkStore().Has(ctx, rootChunkHash)
+	exists, err := srcCS.Has(ctx, rootChunkHash)
 
 	if err != nil {
 		return nil, err
@@ -133,9 +132,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, errors.New("not found")
 	}
 
-	sinkDBCS := sinkDB.chunkStore()
-
-	exists, err = sinkDBCS.Has(ctx, rootChunkHash)
+	exists, err = sinkCS.Has(ctx, rootChunkHash)
 
 	if err != nil {
 		return nil, err
@@ -145,11 +142,11 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, ErrDBUpToDate
 	}
 
-	if srcDB.chunkStore().Version() != sinkDB.chunkStore().Version() {
-		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcDB.chunkStore().Version(), sinkDB.chunkStore().Version())
+	if srcCS.Version() != sinkCS.Version() {
+		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcCS.Version(), sinkCS.Version())
 	}
 
-	srcChunkStore, ok := srcDB.chunkStore().(nbs.NBSCompressedChunkStore)
+	srcChunkStore, ok := srcCS.(nbs.NBSCompressedChunkStore)
 	if !ok {
 		return nil, ErrIncompatibleSourceChunkStore
 	}
@@ -158,6 +155,11 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 
 	if err != nil {
 		return nil, err
+	}
+
+	nbf, err := types.GetFormatForVersionString(srcCS.Version())
+	if err != nil {
+		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", srcCS.Version())
 	}
 
 	var pushLogger *log.Logger
@@ -171,10 +173,9 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 	}
 
 	p := &Puller{
-		fmt:           srcDB.Format(),
-		srcDB:         srcDB,
+		fmt:           nbf,
 		srcChunkStore: srcChunkStore,
-		sinkDBCS:      sinkDBCS,
+		sinkDBCS:      sinkCS,
 		rootChunkHash: rootChunkHash,
 		downloaded:    hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
@@ -185,7 +186,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		pushLog:       pushLogger,
 	}
 
-	if lcs, ok := sinkDBCS.(chunks.LoggingChunkStore); ok {
+	if lcs, ok := sinkCS.(chunks.LoggingChunkStore); ok {
 		lcs.SetLogger(p)
 	}
 

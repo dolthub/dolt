@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -76,8 +77,11 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 		return err
 	}
 
-	puller, err := datas.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcDB, destDB, stRef.TargetHash(), nil)
-	if err == datas.ErrDBUpToDate {
+	srcCS := datas.ChunkStoreFromDatabase(srcDB)
+	destCS := datas.ChunkStoreFromDatabase(destDB)
+
+	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, stRef.TargetHash(), nil)
+	if err == pull.ErrDBUpToDate {
 		return nil
 	} else if err != nil {
 		return err

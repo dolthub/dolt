@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -88,7 +88,7 @@ func EnvForClone(ctx context.Context, nbf *types.NomsBinFormat, r env.Remote, di
 	return dEnv, nil
 }
 
-func cloneProg(eventCh <-chan datas.TableFileEvent) {
+func cloneProg(eventCh <-chan pull.TableFileEvent) {
 	var (
 		chunks            int64
 		chunksDownloading int64
@@ -99,20 +99,20 @@ func cloneProg(eventCh <-chan datas.TableFileEvent) {
 	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
-		case datas.Listed:
+		case pull.Listed:
 			for _, tf := range tblFEvt.TableFiles {
 				chunks += int64(tf.NumChunks())
 			}
-		case datas.DownloadStart:
+		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading += int64(tf.NumChunks())
 			}
-		case datas.DownloadSuccess:
+		case pull.DownloadSuccess:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading -= int64(tf.NumChunks())
 				chunksDownloaded += int64(tf.NumChunks())
 			}
-		case datas.DownloadFailed:
+		case pull.DownloadFailed:
 			// Ignore for now and output errors on the main thread
 		}
 
@@ -124,7 +124,7 @@ func cloneProg(eventCh <-chan datas.TableFileEvent) {
 }
 
 func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) error {
-	eventCh := make(chan datas.TableFileEvent, 128)
+	eventCh := make(chan pull.TableFileEvent, 128)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -139,7 +139,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 	wg.Wait()
 
 	if err != nil {
-		if err == datas.ErrNoData {
+		if err == pull.ErrNoData {
 			err = ErrNoDataAtRemote
 		}
 		return fmt.Errorf("%w; %s", ErrCloneFailed, err.Error())

@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/profile"
 	"github.com/dolthub/dolt/go/store/util/status"
@@ -75,11 +76,11 @@ func runSync(ctx context.Context, args []string) int {
 	defer sinkDB.Close()
 
 	start := time.Now()
-	progressCh := make(chan datas.PullProgress)
-	lastProgressCh := make(chan datas.PullProgress)
+	progressCh := make(chan pull.PullProgress)
+	lastProgressCh := make(chan pull.PullProgress)
 
 	go func() {
-		var last datas.PullProgress
+		var last pull.PullProgress
 
 		for info := range progressCh {
 			last = info
@@ -103,7 +104,9 @@ func runSync(ctx context.Context, args []string) int {
 	nonFF := false
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
-		err := datas.Pull(ctx, sourceStore, sinkDB, sourceRef, progressCh)
+		srcCS := datas.ChunkStoreFromDatabase(sourceStore)
+		sinkCS := datas.ChunkStoreFromDatabase(sinkDB)
+		err := pull.Pull(ctx, srcCS, sinkCS, sourceRef, progressCh)
 
 		if err != nil {
 			return err

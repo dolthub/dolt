@@ -64,9 +64,7 @@ type rootTracker interface {
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
-func newDatabase(cs chunks.ChunkStore) *database {
-	vs := types.NewValueStore(cs)
-
+func newDatabase(vs *types.ValueStore) *database {
 	return &database{
 		ValueStore: vs, // ValueStore is responsible for closing |cs|
 		rt:         vs,
