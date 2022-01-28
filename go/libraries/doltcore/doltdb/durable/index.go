@@ -18,19 +18,25 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
-
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// Index represents a Table index.
 type Index interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
 
 	// Count returns the cardinality of the index.
 	Count() uint64
+
+	// Format returns the types.NomsBinFormat for this index.
+	Format() *types.NomsBinFormat
 }
 
+// IndexSet stores a collection secondary Indexes.
 type IndexSet interface {
 	// HashOf returns the hash.Hash of this table.
 	HashOf() (hash.Hash, error)
@@ -49,15 +55,80 @@ type IndexSet interface {
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
 }
 
+// RefFromIndex persists the Index and returns a types.Ref to it.
+func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (types.Ref, error) {
+	switch idx.Format() {
+	case types.Format_LD_1, types.Format_7_18:
+		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
+
+	case types.Format_DOLT_1:
+		b := prolly.ValueFromMap(idx.(prollyIndex).index)
+		return refFromNomsValue(ctx, vrw, b)
+
+	default:
+		return types.Ref{}, errNbfUnkown
+	}
+}
+
+// IndexFromRef reads the types.Ref from storage and returns the Index it points to.
+func IndexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
+	v, err := r.TargetValue(ctx, vrw)
+	if err != nil {
+		return nil, err
+	}
+
+	switch vrw.Format() {
+	case types.Format_LD_1, types.Format_7_18:
+		return IndexFromNomsMap(v.(types.Map), vrw), nil
+
+	case types.Format_DOLT_1:
+		pm := prolly.MapFromValue(v, sch, vrw)
+		return IndexFromProllyMap(pm), nil
+
+	default:
+		return nil, errNbfUnkown
+	}
+}
+
+// NewEmptyIndex returns an index with no rows.
+func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (Index, error) {
+	switch vrw.Format() {
+	case types.Format_LD_1, types.Format_7_18:
+		m, err := types.NewMap(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromNomsMap(m, vrw), nil
+
+	case types.Format_DOLT_1:
+		kd, vd := prolly.MapDescriptorsFromScheam(sch)
+		ns := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromProllyMap(m), nil
+
+	default:
+		return nil, errNbfUnkown
+	}
+}
+
 type nomsIndex struct {
 	index types.Map
 	vrw   types.ValueReadWriter
 }
 
-func NomsMapFromIndex(i Index) types.Map {
-	return i.(nomsIndex).index
+// NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
+func NomsMapFromIndex(i Index) (types.Map, error) {
+	n, ok := i.(nomsIndex)
+	if !ok {
+		return types.Map{}, fmt.Errorf("unable to unwrap types.Map from Index")
+	}
+	return n.index, nil
 }
 
+// IndexFromNomsMap wraps a types.Map and returns it as an Index.
 func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
 	return nomsIndex{
 		index: m,
@@ -67,14 +138,53 @@ func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
 
 var _ Index = nomsIndex{}
 
+// HashOf implements Index.
 func (i nomsIndex) HashOf() (hash.Hash, error) {
 	return i.index.Hash(i.vrw.Format())
 }
 
+// Count implements Index.
 func (i nomsIndex) Count() uint64 {
 	return i.index.Len()
 }
 
+// Format implements Index.
+func (i nomsIndex) Format() *types.NomsBinFormat {
+	return i.vrw.Format()
+}
+
+type prollyIndex struct {
+	index prolly.Map
+}
+
+// ProllyMapFromIndex unwraps the Index and returns the underlying prolly.Map.
+func ProllyMapFromIndex(i Index) prolly.Map {
+	return i.(prollyIndex).index
+}
+
+// IndexFromProllyMap wraps a prolly.Map and returns it as an Index.
+func IndexFromProllyMap(m prolly.Map) Index {
+	return prollyIndex{index: m}
+}
+
+var _ Index = prollyIndex{}
+
+// HashOf implements Index.
+func (i prollyIndex) HashOf() (hash.Hash, error) {
+	return i.index.HashOf(), nil
+}
+
+// Count implements Index.
+func (i prollyIndex) Count() uint64 {
+	return i.index.Count()
+}
+
+// Format implements Index.
+func (i prollyIndex) Format() *types.NomsBinFormat {
+	return i.index.Format()
+}
+
+// NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	empty, _ := types.NewMap(ctx, vrw)
 	return nomsIndexSet{
@@ -90,12 +200,12 @@ type nomsIndexSet struct {
 
 var _ IndexSet = nomsIndexSet{}
 
-// HashOf implementes IndexSet.
+// HashOf implements IndexSet.
 func (s nomsIndexSet) HashOf() (hash.Hash, error) {
 	return s.indexes.Hash(s.vrw.Format())
 }
 
-// GetIndex implementes IndexSet.
+// GetIndex implements IndexSet.
 func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
@@ -116,14 +226,14 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) 
 	}, nil
 }
 
-// PutIndex implementes IndexSet.
+// PutIndex implements IndexSet.
 func (s nomsIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
 	return s.PutIndex(ctx, name, IndexFromNomsMap(idx, s.vrw))
 }
 
-// PutIndex implementes IndexSet.
+// PutIndex implements IndexSet.
 func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
-	ref, err := refFromNomsValue(ctx, s.vrw, idx.(nomsIndex).index)
+	ref, err := RefFromIndex(ctx, s.vrw, idx)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +246,7 @@ func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (Ind
 	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
 }
 
-// DropIndex implementes IndexSet.
+// DropIndex implements IndexSet.
 func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
 	if err != nil {

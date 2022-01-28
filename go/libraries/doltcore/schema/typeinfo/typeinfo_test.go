@@ -221,11 +221,23 @@ func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
 	for _, tiArray := range tiArrays {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
-				t.Run(ti.String(), func(t *testing.T) {
-					newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
-					require.NoError(t, err)
-					require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
-				})
+				if ti.GetTypeIdentifier() == PointTypeIdentifier ||
+					ti.GetTypeIdentifier() == LinestringTypeIdentifier ||
+					ti.GetTypeIdentifier() == PolygonTypeIdentifier {
+					t.Run(ti.String(), func(t *testing.T) {
+						TestWithSpatialTypesEnabled(func() {
+							newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
+							require.NoError(t, err)
+							require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
+						})
+					})
+				} else {
+					t.Run(ti.String(), func(t *testing.T) {
+						newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
+						require.NoError(t, err)
+						require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())
+					})
+				}
 			}
 		})
 	}
@@ -330,6 +342,9 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{DefaultInlineBlobType},
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
 			{JSONType},
+			{LinestringType},
+			{PointType},
+			{PolygonType},
 			generateSetTypes(t, 16),
 			{TimeType},
 			{Uint8Type, Uint16Type, Uint24Type, Uint32Type, Uint64Type},
@@ -362,10 +377,13 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            //Int
 			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
 				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, //JSON
-			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                //Set
-			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, //Time
-			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                          //Uint
-			{types.UUID{3}, types.UUID{3, 13}, types.UUID{128, 238, 82, 12}, types.UUID{31, 54, 23, 13, 63, 43}, types.UUID{83, 64, 21, 14, 42, 6, 35, 7, 54, 234, 6, 32, 1, 4, 2, 4}},     //Uuid
+			{types.Linestring{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // Linestring
+			{types.Point{SRID: 0, X: 1, Y: 2}}, // Point
+			{types.Polygon{SRID: 0, Lines: []types.Linestring{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}}, // Polygon
+			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                   //Set
+			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)},    //Time
+			{types.Uint(20), types.Uint(275), types.Uint(328395), types.Uint(630257298), types.Uint(93897259874)},                                                                             //Uint
+			{types.UUID{3}, types.UUID{3, 13}, types.UUID{128, 238, 82, 12}, types.UUID{31, 54, 23, 13, 63, 43}, types.UUID{83, 64, 21, 14, 42, 6, 35, 7, 54, 234, 6, 32, 1, 4, 2, 4}},        //Uuid
 			{mustBlobBytes(t, []byte{1}), mustBlobBytes(t, []byte{42, 52}), mustBlobBytes(t, []byte{84, 32, 13, 63, 12, 86}), //VarBinary
 				mustBlobBytes(t, []byte{1, 32, 235, 64, 32, 23, 45, 76}), mustBlobBytes(t, []byte{123, 234, 34, 223, 76, 35, 32, 12, 84, 26, 15, 34, 65, 86, 45, 23, 43, 12, 76, 154, 234, 76, 34})},
 			{types.String(""), types.String("a"), types.String("abc"), //VarString

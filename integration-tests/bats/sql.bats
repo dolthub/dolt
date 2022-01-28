@@ -293,7 +293,7 @@ SQL
 @test "sql: ambiguous column name" {
     run dolt sql -q "select pk,pk1,pk2 from one_pk,two_pk where c1=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]
+    [[ "$output" =~ "ambiguous column name \"c1\", it's present in all these tables: one_pk, two_pk" ]] || false
 }
 
 @test "sql: select with and and or clauses" {
@@ -535,7 +535,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE table_a(x int primary key);
 CREATE TABLE table_b(x int primary key);
@@ -559,7 +559,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
@@ -579,7 +579,7 @@ SQL
     [[ "$output" =~ "created table_a" ]] || false
 
     cd ../
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 use test1;
 show tables;
 SQL
@@ -621,7 +621,7 @@ SQL
     mkdir decoy
     touch decoy/file.txt
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
 CREATE TABLE table_a(x int primary key);
@@ -681,7 +681,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ 'refs/heads/main' ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 CREATE TABLE test (x int primary key);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -699,7 +699,7 @@ SQL
     [[ "$output" =~ test ]] || false
 
     dolt checkout main
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'refs/heads/feature-branch';
 insert into test values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'inserted 3 values');
@@ -712,7 +712,7 @@ SQL
 
     dolt checkout main
 
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 set @@dolt_repo_$$_head_ref = 'feature-branch';
 select @@dolt_repo_$$_head_ref;
 SQL
@@ -732,7 +732,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
@@ -749,7 +749,7 @@ SQL
     dolt checkout -b feature-branch
     dolt checkout main
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 USE \`dolt_repo_$$/feature-branch\`;
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
@@ -768,7 +768,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -785,7 +785,7 @@ SQL
     [[ ! "$output" =~ "5" ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch -r csv <<SQL
+    run dolt sql  -r csv <<SQL
     USE \`dolt_repo_$$/$hash\`;
     select * from a1;
 SQL
@@ -799,7 +799,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -815,7 +815,7 @@ SQL
     [[ "$output" =~ 'read-only' ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
     USE \`dolt_repo_$$/$hash\`;
     delete from a1;
 SQL
@@ -828,7 +828,7 @@ SQL
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
     
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 CREATE TABLE a1(x int primary key);
 insert into a1 values (1), (2), (3);
 SELECT DOLT_COMMIT('-a', '-m', 'new table');
@@ -844,7 +844,7 @@ SQL
     [[ "$output" =~ 'read-only' ]] || false
 
     # same with USE syntax
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
     USE \`dolt_repo_$$/$hash\`;
     update a1 set x = x*10;
 SQL
@@ -1020,7 +1020,7 @@ SQL
     [[ ! "$output" =~ "one_pk" ]] || false
     run dolt sql -q "drop table poop"
     [ $status -eq 1 ]
-    [ "$output" = "table not found: poop" ]
+    [[ "$output" =~ "table not found: poop" ]] || false
 }
 
 @test "sql: explain simple select query" {
@@ -1368,6 +1368,7 @@ SQL
 
 @test "sql: stored procedures creation check" {
     dolt sql -q "
+DELIMITER // ;
 CREATE PROCEDURE p1(s VARCHAR(200), N DOUBLE, m DOUBLE)
 BEGIN
   SET s = '';
@@ -1380,9 +1381,10 @@ BEGIN
   END IF;
   SET s = CONCAT(n, ' ', s, ' ', m, '.');
   SELECT s;
-END;"
+END;
+//"
     run dolt sql -q "CALL p1('', 1, 1)" -r=csv
-    [ "$status" -eq "0" ]
+   [ "$status" -eq "0" ]
     [[ "$output" =~ "1 equals 1." ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "CALL p1('', 2, 1)" -r=csv
@@ -1543,7 +1545,7 @@ SQL
 }
 
 @test "sql: found_row works with update properly" {
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 set autocommit = off;
 CREATE TABLE tbl(pk int primary key, v1 int);
 INSERT INTO tbl VALUES (1,1), (2,1);
@@ -1722,3 +1724,21 @@ SQL
     run expect $BATS_TEST_DIRNAME/sql-vertical-format.expect
     [ "$status" -eq 0 ]
 }
+
+@test "sql: --file param" {
+    cat > script.sql <<SQL
+    create table test (a int primary key, b int);
+    insert into test values (1,1), (2,2);
+SQL
+    
+    run dolt sql --file script.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "select * from test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+
+    run dolt sql --file not-exists.sql
+    [ "$status" -eq 1 ]
+}
+

@@ -333,7 +333,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 		errhand(err)
 	}
 
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rowMap, nil, nil)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rowMap, nil, nil)
 	if err != nil {
 		errhand(err)
 	}
@@ -367,7 +367,7 @@ func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
-	tbl, err := doltdb.NewTable(ctx, vrw, sch, rows, indexData, autoVal)
+	tbl, err := doltdb.NewNomsTable(ctx, vrw, sch, rows, indexData, autoVal)
 	if err != nil {
 		return err
 	}

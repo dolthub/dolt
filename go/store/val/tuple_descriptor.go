@@ -15,14 +15,18 @@
 package val
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type TupleDesc struct {
 	Types []Type
-	cmp   TupleCompare
+	cmp   TupleComparator
 
 	// Under certain conditions, Tuple comparisons can be
 	// optimized by directly comparing Tuples as byte slices,
@@ -31,9 +35,13 @@ type TupleDesc struct {
 	raw rawCmp
 }
 
-type TupleCompare func(left, right Tuple, desc TupleDesc) int
+type TupleComparator interface {
+	Compare(left, right Tuple, desc TupleDesc) int
+}
 
-func defaultCompare(left, right Tuple, desc TupleDesc) (cmp int) {
+type defaultCompare struct{}
+
+func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
 		if cmp != 0 {
@@ -43,14 +51,14 @@ func defaultCompare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-var _ TupleCompare = defaultCompare
+var _ TupleComparator = defaultCompare{}
 
 func NewTupleDescriptor(types ...Type) TupleDesc {
-	return NewTupleDescriptorWithComparator(defaultCompare, types...)
+	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
 
 // NewTupleDescriptor returns a TupleDesc from a slice of Types.
-func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td TupleDesc) {
+func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
 	}
@@ -69,12 +77,14 @@ func NewTupleDescriptorWithComparator(cmp TupleCompare, types ...Type) (td Tuple
 
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	if td.raw != nil {
-		// todo(andy): this is broken for signed ints
-		return compareRaw(left, right, td.raw)
-	} else {
-		return td.cmp(left, right, td)
-	}
+	// todo(andy): compare raw is broken
+	//if td.raw != nil {
+	//	return compareRaw(left, right, td.raw)
+	//} else {
+	//	return td.cmp(left, right, td)
+	//}
+
+	return td.cmp.Compare(left, right, td)
 }
 
 // Count returns the number of fields in the TupleDesc.
@@ -209,13 +219,57 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	return
 }
 
+// GetDecimal reads a float64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
+	td.expectEncoding(i, DecimalEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadString(b), true
+	}
+	return
+}
+
+// GetTime reads a time.Time from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetTime(i int, tup Tuple) (v time.Time, ok bool) {
+	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadTime(b), true
+	}
+	return
+}
+
+// GetSqlTime reads a string encoded Time value from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
+	td.expectEncoding(i, TimeEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadString(b), true
+	}
+	return
+}
+
+// GetInt16 reads an int16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
+	td.expectEncoding(i, YearEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v, ok = ReadInt16(b), true
+	}
+	return
+}
+
 // GetString reads a string from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, StringEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v = ReadString(b, td.Types[i].Coll)
+		v = ReadString(b)
 		ok = true
 	}
 	return
@@ -227,7 +281,21 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, BytesEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v = readBytes(b, td.Types[i].Coll)
+		v = readBytes(b)
+		ok = true
+	}
+	return
+}
+
+// GetBytes reads a []byte from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
+	td.expectEncoding(i, JSONEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		if err := json.Unmarshal(b, &v); err != nil {
+			panic(err)
+		}
 		ok = true
 	}
 	return
@@ -245,10 +313,6 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetInt16(i, tup)
 	case Uint16Enc:
 		v, ok = td.GetUint16(i, tup)
-	case Int24Enc:
-		panic("24 bit")
-	case Uint24Enc:
-		panic("24 bit")
 	case Int32Enc:
 		v, ok = td.GetInt32(i, tup)
 	case Uint32Enc:
@@ -261,15 +325,29 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		v, ok = td.GetFloat32(i, tup)
 	case Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
+	case DecimalEnc:
+		v, ok = td.GetDecimal(i, tup)
+	case TimeEnc:
+		v, ok = td.GetSqlTime(i, tup)
+	case YearEnc:
+		v, ok = td.GetYear(i, tup)
+	case TimestampEnc, DateEnc, DatetimeEnc:
+		v, ok = td.GetTime(i, tup)
 	case StringEnc:
 		v, ok = td.GetString(i, tup)
 	case BytesEnc:
 		v, ok = td.GetBytes(i, tup)
+	case JSONEnc:
+		var js interface{}
+		js, ok = td.GetJSON(i, tup)
+		if ok {
+			v = sql.JSONDocument{Val: js}
+		}
 	default:
 		panic("unknown encoding")
 	}
 	if !ok {
-		return NULL
+		return nil
 	}
 	return v
 }
@@ -300,6 +378,7 @@ func (td TupleDesc) Format(tup Tuple) string {
 			continue
 		}
 
+		// todo(andy): complete cases
 		switch typ.Enc {
 		case Int8Enc:
 			v, _ := td.GetInt8(i, tup)
@@ -313,10 +392,6 @@ func (td TupleDesc) Format(tup Tuple) string {
 		case Uint16Enc:
 			v, _ := td.GetUint16(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
-		case Int24Enc:
-			panic("24 bit")
-		case Uint24Enc:
-			panic("24 bit")
 		case Int32Enc:
 			v, _ := td.GetInt32(i, tup)
 			sb.WriteString(strconv.Itoa(int(v)))
@@ -342,7 +417,7 @@ func (td TupleDesc) Format(tup Tuple) string {
 			v, _ := td.GetBytes(i, tup)
 			sb.Write(v)
 		default:
-			panic("unknown encoding")
+			sb.Write(tup.GetField(i))
 		}
 	}
 	sb.WriteString(" ]")

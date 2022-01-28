@@ -172,7 +172,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
-    run dolt sql << SQL
+    dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 INSERT INTO test VALUES (3);
@@ -180,6 +180,9 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 3');
 SELECT DOLT_CHECKOUT('main');
 INSERT INTO test VALUES (10000);
 SELECT DOLT_COMMIT('-a', '-m', 'Insert 10000');
+SQL
+
+    run dolt sql << SQL
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) = 2 FROM test WHERE pk > 2;
 SQL
@@ -187,8 +190,8 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
-    [[ "${lines[26]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
-    [[ "${lines[28]}" =~ "1" ]] || false
+    [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
+    [[ "${lines[3]}" =~ "1" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
@@ -319,7 +322,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE detects conflicts, returns them in dolt_conflicts table" {
-    run dolt sql --disable-batch << SQL
+    run dolt sql  << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -349,7 +352,7 @@ SQL
     [[ ! "$output" =~ ([[:space:]]*both modified:[[:space:]]*one_pk) ]] || false
 
     # now merge, examine the conflicts, and abort
-    run dolt sql -r csv --disable-batch << SQL
+    run dolt sql -r csv  << SQL
 SET autocommit = off;
 SELECT DOLT_MERGE('feature-branch');
 SELECT * FROM dolt_conflicts;
@@ -362,7 +365,7 @@ SQL
     [[ "${lines[5]}" =~ "1" ]] || false
 
     # now resolve commits
-    run dolt sql --disable-batch << SQL
+    run dolt sql  << SQL
 SET autocommit = off;
 SELECT DOLT_MERGE('feature-branch');
 REPLACE INTO one_pk (pk1, c1, c2) SELECT their_pk1, their_c1, their_c2 FROM dolt_conflicts_one_pk WHERE their_pk1 IS NOT NULL;
@@ -383,7 +386,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE(--abort) clears session state and allows additional edits" {
-    run dolt sql --disable-batch << SQL
+    run dolt sql  << SQL
 set autocommit = off;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -423,7 +426,7 @@ SQL
 
 
 @test "sql-merge: DOLT_MERGE(--abort) clears index state" {
-    run dolt sql --disable-batch << SQL
+    run dolt sql  << SQL
 set autocommit = off;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
@@ -630,7 +633,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE with conflicts renders the dolt_conflicts table" {
-      run dolt sql --disable-batch --continue << SQL
+      run dolt sql  --continue << SQL
 set autocommit = off;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,

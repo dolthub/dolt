@@ -104,7 +104,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 type orderedMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
 	IterAll(ctx context.Context) (MapRangeIter, error)
-	IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error)
+	IterRange(ctx context.Context, rng Range) (MapRangeIter, error)
 }
 
 var _ orderedMap = Map{}
@@ -182,7 +182,7 @@ func testOrderedMapIterAllBackward(t *testing.T, om orderedMap, tuples [][2]val.
 	}
 
 	ctx := context.Background()
-	iter, err := om.IterValueRange(ctx, rng)
+	iter, err := om.IterRange(ctx, rng)
 	require.NoError(t, err)
 
 	idx := len(tuples) - 1
@@ -287,7 +287,7 @@ func testOrderedMapIterValueRange(t *testing.T, om orderedMap, tuples [][2]val.T
 		}
 
 		for _, test := range tests {
-			iter, err := om.IterValueRange(ctx, test.testRange)
+			iter, err := om.IterRange(ctx, test.testRange)
 			require.NoError(t, err)
 
 			key, _, err := iter.Next(ctx)
@@ -383,10 +383,6 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	case val.Uint16Enc:
 		v := uint16(testRand.Intn(math.MaxUint16))
 		tb.PutUint16(idx, v)
-	case val.Int24Enc:
-		panic("24 bit")
-	case val.Uint24Enc:
-		panic("24 bit")
 	case val.Int32Enc:
 		v := int32(testRand.Intn(math.MaxInt32) * neg)
 		tb.PutInt32(idx, v)

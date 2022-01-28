@@ -17,6 +17,7 @@ package types
 import (
 	"errors"
 	"os"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
 )
@@ -31,6 +32,8 @@ func init() {
 	if err != nil {
 		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
 	}
+	nbfLock.Lock()
+	defer nbfLock.Unlock()
 	Format_Default = nbf
 }
 
@@ -54,6 +57,7 @@ var Format_7_18 = &NomsBinFormat{}
 var Format_LD_1 = &NomsBinFormat{formatTag_LD_1}
 var Format_DOLT_1 = &NomsBinFormat{formatTag_DOLT_1}
 
+var nbfLock = &sync.Mutex{}
 var Format_Default *NomsBinFormat
 
 var emptyTuples = make(map[*NomsBinFormat]Tuple)
@@ -65,6 +69,25 @@ func init() {
 
 func isFormat_7_18(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_7_18
+}
+
+var ErrUnsupportedFormat = errors.New("operation not supported for format '__DOLT_1__' ")
+
+func IsFormat_DOLT_1(nbf *NomsBinFormat) bool {
+	return nbf.tag == formatTag_DOLT_1
+}
+
+func TestFormatDolt1(cb func() error) error {
+	nbfLock.Lock()
+	defer nbfLock.Unlock()
+
+	var stash *NomsBinFormat
+	stash, Format_Default = Format_Default, Format_DOLT_1
+	defer func() {
+		Format_Default = stash
+	}()
+
+	return cb()
 }
 
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {

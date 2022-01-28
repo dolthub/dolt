@@ -27,8 +27,6 @@ const (
 	numFieldsSize ByteSize = 2
 )
 
-var NULL []byte = nil
-
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
 //   NULL Field. Values are packed contiguously from the front of the Tuple. The
@@ -134,7 +132,7 @@ func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tupl
 func (tup Tuple) GetField(i int) []byte {
 	// first check if the field is NULL
 	if !tup.mask().present(i) {
-		return NULL
+		return nil
 	}
 
 	// translate from field index to value

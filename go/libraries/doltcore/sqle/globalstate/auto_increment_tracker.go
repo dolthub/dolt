@@ -48,6 +48,8 @@ func (a *autoIncrementTracker) Next(tableName string, insertVal interface{}, dis
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
+	diskVal = valOrZero(diskVal)
+
 	// Case 0: Just use the value passed in.
 	potential, ok := a.valuePerTable[tableName]
 	if !ok {

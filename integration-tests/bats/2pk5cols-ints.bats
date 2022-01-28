@@ -97,8 +97,8 @@ teardown() {
     [[ "$output" =~ "duplicate primary key" ]] || false
     run dolt sql -q "insert into test (pk1,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Field 'pk2' doesn't have a default value" ] || false
+    [[ "$output" =~ "Field 'pk2' doesn't have a default value" ]] || false
     run dolt sql -q "insert into test (c1,c2,c3,c4,c5) values (6,6,6,6,6)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Field 'pk1' doesn't have a default value" ] || false
+    [[ "$output" =~ "Field 'pk1' doesn't have a default value" ]] || false
 }

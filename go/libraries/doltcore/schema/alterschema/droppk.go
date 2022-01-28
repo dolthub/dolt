@@ -65,7 +65,7 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 		return nil, err
 	}
 
-	table, err = table.UpdateRows(ctx, newRowData)
+	table, err = table.UpdateNomsRows(ctx, newRowData)
 	if err != nil {
 		return nil, err
 	}

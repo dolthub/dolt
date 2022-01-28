@@ -49,6 +49,12 @@ func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
 	return nil
 }
 
+// Delete deletes the pair keyed by |key| from the MutableMap.
+func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
+	mut.overlay.Put(key, nil)
+	return nil
+}
+
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
@@ -81,11 +87,11 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		KeyDesc: mut.m.keyDesc,
 		Reverse: false,
 	}
-	return mut.IterValueRange(ctx, rng)
+	return mut.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
-func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
 		if rng.Reverse {
