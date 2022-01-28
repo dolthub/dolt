@@ -319,7 +319,6 @@ var DoltMerge = []enginetest.ScriptTest{
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
-			"SET autocommit = 0",
 			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
 			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
 			"UPDATE dolt_branches SET hash = HASHOF('main^') WHERE name='feature-branch'",
