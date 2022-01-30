@@ -71,13 +71,21 @@ SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
-
-SELECT COUNT(*) from dolt_status;
 SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
-    [[ "$output" =~ "| COUNT(*) |" ]] || false
-    [[ "$output" =~ "| 0        |" ]] || false
+
+    run dolt sql -r csv -q "select count(*) from dolt_status"
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "0" ]
+
+    run dolt sql -r csv -q "select hash from dolt_branches where branch='main'"
+    MAIN_HASH=${lines[1]}
+
+    run dolt sql -r csv -q "select hash from dolt_branches where branch='feature-branch'"
+    FB_HASH=${lines[1]}
+
+    [ "$MAIN_HASH" = "$FB_HASH" ]
 }
 
 @test "sql-merge: DOLT_MERGE with autocommit off works in fast-forward." {
