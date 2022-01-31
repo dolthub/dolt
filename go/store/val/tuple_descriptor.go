@@ -363,6 +363,10 @@ func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 
 // Format prints a Tuple as a string.
 func (td TupleDesc) Format(tup Tuple) string {
+	if tup == nil || tup.Count() == 0 {
+		return "( )"
+	}
+
 	var sb strings.Builder
 	sb.WriteString("( ")
 

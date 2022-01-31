@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -151,50 +152,24 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 }
 
 func (m Map) iterFromRange(ctx context.Context, rng Range) (iter *prollyRangeIter, err error) {
-	var first *nodeCursor
-	if rng.Start.Unbound {
-		if first, err = m.cursorAtStart(ctx); err != nil {
-			return iter, err
-		}
-	} else {
-		if first, err = m.cursorAtKey(ctx, rng.Start.Key); err != nil {
-			return iter, err
-		}
-
-		key := val.Tuple(first.currentPair().key())
-		if !rng.insideStart(key) {
-			if _, err = first.advance(ctx); err != nil {
-				return iter, err
-			}
-		}
+	first, err := m.cursorForRangeStart(ctx, rng)
+	if err != nil {
+		return nil, err
 	}
 
-	var last *nodeCursor
-	if rng.Stop.Unbound {
-		if last, err = m.cursorAtEnd(ctx); err != nil {
-			return iter, err
-		}
-	} else {
-		if last, err = m.cursorAtKey(ctx, rng.Stop.Key); err != nil {
-			return iter, err
-		}
-
-		key := val.Tuple(last.currentPair().key())
-		if !rng.insideStop(key) {
-			if _, err = last.retreat(ctx); err != nil {
-				return iter, err
-			}
-		}
+	stop, err := m.cursorForRangeStop(ctx, rng)
+	if err != nil {
+		return nil, err
 	}
 
-	if first.compare(last) > 0 {
+	if first.compare(stop) >= 0 {
 		// empty range
 		first = nil
 	}
 
 	return &prollyRangeIter{
 		curr: first,
-		last: last,
+		stop: stop,
 		rng:  rng,
 	}, nil
 }
@@ -207,36 +182,66 @@ func (m Map) cursorAtEnd(ctx context.Context) (*nodeCursor, error) {
 	return newCursorAtEnd(ctx, m.ns, m.root)
 }
 
-func (m Map) cursorAtKey(ctx context.Context, key val.Tuple) (*nodeCursor, error) {
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
-	if err == nil {
-		cur.keepInBounds()
+func (m Map) cursorForRangeStart(ctx context.Context, rng Range) (first *nodeCursor, err error) {
+	if rng.Start.Unbound {
+		return m.cursorAtStart(ctx)
 	}
-	return cur, err
+
+	search := func(query nodeItem, nd Node) int {
+		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+			tup := val.Tuple(nd.getItem(i * stride))
+			cmp := rng.KeyDesc.Compare(val.Tuple(query), tup)
+			if rng.Start.Inclusive {
+				return cmp <= 0
+			} else {
+				return cmp < 0
+			}
+		})
+		return i * stride
+	}
+	return newCursorAtTuple(ctx, m.ns, m.root, rng.Start.Key, search)
 }
 
-// searchNode is a searchFn for a Map.
-// It returns the smallest integer i where nd[i] >= query
-// Adapted from search.Sort.
+func (m Map) cursorForRangeStop(ctx context.Context, rng Range) (last *nodeCursor, err error) {
+	if rng.Stop.Unbound {
+		return m.cursorAtEnd(ctx)
+	}
+
+	search := func(query nodeItem, nd Node) int {
+		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+			tup := val.Tuple(nd.getItem(i * stride))
+			cmp := rng.KeyDesc.Compare(val.Tuple(query), tup)
+			if rng.Stop.Inclusive {
+				return cmp < 0
+			} else {
+				return cmp <= 0
+			}
+		})
+		return i * stride
+	}
+	return newCursorAtTuple(ctx, m.ns, m.root, rng.Stop.Key, search)
+}
+
+// searchNode is a searchFn for Map.
+// It returns the smallest index where nd[i] >= query
+// Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
-	// Define:    (query > nd[-1]) and (query < nd[n])
-	// Invariant: (query > nd[i-1]) and (query <= nd[j])
-
+	// Define f(-1) == false and f(n) == true.
+	// Invariant: f(i-1) == false, f(j) == true.
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
 		less := m.compareItems(query, nd.getItem(h*stride)) <= 0
 		// i ≤ h < j
 		if !less {
-			i = h + 1 // preserves (query > nd[i-1])
+			i = h + 1 // preserves f(i-1) == false
 		} else {
-			j = h // preserves (query <= nd[j])
+			j = h // preserves f(j) == true
 		}
 	}
-	// i == j,
-	// (query > nd[i-1]) and
-	// (query <= nd[j])  =>  answer is i.
+	// i == j, f(i-1) == false, and
+	// f(j) (= f(i)) == true  =>  answer is i.
 	return i * stride
 }
 
@@ -252,7 +257,7 @@ func (m Map) compareKeys(left, right val.Tuple) int {
 
 type prollyRangeIter struct {
 	curr *nodeCursor
-	last *nodeCursor
+	stop *nodeCursor
 	rng  Range
 }
 
@@ -273,7 +278,7 @@ func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
 		return err
 	}
 
-	if it.curr.compare(it.last) > 0 {
+	if it.curr.compare(it.stop) >= 0 {
 		// past the end of the range
 		it.curr = nil
 	}

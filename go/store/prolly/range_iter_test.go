@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"io"
-	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -229,121 +228,216 @@ func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 	return
 }
 
-var index = [][2]int{
-	{1, 1},
-	{1, 2},
-	{1, 3},
-	{2, 1},
-	{2, 2},
-	{2, 3},
-	{3, 1},
-	{3, 2},
-	{3, 3},
-	{4, 1},
-	{4, 2},
-	{4, 3},
-}
+func TestMapIterRange(t *testing.T) {
+	ctx := context.Background()
+	ns := newTestNodeStore()
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int32Enc},
+		val.Type{Enc: val.Int32Enc},
+	)
+	vd := val.NewTupleDescriptor()
 
-type interval struct {
-	lo, hi bound
-}
+	tuples := []val.Tuple{
+		intTuple(1, 1), intTuple(),
+		intTuple(1, 2), intTuple(),
+		intTuple(1, 3), intTuple(),
+		intTuple(2, 1), intTuple(),
+		intTuple(2, 2), intTuple(),
+		intTuple(2, 3), intTuple(),
+		intTuple(3, 1), intTuple(),
+		intTuple(3, 2), intTuple(),
+		intTuple(3, 3), intTuple(),
+		intTuple(4, 1), intTuple(),
+		intTuple(4, 2), intTuple(),
+		intTuple(4, 3), intTuple(),
+	}
+	require.Equal(t, 24, len(tuples))
 
-type bound struct {
-	cut       int
-	inclusive bool
-}
+	index, err := NewMapFromTuples(ctx, ns, kd, vd, tuples...)
+	require.NoError(t, err)
+	require.Equal(t, uint64(12), index.Count())
 
-type rangeSearchTest struct {
-	name   string
-	i      interval
-	lo, hi int
-}
+	partialDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int32Enc},
+	)
+	fullDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Int32Enc},
+		val.Type{Enc: val.Int32Enc},
+	)
 
-func TestRangeSearch(t *testing.T) {
-	tests := []rangeSearchTest{
+	tests := []mapRangeTest{
+		// partial-key range scan
 		{
-			name: "range [1,4]",
-			i: interval{
-				lo: bound{cut: 1, inclusive: true},
-				hi: bound{cut: 4, inclusive: true},
+			name: "range [1:4]",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1),
+					Inclusive: true,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4),
+					Inclusive: true,
+				},
+				KeyDesc: partialDesc,
 			},
-			lo: 0,
-			hi: 12,
+			exp: tuples[:],
 		},
 		{
-			name: "range (1,4]",
-			i: interval{
-				lo: bound{cut: 1, inclusive: false},
-				hi: bound{cut: 4, inclusive: true},
+			name: "range (1:4]",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1),
+					Inclusive: false,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4),
+					Inclusive: true,
+				},
+				KeyDesc: partialDesc,
 			},
-			lo: 3,
-			hi: 12,
+			exp: tuples[6:],
 		},
 		{
-			name: "range [1,4)",
-			i: interval{
-				lo: bound{cut: 1, inclusive: true},
-				hi: bound{cut: 4, inclusive: false},
+			name: "range [1:4)",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1),
+					Inclusive: true,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4),
+					Inclusive: false,
+				},
+				KeyDesc: partialDesc,
 			},
-			lo: 0,
-			hi: 9,
+			exp: tuples[:18],
 		},
 		{
-			name: "range (1,4)",
-			i: interval{
-				lo: bound{cut: 1, inclusive: false},
-				hi: bound{cut: 4, inclusive: false},
+			name: "range (1:4)",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1),
+					Inclusive: false,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4),
+					Inclusive: false,
+				},
+				KeyDesc: partialDesc,
 			},
-			lo: 3,
-			hi: 9,
+			exp: tuples[6:18],
+		},
+
+		// full-key range scan
+		{
+			name: "range [1,2:4,2]",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1, 2),
+					Inclusive: true,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4, 2),
+					Inclusive: true,
+				},
+				KeyDesc: fullDesc,
+			},
+			exp: tuples[2:22],
+		},
+		{
+			name: "range (1,2:4,2]",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1, 2),
+					Inclusive: false,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4, 2),
+					Inclusive: true,
+				},
+				KeyDesc: fullDesc,
+			},
+			exp: tuples[4:22],
+		},
+		{
+			name: "range [1,2:4,2)",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1, 2),
+					Inclusive: true,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4, 2),
+					Inclusive: false,
+				},
+				KeyDesc: fullDesc,
+			},
+			exp: tuples[2:20],
+		},
+		{
+			name: "range (1,2:4,2)",
+			rng: Range{
+				Start: RangeCut{
+					Key:       intTuple(1, 2),
+					Inclusive: false,
+				},
+				Stop: RangeCut{
+					Key:       intTuple(4, 2),
+					Inclusive: false,
+				},
+				KeyDesc: fullDesc,
+			},
+			exp: tuples[4:20], // 🌲
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testRangeSearch(t, test)
+			testMapRange(t, index, test)
 		})
 	}
 }
 
-func testRangeSearch(t *testing.T, test rangeSearchTest) {
-	lo, hi := rangeSearch(test.i, index)
-	assert.Equal(t, test.lo, lo)
-	assert.Equal(t, test.hi, hi)
-
-	act := index[lo:hi]
-	exp := index[test.lo:test.hi]
-	require.Equal(t, len(exp), len(act))
-	for i := range exp {
-		assert.Equal(t, exp[i], act[i])
-	}
+type mapRangeTest struct {
+	name string
+	rng  Range
+	exp  []val.Tuple
 }
 
-// range search returns the subset of |data| specified by |i|.
-func rangeSearch(i interval, data [][2]int) (lo, hi int) {
-	lo = lowerBoundSearch(i.lo, data)
-	hi = upperBoundSearch(i.hi, data)
-	return
-}
+func testMapRange(t *testing.T, idx Map, test mapRangeTest) {
+	ctx := context.Background()
 
-func lowerBoundSearch(b bound, data [][2]int) int {
-	less := func(i int) bool {
-		if b.inclusive {
-			return b.cut <= data[i][0]
-		} else {
-			return b.cut < data[i][0]
+	iter, err := idx.IterRange(ctx, test.rng)
+	require.NoError(t, err)
+
+	var k, v val.Tuple
+	act := make([]val.Tuple, 0, len(test.exp))
+	for {
+		k, v, err = iter.Next(ctx)
+		if err == io.EOF {
+			break
 		}
+		assert.NoError(t, err)
+		act = append(act, k, v)
 	}
-	return sort.Search(len(data), less)
+	assert.Error(t, io.EOF, err)
+
+	require.Equal(t, len(test.exp), len(act))
+	for i := range test.exp {
+		assert.Equal(t, test.exp[i], act[i])
+	}
 }
 
-func upperBoundSearch(b bound, data [][2]int) int {
-	less := func(i int) bool {
-		if b.inclusive {
-			return b.cut < data[i][0]
-		} else {
-			return b.cut <= data[i][0]
-		}
+func intTuple(ints ...int32) val.Tuple {
+	types := make([]val.Type, len(ints))
+	for i := range types {
+		types[i] = val.Type{Enc: val.Int32Enc}
 	}
-	return sort.Search(len(data), less)
+
+	desc := val.NewTupleDescriptor(types...)
+	tb := val.NewTupleBuilder(desc)
+	for i := range ints {
+		tb.PutInt32(i, ints[i])
+	}
+	return tb.Build(sharedPool)
 }
