@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
+	"github.com/google/uuid"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -65,6 +66,8 @@ type TpccConfig struct {
 
 // TpccTest encapsulates an End to End prepare, run, cleanup test case.
 type TpccTest struct {
+	Id string
+
 	Name string
 
 	TpccConfig *TpccConfig
@@ -77,6 +80,7 @@ type TpccTest struct {
 
 func NewTpccTest(name string, tpccConfig *TpccConfig, serverConfig *sysbench_runner.ServerConfig, fromScript bool) *TpccTest {
 	return &TpccTest{
+		Id:           uuid.New().String(),
 		Name:         name,
 		TpccConfig:   tpccConfig,
 		ServerConfig: serverConfig,

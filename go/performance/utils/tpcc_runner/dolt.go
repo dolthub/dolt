@@ -33,13 +33,13 @@ const (
 	dbName = "sbt"
 )
 
-func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sysbench_runner.ServerConfig) error {
+func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	// TODO: Need to implement username and password configs for docker deployment
 	serverParams := serverConfig.GetServerArgs()
 
 	testRepo, err := initDoltRepo(ctx, serverConfig)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	withKeyCtx, cancel := context.WithCancel(ctx)
@@ -69,11 +69,11 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sy
 
 	// GetTests and Benchmarks
 	test := NewTpccTest(uuid.New().String(), tppcConfig, serverConfig, true)
-	err = benchmark(ctx, test)
+	result, err := benchmark(ctx, test)
 	if err != nil {
 		close(quit)
 		wg.Wait()
-		return err
+		return nil, err
 	}
 	// send signal to dolt server
 	quit <- syscall.SIGTERM
@@ -86,14 +86,14 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sy
 		if err.Error() != "signal: killed" {
 			close(quit)
 			wg.Wait()
-			return err
+			return nil, err
 		}
 	}
 
 	close(quit)
 	wg.Wait()
 
-	return os.RemoveAll(testRepo)
+	return sysbench_runner.Results{result}, os.RemoveAll(testRepo)
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
@@ -127,7 +127,7 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 	return server
 }
 
-func benchmark(ctx context.Context, test *TpccTest) error {
+func benchmark(ctx context.Context, test *TpccTest) (*sysbench_runner.Result, error) {
 	prepare := test.TpccPrepare(ctx)
 	run := test.TpccRun(ctx)
 	cleanup := test.TpccCleanup(ctx)
@@ -135,20 +135,25 @@ func benchmark(ctx context.Context, test *TpccTest) error {
 	out, err := prepare.Output()
 	if err != nil {
 		fmt.Print(string(out))
-		return err
+		return nil, err
 	}
 
 	out, err = run.Output()
 	if err != nil {
 		fmt.Print(string(out))
-		return err
+		return nil, err
 	}
-	
+
+	result, err := FromOutputResult(out, test, "", nil)
+	if err != nil {
+		return nil, err
+	}
+
 	out, err = cleanup.Output()
 	if err != nil {
 		fmt.Print(string(out))
-		return err
+		return nil, err
 	}
 
-	return nil
+	return result, nil
 }

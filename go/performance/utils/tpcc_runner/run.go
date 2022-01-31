@@ -21,7 +21,6 @@ import (
 
 // TODO: Revalidate the config here
 func Run() error {
-
 	tpccConfig := &TpccConfig{
 		NumThreads:     1,
 		ScaleFactor:    1,
@@ -34,15 +33,25 @@ func Run() error {
 	}
 
 	serverConfig := &sysbench_runner.ServerConfig{
-		Id:         "id",
-		Host:       "127.0.0.1",
-		Port:       3307,
-		Server:     "dolt",
-		ServerExec: "/Users/vinairachakonda/go/bin/dolt",
+		Id:            "id",
+		Host:          "127.0.0.1",
+		Port:          3307,
+		Server:        "dolt",
+		ServerExec:    "/Users/vinairachakonda/go/bin/dolt",
+		ResultsFormat: sysbench_runner.CsvFormat,
 	}
 
 	ctx := context.Background()
 
-	err := BenchmarkDolt(ctx, tpccConfig, serverConfig)
-	return err
+	results, err := BenchmarkDolt(ctx, tpccConfig, serverConfig)
+	if err != nil {
+		return err
+	}
+
+	err = sysbench_runner.WriteResults(serverConfig, results)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
