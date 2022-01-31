@@ -157,6 +157,7 @@ func TestAddColumnToTable(t *testing.T) {
 			index := sch.Indexes().GetByName(dtestutils.IndexName)
 			assert.NotNil(t, index)
 			tt.expectedSchema.Indexes().AddIndex(index)
+			tt.expectedSchema.Checks().AddCheck("test-check", "age < 123", true)
 			require.Equal(t, tt.expectedSchema, sch)
 
 			rowData, err := updatedTable.GetNomsRowData(ctx)
