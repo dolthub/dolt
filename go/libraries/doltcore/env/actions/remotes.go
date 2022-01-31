@@ -69,7 +69,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		return err
 	}
 
-	err = destDB.PushChunks(ctx, tempTableDir, srcDB, rf, progChan, pullerEventCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, pullerEventCh)
 
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 		return err
 	}
 
-	err = destDB.PushChunks(ctx, tempTableDir, srcDB, rf, progChan, pullerEventCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, pullerEventCh)
 
 	if err != nil {
 		return err
@@ -258,7 +258,7 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef, progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef.TargetHash(), progChan, pullerEventCh)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
@@ -269,7 +269,7 @@ func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.Do
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, stRef, progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, stRef.TargetHash(), progChan, pullerEventCh)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -470,7 +470,7 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		}
 	}()
 
-	err = destDb.PushChunksForRefHash(ctx, tempTableDir, srcDb, srcRoot, pullerEventCh)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, srcRoot, progChan, pullerEventCh)
 	if err != nil {
 		return err
 	}
