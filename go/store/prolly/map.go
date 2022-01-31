@@ -188,7 +188,6 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 	return &prollyRangeIter{
 		curr: start,
 		stop: stop,
-		rng:  rng,
 	}, nil
 }
 
@@ -269,7 +268,6 @@ type prollyRangeIter struct {
 	curr *nodeCursor
 	// non-inclusive range stop
 	stop *nodeCursor
-	rng  Range
 }
 
 var _ rangeIter = &prollyRangeIter{}
