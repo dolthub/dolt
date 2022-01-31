@@ -49,7 +49,7 @@ func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
 
 // Delete deletes the pair keyed by |key| from the MutableMap.
 func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
-	mut.overlay.Put(key, nil)
+	mut.overlay.Delete(key)
 	return nil
 }
 

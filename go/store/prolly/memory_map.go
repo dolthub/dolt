@@ -56,6 +56,11 @@ func (mm memoryMap) Put(key, val val.Tuple) {
 	mm.list.Put(key, val)
 }
 
+// Delete deletes the Tuple pair keyed by |key|.
+func (mm memoryMap) Delete(key val.Tuple) {
+	mm.list.Put(key, nil)
+}
+
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the memoryMap, a nil Tuple pair is passed to |cb|.
 func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
@@ -94,7 +99,7 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 		iter = mm.list.GetIterAtWithFn(rng.Start.Key, vc)
 	}
 
-	// enforce range lo
+	// enforce range start
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
@@ -159,8 +164,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 
 		k, _ := it.current()
 		if k == nil || !it.rng.insideStop(k) {
-			// range exhausted
-			it.iter = nil
+			it.iter = nil // range exhausted
 		}
 
 		return

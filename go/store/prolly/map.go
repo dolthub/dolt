@@ -265,7 +265,9 @@ func (m Map) compareKeys(left, right val.Tuple) int {
 }
 
 type prollyRangeIter struct {
+	// current tuple location
 	curr *nodeCursor
+	// non-inclusive range stop
 	stop *nodeCursor
 	rng  Range
 }

@@ -48,12 +48,12 @@ func TestMemMap(t *testing.T) {
 				testIterRange(t, memMap, tuples)
 			})
 
-			memIndex, tuples2 := makeMemSecondaryIndex(t, s)
+			memIndex, idxTuples := makeMemSecondaryIndex(t, s)
 			t.Run("iter prefix range", func(t *testing.T) {
-				testIterPrefixRange(t, memIndex, tuples2)
+				testIterPrefixRange(t, memIndex, idxTuples)
 			})
 
-			memMap2, tuples2, deletes := makeMemMapWithDeletes(t, s)
+			memMap2, tuples2, deletes := deleteFromMemoryMap(memMap.(memoryMap), tuples)
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMemoryMapGetAndHas(t, memMap2, tuples2, deletes)
 			})
@@ -64,10 +64,10 @@ func TestMemMap(t *testing.T) {
 				testIterRange(t, memMap2, tuples2)
 			})
 
-			//memIndex, tuples2, _ = makeMemSecondaryIndexWithDeletes(t, s)
-			//t.Run("iter prefix range", func(t *testing.T) {
-			//	testIterPrefixRange(t, memIndex, tuples2)
-			//})
+			memIndex, idxTuples2, _ := deleteFromMemoryMap(memIndex.(memoryMap), idxTuples)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, memIndex, idxTuples2)
+			})
 		})
 	}
 }
@@ -108,27 +108,25 @@ func makeMemSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple)
 	return mm, tuples
 }
 
-func makeMemMapWithDeletes(t *testing.T, count int) (mut memoryMap, tuples, deletes [][2]val.Tuple) {
-	om, tuples := makeMemMap(t, count)
-	mut = om.(memoryMap)
-
+func deleteFromMemoryMap(mm memoryMap, tt [][2]val.Tuple) (memoryMap, [][2]val.Tuple, [][2]val.Tuple) {
+	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
-		tuples[i], tuples[j] = tuples[j], tuples[i]
+		tt[i], tt[j] = tt[j], tt[i]
 	})
 
 	// delete 1/4 of tuples
-	deletes = tuples[:count/4]
+	deletes := tt[:count/4]
 
 	// re-sort the remaining tuples
-	tuples = tuples[count/4:]
-	desc := keyDescFromMap(om)
-	sortTuplePairs(tuples, desc)
+	remaining := tt[count/4:]
+	desc := keyDescFromMap(mm)
+	sortTuplePairs(remaining, desc)
 
 	for _, kv := range deletes {
-		mut.Put(kv[0], nil)
+		mm.Put(kv[0], nil)
 	}
 
-	return mut, tuples, deletes
+	return mm, remaining, deletes
 }
 
 func testMemoryMapGetAndHas(t *testing.T, mem memoryMap, tuples, deletes [][2]val.Tuple) {

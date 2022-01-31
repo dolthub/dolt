@@ -122,8 +122,7 @@ func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err erro
 		}
 
 		if key != nil && value == nil {
-			// pending delete
-			continue
+			continue // pending delete
 		}
 
 		return key, value, nil
