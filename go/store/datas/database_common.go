@@ -1147,12 +1147,12 @@ func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc fun
 	return db.GetDataset(ctx, ds.ID())
 }
 
-func (db *database) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
+func (db *database) SetCommitHooks(ctx context.Context, postHooks []CommitHook) Database {
 	db.postCommitHooks = postHooks
 	return db
 }
 
-func (db *database) SetCommitHookLogger(ctx context.Context, wr io.Writer) *database {
+func (db *database) SetCommitHookLogger(ctx context.Context, wr io.Writer) Database {
 	for _, h := range db.postCommitHooks {
 		h.SetLogger(ctx, wr)
 	}

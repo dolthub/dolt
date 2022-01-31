@@ -172,11 +172,11 @@ type Database interface {
 
 	// SetCommitHooks attaches a list of CommitHook that can be executed
 	// after CommitWithWorkingSet
-	SetCommitHooks(context.Context, []CommitHook) *database
+	SetCommitHooks(context.Context, []CommitHook) Database
 
 	// WithCommitHookLogger passes an error handler from the user-facing session
 	// to a commit hook executed at the datas layer
-	SetCommitHookLogger(context.Context, io.Writer) *database
+	SetCommitHookLogger(context.Context, io.Writer) Database
 
 	// ExecuteCommitHooks calls each database hook with the given Dataset
 	ExecuteCommitHooks(context.Context, Dataset)
