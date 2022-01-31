@@ -377,7 +377,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 		return err
 	}
 
-	currentDatasets, err := db.Datasets(ctx)
+	currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
 
 	if err != nil {
 		return err
@@ -671,7 +671,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 			return err
 		}
 
-		currentDatasets, err := db.Datasets(ctx)
+		currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
 
 		if err != nil {
 			return err
@@ -961,7 +961,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		return err
 	}
 
-	currentDatasets, err := db.Datasets(ctx)
+	currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
 
 	if err != nil {
 		return err
@@ -994,7 +994,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 			return err
 		}
 
-		currentDatasets, err = db.Datasets(ctx)
+		currentDatasets, err = db.DatasetsInRoot(ctx, currentRootHash)
 
 		if err != nil {
 			return err
