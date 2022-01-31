@@ -100,12 +100,12 @@ func (t *Test) Prepare() []string {
 	return withCommand(t.Params, "prepare")
 }
 
-// Prepare returns a test's args for sysbench's run step
+// Run returns a test's args for sysbench's run step
 func (t *Test) Run() []string {
 	return withCommand(t.Params, "run")
 }
 
-// Prepare returns a test's args for sysbench's cleanup step
+// Cleanup returns a test's args for sysbench's cleanup step
 func (t *Test) Cleanup() []string {
 	return withCommand(t.Params, "cleanup")
 }
