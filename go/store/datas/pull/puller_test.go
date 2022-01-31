@@ -28,8 +28,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
 )
@@ -528,6 +528,6 @@ func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 }
 
 func mustTuple(val types.Tuple, err error) types.Tuple {
-        d.PanicIfError(err)
-        return val
+	d.PanicIfError(err)
+	return val
 }

@@ -228,13 +228,13 @@ func (r Ref) HumanReadableString() string {
 // types package itself, and so the callback itself does not take |types.Ref|
 // values.
 func WalkRefsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h hash.Hash, height uint64) error) error, error) {
-        nbf, err := GetFormatForVersionString(cs.Version())
-        if err != nil {
-                return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
-        }
-        return func(c chunks.Chunk, cb func(h hash.Hash, height uint64) error) error {
-                return WalkRefs(c, nbf, func(r Ref) error {
-                        return cb(r.TargetHash(), r.Height())
-                })
-        }, nil
+	nbf, err := GetFormatForVersionString(cs.Version())
+	if err != nil {
+		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
+	}
+	return func(c chunks.Chunk, cb func(h hash.Hash, height uint64) error) error {
+		return WalkRefs(c, nbf, func(r Ref) error {
+			return cb(r.TargetHash(), r.Height())
+		})
+	}, nil
 }

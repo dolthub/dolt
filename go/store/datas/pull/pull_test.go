@@ -35,8 +35,8 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -576,36 +576,36 @@ func TestClone(t *testing.T) {
 }
 
 func mustList(l types.List, err error) types.List {
-        d.PanicIfError(err)
-        return l
+	d.PanicIfError(err)
+	return l
 }
 
 func mustValue(val types.Value, err error) types.Value {
-        d.PanicIfError(err)
-        return val
+	d.PanicIfError(err)
+	return val
 }
 
 func mustGetValue(v types.Value, found bool, err error) types.Value {
-        d.PanicIfError(err)
-        d.PanicIfFalse(found)
-        return v
+	d.PanicIfError(err)
+	d.PanicIfFalse(found)
+	return v
 }
 
 func mustRef(ref types.Ref, err error) types.Ref {
-        d.PanicIfError(err)
-        return ref
+	d.PanicIfError(err)
+	return ref
 }
 
 func mustHeadRef(ds datas.Dataset) types.Ref {
-        hr, ok, err := ds.MaybeHeadRef()
+	hr, ok, err := ds.MaybeHeadRef()
 
-        if err != nil {
-                panic("error getting head")
-        }
+	if err != nil {
+		panic("error getting head")
+	}
 
-        if !ok {
-                panic("no head")
-        }
+	if !ok {
+		panic("no head")
+	}
 
-        return hr
+	return hr
 }
