@@ -44,9 +44,9 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	pkCols := sch.GetPKCols()
 	cols := pkCols.GetColumns()
 	for _, c := range cols {
-		if c.TypeInfo == typeinfo.PointType ||
-			c.TypeInfo == typeinfo.LinestringType ||
-			c.TypeInfo == typeinfo.PolygonType {
+		if c.TypeInfo.Equals(typeinfo.PointType) ||
+			c.TypeInfo.Equals(typeinfo.LinestringType) ||
+			c.TypeInfo.Equals(typeinfo.PolygonType) {
 			return nil, errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
 		}
 	}

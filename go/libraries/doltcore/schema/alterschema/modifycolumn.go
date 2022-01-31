@@ -55,6 +55,11 @@ func ModifyColumn(
 	// Modify statements won't include key info, so fill it in from the old column
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
+		if newCol.TypeInfo.Equals(typeinfo.PointType) ||
+			newCol.TypeInfo.Equals(typeinfo.LinestringType) ||
+			newCol.TypeInfo.Equals(typeinfo.PolygonType) {
+			return nil, fmt.Errorf("can't use Spatial Types as Primary Key for table")
+		}
 		foundNotNullConstraint := false
 		for _, constraint := range newCol.Constraints {
 			if _, ok := constraint.(schema.NotNullConstraint); ok {
