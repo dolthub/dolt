@@ -176,9 +176,13 @@ func (it *ListIter) Retreat() {
 	return
 }
 
-func (l *List) IterAt(key []byte) (it *ListIter) {
+func (l *List) GetIterAt(key []byte) (it *ListIter) {
+	return l.GetIterAtWithFn(key, l.cmp)
+}
+
+func (l *List) GetIterAtWithFn(key []byte, cmp ValueCmp) (it *ListIter) {
 	it = &ListIter{
-		curr: l.seek(key),
+		curr: l.seekWithFn(key, cmp),
 		list: l,
 	}
 
@@ -206,11 +210,15 @@ func (l *List) IterAtEnd() *ListIter {
 }
 
 // seek returns the skipNode with the smallest key >= |key|.
-func (l *List) seek(key []byte) (node skipNode) {
+func (l *List) seek(key []byte) skipNode {
+	return l.seekWithFn(key, l.cmp)
+}
+
+func (l *List) seekWithFn(key []byte, cmp ValueCmp) (node skipNode) {
 	ptr := l.head
 	for h := int64(highest); h >= 0; h-- {
 		node = l.getNode(ptr[h])
-		for l.compareKeys(key, node.key) > 0 {
+		for l.compareKeysWithFn(key, node.key, cmp) > 0 {
 			ptr = node.next
 			node = l.getNode(ptr[h])
 		}
@@ -240,11 +248,14 @@ func (l *List) compare(left, right skipNode) int {
 }
 
 func (l *List) compareKeys(left, right []byte) int {
+	return l.compareKeysWithFn(left, right, l.cmp)
+}
+
+func (l *List) compareKeysWithFn(left, right []byte, cmp ValueCmp) int {
 	if right == nil {
-		// |right| is sentinel key
-		return -1
+		return -1 // |right| is sentinel key
 	}
-	return l.cmp(left, right)
+	return cmp(left, right)
 }
 
 func (l *List) makeNode(key, val []byte) (n skipNode) {

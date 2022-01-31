@@ -454,7 +454,6 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		Start:   start,
 		Stop:    stop,
 		KeyDesc: tb.Desc,
-		Reverse: false,
 	}, nil
 }
 
