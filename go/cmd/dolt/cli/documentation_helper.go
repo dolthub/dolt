@@ -41,7 +41,6 @@ var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
-
 	// Accumulate the options and args in a string
 	options := ""
 	if len(cmdDoc.ArgParser.Supported) > 0 || len(cmdDoc.ArgParser.ArgListHelp) > 0 {
@@ -187,8 +186,8 @@ var MarkdownFormat = docFormat{"`<", ">`", "`", "`"}
 // Shell help output format
 var CliFormat = docFormat{"<", ">", "<b>", "</b>"}
 
-// Special format for the synopsis which is rendered inside raw HTML in markdown
-var SynopsisMarkdownFormat = docFormat{"&lt;", "&gt;", "`", "`"}
+// Synopsis is an mdx format, but already inside a code block
+var SynopsisMarkdownFormat = docFormat{"<", ">", "`", "`"}
 
 func transformSynopsisToMarkdown(commandStr string, synopsis []string) string {
 	if len(synopsis) == 0 {
