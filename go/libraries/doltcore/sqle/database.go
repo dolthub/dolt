@@ -730,7 +730,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		if c.TypeInfo.Equals(typeinfo.PointType) ||
 			c.TypeInfo.Equals(typeinfo.LinestringType) ||
 			c.TypeInfo.Equals(typeinfo.PolygonType) {
-				return errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
+			return errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
 		}
 	}
 
