@@ -212,6 +212,9 @@ func parentFkConstraintViolations(
 				}
 				return false, nil
 			}()
+			if err != nil {
+				return nil, false, err
+			}
 			if shouldContinue {
 				continue
 			}

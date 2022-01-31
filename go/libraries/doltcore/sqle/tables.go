@@ -701,7 +701,7 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 
 	nbf := rows.Format()
 	switch nbf {
-	case types.Format_LD_1:
+	case types.Format_LD_1, types.Format_7_18:
 		return partitionsFromNomsRows(rows)
 
 	case types.Format_DOLT_1:

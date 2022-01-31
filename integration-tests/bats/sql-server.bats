@@ -773,7 +773,7 @@ SQL
         PRIMARY KEY (pk)
       )" ""
 
-     insert_query repo1 1 "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
+     unselected_server_query 1 "INSERT INTO repo2.one_pk VALUES (0), (1), (2)"
      unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n2"
 
      unselected_update_query 1 "UPDATE repo2.one_pk SET pk=3 WHERE pk=2"
@@ -792,7 +792,7 @@ SQL
         PRIMARY KEY (pk)
       )" ""
 
-     insert_query repo1 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
+     unselected_server_query 1 "INSERT INTO testdb.one_pk VALUES (0), (1), (2)"
      unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1\n2"
 
      unselected_update_query 1 "UPDATE testdb.one_pk SET pk=3 WHERE pk=2"
@@ -802,8 +802,35 @@ SQL
      unselected_server_query 1 "SELECT * FROM testdb.one_pk" "pk\n0\n1"
 
      # one last query on insert db.
-     insert_query repo1 1 "INSERT INTO repo2.one_pk VALUES (4)"
+     unselected_server_query 1 "INSERT INTO repo2.one_pk VALUES (4)"
      unselected_server_query 1 "SELECT * FROM repo2.one_pk" "pk\n0\n1\n4"
+
+     # verify changes outside the session
+     cd repo2
+     run dolt sql -q "show tables"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "one_pk" ]] || false
+
+     run dolt sql -q "select * from one_pk"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "0" ]] || false
+     [[ "$output" =~ "1" ]] || false
+     [[ "$output" =~ "4" ]] || false
+}
+
+@test "sql-server: create database without USE" {
+     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+     start_multi_db_server repo1
+
+     unselected_server_query 1 "CREATE DATABASE newdb" ""
+     unselected_server_query 1 "CREATE TABLE newdb.test (a int primary key)" ""
+
+     # verify changes outside the session
+     cd newdb
+     run dolt sql -q "show tables"
+     [ "$status" -eq 0 ]
+     [[ "$output" =~ "test" ]] || false
 }
 
 @test "sql-server: JSON queries" {

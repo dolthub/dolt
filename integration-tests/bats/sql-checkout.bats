@@ -57,7 +57,7 @@ teardown() {
 }
 
 @test "sql-checkout: DOLT_CHECKOUT updates the head ref session var" {
-    run dolt sql --disable-batch <<SQL
+    run dolt sql  <<SQL
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
 select @@dolt_repo_$$_head_ref;
 SQL

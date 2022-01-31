@@ -11,7 +11,7 @@ teardown() {
 }
 
 @test "drop-create: same schema and data" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -23,7 +23,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 SQL
@@ -38,7 +38,7 @@ SQL
 }
 
 @test "drop-create: same schema and data, commit after drop" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -51,7 +51,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 SQL
@@ -75,7 +75,7 @@ SQL
 }
 
 @test "drop-create: added column" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -87,7 +87,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
 insert into test(a,b) values (1,1), (2,2);
 SQL
@@ -109,7 +109,7 @@ SQL
 }
 
 @test "drop-create: added column with data modifications" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -121,7 +121,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
 insert into test(a,b,c) values (1,2,1), (2,3,2), (3,3,3);
 SQL
@@ -149,7 +149,7 @@ SQL
 
 
 @test "drop-create: dropped column" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
 insert into test values (1,2,3), (4,5,6);
 select dolt_commit("-am", "table with two rows");
@@ -161,7 +161,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test(a,b) values (1,2), (4,5);
 SQL
@@ -187,7 +187,7 @@ SQL
 }
 
 @test "drop-create: dropped column with data modifications" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
 insert into test values (1,2,3), (4,5,6);
 select dolt_commit("-am", "table with two rows");
@@ -199,7 +199,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test(a,b) values (1,7), (4,8), (9,10);
 SQL
@@ -226,7 +226,7 @@ SQL
 }
 
 @test "drop-create: added column, modified column" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -238,7 +238,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a bigint primary key, b tinyint null, c int null);
 insert into test(a,b) values (1,1), (2,2);
 SQL
@@ -264,7 +264,7 @@ SQL
 }
 
 @test "drop-create: constraint changes" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -276,7 +276,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a bigint primary key, b tinyint not null check (b > 0), c varchar(10));
 insert into test(a,b) values (1,1), (2,2);
 SQL
@@ -306,7 +306,7 @@ SQL
 }
 
 @test "drop-create: default changes" {
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a int primary key, b int null default 10);
 insert into test values (1,1), (2,2);
 select dolt_commit("-am", "table with two rows");
@@ -318,7 +318,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "test" ]] || false
 
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 create table test(a bigint primary key, b tinyint not null default 50, c varchar(10));
 insert into test(a,b) values (1,1), (2,2);
 SQL

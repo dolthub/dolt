@@ -19,25 +19,32 @@ import (
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/vitess/go/sqltypes"
-	"github.com/google/uuid"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type uuidType struct {
-	sqlCharType sql.StringType
+// This is a dolt implementation of the MySQL type Point, thus most of the functionality
+// within is directly reliant on the go-mysql-server implementation.
+type pointType struct {
+	sqlPointType sql.PointType
 }
 
-var _ TypeInfo = (*uuidType)(nil)
+var _ TypeInfo = (*pointType)(nil)
 
-var UuidType = &uuidType{sql.MustCreateString(sqltypes.Char, 36, sql.Collation_ascii_bin)}
+var PointType = &pointType{sql.PointType{}}
+
+// ConvertTypesPointToSQLPoint basically makes a deep copy of sql.Point
+func ConvertTypesPointToSQLPoint(p types.Point) sql.Point {
+	return sql.Point{SRID: p.SRID, X: p.X, Y: p.Y}
+}
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *uuidType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	if val, ok := v.(types.UUID); ok {
-		return val.String(), nil
+func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Expect a types.Point, return a sql.Point
+	if val, ok := v.(types.Point); ok {
+		return ConvertTypesPointToSQLPoint(val), nil
 	}
+	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
@@ -45,71 +52,82 @@ func (ti *uuidType) ConvertNomsValueToValue(v types.Value) (interface{}, error) 
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *uuidType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.UUIDKind:
-		val := reader.ReadUUID()
-		return val.String(), nil
-	case types.NullKind:
-		return nil, nil
-	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
-}
-
-// ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *uuidType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
-	switch val := v.(type) {
-	case nil:
-		return types.NullValue, nil
-	case string:
-		valUuid, err := uuid.Parse(val)
+	case types.PointKind:
+		p, err := reader.ReadPoint()
 		if err != nil {
 			return nil, err
 		}
-		return types.UUID(valUuid), err
-	case uuid.UUID:
-		return types.UUID(val), nil
+		return ti.ConvertNomsValueToValue(p)
+	case types.NullKind:
+		return nil, nil
 	default:
-		return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
+		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
 }
 
+// TODO: define constants for WKB?
+
+func ConvertSQLPointToTypesPoint(p sql.Point) types.Point {
+	return types.Point{SRID: p.SRID, X: p.X, Y: p.Y}
+}
+
+// ConvertValueToNomsValue implements TypeInfo interface.
+func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+	// Check for null
+	if v == nil {
+		return types.NullValue, nil
+	}
+
+	// Convert to sql.PointType
+	point, err := ti.sqlPointType.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+
+	return ConvertSQLPointToTypesPoint(point.(sql.Point)), nil
+}
+
 // Equals implements TypeInfo interface.
-func (ti *uuidType) Equals(other TypeInfo) bool {
+func (ti *pointType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*uuidType)
+	_, ok := other.(*pointType)
 	return ok
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *uuidType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.UUID); ok {
-		res := val.String()
-		return &res, nil
+func (ti *pointType) FormatValue(v types.Value) (*string, error) {
+	if val, ok := v.(types.Point); ok {
+		buf := make([]byte, types.EWKBHeaderSize+types.PointDataSize)
+		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
+		types.WriteEWKBPointData(val, buf[types.EWKBHeaderSize:])
+		resStr := string(buf)
+		return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a string`, ti.String(), v.Kind())
+
+	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *uuidType) GetTypeIdentifier() Identifier {
-	return UuidTypeIdentifier
+func (ti *pointType) GetTypeIdentifier() Identifier {
+	return PointTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *uuidType) GetTypeParams() map[string]string {
-	return nil
+func (ti *pointType) GetTypeParams() map[string]string {
+	return map[string]string{}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *uuidType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.UUID); ok {
+func (ti *pointType) IsValid(v types.Value) bool {
+	if _, ok := v.(types.Point); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -119,30 +137,32 @@ func (ti *uuidType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *uuidType) NomsKind() types.NomsKind {
-	return types.UUIDKind
+func (ti *pointType) NomsKind() types.NomsKind {
+	return types.PointKind
 }
 
 // Promote implements TypeInfo interface.
-func (ti *uuidType) Promote() TypeInfo {
-	return ti
+func (ti *pointType) Promote() TypeInfo {
+	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}
 }
 
 // String implements TypeInfo interface.
-func (ti *uuidType) String() string {
-	return "Uuid"
+func (ti *pointType) String() string {
+	return "Point"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *uuidType) ToSqlType() sql.Type {
-	return ti.sqlCharType
+func (ti *pointType) ToSqlType() sql.Type {
+	return ti.sqlPointType
 }
 
-// uuidTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// pointTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
+			return types.Uint(0), nil
+		}, true, nil
 	case *blobStringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *boolType:
@@ -164,7 +184,7 @@ func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc 
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return identityTypeConverter, false, nil
 	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
@@ -174,7 +194,7 @@ func uuidTypeConverter(ctx context.Context, src *uuidType, destTi TypeInfo) (tc 
 	case *uintType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *uuidType:
-		return wrapIsValid(dest.IsValid, src, dest)
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varBinaryType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *varStringType:

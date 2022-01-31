@@ -179,6 +179,7 @@ func Serve(
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
+	defer listener.Close()
 
 	mySQLServer, startError = server.NewServer(
 		serverConf,
@@ -235,9 +236,15 @@ func portInUse(hostPort string) bool {
 
 func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
-		client := sql.Client{Address: conn.RemoteAddr().String(), User: conn.User, Capabilities: conn.Capabilities}
-		mysqlSess := sql.NewBaseSessionWithClientServer(host, client, conn.ConnectionID)
+		mysqlSess, err := server.DefaultSessionBuilder(ctx, conn, host)
+		if err != nil {
+			return nil, err
+		}
+		mysqlBaseSess, ok := mysqlSess.(*sql.BaseSession)
+		if !ok {
+			return nil, fmt.Errorf("unknown GMS base session type")
+		}
 
-		return se.NewDoltSession(ctx, mysqlSess)
+		return se.NewDoltSession(ctx, mysqlBaseSess)
 	}
 }

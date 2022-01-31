@@ -99,10 +99,10 @@ teardown() {
     [[ "$output" =~ "9" ]] || false
     run dolt sql -q "insert into test (c1,c3,c5) values (50,55,60)"
     [ "$status" -eq 1 ]
-    [ "$output" = "Field 'pk' doesn't have a default value" ]
+    [[ "$output" =~ "Field 'pk' doesn't have a default value" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5,c6) values (10,1,1,1,1,1,1)"
     [ "$status" -eq 1 ]
-    [ "$output" = "invalid column name c6" ]
+    [[ "$output" =~ "invalid column name c6" ]] || false
     run dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,6,6,6,6,6)"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "duplicate primary key" ]] || false
@@ -111,7 +111,7 @@ teardown() {
 @test "1pk5col-ints: dolt sql insert same column twice" {
     run dolt sql -q "insert into test (pk,c1,c1) values (3,1,2)"
     [ "$status" -eq 1 ]
-    [ "$output" = "duplicate column name c1" ]
+    [[ "$output" =~ "duplicate column name c1" ]] || false
 }
 
 @test "1pk5col-ints: dolt sql insert no columns specified" {
@@ -122,7 +122,7 @@ teardown() {
     [[ "$output" =~ "0" ]] || false
     run dolt sql -q "insert into test values (4,1,2)"
     [ "$status" -eq 1 ]
-    [ "$output" = "number of values does not match number of columns provided" ]
+    [[ "$output" =~ "number of values does not match number of columns provided" ]] || false
 }
 
 @test "1pk5col-ints: dolt sql with insert ignore" {
@@ -184,7 +184,7 @@ teardown() {
     [ "${#lines[@]}" -eq 5 ]
     run dolt sql -q "select c10 from test where pk=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
+    [[ "$output" =~ "column \"c10\" could not be found in any table in scope" ]] || false
     run dolt sql -q "select * from test where c2=147"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 4 ]
@@ -277,10 +277,10 @@ teardown() {
     [[ ! "$output" =~ "50" ]] || false
     run dolt sql -q "update test set c12=11 where pk=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "column \"c12\" could not be found in any table in scope" ]
+    [[ "$output" =~ "column \"c12\" could not be found in any table in scope" ]] || false
     run dolt sql -q "update test set c1='foo' where pk=0"
     [ "$status" -eq 1 ]
-    [ "$output" = "error: 'foo' is not a valid value for 'BIGINT'" ]
+    [[ "$output" =~ "error: 'foo' is not a valid value for 'BIGINT'" ]] || false
     run dolt sql -q "update test set c1=100,c2=100,c3=100,c4=100,c5=100 where pk>0"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 3 rows affected" ]] || false
@@ -310,7 +310,7 @@ teardown() {
     dolt sql -q "insert into test (pk,c1,c2,c3,c4,c5) values (0,1,2,3,4,5),(1,11,12,13,14,15),(2,21,22,23,24,25)"
     run dolt sql -q "delete from test where c10=1"
     [ "$status" -eq 1 ]
-    [ "$output" = "column \"c10\" could not be found in any table in scope" ]
+    [[ "$output" =~ "column \"c10\" could not be found in any table in scope" ]] || false
     run dolt sql -q "delete from test where c1='foo'"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK, 0 rows affected" ]] || false    
@@ -378,7 +378,7 @@ teardown() {
     dolt commit -m "added test row"
     run dolt branch -d test-branch
     [ "$status" -ne 0 ]
-    [ "$output" = "error: Cannot delete checked out branch 'test-branch'" ]
+    [[ "$output" =~ "error: Cannot delete checked out branch 'test-branch'" ]] || false
     dolt checkout main
     run dolt branch -d test-branch
     [ "$status" -ne 0 ]

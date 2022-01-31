@@ -45,7 +45,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
 
-    run dolt sql < doltdump.sql
+    run dolt sql -b < doltdump.sql
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows inserted: 6 Rows updated: 0 Rows deleted: 0" ]] || false
 }

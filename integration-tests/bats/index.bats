@@ -2297,7 +2297,7 @@ SQL
     dolt checkout main
     dolt merge other
     dolt conflicts resolve onepk 4
-    dolt sql --disable-batch <<SQL
+    dolt sql  <<SQL
 set autocommit = off;
 UPDATE onepk SET v1 = -11, v2 = 11 WHERE pk1 = 1;
 UPDATE onepk SET v1 = -22, v2 = 22 WHERE pk1 = 2;

@@ -478,7 +478,7 @@ SQL
     dolt sql -q "alter table t2 drop primary key"
     run dolt sql -q "ALTER TABLE t2 ADD PRIMARY KEY (val2, val1)"
     [ "$status" -eq 1 ]
-    [[ "$output" = "duplicate primary key given: [2,2]" ]] || false
+    [[ "$output" =~ "duplicate primary key given: [2,2]" ]] || false
 }
 
 @test "primary-key-changes: add primary key on column that doesn't exist errors appropriately" {
@@ -486,7 +486,7 @@ SQL
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (pk1)"
 
     [ "$status" -eq 1 ]
-    [[ "$output" = "error: key column 'pk1' doesn't exist in table" ]] || false
+    [[ "$output" =~ "error: key column 'pk1' doesn't exist in table" ]] || false
 }
 
 @test "primary-key-changes: same primary key set in different order is detected and blocked on merge" {
@@ -555,7 +555,7 @@ SQL
 
     run dolt sql -q "ALTER TABLE t ADD PRIMARY KEY (val);"
     [ "$status" -eq 1 ]
-    [[ "$output" = "duplicate primary key given: [1]" ]] || false
+    [[ "$output" =~ "duplicate primary key given: [1]" ]] || false
 }
 
 @test "primary-key-changes: can drop pk with supporting backup index" {
