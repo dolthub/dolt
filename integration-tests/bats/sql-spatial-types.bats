@@ -21,3 +21,42 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
 }
+
+@test "sql-spatial-types: prevent point as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create table point_tbl (p point primary key)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
+
+@test "sql-spatial-types: prevent linestring as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create table line_tbl (l linestring primary key)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
+
+@test "sql-spatial-types: prevent polygon as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create table poly_tbl (p polygon primary key)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
+
+@test "sql-spatial-types: prevent altering table to use point type as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table point_tbl (p int primary key)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "alter table point_tbl modify column p point primary key"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
+
+@test "sql-spatial-types: prevent altering table to use linestring type as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table line_tbl (l int primary key)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "alter table line_tbl modify column l linestring primary key"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
+
+@test "sql-spatial-types: prevent altering table to use polygon type as primary key" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table poly_tbl (p int primary key)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "alter table poly_tbl modify column p polygon primary key"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
+}
