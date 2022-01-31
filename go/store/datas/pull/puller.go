@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
@@ -61,7 +60,7 @@ type CmpChnkAndRefs struct {
 
 // Puller is used to sync data between to Databases
 type Puller struct {
-	fmt *types.NomsBinFormat
+	wrf WalkRefs
 
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
@@ -120,7 +119,7 @@ func NewTFPullerEvent(et PullerEventType, details *TableFileEventDetails) Puller
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
 	// Sanity Check
 	exists, err := srcCS.Has(ctx, rootChunkHash)
 
@@ -157,11 +156,6 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sink
 		return nil, err
 	}
 
-	nbf, err := types.GetFormatForVersionString(srcCS.Version())
-	if err != nil {
-		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", srcCS.Version())
-	}
-
 	var pushLogger *log.Logger
 	if dbg, ok := os.LookupEnv("PUSH_LOG"); ok && strings.ToLower(dbg) == "true" {
 		logFilePath := filepath.Join(tempDir, "push.log")
@@ -173,7 +167,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sink
 	}
 
 	p := &Puller{
-		fmt:           nbf,
+		wrf:           walkRefs,
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		rootChunkHash: rootChunkHash,
@@ -408,8 +402,8 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 				}
 
 				refs := make(map[hash.Hash]int)
-				if err := types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
-					refs[r.TargetHash()] = int(r.Height())
+				if err := p.wrf(chnk, func(h hash.Hash, height uint64) error {
+					refs[h] = int(height)
 					return nil
 				}); ae.SetIfError(err) {
 					return

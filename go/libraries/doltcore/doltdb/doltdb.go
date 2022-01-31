@@ -1244,9 +1244,15 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 // given, pulling all chunks reachable from the given targetHash. Pull progress
 // is communicated over the provided channel.
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
-	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), targetHash, pullerEventCh)
+	srcCS := datas.ChunkStoreFromDatabase(srcDB.db)
+	destCS := datas.ChunkStoreFromDatabase(ddb.db)
+	wrf, err := types.WalkRefsForChunkStore(srcCS)
+	if err != nil {
+		return err
+	}
 
+	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, wrf, targetHash, pullerEventCh)
 		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {
@@ -1255,7 +1261,7 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 		return puller.Pull(ctx)
 	} else {
-		return pull.Pull(ctx, datas.ChunkStoreFromDatabase(srcDB.db), datas.ChunkStoreFromDatabase(ddb.db), targetHash, progChan)
+		return pull.Pull(ctx, srcCS, destCS, wrf, targetHash, progChan)
 	}
 }
 

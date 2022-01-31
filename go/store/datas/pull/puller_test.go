@@ -322,7 +322,9 @@ func TestPuller(t *testing.T) {
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), rootRef.TargetHash(), eventCh)
+			wrf, err := types.WalkRefsForChunkStore(datas.ChunkStoreFromDatabase(db))
+			require.NoError(t, err)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), wrf, rootRef.TargetHash(), eventCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)

@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type PushOnWriteHook struct {
@@ -79,8 +80,12 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
+	wrf, err := types.WalkRefsForChunkStore(srcCS)
+	if err != nil {
+		return err
+	}
 
-	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, stRef.TargetHash(), nil)
+	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, wrf, stRef.TargetHash(), nil)
 	if err == pull.ErrDBUpToDate {
 		return nil
 	} else if err != nil {
