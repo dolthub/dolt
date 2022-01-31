@@ -90,7 +90,8 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	if rng.Start.Unbound {
 		iter = mm.list.IterAtStart()
 	} else {
-		iter = mm.list.IterAt(rng.Start.Key)
+		vc := valueCmpForRange(rng)
+		iter = mm.list.GetIterAtWithFn(rng.Start.Key, vc)
 	}
 
 	// enforce range lo
@@ -111,6 +112,13 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	return &memRangeIter{
 		iter: iter,
 		rng:  rng,
+	}
+}
+
+func valueCmpForRange(rng Range) skip.ValueCmp {
+	return func(left, right []byte) int {
+		l, r := val.Tuple(left), val.Tuple(right)
+		return rng.KeyDesc.Compare(l, r)
 	}
 }
 

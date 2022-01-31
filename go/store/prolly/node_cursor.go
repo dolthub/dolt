@@ -60,7 +60,7 @@ func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
-func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	cur.skipToNodeEnd()
 
@@ -75,6 +75,16 @@ func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCurso
 		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 		cur.skipToNodeEnd()
 	}
+
+	// advance |cur| past the end
+	ok, err := cur.advance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		panic("expected |ok| to be  false")
+	}
+
 	return
 }
 

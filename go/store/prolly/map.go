@@ -81,14 +81,17 @@ func (m Map) Count() uint64 {
 	return m.root.cumulativeCount() / 2
 }
 
+// HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
 	return hash.Of(m.root)
 }
 
+// Format returns the NomsBinFormat of this Map.
 func (m Map) Format() *types.NomsBinFormat {
 	return m.ns.Format()
 }
 
+// Descriptors returns the TupleDesc's from this Map.
 func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
@@ -151,46 +154,53 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	return NewMapRangeIter(nil, iter, rng), nil
 }
 
-func (m Map) iterFromRange(ctx context.Context, rng Range) (iter *prollyRangeIter, err error) {
-	first, err := m.cursorForRangeStart(ctx, rng)
+func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {
+	var (
+		err   error
+		start *nodeCursor
+		stop  *nodeCursor
+	)
+
+	startSearch := m.rangeStartSearchFn(rng)
+	if rng.Start.Unbound {
+		start, err = newCursorAtStart(ctx, m.ns, m.root)
+	} else {
+		start, err = newCursorAtTuple(ctx, m.ns, m.root, rng.Start.Key, startSearch)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	stop, err := m.cursorForRangeStop(ctx, rng)
+	stopSearch := m.rangeStopSearchFn(rng)
+	if rng.Stop.Unbound {
+		stop, err = newCursorPastEnd(ctx, m.ns, m.root)
+	} else {
+		stop, err = newCursorAtTuple(ctx, m.ns, m.root, rng.Stop.Key, stopSearch)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	if first.compare(stop) >= 0 {
-		// empty range
-		first = nil
+	if start.compare(stop) >= 0 {
+		start = nil // empty range
 	}
 
 	return &prollyRangeIter{
-		curr: first,
+		curr: start,
 		stop: stop,
 		rng:  rng,
 	}, nil
 }
 
-func (m Map) cursorAtStart(ctx context.Context) (*nodeCursor, error) {
-	return newCursorAtStart(ctx, m.ns, m.root)
-}
-
-func (m Map) cursorAtEnd(ctx context.Context) (*nodeCursor, error) {
-	return newCursorAtEnd(ctx, m.ns, m.root)
-}
-
-func (m Map) cursorForRangeStart(ctx context.Context, rng Range) (first *nodeCursor, err error) {
-	if rng.Start.Unbound {
-		return m.cursorAtStart(ctx)
-	}
-
-	search := func(query nodeItem, nd Node) int {
+func (m Map) rangeStartSearchFn(rng Range) searchFn {
+	// todo(andy): inline sort.Search()
+	return func(query nodeItem, nd Node) int {
 		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
-			tup := val.Tuple(nd.getItem(i * stride))
-			cmp := rng.KeyDesc.Compare(val.Tuple(query), tup)
+			q := val.Tuple(query)
+			t := val.Tuple(nd.getItem(i * stride))
+
+			// compare using the range's tuple descriptor.
+			cmp := rng.KeyDesc.Compare(q, t)
 			if rng.Start.Inclusive {
 				return cmp <= 0
 			} else {
@@ -199,18 +209,17 @@ func (m Map) cursorForRangeStart(ctx context.Context, rng Range) (first *nodeCur
 		})
 		return i * stride
 	}
-	return newCursorAtTuple(ctx, m.ns, m.root, rng.Start.Key, search)
 }
 
-func (m Map) cursorForRangeStop(ctx context.Context, rng Range) (last *nodeCursor, err error) {
-	if rng.Stop.Unbound {
-		return m.cursorAtEnd(ctx)
-	}
-
-	search := func(query nodeItem, nd Node) int {
+func (m Map) rangeStopSearchFn(rng Range) searchFn {
+	// todo(andy): inline sort.Search()
+	return func(query nodeItem, nd Node) int {
 		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
-			tup := val.Tuple(nd.getItem(i * stride))
-			cmp := rng.KeyDesc.Compare(val.Tuple(query), tup)
+			q := val.Tuple(query)
+			t := val.Tuple(nd.getItem(i * stride))
+
+			// compare using the range's tuple descriptor.
+			cmp := rng.KeyDesc.Compare(q, t)
 			if rng.Stop.Inclusive {
 				return cmp < 0
 			} else {
@@ -219,11 +228,9 @@ func (m Map) cursorForRangeStop(ctx context.Context, rng Range) (last *nodeCurso
 		})
 		return i * stride
 	}
-	return newCursorAtTuple(ctx, m.ns, m.root, rng.Stop.Key, search)
 }
 
-// searchNode is a searchFn for Map.
-// It returns the smallest index where nd[i] >= query
+// searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount() / stride
@@ -244,6 +251,8 @@ func (m Map) searchNode(query nodeItem, nd Node) int {
 	// f(j) (= f(i)) == true  =>  answer is i.
 	return i * stride
 }
+
+var _ searchFn = Map{}.searchNode
 
 // compareItems is a compareFn.
 func (m Map) compareItems(left, right nodeItem) int {

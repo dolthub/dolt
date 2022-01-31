@@ -168,7 +168,7 @@ func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
-	iter := l.IterAt(key)
+	iter := l.GetIterAt(key)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
@@ -181,7 +181,7 @@ func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
 }
 
 func validateIterBackwardFrom(t *testing.T, l *List, key []byte) (count int) {
-	iter := l.IterAt(key)
+	iter := l.GetIterAt(key)
 	k, _ := iter.Current()
 	for k != nil {
 		count++
