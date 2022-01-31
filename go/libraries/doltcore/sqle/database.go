@@ -17,6 +17,7 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"io"
 	"strings"
 	"time"
@@ -720,6 +721,17 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	doltSch, err := sqlutil.ToDoltSchema(ctx, root, tableName, sch, headRoot)
 	if err != nil {
 		return err
+	}
+
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	pkCols := doltSch.GetPKCols()
+	cols := pkCols.GetColumns()
+	for _, c := range cols {
+		if c.TypeInfo == typeinfo.PointType ||
+			c.TypeInfo == typeinfo.LinestringType ||
+			c.TypeInfo == typeinfo.PolygonType {
+			return errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
+		}
 	}
 
 	return db.createDoltTable(ctx, tableName, root, doltSch)

@@ -17,6 +17,8 @@ package alterschema
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"gopkg.in/src-d/go-errors.v1"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -36,6 +38,17 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 
 	if sch.GetPKCols().Size() > 0 {
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
+	}
+
+	// Prevent adding a spatial type column as primary key column
+	pkCols := sch.GetPKCols()
+	cols := pkCols.GetColumns()
+	for _, c := range cols {
+		if c.TypeInfo == typeinfo.PointType ||
+			c.TypeInfo == typeinfo.LinestringType ||
+			c.TypeInfo == typeinfo.PolygonType {
+			return nil, errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
+		}
 	}
 
 	pkColOrdering := make(map[string]int, len(columns))
