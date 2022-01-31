@@ -68,6 +68,9 @@ teardown() {
     dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
     dolt sql -q "alter table test rename column c2 to c0"
 
+    # TODO: This test can be enabled/finished once the go-mysql-server validation for checks
+    #       has been merged in:
+    #       https://github.com/dolthub/go-mysql-server/pull/774
     skip "dolt incorrectly allows a column used in a table check expression to be renamed/removed"
 }
 
