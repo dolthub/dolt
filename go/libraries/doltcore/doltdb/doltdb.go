@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
 )
@@ -255,29 +254,21 @@ func getCommitStForRefStr(ctx context.Context, db datas.Database, ref string) (t
 	return types.EmptyStruct(db.Format()), err
 }
 
-func getCommitStForHash(ctx context.Context, db datas.Database, c string) (types.Struct, error) {
-	prefixed := c
-
-	if !strings.HasPrefix(c, "#") {
-		prefixed = "#" + c
+func getCommitStForHash(ctx context.Context, vr types.ValueReader, c string) (types.Struct, error) {
+	unprefixed := strings.TrimPrefix(c, "#")
+	hash, ok := hash.MaybeParse(unprefixed)
+	if !ok {
+		return types.Struct{}, errors.New("invalid hash: " + c)
 	}
 
-	ap, err := spec.NewAbsolutePath(prefixed)
-
+	val, err := vr.ReadValue(ctx, hash)
 	if err != nil {
-		return types.EmptyStruct(db.Format()), err
-	}
-
-	val := ap.Resolve(ctx, db)
-
-	if val == nil {
-		return types.EmptyStruct(db.Format()), ErrHashNotFound
+		return types.Struct{}, err
 	}
 
 	valSt, ok := val.(types.Struct)
-
 	if !ok || valSt.Name() != CommitStructName {
-		return types.EmptyStruct(db.Format()), ErrFoundHashNotACommit
+		return types.Struct{}, ErrFoundHashNotACommit
 	}
 
 	return valSt, nil
