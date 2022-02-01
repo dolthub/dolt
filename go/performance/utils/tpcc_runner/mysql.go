@@ -18,14 +18,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 // BenchmarkMysql benchmarks mysql based on the provided configurations

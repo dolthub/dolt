@@ -1,10 +1,12 @@
 package tpcc_runner
 
 import (
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-	"github.com/google/uuid"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 // FromConfigsNewResult returns a new result with some fields set based on the provided configs

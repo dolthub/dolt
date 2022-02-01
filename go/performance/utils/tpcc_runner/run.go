@@ -17,6 +17,7 @@ package tpcc_runner
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 

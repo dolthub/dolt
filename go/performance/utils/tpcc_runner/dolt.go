@@ -17,8 +17,6 @@ package tpcc_runner
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-	"golang.org/x/sync/errgroup"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -26,6 +24,10 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 const (

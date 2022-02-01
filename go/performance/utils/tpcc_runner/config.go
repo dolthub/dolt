@@ -18,12 +18,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-	"github.com/google/uuid"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/google/uuid"
+
+	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 const (
