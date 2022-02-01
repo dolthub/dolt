@@ -315,38 +315,6 @@ var DoltMerge = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with dolt_branches table",
-		SetUpScript: []string{
-			"CREATE TABLE test (pk int primary key)",
-			"INSERT INTO test VALUES (0),(1),(2);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-			"UPDATE dolt_branches SET hash = HASHOF('main^') WHERE name='feature-branch'",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
-			{
-				Query:    "SELECT DOLT_CHECKOUT('feature-branch')",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "SELECT DOLT_MERGE('main')", // should be a ff
-				Expected: []sql.Row{{1}},
-			},
-			{
-				Query:    "SELECT COUNT(*) FROM dolt_status",
-				Expected: []sql.Row{{0}},
-			},
-			{
-				Query:    "SELECT * FROM test order by pk",
-				Expected: []sql.Row{{0}, {1}, {2}},
-			},
-			{
-				Query:    "SELECT COUNT(*) from dolt_log",
-				Expected: []sql.Row{{2}},
-			},
-		},
-	},
-	{
 		Name: "DOLT_MERGE ff",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
