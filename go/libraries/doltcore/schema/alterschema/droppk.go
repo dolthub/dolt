@@ -49,6 +49,14 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
+	// Copy over all checks from the old schema
+	for _, check := range sch.Checks().AllChecks() {
+		_, err := newSchema.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	table, err = table.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err

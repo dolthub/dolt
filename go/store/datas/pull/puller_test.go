@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datas
+package pull
 
 import (
 	"context"
@@ -27,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -120,21 +122,22 @@ func deleteTableValues(ctx context.Context, vrw types.ValueReadWriter, m types.M
 	return me.Map(ctx)
 }
 
-func tempDirDB(ctx context.Context) (Database, error) {
+func tempDirDB(ctx context.Context) (types.ValueReadWriter, datas.Database, error) {
 	dir := filepath.Join(os.TempDir(), uuid.New().String())
 	err := os.MkdirAll(dir, os.ModePerm)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	st, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
-
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return NewDatabase(st), nil
+	vs := types.NewValueStore(st)
+
+	return vs, datas.NewTypesDatabase(vs), nil
 }
 
 func TestPuller(t *testing.T) {
@@ -226,24 +229,24 @@ func TestPuller(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	db, err := tempDirDB(ctx)
+	vs, db, err := tempDirDB(ctx)
 	require.NoError(t, err)
 	ds, err := db.GetDataset(ctx, "ds")
 	require.NoError(t, err)
-	rootMap, err := types.NewMap(ctx, db)
+	rootMap, err := types.NewMap(ctx, vs)
 	require.NoError(t, err)
 
-	parent, err := types.NewList(ctx, db)
+	parent, err := types.NewList(ctx, vs)
 	require.NoError(t, err)
 	states := map[string]types.Ref{}
 	for _, delta := range deltas {
 		for tbl, sets := range delta.sets {
-			rootMap, err = addTableValues(ctx, db, rootMap, tbl, sets...)
+			rootMap, err = addTableValues(ctx, vs, rootMap, tbl, sets...)
 			require.NoError(t, err)
 		}
 
 		for tbl, dels := range delta.deletes {
-			rootMap, err = deleteTableValues(ctx, db, rootMap, tbl, dels...)
+			rootMap, err = deleteTableValues(ctx, vs, rootMap, tbl, dels...)
 			require.NoError(t, err)
 		}
 
@@ -254,7 +257,7 @@ func TestPuller(t *testing.T) {
 		rootMap, err = me.Map(ctx)
 		require.NoError(t, err)
 
-		commitOpts := CommitOptions{ParentsList: parent}
+		commitOpts := datas.CommitOptions{ParentsList: parent}
 		ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 		require.NoError(t, err)
 
@@ -262,16 +265,16 @@ func TestPuller(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 
-		parent, err = types.NewList(ctx, db, r)
+		parent, err = types.NewList(ctx, vs, r)
 		require.NoError(t, err)
 
 		states[delta.name] = r
 	}
 
-	tbl, err := makeABigTable(ctx, db)
+	tbl, err := makeABigTable(ctx, vs)
 	require.NoError(t, err)
 
-	tblRef, err := writeValAndGetRef(ctx, db, tbl)
+	tblRef, err := writeValAndGetRef(ctx, vs, tbl)
 	require.NoError(t, err)
 
 	me := rootMap.Edit()
@@ -279,7 +282,7 @@ func TestPuller(t *testing.T) {
 	rootMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	commitOpts := CommitOptions{ParentsList: parent}
+	commitOpts := datas.CommitOptions{ParentsList: parent}
 	ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 	require.NoError(t, err)
 
@@ -313,13 +316,15 @@ func TestPuller(t *testing.T) {
 				}
 			}()
 
-			sinkdb, err := tempDirDB(ctx)
+			sinkvs, sinkdb, err := tempDirDB(ctx)
 			require.NoError(t, err)
 
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, db, sinkdb, rootRef.TargetHash(), eventCh)
+			wrf, err := types.WalkRefsForChunkStore(datas.ChunkStoreFromDatabase(db))
+			require.NoError(t, err)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), wrf, rootRef.TargetHash(), eventCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
@@ -337,7 +342,7 @@ func TestPuller(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 
-			eq, err := pullerRefEquality(ctx, rootRef, sinkRootRef, db, sinkdb)
+			eq, err := pullerRefEquality(ctx, rootRef, sinkRootRef, vs, sinkvs)
 			require.NoError(t, err)
 			assert.True(t, eq)
 
@@ -345,8 +350,8 @@ func TestPuller(t *testing.T) {
 	}
 }
 
-func makeABigTable(ctx context.Context, db Database) (types.Map, error) {
-	m, err := types.NewMap(ctx, db)
+func makeABigTable(ctx context.Context, vrw types.ValueReadWriter) (types.Map, error) {
+	m, err := types.NewMap(ctx, vrw)
 
 	if err != nil {
 		return types.EmptyMap, nil
@@ -355,7 +360,7 @@ func makeABigTable(ctx context.Context, db Database) (types.Map, error) {
 	me := m.Edit()
 
 	for i := 0; i < 256*1024; i++ {
-		tpl, err := types.NewTuple(db.Format(), types.UUID(uuid.New()), types.String(uuid.New().String()), types.Float(float64(i)))
+		tpl, err := types.NewTuple(vrw.Format(), types.UUID(uuid.New()), types.String(uuid.New().String()), types.Float(float64(i)))
 
 		if err != nil {
 			return types.EmptyMap, err
@@ -367,14 +372,14 @@ func makeABigTable(ctx context.Context, db Database) (types.Map, error) {
 	return me.Map(ctx)
 }
 
-func pullerRefEquality(ctx context.Context, expectad, actual types.Ref, srcDB, sinkDB Database) (bool, error) {
-	expectedVal, err := expectad.TargetValue(ctx, srcDB)
+func pullerRefEquality(ctx context.Context, expectad, actual types.Ref, src, sink types.ValueReadWriter) (bool, error) {
+	expectedVal, err := expectad.TargetValue(ctx, src)
 
 	if err != nil {
 		return false, err
 	}
 
-	actualVal, err := actual.TargetValue(ctx, sinkDB)
+	actualVal, err := actual.TargetValue(ctx, sink)
 	if err != nil {
 		return false, err
 	}
@@ -404,13 +409,13 @@ func pullerRefEquality(ctx context.Context, expectad, actual types.Ref, srcDB, s
 			return errors.New("Missing table " + string(key.(types.String)))
 		}
 
-		exMapVal, err := exVal.(types.Ref).TargetValue(ctx, srcDB)
+		exMapVal, err := exVal.(types.Ref).TargetValue(ctx, src)
 
 		if err != nil {
 			return err
 		}
 
-		actMapVal, err := actVal.(types.Ref).TargetValue(ctx, sinkDB)
+		actMapVal, err := actVal.(types.Ref).TargetValue(ctx, sink)
 
 		if err != nil {
 			return err
@@ -475,7 +480,7 @@ func errIfNotEqual(ctx context.Context, ex, act types.Map) error {
 }
 
 func parentsAndTables(cm types.Struct) (types.List, types.Map, error) {
-	ps, ok, err := cm.MaybeGet(ParentsListField)
+	ps, ok, err := cm.MaybeGet(datas.ParentsListField)
 
 	if err != nil {
 		return types.EmptyList, types.EmptyMap, err
@@ -520,4 +525,9 @@ func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 	}
 
 	return valRef, err
+}
+
+func mustTuple(val types.Tuple, err error) types.Tuple {
+	d.PanicIfError(err)
+	return val
 }

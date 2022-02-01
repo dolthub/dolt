@@ -61,7 +61,10 @@ func TestAddPk(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, originalMap.Empty())
 
-		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD constraint test_check CHECK (c1 > 0)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
 		require.Equal(t, 0, exitCode)
 
 		table, err = getTable(ctx, dEnv, "test")
@@ -69,6 +72,9 @@ func TestAddPk(t *testing.T) {
 
 		sch, err := table.GetSchema(ctx)
 		assert.NoError(t, err)
+
+		assert.Equal(t, 1, sch.Checks().Count())
+		assert.Equal(t, "test_check", sch.Checks().AllChecks()[0].Name())
 
 		// Assert the new index map is not empty
 		newMap, err := table.GetNomsIndexRowData(ctx, indexName)
