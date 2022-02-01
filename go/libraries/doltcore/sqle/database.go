@@ -700,6 +700,20 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 	return db.createSqlTable(ctx, tableName, sch)
 }
 
+// isUsingSpatialColAsKey is a utility function that checks for any spatial types being used as a primary key
+func isUsingSpatialColAsKey(sch schema.Schema) bool {
+	pkCols := sch.GetPKCols()
+	cols := pkCols.GetColumns()
+	for _, c := range cols {
+		if c.TypeInfo.Equals(typeinfo.PointType) ||
+			c.TypeInfo.Equals(typeinfo.LinestringType) ||
+			c.TypeInfo.Equals(typeinfo.PolygonType) {
+			return true
+		}
+	}
+	return false
+}
+
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
 	root, err := db.GetRoot(ctx)
@@ -724,14 +738,8 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	}
 
 	// Prevent any tables that use Spatial Types as Primary Key from being created
-	pkCols := doltSch.GetPKCols()
-	cols := pkCols.GetColumns()
-	for _, c := range cols {
-		if c.TypeInfo.Equals(typeinfo.PointType) ||
-			c.TypeInfo.Equals(typeinfo.LinestringType) ||
-			c.TypeInfo.Equals(typeinfo.PolygonType) {
-			return errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
-		}
+	if isUsingSpatialColAsKey(doltSch) {
+		return errors.NewKind("can't use Spatial Types as Primary Key for table %s").New(tableName)
 	}
 
 	return db.createDoltTable(ctx, tableName, root, doltSch)
