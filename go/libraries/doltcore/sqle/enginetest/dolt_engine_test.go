@@ -41,20 +41,15 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		// In this case, the parser and analyzer collaborate to place the filter below the WINDOW function,
-		// and the window sees the filtered rows.
-		Query: "SELECT ROW_NUMBER() OVER (ORDER BY s2 ASC) idx, i2, s2 FROM othertable WHERE s2 <> 'second' ORDER BY i2 ASC",
-		Expected: []sql.Row{
-			{2, 1, "third"},
-			{1, 3, "first"},
-		},
+		Query:    `SELECT * FROM mytable WHERE i in (1+2)`,
+		Expected: []sql.Row{{3, "third row"}},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
 	enginetest.CreateIndexes(t, harness, engine)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }

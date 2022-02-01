@@ -198,11 +198,12 @@ type prollyCoveringIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapRangeIter
 	keyDesc   val.TupleDesc
+	valDesc   val.TupleDesc
 
 	// keyMap transforms secondary index key tuples into SQL tuples.
 	// secondary index value tuples are assumed to be empty.
 	// todo(andy): shore up this mapping concept, different semantics different places
-	keyMap []int
+	keyMap, valMap []int
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
@@ -213,15 +214,24 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 	if err != nil {
 		return prollyCoveringIndexIter{}, err
 	}
-	keyDesc, _ := secondary.Descriptors()
+	keyDesc, valDesc := secondary.Descriptors()
 
-	keyMap := coveringIndexMapping(idx)
+	var keyMap []int
+	var valMap []int
+
+	if idx.ID() == "PRIMARY" {
+		keyMap, valMap = primaryIndexMapping(idx)
+	} else {
+		keyMap = coveringIndexMapping(idx)
+	}
 
 	iter := prollyCoveringIndexIter{
 		idx:       idx,
 		indexIter: indexIter,
 		keyDesc:   keyDesc,
+		valDesc:   valDesc,
 		keyMap:    keyMap,
+		valMap:    valMap,
 	}
 
 	return iter, nil
@@ -229,20 +239,18 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 
 // Next returns the next row from the iterator.
 func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-	for {
-		k, v, err := p.indexIter.Next(ctx)
-		if err == io.EOF {
-			return nil, io.EOF
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		r := make(sql.Row, len(p.keyMap))
-		p.rowFromTuples(k, v, r)
-
-		return r, nil
+	k, v, err := p.indexIter.Next(ctx)
+	if err == io.EOF {
+		return nil, io.EOF
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	p.rowFromTuples(k, v, r)
+
+	return r, nil
 }
 
 func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
@@ -251,6 +259,14 @@ func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) 
 			continue
 		}
 		r[to] = p.keyDesc.GetField(from, key)
+	}
+
+	off := len(p.keyMap)
+	for to, from := range p.valMap {
+		if from == -1 {
+			continue
+		}
+		r[off+to] = p.valDesc.GetField(from, value)
 	}
 
 	return
@@ -273,6 +289,20 @@ func coveringIndexMapping(idx DoltIndex) (keyMap []int) {
 		} else {
 			keyMap[i] = -1
 		}
+	}
+
+	return
+}
+
+func primaryIndexMapping(idx DoltIndex) (keyMap, valMap []int) {
+	keyMap = make([]int, idx.Schema().GetPKCols().Size())
+	for i := range keyMap {
+		keyMap[i] = i
+	}
+
+	valMap = make([]int, idx.Schema().GetNonPKCols().Size())
+	for i := range valMap {
+		valMap[i] = i
 	}
 
 	return
