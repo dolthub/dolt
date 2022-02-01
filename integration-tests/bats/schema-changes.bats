@@ -66,12 +66,10 @@ teardown() {
 
 @test "schema-changes: dolt schema rename column fails when column is used in table check" {
     dolt sql -q "alter table test add constraint test_check CHECK (c2 < 12345);"
-    dolt sql -q "alter table test rename column c2 to c0"
+    run dolt sql -q "alter table test rename column c2 to c0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "because it would invalidate check constraint" ]] || false
 
-    # TODO: This test can be enabled/finished once the go-mysql-server validation for checks
-    #       has been merged in:
-    #       https://github.com/dolthub/go-mysql-server/pull/774
-    skip "dolt incorrectly allows a column used in a table check expression to be renamed/removed"
 }
 
 @test "schema-changes: dolt schema delete column" {
