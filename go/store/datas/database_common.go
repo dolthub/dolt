@@ -25,7 +25,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
@@ -38,7 +37,6 @@ import (
 type database struct {
 	*types.ValueStore
 	rt              rootTracker
-	postCommitHooks []CommitHook
 }
 
 var (
@@ -46,17 +44,6 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
-// CommitHook is an abstraction for executing arbitrary commands after atomic database commits
-type CommitHook interface {
-	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
-	Execute(ctx context.Context, ds Dataset, db Database) error
-	// HandleError is an bridge function to handle Execute errors
-	HandleError(ctx context.Context, err error) error
-	// SetLogger lets clients specify an output stream for HandleError
-	SetLogger(ctx context.Context, wr io.Writer) error
-}
-
-// TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
 	Rebase(ctx context.Context) error
@@ -811,8 +798,6 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	db.ExecuteCommitHooks(ctx, commitDS)
-
 	return commitDS, workingSetDS, nil
 }
 
@@ -1005,30 +990,4 @@ func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc fun
 	}
 
 	return db.GetDataset(ctx, ds.ID())
-}
-
-func (db *database) SetCommitHooks(ctx context.Context, postHooks []CommitHook) Database {
-	db.postCommitHooks = postHooks
-	return db
-}
-
-func (db *database) SetCommitHookLogger(ctx context.Context, wr io.Writer) Database {
-	for _, h := range db.postCommitHooks {
-		h.SetLogger(ctx, wr)
-	}
-	return db
-}
-
-func (db *database) PostCommitHooks() []CommitHook {
-	return db.postCommitHooks
-}
-
-func (db *database) ExecuteCommitHooks(ctx context.Context, ds Dataset) {
-	var err error
-	for _, hook := range db.postCommitHooks {
-		err = hook.Execute(ctx, ds, db)
-		if err != nil {
-			hook.HandleError(ctx, err)
-		}
-	}
 }

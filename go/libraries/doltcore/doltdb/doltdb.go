@@ -59,14 +59,14 @@ var ErrCannotDeleteLastBranch = errors.New("cannot delete the last branch")
 // Additionally the noms codebase uses panics in a way that is non idiomatic and We've opted to recover and return
 // errors in many cases.
 type DoltDB struct {
-	db datas.Database
+	db hooksDatabase
 }
 
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	db := datas.NewDatabase(cs)
 
-	return &DoltDB{db}
+	return &DoltDB{hooksDatabase{Database: db}}
 }
 
 // LoadDoltDB will acquire a reference to the underlying noms db.  If the Location is InMemDoltDB then a reference
@@ -100,7 +100,7 @@ func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr 
 		return nil, err
 	}
 
-	return &DoltDB{db}, nil
+	return &DoltDB{hooksDatabase{Database: db}}, nil
 }
 
 // NomsRoot returns the hash of the noms dataset map
@@ -1159,7 +1159,7 @@ func (ddb *DoltDB) Rebase(ctx context.Context) error {
 
 // GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
 func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
-	collector, ok := ddb.db.(datas.GarbageCollector)
+	collector, ok := ddb.db.Database.(datas.GarbageCollector)
 	if !ok {
 		return fmt.Errorf("this database does not support garbage collection")
 	}
@@ -1292,13 +1292,13 @@ func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- dat
 	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
 }
 
-func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []datas.CommitHook) *DoltDB {
+func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
 	ddb.db = ddb.db.SetCommitHooks(ctx, postHooks)
 	return ddb
 }
 
 func (ddb *DoltDB) SetCommitHookLogger(ctx context.Context, wr io.Writer) *DoltDB {
-	if ddb.db != nil {
+	if ddb.db.Database != nil {
 		ddb.db = ddb.db.SetCommitHookLogger(ctx, wr)
 	}
 	return ddb
