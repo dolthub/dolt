@@ -309,10 +309,6 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 	case YearEnc:
 		tb.PutYear(i, v.(int16))
 	case DateEnc, DatetimeEnc, TimestampEnc:
-		if _, ok := v.(time.Time); !ok {
-			// todo(andy)
-			v = time.Time{}
-		}
 		tb.PutTimestamp(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))
