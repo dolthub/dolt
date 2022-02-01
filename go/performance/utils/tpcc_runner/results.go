@@ -8,8 +8,8 @@ import (
 )
 
 // FromConfigsNewResult returns a new result with some fields set based on the provided configs
-func FromConfigsNewResult(t *TpccTest, suiteId string, idFunc func() string) (*sysbench_runner.Result, error) {
-	serverParams := t.ServerConfig.GetServerArgs()
+func FromConfigsNewResult(config *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig, test *TpccTest, suiteId string, idFunc func() string) (*sysbench_runner.Result, error) {
+	serverParams := serverConfig.GetServerArgs()
 
 	var getId func() string
 	if idFunc == nil {
@@ -21,31 +21,27 @@ func FromConfigsNewResult(t *TpccTest, suiteId string, idFunc func() string) (*s
 	}
 
 	var name string
-	if t.FromScript {
-		base := filepath.Base(t.Name)
-		ext := filepath.Ext(base)
-		name = strings.TrimSuffix(base, ext)
-	} else {
-		name = t.Name
-	}
+	base := filepath.Base(test.Name)
+	ext := filepath.Ext(base)
+	name = strings.TrimSuffix(base, ext)
 
 	return &sysbench_runner.Result{
 		Id:            getId(),
 		SuiteId:       suiteId,
-		TestId:        t.Id,
-		RuntimeOS:     "os",
-		RuntimeGoArch: "goarch",
-		ServerName:    string(t.ServerConfig.Server),
-		ServerVersion: t.ServerConfig.Version,
+		TestId:        test.Id,
+		RuntimeOS:     config.RuntimeOS,
+		RuntimeGoArch: config.RuntimeGoArch,
+		ServerName:    string(serverConfig.Server),
+		ServerVersion: serverConfig.Version,
 		ServerParams:  strings.Join(serverParams, " "),
 		TestName:      name,
-		TestParams:    strings.Join(t.getArgs(), " "),
+		TestParams:    strings.Join(test.getArgs(serverConfig), " "),
 	}, nil
 }
 
 // FromOutputResult accepts raw sysbench run output and returns the Result
-func FromOutputResult(output []byte, test *TpccTest, suiteId string, idFunc func() string) (*sysbench_runner.Result, error) {
-	result, err := FromConfigsNewResult(test, suiteId, idFunc)
+func FromOutputResult(output []byte, config *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig, test *TpccTest, suiteId string, idFunc func() string) (*sysbench_runner.Result, error) {
+	result, err := FromConfigsNewResult(config, serverConfig, test, suiteId, idFunc)
 	if err != nil {
 		return nil, err
 	}

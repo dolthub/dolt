@@ -33,7 +33,7 @@ const (
 	dbName = "sbt"
 )
 
-func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
+func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig, params *TpccTestParams) (sysbench_runner.Results, error) {
 	// TODO: Need to implement username and password configs for docker deployment
 	serverParams := serverConfig.GetServerArgs()
 
@@ -68,8 +68,9 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccConfig, serverConfig *sy
 	time.Sleep(5 * time.Second)
 
 	// GetTests and Benchmarks
-	test := NewTpccTest(uuid.New().String(), tppcConfig, serverConfig, true)
-	result, err := benchmark(ctx, test)
+	// TODO: This is a bad abstraction
+	test := NewTpccTest(uuid.New().String(), params)
+	result, err := benchmark(ctx, test, serverConfig, tppcConfig)
 	if err != nil {
 		close(quit)
 		wg.Wait()
@@ -127,10 +128,10 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 	return server
 }
 
-func benchmark(ctx context.Context, test *TpccTest) (*sysbench_runner.Result, error) {
-	prepare := test.TpccPrepare(ctx)
-	run := test.TpccRun(ctx)
-	cleanup := test.TpccCleanup(ctx)
+func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runner.ServerConfig, config *TpccBenchmarkConfig) (*sysbench_runner.Result, error) {
+	prepare := test.TpccPrepare(ctx, serverConfig, config.ScriptDir)
+	run := test.TpccRun(ctx, serverConfig, config.ScriptDir)
+	cleanup := test.TpccCleanup(ctx, serverConfig, config.ScriptDir)
 
 	out, err := prepare.Output()
 	if err != nil {
@@ -144,7 +145,8 @@ func benchmark(ctx context.Context, test *TpccTest) (*sysbench_runner.Result, er
 		return nil, err
 	}
 
-	result, err := FromOutputResult(out, test, "", nil)
+	// TODO: Wtf is suite id
+	result, err := FromOutputResult(out, config, serverConfig, test, "tpcc", nil)
 	if err != nil {
 		return nil, err
 	}

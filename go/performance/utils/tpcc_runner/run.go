@@ -21,15 +21,8 @@ import (
 
 // TODO: Revalidate the config here
 func Run() error {
-	tpccConfig := &TpccConfig{
-		NumThreads:     1,
-		ScaleFactor:    1,
-		Tables:         1,
-		TrxLevel:       "RR", // TODO: Not actually uyses
-		ReportCSV:      true,
-		ReportInterval: 1,
-		Time:           30,
-		ScriptDir:      "/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
+	tpccConfig := &TpccBenchmarkConfig{
+		ScriptDir: "/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
 	}
 
 	serverConfig := &sysbench_runner.ServerConfig{
@@ -41,9 +34,19 @@ func Run() error {
 		ResultsFormat: sysbench_runner.CsvFormat,
 	}
 
+	tpccParams := &TpccTestParams{
+		NumThreads:     1,
+		ScaleFactor:    1,
+		Tables:         1,
+		TrxLevel:       "RR", // TODO: Not actually uyses
+		ReportCSV:      true,
+		ReportInterval: 1,
+		Time:           30,
+	}
+
 	ctx := context.Background()
 
-	results, err := BenchmarkDolt(ctx, tpccConfig, serverConfig)
+	results, err := BenchmarkDolt(ctx, tpccConfig, serverConfig, tpccParams)
 	if err != nil {
 		return err
 	}
