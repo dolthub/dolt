@@ -169,12 +169,6 @@ type Database interface {
 	// level detail of the database that should infrequently be needed by
 	// clients.
 	chunkStore() chunks.ChunkStore
-
-	// NomsRoot returns the hash of the toplevel noms dataset map
-	NomsRoot(context.Context) (hash.Hash, error)
-
-	// CommitRoot executes a chunkStore commit, atomically swapping the root hash of the database manifest
-	CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
