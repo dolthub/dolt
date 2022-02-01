@@ -16,9 +16,10 @@ package schema
 
 import (
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"sort"
 	"strings"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 type IndexCollection interface {
