@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 	"os"
 	"os/exec"
@@ -33,7 +32,7 @@ const (
 	dbName = "sbt"
 )
 
-func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig, params *TpccTestParams) (sysbench_runner.Results, error) {
+func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	// TODO: Need to implement username and password configs for docker deployment
 	serverParams := serverConfig.GetServerArgs()
 
@@ -68,14 +67,20 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 	time.Sleep(5 * time.Second)
 
 	// GetTests and Benchmarks
-	// TODO: This is a bad abstraction
-	test := NewTpccTest(uuid.New().String(), params)
-	result, err := benchmark(ctx, test, serverConfig, tppcConfig)
-	if err != nil {
-		close(quit)
-		wg.Wait()
-		return nil, err
+	tests := getTests(ctx, tppcConfig)
+	results := make(sysbench_runner.Results, 0)
+
+	for _, test := range tests {
+		result, err := benchmark(ctx, test, serverConfig, tppcConfig)
+		if err != nil {
+			close(quit)
+			wg.Wait()
+			return nil, err
+		}
+
+		results = append(results, result)
 	}
+
 	// send signal to dolt server
 	quit <- syscall.SIGTERM
 
@@ -94,7 +99,7 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 	close(quit)
 	wg.Wait()
 
-	return sysbench_runner.Results{result}, os.RemoveAll(testRepo)
+	return results, os.RemoveAll(testRepo)
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
@@ -126,6 +131,18 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 	server := sysbench_runner.ExecCommand(ctx, config.ServerExec, params...)
 	server.Dir = testRepo
 	return server
+}
+
+func getTests(ctx context.Context, config *TpccBenchmarkConfig) []*TpccTest {
+	tests := make([]*TpccTest, 0)
+	for _, sf := range config.ScaleFactors {
+		params := NewDefaultTpccParams()
+		params.ScaleFactor = sf
+		test := NewTpccTest(fmt.Sprintf("scale-factor-%d", sf), params)
+		tests = append(tests, test)
+	}
+
+	return tests
 }
 
 func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runner.ServerConfig, config *TpccBenchmarkConfig) (*sysbench_runner.Result, error) {

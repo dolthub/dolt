@@ -21,17 +21,16 @@ import (
 	"os"
 	"path/filepath"
 
-	runner "github.com/dolthub/dolt/go/performance/utils/tpcc_runner"
+	tpcc_runner "github.com/dolthub/dolt/go/performance/utils/tpcc_runner"
 )
 
 var configFile = flag.String("config", "", "path to config file q")
 
 func main() {
-	//flag.Parse()
-	//
-	//if *configFile == "" {
-	//	log.Fatal("Must supply config")
-	//}
+	flag.Parse()
+	if *configFile == "" {
+		log.Fatal("Must supply config")
+	}
 
 	configPath, err := filepath.Abs(*configFile)
 	if err != nil {
@@ -41,8 +40,13 @@ func main() {
 		log.Fatal(err)
 	}
 
+	tpccBenchmarkConfig, err := tpcc_runner.FromFileConfig(configPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Run the TPCC test
-	err = runner.Run()
+	err = tpcc_runner.Run(tpccBenchmarkConfig)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

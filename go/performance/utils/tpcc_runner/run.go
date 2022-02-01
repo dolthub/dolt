@@ -16,44 +16,39 @@ package tpcc_runner
 
 import (
 	"context"
+	"fmt"
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
 // TODO: Revalidate the config here
-func Run() error {
-	tpccConfig := &TpccBenchmarkConfig{
-		ScriptDir: "/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
-	}
-
-	serverConfig := &sysbench_runner.ServerConfig{
-		Id:            "id",
-		Host:          "127.0.0.1",
-		Port:          3307,
-		Server:        "dolt",
-		ServerExec:    "/Users/vinairachakonda/go/bin/dolt",
-		ResultsFormat: sysbench_runner.CsvFormat,
-	}
-
-	tpccParams := &TpccTestParams{
-		NumThreads:     1,
-		ScaleFactor:    1,
-		Tables:         1,
-		TrxLevel:       "RR", // TODO: Not actually uyses
-		ReportCSV:      true,
-		ReportInterval: 1,
-		Time:           30,
-	}
-
+func Run(config *TpccBenchmarkConfig) error {
 	ctx := context.Background()
 
-	results, err := BenchmarkDolt(ctx, tpccConfig, serverConfig, tpccParams)
-	if err != nil {
-		return err
-	}
+	for _, serverConfig := range config.Servers {
+		var results sysbench_runner.Results
+		var err error
+		switch serverConfig.Server {
+		case sysbench_runner.Dolt:
+			results, err = BenchmarkDolt(ctx, config, serverConfig)
+			if err != nil {
+				return err
+			}
+		case sysbench_runner.MySql:
+			results, err = BenchmarkMysql(ctx, config, serverConfig)
+			if err != nil {
+				return err
+			}
+		default:
+			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
+		}
+		if err != nil {
+			return err
+		}
 
-	err = sysbench_runner.WriteResults(serverConfig, results)
-	if err != nil {
-		return err
+		err = sysbench_runner.WriteResults(serverConfig, results)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

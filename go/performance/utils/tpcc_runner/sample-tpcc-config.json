@@ -1,0 +1,25 @@
+{
+  "RuntimeOS": "MAC",
+  "RuntimeGoArch": "dasdas",
+  "Servers": [
+    {
+      "Server": "mysql",
+      "Version": "8.0.22",
+      "ResultsFormat": "csv",
+      "ServerExec": "/usr/local/bin/mysql",
+      "ConnectionProtocol": "unix",
+      "Host": "127.0.0.1",
+      "Id": "mysql"
+    },
+    {
+      "Host": "127.0.0.1",
+      "Port": 3307,
+      "Server": "dolt",
+      "Version": "HEAD",
+      "ResultsFormat": "csv",
+      "ServerExec": "/Users/vinairachakonda/go/bin/dolt"
+    }
+  ],
+  "ScriptDir":"/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
+  "ScaleFactors": [1]
+}

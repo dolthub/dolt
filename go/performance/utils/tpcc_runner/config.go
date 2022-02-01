@@ -16,9 +16,11 @@ package tpcc_runner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 	"github.com/google/uuid"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,11 +30,15 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultUser = "root"
 
-	tpccPassLocal = "tpccpass"
+	tpccUserLocal = "FILL_IN"
+	tpccPassLocal = "FILL"
+
+	defaultSocket = "/var/run/mysqld/mysqld.sock"
+	tcpProtocol   = "tcp"
+	unixProtocol  = "unix"
 )
 
 var defaultTpccParams = []string{
-	fmt.Sprintf("--mysql-user=%s", defaultUser),
 	fmt.Sprintf("--mysql-db=%s", dbName),
 	"--db-driver=mysql",
 }
@@ -40,9 +46,6 @@ var defaultTpccParams = []string{
 // TpccBenchmarkConfig represents a configuration for an execution of the TPCC Benchmark. It executes a series of tests
 // against different ServerConfigurations.
 type TpccBenchmarkConfig struct {
-	// Runs is the number of times to run all tests
-	Runs int
-
 	// RuntimeOS is the platform the benchmarks ran on
 	RuntimeOS string
 
@@ -55,9 +58,35 @@ type TpccBenchmarkConfig struct {
 	// Servers are the servers to benchmark.
 	Servers []*sysbench_runner.ServerConfig
 
-	// Tests are the tests to run. If no tests are provided,
-	// the default tests will be used. We run tests against each type of Server (i.e Dolt and MySQL).
-	Tests []*TpccTest
+	//// Tests are the tests to run. If no tests are provided,
+	//// the default tests will be used. We run tests against each type of Server (i.e Dolt and MySQL).
+	//Tests []*TpccTest
+
+	// ScaleFactors represent the scale at which to run each TpccBenchmark at.
+	ScaleFactors []int
+}
+
+func NeeTpccConfig() *TpccBenchmarkConfig {
+	return &TpccBenchmarkConfig{
+		Servers:      make([]*sysbench_runner.ServerConfig, 0),
+		ScaleFactors: make([]int, 0),
+	}
+}
+
+// FromFileConfig returns a validated Config based on the config file at the configPath
+func FromFileConfig(configPath string) (*TpccBenchmarkConfig, error) {
+	data, err := ioutil.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	config := NeeTpccConfig()
+	err = json.Unmarshal(data, config)
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // TpccTest encapsulates an End to End prepare, run, cleanup test case.
@@ -92,6 +121,19 @@ type TpccTestParams struct {
 	Time int
 }
 
+func NewDefaultTpccParams() *TpccTestParams {
+	// TODO: Should these params be abstracted to the config file? Probably I guess :)
+	return &TpccTestParams{
+		NumThreads:     1,
+		ScaleFactor:    1,
+		Tables:         1,
+		TrxLevel:       "RR", // TODO: Not actually uyses
+		ReportCSV:      true,
+		ReportInterval: 1,
+		Time:           30,
+	}
+}
+
 func NewTpccTest(name string, params *TpccTestParams) *TpccTest {
 	return &TpccTest{
 		Id:     uuid.New().String(),
@@ -113,10 +155,10 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
 		params = append(params, "--mysql-socket=/tmp/mysql.sock")
 		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
-		params = append(params, "--mysql-user=tpcc")
+		params = append(params, fmt.Sprintf("--mysql-user=%s", tpccUserLocal))
 	} else {
 		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
-		params = append(params, "--mysql-user=root")
+		params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
 	}
 
 	params = append(params, fmt.Sprintf("--time=%d", t.Params.Time))
