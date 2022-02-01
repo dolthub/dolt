@@ -16,6 +16,7 @@ package schema
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"sort"
 	"strings"
 )
@@ -143,6 +144,14 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	}
 	if ixc.hasIndexOnTags(tags...) {
 		return nil, fmt.Errorf("cannot create a duplicate index on this table")
+	}
+	for _, c := range ixc.colColl.cols {
+		if c.TypeInfo.Equals(typeinfo.PointType) ||
+			c.TypeInfo.Equals(typeinfo.LinestringType) ||
+			c.TypeInfo.Equals(typeinfo.PolygonType) {
+			return nil, fmt.Errorf("cannot create an index over spatial type columns")
+		}
+
 	}
 	index := &indexImpl{
 		indexColl:     ixc,
