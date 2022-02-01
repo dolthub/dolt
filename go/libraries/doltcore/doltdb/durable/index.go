@@ -215,9 +215,12 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 		return nil, err
 	}
 
-	idxSch := sch.Indexes().GetByName(name).Schema()
+	idx := sch.Indexes().GetByName(name)
+	if idx == nil {
+		return nil, fmt.Errorf("index not found: %s", name)
+	}
 
-	return IndexFromRef(ctx, s.vrw, idxSch, v.(types.Ref))
+	return IndexFromRef(ctx, s.vrw, idx.Schema(), v.(types.Ref))
 }
 
 // PutIndex implements IndexSet.
