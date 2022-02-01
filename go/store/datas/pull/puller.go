@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package datas
+package pull
 
 import (
 	"context"
@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // ErrDBUpToDate is the error code returned from NewPuller in the event that there is no work to do.
@@ -61,9 +60,8 @@ type CmpChnkAndRefs struct {
 
 // Puller is used to sync data between to Databases
 type Puller struct {
-	fmt *types.NomsBinFormat
+	wrf WalkRefs
 
-	srcDB         Database
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
 	rootChunkHash hash.Hash
@@ -121,9 +119,9 @@ func NewTFPullerEvent(et PullerEventType, details *TableFileEventDetails) Puller
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sinkDB Database, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, rootChunkHash hash.Hash, eventCh chan PullerEvent) (*Puller, error) {
 	// Sanity Check
-	exists, err := srcDB.chunkStore().Has(ctx, rootChunkHash)
+	exists, err := srcCS.Has(ctx, rootChunkHash)
 
 	if err != nil {
 		return nil, err
@@ -133,9 +131,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, errors.New("not found")
 	}
 
-	sinkDBCS := sinkDB.chunkStore()
-
-	exists, err = sinkDBCS.Has(ctx, rootChunkHash)
+	exists, err = sinkCS.Has(ctx, rootChunkHash)
 
 	if err != nil {
 		return nil, err
@@ -145,11 +141,11 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		return nil, ErrDBUpToDate
 	}
 
-	if srcDB.chunkStore().Version() != sinkDB.chunkStore().Version() {
-		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcDB.chunkStore().Version(), sinkDB.chunkStore().Version())
+	if srcCS.Version() != sinkCS.Version() {
+		return nil, fmt.Errorf("cannot pull from src to sink; src version is %v and sink version is %v", srcCS.Version(), sinkCS.Version())
 	}
 
-	srcChunkStore, ok := srcDB.chunkStore().(nbs.NBSCompressedChunkStore)
+	srcChunkStore, ok := srcCS.(nbs.NBSCompressedChunkStore)
 	if !ok {
 		return nil, ErrIncompatibleSourceChunkStore
 	}
@@ -171,10 +167,9 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 	}
 
 	p := &Puller{
-		fmt:           srcDB.Format(),
-		srcDB:         srcDB,
+		wrf:           walkRefs,
 		srcChunkStore: srcChunkStore,
-		sinkDBCS:      sinkDBCS,
+		sinkDBCS:      sinkCS,
 		rootChunkHash: rootChunkHash,
 		downloaded:    hash.HashSet{},
 		tablefileSema: semaphore.NewWeighted(outstandingTableFiles),
@@ -185,7 +180,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcDB, sink
 		pushLog:       pushLogger,
 	}
 
-	if lcs, ok := sinkDBCS.(chunks.LoggingChunkStore); ok {
+	if lcs, ok := sinkCS.(chunks.LoggingChunkStore); ok {
 		lcs.SetLogger(p)
 	}
 
@@ -407,8 +402,8 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 				}
 
 				refs := make(map[hash.Hash]int)
-				if err := types.WalkRefs(chnk, p.fmt, func(r types.Ref) error {
-					refs[r.TargetHash()] = int(r.Height())
+				if err := p.wrf(chnk, func(h hash.Hash, height uint64) error {
+					refs[h] = int(height)
 					return nil
 				}); ae.SetIfError(err) {
 					return

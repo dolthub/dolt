@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/sqllogictest/go/logictest"
 	"github.com/dolthub/vitess/go/vt/proto/query"
-	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -67,8 +66,6 @@ func (h *DoltHarness) ExecuteStatement(statement string) error {
 		context.Background(),
 		sql.WithPid(rand.Uint64()),
 		sql.WithSession(h.sess))
-
-	statement = normalizeStatement(statement)
 
 	_, rowIter, err := h.engine.Query(ctx, statement)
 	if err != nil {
@@ -187,37 +184,6 @@ func getDbState(db sql.Database, dEnv *env.DoltEnv) dsess.InitialDbState {
 		DbData:     dEnv.DbData(),
 		Remotes:    dEnv.RepoState.Remotes,
 	}
-}
-
-// We cheat a little at these tests. A great many of them use tables without primary keys, which we don't currently
-// support. Until we do, we just make every column in such tables part of the primary key.
-func normalizeStatement(statement string) string {
-	if !strings.Contains(statement, "CREATE TABLE") {
-		return statement
-	}
-	if strings.Contains(statement, "PRIMARY KEY") {
-		return statement
-	}
-
-	stmt, err := sqlparser.Parse(statement)
-	if err != nil {
-		panic(err)
-	}
-	create, ok := stmt.(*sqlparser.DDL)
-	if !ok {
-		panic("Expected CREATE TABLE statement")
-	}
-
-	lastParen := strings.LastIndex(statement, ")")
-	normalized := statement[:lastParen] + ", PRIMARY KEY ("
-	for i, column := range create.TableSpec.Columns {
-		normalized += column.Name.String()
-		if i != len(create.TableSpec.Columns)-1 {
-			normalized += ", "
-		}
-	}
-	normalized += "))"
-	return normalized
 }
 
 func drainIterator(ctx *sql.Context, iter sql.RowIter) error {

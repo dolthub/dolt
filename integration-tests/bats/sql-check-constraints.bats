@@ -64,20 +64,125 @@ SQL
     [[ "$output" =~ "constraint" ]] || false
 }
 
-@test "sql-check-constraints: check constraints survive adding a primary key" {
-    dolt sql <<SQL 
+@test "sql-check-constraints: check constraints survive adding a new column" {
+    dolt sql <<SQL
 create table foo (
        pk int,
-       c1 int
-       CHECK (c1 > 3)
-);      
-ALTER TABLE foo ADD PRIMARY KEY(pk);
+       c1 int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+ALTER TABLE foo ADD COLUMN j int;
 SQL
-    skip "Alter tables kill all constraints now"
     run dolt schema show
     [ $status -eq 0 ]
+    echo $output
     [[ "$output" =~ "CHECK" ]] || false
-    [[ "$output" =~ "c1 > c3" ]] || false
-    
+    [[ "$output" =~ "`c1` > 3" ]] || false
 }
+
+@test "sql-check-constraints: check constraints survive renaming a column" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       j int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+ALTER TABLE foo RENAME COLUMN j to j2;
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
+@test "sql-check-constraints: check constraints survive modifying a column" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       j int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+ALTER TABLE foo MODIFY COLUMN j int COMMENT 'j column';
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
+@test "sql-check-constraints: check constraints survive dropping a column" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       j int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+ALTER TABLE foo DROP COLUMN j;
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
+@test "sql-check-constraints: check constraints survive adding a primary key" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       CHECK (c1 > 3)
+);
+ALTER TABLE foo ADD PRIMARY KEY(pk);
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
+@test "sql-check-constraints: check constraints survive dropping a primary key" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+ALTER TABLE foo DROP PRIMARY KEY;
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
+@test "sql-check-constraints: check constraints survive renaming a table" {
+    dolt sql <<SQL
+create table foo (
+       pk int,
+       c1 int,
+       CHECK (c1 > 3),
+       PRIMARY KEY (pk)
+);
+RENAME TABLE foo to foo2;
+SQL
+    run dolt schema show
+    [ $status -eq 0 ]
+    echo $output
+    [[ "$output" =~ "CHECK" ]] || false
+    [[ "$output" =~ "`c1` > 3" ]] || false
+}
+
 

@@ -18,10 +18,10 @@ import (
 	"context"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
-func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
+func pullerProgFunc(ctx context.Context, pullerEventCh <-chan pull.PullerEvent) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -37,7 +37,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 	}
 }
 
-func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
+func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -53,9 +53,9 @@ func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	}
 }
 
-func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent)
-	progChan := make(chan datas.PullProgress)
+func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
+	pullerEventCh := make(chan pull.PullerEvent)
+	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
@@ -73,7 +73,7 @@ func NoopRunProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProg
 	return wg, progChan, pullerEventCh
 }
 
-func NoopStopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func NoopStopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) {
 	cancel()
 	close(progChan)
 	close(pullerEventCh)
