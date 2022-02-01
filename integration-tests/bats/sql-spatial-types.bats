@@ -64,6 +64,9 @@ teardown() {
     DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create table poly_tbl (p polygon)"
     [ "$status" -eq 0 ]
     [ "$output" = "" ] || false
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(7,8))))"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Invalid GIS data" ]] || false
     DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "insert into poly_tbl () values (polygon(linestring(point(1,2),point(3,4),point(5,6),point(1,2))))"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Query OK" ]] || false
