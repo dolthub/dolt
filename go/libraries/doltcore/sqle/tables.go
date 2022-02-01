@@ -1043,10 +1043,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		initialValue := column.Type.Zero()
 
-		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
-		if err != nil {
-			return err
-		}
+		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
 
 		rowData, err := updatedTable.GetRowData(ctx)
 		if err != nil {

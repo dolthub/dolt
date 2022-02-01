@@ -80,7 +80,7 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), t.projectedCols, part)
+	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
 }
 
 func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {

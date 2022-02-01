@@ -41,8 +41,8 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    "SELECT f32 FROM floattable WHERE f64 = 2.0;",
-		Expected: []sql.Row{{float32(2.0)}},
+		Query:    "select i from datetime_table where date_col = '2019/12/31'",
+		Expected: []sql.Row{{1}},
 	}
 
 	harness := newDoltHarness(t)

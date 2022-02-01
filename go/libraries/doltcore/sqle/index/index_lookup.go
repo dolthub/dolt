@@ -30,14 +30,14 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, columns []string, part sql.Partition) (sql.RowIter, error) {
+func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partition, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
 	rp := part.(rangePartition)
 	doltIdx := idx.(DoltIndex)
 
 	if types.IsFormat_DOLT_1(rp.rows.Format()) {
 		covers := indexCoversCols(doltIdx, columns)
 		if covers {
-			return newProllyCoveringIndexIter(ctx, doltIdx, rp.prollyRange)
+			return newProllyCoveringIndexIter(ctx, doltIdx, rp.prollyRange, pkSch)
 		} else {
 			return newProllyIndexIter(ctx, doltIdx, rp.prollyRange, columns)
 		}

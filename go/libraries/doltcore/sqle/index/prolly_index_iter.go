@@ -203,12 +203,14 @@ type prollyCoveringIndexIter struct {
 	// keyMap transforms secondary index key tuples into SQL tuples.
 	// secondary index value tuples are assumed to be empty.
 	// todo(andy): shore up this mapping concept, different semantics different places
+
+	// |keyMap| and |valMap| are both of len == pkSch
 	keyMap, valMap []int
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
 
-func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyCoveringIndexIter, error) {
+func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema) (prollyCoveringIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
@@ -220,9 +222,9 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 	var valMap []int
 
 	if idx.ID() == "PRIMARY" {
-		keyMap, valMap = primaryIndexMapping(idx)
+		keyMap, valMap = primaryIndexMapping(idx, pkSch)
 	} else {
-		keyMap = coveringIndexMapping(idx)
+		keyMap = coveringIndexMapping(idx, pkSch)
 	}
 
 	iter := prollyCoveringIndexIter{
@@ -247,7 +249,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+	r := make(sql.Row, len(p.keyMap))
 	p.rowFromTuples(k, v, r)
 
 	return r, nil
@@ -261,12 +263,11 @@ func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) 
 		r[to] = p.keyDesc.GetField(from, key)
 	}
 
-	off := len(p.keyMap)
 	for to, from := range p.valMap {
 		if from == -1 {
 			continue
 		}
-		r[off+to] = p.valDesc.GetField(from, value)
+		r[to] = p.valDesc.GetField(from, value)
 	}
 
 	return
@@ -277,7 +278,7 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 }
 
 // todo(andy): there are multiple column mapping concepts with different semantics
-func coveringIndexMapping(idx DoltIndex) (keyMap []int) {
+func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap []int) {
 	allCols := idx.Schema().GetAllCols()
 	idxCols := idx.IndexSchema().GetAllCols()
 
@@ -294,15 +295,19 @@ func coveringIndexMapping(idx DoltIndex) (keyMap []int) {
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex) (keyMap, valMap []int) {
-	keyMap = make([]int, idx.Schema().GetPKCols().Size())
-	for i := range keyMap {
-		keyMap[i] = i
+func primaryIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap, valMap []int) {
+	sch := idx.Schema()
+
+	keyMap = make([]int, len(pkSch.Schema))
+	for i, col := range pkSch.Schema {
+		// if |col.Name| not found, IndexOf returns -1
+		keyMap[i] = sch.GetPKCols().IndexOf(col.Name)
 	}
 
-	valMap = make([]int, idx.Schema().GetNonPKCols().Size())
-	for i := range valMap {
-		valMap[i] = i
+	valMap = make([]int, len(pkSch.Schema))
+	for i, col := range pkSch.Schema {
+		// if |col.Name| not found, IndexOf returns -1
+		valMap[i] = sch.GetNonPKCols().IndexOf(col.Name)
 	}
 
 	return
