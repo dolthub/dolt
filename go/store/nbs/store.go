@@ -1105,6 +1105,8 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 }
 
 func (nbs *NomsBlockStore) Version() string {
+	nbs.mu.RLock()
+	defer nbs.mu.RUnlock()
 	return nbs.upstream.nbfVers
 }
 
