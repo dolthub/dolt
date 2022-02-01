@@ -19,7 +19,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package datas
+package pull
 
 import (
 	"bytes"
@@ -36,6 +36,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -63,8 +64,8 @@ type PullSuite struct {
 	suite.Suite
 	sinkCS      *chunks.TestStoreView
 	sourceCS    *chunks.TestStoreView
-	sink        Database
-	source      Database
+	sinkVRW     types.ValueReadWriter
+	sourceVRW   types.ValueReadWriter
 	commitReads int // The number of reads triggered by commit differs across chunk store impls
 }
 
@@ -79,8 +80,7 @@ type LocalToLocalSuite struct {
 
 func (suite *LocalToLocalSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sink = NewDatabase(suite.sinkCS)
-	suite.source = NewDatabase(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
 }
 
 type RemoteToLocalSuite struct {
@@ -89,8 +89,7 @@ type RemoteToLocalSuite struct {
 
 func (suite *RemoteToLocalSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sink = NewDatabase(suite.sinkCS)
-	suite.source = makeRemoteDb(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
 }
 
 type LocalToRemoteSuite struct {
@@ -99,8 +98,7 @@ type LocalToRemoteSuite struct {
 
 func (suite *LocalToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sink = makeRemoteDb(suite.sinkCS)
-	suite.source = NewDatabase(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
 	suite.commitReads = 1
 }
 
@@ -110,18 +108,11 @@ type RemoteToRemoteSuite struct {
 
 func (suite *RemoteToRemoteSuite) SetupTest() {
 	suite.sinkCS, suite.sourceCS = makeTestStoreViews()
-	suite.sink = makeRemoteDb(suite.sinkCS)
-	suite.source = makeRemoteDb(suite.sourceCS)
+	suite.sinkVRW, suite.sourceVRW = types.NewValueStore(suite.sinkCS), types.NewValueStore(suite.sourceCS)
 	suite.commitReads = 1
 }
 
-func makeRemoteDb(cs chunks.ChunkStore) Database {
-	return NewDatabase(cs)
-}
-
 func (suite *PullSuite) TearDownTest() {
-	suite.sink.Close()
-	suite.source.Close()
 	suite.sinkCS.Close()
 	suite.sourceCS.Close()
 }
@@ -177,18 +168,20 @@ func (pt *progressTracker) Validate(suite *PullSuite) {
 func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads()
 
-	l := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(l, mustList(types.NewList(context.Background(), suite.source)))
+	l := buildListOfHeight(2, suite.sourceVRW)
+	sourceRef := suite.commitToSource(l, mustList(types.NewList(context.Background(), suite.sourceVRW)))
 	pt := startProgressTracker()
 
-	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	suite.NoError(err)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
 	suite.NoError(err)
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := mustValue(suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())).(types.Struct)
+	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(mustGetValue(v.MaybeGet(ValueField))))
+	suite.True(l.Equals(mustGetValue(v.MaybeGet(datas.ValueField))))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -211,29 +204,31 @@ func (suite *PullSuite) TestPullEverything() {
 //                \  -2-> L1 -1-> N
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
-	sinkL := buildListOfHeight(2, suite.sink)
-	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sink)))
+	sinkL := buildListOfHeight(2, suite.sinkVRW)
+	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
 	expectedReads := suite.sinkCS.Reads()
 
-	srcL := buildListOfHeight(2, suite.source)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source)))
-	srcL = buildListOfHeight(4, suite.source)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source, sourceRef)))
-	srcL = buildListOfHeight(5, suite.source)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source, sourceRef)))
+	srcL := buildListOfHeight(2, suite.sourceVRW)
+	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	srcL = buildListOfHeight(4, suite.sourceVRW)
+	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
+	srcL = buildListOfHeight(5, suite.sourceVRW)
+	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
 
 	pt := startProgressTracker()
 
-	err := Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	suite.NoError(err)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -259,32 +254,34 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                             \ -2-> L1 -1-> N
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
-	sinkL := buildListOfHeight(3, suite.sink)
-	sinkRef := suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sink)))
-	srcL := buildListOfHeight(3, suite.source)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source)))
+	sinkL := buildListOfHeight(3, suite.sinkVRW)
+	sinkRef := suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
+	srcL := buildListOfHeight(3, suite.sourceVRW)
+	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
 
 	var err error
 	sinkL, err = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
 	suite.NoError(err)
-	sinkRef = suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sink, sinkRef)))
-	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.source)).List(context.Background())
+	sinkRef = suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW, sinkRef)))
+	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.sourceVRW)).List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
 	preReads := suite.sinkCS.Reads()
 
 	pt := startProgressTracker()
 
-	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	suite.NoError(err)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
 	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -304,51 +301,55 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                 \ -2-> L1 -1-> N
 //                                         \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
-	sinkL := buildListOfHeight(4, suite.sink)
-	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sink)))
+	sinkL := buildListOfHeight(4, suite.sinkVRW)
+	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
 	expectedReads := suite.sinkCS.Reads()
 
-	srcL := buildListOfHeight(4, suite.source)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source)))
-	L3 := mustValue(mustValue(srcL.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.source)).(types.List)
-	L2 := mustValue(mustValue(L3.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.source)).(types.List)
-	L2Ed := L2.Edit().Append(mustRef(suite.source.WriteValue(context.Background(), types.String("oy!"))))
+	srcL := buildListOfHeight(4, suite.sourceVRW)
+	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	L3 := mustValue(mustValue(srcL.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
+	L2 := mustValue(mustValue(L3.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
+	L2Ed := L2.Edit().Append(mustRef(suite.sourceVRW.WriteValue(context.Background(), types.String("oy!"))))
 	L2, err := L2Ed.List(context.Background())
 	suite.NoError(err)
-	L3Ed := L3.Edit().Set(1, mustRef(suite.source.WriteValue(context.Background(), L2)))
+	L3Ed := L3.Edit().Set(1, mustRef(suite.sourceVRW.WriteValue(context.Background(), L2)))
 	L3, err = L3Ed.List(context.Background())
 	suite.NoError(err)
-	srcLEd := srcL.Edit().Set(1, mustRef(suite.source.WriteValue(context.Background(), L3)))
+	srcLEd := srcL.Edit().Set(1, mustRef(suite.sourceVRW.WriteValue(context.Background(), L3)))
 	srcL, err = srcLEd.List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.source, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
 
 	pt := startProgressTracker()
 
-	err = Pull(context.Background(), suite.source, suite.sink, sourceRef, pt.Ch)
+	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	suite.NoError(err)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sink.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(ValueField))))
+	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p types.List) types.Ref {
-	ds, err := suite.source.GetDataset(context.Background(), datasetID)
+	db := datas.NewTypesDatabase(suite.sourceVRW.(*types.ValueStore))
+	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	ds, err = suite.source.Commit(context.Background(), ds, v, CommitOptions{ParentsList: p})
+	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{ParentsList: p})
 	suite.NoError(err)
 	return mustHeadRef(ds)
 }
 
 func (suite *PullSuite) commitToSink(v types.Value, p types.List) types.Ref {
-	ds, err := suite.sink.GetDataset(context.Background(), datasetID)
+	db := datas.NewTypesDatabase(suite.sinkVRW.(*types.ValueStore))
+	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	ds, err = suite.sink.Commit(context.Background(), ds, v, CommitOptions{ParentsList: p})
+	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{ParentsList: p})
 	suite.NoError(err)
 	return mustHeadRef(ds)
 }
@@ -572,4 +573,39 @@ func TestClone(t *testing.T) {
 
 		assert.True(t, reflect.DeepEqual(flakeySrc.TestTableFileStore, dest))
 	})
+}
+
+func mustList(l types.List, err error) types.List {
+	d.PanicIfError(err)
+	return l
+}
+
+func mustValue(val types.Value, err error) types.Value {
+	d.PanicIfError(err)
+	return val
+}
+
+func mustGetValue(v types.Value, found bool, err error) types.Value {
+	d.PanicIfError(err)
+	d.PanicIfFalse(found)
+	return v
+}
+
+func mustRef(ref types.Ref, err error) types.Ref {
+	d.PanicIfError(err)
+	return ref
+}
+
+func mustHeadRef(ds datas.Dataset) types.Ref {
+	hr, ok, err := ds.MaybeHeadRef()
+
+	if err != nil {
+		panic("error getting head")
+	}
+
+	if !ok {
+		panic("no head")
+	}
+
+	return hr
 }

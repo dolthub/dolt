@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/types/edits"
@@ -1230,13 +1231,20 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	return nil
 }
 
-// PushChunks initiates a push into a database from the source database given, at the Value ref given. Pull progress is
-// communicated over the provided channel.
-func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB, rf types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, rf.TargetHash(), pullerEventCh)
+// PullChunks initiates a pull into this database from the source database
+// given, pulling all chunks reachable from the given targetHash. Pull progress
+// is communicated over the provided channel.
+func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
+	srcCS := datas.ChunkStoreFromDatabase(srcDB.db)
+	destCS := datas.ChunkStoreFromDatabase(ddb.db)
+	wrf, err := types.WalkRefsForChunkStore(srcCS)
+	if err != nil {
+		return err
+	}
 
-		if err == datas.ErrDBUpToDate {
+	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
+		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, wrf, targetHash, pullerEventCh)
+		if err == pull.ErrDBUpToDate {
 			return nil
 		} else if err != nil {
 			return err
@@ -1244,43 +1252,12 @@ func (ddb *DoltDB) PushChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 
 		return puller.Pull(ctx)
 	} else {
-		return datas.Pull(ctx, srcDB.db, ddb.db, rf, progChan)
+		return pull.Pull(ctx, srcCS, destCS, wrf, targetHash, progChan)
 	}
 }
 
-func (ddb *DoltDB) PushChunksForRefHash(ctx context.Context, tempDir string, srcDB *DoltDB, h hash.Hash, pullerEventCh chan datas.PullerEvent) error {
-	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, h, pullerEventCh)
-
-		if err == datas.ErrDBUpToDate {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		return puller.Pull(ctx)
-	} else {
-		return errors.New("this type of chunk store does not support this operation")
-	}
-}
-
-// PullChunks initiates a pull into a database from the source database given, at the commit given. Progress is
-// communicated over the provided channel.
-func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, stRef types.Ref, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) error {
-	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
-		puller, err := datas.NewPuller(ctx, tempDir, defaultChunksPerTF, srcDB.db, ddb.db, stRef.TargetHash(), pullerEventCh)
-		if err != nil {
-			return err
-		}
-
-		return puller.Pull(ctx)
-	} else {
-		return datas.PullWithoutBatching(ctx, srcDB.db, ddb.db, stRef, progChan)
-	}
-}
-
-func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- datas.TableFileEvent) error {
-	return datas.Clone(ctx, ddb.db, destDB.db, eventCh)
+func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
+	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db), datas.ChunkStoreFromDatabase(destDB.db), eventCh)
 }
 
 func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {

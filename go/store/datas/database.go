@@ -172,7 +172,11 @@ type Database interface {
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
-	return newDatabase(cs)
+	return newDatabase(types.NewValueStore(cs))
+}
+
+func NewTypesDatabase(vs *types.ValueStore) Database {
+	return newDatabase(vs)
 }
 
 // GarbageCollector provides a method to

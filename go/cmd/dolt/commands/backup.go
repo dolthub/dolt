@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -270,7 +270,7 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
 	case env.ErrInvalidBackupName:
 		return errhand.BuildDError("error: invalid backup name: " + b.Name).Build()
-	case datas.ErrDBUpToDate:
+	case pull.ErrDBUpToDate:
 		return errhand.BuildDError("error: backup already up to date").Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
