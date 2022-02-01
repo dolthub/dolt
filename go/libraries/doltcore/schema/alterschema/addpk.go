@@ -19,32 +19,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"gopkg.in/src-d/go-errors.v1"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
 )
-
-var ErrUsingSpatialKey = errors.NewKind("can't use Spatial Types as Primary Key for table %s")
-
-// IsUsingSpatialColAsKey is a utility function that checks for any spatial types being used as a primary key
-func IsUsingSpatialColAsKey(sch schema.Schema) bool {
-	pkCols := sch.GetPKCols()
-	cols := pkCols.GetColumns()
-	for _, c := range cols {
-		if c.TypeInfo.Equals(typeinfo.PointType) ||
-			c.TypeInfo.Equals(typeinfo.LinestringType) ||
-			c.TypeInfo.Equals(typeinfo.PolygonType) {
-			return true
-		}
-	}
-	return false
-}
 
 func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn, opts editor.Options) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
@@ -56,8 +37,8 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
-	if IsUsingSpatialColAsKey(sch) {
-		return nil, ErrUsingSpatialKey.New(tableName)
+	if schema.IsUsingSpatialColAsKey(sch) {
+		return nil, schema.ErrUsingSpatialKey.New(tableName)
 	}
 
 	pkColOrdering := make(map[string]int, len(columns))

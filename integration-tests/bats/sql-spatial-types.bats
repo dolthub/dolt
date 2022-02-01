@@ -60,3 +60,24 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "can't use Spatial Types as Primary Key" ]] || false
 }
+
+@test "sql-spatial-types: prevent creating index on point type" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table point_tbl (p point)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create index idx on point_tbl (p)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
+}
+
+@test "sql-spatial-types: prevent creating index on linestring types" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table line_tbl (l linestring)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create index idx on line_tbl (l)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
+}
+
+@test "sql-spatial-types: prevent creating index on spatial types" {
+    DOLT_ENABLE_SPATIAL_TYPES=true dolt sql -q "create table poly_tbl (p polygon)"
+    DOLT_ENABLE_SPATIAL_TYPES=true run dolt sql -q "create index idx on poly_tbl (p)"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot create an index over spatial type columns" ]] || false
+}

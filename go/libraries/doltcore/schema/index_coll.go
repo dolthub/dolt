@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 )
 
 type IndexCollection interface {
@@ -147,12 +145,9 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		return nil, fmt.Errorf("cannot create a duplicate index on this table")
 	}
 	for _, c := range ixc.colColl.cols {
-		if c.TypeInfo.Equals(typeinfo.PointType) ||
-			c.TypeInfo.Equals(typeinfo.LinestringType) ||
-			c.TypeInfo.Equals(typeinfo.PolygonType) {
+		if IsColSpatialType(c) {
 			return nil, fmt.Errorf("cannot create an index over spatial type columns")
 		}
-
 	}
 	index := &indexImpl{
 		indexColl:     ixc,
