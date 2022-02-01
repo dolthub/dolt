@@ -141,9 +141,9 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	if !ixc.tagsExist(tags...) {
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
 	}
-	if ixc.hasIndexOnTags(tags...) {
-		return nil, fmt.Errorf("cannot create a duplicate index on this table")
-	}
+	// if ixc.hasIndexOnTags(tags...) {
+	// 	return nil, fmt.Errorf("cannot create a duplicate index on this table")
+	// }
 	index := &indexImpl{
 		indexColl:     ixc,
 		name:          indexName,
