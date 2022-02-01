@@ -41,8 +41,8 @@ func TestQueries(t *testing.T) {
 func TestSingleQuery(t *testing.T) {
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    `SELECT * FROM mytable WHERE i in (1+2)`,
-		Expected: []sql.Row{{3, "third row"}},
+		Query:    "SELECT f32 FROM floattable WHERE f64 = 2.0;",
+		Expected: []sql.Row{{float32(2.0)}},
 	}
 
 	harness := newDoltHarness(t)

@@ -455,10 +455,12 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		}
 	}
 
+	rngDesc := val.TupleDescriptorPrefix(tb.Desc, len(sqlRange))
+
 	return prolly.Range{
 		Start:   start,
 		Stop:    stop,
-		KeyDesc: tb.Desc,
+		KeyDesc: rngDesc,
 	}, nil
 }
 

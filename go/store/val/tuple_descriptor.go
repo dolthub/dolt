@@ -75,6 +75,10 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	return
 }
 
+func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
+	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
+}
+
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	// todo(andy): compare raw is broken
