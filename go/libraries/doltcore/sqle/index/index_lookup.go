@@ -25,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -74,7 +75,15 @@ func indexCoversCols(idx DoltIndex, cols []string) bool {
 		return false
 	}
 
-	idxCols := idx.IndexSchema().GetAllCols()
+	var idxCols *schema.ColCollection
+	if types.IsFormat_DOLT_1(idx.Format()) {
+		// prolly indexes use covering index iter
+		// with primary clustered index
+		idxCols = idx.IndexSchema().GetAllCols()
+	} else {
+		idxCols = idx.IndexSchema().GetPKCols()
+	}
+
 	covers := true
 	for _, colName := range cols {
 		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
@@ -229,23 +238,6 @@ func (il *doltIndexLookup) Index() sql.Index {
 // Ranges implements the interface sql.IndexLookup
 func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 	return il.sqlRanges
-}
-
-func (il *doltIndexLookup) indexCoversCols(cols []string) bool {
-	if cols == nil {
-		return false
-	}
-
-	idxCols := il.idx.IndexSchema().GetPKCols()
-	covers := true
-	for _, colName := range cols {
-		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
-			covers = false
-			break
-		}
-	}
-
-	return covers
 }
 
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside

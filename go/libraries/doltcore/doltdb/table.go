@@ -406,27 +406,12 @@ func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Tabl
 // RenameIndexRowData changes the name for the index data. Does not verify that the new name is unoccupied. If the old
 // name does not exist, then this returns the called table without error.
 func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexName string) (*Table, error) {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	im, err := indexes.GetIndex(ctx, sch, oldIndexName)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err = indexes.DropIndex(ctx, oldIndexName)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err = indexes.PutIndex(ctx, newIndexName, im)
+	indexes, err = indexes.RenameIndex(ctx, oldIndexName, newIndexName)
 	if err != nil {
 		return nil, err
 	}

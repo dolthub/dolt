@@ -53,6 +53,9 @@ type IndexSet interface {
 
 	// DropIndex removes an index from the set.
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
+
+	// RenameIndex renames index |oldName| to |newName|.
+	RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error)
 }
 
 // RefFromIndex persists the Index and returns a types.Ref to it.
@@ -246,6 +249,24 @@ func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (Ind
 // DropIndex implements IndexSet.
 func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+}
+
+func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
+	v, ok, err := s.indexes.MaybeGet(ctx, types.String(oldName))
+	if !ok {
+		err = fmt.Errorf("index %s not found in IndexSet", oldName)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	edit := s.indexes.Edit()
+	im, err := edit.Set(types.String(newName), v).Remove(types.String(oldName)).Map(ctx)
 	if err != nil {
 		return nil, err
 	}
