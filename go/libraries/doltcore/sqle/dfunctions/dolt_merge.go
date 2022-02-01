@@ -256,7 +256,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 
 	ws = ws.WithWorkingRoot(rv).WithStagedRoot(rv)
 
-	// We need to assign the working set to the session but ensure that it's state is not labeled as dirty (ffs are clean
+	// We need to assign the working set to the session but ensure that its state is not labeled as dirty (ffs are clean
 	// merges). Hence, we go ahead and commit the working set to the transaction.
 	sess := dsess.DSessFromSess(ctx.Session)
 
@@ -265,7 +265,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 		return ws, err
 	}
 
-	// We only fully commit our transaction when are not squashing.
+	// We only fully commit our transaction when we are not squashing.
 	if !squash {
 		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
 		if err != nil {

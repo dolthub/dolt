@@ -196,7 +196,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrCanSwitchDueToDirtyWorkset,
+				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 		},
 	},
@@ -234,7 +234,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-				ExpectedErr: dsess.ErrCanSwitchDueToDirtyWorkset,
+				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
@@ -306,7 +306,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
-				ExpectedErr: dsess.ErrCanSwitchDueToDirtyWorkset,
+				ExpectedErr: dsess.ErrWorkingSetChanges,
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
