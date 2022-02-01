@@ -32,8 +32,8 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultUser = "root"
 
-	tpccUserLocal = "FILL_IN"
-	tpccPassLocal = "FILL"
+	tpccUserLocal = "'sysbench'@'localhost'"
+	tpccPassLocal = "sysbenchpass"
 
 	defaultSocket = "/var/run/mysqld/mysqld.sock"
 	tcpProtocol   = "tcp"
