@@ -454,12 +454,6 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash
 	if err != nil {
 		return hash.Hash{}, err
 	}
-
-	err = ddb.db.Flush(ctx)
-	if err != nil {
-		return hash.Hash{}, err
-	}
-
 	return valRef.TargetHash(), nil
 }
 

@@ -337,12 +337,6 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	// TODO: is this flush necessary?
-	err = ddb.db.Flush(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	ds, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {
 		return nil, err

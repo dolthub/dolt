@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/util/random"
 )
 
 type database struct {
@@ -73,30 +72,6 @@ func (db *database) Stats() interface{} {
 
 func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
-}
-
-func (db *database) Flush(ctx context.Context) error {
-	ds, err := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
-
-	if err != nil {
-		return err
-	}
-
-	r, err := db.WriteValue(ctx, types.Bool(true))
-
-	if err != nil {
-		return err
-	}
-
-	ds, err = db.CommitValue(ctx, ds, r)
-
-	if err != nil {
-		return err
-	}
-
-	_, err = db.Delete(ctx, ds)
-
-	return err
 }
 
 // DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
@@ -415,11 +390,6 @@ func (db *database) CommitDangling(ctx context.Context, v types.Value, opts Comm
 	}
 
 	_, err = db.WriteValue(ctx, commitStruct)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	err = db.Flush(ctx)
 	if err != nil {
 		return types.Struct{}, err
 	}

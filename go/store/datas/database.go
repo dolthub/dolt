@@ -73,8 +73,6 @@ type Database interface {
 
 	// CommitDangling creates a new commit that is unreferenced by any Dataset.
 	// This method is used in the course of programmatic updates such as Rebase
-	// All Values that have been written to this Database are guaranteed to be
-	// persistent after CommitDangling() returns.
 	// The new Commit struct is of the same form as structs created by Commit()
 	CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error)
 
@@ -154,8 +152,6 @@ type Database interface {
 	// the ChunkStore that backs this Database. It must return "Unsupported"
 	// if this operation is not supported.
 	StatsSummary() string
-
-	Flush(ctx context.Context) error
 
 	// chunkStore returns the ChunkStore used to read and write
 	// groups of values to the database efficiently. This interface is a low-

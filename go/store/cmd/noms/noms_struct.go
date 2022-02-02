@@ -155,12 +155,12 @@ func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal t
 	d.Chk.NotNil(newRootVal)
 	r, err := vrw.WriteValue(ctx, newRootVal)
 	util.CheckError(err)
-	db.Flush(ctx)
 	newAbsPath := spec.AbsolutePath{
 		Hash: r.TargetHash(),
 		Path: basePath,
 	}
 	newSpec := sp
 	newSpec.Path = newAbsPath
+	// TODO: This value is not actually in the database.
 	fmt.Println(newSpec.String())
 }

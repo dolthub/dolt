@@ -141,9 +141,5 @@ func (m *prollyStore) flush() {
 	if err != nil {
 		panic(err)
 	}
-	if err = m.db.Flush(ctx); err != nil {
-		panic(err)
-	}
-
 	m.editor = types.NewMapEditor(m.store)
 }
