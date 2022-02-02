@@ -848,8 +848,8 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ SELECT DOLT_RESET('--hard', 'HEAD')",
-				Expected: []sql.Row{{0}},
+				Query:    "/* client a */ SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "/* client a */ commit",
