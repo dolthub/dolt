@@ -28,7 +28,8 @@ func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (mapNode, error
 }
 
 func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (mapNode, nodePair, error) {
-	child := makeProllyNode(ns.Pool(), level, items...)
+	keys, values := splitKeyValuePairs(items...)
+	child := makeMapNode(ns.Pool(), level, keys, values)
 
 	ref, err := ns.Write(ctx, child)
 	if err != nil {
@@ -46,6 +47,25 @@ func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nod
 	meta := nodePair{nodeItem(metaKey), nodeItem(metaVal)}
 
 	return child, meta, nil
+}
+
+// todo(andy): treeChunker should collect keys and values
+func splitKeyValuePairs(items ...nodeItem) (keys, values []nodeItem) {
+	if len(items)%2 != 0 {
+		panic("expected even count")
+	}
+
+	keys = make([]nodeItem, len(items)/2)
+	for i := range keys {
+		keys[i] = items[i*2]
+	}
+
+	values = make([]nodeItem, len(items)/2)
+	for i := range values {
+		values[i] = items[(i*2)+1]
+	}
+
+	return
 }
 
 const (
