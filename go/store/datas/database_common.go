@@ -944,30 +944,30 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	parents := opts.ParentsList
 	if parents == types.EmptyList || parents.Len() == 0 {
 		var err error
-		parents, err = types.NewList(ctx, ds.Database())
+		parents, err = types.NewList(ctx, ds.db)
 		if err != nil {
-			return types.EmptyStruct(ds.Database().Format()), err
+			return types.EmptyStruct(ds.db.Format()), err
 		}
 
 		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
-			return types.EmptyStruct(ds.Database().Format()), err
+			return types.EmptyStruct(ds.db.Format()), err
 		} else if ok {
 			le := parents.Edit().Append(headRef)
 			parents, err = le.List(ctx)
 			if err != nil {
-				return types.EmptyStruct(ds.Database().Format()), err
+				return types.EmptyStruct(ds.db.Format()), err
 			}
 		}
 	}
 
 	meta := opts.Meta
 	if meta.IsZeroValue() {
-		meta = types.EmptyStruct(ds.Database().Format())
+		meta = types.EmptyStruct(ds.db.Format())
 	}
 
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.db, parents)
 	if err != nil {
-		return types.EmptyStruct(ds.Database().Format()), err
+		return types.EmptyStruct(ds.db.Format()), err
 	}
 
 	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)

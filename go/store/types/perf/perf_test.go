@@ -49,7 +49,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
 	ae := atomicerr.New()
-	out := types.NewStreamingList(context.Background(), s.Database, ae, in)
+	out := types.NewStreamingList(context.Background(), s.VS, ae, in)
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.Float(s.r.Int63())
@@ -70,7 +70,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
 	ae := atomicerr.New()
-	out := types.NewStreamingList(context.Background(), s.Database, ae, in)
+	out := types.NewStreamingList(context.Background(), s.VS, ae, in)
 
 	for i := 0; i < 1e7; i++ {
 		st, err := types.NewStruct(types.Format_7_18, "", types.StructData{
@@ -114,7 +114,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	l1Len, l2Len := l1.Len(), l2.Len()
 	l1Last, l2Last := last(l1), last(l2)
 
-	l3, err := types.NewList(context.Background(), s.Database)
+	l3, err := types.NewList(context.Background(), s.VS)
 	assert.NoError(err)
 	for i := uint64(0); i < 1e3; i++ { // 1k iterations * 2 concat ops = 2k times
 		// Include some basic sanity checks.
@@ -183,7 +183,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 		}
 	})
 
-	b, err := types.NewBlob(context.Background(), s.Database, readers...)
+	b, err := types.NewBlob(context.Background(), s.VS, readers...)
 	assert.NoError(err)
 	assert.Equal(uint64(size), b.Len())
 }

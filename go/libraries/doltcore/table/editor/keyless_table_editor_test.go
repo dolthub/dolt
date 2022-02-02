@@ -32,7 +32,7 @@ import (
 
 func TestKeylessTableEditorConcurrency(t *testing.T) {
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
@@ -40,12 +40,12 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(context.Background(), db)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	for i := 0; i < tableEditorConcurrencyIterations; i++ {
 		tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 		require.NoError(t, err)
@@ -140,7 +140,7 @@ func TestKeylessTableEditorConcurrency(t *testing.T) {
 
 func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
@@ -148,12 +148,12 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(context.Background(), db)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 	for i := 0; i < tableEditorConcurrencyFinalCount*2; i++ {
@@ -247,7 +247,7 @@ func TestKeylessTableEditorConcurrencyPostInsert(t *testing.T) {
 
 func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
@@ -255,12 +255,12 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(context.Background(), db)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
@@ -328,7 +328,7 @@ func TestKeylessTableEditorWriteAfterFlush(t *testing.T) {
 
 func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), format, nil, nil)
 	require.NoError(t, err)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
@@ -336,12 +336,12 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 		schema.NewColumn("v2", 2, types.IntKind, false))
 	tableSch, err := schema.SchemaFromCols(colColl)
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(context.Background(), db)
+	emptyMap, err := types.NewMap(context.Background(), vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(context.Background(), db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(context.Background(), vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	tableEditor, err := newKeylessTableEditor(context.Background(), table, tableSch, tableName, opts)
 	require.NoError(t, err)
 
@@ -418,9 +418,9 @@ func TestKeylessTableEditorDuplicateKeyHandling(t *testing.T) {
 func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 	ctx := context.Background()
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -435,9 +435,9 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 		IsUnique: false,
 	})
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(ctx, db)
+	emptyMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(ctx, db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(ctx, vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)
@@ -575,9 +575,9 @@ func TestKeylessTableEditorMultipleIndexErrorHandling(t *testing.T) {
 func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 	ctx := context.Background()
 	format := types.Format_Default
-	db, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(ctx, format, nil, nil)
 	require.NoError(t, err)
-	opts := TestEditorOptions(db)
+	opts := TestEditorOptions(vrw)
 	colColl := schema.NewColCollection(
 		schema.NewColumn("v0", 0, types.IntKind, false),
 		schema.NewColumn("v1", 1, types.IntKind, false),
@@ -588,9 +588,9 @@ func TestKeylessTableEditorIndexCardinality(t *testing.T) {
 		IsUnique: false,
 	})
 	require.NoError(t, err)
-	emptyMap, err := types.NewMap(ctx, db)
+	emptyMap, err := types.NewMap(ctx, vrw)
 	require.NoError(t, err)
-	table, err := doltdb.NewNomsTable(ctx, db, tableSch, emptyMap, nil, nil)
+	table, err := doltdb.NewNomsTable(ctx, vrw, tableSch, emptyMap, nil, nil)
 	require.NoError(t, err)
 	table, err = RebuildAllIndexes(ctx, table, opts)
 	require.NoError(t, err)

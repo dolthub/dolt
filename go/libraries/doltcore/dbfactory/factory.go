@@ -53,7 +53,7 @@ const (
 
 // DBFactory is an interface for creating concrete datas.Database instances which may have different backing stores.
 type DBFactory interface {
-	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error)
+	CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error)
 }
 
 // DBFactories is a map from url scheme name to DBFactory.  Additional factories can be added to the DBFactories map
@@ -70,11 +70,11 @@ var DBFactories = map[string]DBFactory{
 
 // CreateDB creates a database based on the supplied urlStr, and creation params.  The DBFactory used for creation is
 // determined by the scheme of the url.  Naked urls will use https by default.
-func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, error) {
+func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
 	urlObj, err := earl.Parse(urlStr)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	scheme := urlObj.Scheme
@@ -86,5 +86,5 @@ func CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, para
 		return fact.CreateDB(ctx, nbf, urlObj, params)
 	}
 
-	return nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
+	return nil, nil, fmt.Errorf("unknown url scheme: '%s'", urlObj.Scheme)
 }

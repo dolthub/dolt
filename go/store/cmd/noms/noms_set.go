@@ -69,8 +69,8 @@ func nomsSet(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClause
 func nomsSetNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	db := sp.GetDatabase(ctx)
-	s, err := types.NewSet(ctx, db)
+	vrw := sp.GetVRW(ctx)
+	s, err := types.NewSet(ctx, vrw)
 	d.PanicIfError(err)
 	applySetEdits(ctx, sp, s, nil, types.DiffChangeAdded, args)
 	return 0
@@ -100,9 +100,10 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		return
 	}
 	db := sp.GetDatabase(ctx)
+	vrw := sp.GetVRW(ctx)
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vv, err := argumentToValue(ctx, args[i], db)
+		vv, err := argumentToValue(ctx, args[i], db, vrw)
 		if err != nil {
 			util.CheckErrorNoUsage(err)
 		}
@@ -110,7 +111,7 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 		if types.ValueCanBePathIndex(vv) {
 			pp = types.NewIndexPath(vv)
 		} else {
-			h, err := vv.Hash(db.Format())
+			h, err := vv.Hash(vrw.Format())
 			d.PanicIfError(err)
 			pp = types.NewHashIndexPath(h)
 		}
@@ -127,7 +128,7 @@ func applySetEdits(ctx context.Context, sp spec.Spec, rootVal types.Value, baseP
 	appplyPatch(ctx, db, sp, rootVal, basePath, patch)
 }
 
-func argumentToValue(ctx context.Context, arg string, db datas.Database) (types.Value, error) {
+func argumentToValue(ctx context.Context, arg string, db datas.Database, vrw types.ValueReadWriter) (types.Value, error) {
 	d.PanicIfTrue(arg == "")
 
 	if arg == "true" {
@@ -160,7 +161,7 @@ func argumentToValue(ctx context.Context, arg string, db datas.Database) (types.
 	if arg[0] == '@' {
 		p, err := spec.NewAbsolutePath(arg[1:])
 		d.PanicIfError(err)
-		return p.Resolve(ctx, db), nil
+		return p.Resolve(ctx, db, vrw), nil
 	}
 	if n, err := strconv.ParseFloat(arg, 64); err == nil {
 		return types.Float(n), nil

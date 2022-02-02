@@ -72,11 +72,12 @@ func main() {
 
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
-			db := datas.NewDatabase(storage.NewView())
+			vrw := types.NewValueStore(storage.NewView())
+			db := datas.NewTypesDatabase(vrw)
 			ds, err := db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 := time.Now()
-			col := buildFns[i](db, buildCount, valueFn)
+			col := buildFns[i](vrw, buildCount, valueFn)
 			ds, err = db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
@@ -92,11 +93,12 @@ func main() {
 
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
-			db = datas.NewDatabase(storage.NewView())
+			vrw = types.NewValueStore(storage.NewView())
+			db = datas.NewTypesDatabase(vrw)
 			ds, err = db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
 			t1 = time.Now()
-			col = buildIncrFns[i](db, insertCount, valueFn)
+			col = buildIncrFns[i](vrw, insertCount, valueFn)
 			ds, err = db.CommitValue(context.Background(), ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
@@ -113,13 +115,14 @@ func main() {
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	storage := &chunks.MemoryStorage{}
-	db := datas.NewDatabase(storage.NewView())
+	vrw := types.NewValueStore(storage.NewView())
+	db := datas.NewTypesDatabase(vrw)
 	ds, err := db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 
 	blobBytes := makeBlobBytes(*blobSize)
 	t1 := time.Now()
-	blob, err := types.NewBlob(context.Background(), db, bytes.NewReader(blobBytes))
+	blob, err := types.NewBlob(context.Background(), vrw, bytes.NewReader(blobBytes))
 	d.Chk.NoError(err)
 	_, err = db.CommitValue(context.Background(), ds, blob)
 	d.Chk.NoError(err)

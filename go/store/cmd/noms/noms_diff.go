@@ -57,21 +57,21 @@ func setupDiffFlags() *flag.FlagSet {
 
 func runDiff(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db1, value1, err := cfg.GetPath(ctx, args[0])
+	db1, vrw1, value1, err := cfg.GetPath(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	if value1 == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 	defer db1.Close()
 
-	db2, value2, err := cfg.GetPath(ctx, args[1])
+	db2, vrw2, value2, err := cfg.GetPath(ctx, args[1])
 	util.CheckErrorNoUsage(err)
 	if value2 == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[1]))
 	}
 	defer db2.Close()
 
-	d.PanicIfFalse(db1.Format() == db2.Format())
+	d.PanicIfFalse(vrw1.Format() == vrw2.Format())
 
 	if stat {
 		diff.Summary(ctx, value1, value2)

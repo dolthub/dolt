@@ -182,9 +182,10 @@ func TestJSONStructuralSharing(t *testing.T) {
 
 		ctx := context.Background()
 		ts := &chunks.TestStorage{}
-		db := datas.NewDatabase(ts.NewViewWithDefaultFormat())
+		vrw := types.NewValueStore(ts.NewViewWithDefaultFormat())
+		db := datas.NewTypesDatabase(vrw)
 
-		val := MustNomsJSONWithVRW(db, sb.String())
+		val := MustNomsJSONWithVRW(vrw, sb.String())
 
 		err := db.Flush(ctx)
 		require.NoError(t, err)
@@ -199,7 +200,7 @@ func TestJSONStructuralSharing(t *testing.T) {
 		for i < tuples {
 			tup, err := types.NewTuple(types.Format_Default, types.Int(i), types.JSON(val))
 			require.NoError(t, err)
-			_, err = db.WriteValue(ctx, tup)
+			_, err = vrw.WriteValue(ctx, tup)
 			require.NoError(t, err)
 			i++
 		}

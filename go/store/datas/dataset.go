@@ -39,12 +39,12 @@ var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
-	db   Database
+	db   *database
 	id   string
 	head types.Value
 }
 
-func newDataset(db Database, id string, head types.Value) (Dataset, error) {
+func newDataset(db *database, id string, head types.Value) (Dataset, error) {
 	check := head == nil
 
 	var err error
@@ -105,7 +105,7 @@ func (ds Dataset) MaybeHeadRef() (types.Ref, bool, error) {
 	if ds.head == nil {
 		return types.Ref{}, false, nil
 	}
-	ref, err := types.NewRef(ds.head, ds.Database().Format())
+	ref, err := types.NewRef(ds.head, ds.db.Format())
 
 	if err != nil {
 		return types.Ref{}, false, err

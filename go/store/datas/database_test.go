@@ -58,7 +58,7 @@ func TestValidateRef(t *testing.T) {
 type DatabaseSuite struct {
 	suite.Suite
 	storage *chunks.TestStorage
-	db      Database
+	db      *database
 	makeDb  func(chunks.ChunkStore) Database
 }
 
@@ -69,7 +69,7 @@ type LocalDatabaseSuite struct {
 func (suite *LocalDatabaseSuite) SetupTest() {
 	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = NewDatabase
-	suite.db = suite.makeDb(suite.storage.NewView())
+	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
 }
 
 type RemoteDatabaseSuite struct {
@@ -81,7 +81,7 @@ func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
 		return NewDatabase(cs)
 	}
-	suite.db = suite.makeDb(suite.storage.NewView())
+	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
 }
 
 func (suite *DatabaseSuite) TearDownTest() {

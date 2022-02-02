@@ -43,7 +43,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "othertestdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewView()).(*database)
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)

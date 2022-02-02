@@ -83,7 +83,9 @@ func main() {
 		log.Fatalf("Must set either --dir or ALL of --table, --bucket and --db\n")
 	}
 
-	db := datas.NewDatabase(store)
+	vrw := types.NewValueStore(store)
+
+	db := datas.NewTypesDatabase(vrw)
 	defer db.Close()
 
 	defer profile.MaybeStartProfile().Stop()
@@ -117,7 +119,7 @@ func main() {
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph
 		currentValues := make(map[hash.Hash]types.Value, len(current))
-		readValues, err := db.ReadManyValues(context.Background(), current)
+		readValues, err := vrw.ReadManyValues(context.Background(), current)
 		d.PanicIfError(err)
 		for i, v := range readValues {
 			h := current[i]

@@ -68,14 +68,14 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	}
 
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(ctx, dsPath)
+	db, vrw, ds, err := cfg.GetDataset(ctx, dsPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not create dataset: %s\n", err)
 		return 1
 	}
 	defer db.Close()
 
-	blob, err := types.NewBlob(ctx, db, readers...)
+	blob, err := types.NewBlob(ctx, vrw, readers...)
 
 	// TODO: fix panics
 	d.PanicIfError(err)

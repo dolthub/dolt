@@ -41,7 +41,7 @@ import (
 func nomsBlobGet(ctx context.Context, ds string, filePath string) int {
 	cfg := config.NewResolver()
 	var blob types.Blob
-	if db, val, err := cfg.GetPath(ctx, ds); err != nil {
+	if db, _, val, err := cfg.GetPath(ctx, ds); err != nil {
 		util.CheckErrorNoUsage(err)
 	} else if val == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("No value at %s", ds))

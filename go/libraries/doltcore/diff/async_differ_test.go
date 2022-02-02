@@ -26,14 +26,13 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestAsyncDiffer(t *testing.T) {
 	ctx := context.Background()
 	storage := &chunks.MemoryStorage{}
-	db := datas.NewDatabase(storage.NewView())
+	vrw := types.NewValueStore(storage.NewView())
 
 	vals := []types.Value{
 		types.Uint(0), types.String("a"),
@@ -56,7 +55,7 @@ func TestAsyncDiffer(t *testing.T) {
 		types.Uint(25), types.String("z"),
 	}
 
-	m1, err := types.NewMap(ctx, db, vals...)
+	m1, err := types.NewMap(ctx, vrw, vals...)
 	require.NoError(t, err)
 
 	vals = []types.Value{
@@ -87,7 +86,7 @@ func TestAsyncDiffer(t *testing.T) {
 		types.Uint(24), types.String("y2"), // changed
 		//types.Uint(25), types.String("z"),	// deleted
 	}
-	m2, err := types.NewMap(ctx, db, vals...)
+	m2, err := types.NewMap(ctx, vrw, vals...)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -245,20 +244,20 @@ func TestAsyncDiffer(t *testing.T) {
 	})
 
 	k1Row1Vals := []types.Value{c1Tag, types.Uint(3), c2Tag, types.String("d")}
-	k1Vals, err := getKeylessRow(ctx, db, k1Row1Vals)
+	k1Vals, err := getKeylessRow(ctx, k1Row1Vals)
 	assert.NoError(t, err)
-	k1, err := types.NewMap(ctx, db, k1Vals...)
+	k1, err := types.NewMap(ctx, vrw, k1Vals...)
 	assert.NoError(t, err)
 
 	// Delete one row, add two rows
 	k2Row1Vals := []types.Value{c1Tag, types.Uint(4), c2Tag, types.String("d")}
-	k2Vals1, err := getKeylessRow(ctx, db, k2Row1Vals)
+	k2Vals1, err := getKeylessRow(ctx, k2Row1Vals)
 	assert.NoError(t, err)
 	k2Row2Vals := []types.Value{c1Tag, types.Uint(1), c2Tag, types.String("e")}
-	k2Vals2, err := getKeylessRow(ctx, db, k2Row2Vals)
+	k2Vals2, err := getKeylessRow(ctx, k2Row2Vals)
 	assert.NoError(t, err)
 	k2Vals := append(k2Vals1, k2Vals2...)
-	k2, err := types.NewMap(ctx, db, k2Vals...)
+	k2, err := types.NewMap(ctx, vrw, k2Vals...)
 	require.NoError(t, err)
 
 	t.Run("can diff and filter keyless tables", func(t *testing.T) {
@@ -312,7 +311,7 @@ var c2Tag = types.Uint(2)
 var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 var rowIdTag = types.Uint(schema.KeylessRowIdTag)
 
-func getKeylessRow(ctx context.Context, db datas.Database, vals []types.Value) ([]types.Value, error) {
+func getKeylessRow(ctx context.Context, vals []types.Value) ([]types.Value, error) {
 	nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
 	if err != nil {
 		return []types.Value{}, err

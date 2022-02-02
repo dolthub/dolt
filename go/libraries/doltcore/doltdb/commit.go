@@ -353,7 +353,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	parents, err := types.NewList(ctx, ddb.db)
+	parents, err := types.NewList(ctx, ddb.vrw)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +364,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	}
 
 	for _, pc := range parentCommits {
-		rf, err := types.NewRef(pc.commitSt, ddb.db.Format())
+		rf, err := types.NewRef(pc.commitSt, ddb.vrw.Format())
 		if err != nil {
 			return nil, err
 		}
@@ -377,7 +377,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	st, err := cm.toNomsStruct(ddb.db.Format())
+	st, err := cm.toNomsStruct(ddb.vrw.Format())
 	if err != nil {
 		return nil, err
 	}

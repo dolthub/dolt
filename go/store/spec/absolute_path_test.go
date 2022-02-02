@@ -53,21 +53,22 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 func TestAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
-	db := datas.NewDatabase(storage.NewView())
+	vs := types.NewValueStore(storage.NewView())
+	db := datas.NewTypesDatabase(vs)
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list, err := types.NewList(context.Background(), db, s0, s1)
+	list, err := types.NewList(context.Background(), vs, s0, s1)
 	assert.NoError(err)
-	emptySet, err := types.NewSet(context.Background(), db)
+	emptySet, err := types.NewSet(context.Background(), vs)
 	assert.NoError(err)
 
-	_, err = db.WriteValue(context.Background(), s0)
+	_, err = vs.WriteValue(context.Background(), s0)
 	assert.NoError(err)
-	_, err = db.WriteValue(context.Background(), s1)
+	_, err = vs.WriteValue(context.Background(), s1)
 	assert.NoError(err)
-	_, err = db.WriteValue(context.Background(), list)
+	_, err = vs.WriteValue(context.Background(), list)
 	assert.NoError(err)
-	_, err = db.WriteValue(context.Background(), emptySet)
+	_, err = vs.WriteValue(context.Background(), emptySet)
 	assert.NoError(err)
 
 	ds, err := db.GetDataset(context.Background(), "ds")
@@ -80,7 +81,7 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo := func(exp types.Value, str string) {
 		p, err := NewAbsolutePath(str)
 		assert.NoError(err)
-		act := p.Resolve(context.Background(), db)
+		act := p.Resolve(context.Background(), db, vs)
 		if exp == nil {
 			assert.Nil(act)
 		} else {
@@ -111,10 +112,11 @@ func TestAbsolutePaths(t *testing.T) {
 func TestReadAbsolutePaths(t *testing.T) {
 	assert := assert.New(t)
 	storage := &chunks.MemoryStorage{}
-	db := datas.NewDatabase(storage.NewView())
+	vs := types.NewValueStore(storage.NewView())
+	db := datas.NewTypesDatabase(vs)
 
 	s0, s1 := types.String("foo"), types.String("bar")
-	list, err := types.NewList(context.Background(), db, s0, s1)
+	list, err := types.NewList(context.Background(), vs, s0, s1)
 	assert.NoError(err)
 
 	ds, err := db.GetDataset(context.Background(), "ds")
@@ -122,18 +124,18 @@ func TestReadAbsolutePaths(t *testing.T) {
 	_, err = db.CommitValue(context.Background(), ds, list)
 	assert.NoError(err)
 
-	vals, err := ReadAbsolutePaths(context.Background(), db, "ds.value[0]", "ds.value[1]")
+	vals, err := ReadAbsolutePaths(context.Background(), db, vs, "ds.value[0]", "ds.value[1]")
 	assert.NoError(err)
 
 	assert.Equal(2, len(vals))
 	assert.Equal("foo", string(vals[0].(types.String)))
 	assert.Equal("bar", string(vals[1].(types.String)))
 
-	vals, err = ReadAbsolutePaths(context.Background(), db, "!!#")
+	vals, err = ReadAbsolutePaths(context.Background(), db, vs, "!!#")
 	assert.Nil(vals)
 	assert.Equal("invalid input path '!!#'", err.Error())
 
-	vals, err = ReadAbsolutePaths(context.Background(), db, "invalid.monkey")
+	vals, err = ReadAbsolutePaths(context.Background(), db, vs, "invalid.monkey")
 	assert.Nil(vals)
 	assert.Equal("input path 'invalid.monkey' does not exist in database", err.Error())
 }

@@ -43,13 +43,6 @@ import (
 // Datasets() occurring after a call to Commit() (et al) will represent the
 // result of the Commit().
 type Database interface {
-	// To implement types.ValueWriter, Database implementations provide
-	// WriteValue(). WriteValue() writes v to this Database, though v is not
-	// guaranteed to be be persistent until after a subsequent Commit(). The
-	// return value is the Ref of v.
-	// Written values won't be persisted until a commit-alike
-	types.ValueReadWriter
-
 	// Close must have no side-effects
 	io.Closer
 

@@ -367,7 +367,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		mergeStateRef, err = db.db.WriteValue(ctx, mergeStateRefSt)
+		mergeStateRef, err = db.vrw.WriteValue(ctx, mergeStateRefSt)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

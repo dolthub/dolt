@@ -146,6 +146,8 @@ type PerfSuite struct {
 	// Database is a Noms database that tests can use for reading and writing. State is persisted across a single Run of a suite.
 	Database datas.Database
 
+	VS *types.ValueStore
+
 	// DatabaseSpec is the Noms spec of Database (typically a localhost URL).
 	DatabaseSpec string
 
@@ -257,12 +259,13 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 	defer func() {
 		db := sp.GetDatabase(context.Background())
+		vrw := sp.GetVRW(context.Background())
 
 		reps := make([]types.Value, *perfRepeatFlag)
 		for i, rep := range testReps {
 			timesSlice := types.ValueSlice{}
 			for name, info := range rep {
-				st, err := types.NewStruct(db.Format(), "", types.StructData{
+				st, err := types.NewStruct(vrw.Format(), "", types.StructData{
 					"elapsed": types.Float(info.elapsed.Nanoseconds()),
 					"paused":  types.Float(info.paused.Nanoseconds()),
 					"total":   types.Float(info.total.Nanoseconds()),
@@ -271,13 +274,13 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 				require.NoError(t, err)
 				timesSlice = append(timesSlice, types.String(name), st)
 			}
-			reps[i], err = types.NewMap(context.Background(), db, timesSlice...)
+			reps[i], err = types.NewMap(context.Background(), vrw, timesSlice...)
 		}
 
-		l, err := types.NewList(context.Background(), db, reps...)
+		l, err := types.NewList(context.Background(), vrw, reps...)
 		require.NoError(t, err)
-		record, err := types.NewStruct(db.Format(), "", map[string]types.Value{
-			"environment":      suite.getEnvironment(db),
+		record, err := types.NewStruct(vrw.Format(), "", map[string]types.Value{
+			"environment":      suite.getEnvironment(vrw),
 			"nomsRevision":     types.String(suite.getGitHead(path.Join(suite.AtticLabs, "noms"))),
 			"testdataRevision": types.String(suite.getGitHead(suite.Testdata)),
 			"reps":             l,
@@ -300,7 +303,8 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 		storage := &chunks.MemoryStorage{}
 		memCS := storage.NewView()
 		suite.DatabaseSpec = "mem://"
-		suite.Database = datas.NewDatabase(memCS)
+		suite.VS = types.NewValueStore(memCS)
+		suite.Database = datas.NewTypesDatabase(suite.VS)
 		defer suite.Database.Close()
 
 		if t, ok := suiteT.(SetupRepSuite); ok {

@@ -102,7 +102,7 @@ func runLog(ctx context.Context, args []string) int {
 		return 1
 	}
 	defer pinned.Close()
-	database := pinned.GetDatabase(ctx)
+	vrw := pinned.GetVRW(ctx)
 
 	absPath := pinned.Path
 	path := absPath.Path
@@ -110,7 +110,7 @@ func runLog(ctx context.Context, args []string) int {
 		path = types.MustParsePath(".value")
 	}
 
-	origCommitVal, err := database.ReadValue(ctx, absPath.Hash)
+	origCommitVal, err := vrw.ReadValue(ctx, absPath.Hash)
 	d.PanicIfError(err)
 	origCommit, ok := origCommitVal.(types.Struct)
 
@@ -124,7 +124,7 @@ func runLog(ctx context.Context, args []string) int {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
 	}
 
-	iter := NewCommitIterator(database, origCommit)
+	iter := NewCommitIterator(vrw, origCommit)
 	displayed := 0
 	if maxCommits <= 0 {
 		maxCommits = math.MaxInt32
@@ -141,7 +141,7 @@ func runLog(ctx context.Context, args []string) int {
 
 			go func(ch chan []byte, node LogNode) {
 				buff := &bytes.Buffer{}
-				printCommit(ctx, node, path, buff, database, tz)
+				printCommit(ctx, node, path, buff, vrw, tz)
 				ch <- buff.Bytes()
 			}(ch, ln)
 
@@ -169,7 +169,7 @@ func runLog(ctx context.Context, args []string) int {
 
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
-func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, db datas.Database, tz *time.Location) (err error) {
+func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, vr types.ValueReader, tz *time.Location) (err error) {
 	maxMetaFieldNameLength := func(commit types.Struct) int {
 		maxLen := 0
 		if m, ok, err := commit.MaybeGet(datas.CommitMetaField); err != nil {
@@ -185,7 +185,7 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		return maxLen
 	}
 
-	h, err := node.commit.Hash(db.Format())
+	h, err := node.commit.Hash(vr.Format())
 	d.PanicIfError(err)
 	hashStr := h.String()
 	if useColor {
@@ -231,9 +231,9 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		}
 
 		if showValue {
-			_, err = writeCommitLines(ctx, node, path, maxLines, lineno, w, db)
+			_, err = writeCommitLines(ctx, node, path, maxLines, lineno, w, vr)
 		} else {
-			_, err = writeDiffLines(ctx, node, path, db, maxLines, lineno, w)
+			_, err = writeDiffLines(ctx, node, path, vr, maxLines, lineno, w)
 		}
 	}
 	return
@@ -345,13 +345,13 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 	return lineno, nil
 }
 
-func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, db datas.Database) (lineCnt int, err error) {
+func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, vr types.ValueReader) (lineCnt int, err error) {
 	genPrefix := func(pw *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(pw.NumLines)+1))
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	v, err := path.Resolve(ctx, node.commit, db)
+	v, err := path.Resolve(ctx, node.commit, vr)
 	d.PanicIfError(err)
 	if v == nil {
 		pw.Write([]byte("<nil>\n"))
@@ -375,7 +375,7 @@ func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLin
 	return int(pw.NumLines), err
 }
 
-func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas.Database, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
+func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types.ValueReader, maxLines, lineno int, w io.Writer) (lineCnt int, err error) {
 	genPrefix := func(w *writers.PrefixWriter) []byte {
 		return []byte(genGraph(node, int(w.NumLines)+1))
 	}
@@ -398,7 +398,7 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 		return 1, err
 	}
 
-	val, err := parent.(types.Ref).TargetValue(ctx, db)
+	val, err := parent.(types.Ref).TargetValue(ctx, vr)
 	parentCommit := val.(types.Struct)
 	d.PanicIfError(err)
 
@@ -406,12 +406,12 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, db datas
 	err = functions.All(
 		func() error {
 			var err error
-			old, err = path.Resolve(ctx, parentCommit, db)
+			old, err = path.Resolve(ctx, parentCommit, vr)
 			return err
 		},
 		func() error {
 			var err error
-			neu, err = path.Resolve(ctx, node.commit, db)
+			neu, err = path.Resolve(ctx, node.commit, vr)
 			return err
 		},
 	)
