@@ -43,10 +43,8 @@ func testNewCursorAtItem(t *testing.T, count int) {
 		key, value := items[i][0], items[i][1]
 		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
-
-		pair := cur.currentPair()
-		assert.Equal(t, key, pair.key())
-		assert.Equal(t, value, pair.value())
+		assert.Equal(t, key, cur.currentKey())
+		assert.Equal(t, value, cur.currentValue())
 	}
 
 	validateTreeItems(t, ns, root, items)

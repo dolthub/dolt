@@ -34,16 +34,6 @@ func (i nodeItem) size() val.ByteSize {
 	return val.ByteSize(len(i))
 }
 
-type nodePair [2]nodeItem
-
-func (p nodePair) key() nodeItem {
-	return p[0]
-}
-
-func (p nodePair) value() nodeItem {
-	return p[1]
-}
-
 // nodeCursor explores a tree of mapNode items.
 type nodeCursor struct {
 	nd     mapNode
@@ -59,7 +49,7 @@ type searchFn func(item nodeItem, nd mapNode) (idx int)
 func newCursorAtStart(ctx context.Context, nrw NodeStore, nd mapNode) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentPair().value())
+		mv := metaValue(cur.currentValue())
 		nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
 			return nil, err
@@ -76,7 +66,7 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd mapNode) (cur *node
 	cur.skipToNodeEnd()
 
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentPair().value())
+		mv := metaValue(cur.currentValue())
 		nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
 			return nil, err
@@ -112,7 +102,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item nodeIt
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		mv := metaValue(cur.currentPair().value())
+		mv := metaValue(cur.currentValue())
 		nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
 			return cur, err
@@ -137,7 +127,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item no
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		mv := metaValue(cur.currentPair().value())
+		mv := metaValue(cur.currentValue())
 		cur.nd, err = fetchChild(ctx, nrw, mv)
 		if err != nil {
 			return cur, err
@@ -161,12 +151,8 @@ func (cur *nodeCursor) currentKey() nodeItem {
 	return cur.nd.getKey(cur.idx)
 }
 
-// currentPair returns the item at the currentPair cursor position
-func (cur *nodeCursor) currentPair() nodePair {
-	return nodePair{
-		cur.nd.getKey(cur.idx),
-		cur.nd.getValue(cur.idx),
-	}
+func (cur *nodeCursor) currentValue() nodeItem {
+	return cur.nd.getValue(cur.idx)
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
@@ -230,7 +216,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		// stay in bounds for internal nodes
 		cur.parent.keepInBounds()
 
-		mv := metaValue(cur.parent.currentPair().value())
+		mv := metaValue(cur.parent.currentValue())
 		cur.nd, err = fetchChild(ctx, cur.nrw, mv)
 		if err != nil {
 			return err
@@ -356,7 +342,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil)
-	mv := metaValue(cur.parent.currentPair().value())
+	mv := metaValue(cur.parent.currentValue())
 	cur.nd, err = fetchChild(ctx, cur.nrw, mv)
 	cur.idx = -1 // caller must set
 	return err

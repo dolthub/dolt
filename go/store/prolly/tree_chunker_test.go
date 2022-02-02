@@ -90,14 +90,12 @@ func iterTree(ctx context.Context, ns NodeStore, nd mapNode, cb func(item nodeIt
 
 	ok := true
 	for ok {
-		curr := cur.currentPair()
-
-		err = cb(curr.key())
+		err = cb(cur.currentKey())
 		if err != nil {
 			return err
 		}
 
-		err = cb(curr.value())
+		err = cb(cur.currentValue())
 		if err != nil {
 			return err
 		}

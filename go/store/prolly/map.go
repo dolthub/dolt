@@ -106,11 +106,9 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 
 	var k, v val.Tuple
 	if cur.valid() {
-		pair := cur.currentPair()
-
-		k = val.Tuple(pair.key())
+		k = val.Tuple(cur.currentKey())
 		if m.compareKeys(key, k) == 0 {
-			v = val.Tuple(pair.value())
+			v = val.Tuple(cur.currentValue())
 		} else {
 			k = nil
 		}
@@ -273,8 +271,8 @@ var _ rangeIter = &prollyRangeIter{}
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.valid() {
-		p := it.curr.currentPair()
-		return val.Tuple(p.key()), val.Tuple(p.value())
+		key = val.Tuple(it.curr.currentKey())
+		value = val.Tuple(it.curr.currentValue())
 	}
 	return
 }

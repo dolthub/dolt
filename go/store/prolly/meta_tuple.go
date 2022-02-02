@@ -22,6 +22,18 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// todo(andy): remove
+//  this is only used once
+type nodePair [2]nodeItem
+
+func (p nodePair) key() nodeItem {
+	return p[0]
+}
+
+func (p nodePair) value() nodeItem {
+	return p[1]
+}
+
 func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (mapNode, error) {
 	// todo(andy) handle nil mapNode, dangling ref
 	return ns.Read(ctx, mt.GetRef())

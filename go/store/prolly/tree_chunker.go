@@ -88,9 +88,7 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	tc.cur.skipToNodeStart()
 
 	for tc.cur.idx < idx {
-		pair := tc.cur.currentPair()
-
-		_, err = tc.Append(ctx, pair.key(), pair.value())
+		_, err = tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -142,8 +140,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 		// append items until we catchup with |nextMutation|, or until
 		// we resynchronize with the previous tree.
-		pair := tc.cur.currentPair()
-		ok, err := tc.Append(ctx, pair.key(), pair.value())
+		ok, err := tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -403,10 +400,8 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 // boundary or the end of the mapNode.
 func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.valid() {
-		pair := tc.cur.currentPair()
-
 		var ok bool
-		ok, err = tc.Append(ctx, pair.key(), pair.value())
+		ok, err = tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
