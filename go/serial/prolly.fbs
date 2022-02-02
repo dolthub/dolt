@@ -38,8 +38,6 @@ table TupleMap {
   // - leaf nodes: contains refs for heap values
   //   iff table has ref'd types (eg TEXT)
   ref_array:[ubyte];
-  // cardinalities of ref'd subtrees
-  ref_cardinality:[uint64];
 
   // tuple format for |key_tuples|
   key_format:TupleFormat;
