@@ -95,12 +95,10 @@ func (d DoltResetFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		if err != nil {
 			return nil, err
 		}
-
 		err = dSess.SetWorkingSet(ctx, dbName, ws.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged), nil)
 		if err != nil {
 			return 1, err
 		}
-
 	} else {
 		roots, err = actions.ResetSoftTables(ctx, dbData, apr, roots)
 		if err != nil {

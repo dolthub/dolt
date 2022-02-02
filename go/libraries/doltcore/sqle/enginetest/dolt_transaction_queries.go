@@ -868,7 +868,7 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{
-				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test", // Commit allows queries when flags are set.
+				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{
