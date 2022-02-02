@@ -15,6 +15,8 @@
 package prolly
 
 import (
+	"math"
+
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -25,44 +27,67 @@ const (
 	refSz = hash.ByteLen
 )
 
+const (
+	cumulativeCountSize = val.ByteSize(6)
+	nodeCountSize       = val.ByteSize(2)
+	treeLevelSize       = val.ByteSize(1)
+
+	maxNodeDataSize = uint64(math.MaxUint16)
+)
+
+var emptyNode = mapNode{}
+
 type mapNode struct {
 	buf serial.TupleMap
+
+	// todo(andy): embed hash.Hash here?
 }
 
-func makeMapNode(pool pool.BuffPool, level uint64, items ...nodeItem) (node Node) {
-	var sz uint64
-	for _, item := range items {
-		sz += uint64(item.size())
+func makeProllyNode(pool pool.BuffPool, level uint64, items ...nodeItem) (node mapNode) {
+	//var sz uint64
+	//for _, item := range items {
+	//	sz += uint64(item.size())
+	//
+	//}
+	//count := len(items)
+	//
+	//if sz > maxNodeDataSize {
+	//	panic("items exceeded max chunk data size")
+	//}
+	//
+	//pos := val.ByteSize(sz)
+	//pos += val.OffsetsSize(count)
+	//pos += cumulativeCountSize
+	//pos += nodeCountSize
+	//pos += treeLevelSize
+	//
+	//node = pool.Get(uint64(pos))
+	//
+	//cc := countCumulativeItems(level, items)
+	//writeCumulativeCount(node, cc)
+	//writeItemCount(node, count)
+	//writeTreeLevel(node, level)
+	//
+	//pos = 0
+	//offs, _ := node.offsets()
+	//for i, item := range items {
+	//	copy(node[pos:pos+item.size()], item)
+	//	offs.Put(i, pos)
+	//	pos += item.size()
+	//}
+	//
+	//return node
 
-	}
-	count := len(items)
+	return mapNode{}
+}
 
-	if sz > maxNodeDataSize {
-		panic("items exceeded max chunk data size")
-	}
+func mapNodeFromBytes(bb []byte) mapNode {
+	fb := serial.GetRootAsTupleMap(bb, 0)
+	return mapNode{buf: *fb}
+}
 
-	pos := val.ByteSize(sz)
-	pos += val.OffsetsSize(count)
-	pos += cumulativeCountSize
-	pos += nodeCountSize
-	pos += treeLevelSize
-
-	node = pool.Get(uint64(pos))
-
-	cc := countCumulativeItems(level, items)
-	writeCumulativeCount(node, cc)
-	writeItemCount(node, count)
-	writeTreeLevel(node, level)
-
-	pos = 0
-	offs, _ := node.offsets()
-	for i, item := range items {
-		copy(node[pos:pos+item.size()], item)
-		offs.Put(i, pos)
-		pos += item.size()
-	}
-
-	return node
+func (nd mapNode) hashOf() hash.Hash {
+	return hash.Of(nd.bytes())
 }
 
 func (nd mapNode) getKey(i int) nodeItem {
@@ -70,7 +95,7 @@ func (nd mapNode) getKey(i int) nodeItem {
 
 	start, stop := uint16(0), uint16(len(keys))
 	if i > 0 {
-		start = nd.buf.KeyOffsets(i-1)
+		start = nd.buf.KeyOffsets(i - 1)
 	}
 	if i < nd.buf.KeyOffsetsLength() {
 		stop = nd.buf.KeyOffsets(i)
@@ -80,11 +105,19 @@ func (nd mapNode) getKey(i int) nodeItem {
 }
 
 func (nd mapNode) getValue(i int) nodeItem {
+	if nd.leafNode() {
+		return nd.getValueTuple(i)
+	} else {
+		return nd.getRef(i)
+	}
+}
+
+func (nd mapNode) getValueTuple(i int) nodeItem {
 	values := nd.buf.ValueTuplesBytes()
 
 	start, stop := uint16(0), uint16(len(values))
 	if i > 0 {
-		start = nd.buf.ValueOffsets(i-1)
+		start = nd.buf.ValueOffsets(i - 1)
 	}
 	if i < nd.buf.ValueOffsetsLength() {
 		stop = nd.buf.ValueOffsets(i)
@@ -117,5 +150,9 @@ func (nd mapNode) leafNode() bool {
 }
 
 func (nd mapNode) empty() bool {
-	return nd.nodeCount() == 0
+	return nd.bytes() == nil || nd.nodeCount() == 0
+}
+
+func (nd mapNode) bytes() []byte {
+	return nd.buf.Table().Bytes
 }

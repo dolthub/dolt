@@ -57,7 +57,7 @@ func newTestNodeStore() NodeStore {
 	return NewNodeStore(ts.NewView())
 }
 
-func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
+func randomTree(t *testing.T, count int) (mapNode, [][2]nodeItem, NodeStore) {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
@@ -83,7 +83,7 @@ var valDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-func searchTestTree(item nodeItem, nd Node) int {
+func searchTestTree(item nodeItem, nd mapNode) int {
 	idx := sort.Search(nd.nodeCount()/stride, func(i int) bool {
 		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*stride))
 		return keyDesc.Compare(l, r) <= 0

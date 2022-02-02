@@ -53,7 +53,7 @@ func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit newSplitter
 }
 
 func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
-	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
+	// |cur| will be nil if this is a new mapNode, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
 	sc := &treeChunker{
@@ -169,7 +169,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 				}
 
 				// |tc.cur| is now inconsistent with its parent, invalidate it.
-				tc.cur.nd = nil
+				tc.cur.nd = mapNode{}
 			}
 
 			break
@@ -215,8 +215,8 @@ func (tc *treeChunker) Skip(ctx context.Context) error {
 // may be made before or after the pair, but not between them.
 func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
-	// (1) Key-value pairs are stored in the same Node.
-	// (2) The total size of a Node's data cannot exceed |maxNodeDataSize|.
+	// (1) Key-value pairs are stored in the same mapNode.
+	// (2) The total size of a mapNode's data cannot exceed |maxNodeDataSize|.
 	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
@@ -313,13 +313,13 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 	return nil
 }
 
-// createNode creates a Node from the current items in |sc.currentPair|,
-// clears the current items, then returns the new Node and a metaValue that
-// points to it. The Node is always eagerly written.
-func (tc *treeChunker) createNode(ctx context.Context) (Node, nodePair, error) {
+// createNode creates a mapNode from the current items in |sc.currentPair|,
+// clears the current items, then returns the new mapNode and a metaValue that
+// points to it. The mapNode is always eagerly written.
+func (tc *treeChunker) createNode(ctx context.Context) (mapNode, nodePair, error) {
 	nd, metaPair, err := writeNewChild(ctx, tc.ns, tc.level, tc.current...)
 	if err != nil {
-		return nil, nodePair{}, err
+		return mapNode{}, nodePair{}, err
 	}
 
 	// |tc.currentPair| is copied so it's safe to re-use the memory.
@@ -329,15 +329,15 @@ func (tc *treeChunker) createNode(ctx context.Context) (Node, nodePair, error) {
 	return nd, metaPair, nil
 }
 
-// Done returns the root Node of the resulting tree.
+// Done returns the root mapNode of the resulting tree.
 // The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
+func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 	assertTrue(!tc.done)
 	tc.done = true
 
 	if tc.cur != nil {
 		if err := tc.finalizeCursor(ctx); err != nil {
-			return nil, err
+			return mapNode{}, err
 		}
 	}
 
@@ -348,7 +348,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 			// |tc.current| are the last items at this level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
-				return nil, err
+				return mapNode{}, err
 			}
 		}
 
@@ -357,29 +357,29 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	// At this point, we know |tc.current| contains every item at this level of the tree.
 	// To see this, consider that there are two ways items can enter |tc.current|.
-	//  (1) as the result of resume() with the cursor on anything other than the first item in the Node
+	//  (1) as the result of resume() with the cursor on anything other than the first item in the mapNode
 	//  (2) as a result of a child treeChunker hitting an explicit chunk boundary during either Append() or finalize().
 	//
 	// The only way there can be no items in some parent treeChunker's |tc.current| is if this treeChunker began with
 	// a cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
 	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
 	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.current| must contain all items
-	// within the current Node.
+	// within the current mapNode.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three possible cases:
 	// (1) This is "leaf" treeChunker and thus produced tree of depth 1 which contains exactly one chunk
 	//     (never hit a boundary), or
-	// (2) This in an internal Node of the tree which contains multiple references to child nodes. In either case,
+	// (2) This in an internal mapNode of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
 	if tc.isLeaf() || len(tc.current) > metaPairCount {
 		nd, _, err := tc.createNode(ctx)
 		if err != nil {
-			return nil, err
+			return mapNode{}, err
 		}
 		return nd, nil
 	}
 
-	// (3) This is an internal Node of the tree with a single metaPair. This is a non-canonical root, and we must walk
+	// (3) This is an internal mapNode of the tree with a single metaPair. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
 	assertTrue(!tc.isLeaf())
 	assertTrue(len(tc.current) == metaPairCount)
@@ -388,19 +388,19 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	for {
 		child, err := fetchChild(ctx, tc.ns, mt)
 		if err != nil {
-			return nil, err
+			return mapNode{}, err
 		}
 
 		if child.leafNode() || child.nodeCount() > 1 {
 			return child, nil
 		}
 
-		mt = metaValue(child.getItem(metaPairValIdx))
+		mt = metaValue(child.getRef(0))
 	}
 }
 
-// If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
-// boundary or the end of the Node.
+// If we are mutating an existing mapNode, appending subsequent items in the mapNode until we reach a pre-existing chunk
+// boundary or the end of the mapNode.
 func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.valid() {
 		pair := tc.cur.currentPair()
@@ -411,7 +411,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 			return err
 		}
 		if ok && tc.cur.atNodeEnd() {
-			break // boundary occurred at same place in old & new Node
+			break // boundary occurred at same place in old & new mapNode
 		}
 
 		_, err = tc.cur.advance(ctx)
@@ -428,7 +428,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 		}
 
 		// invalidate this cursor to mark it finalized.
-		tc.cur.nd = nil
+		tc.cur.nd = mapNode{}
 	}
 
 	return nil

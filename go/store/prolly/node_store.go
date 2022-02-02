@@ -32,12 +32,11 @@ const (
 
 // NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
+	// Read reads a prolly tree mapNode from the store.
+	Read(ctx context.Context, ref hash.Hash) (mapNode, error)
 
-	// Read reads a prolly tree Node from the store.
-	Read(ctx context.Context, ref hash.Hash) (Node, error)
-
-	// Write writes a prolly tree Node to the store.
-	Write(ctx context.Context, nd Node) (hash.Hash, error)
+	// Write writes a prolly tree mapNode to the store.
+	Write(ctx context.Context, nd mapNode) (hash.Hash, error)
 
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
@@ -68,23 +67,24 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 }
 
 // Read implements NodeStore.
-func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
+func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (mapNode, error) {
 	c, ok := ns.cache.get(ref)
 	if ok {
-		return c.Data(), nil
+		return mapNodeFromBytes(c.Data()), nil
 	}
 
 	c, err := ns.store.Get(ctx, ref)
 	if err != nil {
-		return nil, err
+		return mapNode{}, err
 	}
 	ns.cache.insert(c)
-	return c.Data(), err
+
+	return mapNodeFromBytes(c.Data()), err
 }
 
 // Write implements NodeStore.
-func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
-	c := chunks.NewChunk(nd)
+func (ns nodeStore) Write(ctx context.Context, nd mapNode) (hash.Hash, error) {
+	c := chunks.NewChunk(nd.bytes())
 	if err := ns.store.Put(ctx, c); err != nil {
 		return hash.Hash{}, err
 	}

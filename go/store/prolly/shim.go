@@ -37,24 +37,23 @@ func NewEmptyMap(sch schema.Schema) Map {
 
 // PartitionKeysFromMap naively divides the map by its top-level keys.
 func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
-	keys = make([]val.Tuple, m.root.nodeCount()/2)
+	keys = make([]val.Tuple, m.root.nodeCount())
 	for i := range keys {
-		pair := m.root.getPair(i * 2)
-		keys[i] = val.Tuple(pair.key())
+		keys[i] = val.Tuple(m.root.getKey(i))
 	}
 	return
 }
 
-func ValueFromNode(nd Node) types.Value {
-	return types.InlineBlob(nd)
+func ValueFromNode(nd mapNode) types.Value {
+	return types.InlineBlob(nd.bytes())
 }
 
-func NodeFromValue(v types.Value) Node {
-	return Node(v.(types.InlineBlob))
+func NodeFromValue(v types.Value) mapNode {
+	return mapNodeFromBytes(v.(types.InlineBlob))
 }
 
 func ValueFromMap(m Map) types.Value {
-	return types.InlineBlob(m.root)
+	return types.InlineBlob(m.root.bytes())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {

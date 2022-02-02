@@ -22,17 +22,17 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (Node, error) {
-	// todo(andy) handle nil Node, dangling ref
+func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (mapNode, error) {
+	// todo(andy) handle nil mapNode, dangling ref
 	return ns.Read(ctx, mt.GetRef())
 }
 
-func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (Node, nodePair, error) {
+func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (mapNode, nodePair, error) {
 	child := makeProllyNode(ns.Pool(), level, items...)
 
 	ref, err := ns.Write(ctx, child)
 	if err != nil {
-		return nil, nodePair{}, err
+		return mapNode{}, nodePair{}, err
 	}
 
 	if len(items) == 0 {
@@ -57,7 +57,7 @@ const (
 	metaValueRefIdx   = 1
 )
 
-// metaValue is a value Tuple in an internal Node of a prolly tree.
+// metaValue is a value Tuple in an internal mapNode of a prolly tree.
 // metaValues have two fields: cumulative count and ref.
 type metaValue val.Tuple
 
@@ -74,7 +74,7 @@ func (mt metaValue) GetCumulativeCount() uint64 {
 	return val.ReadUint48(cnt)
 }
 
-// GetRef returns the hash.Hash of the child Node pointed
+// GetRef returns the hash.Hash of the child mapNode pointed
 // to by this metaValue.
 func (mt metaValue) GetRef() hash.Hash {
 	tup := val.Tuple(mt)
