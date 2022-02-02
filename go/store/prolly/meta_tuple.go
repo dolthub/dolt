@@ -21,8 +21,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// todo(andy): remove
-//  this is only used once
 type metaPair struct {
 	k, r      nodeItem
 	treeCount uint64
@@ -45,8 +43,7 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (mapNode, erro
 	return ns.Read(ctx, ref)
 }
 
-func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (mapNode, metaPair, error) {
-	keys, values := splitKeyValuePairs(items...)
+func writeNewChild(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (mapNode, metaPair, error) {
 	child := makeMapNode(ns.Pool(), level, keys, values)
 
 	ref, err := ns.Write(ctx, child)
@@ -54,39 +51,14 @@ func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nod
 		return mapNode{}, metaPair{}, err
 	}
 
-	if len(items) == 0 {
+	if len(keys) == 0 {
 		// empty leaf node
 		return child, metaPair{}, nil
 	}
 
-	lastKey := val.Tuple(items[len(items)-metaPairCount])
+	lastKey := val.Tuple(keys[len(keys)-1])
 	metaKey := val.CloneTuple(ns.Pool(), lastKey)
 	meta := metaPair{k: nodeItem(metaKey), r: nodeItem(ref[:])}
 
 	return child, meta, nil
 }
-
-// todo(andy): treeChunker should collect keys and values
-func splitKeyValuePairs(items ...nodeItem) (keys, values []nodeItem) {
-	if len(items)%2 != 0 {
-		panic("expected even count")
-	}
-
-	keys = make([]nodeItem, len(items)/2)
-	for i := range keys {
-		keys[i] = items[i*2]
-	}
-
-	values = make([]nodeItem, len(items)/2)
-	for i := range values {
-		values[i] = items[(i*2)+1]
-	}
-
-	return
-}
-
-const (
-	metaPairCount  = 2
-	metaPairKeyIdx = 0
-	metaPairValIdx = 1
-)

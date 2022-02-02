@@ -27,9 +27,6 @@ import (
 const (
 	maxNodeDataSize = uint64(math.MaxUint16)
 	refSz           = hash.ByteLen
-
-	// todo(andy) tighter bound here
-	fbPad = 96
 )
 
 func init() {
@@ -49,7 +46,7 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 		keySz += len(keys[i])
 		valSz += len(values[i])
 	}
-	b := getMapBuilder(pool, keySz+valSz+fbPad)
+	b := getMapBuilder(pool, keySz+valSz+96)
 
 	var (
 		keyTups, keyOffs fb.UOffsetT
@@ -147,10 +144,6 @@ func (nd mapNode) getKey(i int) nodeItem {
 		stop = nd.buf.KeyOffsets(i)
 	}
 
-	if start == stop {
-		panic("fux")
-	}
-
 	return keys[start:stop]
 }
 
@@ -191,9 +184,10 @@ func (nd mapNode) nodeCount() int {
 	return nd.cnt
 }
 
-func (nd mapNode) cumulativeCount() uint64 {
-	return nd.buf.TreeCount()
-}
+// todo(andy): should we support this?
+//func (nd mapNode) cumulativeCount() uint64 {
+//	return nd.buf.TreeCount()
+//}
 
 func (nd mapNode) leafNode() bool {
 	return nd.level() == 0

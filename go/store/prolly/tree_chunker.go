@@ -28,17 +28,17 @@ import (
 )
 
 const (
-	nodeItemAccumulatorSz = 512
+	nodeItemAccumulatorSz = 256
 )
 
 //  newSplitterFn makes a nodeSplitter.
 type newSplitterFn func(salt byte) nodeSplitter
 
 type treeChunker struct {
-	cur     *nodeCursor
-	current []nodeItem
-	currSz  uint64
-	done    bool
+	cur        *nodeCursor
+	keys, vals []nodeItem
+	currSz     uint64
+	done       bool
 
 	level  uint64
 	parent *treeChunker
@@ -60,7 +60,8 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, ns NodeS
 
 	sc := &treeChunker{
 		cur:      cur,
-		current:  make([]nodeItem, 0, nodeItemAccumulatorSz),
+		keys:     make([]nodeItem, 0, nodeItemAccumulatorSz),
+		vals:     make([]nodeItem, 0, nodeItemAccumulatorSz),
 		level:    level,
 		parent:   nil,
 		newSplit: newSplit,
@@ -161,7 +162,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 				// Here we need to advance the chunker's cursor, but calling
 				// tc.cur.forward() would needlessly fetch another chunk at the
-				// current level. Instead, we only advance the parent.
+				// keys level. Instead, we only advance the parent.
 				_, err := tc.cur.parent.advanceInBounds(ctx)
 				if err != nil {
 					return err
@@ -194,7 +195,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 	tc.cur.copy(next)
 
 	if fastForward { // Case (4)
-		// we fast-forwarded to the current chunk, so we
+		// we fast-forwarded to the keys chunk, so we
 		// need to process its prefix
 		if err := tc.resume(ctx); err != nil {
 			return err
@@ -224,7 +225,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 	//     but we enforce this constraint for all internal nodes of the tree.
 
 	// constraint (3)
-	degenerate := !tc.isLeaf() && len(tc.current) < metaPairCount*2
+	degenerate := !tc.isLeaf() && len(tc.keys) == 1
 
 	// constraint (2)
 	overflow := false
@@ -248,15 +249,16 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 		}
 	}
 
-	tc.current = append(tc.current, key, value)
+	tc.keys = append(tc.keys, key)
+	tc.vals = append(tc.vals, value)
 	tc.currSz += uint64(len(key) + len(value))
 	err := tc.splitter.Append(key, value)
 	if err != nil {
 		return false, err
 	}
 
-	// recompute with updated |tc.current|
-	degenerate = !tc.isLeaf() && len(tc.current) < metaPairCount*2
+	// recompute with updated |tc.keys|
+	degenerate = !tc.isLeaf() && len(tc.keys) == 1
 
 	if tc.splitter.CrossedBoundary() && !degenerate {
 		err := tc.handleChunkBoundary(ctx)
@@ -270,7 +272,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 }
 
 func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
-	assertTrue(len(tc.current) > 0)
+	assertTrue(len(tc.keys) > 0)
 	tc.splitter.Reset()
 
 	if tc.parent == nil {
@@ -313,17 +315,18 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 	return nil
 }
 
-// createNode creates a mapNode from the current items in |sc.currentPair|,
-// clears the current items, then returns the new mapNode and a metaValue that
+// createNode creates a mapNode from the keys items in |sc.currentPair|,
+// clears the keys items, then returns the new mapNode and a metaValue that
 // points to it. The mapNode is always eagerly written.
 func (tc *treeChunker) createNode(ctx context.Context) (mapNode, metaPair, error) {
-	nd, mp, err := writeNewChild(ctx, tc.ns, tc.level, tc.current...)
+	nd, mp, err := writeNewChild(ctx, tc.ns, tc.level, tc.keys, tc.vals)
 	if err != nil {
 		return mapNode{}, metaPair{}, err
 	}
 
-	// |tc.currentPair| is copied so it's safe to re-use the memory.
-	tc.current = tc.current[:0]
+	// buffers are copied, it's safe to re-use the memory.
+	tc.keys = tc.keys[:0]
+	tc.vals = tc.vals[:0]
 	tc.currSz = 0
 
 	return nd, mp, nil
@@ -344,8 +347,8 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
 	// to find the root of the resulting tree.
 	if tc.parent != nil && tc.parent.anyPending() {
-		if len(tc.current) > 0 {
-			// |tc.current| are the last items at this level of the tree,
+		if len(tc.keys) > 0 {
+			// |tc.keys| are the last items at this level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
 				return mapNode{}, err
@@ -355,23 +358,23 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 		return tc.parent.Done(ctx)
 	}
 
-	// At this point, we know |tc.current| contains every item at this level of the tree.
-	// To see this, consider that there are two ways items can enter |tc.current|.
+	// At this point, we know |tc.keys| contains every item at this level of the tree.
+	// To see this, consider that there are two ways items can enter |tc.keys|.
 	//  (1) as the result of resume() with the cursor on anything other than the first item in the mapNode
 	//  (2) as a result of a child treeChunker hitting an explicit chunk boundary during either Append() or finalize().
 	//
-	// The only way there can be no items in some parent treeChunker's |tc.current| is if this treeChunker began with
+	// The only way there can be no items in some parent treeChunker's |tc.keys| is if this treeChunker began with
 	// a cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
 	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
-	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.current| must contain all items
-	// within the current mapNode.
+	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.keys| must contain all items
+	// within the keys mapNode.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three possible cases:
 	// (1) This is "leaf" treeChunker and thus produced tree of depth 1 which contains exactly one chunk
 	//     (never hit a boundary), or
 	// (2) This in an internal mapNode of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
-	if tc.isLeaf() || len(tc.current) > metaPairCount {
+	if tc.isLeaf() || len(tc.keys) > 1 {
 		nd, _, err := tc.createNode(ctx)
 		if err != nil {
 			return mapNode{}, err
@@ -382,9 +385,9 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 	// (3) This is an internal mapNode of the tree with a single metaPair. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
 	assertTrue(!tc.isLeaf())
-	assertTrue(len(tc.current) == metaPairCount)
+	assertTrue(len(tc.keys) == 1)
 
-	mt := hash.New(tc.current[metaPairValIdx])
+	mt := hash.New(tc.vals[0])
 	for {
 		child, err := fetchChild(ctx, tc.ns, mt)
 		if err != nil {
@@ -434,7 +437,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
 func (tc *treeChunker) anyPending() bool {
-	if len(tc.current) > 0 {
+	if len(tc.keys) > 0 {
 		return true
 	}
 

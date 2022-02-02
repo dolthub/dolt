@@ -76,10 +76,11 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
-// Count returns the number of key-ref pairs in the Map.
-func (m Map) Count() uint64 {
-	return m.root.cumulativeCount() / 2
-}
+// todo(andy): support this?
+//// Count returns the number of key-ref pairs in the Map.
+//func (m Map) Count() uint64 {
+//	return m.root.cumulativeCount() / 2
+//}
 
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
@@ -94,6 +95,10 @@ func (m Map) Format() *types.NomsBinFormat {
 // Descriptors returns the TupleDesc's from this Map.
 func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
+}
+
+func (m Map) Empty() bool {
+	return m.root.empty()
 }
 
 // Get searches for the key-ref pair keyed by |key| and passes the results to the callback.
