@@ -289,7 +289,7 @@ func Run(datasetID string, t *testing.T, suiteT perfSuiteT) {
 
 		ds, err := db.GetDataset(context.Background(), *perfPrefixFlag+datasetID)
 		require.NoError(t, err)
-		_, err = db.CommitValue(context.Background(), ds, record)
+		_, err = datas.CommitValue(context.Background(), db, ds, record)
 		require.NoError(t, err)
 	}()
 

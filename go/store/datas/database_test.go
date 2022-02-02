@@ -92,7 +92,7 @@ func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	suite.NoError(err)
 	r, err := types.NewRef(types.Bool(true), types.Format_7_18)
 	suite.NoError(err)
-	suite.Panics(func() { suite.db.CommitValue(context.Background(), ds, r) })
+	suite.Panics(func() { CommitValue(context.Background(), suite.db, ds, r) })
 }
 
 func (suite *DatabaseSuite) TestTolerateUngettableRefs() {
@@ -115,7 +115,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	s, err = se.Set(context.Background())
 	suite.NoError(err)
 
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, s)
 	suite.NoError(err)
 
 	s = mustHeadValue(ds1).(types.Set)
@@ -126,7 +126,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	s, err = se.Set(context.Background()) // danging ref
 	suite.NoError(err)
 	suite.Panics(func() {
-		ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
+		ds1, err = CommitValue(context.Background(), suite.db, ds1, s)
 	})
 }
 
@@ -137,9 +137,9 @@ func (suite *DatabaseSuite) TestRebase() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = CommitValue(context.Background(), suite.db, ds1, types.String("a"))
 	b := types.String("b")
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(b))
 
@@ -151,7 +151,7 @@ func (suite *DatabaseSuite) TestRebase() {
 	e := types.String("e")
 	ds, err := interloper.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	iDS, concErr := interloper.CommitValue(context.Background(), ds, e)
+	iDS, concErr := CommitValue(context.Background(), interloper, ds, e)
 	suite.NoError(concErr)
 	suite.True(mustHeadValue(iDS).Equals(e))
 
@@ -175,7 +175,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	ds1, err := db1.GetDataset(context.Background(), id1)
 	suite.NoError(err)
 	ds1HeadVal := types.String("Commit value for " + id1)
-	ds1, err = db1.CommitValue(context.Background(), ds1, ds1HeadVal)
+	ds1, err = CommitValue(context.Background(), db1, ds1, ds1HeadVal)
 	suite.NoError(err)
 
 	db2 := suite.makeDb(suite.storage.NewView())
@@ -183,7 +183,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	ds2, err := db2.GetDataset(context.Background(), id2)
 	suite.NoError(err)
 	ds2HeadVal := types.String("Commit value for " + id2)
-	ds2, err = db2.CommitValue(context.Background(), ds2, ds2HeadVal)
+	ds2, err = CommitValue(context.Background(), db2, ds2, ds2HeadVal)
 	suite.NoError(err)
 
 	suite.EqualValues(ds1HeadVal, mustHeadValue(ds1))
@@ -202,7 +202,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err := suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	a := types.String("a")
-	ds2, err := suite.db.CommitValue(context.Background(), ds, a)
+	ds2, err := CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
 
 	// ds2 matches the Datasets Map in suite.db
@@ -223,7 +223,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a| <- |b|
 	b := types.String("b")
-	ds, err = suite.db.CommitValue(context.Background(), ds, b)
+	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 	suite.Equal(uint64(2), mustHeadRef(ds).Height())
@@ -238,7 +238,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 
 	// |a| <- |b| <- |d|
 	d := types.String("d")
-	ds, err = suite.db.CommitValue(context.Background(), ds, d)
+	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
 	suite.Equal(uint64(3), mustHeadRef(ds).Height())
@@ -252,7 +252,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	// Add a commit to a different datasetId
 	ds, err = suite.db.GetDataset(context.Background(), "otherDS")
 	suite.NoError(err)
-	_, err = suite.db.CommitValue(context.Background(), ds, a)
+	_, err = CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
 
 	// Get a fresh database, and verify that both datasets are present
@@ -270,7 +270,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NoError(err)
 	ds, err := suite.db.GetDataset(context.Background(), dsID1)
 	suite.NoError(err)
-	ds, err = suite.db.CommitValue(context.Background(), ds, types.String("a"))
+	ds, err = CommitValue(context.Background(), suite.db, ds, types.String("a"))
 	suite.NoError(err)
 	dss, err := suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -280,7 +280,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NoError(err)
 	ds2, err := suite.db.GetDataset(context.Background(), dsID2)
 	suite.NoError(err)
-	_, err = suite.db.CommitValue(context.Background(), ds2, types.Float(42))
+	_, err = CommitValue(context.Background(), suite.db, ds2, types.Float(42))
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -340,10 +340,10 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 	suite.Zero(datasets.Len())
 
 	v := types.String("Hello")
-	_, err = suite.db.CommitValue(context.Background(), ds, v)
+	_, err = CommitValue(context.Background(), suite.db, ds, v)
 	suite.NoError(err)
 
-	_, err = suite.db.CommitValue(context.Background(), ds, v)
+	_, err = CommitValue(context.Background(), suite.db, ds, v)
 	suite.IsType(ErrMergeNeeded, err)
 }
 
@@ -359,13 +359,13 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, a)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, a)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(a))
 
 	// ds1: |a|, ds2: |b|
 	b := types.String("b")
-	ds2, err = suite.db.CommitValue(context.Background(), ds2, b)
+	ds2, err = CommitValue(context.Background(), suite.db, ds2, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds2).Equals(b))
 
@@ -399,9 +399,9 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = CommitValue(context.Background(), suite.db, ds1, types.String("a"))
 	b := types.String("b")
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(b))
 
@@ -416,13 +416,13 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	stf := types.String("stuff")
 	ds2, err := interloper.GetDataset(context.Background(), "ds2")
 	suite.NoError(err)
-	ds2, concErr := interloper.CommitValue(context.Background(), ds2, stf)
+	ds2, concErr := CommitValue(context.Background(), interloper, ds2, stf)
 	suite.NoError(concErr)
 	suite.True(mustHeadValue(ds2).Equals(stf))
 
 	// Change ds1 via suite.db, which should proceed without a problem
 	c := types.String("c")
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, c)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, c)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(c))
 
@@ -432,7 +432,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	interloperCS.Rebase(context.Background())
 	iDS, err := interloper.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
-	iDS, concErr = interloper.CommitValue(context.Background(), iDS, e)
+	iDS, concErr = CommitValue(context.Background(), interloper, iDS, e)
 	suite.NoError(concErr)
 	suite.True(mustHeadValue(iDS).Equals(e))
 	v := mustHeadValue(iDS)
@@ -440,7 +440,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 
 	// Attempted Concurrent change, which should fail due to the above
 	nope := types.String("nope")
-	_, err = suite.db.CommitValue(context.Background(), ds1, nope)
+	_, err = CommitValue(context.Background(), suite.db, ds1, nope)
 	suite.Error(err)
 }
 
@@ -451,9 +451,9 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 
 	// Setup:
 	// ds1: |a| <- |b|
-	ds1, _ = suite.db.CommitValue(context.Background(), ds1, types.String("a"))
+	ds1, _ = CommitValue(context.Background(), suite.db, ds1, types.String("a"))
 	b := types.String("b")
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, b)
+	ds1, err = CommitValue(context.Background(), suite.db, ds1, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(b))
 
@@ -466,7 +466,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	e := types.String("e")
 	iDS, err := interloper.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	iDS, concErr := interloper.CommitValue(context.Background(), iDS, e)
+	iDS, concErr := CommitValue(context.Background(), interloper, iDS, e)
 	suite.NoError(concErr)
 	suite.True(mustHeadValue(iDS).Equals(e))
 
@@ -480,7 +480,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	stf := types.String("stuff")
 	otherDS, err := suite.db.GetDataset(context.Background(), "other")
 	suite.NoError(err)
-	iDS, concErr = interloper.CommitValue(context.Background(), otherDS, stf)
+	iDS, concErr = CommitValue(context.Background(), interloper, otherDS, stf)
 	suite.NoError(concErr)
 	suite.True(mustHeadValue(iDS).Equals(stf))
 
@@ -500,12 +500,12 @@ func (suite *DatabaseSuite) TestSetHead() {
 	ds, err := suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	a := types.String("a")
-	ds, err = suite.db.CommitValue(context.Background(), ds, a)
+	ds, err = CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
 	aCommitRef := mustHeadRef(ds) // To use in non-FF SetHeadToCommit() below.
 
 	b := types.String("b")
-	ds, err = suite.db.CommitValue(context.Background(), ds, b)
+	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
@@ -526,17 +526,17 @@ func (suite *DatabaseSuite) TestFastForward() {
 	ds, err := suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	a := types.String("a")
-	ds, err = suite.db.CommitValue(context.Background(), ds, a)
+	ds, err = CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
 	aCommitRef := mustHeadRef(ds) // To use in non-FF cases below.
 
 	b := types.String("b")
-	ds, err = suite.db.CommitValue(context.Background(), ds, b)
+	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 
 	c := types.String("c")
-	ds, err = suite.db.CommitValue(context.Background(), ds, c)
+	ds, err = CommitValue(context.Background(), suite.db, ds, c)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 	cCommitRef := mustHeadRef(ds) // To use in FastForward() below.

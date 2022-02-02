@@ -49,7 +49,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 	sourceDB := datas.NewDatabase(cs)
 	source1, err := sourceDB.GetDataset(context.Background(), "src")
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
+	source1, err = datas.CommitValue(context.Background(), sourceDB, source1, types.Float(42))
 	s.NoError(err)
 	source1HeadRef, err := mustHead(source1).Hash(types.Format_7_18)
 	s.NoError(err)
@@ -74,11 +74,11 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sourceDB := datas.NewDatabase(cs)
 	source1, err := sourceDB.GetDataset(context.Background(), "src")
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
+	source1, err = datas.CommitValue(context.Background(), sourceDB, source1, types.Float(42))
 	s.NoError(err)
 	source1HeadRef, err := mustHead(source1).Hash(types.Format_7_18) // Remember first head, so we can sync to it.
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
+	source1, err = datas.CommitValue(context.Background(), sourceDB, source1, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close()
 
@@ -136,15 +136,15 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	// Create dataset "src1", which has a lineage of two commits.
 	source1, err := sourceDB.GetDataset(context.Background(), "src1")
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(42))
+	source1, err = datas.CommitValue(context.Background(), sourceDB, source1, types.Float(42))
 	s.NoError(err)
-	source1, err = sourceDB.CommitValue(context.Background(), source1, types.Float(43))
+	source1, err = datas.CommitValue(context.Background(), sourceDB, source1, types.Float(43))
 	s.NoError(err)
 
 	// Create dataset "src2", with a lineage of one commit.
 	source2, err := sourceDB.GetDataset(context.Background(), "src2")
 	s.NoError(err)
-	source2, err = sourceDB.CommitValue(context.Background(), source2, types.Float(1))
+	source2, err = datas.CommitValue(context.Background(), sourceDB, source2, types.Float(1))
 	s.NoError(err)
 
 	sourceDB.Close() // Close Database backing both Datasets
@@ -184,10 +184,10 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	sourceDB := datas.NewDatabase(cs)
 	src, err := sourceDB.GetDataset(context.Background(), "foo")
 	s.NoError(err)
-	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(42))
+	src, err = datas.CommitValue(context.Background(), sourceDB, src, types.Float(42))
 	s.NoError(err)
 	rewindRef := mustHeadRef(src).TargetHash()
-	src, err = sourceDB.CommitValue(context.Background(), src, types.Float(43))
+	src, err = datas.CommitValue(context.Background(), sourceDB, src, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close() // Close Database backing both Datasets
 

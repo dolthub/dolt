@@ -78,7 +78,7 @@ func main() {
 			d.Chk.NoError(err)
 			t1 := time.Now()
 			col := buildFns[i](vrw, buildCount, valueFn)
-			ds, err = db.CommitValue(context.Background(), ds, col)
+			ds, err = datas.CommitValue(context.Background(), db, ds, col)
 			d.Chk.NoError(err)
 			buildDuration := time.Since(t1)
 
@@ -99,7 +99,7 @@ func main() {
 			d.Chk.NoError(err)
 			t1 = time.Now()
 			col = buildIncrFns[i](vrw, insertCount, valueFn)
-			ds, err = db.CommitValue(context.Background(), ds, col)
+			ds, err = datas.CommitValue(context.Background(), db, ds, col)
 			d.Chk.NoError(err)
 			incrDuration := time.Since(t1)
 
@@ -124,7 +124,7 @@ func main() {
 	t1 := time.Now()
 	blob, err := types.NewBlob(context.Background(), vrw, bytes.NewReader(blobBytes))
 	d.Chk.NoError(err)
-	_, err = db.CommitValue(context.Background(), ds, blob)
+	_, err = datas.CommitValue(context.Background(), db, ds, blob)
 	d.Chk.NoError(err)
 	buildDuration := time.Since(t1)
 

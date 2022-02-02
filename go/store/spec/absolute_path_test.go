@@ -73,7 +73,7 @@ func TestAbsolutePaths(t *testing.T) {
 
 	ds, err := db.GetDataset(context.Background(), "ds")
 	assert.NoError(err)
-	ds, err = db.CommitValue(context.Background(), ds, list)
+	ds, err = datas.CommitValue(context.Background(), db, ds, list)
 	assert.NoError(err)
 	head, hasHead := ds.MaybeHead()
 	assert.True(hasHead)
@@ -121,7 +121,7 @@ func TestReadAbsolutePaths(t *testing.T) {
 
 	ds, err := db.GetDataset(context.Background(), "ds")
 	assert.NoError(err)
-	_, err = db.CommitValue(context.Background(), ds, list)
+	_, err = datas.CommitValue(context.Background(), db, ds, list)
 	assert.NoError(err)
 
 	vals, err := ReadAbsolutePaths(context.Background(), db, vs, "ds.value[0]", "ds.value[1]")

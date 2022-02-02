@@ -225,7 +225,7 @@ func (s *nomsMergeTestSuite) TestBadInput() {
 	prep := func(dsName string) {
 		ds, err := db.GetDataset(context.Background(), dsName)
 		s.NoError(err)
-		_, err = db.CommitValue(context.Background(), ds, mustValue(types.NewMap(context.Background(), vrw, types.String("foo"), types.String("bar"))))
+		_, err = datas.CommitValue(context.Background(), db, ds, mustValue(types.NewMap(context.Background(), vrw, types.String("foo"), types.String("bar"))))
 		s.NoError(err)
 	}
 	prep(l)

@@ -163,7 +163,7 @@ type Spec struct {
 	Path AbsolutePath
 
 	// db is lazily created, so it needs to be a pointer to a Database.
-	db *datas.Database
+	db  *datas.Database
 	vrw *types.ValueReadWriter
 }
 

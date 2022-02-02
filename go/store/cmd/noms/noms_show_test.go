@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -84,7 +85,7 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	vrw := sp.GetVRW(context.Background())
 	r1, err := vrw.WriteValue(context.Background(), value)
 	s.NoError(err)
-	_, err = db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
+	_, err = datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
 
 	return r1
@@ -143,7 +144,7 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test := func(in types.Value) {
 		r1, err := vrw.WriteValue(context.Background(), in)
 		s.NoError(err)
-		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
+		datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))

@@ -51,7 +51,7 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 
 	db := sp.GetDatabase(context.Background())
 	vrw := sp.GetVRW(context.Background())
-	db.CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
+	datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), types.Float(i))
 	s.NoError(err)
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
@@ -87,7 +87,7 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 			"bar": types.Float(i),
 		})
 		s.NoError(err)
-		ds, err = db.CommitValue(context.Background(), ds, data)
+		ds, err = datas.CommitValue(context.Background(), db, ds, data)
 		s.NoError(err)
 	}
 
@@ -101,11 +101,13 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 }
 
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {
-	return ds.Database().CommitValue(context.Background(), ds, types.String(v))
+	db := ds.Database()
+	return datas.CommitValue(context.Background(), db, ds, types.String(v))
 }
 
 func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) {
-	return ds.Database().CommitValue(context.Background(), ds, v)
+	db := ds.Database()
+	return datas.CommitValue(context.Background(), db, ds, v)
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {

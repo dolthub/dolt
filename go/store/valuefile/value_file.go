@@ -86,7 +86,7 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 		return err
 	}
 
-	ds, err = db.CommitValue(ctx, ds, l)
+	ds, err = datas.CommitValue(ctx, db, ds, l)
 
 	if err != nil {
 		return err

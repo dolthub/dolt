@@ -68,17 +68,6 @@ type Database interface {
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// CommitValue updates the Commit that ds.ID() in this database points at.
-	// All Values that have been written to this Database are guaranteed to be
-	// persistent after Commit().
-	// The new Commit struct is constructed using `v`, and the current Head of
-	// `ds` as the lone Parent.
-	// The returned Dataset is always the newest snapshot, regardless of
-	// success or failure, and Datasets() is updated to match backing storage
-	// upon return as well. If the update cannot be performed, e.g., because
-	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
-	CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error)
-
 	// Tag stores an immutable reference to a Value. It takes a Ref and a Dataset
 	// whose head must be nil (ie a newly created Dataset).
 	// The new Tag struct is constructed with `ref` and metadata about the tag

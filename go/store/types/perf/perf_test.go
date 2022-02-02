@@ -32,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/perf/suite"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -59,7 +60,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mNumbers")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, <-out)
 	assert.NoError(err)
 
 	assert.NoError(ae.Get())
@@ -85,7 +86,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mStructs")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, <-out)
 	assert.NoError(err)
 
 	assert.NoError(ae.Get())
@@ -131,7 +132,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	ds, err := s.Database.GetDataset(context.Background(), "Concat10mValues2kTimes")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, l3)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, l3)
 	assert.NoError(err)
 
 	s.Database = ds.Database()

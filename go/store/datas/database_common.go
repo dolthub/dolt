@@ -33,7 +33,7 @@ import (
 
 type database struct {
 	*types.ValueStore
-	rt              rootTracker
+	rt rootTracker
 }
 
 var (
@@ -364,7 +364,8 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 	)
 }
 
-func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error) {
+// Calls db.Commit with empty CommitOptions{}.
+func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (Dataset, error) {
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }
 
@@ -578,36 +579,36 @@ func (db *database) CommitWithWorkingSet(
 	}
 
 	err = db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
-			success, err := assertDatasetHash(ctx, datasets, workingSetDS.ID(), prevWsHash)
+		success, err := assertDatasetHash(ctx, datasets, workingSetDS.ID(), prevWsHash)
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		if !success {
+			return types.Map{}, ErrOptimisticLockFailed
+		}
+
+		r, hasHead, err := datasets.MaybeGet(ctx, types.String(commitDS.ID()))
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		if hasHead {
+			currentHeadRef := r.(types.Ref)
+			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
 			if err != nil {
 				return types.Map{}, err
 			}
 
-			if !success {
-				return types.Map{}, ErrOptimisticLockFailed
+			if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
+				return types.Map{}, ErrMergeNeeded
 			}
+		}
 
-			r, hasHead, err := datasets.MaybeGet(ctx, types.String(commitDS.ID()))
-			if err != nil {
-				return types.Map{}, err
-			}
-
-			if hasHead {
-				currentHeadRef := r.(types.Ref)
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-				if err != nil {
-					return types.Map{}, err
-				}
-
-				if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
-					return types.Map{}, ErrMergeNeeded
-				}
-			}
-
-			return datasets.Edit().
-				Set(types.String(workingSetDS.ID()), wsValRef).
-				Set(types.String(commitDS.ID()), commitValRef).
-				Map(ctx)
+		return datasets.Edit().
+			Set(types.String(workingSetDS.ID()), wsValRef).
+			Set(types.String(commitDS.ID()), commitValRef).
+			Map(ctx)
 	})
 
 	if err != nil {

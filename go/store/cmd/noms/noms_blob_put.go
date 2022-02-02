@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/profile"
 )
@@ -80,7 +81,7 @@ func nomsBlobPut(ctx context.Context, filePath string, dsPath string, concurrenc
 	// TODO: fix panics
 	d.PanicIfError(err)
 
-	_, err = db.CommitValue(ctx, ds, blob)
+	_, err = datas.CommitValue(ctx, db, ds, blob)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error committing: %s\n", err)
 		return 1

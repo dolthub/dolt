@@ -31,6 +31,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -65,7 +66,7 @@ func (s *nbeSuite) TestNomsBlobGet() {
 	s.NoError(err)
 	ds, err = db.GetDataset(context.Background(), "datasetID")
 	s.NoError(err)
-	_, err = db.CommitValue(context.Background(), ds, ref)
+	_, err = datas.CommitValue(context.Background(), db, ds, ref)
 	s.NoError(err)
 
 	hashSpec := fmt.Sprintf("%s::#%s", s.TempDir, ref.TargetHash().String())

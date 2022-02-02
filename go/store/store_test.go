@@ -68,7 +68,7 @@ func writeTupleToDB(ctx context.Context, db datas.Database, vrw types.ValueReadW
 	ds, err := db.GetDataset(ctx, dsID)
 	poe(err)
 
-	_, err = db.CommitValue(ctx, ds, root)
+	_, err = datas.CommitValue(ctx, db, ds, root)
 	poe(err)
 }
 
