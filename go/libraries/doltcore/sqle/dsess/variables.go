@@ -59,7 +59,7 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
-			Default:           int8(1),
+			Default:           int8(0),
 		},
 		{
 			Name:              CurrentBatchModeKey,

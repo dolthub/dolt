@@ -269,7 +269,7 @@ func handleConflictSystemVariables(ctx *sql.Context, workingSet *doltdb.WorkingS
 		return err
 	}
 
-	if allowCommitConflicts.(int8) != 1 || forceTransactionCommit.(int8) != 1 {
+	if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
 		workingRoot := workingSet.WorkingRoot()
 		hasConflicts, err := workingRoot.HasConflicts(ctx)
 		if err != nil {
