@@ -487,12 +487,12 @@ SQL
     dolt checkout main
 
     run dolt sql <<"SQL"
+SET dolt_force_transaction_commit = 0;
 SELECT DOLT_MERGE('other');
 SQL
     [ "$status" -eq "1" ]
     [[ "$output" =~ "conflicts" ]] || false
     run dolt sql <<"SQL"
-SET dolt_force_transaction_commit = 1;
 SELECT DOLT_MERGE('other');
 SQL
     [ "$status" -eq "0" ]
