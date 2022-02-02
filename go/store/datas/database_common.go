@@ -381,12 +381,17 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 		fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
-	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
-		commitRef, err := db.WriteValue(ctx, commit)
-		if err != nil {
-			return types.Map{}, err
-		}
+	commitRef, err := db.WriteValue(ctx, commit)
+	if err != nil {
+		return err
+	}
 
+	ref, err := types.ToRefOfValue(commitRef, db.Format())
+	if err != nil {
+		return err
+	}
+
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		curr, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
 		if err != nil {
 			return types.Map{}, err
@@ -400,15 +405,9 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			if !found {
 				return types.Map{}, ErrMergeNeeded
 			}
-
 			if mergeNeeded(currRef, ancestorRef, commitRef) {
 				return types.Map{}, ErrMergeNeeded
 			}
-		}
-
-		ref, err := types.ToRefOfValue(commitRef, db.Format())
-		if err != nil {
-			return types.Map{}, err
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
@@ -460,7 +459,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 			return types.Map{}, err
 		}
 		if hasHead {
-			return types.Map{}, fmt.Errorf(fmt.Sprintf("tag %s already exists and cannot be altered after creation", datasetID))
+			return types.Map{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)

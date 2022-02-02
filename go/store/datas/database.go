@@ -149,8 +149,7 @@ func NewTypesDatabase(vs *types.ValueStore) Database {
 	return newDatabase(vs)
 }
 
-// GarbageCollector provides a method to
-// remove unreferenced data from a store.
+// GarbageCollector provides a method to remove unreferenced data from a store.
 type GarbageCollector interface {
 	types.ValueReadWriter
 
