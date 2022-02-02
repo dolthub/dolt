@@ -652,5 +652,5 @@ SQL
     run dolt sql -q "show create table mydb.test";
     [ $status -eq 0 ]
     skip "Dolt does not accept most alters in the db.table form"
-    [[ "$output" =~ "primary key" ]]
+    [[ "$output" =~ "PRIMARY KEY" ]]
 }
