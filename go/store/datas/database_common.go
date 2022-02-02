@@ -286,7 +286,6 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, datase
 		return Dataset{}, err
 	} else if ok {
 		head, err = r.(types.Ref).TargetValue(ctx, db)
-
 		if err != nil {
 			return Dataset{}, err
 		}
@@ -456,16 +455,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			return types.Map{}, err
 		}
 		if hasHead {
-			head, err := curr.(types.Ref).TargetValue(ctx, db)
-			if err != nil {
-				return types.Map{}, err
-			}
-
-			currRef, err := types.NewRef(head, db.Format())
-			if err != nil {
-				return types.Map{}, err
-			}
-
+			currRef := curr.(types.Ref)
 			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currRef, db, db)
 			if err != nil {
 				return types.Map{}, err
@@ -483,6 +473,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 				if err != nil {
 					return types.Map{}, err
 				}
+			} else {
 			}
 		}
 
@@ -530,6 +521,15 @@ func (db *database) doMerge(
 	}
 
 	merged, err := mergePolicy(ctx, cmVal, curVal, ancVal, db, nil)
+	if err != nil {
+		return types.Ref{}, err
+	}
+
+	// Load bearing re-ref. Sometimes current head has come from the
+	// datasets map and does not have Type information. parents_list is
+	// storing fully typed Refs, so we need to grab the type from that
+	// value we have.
+	currentHeadRef, err = types.NewRef(currentHead, db.Format())
 	if err != nil {
 		return types.Ref{}, err
 	}
@@ -735,19 +735,7 @@ func (db *database) CommitWithWorkingSet(
 			}
 
 			if hasHead {
-				// TODO: We have to do a round-trip here (target the ref, then take a ref of it) because the type of the entry
-				//  stored in the dataset is a ValueType, rather than Struct (commit). See types.ToRefOfValue
-				//  We should rip this out along with much other type info
-				head, err := r.(types.Ref).TargetValue(ctx, db)
-				if err != nil {
-					return types.Map{}, err
-				}
-
-				currentHeadRef, err := types.NewRef(head, db.Format())
-				if err != nil {
-					return types.Map{}, err
-				}
-
+				currentHeadRef := r.(types.Ref)
 				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
 				if err != nil {
 					return types.Map{}, err
