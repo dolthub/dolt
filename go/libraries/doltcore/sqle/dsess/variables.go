@@ -32,6 +32,7 @@ const (
 	TransactionsDisabledSysVar    = "dolt_transactions_disabled"
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	CurrentBatchModeKey           = "batch_mode"
+	AllowCommitConflicts          = "dolt_allow_commit_conflicts"
 )
 
 func init() {
@@ -58,7 +59,7 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
-			Default:           int8(0),
+			Default:           int8(1),
 		},
 		{
 			Name:              CurrentBatchModeKey,
@@ -67,6 +68,14 @@ func init() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
+		},
+		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
+			Name:              AllowCommitConflicts,
+			Scope:             sql.SystemVariableScope_Session,
+			Dynamic:           true,
+			SetVarHintApplies: false,
+			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
+			Default:           int8(1),
 		},
 	})
 }

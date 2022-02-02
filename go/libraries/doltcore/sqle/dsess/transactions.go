@@ -164,26 +164,9 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	err := handleConflictSystemVariables(ctx, workingSet)
 	if err != nil {
 		return nil, nil, err
-	}
-	if forceTransactionCommit.(int8) != 1 {
-		workingRoot := workingSet.WorkingRoot()
-		hasConflicts, err := workingRoot.HasConflicts(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConflicts {
-			return nil, nil, doltdb.ErrUnresolvedConflicts
-		}
-		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConstraintViolations {
-			return nil, nil, doltdb.ErrUnresolvedConstraintViolations
-		}
 	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
@@ -273,6 +256,38 @@ func (tx *DoltTransaction) doCommit(
 
 	// TODO: different error type for retries exhausted
 	return nil, nil, datas.ErrOptimisticLockFailed
+}
+
+func handleConflictSystemVariables(ctx *sql.Context, workingSet *doltdb.WorkingSet) error {
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	if err != nil {
+		return err
+	}
+
+	allowCommitConflicts, err := ctx.GetSessionVariable(ctx, AllowCommitConflicts)
+	if err != nil {
+		return err
+	}
+
+	if allowCommitConflicts.(int8) == 0 || forceTransactionCommit.(int8) != 1 {
+		workingRoot := workingSet.WorkingRoot()
+		hasConflicts, err := workingRoot.HasConflicts(ctx)
+		if err != nil {
+			return err
+		}
+		if hasConflicts {
+			return doltdb.ErrUnresolvedConflicts
+		}
+		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+		if err != nil {
+			return err
+		}
+		if hasConstraintViolations {
+			return doltdb.ErrUnresolvedConstraintViolations
+		}
+	}
+
+	return nil
 }
 
 // stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the

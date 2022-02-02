@@ -693,7 +693,7 @@ SQL
     [[ "$output" =~ "| 1        |" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE with conflicts is queryablw when autocommit is on" {
+@test "sql-merge: DOLT_MERGE with conflicts is queryable when autocommit is on" {
     skip "This needs to work"
     run dolt sql  --continue << SQL
 CREATE TABLE one_pk (
