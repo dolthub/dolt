@@ -689,7 +689,12 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
-	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
+	commitSt, err = datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = ddb.vrw.WriteValue(ctx, commitSt)
 	if err != nil {
 		return nil, err
 	}

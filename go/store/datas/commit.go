@@ -24,6 +24,7 @@ package datas
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -101,6 +102,23 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	} else {
 		return commitTemplateWithoutParentsClosure.NewStruct(meta.Format(), []types.Value{meta, parentsSet, parentsList, value})
 	}
+}
+
+func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
+	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
+		return types.Struct{}, errors.New("cannot create commit without parents")
+	}
+
+	if opts.Meta.IsZeroValue() {
+		opts.Meta = types.EmptyStruct(vrw.Format())
+	}
+
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, opts.ParentsList)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	return newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
 }
 
 func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {

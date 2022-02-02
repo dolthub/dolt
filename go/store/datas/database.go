@@ -68,11 +68,6 @@ type Database interface {
 	// of a conflict, Commit returns an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// CommitDangling creates a new commit that is unreferenced by any Dataset.
-	// This method is used in the course of programmatic updates such as Rebase
-	// The new Commit struct is of the same form as structs created by Commit()
-	CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error)
-
 	// CommitValue updates the Commit that ds.ID() in this database points at.
 	// All Values that have been written to this Database are guaranteed to be
 	// persistent after Commit().
