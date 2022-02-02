@@ -29,6 +29,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+func testWithSpatialTypesEnabled(cb func()) {
+	spatialTypesLock.Lock()
+	defer spatialTypesLock.Unlock()
+
+	spatialTypesFeatureFlag = true
+	cb()
+	spatialTypesFeatureFlag = false
+}
+
 func TestTypeInfoSuite(t *testing.T) {
 	typeInfoArrays, validTypeValues := generateTypeInfoArrays(t)
 	t.Run("VerifyArray", func(t *testing.T) {
@@ -225,7 +234,7 @@ func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
 					ti.GetTypeIdentifier() == LinestringTypeIdentifier ||
 					ti.GetTypeIdentifier() == PolygonTypeIdentifier {
 					t.Run(ti.String(), func(t *testing.T) {
-						TestWithSpatialTypesEnabled(func() {
+						testWithSpatialTypesEnabled(func() {
 							newTi, err := FromTypeParams(ti.GetTypeIdentifier(), ti.GetTypeParams())
 							require.NoError(t, err)
 							require.True(t, ti.Equals(newTi), "%v\n%v", ti.String(), newTi.String())

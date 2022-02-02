@@ -144,6 +144,11 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	if ixc.hasIndexOnTags(tags...) {
 		return nil, fmt.Errorf("cannot create a duplicate index on this table")
 	}
+	for _, c := range ixc.colColl.cols {
+		if IsColSpatialType(c) {
+			return nil, fmt.Errorf("cannot create an index over spatial type columns")
+		}
+	}
 	index := &indexImpl{
 		indexColl:     ixc,
 		name:          indexName,
