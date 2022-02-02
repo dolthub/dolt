@@ -178,7 +178,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta}
 
 	cb := ref.NewInternalRef(creationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())
@@ -635,7 +635,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -694,7 +694,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
 	commitSt, err = ddb.db.CommitDangling(ctx, val, commitOpts)
 	if err != nil {
 		return nil, err

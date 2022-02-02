@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/merge"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/random"
 )
@@ -377,7 +376,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadRef ty
 		return err
 	}
 
-	return db.doCommit(ctx, ds.ID(), commit, nil)
+	return db.doCommit(ctx, ds.ID(), commit)
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
@@ -391,7 +390,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 				return err
 			}
 
-			return db.doCommit(ctx, ds.ID(), st, opts.Policy)
+			return db.doCommit(ctx, ds.ID(), st)
 		},
 	)
 }
@@ -437,7 +436,7 @@ func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) 
 // current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g.
 // because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and
 // return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
+func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct) error {
 	if is, err := IsCommit(commit); err != nil {
 		return err
 	} else if !is {
@@ -465,15 +464,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 			}
 
 			if mergeNeeded(currRef, ancestorRef, commitRef) {
-				if mergePolicy == nil {
-					return types.Map{}, ErrMergeNeeded
-				}
-
-				commitRef, err = db.doMerge(ctx, ancestorRef, currRef, commit, commitRef, mergePolicy)
-				if err != nil {
-					return types.Map{}, err
-				}
-			} else {
+				return types.Map{}, ErrMergeNeeded
 			}
 		}
 
@@ -484,76 +475,6 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 
 		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
 	})
-}
-
-// doMerge applies the merge policy given to the refs given to return a merged commit ref
-func (db *database) doMerge(
-	ctx context.Context,
-	ancestorRef types.Ref,
-	currentHeadRef types.Ref,
-	commit types.Struct,
-	commitRef types.Ref,
-	mergePolicy merge.Policy,
-) (types.Ref, error) {
-	ancestor, err := db.validateRefAsCommit(ctx, ancestorRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	currentHead, err := db.validateRefAsCommit(ctx, currentHeadRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	cmVal, _, err := commit.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	curVal, _, err := currentHead.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	ancVal, _, err := ancestor.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	merged, err := mergePolicy(ctx, cmVal, curVal, ancVal, db, nil)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	// Load bearing re-ref. Sometimes current head has come from the
-	// datasets map and does not have Type information. parents_list is
-	// storing fully typed Refs, so we need to grab the type from that
-	// value we have.
-	currentHeadRef, err = types.NewRef(currentHead, db.Format())
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	parents, err := types.NewList(ctx, db, commitRef, currentHeadRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, parents)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	newCom, err := newCommit(ctx, merged, parents, parentsClosure, includeParentsClosure, types.EmptyStruct(db.Format()))
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	commitRef, err = db.WriteValue(ctx, newCom)
-	if err != nil {
-		return types.Ref{}, err
-	}
-	return commitRef, nil
 }
 
 func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef types.Ref) bool {

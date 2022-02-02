@@ -382,7 +382,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
 	return &PendingCommit{
 		Roots:         roots,
 		Val:           val,

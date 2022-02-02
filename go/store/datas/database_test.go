@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/merge"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -356,57 +355,6 @@ func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
 
 	_, err = suite.db.CommitValue(context.Background(), ds, v)
 	suite.IsType(ErrMergeNeeded, err)
-}
-
-func (suite *DatabaseSuite) TestDatabaseCommitMerge() {
-	datasetID1, datasetID2 := "ds1", "ds2"
-	ds1, err := suite.db.GetDataset(context.Background(), datasetID1)
-	suite.NoError(err)
-	ds2, err := suite.db.GetDataset(context.Background(), datasetID2)
-	suite.NoError(err)
-
-	v, err := types.NewMap(context.Background(), suite.db, types.String("Hello"), types.Float(42))
-	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, v)
-	ds1First := ds1
-	suite.NoError(err)
-	s, err := v.Edit().Set(types.String("Friends"), types.Bool(true)).Map(context.Background())
-	suite.NoError(err)
-	ds1, err = suite.db.CommitValue(context.Background(), ds1, s)
-	suite.NoError(err)
-
-	ds2, err = suite.db.CommitValue(context.Background(), ds2, types.String("Goodbye"))
-	suite.NoError(err)
-
-	// No common ancestor
-	_, err = suite.db.Commit(context.Background(), ds1, types.Float(47), newOpts(suite.db, mustHeadRef(ds2)))
-	suite.IsType(ErrMergeNeeded, err, "%s", err)
-
-	// Unmergeable
-	_, err = suite.db.Commit(context.Background(), ds1, types.Float(47), newOptsWithMerge(suite.db, merge.None, mustHeadRef(ds1First)))
-	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
-
-	// Merge policies
-	newV, err := v.Edit().Set(types.String("Friends"), types.Bool(false)).Map(context.Background())
-	suite.NoError(err)
-	_, err = suite.db.Commit(context.Background(), ds1, newV, newOptsWithMerge(suite.db, merge.None, mustHeadRef(ds1First)))
-	suite.IsType(&merge.ErrMergeConflict{}, err, "%s", err)
-
-	theirs, err := suite.db.Commit(context.Background(), ds1, newV, newOptsWithMerge(suite.db, merge.Theirs, mustHeadRef(ds1First)))
-	suite.NoError(err)
-	suite.True(types.Bool(true).Equals(mustGetValue(mustHeadValue(theirs).(types.Map).MaybeGet(context.Background(), types.String("Friends")))))
-
-	newV, err = v.Edit().Set(types.String("Friends"), types.Float(47)).Map(context.Background())
-	suite.NoError(err)
-	ours, err := suite.db.Commit(context.Background(), ds1First, newV, newOptsWithMerge(suite.db, merge.Ours, mustHeadRef(ds1First)))
-	suite.NoError(err)
-	suite.True(types.Float(47).Equals(mustGetValue(mustHeadValue(ours).(types.Map).MaybeGet(context.Background(), types.String("Friends")))))
-}
-
-func newOptsWithMerge(vrw types.ValueReadWriter, policy merge.ResolveFunc, parents ...types.Value) CommitOptions {
-	plist, err := types.NewList(context.Background(), vrw, parents...)
-	d.PanicIfError(err)
-	return CommitOptions{ParentsList: plist, Policy: merge.NewThreeWay(policy)}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDelete() {
