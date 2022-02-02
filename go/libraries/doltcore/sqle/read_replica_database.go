@@ -116,7 +116,11 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
 			return sql.ErrInvalidSystemVariableValue.New(ReplicateHeadsKey)
 		}
 		branches := parseBranches(heads)
-		err := pullBranches(ctx, rrd, branches)
+		err := rrd.srcDB.Rebase(ctx)
+		if err != nil {
+			return err
+		}
+		err = pullBranches(ctx, rrd, branches)
 		if err != nil {
 			return err
 		}
@@ -152,11 +156,6 @@ func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase
 }
 
 func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
-	err := rrd.srcDB.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-
 	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err

@@ -44,7 +44,6 @@ var (
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
-	Rebase(ctx context.Context) error
 	Root(ctx context.Context) (hash.Hash, error)
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
@@ -266,10 +265,6 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, datase
 	}
 
 	return newDataset(db, datasetID, head)
-}
-
-func (db *database) Rebase(ctx context.Context) error {
-	return db.rt.Rebase(ctx)
 }
 
 func (db *database) Close() error {

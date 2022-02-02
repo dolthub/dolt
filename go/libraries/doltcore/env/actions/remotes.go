@@ -475,11 +475,6 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 		return err
 	}
 
-	err = destDb.Rebase(ctx)
-	if err != nil {
-		return err
-	}
-
 	destDb.CommitRoot(ctx, srcRoot, destRoot)
 
 	return nil

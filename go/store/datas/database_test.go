@@ -160,21 +160,11 @@ func (suite *DatabaseSuite) TestRebase() {
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 
-	err = suite.db.Rebase(context.Background())
+	err = ChunkStoreFromDatabase(suite.db).Rebase(context.Background())
 	suite.NoError(err)
 	ds, err = suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(e))
-
-	cs := suite.storage.NewView()
-	noChangeDB := suite.makeDb(cs)
-	_, err = noChangeDB.Datasets(context.Background())
-	suite.NoError(err)
-	n := cs.Reads()
-
-	err = noChangeDB.Rebase(context.Background())
-	suite.NoError(err)
-	suite.Equal(n, cs.Reads())
 }
 
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
@@ -416,7 +406,8 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	interloper := suite.makeDb(suite.storage.NewView())
+	interloperCS := suite.storage.NewView()
+	interloper := suite.makeDb(interloperCS)
 	defer interloper.Close()
 
 	// Change ds2 behind suite.db's back. This shouldn't block changes to ds1 via suite.db below.
@@ -438,7 +429,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	// Change ds1 behind suite.db's back. Will block changes to ds1 below.
 	// ds1: |a| <- |b| <- |c| <- |e|
 	e := types.String("e")
-	interloper.Rebase(context.Background())
+	interloperCS.Rebase(context.Background())
 	iDS, err := interloper.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 	iDS, concErr = interloper.CommitValue(context.Background(), iDS, e)

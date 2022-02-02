@@ -1142,7 +1142,7 @@ func (ddb *DoltDB) DeleteWorkspace(ctx context.Context, workRef ref.DoltRef) err
 // Rebase rebases the underlying db from disk, re-loading the manifest. Useful when another process might have made
 // changes to the database we need to read.
 func (ddb *DoltDB) Rebase(ctx context.Context) error {
-	return ddb.db.Rebase(ctx)
+	return datas.ChunkStoreFromDatabase(ddb.db).Rebase(ctx)
 }
 
 // GC performs garbage collection on this ddb. Values passed in |uncommitedVals| will be temporarily saved during gc.
