@@ -53,7 +53,7 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	}
 
 	if len(tups)%2 != 0 {
-		return Map{}, fmt.Errorf("tuples must be key-ref pairs")
+		return Map{}, fmt.Errorf("tuples must be key-value pairs")
 	}
 
 	for i := 0; i < len(tups); i += 2 {
@@ -77,7 +77,7 @@ func (m Map) Mutate() MutableMap {
 }
 
 // todo(andy): support this?
-//// Count returns the number of key-ref pairs in the Map.
+//// Count returns the number of key-value pairs in the Map.
 //func (m Map) Count() uint64 {
 //	return m.root.cumulativeCount() / 2
 //}
@@ -101,8 +101,8 @@ func (m Map) Empty() bool {
 	return m.root.empty()
 }
 
-// Get searches for the key-ref pair keyed by |key| and passes the results to the callback.
-// If |key| is not present in the map, a nil key-ref pair are passed.
+// Get searches for the key-value pair keyed by |key| and passes the results to the callback.
+// If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
 	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
 	if err != nil {

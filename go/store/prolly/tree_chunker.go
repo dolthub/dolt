@@ -162,7 +162,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 				// Here we need to advance the chunker's cursor, but calling
 				// tc.cur.forward() would needlessly fetch another chunk at the
-				// keys level. Instead, we only advance the parent.
+				// current level. Instead, we only advance the parent.
 				_, err := tc.cur.parent.advanceInBounds(ctx)
 				if err != nil {
 					return err
@@ -195,7 +195,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 	tc.cur.copy(next)
 
 	if fastForward { // Case (4)
-		// we fast-forwarded to the keys chunk, so we
+		// we fast-forwarded to the current chunk, so we
 		// need to process its prefix
 		if err := tc.resume(ctx); err != nil {
 			return err
@@ -210,14 +210,14 @@ func (tc *treeChunker) Skip(ctx context.Context) error {
 	return err
 }
 
-// Append adds a new key-ref pair to the chunker, validating the new pair to ensure
-// that chunks are well-formed. Key-ref pairs are appended atomically a chunk boundary
+// Append adds a new key-value pair to the chunker, validating the new pair to ensure
+// that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
 func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, error) {
-	// When adding new key-ref pairs to an in-progress chunk, we must enforce 3 invariants
-	// (1) Key-ref pairs are stored in the same mapNode.
+	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
+	// (1) Key-value pairs are stored in the same mapNode.
 	// (2) The total size of a mapNode's data cannot exceed |maxNodeDataSize|.
-	// (3) Internal Nodes (level > 0) must contain at least 2 key-ref pairs (4 node items).
+	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
 	//     key will lead to an identical metaPair in the nextMutation level in the tree, triggering
@@ -241,7 +241,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 
 	if overflow {
 		// Enforce constraints (1) and (2):
-		//  |key| and |ref| won't fit in this chunk, force a
+		//  |key| and |value| won't fit in this chunk, force a
 		//  boundary here and pass them to the nextMutation chunk.
 		err := tc.handleChunkBoundary(ctx)
 		if err != nil {
@@ -367,7 +367,7 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 	// a cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
 	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
 	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.keys| must contain all items
-	// within the keys mapNode.
+	// within the current mapNode.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three possible cases:
 	// (1) This is "leaf" treeChunker and thus produced tree of depth 1 which contains exactly one chunk

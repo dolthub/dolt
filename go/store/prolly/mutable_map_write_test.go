@@ -29,9 +29,9 @@ import (
 func TestMutableMapWrites(t *testing.T) {
 	scales := []int{
 		10,
-		//100,
-		//1000,
-		//10_000,
+		100,
+		1000,
+		10_000,
 	}
 
 	for _, s := range scales {
@@ -291,15 +291,15 @@ func testMixedMutations(t *testing.T, batch int, mapCount int) {
 		// |v| is an existing key.
 		v := int64(i * 2)
 
-		// insert new key-ref pair.
+		// insert new key-value pair.
 		mutations[i][0], mutations[i][1] = makePut(v+1, v+1)
 
 		// create a delete or an update for |v|, but not both.
 		if i%4 == 0 {
-			// update existing key-ref pair.
+			// update existing key-value pair.
 			mutations[i+1][0], mutations[i+1][1] = makePut(v, -v)
 		} else {
-			// delete existing key-ref pair.
+			// delete existing key-value pair.
 			mutations[i+1][0], mutations[i+1][1] = makeDelete(v), nil
 		}
 	}
