@@ -24,7 +24,9 @@ package types
 import (
 	"bytes"
 	"context"
+	"fmt"
 
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -219,4 +221,20 @@ func (r Ref) String() string {
 
 func (r Ref) HumanReadableString() string {
 	panic("unreachable")
+}
+
+// Returns a function that can be used to walk the hash and height of all the
+// Refs of a given Chunk.  This function is meant to decouple callers from the
+// types package itself, and so the callback itself does not take |types.Ref|
+// values.
+func WalkRefsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h hash.Hash, height uint64) error) error, error) {
+	nbf, err := GetFormatForVersionString(cs.Version())
+	if err != nil {
+		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
+	}
+	return func(c chunks.Chunk, cb func(h hash.Hash, height uint64) error) error {
+		return WalkRefs(c, nbf, func(r Ref) error {
+			return cb(r.TargetHash(), r.Height())
+		})
+	}, nil
 }

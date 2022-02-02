@@ -71,17 +71,25 @@ SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');
 SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT COUNT(*) > 0 FROM test WHERE pk=3;
-
-SELECT COUNT(*) from dolt_status;
 SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "true" ]] || false
-    [[ "$output" =~ "| COUNT(*) |" ]] || false
-    [[ "$output" =~ "| 0        |" ]] || false
+
+    run dolt sql -r csv -q "select count(*) from dolt_status"
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = "0" ]
+
+    run dolt sql -r csv -q "select hash from dolt_branches where branch='main'"
+    MAIN_HASH=${lines[1]}
+
+    run dolt sql -r csv -q "select hash from dolt_branches where branch='feature-branch'"
+    FB_HASH=${lines[1]}
+
+    [ "$MAIN_HASH" = "$FB_HASH" ]
 }
 
 @test "sql-merge: DOLT_MERGE with autocommit off works in fast-forward." {
-     run dolt sql << SQL
+     dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -91,7 +99,6 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SELECT DOLT_CHECKOUT('-b', 'new-branch');
 SQL
-    [ $status -eq 0 ]
 
     run dolt sql -r csv -q "select * from test order by pk"
     [ "${#lines[@]}" -eq 5 ]
@@ -102,7 +109,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE no-ff works with autocommit off." {
-     run dolt sql << SQL
+     dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -112,7 +119,6 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch', '-no-ff');
 COMMIT;
 SQL
-    [ $status -eq 0 ]
 
     run dolt sql -r csv -q "select * from test order by pk"
     [ "${#lines[@]}" -eq 5 ]
@@ -123,23 +129,22 @@ SQL
 }
 
 @test "sql-merge: End to End Conflict Resolution with autocommit off." {
-    run dolt sql << SQL
-    CREATE TABLE test2 (pk int primary key, val int);
-    INSERT INTO test2 VALUES (0, 0);
-    SET autocommit = 0;
-    SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
-		SELECT DOLT_CHECKOUT('-b', 'feature-branch');
-		INSERT INTO test2 VALUES (1, 1);
-		UPDATE test2 SET val=1000 WHERE pk=0;
-		SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');
-		SELECT DOLT_CHECKOUT('main');
-		UPDATE test2 SET val=1001 WHERE pk=0;
-		SELECT DOLT_COMMIT('-a', '-m', 'update a value');
-		SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge');
-		DELETE FROM dolt_conflicts_test2;
-		SELECT DOLT_COMMIT('-a', '-m', 'remove conflicts');
+    dolt sql << SQL
+CREATE TABLE test2 (pk int primary key, val int);
+INSERT INTO test2 VALUES (0, 0);
+SET autocommit = 0;
+SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+INSERT INTO test2 VALUES (1, 1);
+UPDATE test2 SET val=1000 WHERE pk=0;
+SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');
+SELECT DOLT_CHECKOUT('main');
+UPDATE test2 SET val=1001 WHERE pk=0;
+SELECT DOLT_COMMIT('-a', '-m', 'update a value');
+SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge');
+DELETE FROM dolt_conflicts_test2;
+SELECT DOLT_COMMIT('-a', '-m', 'remove conflicts');
 SQL
-    [ $status -eq 0 ]
 
     run dolt sql -r csv -q "select * from test2 order by pk"
     [ "${#lines[@]}" -eq 3 ]
@@ -148,7 +153,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE works with autocommit off." {
-     run dolt sql << SQL
+    dolt sql << SQL
 set autocommit = off;
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -160,7 +165,6 @@ SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');
 SELECT DOLT_MERGE('feature-branch');
 COMMIT;
 SQL
-    [ $status -eq 0 ]
 
     run dolt sql -r csv -q "select * from test order by pk"
     [ "${#lines[@]}" -eq 6 ]
@@ -451,7 +455,6 @@ SQL
     [[ "$output" =~ "9,9,9" ]] || false
 }
 
-
 @test "sql-merge: DOLT_MERGE(--abort) clears index state" {
     run dolt sql  << SQL
 set autocommit = off;
@@ -660,8 +663,39 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE with conflicts renders the dolt_conflicts table" {
-      run dolt sql  --continue << SQL
+    run dolt sql  --continue << SQL
 set autocommit = off;
+CREATE TABLE one_pk (
+  pk1 BIGINT NOT NULL,
+  c1 BIGINT,
+  c2 BIGINT,
+  PRIMARY KEY (pk1)
+);
+SELECT DOLT_COMMIT('-a', '-m', 'add tables');
+SELECT DOLT_CHECKOUT('-b', 'feature-branch');
+SELECT DOLT_CHECKOUT('main');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);
+SELECT DOLT_COMMIT('-a', '-m', 'changed main');
+SELECT DOLT_CHECKOUT('feature-branch');
+INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);
+SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
+SELECT DOLT_CHECKOUT('main');
+SELECT DOLT_MERGE('feature-branch');
+SHOW WARNINGS;
+SELECT COUNT(*) FROM dolt_conflicts where num_conflicts > 0;
+rollback;
+SQL
+    [ $status -eq 0 ]
+    [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
+    [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
+    [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts. please use the dolt_conflicts table to resolve |" ]] || false
+    [[ "$output" =~ "| COUNT(*) |" ]] || false
+    [[ "$output" =~ "| 1        |" ]] || false
+}
+
+@test "sql-merge: DOLT_MERGE with conflicts is queryablw when autocommit is on" {
+    skip "This needs to work"
+    run dolt sql  --continue << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,

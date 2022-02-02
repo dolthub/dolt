@@ -62,7 +62,7 @@ func TestDoltHarness(t *testing.T) {
 			expErr:    nil,
 		},
 		{
-			statement: "INSERT INTO t1(e,c,b,d,a) VALUES(103,102,100,101,104);",
+			statement: "INSERT INTO t1(e,c,b,d,a) VALUES(NULL,102,NULL,101,104);",
 			expErr:    nil,
 		},
 		{
@@ -76,19 +76,19 @@ func TestDoltHarness(t *testing.T) {
 			query:      "SELECT a,c,e FROM t1;",
 			expErr:     nil,
 			expSchema:  "III",
-			expResults: []string{"104", "102", "103", "107", "106", "109"},
+			expResults: []string{"104", "102", "NULL", "107", "106", "109"},
 		},
 		{
 			query:      "SELECT b,d FROM t1;",
 			expErr:     nil,
 			expSchema:  "II",
-			expResults: []string{"100", "101", "105", "108"},
+			expResults: []string{"NULL", "101", "105", "108"},
 		},
 		{
 			query:      "SELECT * FROM t1 WHERE d < 107;",
 			expErr:     nil,
 			expSchema:  "IIIII",
-			expResults: []string{"104", "100", "102", "101", "103"},
+			expResults: []string{"104", "NULL", "102", "101", "NULL"},
 		},
 		{
 			query:      "SELECT * FROM t1 WHERE d > 102;",

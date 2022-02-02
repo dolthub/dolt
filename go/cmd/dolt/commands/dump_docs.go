@@ -27,7 +27,12 @@ import (
 )
 
 const (
-	fileParamName = "file"
+	fileParamName  = "file"
+	cliMdDocHeader = "" +
+		"---\n" +
+		"title: CLI\n" +
+		"---\n\n" +
+		"# CLI\n\n"
 )
 
 type DumpDocsCmd struct {
@@ -83,6 +88,12 @@ func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []stri
 	}
 
 	wr, err := dEnv.FS.OpenForWrite(fileStr, os.ModePerm)
+	if err != nil {
+		cli.PrintErrln(err.Error())
+		return 1
+	}
+
+	_, err = wr.Write([]byte(cliMdDocHeader))
 	if err != nil {
 		cli.PrintErrln(err.Error())
 		return 1

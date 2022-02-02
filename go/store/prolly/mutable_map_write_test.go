@@ -483,7 +483,7 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 		if next == nil {
 			break
 		}
-		cmp := mut.m.compareKeys(prev, next)
+		cmp := mut.prolly.compareKeys(prev, next)
 		assert.True(t, cmp < 0)
 		prev = next
 	}

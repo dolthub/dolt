@@ -56,6 +56,11 @@ func (mm memoryMap) Put(key, val val.Tuple) {
 	mm.list.Put(key, val)
 }
 
+// Delete deletes the Tuple pair keyed by |key|.
+func (mm memoryMap) Delete(key val.Tuple) {
+	mm.list.Put(key, nil)
+}
+
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the memoryMap, a nil Tuple pair is passed to |cb|.
 func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
@@ -75,41 +80,98 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
 		KeyDesc: mm.keyDesc,
-		Reverse: false,
 	}
 	return mm.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
 func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	memIter := mm.iterFromRange(rng)
+	return NewMapRangeIter(memIter, nil, rng), nil
+}
+
+func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	var iter *skip.ListIter
 	if rng.Start.Unbound {
-		if rng.Reverse {
-			iter = mm.list.IterAtEnd()
-		} else {
-			iter = mm.list.IterAtStart()
-		}
+		iter = mm.list.IterAtStart()
 	} else {
-		iter = mm.list.IterAt(rng.Start.Key)
+		vc := valueCmpForRange(rng)
+		iter = mm.list.GetIterAtWithFn(rng.Start.Key, vc)
 	}
-	memCur := memTupleCursor{iter: iter}
 
-	return NewMapRangeIter(ctx, memCur, nil, rng)
+	// enforce range start
+	var key val.Tuple
+	for {
+		key, _ = iter.Current()
+		if key == nil || rng.insideStart(key) {
+			break // |i| inside |rng|
+		}
+		iter.Advance()
+	}
+
+	// enforce range end
+	if key == nil || !rng.insideStop(key) {
+		iter = nil
+	}
+
+	return &memRangeIter{
+		iter: iter,
+		rng:  rng,
+	}
+}
+
+func valueCmpForRange(rng Range) skip.ValueCmp {
+	return func(left, right []byte) int {
+		l, r := val.Tuple(left), val.Tuple(right)
+		return rng.KeyDesc.Compare(l, r)
+	}
 }
 
 func (mm memoryMap) mutations() mutationIter {
-	return memTupleCursor{iter: mm.list.IterAtStart()}
+	return &memRangeIter{
+		iter: mm.list.IterAtStart(),
+		rng: Range{
+			Start:   RangeCut{Unbound: true},
+			Stop:    RangeCut{Unbound: true},
+			KeyDesc: mm.keyDesc,
+		},
+	}
 }
 
-type memTupleCursor struct {
-	iter    *skip.ListIter
-	reverse bool
+type memRangeIter struct {
+	iter *skip.ListIter
+	rng  Range
 }
 
-var _ tupleCursor = memTupleCursor{}
-var _ mutationIter = memTupleCursor{}
+var _ rangeIter = &memRangeIter{}
+var _ mutationIter = &memRangeIter{}
 
-func (it memTupleCursor) nextMutation() (key, value val.Tuple) {
+// current returns the iter's current Tuple pair, or nil Tuples
+// if the iter has exhausted its range, it will
+func (it *memRangeIter) current() (key, value val.Tuple) {
+	// |it.iter| is set to nil when its range is exhausted
+	if it.iter != nil {
+		key, value = it.iter.Current()
+	}
+	return
+}
+
+// iterate progresses the iter inside its range, skipping
+// over pending deletes in the memoryMap.
+func (it *memRangeIter) iterate(context.Context) (err error) {
+	for {
+		it.iter.Advance()
+
+		k, _ := it.current()
+		if k == nil || !it.rng.insideStop(k) {
+			it.iter = nil // range exhausted
+		}
+
+		return
+	}
+}
+
+func (it *memRangeIter) nextMutation() (key, value val.Tuple) {
 	key, value = it.iter.Current()
 	if key == nil {
 		return
@@ -118,24 +180,10 @@ func (it memTupleCursor) nextMutation() (key, value val.Tuple) {
 	return
 }
 
-func (it memTupleCursor) current() (key, value val.Tuple) {
-	return it.iter.Current()
-}
-
-func (it memTupleCursor) advance(context.Context) (err error) {
-	it.iter.Advance()
-	return
-}
-
-func (it memTupleCursor) retreat(context.Context) (err error) {
-	it.iter.Retreat()
-	return
-}
-
-func (it memTupleCursor) count() int {
+func (it *memRangeIter) count() int {
 	return it.iter.Count()
 }
 
-func (it memTupleCursor) close() error {
+func (it *memRangeIter) close() error {
 	return nil
 }

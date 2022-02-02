@@ -32,7 +32,6 @@ type RangeCut struct {
 type Range struct {
 	Start, Stop RangeCut
 	KeyDesc     val.TupleDesc
-	Reverse     bool
 }
 
 func (r Range) insideStart(key val.Tuple) bool {
@@ -43,9 +42,6 @@ func (r Range) insideStart(key val.Tuple) bool {
 	cmp := r.KeyDesc.Compare(key, r.Start.Key)
 	if cmp == 0 {
 		return r.Start.Inclusive
-	}
-	if r.Reverse {
-		cmp = -cmp
 	}
 	return cmp > 0
 }
@@ -59,213 +55,86 @@ func (r Range) insideStop(key val.Tuple) bool {
 	if cmp == 0 {
 		return r.Stop.Inclusive
 	}
-	if r.Reverse {
-		cmp = -cmp
-	}
 	return cmp < 0
 }
 
-// GreaterRange defines a Range of Tuples greater than |start|.
-func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
-		KeyDesc: desc,
-		Reverse: false,
+func NewMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
+	if memory == nil {
+		memory = emptyIter{}
 	}
-}
-
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
-		KeyDesc: desc,
-		Reverse: false,
+	if prolly == nil {
+		prolly = emptyIter{}
 	}
-}
 
-// LesserRange defines a Range of Tuples less than |stop|.
-func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
-		KeyDesc: desc,
-		Reverse: false,
-	}
-}
-
-// LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
-func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
-		KeyDesc: desc,
-		Reverse: false,
-	}
-}
-
-// todo(andy): reverse ranges for GT, GTE, LT, and LTE?
-
-// OpenRange defines a non-inclusive Range of Tuples from |start| to |stop|.
-func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
-		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
-	}
-}
-
-// OpenStartRange defines a half-open Range of Tuples from |start| to |stop|.
-func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
-		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
-	}
-}
-
-// OpenStopRange defines a half-open Range of Tuples from |start| to |stop|.
-func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
-		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
-	}
-}
-
-// ClosedRange defines an inclusive Range of Tuples from |start| to |stop|.
-func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
-		KeyDesc: desc,
-		Reverse: desc.Compare(start, stop) > 0,
+	return MapRangeIter{
+		memory: memory,
+		prolly: prolly,
+		rng:    rng,
 	}
 }
 
 // MapRangeIter iterates over a Range of Tuples.
 type MapRangeIter struct {
-	memCur, proCur tupleCursor
-	rng            Range
+	memory rangeIter
+	prolly rangeIter
+	rng    Range
 }
 
-func NewMapRangeIter(ctx context.Context, memCur, proCur tupleCursor, rng Range) (MapRangeIter, error) {
-	mri := MapRangeIter{
-		memCur: memCur,
-		proCur: proCur,
-		rng:    rng,
-	}
-
-	err := startInRange(ctx, mri)
-	if err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return mri, nil
-}
-
-type tupleCursor interface {
+type rangeIter interface {
+	iterate(ctx context.Context) error
 	current() (key, value val.Tuple)
-	advance(ctx context.Context) error
-	retreat(ctx context.Context) error
 }
 
 // Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
 func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	for value == nil {
-		key, value = it.current()
+	for {
+		mk, mv := it.memory.current()
+		pk, pv := it.prolly.current()
 
-		if key == nil {
-			// |key| == nil is exhausted |iter|
+		if mk == nil && pk == nil {
+			// range is exhausted
 			return nil, nil, io.EOF
 		}
 
-		// |value| == nil is a pending delete
+		cmp := it.compareKeys(pk, mk)
+		switch {
+		case cmp < 0:
+			key, value = pk, pv
+			if err = it.prolly.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
 
-		if err = it.progress(ctx); err != nil {
-			return nil, nil, err
+		case cmp > 0:
+			key, value = mk, mv
+			if err = it.memory.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+
+		case cmp == 0:
+			// |it.memory| wins ties
+			key, value = mk, mv
+			if err = it.memory.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
+			if err = it.prolly.iterate(ctx); err != nil {
+				return nil, nil, err
+			}
 		}
+
+		if key != nil && value == nil {
+			continue // pending delete
+		}
+
+		return key, value, nil
 	}
-
-	return key, value, nil
-}
-
-func (it MapRangeIter) current() (key, value val.Tuple) {
-	memKey, proKey := it.currentKeys()
-
-	if memKey == nil && proKey == nil {
-		// cursors exhausted
-		return nil, nil
-	}
-
-	if it.compareKeys(memKey, proKey) > 0 {
-		key, value = it.proCur.current()
-	} else {
-		// |memCur| wins ties
-		key, value = it.memCur.current()
-	}
-
-	if !it.rng.insideStop(key) {
-		return nil, nil
-	}
-
-	return
 }
 
 func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
-	if it.memCur != nil {
-		memKey, _ = it.memCur.current()
+	if it.memory != nil {
+		memKey, _ = it.memory.current()
 	}
-	if it.proCur != nil {
-		proKey, _ = it.proCur.current()
+	if it.prolly != nil {
+		proKey, _ = it.prolly.current()
 	}
 	return
 }
@@ -277,68 +146,133 @@ func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 	if proKey == nil {
 		return -1
 	}
-
-	cmp := it.rng.KeyDesc.Compare(memKey, proKey)
-	if it.rng.Reverse {
-		cmp = -cmp
-	}
-	return cmp
+	return it.rng.KeyDesc.Compare(memKey, proKey)
 }
 
-func (it MapRangeIter) progress(ctx context.Context) (err error) {
-	memKey, proKey := it.currentKeys()
+type emptyIter struct{}
 
-	if memKey == nil && proKey == nil {
-		return nil // can't progress
-	}
+var _ rangeIter = emptyIter{}
 
-	cmp := it.compareKeys(memKey, proKey)
-
-	if cmp >= 0 {
-		if err = it.moveCursor(ctx, it.proCur); err != nil {
-			return err
-		}
-	}
-	if cmp <= 0 {
-		if err = it.moveCursor(ctx, it.memCur); err != nil {
-			return err
-		}
-	}
+func (e emptyIter) iterate(ctx context.Context) (err error) {
 	return
 }
 
-func (it MapRangeIter) moveCursor(ctx context.Context, cur tupleCursor) error {
-	if it.rng.Reverse {
-		return cur.retreat(ctx)
-	} else {
-		return cur.advance(ctx)
+func (e emptyIter) current() (key, value val.Tuple) {
+	return
+}
+
+// GreaterRange defines a Range of Tuples greater than |lo|.
+func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		KeyDesc: desc,
 	}
 }
 
-func startInRange(ctx context.Context, iter MapRangeIter) error {
-	if iter.rng.Start.Unbound {
-		return nil
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |lo|.
+func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Unbound: true,
+		},
+		KeyDesc: desc,
 	}
+}
 
-	key, value := iter.current()
-	if key == nil {
-		// |key| == nil is exhausted iter
-		return nil
+// LesserRange defines a Range of Tuples less than |last|.
+func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		KeyDesc: desc,
 	}
+}
 
-	// |value| == nil is a pending delete
-
-	for !iter.rng.insideStart(key) || value == nil {
-		if err := iter.progress(ctx); err != nil {
-			return err
-		}
-
-		key, value = iter.current()
-		if key == nil {
-			// |key| == nil is exhausted iter
-			return nil
-		}
+// LesserOrEqualRange defines a Range of Tuples less than or equal to |last|.
+func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Unbound: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		KeyDesc: desc,
 	}
+}
 
-	return nil
+// OpenRange defines a non-inclusive Range of Tuples from |lo| to |last|.
+func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		KeyDesc: desc,
+	}
+}
+
+// OpenStartRange defines a half-open Range of Tuples from |lo| to |last|.
+func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: false,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		KeyDesc: desc,
+	}
+}
+
+// OpenStopRange defines a half-open Range of Tuples from |lo| to |last|.
+func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: false,
+		},
+		KeyDesc: desc,
+	}
+}
+
+// ClosedRange defines an inclusive Range of Tuples from |lo| to |last|.
+func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	return Range{
+		Start: RangeCut{
+			Key:       start,
+			Inclusive: true,
+		},
+		Stop: RangeCut{
+			Key:       stop,
+			Inclusive: true,
+		},
+		KeyDesc: desc,
+	}
 }

@@ -51,7 +51,7 @@ func init() {
 const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
 
 var transactionMergeStomp = false
-var ErrCanSwitchDueToDirtyWorkset = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
+var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
@@ -680,7 +680,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	if sessionState.dirty {
-		return ErrCanSwitchDueToDirtyWorkset.New()
+		return ErrWorkingSetChanges.New()
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)

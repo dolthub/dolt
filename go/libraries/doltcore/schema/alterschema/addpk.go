@@ -97,6 +97,14 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, err
 	}
 
+	// Copy over all checks from the old schema
+	for _, check := range sch.Checks().AllChecks() {
+		_, err := newSchema.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 	err = newSchema.SetPkOrdinals(pkOrdinals)
 	if err != nil {
