@@ -41,7 +41,7 @@ func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 	return materializeMutations(ctx, mut.prolly, mut.overlay.mutations())
 }
 
-// Put adds the Tuple pair |key|, |value| to the MutableMap.
+// Put adds the Tuple pair |key|, |ref| to the MutableMap.
 func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
 	mut.overlay.Put(key, value)
 	return nil

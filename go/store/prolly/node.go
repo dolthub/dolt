@@ -60,7 +60,7 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 	keyOffs = b.EndVector(writeItemOffsets(b, keys, keySz))
 
 	if level == 0 {
-		// serialize value tuples for leaf nodes
+		// serialize ref tuples for leaf nodes
 		serial.TupleMapStartKeyTuplesVector(b, valSz)
 		valTups = b.EndVector(writeItems(b, values))
 		serial.TupleMapStartValueOffsetsVector(b, len(values)-1)
@@ -142,7 +142,8 @@ func (nd mapNode) getValue(i int) nodeItem {
 	if nd.leafNode() {
 		return nd.getValueTuple(i)
 	} else {
-		return nd.getRef(i)
+		r := nd.getRef(i)
+		return r[:]
 	}
 }
 
@@ -160,10 +161,10 @@ func (nd mapNode) getValueTuple(i int) nodeItem {
 	return values[start:stop]
 }
 
-func (nd mapNode) getRef(i int) nodeItem {
+func (nd mapNode) getRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
 	start, stop := i*refSz, (i+1)*refSz
-	return refs[start:stop]
+	return hash.New(refs[start:stop])
 }
 
 func (nd mapNode) level() int {

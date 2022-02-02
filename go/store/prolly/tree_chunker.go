@@ -23,6 +23,8 @@ package prolly
 
 import (
 	"context"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
@@ -207,14 +209,14 @@ func (tc *treeChunker) Skip(ctx context.Context) error {
 	return err
 }
 
-// Append adds a new key-value pair to the chunker, validating the new pair to ensure
-// that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
+// Append adds a new key-ref pair to the chunker, validating the new pair to ensure
+// that chunks are well-formed. Key-ref pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
 func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, error) {
-	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
-	// (1) Key-value pairs are stored in the same mapNode.
+	// When adding new key-ref pairs to an in-progress chunk, we must enforce 3 invariants
+	// (1) Key-ref pairs are stored in the same mapNode.
 	// (2) The total size of a mapNode's data cannot exceed |maxNodeDataSize|.
-	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
+	// (3) Internal Nodes (level > 0) must contain at least 2 key-ref pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
 	//     key will lead to an identical metaPair in the nextMutation level in the tree, triggering
@@ -238,7 +240,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 
 	if overflow {
 		// Enforce constraints (1) and (2):
-		//  |key| and |value| won't fit in this chunk, force a
+		//  |key| and |ref| won't fit in this chunk, force a
 		//  boundary here and pass them to the nextMutation chunk.
 		err := tc.handleChunkBoundary(ctx)
 		if err != nil {
@@ -283,7 +285,8 @@ func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
 		return err
 	}
 
-	_, err = tc.parent.Append(ctx, meta.key(), meta.value())
+	k, r := meta.key(), meta.ref()
+	_, err = tc.parent.Append(ctx, nodeItem(k), nodeItem(r[:]))
 	if err != nil {
 		return err
 	}
@@ -313,17 +316,17 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 // createNode creates a mapNode from the current items in |sc.currentPair|,
 // clears the current items, then returns the new mapNode and a metaValue that
 // points to it. The mapNode is always eagerly written.
-func (tc *treeChunker) createNode(ctx context.Context) (mapNode, nodePair, error) {
-	nd, metaPair, err := writeNewChild(ctx, tc.ns, tc.level, tc.current...)
+func (tc *treeChunker) createNode(ctx context.Context) (mapNode, metaPair, error) {
+	nd, mp, err := writeNewChild(ctx, tc.ns, tc.level, tc.current...)
 	if err != nil {
-		return mapNode{}, nodePair{}, err
+		return mapNode{}, metaPair{}, err
 	}
 
 	// |tc.currentPair| is copied so it's safe to re-use the memory.
 	tc.current = tc.current[:0]
 	tc.currSz = 0
 
-	return nd, metaPair, nil
+	return nd, mp, nil
 }
 
 // Done returns the root mapNode of the resulting tree.
@@ -381,7 +384,7 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 	assertTrue(!tc.isLeaf())
 	assertTrue(len(tc.current) == metaPairCount)
 
-	mt := metaValue(tc.current[metaPairValIdx])
+	mt := hash.New(tc.current[metaPairValIdx])
 	for {
 		child, err := fetchChild(ctx, tc.ns, mt)
 		if err != nil {
@@ -392,7 +395,7 @@ func (tc *treeChunker) Done(ctx context.Context) (mapNode, error) {
 			return child, nil
 		}
 
-		mt = metaValue(child.getRef(0))
+		mt = child.getRef(0)
 	}
 }
 

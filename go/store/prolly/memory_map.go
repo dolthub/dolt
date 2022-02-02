@@ -28,7 +28,7 @@ type memoryMap struct {
 
 func newMemoryMap(keyDesc val.TupleDesc, tups ...val.Tuple) (mm memoryMap) {
 	if len(tups)%2 != 0 {
-		panic("tuples must be key-value pairs")
+		panic("tuples must be key-ref pairs")
 	}
 
 	mm.keyDesc = keyDesc
@@ -51,7 +51,7 @@ func (mm memoryMap) Count() uint64 {
 	return uint64(mm.list.Count())
 }
 
-// Put adds the Tuple pair |key|, |value| to the memoryMap.
+// Put adds the Tuple pair |key|, |ref| to the memoryMap.
 func (mm memoryMap) Put(key, val val.Tuple) {
 	mm.list.Put(key, val)
 }
@@ -69,7 +69,7 @@ func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
 		key = nil
 	}
 
-	// if |ok| is true but |value| is nil, then there
+	// if |ok| is true but |ref| is nil, then there
 	// is a pending delete of |key| in |mm.list|.
 	return cb(key, value)
 }

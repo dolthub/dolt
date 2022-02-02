@@ -291,15 +291,15 @@ func testMixedMutations(t *testing.T, batch int, mapCount int) {
 		// |v| is an existing key.
 		v := int64(i * 2)
 
-		// insert new key-value pair.
+		// insert new key-ref pair.
 		mutations[i][0], mutations[i][1] = makePut(v+1, v+1)
 
 		// create a delete or an update for |v|, but not both.
 		if i%4 == 0 {
-			// update existing key-value pair.
+			// update existing key-ref pair.
 			mutations[i+1][0], mutations[i+1][1] = makePut(v, -v)
 		} else {
-			// delete existing key-value pair.
+			// delete existing key-ref pair.
 			mutations[i+1][0], mutations[i+1][1] = makeDelete(v), nil
 		}
 	}

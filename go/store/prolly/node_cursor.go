@@ -25,6 +25,7 @@ import (
 	"context"
 	"sort"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -49,8 +50,7 @@ type searchFn func(item nodeItem, nd mapNode) (idx int)
 func newCursorAtStart(ctx context.Context, nrw NodeStore, nd mapNode) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentValue())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -66,8 +66,7 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd mapNode) (cur *node
 	cur.skipToNodeEnd()
 
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentValue())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -102,8 +101,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item nodeIt
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		mv := metaValue(cur.currentValue())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -127,8 +125,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item no
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		mv := metaValue(cur.currentValue())
-		cur.nd, err = fetchChild(ctx, nrw, mv)
+		cur.nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -153,6 +150,10 @@ func (cur *nodeCursor) currentKey() nodeItem {
 
 func (cur *nodeCursor) currentValue() nodeItem {
 	return cur.nd.getValue(cur.idx)
+}
+
+func (cur *nodeCursor) currentRef() hash.Hash {
+	return cur.nd.getRef(cur.idx)
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
@@ -216,8 +217,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		// stay in bounds for internal nodes
 		cur.parent.keepInBounds()
 
-		mv := metaValue(cur.parent.currentValue())
-		cur.nd, err = fetchChild(ctx, cur.nrw, mv)
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.currentRef())
 		if err != nil {
 			return err
 		}
@@ -342,8 +342,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil)
-	mv := metaValue(cur.parent.currentValue())
-	cur.nd, err = fetchChild(ctx, cur.nrw, mv)
+	cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 	cur.idx = -1 // caller must set
 	return err
 }

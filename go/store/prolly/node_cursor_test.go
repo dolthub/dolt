@@ -31,6 +31,7 @@ func TestNodeCursor(t *testing.T) {
 		testNewCursorAtItem(t, 10)
 		testNewCursorAtItem(t, 100)
 		testNewCursorAtItem(t, 1000)
+		testNewCursorAtItem(t, 10_000)
 	})
 }
 
