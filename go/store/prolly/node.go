@@ -32,11 +32,15 @@ const (
 	fbPad = 96
 )
 
-type mapNode struct {
-	buf serial.TupleMap
+func init() {
+	emptyNode = makeMapNode(sharedPool, 0, nil, nil)
 }
 
-// todo(andy): populate with init()
+type mapNode struct {
+	buf serial.TupleMap
+	cnt int
+}
+
 var emptyNode mapNode
 
 func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node mapNode) {
@@ -117,7 +121,15 @@ func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
 
 func mapNodeFromBytes(bb []byte) mapNode {
 	buf := serial.GetRootAsTupleMap(bb, 0)
-	return mapNode{buf: *buf}
+	// first key offset omitted
+	cnt := buf.KeyOffsetsLength() + 1
+	if len(buf.KeyTuplesBytes()) == 0 {
+		cnt = 0
+	}
+	return mapNode{
+		buf: *buf,
+		cnt: cnt,
+	}
 }
 
 func (nd mapNode) hashOf() hash.Hash {
@@ -133,6 +145,10 @@ func (nd mapNode) getKey(i int) nodeItem {
 	}
 	if i < nd.buf.KeyOffsetsLength() {
 		stop = nd.buf.KeyOffsets(i)
+	}
+
+	if start == stop {
+		panic("fux")
 	}
 
 	return keys[start:stop]
@@ -172,8 +188,7 @@ func (nd mapNode) level() int {
 }
 
 func (nd mapNode) nodeCount() int {
-	// first offset omitted
-	return nd.buf.KeyOffsetsLength() + 1
+	return nd.cnt
 }
 
 func (nd mapNode) cumulativeCount() uint64 {

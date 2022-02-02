@@ -23,14 +23,21 @@ import (
 
 // todo(andy): remove
 //  this is only used once
-type metaPair [2]nodeItem
+type metaPair struct {
+	k, r      nodeItem
+	treeCount uint64
+}
 
 func (p metaPair) key() val.Tuple {
-	return val.Tuple(p[0])
+	return val.Tuple(p.k)
 }
 
 func (p metaPair) ref() hash.Hash {
-	return hash.New(p[1])
+	return hash.New(p.r)
+}
+
+func (p metaPair) subtreeCount() uint64 {
+	return p.treeCount
 }
 
 func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (mapNode, error) {
@@ -54,7 +61,7 @@ func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nod
 
 	lastKey := val.Tuple(items[len(items)-metaPairCount])
 	metaKey := val.CloneTuple(ns.Pool(), lastKey)
-	meta := metaPair{nodeItem(metaKey), nodeItem(ref[:])}
+	meta := metaPair{k: nodeItem(metaKey), r: nodeItem(ref[:])}
 
 	return child, meta, nil
 }

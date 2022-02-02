@@ -217,7 +217,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		// stay in bounds for internal nodes
 		cur.parent.keepInBounds()
 
-		cur.nd, err = fetchChild(ctx, cur.nrw, cur.currentRef())
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 		if err != nil {
 			return err
 		}
