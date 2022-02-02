@@ -27,7 +27,6 @@ import (
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -405,7 +404,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	if is, err := IsCommit(commit); err != nil {
 		return err
 	} else if !is {
-		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
+		fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
@@ -748,17 +747,17 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	v, err := db.ReadValue(ctx, r.TargetHash())
 
 	if err != nil {
-		return types.EmptyStruct(r.Format()), err
+		return types.Struct{}, err
 	}
 
 	if v == nil {
-		panic(r.TargetHash().String() + " not found")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
 
 	is, err := IsCommit(v)
 
 	if err != nil {
-		return types.EmptyStruct(r.Format()), err
+		return types.Struct{}, err
 	}
 
 	if !is {
@@ -820,16 +819,16 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		var err error
 		parents, err = types.NewList(ctx, ds.db)
 		if err != nil {
-			return types.EmptyStruct(ds.db.Format()), err
+			return types.Struct{}, err
 		}
 
 		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
-			return types.EmptyStruct(ds.db.Format()), err
+			return types.Struct{}, err
 		} else if ok {
 			le := parents.Edit().Append(headRef)
 			parents, err = le.List(ctx)
 			if err != nil {
-				return types.EmptyStruct(ds.db.Format()), err
+				return types.Struct{}, err
 			}
 		}
 	}
@@ -841,7 +840,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 
 	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.db, parents)
 	if err != nil {
-		return types.EmptyStruct(ds.db.Format()), err
+		return types.Struct{}, err
 	}
 
 	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)

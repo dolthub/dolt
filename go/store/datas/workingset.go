@@ -17,7 +17,6 @@ package datas
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -49,13 +48,6 @@ const workingSetMetaVersion = "1.0"
 type WorkingSetMeta struct {
 	Meta types.Struct
 }
-
-var valueWorkingSetType = nomdl.MustParseType(`Struct WorkingSet {
-		mergeState?: Ref<Value>,
-		meta: Struct {},
-		stagedRootRef?:  Ref<Value>,
-        workingRootRef:  Ref<Value>,
-}`)
 
 var mergeStateTemplate = types.MakeStructTemplate(MergeStateName, []string{MergeStateCommitField, MergeStateWorkingPreMergeField})
 
