@@ -26,7 +26,6 @@ teardown() {
 }
 
 @test "git-dolt: install sets up a smudge filter in the current git repository" {
-    skiponwindows "Failing with device busy error"
     init_git_repo
 
     run git dolt install
@@ -44,7 +43,6 @@ teardown() {
 }
 
 @test "git-dolt: install works in subdirectories of the git repository" {
-    skiponwindows "Failing with device busy error"
     init_git_repo
     mkdir -p deeply/nested/directory
     pushd deeply/nested/directory
@@ -62,14 +60,12 @@ teardown() {
 }
 
 @test "git-dolt: install fails with a helpful error when executed outside of a git repo" {
-    skiponwindows "Failing with device busy error"
     run git dolt install
     [ "$status" -eq 1 ]
     [[ "$output" =~ "couldn't find a .git directory" ]] || false
 }
 
 @test "git-dolt: link takes a remote url (and an optional revspec and destination directory), clones the repo, and outputs a pointer file" {
-    skiponwindows "Failing with device busy error"
     init_git_repo
     run git dolt link $REMOTE
     [ "$status" -eq 0 ]
@@ -91,7 +87,6 @@ teardown() {
 }
 
 @test "git-dolt: smudge filter automatically clones dolt repositories referenced in checked out git-dolt pointer files" {
-    skiponwindows "Failing with device busy error"
     init_git_repo
     git dolt install
     git dolt link $REMOTE
@@ -109,7 +104,6 @@ teardown() {
 }
 
 @test "git-dolt: fetch takes the name of a git-dolt pointer file and clones the repo to the specified revision if it doesn't exist" {
-    skiponwindows "Failing with device busy error"
     init_git_repo
     create_test_pointer
 
@@ -123,7 +117,6 @@ teardown() {
 }
 
 @test "git-dolt: update updates the specified pointer file to the specified revision" {
-    skiponwindows "Failing with device busy error"
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
@@ -153,7 +146,6 @@ SQL
 }
 
 @test "git-dolt: fails helpfully when dolt is not installed" {
-    skiponwindows "Failing with device busy error"
     mkdir TMP_PATH
     pushd TMP_PATH
     cp `which git` ./git
@@ -174,13 +166,11 @@ SQL
 }
 
 @test "git-dolt: shows usage on unknown commands" {
-    skiponwindows "Failing with device busy error"
     run git dolt nonsense
     [[ "$output" =~ Usage ]] || false
 }
 
 @test "git-dolt: prints usage information with no arguments" {
-    skiponwindows "Failing with device busy error"
     run git dolt
     [[ "$output" =~ Usage ]] || false
 }
