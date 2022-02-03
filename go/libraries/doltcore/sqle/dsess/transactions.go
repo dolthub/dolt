@@ -164,7 +164,7 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	err := handleConflictSystemVariables(ctx, workingSet)
+	err := checkForConflictsAndConstraintViolations(ctx, workingSet)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -258,7 +258,9 @@ func (tx *DoltTransaction) doCommit(
 	return nil, nil, datas.ErrOptimisticLockFailed
 }
 
-func handleConflictSystemVariables(ctx *sql.Context, workingSet *doltdb.WorkingSet) error {
+// checkForConflictsAndConstraintViolations determines which conflicts and constraint violations are ok to commit
+// given the state of certain system variables.
+func checkForConflictsAndConstraintViolations(ctx *sql.Context, workingSet *doltdb.WorkingSet) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
 		return err
@@ -269,8 +271,9 @@ func handleConflictSystemVariables(ctx *sql.Context, workingSet *doltdb.WorkingS
 		return err
 	}
 
+	workingRoot := workingSet.WorkingRoot()
+
 	if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
-		workingRoot := workingSet.WorkingRoot()
 		hasConflicts, err := workingRoot.HasConflicts(ctx)
 		if err != nil {
 			return err
@@ -278,6 +281,11 @@ func handleConflictSystemVariables(ctx *sql.Context, workingSet *doltdb.WorkingS
 		if hasConflicts {
 			return doltdb.ErrUnresolvedConflicts
 		}
+	}
+
+	// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
+	// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
+	if forceTransactionCommit.(int8) != 1 {
 		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
 		if err != nil {
 			return err

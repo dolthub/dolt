@@ -423,7 +423,7 @@ var DoltMerge = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflict is queryable and commitable",
+		Name: "DOLT_MERGE with conflict is queryable and commitable until dolt_allow_commit_conflicts is turned off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",

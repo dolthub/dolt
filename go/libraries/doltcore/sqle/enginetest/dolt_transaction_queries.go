@@ -797,7 +797,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 
 var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 	{
-		Name: "Dolt Merge that commits conflicts is reflected by another user",
+		Name: "Committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
