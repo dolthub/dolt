@@ -233,6 +233,7 @@ func TestGet(t *testing.T) {
 
 	// edits in materialized data
 	_, err = tea.MaterializeEdits(ctx, nbf)
+	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, true)
 	requireGet(ctx, t, tea, key2, true)
 	requireGet(ctx, t, tea, key3, true)
@@ -258,6 +259,7 @@ func TestGet(t *testing.T) {
 	requireGet(ctx, t, tea, key6, true)
 
 	_, err = tea.MaterializeEdits(ctx, nbf)
+	require.NoError(t, err)
 	requireGet(ctx, t, tea, key1, false)
 	requireGet(ctx, t, tea, key2, false)
 	requireGet(ctx, t, tea, key3, true)
