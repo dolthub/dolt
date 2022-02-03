@@ -1484,6 +1484,7 @@ SQL
 }
 
 @test "sql: sql show grants" {
+    skip "todo"
     run dolt sql -q "show grants for current_user" -r csv
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = "Grants for root@%" ]
