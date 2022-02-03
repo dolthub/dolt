@@ -38,8 +38,8 @@ type prollyIndexIter struct {
 	pkMap columnMapping
 	pkBld *val.TupleBuilder
 
-	eg     *errgroup.Group
-	pkChan chan val.Tuple
+	eg      *errgroup.Group
+	rowChan chan sql.Row
 
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
@@ -74,42 +74,31 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, proje
 		pkBld:     pkBld,
 		pkMap:     pkMap,
 		eg:        eg,
-		pkChan:    make(chan val.Tuple, indexLookupBufSize),
+		rowChan:   make(chan sql.Row, indexLookupBufSize),
 		keyMap:    columnMapping(km),
 		valMap:    columnMapping(vm),
 	}
 
 	eg.Go(func() error {
-		return iter.queuePrimaryKeys(c)
+		return iter.queueRows(c)
 	})
 
 	return iter, nil
 }
 
 // Next returns the next row from the iterator.
-func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
-	var err error
+func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
 	for {
 		var ok bool
-		var pk val.Tuple
 		select {
-		case pk, ok = <-p.pkChan:
+		case r, ok = <-p.rowChan:
+			if ok {
+				return r, nil
+			}
 		}
-
 		if !ok {
 			break
 		}
-
-		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
-		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) (err error) {
-			p.rowFromTuples(key, value, r)
-			return
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		return r, nil
 	}
 
 	if err = p.eg.Wait(); err != nil {
@@ -119,16 +108,11 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	return nil, io.EOF
 }
 
-func (p prollyIndexIter) queuePrimaryKeys(ctx context.Context) error {
-	defer close(p.pkChan)
+func (p prollyIndexIter) queueRows(ctx context.Context) error {
+	defer close(p.rowChan)
 
 	for {
 		idxKey, _, err := p.indexIter.Next(ctx)
-		if err == io.EOF {
-			// ignore io.EOF here, and return it in Next()
-			// after |p.pkChan| has been drained
-			return nil
-		}
 		if err != nil {
 			return err
 		}
@@ -138,10 +122,19 @@ func (p prollyIndexIter) queuePrimaryKeys(ctx context.Context) error {
 		}
 		pk := p.pkBld.Build(sharePool)
 
+		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) (err error) {
+			p.rowFromTuples(key, value, r)
+			return
+		})
+		if err != nil {
+			return err
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case p.pkChan <- pk:
+		case p.rowChan <- r:
 		}
 	}
 }
