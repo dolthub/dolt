@@ -315,13 +315,13 @@ func (c *Config) validateServerConfigs() error {
 			return fmt.Errorf("unsupported server type: %s", s.Server)
 		}
 
-		err := validateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
+		err := ValidateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
 		if err != nil {
 			return err
 		}
 
 		if s.Server == MySql {
-			err = checkProtocol(s.ConnectionProtocol)
+			err = CheckProtocol(s.ConnectionProtocol)
 			if err != nil {
 				return err
 			}
@@ -331,12 +331,12 @@ func (c *Config) validateServerConfigs() error {
 			s.Host = defaultHost
 		}
 
-		portMap, err = checkUpdatePortMap(s, portMap)
+		portMap, err = CheckUpdatePortMap(s, portMap)
 		if err != nil {
 			return err
 		}
 
-		err = checkExec(s)
+		err = CheckExec(s)
 		if err != nil {
 			return err
 		}
@@ -344,7 +344,7 @@ func (c *Config) validateServerConfigs() error {
 	return nil
 }
 
-func validateRequiredFields(server, version, format string) error {
+func ValidateRequiredFields(server, version, format string) error {
 	if server == "" {
 		return getMustSupplyError("server")
 	}
@@ -389,8 +389,8 @@ func (c *Config) setDefaults() error {
 	return nil
 }
 
-// checkUpdatePortMap returns an error if multiple servers have specified the same port
-func checkUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
+// CheckUpdatePortMap returns an error if multiple servers have specified the same port
+func CheckUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
 	if serverConfig.Port == 0 {
 		serverConfig.Port = defaultPort
 	}
@@ -404,8 +404,8 @@ func checkUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) 
 	return portMap, nil
 }
 
-// checkExec verifies the binary exists
-func checkExec(serverConfig *ServerConfig) error {
+// CheckExec verifies the binary exists
+func CheckExec(serverConfig *ServerConfig) error {
 	if serverConfig.ServerExec == "" {
 		return getMustSupplyError("server exec")
 	}
@@ -420,8 +420,8 @@ func checkExec(serverConfig *ServerConfig) error {
 	return nil
 }
 
-// checkProtocol ensures the given protocol is supported
-func checkProtocol(protocol string) error {
+// CheckProtocol ensures the given protocol is supported
+func CheckProtocol(protocol string) error {
 	if protocol == "" {
 		return getMustSupplyError("connection protocol")
 	}

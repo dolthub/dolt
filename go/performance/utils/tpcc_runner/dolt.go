@@ -35,7 +35,6 @@ const (
 )
 
 func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
-	// TODO: Need to implement username and password configs for docker deployment
 	serverParams := serverConfig.GetServerArgs()
 
 	testRepo, err := initDoltRepo(ctx, serverConfig)
@@ -69,7 +68,7 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 	time.Sleep(5 * time.Second)
 
 	// GetTests and Benchmarks
-	tests := getTests(ctx, tppcConfig)
+	tests := getTests(tppcConfig)
 	results := make(sysbench_runner.Results, 0)
 
 	for _, test := range tests {
@@ -117,7 +116,11 @@ func initDoltRepo(ctx context.Context, config *sysbench_runner.ServerConfig) (st
 		return "", err
 	}
 
-	// TODO: Ignore an error if init already exists
+	err = os.RemoveAll(filepath.Join(testRepo, ".dolt"))
+	if err != nil {
+		return "", err
+	}
+
 	doltInit := sysbench_runner.ExecCommand(ctx, config.ServerExec, "init")
 	doltInit.Dir = testRepo
 	err = doltInit.Run()
@@ -135,7 +138,7 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 	return server
 }
 
-func getTests(ctx context.Context, config *TpccBenchmarkConfig) []*TpccTest {
+func getTests(config *TpccBenchmarkConfig) []*TpccTest {
 	tests := make([]*TpccTest, 0)
 	for _, sf := range config.ScaleFactors {
 		params := NewDefaultTpccParams()
@@ -164,7 +167,6 @@ func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runne
 		return nil, err
 	}
 
-	// TODO: Wtf is suite id
 	result, err := FromOutputResult(out, config, serverConfig, test, "tpcc", nil)
 	if err != nil {
 		return nil, err

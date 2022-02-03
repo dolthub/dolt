@@ -21,8 +21,12 @@ import (
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
-// TODO: Revalidate the config here
 func Run(config *TpccBenchmarkConfig) error {
+	err := config.updateDefaults()
+	if err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 
 	for _, serverConfig := range config.Servers {
@@ -30,11 +34,13 @@ func Run(config *TpccBenchmarkConfig) error {
 		var err error
 		switch serverConfig.Server {
 		case sysbench_runner.Dolt:
+			fmt.Println("Running Dolt Benchmark")
 			results, err = BenchmarkDolt(ctx, config, serverConfig)
 			if err != nil {
 				return err
 			}
 		case sysbench_runner.MySql:
+			fmt.Println("Running MySQL benchmark")
 			results, err = BenchmarkMysql(ctx, config, serverConfig)
 			if err != nil {
 				return err

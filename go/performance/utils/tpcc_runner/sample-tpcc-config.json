@@ -1,6 +1,4 @@
 {
-  "RuntimeOS": "MAC",
-  "RuntimeGoArch": "dasdas",
   "Servers": [
     {
       "Server": "mysql",

@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 
 	"github.com/google/uuid"
 
@@ -32,8 +33,8 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultUser = "root"
 
-	tpccUserLocal = "'sysbench'@'localhost'"
-	tpccPassLocal = "sysbenchpass"
+	tpccUserLocal = "vinairachakonda"
+	tpccPassLocal = "vinai"
 
 	defaultSocket = "/var/run/mysqld/mysqld.sock"
 	tcpProtocol   = "tcp"
@@ -60,10 +61,6 @@ type TpccBenchmarkConfig struct {
 	// Servers are the servers to benchmark.
 	Servers []*sysbench_runner.ServerConfig
 
-	//// Tests are the tests to run. If no tests are provided,
-	//// the default tests will be used. We run tests against each type of Server (i.e Dolt and MySQL).
-	//Tests []*TpccTest
-
 	// ScaleFactors represent the scale at which to run each TpccBenchmark at.
 	ScaleFactors []int
 }
@@ -73,6 +70,58 @@ func NeeTpccConfig() *TpccBenchmarkConfig {
 		Servers:      make([]*sysbench_runner.ServerConfig, 0),
 		ScaleFactors: make([]int, 0),
 	}
+}
+
+func (c *TpccBenchmarkConfig) updateDefaults() error {
+	if len(c.Servers) < 1 {
+		return sysbench_runner.ErrNoServersDefined
+	}
+
+	if c.RuntimeOS == "" {
+		c.RuntimeOS = runtime.GOOS
+	}
+	if c.RuntimeGoArch == "" {
+		c.RuntimeGoArch = runtime.GOARCH
+	}
+
+	return c.validateServerConfigs()
+}
+
+// validateServerConfigs ensures the ServerConfigs are valid
+func (c *TpccBenchmarkConfig) validateServerConfigs() error {
+	portMap := make(map[int]sysbench_runner.ServerType)
+	for _, s := range c.Servers {
+		if s.Server != sysbench_runner.Dolt && s.Server != sysbench_runner.MySql {
+			return fmt.Errorf("unsupported server type: %s", s.Server)
+		}
+
+		err := sysbench_runner.ValidateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
+		if err != nil {
+			return err
+		}
+
+		if s.Server == sysbench_runner.MySql {
+			err = sysbench_runner.CheckProtocol(s.ConnectionProtocol)
+			if err != nil {
+				return err
+			}
+		}
+
+		if s.Host == "" {
+			s.Host = defaultHost
+		}
+
+		portMap, err = sysbench_runner.CheckUpdatePortMap(s, portMap)
+		if err != nil {
+			return err
+		}
+
+		err = sysbench_runner.CheckExec(s)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // FromFileConfig returns a validated Config based on the config file at the configPath
@@ -124,12 +173,11 @@ type TpccTestParams struct {
 }
 
 func NewDefaultTpccParams() *TpccTestParams {
-	// TODO: Should these params be abstracted to the config file? Probably I guess :)
 	return &TpccTestParams{
-		NumThreads:     1,
+		NumThreads:     3, // Try with multiple threads. Need to export command line variable
 		ScaleFactor:    1,
 		Tables:         1,
-		TrxLevel:       "RR", // TODO: Not actually uyses
+		TrxLevel:       "RR",
 		ReportCSV:      true,
 		ReportInterval: 1,
 		Time:           30,
@@ -151,8 +199,6 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 
 	params = append(params, fmt.Sprintf("--mysql-host=%s", serverConfig.Host))
 
-	// TODO: Handle MySQL Socket case
-
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
 		params = append(params, "--mysql-socket=/tmp/mysql.sock")
@@ -168,48 +214,34 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 	params = append(params, fmt.Sprintf("--report_interval=%d", t.Params.ReportInterval))
 	params = append(params, fmt.Sprintf("--tables=%d", t.Params.Tables))
 	params = append(params, fmt.Sprintf("--scale=%d", t.Params.ScaleFactor))
+	params = append(params, fmt.Sprintf("--trx_level=%s", t.Params.TrxLevel))
 
 	return params
 }
 
-func (t *TpccTest) getPrepareArgs(serverConfig *sysbench_runner.ServerConfig) []string {
-	return append(t.getArgs(serverConfig), "prepare")
-}
-
-// getRunArgs returns a test's args for the TPCC run step.
-func (t *TpccTest) getRunArgs(serverConfig *sysbench_runner.ServerConfig) []string {
-	return append(t.getArgs(serverConfig), "run")
-}
-
-// getCleanupArgs returns a test's args for the TPCC cleanup step.
-func (t *TpccTest) getCleanupArgs(serverConfig *sysbench_runner.ServerConfig) []string {
-	return append(t.getArgs(serverConfig), "cleanup")
-}
-
-// TODO: Refactor all of this
+// TpccPrepare prepares the command executable for the Prepare step.
 func (t *TpccTest) TpccPrepare(ctx context.Context, serverConfig *sysbench_runner.ServerConfig, scriptDir string) *exec.Cmd {
-	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", t.getPrepareArgs(serverConfig)...)
-	lp := filepath.Join(scriptDir, "?.lua")
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, fmt.Sprintf("LUA_PATH=%s", lp))
-
-	return cmd
+	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "prepare")...)
+	return addParamsToCmd(cmd, scriptDir)
 }
 
+// TpccRun prepares the command executable for the Run step.
 func (t *TpccTest) TpccRun(ctx context.Context, serverConfig *sysbench_runner.ServerConfig, scriptDir string) *exec.Cmd {
-	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", t.getRunArgs(serverConfig)...)
-	lp := filepath.Join(scriptDir, "?.lua")
-	cmd.Env = os.Environ()
-	cmd.Env = append(cmd.Env, fmt.Sprintf("LUA_PATH=%s", lp))
-
-	return cmd
+	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
+	return addParamsToCmd(cmd, scriptDir)
 }
 
+// TpccCleanup prepares the cleanup executable for the Cleanup step.
 func (t *TpccTest) TpccCleanup(ctx context.Context, serverConfig *sysbench_runner.ServerConfig, scriptDir string) *exec.Cmd {
-	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", t.getCleanupArgs(serverConfig)...)
+	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "cleanup")...)
+	return addParamsToCmd(cmd, scriptDir)
+}
+
+func addParamsToCmd(cmd *exec.Cmd, scriptDir string) *exec.Cmd {
 	lp := filepath.Join(scriptDir, "?.lua")
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("LUA_PATH=%s", lp))
+	cmd.Env = append(cmd.Env, "DOLT_TRANSACTION_MERGE_STOMP=1")
 
 	return cmd
 }
