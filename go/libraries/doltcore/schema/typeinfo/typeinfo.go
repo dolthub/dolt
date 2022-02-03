@@ -45,15 +45,6 @@ func SpatialTypesEnabled() bool {
 	return spatialTypesFeatureFlag
 }
 
-func TestWithSpatialTypesEnabled(cb func()) {
-	spatialTypesLock.Lock()
-	defer spatialTypesLock.Unlock()
-
-	spatialTypesFeatureFlag = true
-	cb()
-	spatialTypesFeatureFlag = false
-}
-
 type Identifier string
 
 const (
