@@ -617,7 +617,7 @@ SQL
     dolt sql -q "alter table t drop primary key"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "NOT NULL" ]] || false
+    [[ "$output" =~ "`pk` int NOT NULL" ]] || false
     [[ ! "$output" =~ "PRIMARY KEY" ]] || false
 }
 
@@ -651,6 +651,5 @@ alter table mydb.test add primary key(pk);
 SQL
     run dolt sql -q "show create table mydb.test";
     [ $status -eq 0 ]
-    skip "Dolt does not accept most alters in the db.table form"
     [[ "$output" =~ "PRIMARY KEY" ]]
 }
