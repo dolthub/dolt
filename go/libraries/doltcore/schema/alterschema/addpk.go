@@ -38,6 +38,10 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
+	if schema.IsUsingSpatialColAsKey(sch) {
+		return nil, schema.ErrUsingSpatialKey.New(tableName)
+	}
+
 	pkColOrdering := make(map[string]int, len(columns))
 	for i, newCol := range columns {
 		pkColOrdering[newCol.Name] = i

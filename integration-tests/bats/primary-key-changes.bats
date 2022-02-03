@@ -642,3 +642,15 @@ SQL
     run dolt sql -q "alter table t add (pk int null primary key)"
     [ $status -eq 1 ]
 }
+
+@test "primary-key-changes: can add primary keys on db.table named tables" {
+    dolt sql <<SQL
+create database mydb;
+create table mydb.test(pk int, c1 int);
+alter table mydb.test add primary key(pk);
+SQL
+    run dolt sql -q "show create table mydb.test";
+    [ $status -eq 0 ]
+    skip "Dolt does not accept most alters in the db.table form"
+    [[ "$output" =~ "PRIMARY KEY" ]]
+}

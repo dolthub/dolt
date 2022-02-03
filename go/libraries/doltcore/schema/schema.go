@@ -17,6 +17,9 @@ package schema
 import (
 	"strings"
 
+	"gopkg.in/src-d/go-errors.v1"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -195,4 +198,25 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 	}
 
 	return true
+}
+
+var ErrUsingSpatialKey = errors.NewKind("can't use Spatial Types as Primary Key for table %s")
+
+// IsColSpatialType is a utility function that checks if a single column is using a spatial type by comparing typeinfos
+func IsColSpatialType(c Column) bool {
+	return c.TypeInfo.Equals(typeinfo.PointType) ||
+		c.TypeInfo.Equals(typeinfo.LinestringType) ||
+		c.TypeInfo.Equals(typeinfo.PolygonType)
+}
+
+// IsUsingSpatialColAsKey is a utility function that checks for any spatial types being used as a primary key
+func IsUsingSpatialColAsKey(sch Schema) bool {
+	pkCols := sch.GetPKCols()
+	cols := pkCols.GetColumns()
+	for _, c := range cols {
+		if IsColSpatialType(c) {
+			return true
+		}
+	}
+	return false
 }
