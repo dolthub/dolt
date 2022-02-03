@@ -612,13 +612,19 @@ SQL
 }
 
 @test "primary-key-changes: dropping primary key retains not null constraint" {
-    dolt sql -q "create table t (pk int)"
-    dolt sql -q "alter table t add primary key (pk)"
+    dolt sql -q "create table t (pk1 int, pk2 int, c1 int)"
+    dolt sql -q "alter table t add primary key (pk1, pk2)"
     dolt sql -q "alter table t drop primary key"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "`pk` int NOT NULL" ]] || false
+    [[ "$output" =~ "`pk1` int NOT NULL" ]] || false
+    [[ "$output" =~ "`pk2` int NOT NULL" ]] || false
     [[ ! "$output" =~ "PRIMARY KEY" ]] || false
+
+    dolt sql -q "show create table t" > res.txt
+    run grep 'NOT NULL' res.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "primary-key-changes: creating table with null and primary key column throws error" {
