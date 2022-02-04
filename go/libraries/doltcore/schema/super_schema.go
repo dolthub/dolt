@@ -69,6 +69,14 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 			return fmt.Errorf("tag collision for columns %s and %s, different definitions (tag: %d)",
 				ecName, col.Name, col.Tag)
 		}
+
+		// If the column's primary key metadata has changed, update SuperSchema's
+		// representation of the column to match.
+		if existingCol.IsPartOfPK != col.IsPartOfPK {
+			existingCol.IsPartOfPK = col.IsPartOfPK
+			ac.TagToCol[ct] = existingCol
+			ac.cols[ac.TagToIdx[ct]] = existingCol
+		}
 	}
 
 	names, found := ss.tagNames[col.Tag]
