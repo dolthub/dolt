@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -174,7 +175,7 @@ func (ts *TextSpinner) next() string {
 	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
+func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent) {
 	var pos int
 	var currentTreeLevel int
 	var percentBuffered float64
@@ -189,17 +190,17 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 			return
 		}
 		switch evt.EventType {
-		case datas.NewLevelTWEvent:
+		case pull.NewLevelTWEvent:
 			if evt.TWEventDetails.TreeLevel != 1 {
 				currentTreeLevel = evt.TWEventDetails.TreeLevel
 				percentBuffered = 0
 			}
-		case datas.DestDBHasTWEvent:
+		case pull.DestDBHasTWEvent:
 			if evt.TWEventDetails.TreeLevel != -1 {
 				currentTreeLevel = evt.TWEventDetails.TreeLevel
 			}
 
-		case datas.LevelUpdateTWEvent:
+		case pull.LevelUpdateTWEvent:
 			if evt.TWEventDetails.TreeLevel != -1 {
 				currentTreeLevel = evt.TWEventDetails.TreeLevel
 				toBuffer := evt.TWEventDetails.ChunksInLevel - evt.TWEventDetails.ChunksAlreadyHad
@@ -209,18 +210,18 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 				}
 			}
 
-		case datas.LevelDoneTWEvent:
+		case pull.LevelDoneTWEvent:
 
-		case datas.TableFileClosedEvent:
+		case pull.TableFileClosedEvent:
 			tableFilesBuffered += 1
 
-		case datas.StartUploadTableFileEvent:
+		case pull.StartUploadTableFileEvent:
 
-		case datas.UploadTableFileUpdateEvent:
+		case pull.UploadTableFileUpdateEvent:
 			bps := float64(evt.TFEventDetails.Stats.Read) / evt.TFEventDetails.Stats.Elapsed.Seconds()
 			uploadRate = humanize.Bytes(uint64(bps)) + "/s"
 
-		case datas.EndUploadTableFileEvent:
+		case pull.EndUploadTableFileEvent:
 			filesUploaded += 1
 		}
 
@@ -239,8 +240,8 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan datas.PullerEvent) {
 	}
 }
 
-func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
-	var latest datas.PullProgress
+func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
+	var latest pull.PullProgress
 	last := time.Now().UnixNano() - 1
 	lenPrinted := 0
 	done := false
@@ -277,9 +278,9 @@ func progFunc(ctx context.Context, progChan chan datas.PullProgress) {
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent, 128)
-	progChan := make(chan datas.PullProgress, 128)
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
+	pullerEventCh := make(chan pull.PullerEvent, 128)
+	progChan := make(chan pull.PullProgress, 128)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
@@ -297,7 +298,7 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress
 	return wg, progChan, pullerEventCh
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) {
 	cancel()
 	close(progChan)
 	close(pullerEventCh)

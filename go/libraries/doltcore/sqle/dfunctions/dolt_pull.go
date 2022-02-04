@@ -29,7 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 const DoltPullFuncName = "dolt_pull"
@@ -153,7 +153,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return noConflicts, nil
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent) {
+func pullerProgFunc(ctx context.Context, pullerEventCh <-chan pull.PullerEvent) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -167,7 +167,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan datas.PullerEvent)
 	}
 }
 
-func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
+func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -181,9 +181,9 @@ func progFunc(ctx context.Context, progChan <-chan datas.PullProgress) {
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress, chan datas.PullerEvent) {
-	pullerEventCh := make(chan datas.PullerEvent)
-	progChan := make(chan datas.PullProgress)
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
+	pullerEventCh := make(chan pull.PullerEvent)
+	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
@@ -201,7 +201,7 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan datas.PullProgress
 	return wg, progChan, pullerEventCh
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan datas.PullProgress, pullerEventCh chan datas.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) {
 	cancel()
 	close(progChan)
 	close(pullerEventCh)
