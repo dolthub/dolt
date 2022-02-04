@@ -55,6 +55,9 @@ func ModifyColumn(
 	// Modify statements won't include key info, so fill it in from the old column
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
+		if schema.IsColSpatialType(newCol) {
+			return nil, fmt.Errorf("can't use Spatial Types as Primary Key for table")
+		}
 		foundNotNullConstraint := false
 		for _, constraint := range newCol.Constraints {
 			if _, ok := constraint.(schema.NotNullConstraint); ok {
@@ -340,6 +343,14 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			IsUserDefined: index.IsUserDefined(),
 			Comment:       index.Comment(),
 		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Copy over all checks from the old schema
+	for _, check := range sch.Checks().AllChecks() {
+		_, err := newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
 		if err != nil {
 			return nil, err
 		}

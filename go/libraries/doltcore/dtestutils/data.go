@@ -111,6 +111,15 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	_, err = TypedSchema.Checks().AddCheck("test-check", "age < 123", true)
+	if err != nil {
+		panic(err)
+	}
+	_, err = UntypedSchema.Checks().AddCheck("test-check", "age < 123", true)
+	if err != nil {
+		panic(err)
+	}
 }
 
 func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *string) row.Row {

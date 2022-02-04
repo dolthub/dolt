@@ -39,45 +39,55 @@ func TestMutableMapReads(t *testing.T) {
 
 			mutableMap, tuples := makeMutableMap(t, s)
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGet(t, mutableMap, tuples)
+				testGet(t, mutableMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				testOrderedMapIterAll(t, mutableMap, tuples)
+				testIterAll(t, mutableMap, tuples)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, mutableMap, tuples)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, mutableMap, tuples)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, mutableMap, tuples)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, mutableMap, tuples)
 			})
 
-			mutableMap2, tuples2, deletes := makeMutableMapWithDeletes(t, s)
+			mutableIndex, idxTuples := makeMutableSecondaryIndex(t, s)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, mutableIndex, idxTuples)
+			})
+
+			mutableMap2, tuples2, deletes := deleteFromMutableMap(mutableMap.(MutableMap), tuples)
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMutableMapGetAndHas(t, mutableMap2, tuples2, deletes)
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
-				testOrderedMapIterAll(t, mutableMap2, tuples2)
+				testIterAll(t, mutableMap2, tuples2)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, mutableMap2, tuples2)
+			t.Run("iter range with pending deletes", func(t *testing.T) {
+				testIterRange(t, mutableMap2, tuples2)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, mutableMap2, tuples2)
+
+			mutableIndex2, idxTuples2, _ := deleteFromMutableMap(mutableIndex.(MutableMap), idxTuples)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, mutableIndex, idxTuples2)
 			})
 
 			prollyMap, err := mutableMap2.Map(context.Background())
 			require.NoError(t, err)
-			t.Run("get item from map with deletes", func(t *testing.T) {
-				testProllyMapHas(t, prollyMap, tuples2)
+			t.Run("get item from map after deletes applied", func(t *testing.T) {
+				testHas(t, prollyMap, tuples2)
 			})
-			t.Run("iter all from map with deletes", func(t *testing.T) {
-				testOrderedMapIterAll(t, prollyMap, tuples2)
+			t.Run("iter all from map after deletes applied", func(t *testing.T) {
+				testIterAll(t, prollyMap, tuples2)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, prollyMap, tuples2)
+			t.Run("iter range after deletes applied", func(t *testing.T) {
+				testIterRange(t, prollyMap, tuples2)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, prollyMap, tuples2)
+
+			prollyIndex, err := mutableIndex2.Map(context.Background())
+			require.NoError(t, err)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, prollyIndex, idxTuples2)
 			})
 		})
 	}
@@ -118,7 +128,7 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	require.NoError(t, err)
 
 	mut := MutableMap{
-		m: Map{
+		prolly: Map{
 			root:    root,
 			keyDesc: kd,
 			valDesc: vd,
@@ -135,29 +145,33 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return mut, tuples
 }
 
-func makeMutableMapWithDeletes(t *testing.T, count int) (mut MutableMap, tuples, deletes [][2]val.Tuple) {
-	ctx := context.Background()
-	om, tuples := makeMutableMap(t, count)
-	mut = om.(MutableMap)
+func makeMutableSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	m, tuples := makeProllySecondaryIndex(t, count)
+	return newMutableMap(m.(Map)), tuples
+}
 
+func deleteFromMutableMap(mut MutableMap, tt [][2]val.Tuple) (MutableMap, [][2]val.Tuple, [][2]val.Tuple) {
+	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
-		tuples[i], tuples[j] = tuples[j], tuples[i]
+		tt[i], tt[j] = tt[j], tt[i]
 	})
 
 	// delete 1/4 of tuples
-	deletes = tuples[:count/4]
+	deletes := tt[:count/4]
 
 	// re-sort the remaining tuples
-	tuples = tuples[count/4:]
-	desc := getKeyDesc(om)
-	sortTuplePairs(tuples, desc)
+	remaining := tt[count/4:]
+	desc := keyDescFromMap(mut)
+	sortTuplePairs(remaining, desc)
 
+	ctx := context.Background()
 	for _, kv := range deletes {
-		err := mut.Put(ctx, kv[0], nil)
-		require.NoError(t, err)
+		if err := mut.Delete(ctx, kv[0]); err != nil {
+			panic(err)
+		}
 	}
 
-	return mut, tuples, deletes
+	return mut, remaining, deletes
 }
 
 func testMutableMapGetAndHas(t *testing.T, mut MutableMap, tuples, deletes [][2]val.Tuple) {

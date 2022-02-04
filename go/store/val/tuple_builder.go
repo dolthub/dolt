@@ -218,6 +218,19 @@ func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
 	tb.pos += sz
 }
 
+// PutRaw writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
+	if buf == nil {
+		// todo(andy): does it make senes to
+		//  allow/expect nulls here?
+		return
+	}
+	sz := ByteSize(len(buf))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeBytes(tb.fields[i], buf, tb.Desc.Types[i].Coll)
+	tb.pos += sz
+}
+
 // PutField writes an interface{} to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutField(i int, v interface{}) {
 	if v == nil {

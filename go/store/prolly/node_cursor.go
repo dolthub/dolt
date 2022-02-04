@@ -24,6 +24,8 @@ package prolly
 import (
 	"context"
 	"sort"
+
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -58,7 +60,7 @@ func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
-func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	cur.skipToNodeEnd()
 
@@ -73,7 +75,21 @@ func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCurso
 		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 		cur.skipToNodeEnd()
 	}
+
+	// advance |cur| past the end
+	ok, err := cur.advance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		panic("expected |ok| to be  false")
+	}
+
 	return
+}
+
+func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search searchFn) (cur *nodeCursor, err error) {
+	return newCursorAtItem(ctx, nrw, nd, nodeItem(tup), search)
 }
 
 func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
@@ -120,36 +136,6 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 	}
 
 	return cur, nil
-}
-
-func newCursorAtIndex(ctx context.Context, nrw NodeStore, nd Node, idx uint64) (cur nodeCursor, err error) {
-	cur = nodeCursor{nd: nd, nrw: nrw}
-
-	distance := idx
-	for !cur.isLeaf() {
-
-		mv := metaValue(cur.currentPair().value())
-		for distance >= mv.GetCumulativeCount() {
-
-			if _, err = cur.advance(ctx); err != nil {
-				return nodeCursor{}, err
-			}
-
-			distance -= mv.GetCumulativeCount()
-			mv = metaValue(cur.currentPair().value())
-		}
-
-		nd, err = fetchChild(ctx, nrw, mv)
-		if err != nil {
-			return nodeCursor{}, err
-		}
-
-		parent := cur
-		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
-	}
-
-	cur.idx = int(distance)
-	return
 }
 
 func (cur *nodeCursor) valid() bool {

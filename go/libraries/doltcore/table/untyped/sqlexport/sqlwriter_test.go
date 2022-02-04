@@ -44,7 +44,7 @@ func TestEndToEnd(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\nCREATE TABLE `people` (\n  `id` char(36) character set ascii collate ascii_bin NOT NULL,\n  `name` varchar(16383) NOT NULL,\n  `age` bigint unsigned NOT NULL,\n  `is_married` bit(1) NOT NULL,\n  `title` varchar(16383),\n  PRIMARY KEY (`id`),\n  KEY `idx_name` (`name`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\nCREATE TABLE `people` (\n  `id` char(36) character set ascii collate ascii_bin NOT NULL,\n  `name` varchar(16383) NOT NULL,\n  `age` bigint unsigned NOT NULL,\n  `is_married` bit(1) NOT NULL,\n  `title` varchar(16383),\n  PRIMARY KEY (`id`),\n  KEY `idx_name` (`name`),\n  CONSTRAINT `test-check` CHECK ((`age` < 123))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
 
 	type test struct {
 		name           string

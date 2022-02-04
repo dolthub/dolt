@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,50 +34,54 @@ func TestMemMap(t *testing.T) {
 	}
 
 	for _, s := range scales {
-		name := fmt.Sprintf("test memCur map at scale %d", s)
+		name := fmt.Sprintf("test memory map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
 
 			memMap, tuples := makeMemMap(t, s)
 			t.Run("get item from map", func(t *testing.T) {
-				testOrderedMapGet(t, memMap, tuples)
+				testGet(t, memMap, tuples)
 			})
 			t.Run("iter all from map", func(t *testing.T) {
-				testOrderedMapIterAll(t, memMap, tuples)
+				testIterAll(t, memMap, tuples)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, memMap, tuples)
-			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, memMap, tuples)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, memMap, tuples)
 			})
 
-			memMap2, tuples2, deletes := makeMemMapWithDeletes(t, s)
+			memIndex, idxTuples := makeMemSecondaryIndex(t, s)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, memIndex, idxTuples)
+			})
+
+			memMap2, tuples2, deletes := deleteFromMemoryMap(memMap.(memoryMap), tuples)
 			t.Run("get item from map with deletes", func(t *testing.T) {
 				testMemoryMapGetAndHas(t, memMap2, tuples2, deletes)
 			})
 			t.Run("iter all from map with deletes", func(t *testing.T) {
-				testOrderedMapIterAll(t, memMap2, tuples2)
+				testIterAll(t, memMap2, tuples2)
 			})
-			t.Run("iter all backwards from map", func(t *testing.T) {
-				testOrderedMapIterAllBackward(t, memMap2, tuples2)
+			t.Run("iter range", func(t *testing.T) {
+				testIterRange(t, memMap2, tuples2)
 			})
-			t.Run("iter value range", func(t *testing.T) {
-				testOrderedMapIterValueRange(t, memMap2, tuples2)
+
+			memIndex, idxTuples2, _ := deleteFromMemoryMap(memIndex.(memoryMap), idxTuples)
+			t.Run("iter prefix range", func(t *testing.T) {
+				testIterPrefixRange(t, memIndex, idxTuples2)
 			})
 		})
 	}
 }
 
-var memKeyDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Uint32Enc, Nullable: false},
-)
-var memValueDesc = val.NewTupleDescriptor(
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-	val.Type{Enc: val.Uint32Enc, Nullable: true},
-)
-
 func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	memKeyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+	)
+	memValueDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+
 	tuples := randomTuplePairs(count, memKeyDesc, memValueDesc)
 	mm := newMemoryMap(memKeyDesc)
 	for _, pair := range tuples {
@@ -88,27 +91,42 @@ func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return mm, tuples
 }
 
-func makeMemMapWithDeletes(t *testing.T, count int) (mut memoryMap, tuples, deletes [][2]val.Tuple) {
-	om, tuples := makeMemMap(t, count)
-	mut = om.(memoryMap)
+func makeMemSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+	memKeyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+	memValueDesc := val.NewTupleDescriptor()
 
+	tuples := randomCompositeTuplePairs(count, memKeyDesc, memValueDesc)
+
+	mm := newMemoryMap(memKeyDesc)
+	for _, pair := range tuples {
+		mm.Put(pair[0], pair[1])
+	}
+
+	return mm, tuples
+}
+
+func deleteFromMemoryMap(mm memoryMap, tt [][2]val.Tuple) (memoryMap, [][2]val.Tuple, [][2]val.Tuple) {
+	count := len(tt)
 	testRand.Shuffle(count, func(i, j int) {
-		tuples[i], tuples[j] = tuples[j], tuples[i]
+		tt[i], tt[j] = tt[j], tt[i]
 	})
 
 	// delete 1/4 of tuples
-	deletes = tuples[:count/4]
+	deletes := tt[:count/4]
 
 	// re-sort the remaining tuples
-	tuples = tuples[count/4:]
-	desc := getKeyDesc(om)
-	sortTuplePairs(tuples, desc)
+	remaining := tt[count/4:]
+	desc := keyDescFromMap(mm)
+	sortTuplePairs(remaining, desc)
 
 	for _, kv := range deletes {
-		mut.Put(kv[0], nil)
+		mm.Put(kv[0], nil)
 	}
 
-	return mut, tuples, deletes
+	return mm, remaining, deletes
 }
 
 func testMemoryMapGetAndHas(t *testing.T, mem memoryMap, tuples, deletes [][2]val.Tuple) {
@@ -132,29 +150,4 @@ func testMemoryMapGetAndHas(t *testing.T, mem memoryMap, tuples, deletes [][2]va
 		})
 		require.NoError(t, err)
 	}
-}
-
-func debugFmt(tup val.Tuple, desc val.TupleDesc) (s string) {
-	if tup == nil {
-		s = "[ nil ]"
-	} else {
-		s = desc.Format(tup)
-	}
-	return
-}
-
-func fmtMany(tuples, deletes [][2]val.Tuple) string {
-	tuples = append(tuples, deletes...)
-	sortTuplePairs(tuples, memKeyDesc)
-
-	var sb strings.Builder
-	sb.WriteString("{ ")
-	for _, kv := range tuples {
-		sb.WriteString(debugFmt(kv[0], memKeyDesc))
-		sb.WriteString(": ")
-		sb.WriteString(debugFmt(kv[1], memValueDesc))
-		sb.WriteString(", ")
-	}
-	sb.WriteString("}")
-	return sb.String()
 }
