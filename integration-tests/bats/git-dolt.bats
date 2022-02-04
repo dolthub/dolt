@@ -5,7 +5,7 @@ REMOTE=http://localhost:50051/test-org/test-repo
 
 remotesrv_pid=
 setup() {
-    skiponwindows "git-dolt tests are flaky on Windows"
+    skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$

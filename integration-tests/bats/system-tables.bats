@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
+skiponwindows "tests are flaky on Windows"
 
 setup() {
-    skiponwindows "git-dolt tests are flaky on Windows"
     setup_common
 
     # Needed for dolt_branches test
