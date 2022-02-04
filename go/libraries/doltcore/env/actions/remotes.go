@@ -123,10 +123,6 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 		err = fmt.Errorf("%w: %s of type %s", ErrCannotPushRef, opts.SrcRef.String(), opts.SrcRef.GetType())
 	}
 
-	if err != nil {
-		return err
-	}
-
 	if opts.SetUpstream {
 		return rsw.UpdateBranch(opts.SrcRef.GetPath(), env.BranchConfig{
 			Merge: ref.MarshalableRef{
@@ -136,7 +132,7 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 		})
 	}
 
-	return nil
+	return err
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
