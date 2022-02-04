@@ -26,33 +26,29 @@ import (
 
 const (
 	maxNodeDataSize = uint64(math.MaxUint16)
-	refSz           = hash.ByteLen
+	refSize         = hash.ByteLen
 )
 
 func init() {
 	emptyNode = makeMapNode(sharedPool, 0, nil, nil)
 }
 
-type mapNode struct {
+type Node struct {
 	buf serial.TupleMap
 	cnt int
 }
 
-var emptyNode mapNode
+var emptyNode Node
 
-func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node mapNode) {
-	var keySz, valSz int
-	for i := range keys {
-		keySz += len(keys[i])
-		valSz += len(values[i])
-	}
-	b := getMapBuilder(pool, keySz+valSz+96)
-
+func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node Node) {
 	var (
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
 		refArr           fb.UOffsetT
 	)
+
+	keySz, valSz, bufSz := measureNodeSize(keys, values)
+	b := getMapBuilder(pool, bufSz)
 
 	// serialize keys and offsets
 	serial.TupleMapStartKeyTuplesVector(b, keySz)
@@ -96,6 +92,22 @@ func getMapBuilder(pool pool.BuffPool, sz int) *fb.Builder {
 	return fb.NewBuilder(sz)
 }
 
+// measureNodeSize returns the exact size of the tuple vectors for keys and values,
+// and an estimate of the overall size of the final flatbuffer.
+func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
+	for i := range keys {
+		keySz += len(keys[i])
+		valSz += len(values[i])
+	}
+
+	bufSz += keySz + valSz               // tuples
+	bufSz += len(keys)*2 + len(values)*2 // offsets
+	bufSz += 8 + 1 + 1 + 1               // metadata
+	bufSz += 72                          // vtable (approx)
+
+	return
+}
+
 func writeItems(b *fb.Builder, items []nodeItem) (cnt int) {
 	for i := len(items) - 1; i >= 0; i-- {
 		for j := len(items[i]) - 1; j >= 0; j-- {
@@ -116,24 +128,24 @@ func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
 	return
 }
 
-func mapNodeFromBytes(bb []byte) mapNode {
+func mapNodeFromBytes(bb []byte) Node {
 	buf := serial.GetRootAsTupleMap(bb, 0)
 	// first key offset omitted
 	cnt := buf.KeyOffsetsLength() + 1
 	if len(buf.KeyTuplesBytes()) == 0 {
 		cnt = 0
 	}
-	return mapNode{
+	return Node{
 		buf: *buf,
 		cnt: cnt,
 	}
 }
 
-func (nd mapNode) hashOf() hash.Hash {
+func (nd Node) hashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
-func (nd mapNode) getKey(i int) nodeItem {
+func (nd Node) getKey(i int) nodeItem {
 	keys := nd.buf.KeyTuplesBytes()
 
 	start, stop := uint16(0), uint16(len(keys))
@@ -147,7 +159,7 @@ func (nd mapNode) getKey(i int) nodeItem {
 	return keys[start:stop]
 }
 
-func (nd mapNode) getValue(i int) nodeItem {
+func (nd Node) getValue(i int) nodeItem {
 	if nd.leafNode() {
 		return nd.getValueTuple(i)
 	} else {
@@ -156,7 +168,7 @@ func (nd mapNode) getValue(i int) nodeItem {
 	}
 }
 
-func (nd mapNode) getValueTuple(i int) nodeItem {
+func (nd Node) getValueTuple(i int) nodeItem {
 	values := nd.buf.ValueTuplesBytes()
 
 	start, stop := uint16(0), uint16(len(values))
@@ -170,33 +182,33 @@ func (nd mapNode) getValueTuple(i int) nodeItem {
 	return values[start:stop]
 }
 
-func (nd mapNode) getRef(i int) hash.Hash {
+func (nd Node) getRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
-	start, stop := i*refSz, (i+1)*refSz
+	start, stop := i*refSize, (i+1)*refSize
 	return hash.New(refs[start:stop])
 }
 
-func (nd mapNode) level() int {
+func (nd Node) level() int {
 	return int(nd.buf.TreeLevel())
 }
 
-func (nd mapNode) nodeCount() int {
+func (nd Node) nodeCount() int {
 	return nd.cnt
 }
 
 // todo(andy): should we support this?
-//func (nd mapNode) cumulativeCount() uint64 {
+//func (nd Node) cumulativeCount() uint64 {
 //	return nd.buf.TreeCount()
 //}
 
-func (nd mapNode) leafNode() bool {
+func (nd Node) leafNode() bool {
 	return nd.level() == 0
 }
 
-func (nd mapNode) empty() bool {
+func (nd Node) empty() bool {
 	return nd.bytes() == nil || nd.nodeCount() == 0
 }
 
-func (nd mapNode) bytes() []byte {
+func (nd Node) bytes() []byte {
 	return nd.buf.Table().Bytes
 }

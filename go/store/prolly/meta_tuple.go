@@ -38,17 +38,17 @@ func (p metaPair) subtreeCount() uint64 {
 	return p.treeCount
 }
 
-func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (mapNode, error) {
-	// todo(andy) handle nil mapNode, dangling ref
+func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
+	// todo(andy) handle nil Node, dangling ref
 	return ns.Read(ctx, ref)
 }
 
-func writeNewChild(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (mapNode, metaPair, error) {
+func writeNewChild(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (Node, metaPair, error) {
 	child := makeMapNode(ns.Pool(), level, keys, values)
 
 	ref, err := ns.Write(ctx, child)
 	if err != nil {
-		return mapNode{}, metaPair{}, err
+		return Node{}, metaPair{}, err
 	}
 
 	if len(keys) == 0 {

@@ -25,7 +25,7 @@ import (
 )
 
 type Map struct {
-	root    mapNode
+	root    Node
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	ns      NodeStore
@@ -34,7 +34,7 @@ type Map struct {
 type KeyValueFn func(key, value val.Tuple) error
 
 // NewMap creates an empty prolly tree Map
-func NewMap(node mapNode, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
+func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	return Map{
 		root:    node,
 		keyDesc: keyDesc,
@@ -45,7 +45,7 @@ func NewMap(node mapNode, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	m := NewMap(mapNode{}, ns, keyDesc, valDesc)
+	m := NewMap(Node{}, ns, keyDesc, valDesc)
 
 	ch, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	if err != nil {
@@ -196,7 +196,7 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 
 func (m Map) rangeStartSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
-	return func(query nodeItem, nd mapNode) int {
+	return func(query nodeItem, nd Node) int {
 		return sort.Search(nd.nodeCount(), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
@@ -214,7 +214,7 @@ func (m Map) rangeStartSearchFn(rng Range) searchFn {
 
 func (m Map) rangeStopSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
-	return func(query nodeItem, nd mapNode) int {
+	return func(query nodeItem, nd Node) int {
 		return sort.Search(nd.nodeCount(), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
@@ -232,7 +232,7 @@ func (m Map) rangeStopSearchFn(rng Range) searchFn {
 
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
-func (m Map) searchNode(query nodeItem, nd mapNode) int {
+func (m Map) searchNode(query nodeItem, nd Node) int {
 	n := nd.nodeCount()
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.

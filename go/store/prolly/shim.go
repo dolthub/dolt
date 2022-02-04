@@ -44,11 +44,11 @@ func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
 	return
 }
 
-func ValueFromNode(nd mapNode) types.Value {
+func ValueFromNode(nd Node) types.Value {
 	return types.InlineBlob(nd.bytes())
 }
 
-func NodeFromValue(v types.Value) mapNode {
+func NodeFromValue(v types.Value) Node {
 	return mapNodeFromBytes(v.(types.InlineBlob))
 }
 

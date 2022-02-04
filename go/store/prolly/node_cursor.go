@@ -35,9 +35,9 @@ func (i nodeItem) size() val.ByteSize {
 	return val.ByteSize(len(i))
 }
 
-// nodeCursor explores a tree of mapNode items.
+// nodeCursor explores a tree of Node items.
 type nodeCursor struct {
-	nd     mapNode
+	nd     Node
 	idx    int
 	parent *nodeCursor
 	nrw    NodeStore
@@ -45,9 +45,9 @@ type nodeCursor struct {
 
 type compareFn func(left, right nodeItem) int
 
-type searchFn func(item nodeItem, nd mapNode) (idx int)
+type searchFn func(item nodeItem, nd Node) (idx int)
 
-func newCursorAtStart(ctx context.Context, nrw NodeStore, nd mapNode) (cur *nodeCursor, err error) {
+func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
 		nd, err = fetchChild(ctx, nrw, cur.currentRef())
@@ -61,7 +61,7 @@ func newCursorAtStart(ctx context.Context, nrw NodeStore, nd mapNode) (cur *node
 	return
 }
 
-func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd mapNode) (cur *nodeCursor, err error) {
+func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	cur.skipToNodeEnd()
 
@@ -88,11 +88,11 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd mapNode) (cur *node
 	return
 }
 
-func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd mapNode, tup val.Tuple, search searchFn) (cur *nodeCursor, err error) {
+func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search searchFn) (cur *nodeCursor, err error) {
 	return newCursorAtItem(ctx, nrw, nd, nodeItem(tup), search)
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
+func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -115,7 +115,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item nodeIt
 	return
 }
 
-func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd mapNode, item nodeItem, search searchFn) (cur nodeCursor, err error) {
+func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -338,7 +338,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 	return false, nil
 }
 
-// fetchNode loads the mapNode that the cursor index points to.
+// fetchNode loads the Node that the cursor index points to.
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil)

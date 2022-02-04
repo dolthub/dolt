@@ -51,7 +51,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 	}
 }
 
-func newLeafNode(keys, values []nodeItem) mapNode {
+func newLeafNode(keys, values []nodeItem) Node {
 	return makeMapNode(sharedPool, 0, keys, values)
 }
 

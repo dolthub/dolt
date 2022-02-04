@@ -36,7 +36,7 @@ func TestContentAddress(t *testing.T) {
 	require.Equal(t, expected, m.hashOf())
 }
 
-func makeTree(t *testing.T, keys, values []nodeItem) mapNode {
+func makeTree(t *testing.T, keys, values []nodeItem) Node {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 
