@@ -65,7 +65,7 @@ type TpccBenchmarkConfig struct {
 	ScaleFactors []int
 }
 
-func NeeTpccConfig() *TpccBenchmarkConfig {
+func NewTpccConfig() *TpccBenchmarkConfig {
 	return &TpccBenchmarkConfig{
 		Servers:      make([]*sysbench_runner.ServerConfig, 0),
 		ScaleFactors: make([]int, 0),
@@ -131,7 +131,7 @@ func FromFileConfig(configPath string) (*TpccBenchmarkConfig, error) {
 		return nil, err
 	}
 
-	config := NeeTpccConfig()
+	config := NewTpccConfig()
 	err = json.Unmarshal(data, config)
 	if err != nil {
 		return nil, err
