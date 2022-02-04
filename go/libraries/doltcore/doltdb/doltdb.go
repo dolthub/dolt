@@ -1171,6 +1171,9 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	}
 
 	datasets, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
 	newGen := hash.NewHashSet(uncommitedVals...)
 	oldGen := make(hash.HashSet)
 	err = datasets.IterAll(ctx, func(key, value types.Value) error {
