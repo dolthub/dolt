@@ -1,8 +1,8 @@
 #!/usr/bin/env bats
 load $BATS_TEST_DIRNAME/helper/common.bash
-skiponwindows "tests are flaky on Windows"
 
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_common
 
     # Needed for dolt_branches test
@@ -17,6 +17,7 @@ setup() {
 }
 
 teardown() {
+    skiponwindows "tests are flaky on Windows"
     assert_feature_version
     teardown_common
     kill $remotesrv_pid
