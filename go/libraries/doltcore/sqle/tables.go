@@ -1838,7 +1838,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	// Update the root with then new table
+	// Update the root with the new table
 	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err
