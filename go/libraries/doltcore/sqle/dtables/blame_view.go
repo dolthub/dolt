@@ -18,9 +18,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var errUnblameableTable = errors.New("unable to generate blame view for table without primary key")
