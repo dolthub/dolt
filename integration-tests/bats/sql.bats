@@ -1483,13 +1483,6 @@ SQL
     [ "${lines[0]}" = "current_user" ]
 }
 
-@test "sql: sql show grants" {
-    run dolt sql -q "show grants for current_user" -r csv
-    [ "$status" -eq 0 ]
-    [ "${lines[0]}" = "Grants for root@%" ]
-    [ "${lines[1]}" = "GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION" ]
-}
-
 @test "sql: found_row works with update properly" {
     run dolt sql  <<SQL
 set autocommit = off;
