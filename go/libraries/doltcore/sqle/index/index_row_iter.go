@@ -65,10 +65,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsK
 		lookupTags[schema.KeylessRowIdTag] = 0
 	}
 
-	rows, err := durable.NomsMapFromIndex(idx.TableData())
-	if err != nil {
-		return nil, err
-	}
+	rows := durable.NomsMapFromIndex(idx.TableData())
 
 	conv := NewKVToSqlRowConverterForCols(idx.Format(), idx.Schema())
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
