@@ -30,7 +30,7 @@ const (
 )
 
 func init() {
-	emptyNode = makeMapNode(sharedPool, 0, nil, nil)
+	//emptyNode = makeMapNode(sharedPool, 0, nil, nil)
 }
 
 type Node struct {
@@ -51,21 +51,18 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 	b := getMapBuilder(pool, bufSz)
 
 	// serialize keys and offsets
-	serial.TupleMapStartKeyTuplesVector(b, keySz)
-	keyTups = b.EndVector(writeItems(b, keys))
+	keyTups = writeItemBytes(b, keys, keySz)
 	serial.TupleMapStartKeyOffsetsVector(b, len(keys)-1)
 	keyOffs = b.EndVector(writeItemOffsets(b, keys, keySz))
 
 	if level == 0 {
 		// serialize ref tuples for leaf nodes
-		serial.TupleMapStartKeyTuplesVector(b, valSz)
-		valTups = b.EndVector(writeItems(b, values))
+		valTups = writeItemBytes(b, values, valSz)
 		serial.TupleMapStartValueOffsetsVector(b, len(values)-1)
 		valOffs = b.EndVector(writeItemOffsets(b, values, valSz))
 	} else {
 		// serialize child refs for internal nodes
-		serial.TupleMapStartRefArrayVector(b, valSz)
-		refArr = b.EndVector(writeItems(b, values))
+		refArr = writeItemBytes(b, values, valSz)
 	}
 
 	// populate the node's vtable
@@ -108,14 +105,18 @@ func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
 	return
 }
 
-func writeItems(b *fb.Builder, items []nodeItem) (cnt int) {
-	for i := len(items) - 1; i >= 0; i-- {
-		for j := len(items[i]) - 1; j >= 0; j-- {
-			b.PrependByte(items[i][j])
-			cnt++
-		}
+func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
+	b.Prep(fb.SizeUOffsetT, sumSz)
+
+	stop := int(b.Head())
+	start := stop - sumSz
+	for _, item := range items {
+		copy(b.Bytes[start:stop], item)
+		start += len(item)
 	}
-	return
+
+	start = stop - sumSz
+	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
 func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
