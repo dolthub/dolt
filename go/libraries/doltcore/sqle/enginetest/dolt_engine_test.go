@@ -39,17 +39,30 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
+	t.Skip()
+
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    "select i from datetime_table where date_col = '2019/12/31'",
-		Expected: []sql.Row{{1}},
+		Query: `SELECT 
+					myTable.i, 
+					(SELECT 
+						dolt_commit_diff_mytable.diff_type 
+					FROM 
+						dolt_commit_diff_mytable
+					WHERE (
+						dolt_commit_diff_mytable.from_commit = 'abc' AND 
+						dolt_commit_diff_mytable.to_commit = 'abc' AND
+						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
+					)) AS diff_type 
+				FROM myTable`,
+		Expected: []sql.Row{},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
 	enginetest.CreateIndexes(t, harness, engine)
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }

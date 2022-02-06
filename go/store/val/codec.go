@@ -32,12 +32,10 @@ type Type struct {
 type ByteSize uint16
 
 const (
-	int8Size   ByteSize = 1
-	uint8Size  ByteSize = 1
-	int16Size  ByteSize = 2
-	uint16Size ByteSize = 2
-	//int24Size   ByteSize = 3
-	//uint24Size  ByteSize = 3
+	int8Size    ByteSize = 1
+	uint8Size   ByteSize = 1
+	int16Size   ByteSize = 2
+	uint16Size  ByteSize = 2
 	int32Size   ByteSize = 4
 	uint32Size  ByteSize = 4
 	int48Size   ByteSize = 6

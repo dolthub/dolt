@@ -15,7 +15,6 @@
 package val
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -101,12 +100,6 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 			continue
 		}
 		mask.set(i)
-
-		// todo(andy): remove
-		if count != 0 && pos == 0 {
-			fmt.Println("pos 0")
-		}
-
 		offs.Put(count, pos)
 		count++
 

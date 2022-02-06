@@ -202,7 +202,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schem
 		}
 
 		// todo(andy): build permissive?
-		idxKey := keyBld.BuildPermissive(sharePool)
+		idxKey := keyBld.Build(sharePool)
 		idxVal := val.EmptyTuple
 
 		// todo(andy): periodic flushing

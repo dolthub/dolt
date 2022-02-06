@@ -1286,7 +1286,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	onUpdate, onDelete sql.ForeignKeyReferenceOption,
 ) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		//return types.ErrUnsupportedFormat
+		// todo(andy)
 		return nil
 	}
 
@@ -1368,7 +1368,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 // DropForeignKey implements sql.ForeignKeyAlterableTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		//return types.ErrUnsupportedFormat
+		// todo(andy)
 		return nil
 	}
 
