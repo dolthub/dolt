@@ -57,7 +57,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 
 	b.Run("benchmark prolly map writes", func(b *testing.B) {
 		ctx := context.Background()
-		iters := int(bench.m.Count()) / 10
+		iters := int(size) / 10
 
 		for i := 0; i < iters; i++ {
 			mut := bench.m.Mutate()
@@ -72,7 +72,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 			}
 			mm, err := mut.Map(ctx)
 			require.NoError(b, err)
-			assert.Equal(b, bench.m.Count(), mm.Count())
+			assert.False(b, mm.Empty())
 		}
 		b.ReportAllocs()
 	})

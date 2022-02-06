@@ -17,6 +17,7 @@ package durable
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -31,6 +32,9 @@ type Index interface {
 
 	// Count returns the cardinality of the index.
 	Count() uint64
+
+	// Empty returns true if the index is empty.
+	Empty() bool
 
 	// Format returns the types.NomsBinFormat for this index.
 	Format() *types.NomsBinFormat
@@ -123,12 +127,12 @@ type nomsIndex struct {
 }
 
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
-func NomsMapFromIndex(i Index) (types.Map, error) {
-	n, ok := i.(nomsIndex)
-	if !ok {
-		return types.Map{}, fmt.Errorf("unable to unwrap types.Map from Index")
-	}
-	return n.index, nil
+func NomsMapFromIndex(i Index) types.Map {
+	return i.(nomsIndex).index
+}
+
+func VrwFromNomsIndex(i Index) types.ValueReadWriter {
+	return i.(nomsIndex).vrw
 }
 
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.
@@ -149,6 +153,11 @@ func (i nomsIndex) HashOf() (hash.Hash, error) {
 // Count implements Index.
 func (i nomsIndex) Count() uint64 {
 	return i.index.Len()
+}
+
+// Empty implements Index.
+func (i nomsIndex) Empty() bool {
+	return i.index.Len() == 0
 }
 
 // Format implements Index.
@@ -179,7 +188,12 @@ func (i prollyIndex) HashOf() (hash.Hash, error) {
 
 // Count implements Index.
 func (i prollyIndex) Count() uint64 {
-	return i.index.Count()
+	return math.MaxUint64 // 🙃
+}
+
+// Empty implements Index.
+func (i prollyIndex) Empty() bool {
+	return i.index.Empty()
 }
 
 // Format implements Index.

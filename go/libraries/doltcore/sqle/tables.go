@@ -692,8 +692,7 @@ type doltTablePartition struct {
 }
 
 func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
-	if numElements == 0 {
+	if rows.Empty() {
 		return []doltTablePartition{
 			{start: 0, end: 0, rowData: rows},
 		}
@@ -702,7 +701,8 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 	nbf := rows.Format()
 	switch nbf {
 	case types.Format_LD_1, types.Format_7_18:
-		return partitionsFromNomsRows(rows)
+		nm := durable.NomsMapFromIndex(rows)
+		return partitionsFromNomsRows(nm, durable.VrwFromNomsIndex(rows))
 
 	case types.Format_DOLT_1:
 		return partitionsFromProllyRows(rows)
@@ -711,8 +711,8 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 	return nil
 }
 
-func partitionsFromNomsRows(rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
+func partitionsFromNomsRows(rows types.Map, vrw types.ValueReadWriter) []doltTablePartition {
+	numElements := rows.Len()
 	itemsPerPartition := MaxRowsPerPartition
 	numPartitions := (numElements / itemsPerPartition) + 1
 
@@ -731,14 +731,14 @@ func partitionsFromNomsRows(rows durable.Index) []doltTablePartition {
 		partitions[i] = doltTablePartition{
 			start:   i * itemsPerPartition,
 			end:     (i + 1) * itemsPerPartition,
-			rowData: rows,
+			rowData: durable.IndexFromNomsMap(rows, vrw),
 		}
 	}
 
 	partitions[numPartitions-1] = doltTablePartition{
 		start:   (numPartitions - 1) * itemsPerPartition,
 		end:     numElements,
-		rowData: rows,
+		rowData: durable.IndexFromNomsMap(rows, vrw),
 	}
 
 	return partitions
@@ -783,10 +783,7 @@ func (p doltTablePartition) Key() []byte {
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
 func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
-	m, err := durable.NomsMapFromIndex(idx)
-	if err != nil {
-		return nil, err
-	}
+	m := durable.NomsMapFromIndex(idx)
 	return m.RangeIterator(ctx, p.start, p.end)
 }
 
