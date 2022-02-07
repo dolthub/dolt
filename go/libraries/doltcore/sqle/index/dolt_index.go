@@ -483,7 +483,7 @@ func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 	return tb.BuildPermissive(sharePool), nil
 }
 
-// normalizeRangeKey converts a range's key into a canonicaly value.
+// normalizeRangeKey converts a range's key into a canonical value.
 func normalizeRangeKey(rng sql.Range, key sql.Row) (sql.Row, error) {
 	var err error
 	for i := range key {

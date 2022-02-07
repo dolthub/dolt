@@ -192,7 +192,8 @@ func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schem
 			return nil, err
 		}
 
-		for to, from := range keyMap {
+		for to := range keyMap {
+			from := keyMap.MapOrdinal(to)
 			if from < pkLen {
 				keyBld.PutRaw(to, k.GetField(from))
 			} else {
@@ -219,11 +220,8 @@ func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schem
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
-// todo(andy): here
-type indexMapping []int
-
-func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m indexMapping) {
-	m = make(indexMapping, len(idx.AllTags()))
+func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
+	m = make(val.OrdinalMapping, len(idx.AllTags()))
 
 	for i, tag := range idx.AllTags() {
 		j, ok := sch.GetPKCols().TagToIdx[tag]

@@ -241,12 +241,12 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, len(p.keyMap))
-	p.rowFromTuples(k, v, r)
+	p.writeRowFromTuples(k, v, r)
 
 	return r, nil
 }
 
-func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
+func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.Row) {
 	for to := range p.keyMap {
 		from := p.keyMap.MapOrdinal(to)
 		if from == -1 {
