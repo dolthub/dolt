@@ -219,6 +219,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schem
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
+// todo(andy): here
 type indexMapping []int
 
 func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m indexMapping) {

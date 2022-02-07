@@ -24,6 +24,15 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
+// OrdinalMapping is a mapping from one field ordering to another.
+// It's used to construct index tuples from another index's tuples.
+type OrdinalMapping []int
+
+func (om OrdinalMapping) MapOrdinal(to int) (from int) {
+	from = om[to]
+	return
+}
+
 type TupleBuilder struct {
 	Desc TupleDesc
 
