@@ -56,10 +56,7 @@ func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []stri
 }
 
 func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
-	m, err := durable.NomsMapFromIndex(rowData)
-	if err != nil {
-		return nil, err
-	}
+	m := durable.NomsMapFromIndex(rowData)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
 	covers := indexCoversCols(idx, columns)
@@ -77,10 +74,14 @@ func indexCoversCols(idx DoltIndex, cols []string) bool {
 
 	var idxCols *schema.ColCollection
 	if types.IsFormat_DOLT_1(idx.Format()) {
-		// prolly indexes use covering index iter
-		// with primary clustered index
+		// prolly indexes can cover an index lookup using
+		// both the key and value fields of the index,
+		// this allows using covering index machinery for
+		// primary key index lookups.
 		idxCols = idx.IndexSchema().GetAllCols()
 	} else {
+		// to cover an index lookup, noms indexes must
+		// contain all fields in the index's key.
 		idxCols = idx.IndexSchema().GetPKCols()
 	}
 

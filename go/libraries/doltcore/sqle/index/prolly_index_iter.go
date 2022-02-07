@@ -35,7 +35,7 @@ type prollyIndexIter struct {
 
 	// pkMap transforms indexRows index keys
 	// into primary index keys
-	pkMap columnMapping
+	pkMap val.OrdinalMapping
 	pkBld *val.TupleBuilder
 
 	eg      *errgroup.Group
@@ -43,13 +43,10 @@ type prollyIndexIter struct {
 
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
-	keyMap, valMap columnMapping
+	keyMap, valMap val.OrdinalMapping
 }
 
 var _ sql.RowIter = prollyIndexIter{}
-
-// todo(andy): consolidate definitions of columnMapping
-type columnMapping []int
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, projection []string) (prollyIndexIter, error) {
@@ -62,7 +59,7 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, proje
 	primary := durable.ProllyMapFromIndex(idx.TableData())
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
-	pkMap := columnMappingFromIndex(idx)
+	pkMap := ordinalMappingFromIndex(idx)
 	km, vm := projectionMappings(idx.Schema(), idx.Schema().GetAllCols().GetColumnNames())
 
 	eg, c := errgroup.WithContext(ctx)
@@ -75,8 +72,8 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, proje
 		pkMap:     pkMap,
 		eg:        eg,
 		rowChan:   make(chan sql.Row, indexLookupBufSize),
-		keyMap:    columnMapping(km),
-		valMap:    columnMapping(vm),
+		keyMap:    km,
+		valMap:    vm,
 	}
 
 	eg.Go(func() error {
@@ -117,8 +114,9 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 			return err
 		}
 
-		for i, j := range p.pkMap {
-			p.pkBld.PutRaw(i, idxKey.GetField(j))
+		for to := range p.pkMap {
+			from := p.pkMap.MapOrdinal(to)
+			p.pkBld.PutRaw(to, idxKey.GetField(from))
 		}
 		pk := p.pkBld.Build(sharePool)
 
@@ -162,10 +160,10 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-func columnMappingFromIndex(idx DoltIndex) (m columnMapping) {
+func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 	if idx.ID() == "PRIMARY" {
 		// todo(andy)
-		m = make(columnMapping, idx.Schema().GetPKCols().Size())
+		m = make(val.OrdinalMapping, idx.Schema().GetPKCols().Size())
 		for i := range m {
 			m[i] = i
 		}
@@ -174,7 +172,7 @@ func columnMappingFromIndex(idx DoltIndex) (m columnMapping) {
 
 	def := idx.Schema().Indexes().GetByName(idx.ID())
 	pks := def.PrimaryKeyTags()
-	m = make(columnMapping, len(pks))
+	m = make(val.OrdinalMapping, len(pks))
 
 	for i, pk := range pks {
 		for j, tag := range def.AllTags() {
@@ -197,8 +195,8 @@ type prollyCoveringIndexIter struct {
 	// secondary index value tuples are assumed to be empty.
 	// todo(andy): shore up this mapping concept, different semantics different places
 
-	// |keyMap| and |valMap| are both of len == pkSch
-	keyMap, valMap []int
+	// |keyMap| and |valMap| are both of len ==
+	keyMap, valMap val.OrdinalMapping
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
@@ -243,20 +241,22 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, len(p.keyMap))
-	p.rowFromTuples(k, v, r)
+	p.writeRowFromTuples(k, v, r)
 
 	return r, nil
 }
 
-func (p prollyCoveringIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
-	for to, from := range p.keyMap {
+func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.Row) {
+	for to := range p.keyMap {
+		from := p.keyMap.MapOrdinal(to)
 		if from == -1 {
 			continue
 		}
 		r[to] = p.keyDesc.GetField(from, key)
 	}
 
-	for to, from := range p.valMap {
+	for to := range p.valMap {
+		from := p.valMap.MapOrdinal(to)
 		if from == -1 {
 			continue
 		}
@@ -271,11 +271,11 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 }
 
 // todo(andy): there are multiple column mapping concepts with different semantics
-func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap []int) {
+func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap val.OrdinalMapping) {
 	allCols := idx.Schema().GetAllCols()
 	idxCols := idx.IndexSchema().GetAllCols()
 
-	keyMap = make([]int, allCols.Size())
+	keyMap = make(val.OrdinalMapping, allCols.Size())
 	for i, col := range allCols.GetColumns() {
 		j, ok := idxCols.TagToIdx[col.Tag]
 		if ok {
@@ -288,16 +288,16 @@ func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap []i
 	return
 }
 
-func primaryIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap, valMap []int) {
+func primaryIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap, valMap val.OrdinalMapping) {
 	sch := idx.Schema()
 
-	keyMap = make([]int, len(pkSch.Schema))
+	keyMap = make(val.OrdinalMapping, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		// if |col.Name| not found, IndexOf returns -1
 		keyMap[i] = sch.GetPKCols().IndexOf(col.Name)
 	}
 
-	valMap = make([]int, len(pkSch.Schema))
+	valMap = make(val.OrdinalMapping, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		// if |col.Name| not found, IndexOf returns -1
 		valMap[i] = sch.GetNonPKCols().IndexOf(col.Name)

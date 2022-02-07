@@ -14,9 +14,11 @@ timeprefix="$4"
 actorprefix="$5"
 format="$6"
 
+precision="2"
+
 resultCountQuery="select result, count(*) as total from results where result != 'skipped' group by result;"
 testCountQuery="select count(*) as total_tests from results where result != 'skipped';"
-correctnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001))) as correctness_percentage from (select count(*) as total from results where result = 'ok') as ok_results join (select count(*) as total from results where result != 'skipped') as all_results"
+correctnessQuery="select ROUND(100.0 * (cast(ok_results.total as decimal) / (cast(all_results.total as decimal) + .000001)), $precision) as correctness_percentage from (select count(*) as total from results where result = 'ok') as ok_results join (select count(*) as total from results where result != 'skipped') as all_results"
 
 echo '
 {

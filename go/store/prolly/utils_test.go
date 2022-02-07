@@ -16,10 +16,14 @@ package prolly
 
 import (
 	"context"
+	"io"
 	"math"
 	"math/rand"
 	"sort"
 	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -35,6 +39,20 @@ type orderedMap interface {
 var _ orderedMap = Map{}
 var _ orderedMap = MutableMap{}
 var _ orderedMap = memoryMap{}
+
+func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
+	iter, err := om.IterAll(context.Background())
+	require.NoError(t, err)
+	for {
+		_, _, err = iter.Next(context.Background())
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		cnt++
+	}
+	return
+}
 
 func keyDescFromMap(om orderedMap) val.TupleDesc {
 	switch m := om.(type) {

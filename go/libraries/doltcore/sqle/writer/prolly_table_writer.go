@@ -217,10 +217,10 @@ type prollyIndexWriter struct {
 	mut  prolly.MutableMap
 
 	keyBld *val.TupleBuilder
-	keyMap colMapping
+	keyMap val.OrdinalMapping
 
 	valBld *val.TupleBuilder
-	valMap colMapping
+	valMap val.OrdinalMapping
 }
 
 func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (prollyIndexWriter, error) {
@@ -232,7 +232,7 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Sch
 	m := durable.ProllyMapFromIndex(idx)
 
 	keyDesc, valDesc := m.Descriptors()
-	keyMap, valMap := colMappingsFromSchema(sqlSch, sch)
+	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyIndexWriter{
 		mut:    m.Mutate(),
@@ -259,7 +259,7 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		}
 		m := durable.ProllyMapFromIndex(idxRows)
 
-		keyMap, valMap := colMappingsFromSchema(sqlSch, def.Schema())
+		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, valDesc := m.Descriptors()
 
 		writers[i] = prollyIndexWriter{
@@ -282,7 +282,8 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 }
 
 func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	for to, from := range m.keyMap {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
 		m.keyBld.PutField(to, sqlRow[from])
 	}
 	k := m.keyBld.Build(sharePool)
@@ -294,7 +295,8 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		return m.primaryKeyError(ctx, k)
 	}
 
-	for to, from := range m.valMap {
+	for to := range m.valMap {
+		from := m.valMap.MapOrdinal(to)
 		m.valBld.PutField(to, sqlRow[from])
 	}
 	v := m.valBld.Build(sharePool)
@@ -303,7 +305,8 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	for to, from := range m.keyMap {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
 		m.keyBld.PutField(to, sqlRow[from])
 	}
 	k := m.keyBld.Build(sharePool)
@@ -312,7 +315,8 @@ func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 }
 
 func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	for to, from := range m.keyMap {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
 		m.keyBld.PutField(to, oldRow[from])
 	}
 	oldKey := m.keyBld.Build(sharePool)
@@ -323,7 +327,8 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 		return err
 	}
 
-	for to, from := range m.keyMap {
+	for to := range m.keyMap {
+		from := m.keyMap.MapOrdinal(to)
 		m.keyBld.PutField(to, newRow[from])
 	}
 	newKey := m.keyBld.Build(sharePool)
@@ -335,7 +340,8 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 		return m.primaryKeyError(ctx, newKey)
 	}
 
-	for to, from := range m.valMap {
+	for to := range m.valMap {
+		from := m.valMap.MapOrdinal(to)
 		m.valBld.PutField(to, newRow[from])
 	}
 	v := m.valBld.Build(sharePool)
@@ -348,12 +354,14 @@ func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) e
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
-		for from, to := range m.keyMap {
+		for from := range m.keyMap {
+			to := m.keyMap.MapOrdinal(from)
 			existing[to] = kd.GetField(from, key)
 		}
 
 		vd := m.valBld.Desc
-		for from, to := range m.valMap {
+		for from := range m.valMap {
+			to := m.valMap.MapOrdinal(from)
 			existing[to] = vd.GetField(from, value)
 		}
 		return
@@ -364,16 +372,14 @@ func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) e
 	return sql.NewUniqueKeyErr(s, true, existing)
 }
 
-type colMapping []int
-
-func colMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm colMapping) {
-	km = makeColMapping(from, to.GetPKCols())
-	vm = makeColMapping(from, to.GetNonPKCols())
+func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
+	km = makeOrdinalMapping(from, to.GetPKCols())
+	vm = makeOrdinalMapping(from, to.GetNonPKCols())
 	return
 }
 
-func makeColMapping(from sql.Schema, to *schema.ColCollection) (m colMapping) {
-	m = make(colMapping, len(to.GetColumns()))
+func makeOrdinalMapping(from sql.Schema, to *schema.ColCollection) (m val.OrdinalMapping) {
+	m = make(val.OrdinalMapping, len(to.GetColumns()))
 	for i := range m {
 		name := to.GetAtIndex(i).Name
 		for j, col := range from {

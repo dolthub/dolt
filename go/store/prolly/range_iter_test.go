@@ -255,7 +255,7 @@ func TestMapIterRange(t *testing.T) {
 
 	index, err := NewMapFromTuples(ctx, ns, kd, vd, tuples...)
 	require.NoError(t, err)
-	require.Equal(t, uint64(12), index.Count())
+	require.Equal(t, int(12), countOrderedMap(t, index))
 
 	partialDesc := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int32Enc},

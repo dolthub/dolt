@@ -15,7 +15,6 @@
 package val
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -24,6 +23,15 @@ import (
 
 	"github.com/dolthub/dolt/go/store/pool"
 )
+
+// OrdinalMapping is a mapping from one field ordering to another.
+// It's used to construct index tuples from another index's tuples.
+type OrdinalMapping []int
+
+func (om OrdinalMapping) MapOrdinal(to int) (from int) {
+	from = om[to]
+	return
+}
 
 type TupleBuilder struct {
 	Desc TupleDesc
@@ -54,50 +62,8 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)
-
-	//if err := tb.validateBuild(tup); err != nil {
-	//	panic(err)
-	//}
-
 	tb.Recycle()
 	return
-}
-
-func (tb *TupleBuilder) validateBuild(tup Tuple) error {
-	expected := ByteSize(0)
-	values := 0
-	for i, field := range tb.fields {
-		if i >= tb.Desc.Count() {
-			break
-		}
-
-		null := field == nil
-		present := tup.mask().present(i)
-		if null == present {
-			return fmt.Errorf("expected null field")
-		}
-		if !null {
-			values++
-		}
-
-		f := tup.GetField(i)
-		if !bytes.Equal(field, f) {
-			return fmt.Errorf("expected equal fields")
-		}
-		expected += ByteSize(len(field))
-	}
-	if values != tup.mask().count() {
-		return fmt.Errorf("expected equal values")
-	}
-
-	expected += uint16Size
-	expected += OffsetsSize(values)
-	expected += maskSize(tb.Desc.Count())
-
-	if ByteSize(len(tup)) != expected {
-		return fmt.Errorf("tuple is not expected size")
-	}
-	return nil
 }
 
 // Recycle resets the TupleBuilder so it can build a new Tuple.
@@ -318,6 +284,7 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		}
 		tb.PutBytes(i, v.([]byte))
 	case JSONEnc:
+		// todo(andy): remove GMS dependency
 		tb.PutJSON(i, v.(sql.JSONDocument).Val)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))

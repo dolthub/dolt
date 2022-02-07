@@ -45,7 +45,7 @@ func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	m := NewMap(nil, ns, keyDesc, valDesc)
+	m := NewMap(Node{}, ns, keyDesc, valDesc)
 
 	ch, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	if err != nil {
@@ -76,14 +76,15 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
-// Count returns the number of key-value pairs in the Map.
-func (m Map) Count() uint64 {
-	return m.root.cumulativeCount() / 2
-}
+// todo(andy): support this?
+//// Count returns the number of key-value pairs in the Map.
+//func (m Map) Count() uint64 {
+//	return m.root.cumulativeCount() / 2
+//}
 
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
-	return hash.Of(m.root)
+	return m.root.hashOf()
 }
 
 // Format returns the NomsBinFormat of this Map.
@@ -96,6 +97,10 @@ func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
+func (m Map) Empty() bool {
+	return m.root.empty()
+}
+
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
@@ -106,11 +111,9 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 
 	var k, v val.Tuple
 	if cur.valid() {
-		pair := cur.currentPair()
-
-		k = val.Tuple(pair.key())
+		k = val.Tuple(cur.currentKey())
 		if m.compareKeys(key, k) == 0 {
-			v = val.Tuple(pair.value())
+			v = val.Tuple(cur.currentValue())
 		} else {
 			k = nil
 		}
@@ -127,7 +130,7 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	}
 
 	if cur.valid() {
-		k := val.Tuple(cur.currentPair().key())
+		k := val.Tuple(cur.currentKey())
 		ok = m.compareKeys(key, k) == 0
 	}
 
@@ -194,9 +197,9 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 func (m Map) rangeStartSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+		return sort.Search(nd.nodeCount(), func(i int) bool {
 			q := val.Tuple(query)
-			t := val.Tuple(nd.getItem(i * stride))
+			t := val.Tuple(nd.getKey(i))
 
 			// compare using the range's tuple descriptor.
 			cmp := rng.KeyDesc.Compare(q, t)
@@ -206,16 +209,15 @@ func (m Map) rangeStartSearchFn(rng Range) searchFn {
 				return cmp < 0
 			}
 		})
-		return i * stride
 	}
 }
 
 func (m Map) rangeStopSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		i := sort.Search(nd.nodeCount()/stride, func(i int) bool {
+		return sort.Search(nd.nodeCount(), func(i int) bool {
 			q := val.Tuple(query)
-			t := val.Tuple(nd.getItem(i * stride))
+			t := val.Tuple(nd.getKey(i))
 
 			// compare using the range's tuple descriptor.
 			cmp := rng.KeyDesc.Compare(q, t)
@@ -225,20 +227,19 @@ func (m Map) rangeStopSearchFn(rng Range) searchFn {
 				return cmp <= 0
 			}
 		})
-		return i * stride
 	}
 }
 
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query nodeItem, nd Node) int {
-	n := nd.nodeCount() / stride
+	n := nd.nodeCount()
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := m.compareItems(query, nd.getItem(h*stride)) <= 0
+		less := m.compareItems(query, nd.getKey(h)) <= 0
 		// i ≤ h < j
 		if !less {
 			i = h + 1 // preserves f(i-1) == false
@@ -248,7 +249,7 @@ func (m Map) searchNode(query nodeItem, nd Node) int {
 	}
 	// i == j, f(i-1) == false, and
 	// f(j) (= f(i)) == true  =>  answer is i.
-	return i * stride
+	return i
 }
 
 var _ searchFn = Map{}.searchNode
@@ -275,8 +276,8 @@ var _ rangeIter = &prollyRangeIter{}
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.valid() {
-		p := it.curr.currentPair()
-		return val.Tuple(p.key()), val.Tuple(p.value())
+		key = val.Tuple(it.curr.currentKey())
+		value = val.Tuple(it.curr.currentValue())
 	}
 	return
 }
