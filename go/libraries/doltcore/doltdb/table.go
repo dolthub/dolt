@@ -254,7 +254,7 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 		return types.Map{}, err
 	}
 
-	return durable.NomsMapFromIndex(idx)
+	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
@@ -333,7 +333,7 @@ func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (type
 		return types.EmptyMap, err
 	}
 
-	return durable.NomsMapFromIndex(idx)
+	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
@@ -426,11 +426,7 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return err
 	}
 
-	im, err := durable.NomsMapFromIndex(idx)
-	if err != nil {
-		return err
-	}
-
+	im := durable.NomsMapFromIndex(idx)
 	iter, err := im.Iterator(ctx)
 	if err != nil {
 		return err
