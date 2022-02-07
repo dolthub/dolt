@@ -33,8 +33,8 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultUser = "root"
 
-	tpccUserLocal = "vinairachakonda"
-	tpccPassLocal = "vinai"
+	tpccUserLocal = ""
+	tpccPassLocal = ""
 
 	defaultSocket = "/var/run/mysqld/mysqld.sock"
 	tcpProtocol   = "tcp"
