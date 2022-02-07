@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -69,6 +70,30 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	}
 
 	return m, nil
+}
+
+func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
+	differ, err := treeDifferFromMaps(ctx, from, to)
+	if err != nil {
+		return err
+	}
+
+	var diff Diff
+	for {
+		diff, err = differ.Next(ctx)
+		if err != nil {
+			break
+		}
+
+		err = cb(ctx, diff)
+		if err != nil {
+			break
+		}
+	}
+	if err == io.EOF {
+		err = nil
+	}
+	return err
 }
 
 // Mutate makes a MutableMap from a Map.

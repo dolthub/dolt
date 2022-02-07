@@ -23,6 +23,7 @@ package prolly
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -142,6 +143,11 @@ func (cur *nodeCursor) valid() bool {
 	}
 	cnt := cur.nd.nodeCount()
 	return cur.idx >= 0 && cur.idx < cnt
+}
+
+func (cur *nodeCursor) invalidate() {
+	// todo(andy): would prefer something more obvious
+	cur.idx = math.MinInt32
 }
 
 func (cur *nodeCursor) currentKey() nodeItem {
