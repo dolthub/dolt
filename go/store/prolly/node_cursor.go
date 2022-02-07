@@ -146,7 +146,6 @@ func (cur *nodeCursor) valid() bool {
 }
 
 func (cur *nodeCursor) invalidate() {
-	// todo(andy): would prefer something more obvious
 	cur.idx = math.MinInt32
 }
 
