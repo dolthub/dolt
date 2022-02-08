@@ -69,7 +69,7 @@ func init() {
 			Type:              sql.NewSystemIntType(CurrentBatchModeKey, -9223372036854775808, 9223372036854775807, false),
 			Default:           int64(0),
 		},
-		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
+		{ // If true, disables the conflict violation check when you commit a transaction.
 			Name:              AllowCommitConflicts,
 			Scope:             sql.SystemVariableScope_Session,
 			Dynamic:           true,
