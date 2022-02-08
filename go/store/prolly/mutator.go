@@ -58,7 +58,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		if cur.valid() {
 			// compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			k, v := getKeyValuePair(ctx, cur)
+			k, v := getKeyValuePair(cur)
 			if compareKeys(m, newKey, k) == 0 {
 				oldValue = v
 			}
@@ -105,9 +105,9 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 	return m, nil
 }
 
-func getKeyValuePair(ctx context.Context, cur *nodeCursor) (key, value val.Tuple) {
-	p := cur.currentPair()
-	key, value = val.Tuple(p.key()), val.Tuple(p.value())
+func getKeyValuePair(cur *nodeCursor) (key, value val.Tuple) {
+	key = val.Tuple(cur.currentKey())
+	value = val.Tuple(cur.currentValue())
 	return
 }
 

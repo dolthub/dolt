@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 remotesrv_pid=
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
@@ -1446,5 +1447,21 @@ setup_ref_test() {
     cd dolt-repo-clones
     dolt clone http://localhost:50051/test-org/test-repo
     cd test-repo
+    dolt push
+}
+
+@test "remotes: set upstream succeeds even if up to date" {
+    dolt remote add origin http://localhost:50051/test-org/test-repo
+    dolt push origin main
+    dolt checkout -b feature
+    dolt push --set-upstream origin feature
+
+    cd dolt-repo-clones
+    dolt clone http://localhost:50051/test-org/test-repo
+    cd test-repo
+    dolt checkout -b feature
+    run dolt push
+    [ "$status" -eq 1 ]
+    dolt push --set-upstream origin feature
     dolt push
 }
