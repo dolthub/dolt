@@ -17,10 +17,11 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/skratchdot/open-golang/open"
-	"google.golang.org/grpc"
 	"io"
 	"time"
+
+	"github.com/skratchdot/open-golang/open"
+	"google.golang.org/grpc"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
