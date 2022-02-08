@@ -18,12 +18,32 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"os"
+	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+const spatialTypesFeatureFlagKey = "DOLT_ENABLE_SPATIAL_TYPES"
+
+// use SpatialTypesEnabled() to check, don't access directly
+var spatialTypesFeatureFlag = false
+
+func init() {
+	// set the spatial types feature flag to true if the env var is set
+	if v, ok := os.LookupEnv(spatialTypesFeatureFlagKey); ok && v != "" {
+		spatialTypesFeatureFlag = true
+	}
+}
+
+var spatialTypesLock = &sync.RWMutex{}
+
+func SpatialTypesEnabled() bool {
+	return spatialTypesFeatureFlag
+}
 
 type Identifier string
 
@@ -47,6 +67,9 @@ const (
 	VarBinaryTypeIdentifier  Identifier = "varbinary"
 	VarStringTypeIdentifier  Identifier = "varstring"
 	YearTypeIdentifier       Identifier = "year"
+	PointTypeIdentifier      Identifier = "point"
+	LinestringTypeIdentifier Identifier = "linestring"
+	PolygonTypeIdentifier    Identifier = "polygon"
 )
 
 var Identifiers = map[Identifier]struct{}{
@@ -69,6 +92,9 @@ var Identifiers = map[Identifier]struct{}{
 	VarBinaryTypeIdentifier:  {},
 	VarStringTypeIdentifier:  {},
 	YearTypeIdentifier:       {},
+	PointTypeIdentifier:      {},
+	LinestringTypeIdentifier: {},
+	PolygonTypeIdentifier:    {},
 }
 
 // TypeInfo is an interface used for encoding type information.
@@ -155,6 +181,18 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		return DatetimeType, nil
 	case sqltypes.Year:
 		return YearType, nil
+	case sqltypes.Geometry:
+		// TODO: bad, but working way to determine which specific geometry type
+		switch sqlType.String() {
+		case sql.PolygonType{}.String():
+			return &polygonType{sqlType.(sql.PolygonType)}, nil
+		case sql.LinestringType{}.String():
+			return &linestringType{sqlType.(sql.LinestringType)}, nil
+		case sql.PointType{}.String():
+			return &pointType{sqlType.(sql.PointType)}, nil
+		default:
+			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
+		}
 	case sqltypes.Decimal:
 		decimalSQLType, ok := sqlType.(sql.DecimalType)
 		if !ok {
@@ -228,6 +266,17 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 
 // FromTypeParams constructs a TypeInfo from the given identifier and parameters.
 func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
+	if SpatialTypesEnabled() {
+		switch id {
+		case PointTypeIdentifier:
+			return PointType, nil
+		case LinestringTypeIdentifier:
+			return LinestringType, nil
+		case PolygonTypeIdentifier:
+			return PolygonType, nil
+		}
+	}
+
 	switch id {
 	case BitTypeIdentifier:
 		return CreateBitTypeFromParams(params)
@@ -285,8 +334,14 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Int64Type
 	case types.JSONKind:
 		return JSONType
+	case types.LinestringKind:
+		return LinestringType
 	case types.NullKind:
 		return UnknownType
+	case types.PointKind:
+		return PointType
+	case types.PolygonKind:
+		return PolygonType
 	case types.StringKind:
 		return StringDefaultType
 	case types.TimestampKind:

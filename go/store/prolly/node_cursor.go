@@ -24,12 +24,16 @@ package prolly
 import (
 	"context"
 	"sort"
+
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
-	// for leaf and internal nodes
-	stride = 2
-)
+type nodeItem []byte
+
+func (i nodeItem) size() val.ByteSize {
+	return val.ByteSize(len(i))
+}
 
 // nodeCursor explores a tree of Node items.
 type nodeCursor struct {
@@ -46,8 +50,7 @@ type searchFn func(item nodeItem, nd Node) (idx int)
 func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentPair().value())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -58,13 +61,12 @@ func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
-func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	cur.skipToNodeEnd()
 
 	for !cur.isLeaf() {
-		mv := metaValue(cur.currentPair().value())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +75,21 @@ func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCurso
 		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 		cur.skipToNodeEnd()
 	}
+
+	// advance |cur| past the end
+	ok, err := cur.advance(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		panic("expected |ok| to be  false")
+	}
+
 	return
+}
+
+func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search searchFn) (cur *nodeCursor, err error) {
+	return newCursorAtItem(ctx, nrw, nd, nodeItem(tup), search)
 }
 
 func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
@@ -85,8 +101,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		mv := metaValue(cur.currentPair().value())
-		nd, err = fetchChild(ctx, nrw, mv)
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -110,8 +125,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		mv := metaValue(cur.currentPair().value())
-		cur.nd, err = fetchChild(ctx, nrw, mv)
+		cur.nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -122,55 +136,32 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 	return cur, nil
 }
 
-func newCursorAtIndex(ctx context.Context, nrw NodeStore, nd Node, idx uint64) (cur nodeCursor, err error) {
-	cur = nodeCursor{nd: nd, nrw: nrw}
-
-	distance := idx
-	for !cur.isLeaf() {
-
-		mv := metaValue(cur.currentPair().value())
-		for distance >= mv.GetCumulativeCount() {
-
-			if _, err = cur.advance(ctx); err != nil {
-				return nodeCursor{}, err
-			}
-
-			distance -= mv.GetCumulativeCount()
-			mv = metaValue(cur.currentPair().value())
-		}
-
-		nd, err = fetchChild(ctx, nrw, mv)
-		if err != nil {
-			return nodeCursor{}, err
-		}
-
-		parent := cur
-		cur = nodeCursor{nd: nd, parent: &parent, nrw: nrw}
-	}
-
-	cur.idx = int(distance)
-	return
-}
-
 func (cur *nodeCursor) valid() bool {
-	if cur.nd == nil {
+	if cur.nd.empty() {
 		return false
 	}
 	cnt := cur.nd.nodeCount()
 	return cur.idx >= 0 && cur.idx < cnt
 }
 
-// currentPair returns the item at the currentPair cursor position
-func (cur *nodeCursor) currentPair() nodePair {
-	return cur.nd.getPair(cur.idx)
+func (cur *nodeCursor) currentKey() nodeItem {
+	return cur.nd.getKey(cur.idx)
+}
+
+func (cur *nodeCursor) currentValue() nodeItem {
+	return cur.nd.getValue(cur.idx)
+}
+
+func (cur *nodeCursor) currentRef() hash.Hash {
+	return cur.nd.getRef(cur.idx)
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
-	return cur.nd.getItem(0)
+	return cur.nd.getKey(0)
 }
 
 func (cur *nodeCursor) lastKey() nodeItem {
-	return cur.nd.getItem(cur.lastKeyIdx())
+	return cur.nd.getKey(cur.lastKeyIdx())
 }
 
 func (cur *nodeCursor) skipToNodeStart() {
@@ -199,7 +190,7 @@ func (cur *nodeCursor) atNodeEnd() bool {
 }
 
 func (cur *nodeCursor) lastKeyIdx() int {
-	return cur.nd.nodeCount() - stride
+	return cur.nd.nodeCount() - 1
 }
 
 func (cur *nodeCursor) isLeaf() bool {
@@ -226,8 +217,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		// stay in bounds for internal nodes
 		cur.parent.keepInBounds()
 
-		mv := metaValue(cur.parent.currentPair().value())
-		cur.nd, err = fetchChild(ctx, cur.nrw, mv)
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 		if err != nil {
 			return err
 		}
@@ -242,11 +232,11 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 // index of the nextMutation greatest element if it is not present.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 	count := cur.nd.nodeCount()
-	idx = sort.Search(count/stride, func(i int) bool {
-		return cb(item, cur.nd.getItem(i*stride)) <= 0
+	idx = sort.Search(count, func(i int) bool {
+		return cb(item, cur.nd.getKey(i)) <= 0
 	})
 
-	return idx * stride
+	return idx
 }
 
 func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
@@ -263,7 +253,7 @@ func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 
 func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 	if cur.idx < cur.lastKeyIdx() {
-		cur.idx += stride
+		cur.idx += 1
 		return true, nil
 	}
 
@@ -305,7 +295,7 @@ func (cur *nodeCursor) retreat(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if !ok {
-		cur.idx = -stride
+		cur.idx = -1
 	}
 
 	return ok, nil
@@ -313,11 +303,11 @@ func (cur *nodeCursor) retreat(ctx context.Context) (bool, error) {
 
 func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 	if cur.idx > 0 {
-		cur.idx -= stride
+		cur.idx -= 1
 		return true, nil
 	}
 
-	if cur.idx == -stride {
+	if cur.idx == -1 {
 		// |cur| is already out of bounds
 		return false, nil
 	}
@@ -352,8 +342,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil)
-	mv := metaValue(cur.parent.currentPair().value())
-	cur.nd, err = fetchChild(ctx, cur.nrw, mv)
+	cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 	cur.idx = -1 // caller must set
 	return err
 }

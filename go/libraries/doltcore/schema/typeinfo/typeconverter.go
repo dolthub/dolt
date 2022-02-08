@@ -71,6 +71,12 @@ func GetTypeConverter(ctx context.Context, srcTi TypeInfo, destTi TypeInfo) (tc 
 		return intTypeConverter(ctx, src, destTi)
 	case *jsonType:
 		return jsonTypeConverter(ctx, src, destTi)
+	case *linestringType:
+		return linestringTypeConverter(ctx, src, destTi)
+	case *pointType:
+		return pointTypeConverter(ctx, src, destTi)
+	case *polygonType:
+		return polygonTypeConverter(ctx, src, destTi)
 	case *setType:
 		return setTypeConverter(ctx, src, destTi)
 	case *timeType:
@@ -131,6 +137,12 @@ func wrapConvertValueToNomsValue(
 			if err != nil {
 				return nil, err
 			}
+		case types.Linestring:
+			vInt = ConvertTypesLinestringToSQLLinestring(val)
+		case types.Point:
+			vInt = ConvertTypesPointToSQLPoint(val)
+		case types.Polygon:
+			vInt = ConvertTypesPolygonToSQLPolygon(val)
 		case types.String:
 			vInt = string(val)
 		case types.Timestamp:

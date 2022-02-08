@@ -189,7 +189,11 @@ type Database interface {
 }
 
 func NewDatabase(cs chunks.ChunkStore) Database {
-	return newDatabase(cs)
+	return newDatabase(types.NewValueStore(cs))
+}
+
+func NewTypesDatabase(vs *types.ValueStore) Database {
+	return newDatabase(vs)
 }
 
 // GarbageCollector provides a method to
@@ -216,4 +220,8 @@ func CanUsePuller(db Database) bool {
 func GetCSStatSummaryForDB(db Database) string {
 	cs := db.chunkStore()
 	return cs.StatsSummary()
+}
+
+func ChunkStoreFromDatabase(db Database) chunks.ChunkStore {
+	return db.chunkStore()
 }

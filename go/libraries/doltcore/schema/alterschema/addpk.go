@@ -38,6 +38,10 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, sql.ErrMultiplePrimaryKeysDefined.New() // Also caught in GMS
 	}
 
+	if schema.IsUsingSpatialColAsKey(sch) {
+		return nil, schema.ErrUsingSpatialKey.New(tableName)
+	}
+
 	pkColOrdering := make(map[string]int, len(columns))
 	for i, newCol := range columns {
 		pkColOrdering[newCol.Name] = i
@@ -46,12 +50,12 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	newColl := make([]schema.Column, sch.GetAllCols().Size())
 	pkOrdinals := make([]int, len(columns))
 	for ord, col := range sch.GetAllCols().GetColumns() {
-		if col.IsNullable() {
-			col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
-		}
 		if i, ok := pkColOrdering[col.Name]; ok {
 			pkOrdinals[i] = ord
 			col.IsPartOfPK = true
+			if col.IsNullable() {
+				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+			}
 		}
 		newColl[ord] = col
 	}
@@ -97,6 +101,14 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		return nil, err
 	}
 
+	// Copy over all checks from the old schema
+	for _, check := range sch.Checks().AllChecks() {
+		_, err := newSchema.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 	err = newSchema.SetPkOrdinals(pkOrdinals)
 	if err != nil {
@@ -114,7 +126,7 @@ func insertKeyedData(ctx context.Context, nbf *types.NomsBinFormat, oldTable *do
 	}
 
 	// Create the new Table and rebuild all the indexes
-	newTable, err := doltdb.NewTable(ctx, oldTable.ValueReadWriter(), newSchema, empty, nil, nil)
+	newTable, err := doltdb.NewNomsTable(ctx, oldTable.ValueReadWriter(), newSchema, empty, nil, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -33,10 +33,14 @@ import (
 )
 
 var schExportDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Exports a table's schema.",
-	LongDesc:  "",
+	ShortDesc: "Exports table schemas as SQL DDL statements.",
+	LongDesc: "Exports table schemas as SQL DDL statements, which can then be executed to recreate tables." + `
+
+If ` + "`table`" + ` is given, only that table's schema will be exported, otherwise all table schemas will be exported.
+
+If ` + "`file`" + ` is given, the exported schemas will be written to that file, otherwise they will be written to standard out.`,
 	Synopsis: []string{
-		"{{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"[{{.LessThan}}table{{.GreaterThan}}] [{{.LessThan}}file{{.GreaterThan}}]",
 	},
 }
 
@@ -61,7 +65,7 @@ func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "table whose schema is being exported."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file that the schema will be written to."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"file", "the file to which the schema will be exported."})
 	return ap
 }
 

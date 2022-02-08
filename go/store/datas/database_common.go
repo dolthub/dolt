@@ -64,9 +64,7 @@ type rootTracker interface {
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
 
-func newDatabase(cs chunks.ChunkStore) *database {
-	vs := types.NewValueStore(cs)
-
+func newDatabase(vs *types.ValueStore) *database {
 	return &database{
 		ValueStore: vs, // ValueStore is responsible for closing |cs|
 		rt:         vs,
@@ -192,6 +190,9 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 			}
 		}
 		v, ok, err = p.MaybeGet(ParentsListField)
+		if err != nil {
+			return types.Ref{}, false, err
+		}
 		if !ok || types.IsNull(v) {
 			empty, err := types.NewList(ctx, vrw)
 			if err != nil {

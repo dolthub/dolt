@@ -193,6 +193,7 @@ func TestModifyColumn(t *testing.T) {
 			assert.NotNil(t, index)
 			tt.expectedSchema.Indexes().AddIndex(index)
 			tt.expectedSchema.SetPkOrdinals(sch.GetPkOrdinals())
+			tt.expectedSchema.Checks().AddCheck("test-check", "age < 123", true)
 			require.Equal(t, tt.expectedSchema, sch)
 
 			rowData, err := updatedTable.GetNomsRowData(ctx)

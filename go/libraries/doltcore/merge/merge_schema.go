@@ -118,6 +118,13 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 	if err != nil {
 		return nil, sc, err
 	}
+
+	// TODO: Merge conflict should have blocked any primary key ordinal changes
+	err = sch.SetPkOrdinals(ourSch.GetPkOrdinals())
+	if err != nil {
+		return nil, sc, err
+	}
+
 	_ = mergedIdxs.Iter(func(index schema.Index) (stop bool, err error) {
 		sch.Indexes().AddIndex(index)
 		return false, nil

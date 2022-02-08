@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func init() {
@@ -102,6 +103,11 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		// todo(andy): unskip after secondary index support
+		t.Skip()
+	}
+
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
 	skipped := []string{
@@ -181,6 +187,11 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		// todo(andy): unskip
+		t.Skip()
+	}
+
 	skipped := []string{
 		"create index r_c0 on r (c0);",
 		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
@@ -354,6 +365,13 @@ func TestTransactions(t *testing.T) {
 func TestDoltScripts(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestDoltMerge(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltMerge {
 		enginetest.TestScript(t, harness, script)
 	}
 }

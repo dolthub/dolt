@@ -17,8 +17,6 @@ package prolly
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/skip"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -27,25 +25,31 @@ const (
 )
 
 type MutableMap struct {
-	m       Map
+	prolly  Map
 	overlay memoryMap
 }
 
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
-		m:       m,
+		prolly:  m,
 		overlay: newMemoryMap(m.keyDesc),
 	}
 }
 
 // Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	return materializeMutations(ctx, mut.m, mut.overlay.mutations())
+	return materializeMutations(ctx, mut.prolly, mut.overlay.mutations())
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
 func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
 	mut.overlay.Put(key, value)
+	return nil
+}
+
+// Delete deletes the pair keyed by |key| from the MutableMap.
+func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
+	mut.overlay.Delete(key)
 	return nil
 }
 
@@ -61,7 +65,7 @@ func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (er
 		return cb(key, value)
 	}
 
-	return mut.m.Get(ctx, key, cb)
+	return mut.prolly.Get(ctx, key, cb)
 }
 
 // Has returns true if |key| is present in the MutableMap.
@@ -78,41 +82,18 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
 		Stop:    RangeCut{Unbound: true},
-		KeyDesc: mut.m.keyDesc,
-		Reverse: false,
+		KeyDesc: mut.prolly.keyDesc,
 	}
-	return mut.IterValueRange(ctx, rng)
+	return mut.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MapRangeIter that iterates over a Range.
-func (mut MutableMap) IterValueRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	var iter *skip.ListIter
-	if rng.Start.Unbound {
-		if rng.Reverse {
-			iter = mut.overlay.list.IterAtEnd()
-		} else {
-			iter = mut.overlay.list.IterAtStart()
-		}
-	} else {
-		iter = mut.overlay.list.IterAt(rng.Start.Key)
-	}
-	memCur := memTupleCursor{iter: iter}
-
-	var err error
-	var cur *nodeCursor
-	if rng.Start.Unbound {
-		if rng.Reverse {
-			cur, err = mut.m.cursorAtEnd(ctx)
-		} else {
-			cur, err = mut.m.cursorAtStart(ctx)
-		}
-	} else {
-		cur, err = mut.m.cursorAtkey(ctx, rng.Start.Key)
-	}
+func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+	proIter, err := mut.prolly.iterFromRange(ctx, rng)
 	if err != nil {
 		return MapRangeIter{}, err
 	}
-	proCur := mapTupleCursor{cur: cur}
+	memIter := mut.overlay.iterFromRange(rng)
 
-	return NewMapRangeIter(ctx, memCur, proCur, rng)
+	return NewMapRangeIter(memIter, proIter, rng), nil
 }

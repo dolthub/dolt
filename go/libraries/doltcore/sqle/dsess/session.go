@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -50,6 +51,8 @@ func init() {
 const TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
 
 var transactionMergeStomp = false
+var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
+	"Rollback or commit changes before changing working sets.")
 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
@@ -677,8 +680,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	if sessionState.dirty {
-		return fmt.Errorf("Cannot switch working set, session state is dirty. " +
-			"Rollback or commit changes before changing working sets.")
+		return ErrWorkingSetChanges.New()
 	}
 
 	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
@@ -970,8 +972,9 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
+	nbf := sessionState.dbData.Ddb.Format()
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.WriteSession = writer.NewWriteSession(nil, editOpts)
+	sessionState.WriteSession = writer.NewWriteSession(nbf, nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
@@ -1020,7 +1023,8 @@ func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, 
 	if err != nil {
 		return err
 	}
-	dbState.TempTableWriteSession = writer.NewWriteSession(newRoot, dbState.WriteSession.GetOptions())
+	nbf := newRoot.VRW().Format()
+	dbState.TempTableWriteSession = writer.NewWriteSession(nbf, newRoot, dbState.WriteSession.GetOptions())
 
 	return sess.SetTempTableRoot(ctx, dbName, newRoot)
 }

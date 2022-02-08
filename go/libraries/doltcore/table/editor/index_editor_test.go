@@ -549,7 +549,7 @@ func TestIndexRebuildingWithTwoIndexes(t *testing.T) {
 	// change the underlying data and verify that rebuild changes the data as well
 	rowData, rows = createUpdatedTestRowData(t, db, tSchema)
 	indexNameExpectedRows, indexAgeExpectedRows = rowsToIndexRows(t, rows, indexName, indexAge)
-	updatedTable, err := rebuildAllTable.UpdateRows(context.Background(), rowData)
+	updatedTable, err := rebuildAllTable.UpdateNomsRows(context.Background(), rowData)
 	require.NoError(t, err)
 	rebuildAllTable, err = RebuildAllIndexes(context.Background(), updatedTable, opts)
 	require.NoError(t, err)
@@ -838,7 +838,7 @@ func createTestSchema(t *testing.T) schema.Schema {
 }
 
 func createTableWithoutIndexRebuilding(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rowData types.Map) (*doltdb.Table, error) {
-	return doltdb.NewTable(ctx, vrw, sch, rowData, nil, nil)
+	return doltdb.NewNomsTable(ctx, vrw, sch, rowData, nil, nil)
 }
 
 func rowsToIndexRows(t *testing.T, rows []row.Row, indexName schema.Index, indexAge schema.Index) (indexNameExpectedRows []row.Row, indexAgeExpectedRows []row.Row) {

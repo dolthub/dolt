@@ -38,6 +38,9 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 
 	// Modify the schema to convert the primary key cols into non primary key cols
 	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
+		if col.IsPartOfPK {
+			col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+		}
 		col.IsPartOfPK = false
 		return col
 	})
@@ -48,6 +51,14 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 	}
 
 	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
+
+	// Copy over all checks from the old schema
+	for _, check := range sch.Checks().AllChecks() {
+		_, err := newSchema.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	table, err = table.UpdateSchema(ctx, newSchema)
 	if err != nil {
@@ -65,7 +76,7 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 		return nil, err
 	}
 
-	table, err = table.UpdateRows(ctx, newRowData)
+	table, err = table.UpdateNomsRows(ctx, newRowData)
 	if err != nil {
 		return nil, err
 	}

@@ -29,10 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// sessionedTableEditor represents a table editor obtained from a tableEditSession. This table editor may be shared
+// sessionedTableEditor represents a table editor obtained from a nomsWriteSession. This table editor may be shared
 // by multiple callers. It is thread safe.
 type sessionedTableEditor struct {
-	tableEditSession  *tableEditSession
+	tableEditSession  *nomsWriteSession
 	tableEditor       editor.TableEditor
 	referencedTables  []doltdb.ForeignKey // The tables that we reference to ensure an insert or update is valid
 	referencingTables []doltdb.ForeignKey // The tables that reference us to ensure their inserts and updates are valid

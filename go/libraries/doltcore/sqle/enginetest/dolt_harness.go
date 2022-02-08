@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -68,11 +69,18 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 
 	session, err := dsess.NewDoltSession(sql.NewEmptyContext(), enginetest.NewBaseSession(), pro, localConfig)
 	require.NoError(t, err)
-	return &DoltHarness{
+	dh := &DoltHarness{
 		t:              t,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
 	}
+
+	format := dEnv.DoltDB.Format()
+	if types.IsFormat_DOLT_1(format) {
+		dh = dh.WithSkippedQueries(newFormatSkippedQueries)
+	}
+
+	return dh
 }
 
 var defaultSkippedQueries = []string{
@@ -86,6 +94,14 @@ var defaultSkippedQueries = []string{
 	"show global variables like", // we set extra variables
 }
 
+var newFormatSkippedQueries = []string{
+	"alter",              // todo(andy): remove after DDL support
+	"desc",               // todo(andy): remove after secondary index support
+	"show",               // todo(andy): remove after secondary index support
+	"information_schema", // todo(andy): remove after secondary index support
+	"keyless",            // todo(andy): remove after keyless table support
+}
+
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
 func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
@@ -95,7 +111,7 @@ func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
 
 // WithSkippedQueries returns a copy of the harness with the given queries skipped
 func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
-	d.skippedQueries = queries
+	d.skippedQueries = append(d.skippedQueries, queries...)
 	return &d
 }
 
@@ -165,6 +181,10 @@ func (d *DoltHarness) SupportsForeignKeys() bool {
 }
 
 func (d *DoltHarness) SupportsKeylessTables() bool {
+	if types.IsFormat_DOLT_1(d.env.DoltDB.Format()) {
+		// todo(andy): support keyless tables
+		return false
+	}
 	return true
 }
 

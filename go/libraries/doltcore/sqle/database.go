@@ -722,6 +722,11 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		return err
 	}
 
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	if schema.IsUsingSpatialColAsKey(doltSch) {
+		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
 	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 

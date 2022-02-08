@@ -43,7 +43,7 @@ Running dolt init in an already initialized directory will fail.
 `,
 
 	Synopsis: []string{
-		//`[{{.LessThan}}options{{.GreaterThan}}] [{{.LessThan}}path{{.GreaterThan}}]`,
+		"",
 	},
 }
 
