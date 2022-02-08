@@ -46,7 +46,7 @@ func GetCreateTableStmt(ctx *sql.Context, engine *sqle.Engine, tableName string)
 	if err != nil {
 		return "", err
 	}
-	rows, err := sql.RowIterToRows(ctx, rowIter)
+	rows, err := sql.RowIterToRows(ctx, nil, rowIter)
 	if err != nil {
 		return "", err
 	}

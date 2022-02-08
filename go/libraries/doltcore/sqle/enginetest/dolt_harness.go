@@ -283,7 +283,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	_, iter, err := e.Query(ctx,
 		"set @@"+dsess.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
 	require.NoError(d.t, err)
-	_, err = sql.RowIterToRows(ctx, iter)
+	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)
 
 	headHash, err := ctx.GetSessionVariable(ctx, dsess.HeadKey(db.Name()))
@@ -298,7 +298,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	_, iter, err = e.Query(ctx,
 		query)
 	require.NoError(d.t, err)
-	_, err = sql.RowIterToRows(ctx, iter)
+	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)
 
 	return nil

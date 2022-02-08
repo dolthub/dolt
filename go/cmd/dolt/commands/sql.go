@@ -996,7 +996,7 @@ func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		_, err = sql.RowIterToRows(ctx, nil, ri)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1007,7 +1007,7 @@ func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		_, err = sql.RowIterToRows(ctx, nil, ri)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1017,7 +1017,7 @@ func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Sch
 		if err != nil {
 			return nil, nil, err
 		}
-		_, err = sql.RowIterToRows(ctx, ri)
+		_, err = sql.RowIterToRows(ctx, nil, ri)
 		if err != nil {
 			return nil, nil, err
 		}
