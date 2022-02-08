@@ -180,7 +180,6 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 		linePrinter("requesting update")
 		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 		if err != nil {
-			// TODO: if you get cancelled status code stop retrying
 			for i := 0; i < loginRetryInterval; i++ {
 				linePrinter(fmt.Sprintf("Retrying in %d", loginRetryInterval-i))
 				time.Sleep(time.Second)
