@@ -88,6 +88,10 @@ func writePtreeStats(ctx context.Context, w io.Writer, v Value, vr ValueReader) 
 		chunkCount, valueCount, byteSize := uint64(0), uint64(0), uint64(0)
 
 		for _, n := range nodes {
+			if n == nil {
+				continue
+			}
+
 			chunkCount++
 			if level > 0 {
 				err := n.WalkRefs(vr.Format(), func(r Ref) error {
