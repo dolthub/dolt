@@ -60,6 +60,7 @@ func TestSingleQuery(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
+	enginetest.CreateIndexes(t, harness, engine)
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
@@ -358,6 +359,10 @@ func TestStoredProcedures(t *testing.T) {
 func TestTransactions(t *testing.T) {
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }

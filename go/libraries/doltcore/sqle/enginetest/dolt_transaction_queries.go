@@ -18,6 +18,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 var DoltTransactionTests = []enginetest.TransactionTest{
@@ -788,6 +790,94 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			{
 				Query:       "/* client b */ insert into test values (4,3,2)",
 				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+		},
+	},
+}
+
+var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
+	{
+		Name: "Committed conflicts are seen by other sessions",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
+				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+			},
+			{
+				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+			},
+			{
+				Query:          "/* client a */ commit",
+				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+			},
+			{
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
