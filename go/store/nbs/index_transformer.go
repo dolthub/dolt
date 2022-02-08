@@ -13,24 +13,24 @@ var (
 // IndexTransformer transforms a table file index byte stream with lengths
 // to a table file index byte stream with offsets
 type IndexTransformer struct {
-	src         io.Reader
+	src io.Reader
+
 	lengthsIdx  int64 // Start index of lengths in table file byte stream
 	suffixesIdx int64 // Start index of suffixes in table file byte stream
-
-	buff   []byte
-	idx    int64
-	offset uint64
+	buff        []byte
+	idx         int64
+	offset      uint64
 }
 
 // Create an IndexTransform given a src reader, chunkCount, and maximum size of read
-func NewIndexTransformer(src io.Reader, chunkCount int, maxReadSize int) IndexTransformer {
+func NewIndexTransformer(src io.Reader, chunkCount int, maxReadSize int) *IndexTransformer {
 	tuplesSize := int64(chunkCount) * prefixTupleSize
 	lengthsSize := int64(chunkCount) * lengthSize
 
 	maxNumOffsetsToRead := maxReadSize / offsetSize
 	buffSize := maxNumOffsetsToRead * lengthSize
 
-	return IndexTransformer{
+	return &IndexTransformer{
 		src:         src,
 		buff:        make([]byte, buffSize),
 		lengthsIdx:  tuplesSize,
