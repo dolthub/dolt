@@ -343,6 +343,12 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 			return nil, false, err
 		}
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
+	case doltdb.DiffTableName:
+		head, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
 	case doltdb.TableOfTablesWithViolationsName:
