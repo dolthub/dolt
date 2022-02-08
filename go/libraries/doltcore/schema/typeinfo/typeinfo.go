@@ -17,9 +17,10 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"math"
+
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
-	"math"
 
 	"github.com/dolthub/dolt/go/store/types"
 )
