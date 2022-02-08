@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -87,9 +86,6 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 		if err = cb(ctx, diff); err != nil {
 			break
 		}
-	}
-	if err == io.EOF {
-		err = nil
 	}
 	return err
 }

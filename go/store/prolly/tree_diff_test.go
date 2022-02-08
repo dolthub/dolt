@@ -16,7 +16,9 @@ package prolly
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"sort"
 	"testing"
@@ -41,8 +43,14 @@ func TestMapDiff(t *testing.T) {
 			prollyMap, tuples := makeProllyMap(t, s)
 			require.Equal(t, s, len(tuples))
 
-			t.Run("empty map diff", func(t *testing.T) {
-				testEmptyMapDiff(t, prollyMap.(Map))
+			t.Run("map diff error handling", func(t *testing.T) {
+				testMapDiffErrorHandling(t, prollyMap.(Map))
+			})
+			t.Run("equal map diff", func(t *testing.T) {
+				testEqualMapDiff(t, prollyMap.(Map))
+			})
+			t.Run("map diff against empty", func(t *testing.T) {
+				testMapDiffAgainstEmpty(t, s)
 			})
 
 			// deletes
@@ -90,15 +98,53 @@ func TestMapDiff(t *testing.T) {
 	}
 }
 
-func testEmptyMapDiff(t *testing.T, m Map) {
+func testMapDiffErrorHandling(t *testing.T, m Map) {
+	ctx := context.Background()
+
+	expErr := errors.New("error case")
+	err := DiffMaps(ctx, m, m, func(ctx context.Context, diff Diff) error {
+		return expErr
+	})
+	require.Error(t, expErr, err)
+}
+
+func testEqualMapDiff(t *testing.T, m Map) {
 	ctx := context.Background()
 	var counter int
 	err := DiffMaps(ctx, m, m, func(ctx context.Context, diff Diff) error {
 		counter++
 		return nil
 	})
-	require.NoError(t, err)
+	require.Error(t, io.EOF, err)
 	assert.Equal(t, 0, counter)
+}
+
+func testMapDiffAgainstEmpty(t *testing.T, scale int) {
+	ctx := context.Background()
+	m, tuples := makeProllyMap(t, scale)
+	empty, _ := makeProllyMap(t, 0)
+
+	cnt := 0
+	err := DiffMaps(ctx, m.(Map), empty.(Map), func(ctx context.Context, diff Diff) error {
+		assert.Equal(t, tuples[cnt][0], diff.Key)
+		assert.Equal(t, tuples[cnt][1], diff.From)
+		assert.Nil(t, diff.To)
+		cnt++
+		return nil
+	})
+	require.Error(t, io.EOF, err)
+	assert.Equal(t, scale, cnt)
+
+	cnt = 0
+	err = DiffMaps(ctx, empty.(Map), m.(Map), func(ctx context.Context, diff Diff) error {
+		assert.Equal(t, tuples[cnt][0], diff.Key)
+		assert.Equal(t, tuples[cnt][1], diff.To)
+		assert.Nil(t, diff.From)
+		cnt++
+		return nil
+	})
+	require.Error(t, io.EOF, err)
+	assert.Equal(t, scale, cnt)
 }
 
 func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int) {
@@ -120,7 +166,7 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 		cnt++
 		return nil
 	})
-	require.NoError(t, err)
+	require.Error(t, io.EOF, err)
 	assert.Equal(t, numDeletes, cnt)
 }
 
@@ -138,7 +184,7 @@ func testInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int
 		cnt++
 		return nil
 	})
-	require.NoError(t, err)
+	require.Error(t, io.EOF, err)
 	assert.Equal(t, numInserts, cnt)
 }
 
@@ -173,7 +219,7 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 		cnt++
 		return nil
 	})
-	require.NoError(t, err)
+	require.Error(t, io.EOF, err)
 	assert.Equal(t, numUpdates, cnt)
 }
 
