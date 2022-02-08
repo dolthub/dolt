@@ -395,11 +395,6 @@ func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 		return false, err
 	}
 
-	// dp.to can be nil if a table was deleted and then recreated
-	if dp.to == nil {
-		return true, nil
-	}
-
 	toSch, err := dp.to.GetSchema(ctx)
 	if err != nil {
 		return false, err
