@@ -381,6 +381,17 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestScopedDoltHistorySystemTables(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range ScopedDoltHistoryScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {

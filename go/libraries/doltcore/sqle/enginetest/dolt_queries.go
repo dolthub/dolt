@@ -94,6 +94,23 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 }
 
+var ScopedDoltHistoryScriptTests = []enginetest.ScriptTest{
+	{
+		Name: "scoped-dolt-history-system-table: filtering results on non-pk tables",
+		SetUpScript: []string{
+			"create table foo1 (n int, abcd text);",
+			"insert into foo1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
+			"select dolt_commit('-am', 'inserting into foo1');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "select n, abcd FROM DOLT_HISTORY_foo1 where n=1;",
+				Expected: []sql.Row{{1, "Eins"}},
+			},
+		},
+	},
+}
+
 var DoltMerge = []enginetest.ScriptTest{
 	{
 		Name: "DOLT_MERGE ff correctly works with autocommit off",
