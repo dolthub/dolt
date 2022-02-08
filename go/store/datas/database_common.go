@@ -378,7 +378,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 	if is, err := IsCommit(commit); err != nil {
 		return err
 	} else if !is {
-		fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
+		return fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
 	commitRef, err := db.WriteValue(ctx, commit)
