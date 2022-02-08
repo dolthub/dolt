@@ -17,11 +17,10 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
-	"time"
-
 	"github.com/skratchdot/open-golang/open"
 	"google.golang.org/grpc"
+	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -45,7 +44,14 @@ var loginDocs = cli.CommandDocumentationContent{
 	Synopsis: []string{"[{{.LessThan}}creds{{.GreaterThan}}]"},
 }
 
+// The LoginCmd doesn't handle its own signals, but should stop cancel global context when receiving SIGINT signal
+func (cmd LoginCmd) InstallsSignalHandlers() bool {
+	return true
+}
+
 type LoginCmd struct{}
+
+var _ cli.SignalCommand = SqlCmd{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd LoginCmd) Name() string {
@@ -174,6 +180,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 		linePrinter("requesting update")
 		whoAmI, err = grpcClient.WhoAmI(ctx, &remotesapi.WhoAmIRequest{})
 		if err != nil {
+			// TODO: if you get cancelled status code stop retrying
 			for i := 0; i < loginRetryInterval; i++ {
 				linePrinter(fmt.Sprintf("Retrying in %d", loginRetryInterval-i))
 				time.Sleep(time.Second)
