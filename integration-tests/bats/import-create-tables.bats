@@ -704,3 +704,40 @@ DELIM
     run dolt sql -r csv -q "select * from keyless"
     [ "${lines[1]}" = "0,42,2" ]
 }
+
+@test "import-create-tables: auto-increment table" {
+    cat <<SQL > schema.sql
+CREATE TABLE test (
+    pk int PRIMARY KEY AUTO_INCREMENT,
+    v1 int
+);
+SQL
+
+    cat <<DELIM > data.csv
+pk,v1
+1,1
+2,2
+3,3
+4,4
+DELIM
+
+    run dolt table import -s schema.sql -c test data.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 4, Additions: 4, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from test order by pk ASC"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [ "${lines[1]}" = 1,1 ]
+    [ "${lines[2]}" = 2,2 ]
+    [ "${lines[3]}" = 3,3 ]
+    [ "${lines[4]}" = 4,4 ]
+
+    dolt sql -q "insert into test values (NULL, 5)"
+
+    run dolt sql -r csv -q "select * from test where pk = 5"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [ "${lines[1]}" = 5,5 ]
+}
