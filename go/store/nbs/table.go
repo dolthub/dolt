@@ -130,6 +130,7 @@ const (
 	uint32Size      = 4
 	ordinalSize     = uint32Size
 	lengthSize      = uint32Size
+	offsetSize      = uint64Size
 	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	magicNumberSize = 8 //len(magicNumber)
 	footerSize      = uint32Size + uint64Size + magicNumberSize
