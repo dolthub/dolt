@@ -32,7 +32,6 @@ const (
 
 // NodeStore reads and writes prolly tree Nodes.
 type NodeStore interface {
-
 	// Read reads a prolly tree Node from the store.
 	Read(ctx context.Context, ref hash.Hash) (Node, error)
 
@@ -71,20 +70,21 @@ func NewNodeStore(cs chunks.ChunkStore) NodeStore {
 func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	c, ok := ns.cache.get(ref)
 	if ok {
-		return c.Data(), nil
+		return mapNodeFromBytes(c.Data()), nil
 	}
 
 	c, err := ns.store.Get(ctx, ref)
 	if err != nil {
-		return nil, err
+		return Node{}, err
 	}
 	ns.cache.insert(c)
-	return c.Data(), err
+
+	return mapNodeFromBytes(c.Data()), err
 }
 
 // Write implements NodeStore.
 func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
-	c := chunks.NewChunk(nd)
+	c := chunks.NewChunk(nd.bytes())
 	if err := ns.store.Put(ctx, c); err != nil {
 		return hash.Hash{}, err
 	}
