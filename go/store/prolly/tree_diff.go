@@ -86,7 +86,6 @@ func (td treeDiffer) Next(ctx context.Context) (diff Diff, err error) {
 	if td.from.valid() {
 		return sendRemoved(ctx, td.from)
 	}
-
 	if td.to.valid() {
 		return sendAdded(ctx, td.to)
 	}
@@ -138,30 +137,33 @@ func sendModified(ctx context.Context, from, to *nodeCursor) (diff Diff, err err
 }
 
 func skipCommon(ctx context.Context, from, to *nodeCursor) (err error) {
+	// track when |from.parent| and |to.parent| change
+	// to avoid unnecessary comparisons.
+	parentsAreNew := true
+
 	for from.valid() && to.valid() {
 		if !equalItems(from, to) {
 			// found the next difference
 			return nil
 		}
 
-		var equalParents bool
-		if from.parent != nil && to.parent != nil {
-			// todo(andy): we compare here every loop
-			equalParents = equalItems(from.parent, to.parent)
-		}
-		if equalParents {
-			// if our parents are equal, we can search for differences
-			// faster at the next highest tree level.
-			if err = skipCommonParents(ctx, from, to); err != nil {
-				return err
+		if parentsAreNew {
+			if equalParents(from, to) {
+				// if our parents are equal, we can search for differences
+				// faster at the next highest tree level.
+				if err = skipCommonParents(ctx, from, to); err != nil {
+					return err
+				}
+				continue
 			}
-			continue
+			parentsAreNew = false
 		}
 
-		// todo(andy): we'd like to not load the next node
-		//  here if we know they're equal (parents are equal),
-		//  however we can only optimize in the case were both
-		//  cursors exhaust their current node at the same time.
+		// if one of the cursors is at the end of its node, it will
+		// need to advance its parent and fetch a new node. In this
+		// case we need to compare parents again.
+		parentsAreNew = from.atNodeEnd() || to.atNodeEnd()
+
 		if _, err = from.advance(ctx); err != nil {
 			return err
 		}
@@ -200,10 +202,17 @@ func skipCommonParents(ctx context.Context, from, to *nodeCursor) (err error) {
 	return
 }
 
+// todo(andy): assumes equal byte representations
 func equalItems(from, to *nodeCursor) bool {
-	// todo(andy): assumes equal byte representations
 	return bytes.Equal(from.currentKey(), to.currentKey()) &&
 		bytes.Equal(from.currentValue(), to.currentValue())
+}
+
+func equalParents(from, to *nodeCursor) (eq bool) {
+	if from.parent != nil && to.parent != nil {
+		eq = equalItems(from.parent, to.parent)
+	}
+	return
 }
 
 func equalValues(from, to *nodeCursor) bool {

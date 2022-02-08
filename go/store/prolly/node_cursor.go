@@ -267,7 +267,7 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == cur.lastKeyIdx())
+	assertTrue(cur.atNodeEnd())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.advanceInBounds(ctx)
@@ -317,7 +317,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == 0)
+	assertTrue(cur.atNodeStart())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.retreatInBounds(ctx)

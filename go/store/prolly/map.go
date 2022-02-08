@@ -78,15 +78,13 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 		return err
 	}
 
-	var diff Diff
 	for {
-		diff, err = differ.Next(ctx)
-		if err != nil {
+		var diff Diff
+		if diff, err = differ.Next(ctx); err != nil {
 			break
 		}
 
-		err = cb(ctx, diff)
-		if err != nil {
+		if err = cb(ctx, diff); err != nil {
 			break
 		}
 	}
