@@ -427,6 +427,11 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	}
 
 	if !start.Unbound {
+		startFields, err = normalizeRangeKey(sqlRange, startFields)
+		if err != nil {
+			return prolly.Range{}, err
+		}
+
 		start.Key, err = tupleFromKeys(startFields, tb)
 		if err != nil {
 			return prolly.Range{}, err
@@ -444,16 +449,26 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		stopFields = append(stopFields, sql.GetRangeCutKey(sc))
 	}
 	if !stop.Unbound {
+		stopFields, err = normalizeRangeKey(sqlRange, stopFields)
+		if err != nil {
+			return prolly.Range{}, err
+		}
+
 		stop.Key, err = tupleFromKeys(stopFields, tb)
 		if err != nil {
 			return prolly.Range{}, err
 		}
 	}
 
+	// Range queries can be made over a prefix subset of the
+	// index's columns. In this case, |prolly.Range.KeyDesc|
+	// must describe the same subset of index columns.
+	rngDesc := val.TupleDescriptorPrefix(tb.Desc, len(sqlRange))
+
 	return prolly.Range{
 		Start:   start,
 		Stop:    stop,
-		KeyDesc: tb.Desc,
+		KeyDesc: rngDesc,
 	}, nil
 }
 
@@ -466,4 +481,16 @@ func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 		tb.PutField(i, v)
 	}
 	return tb.BuildPermissive(sharePool), nil
+}
+
+// normalizeRangeKey converts a range's key into a canonical value.
+func normalizeRangeKey(rng sql.Range, key sql.Row) (sql.Row, error) {
+	var err error
+	for i := range key {
+		key[i], err = rng[i].Typ.Convert(key[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return key, nil
 }

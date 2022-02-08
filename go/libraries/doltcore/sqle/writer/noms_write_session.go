@@ -70,7 +70,7 @@ func NewWriteSession(nbf *types.NomsBinFormat, root *doltdb.RootValue, opts edit
 	if types.IsFormat_DOLT_1(nbf) {
 		return &prollyWriteSession{
 			root:   root,
-			tables: make(map[string]*prollyWriter),
+			tables: make(map[string]*prollyTableWriter),
 			mut:    &sync.RWMutex{},
 		}
 	}

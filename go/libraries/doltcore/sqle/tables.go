@@ -1040,10 +1040,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		initialValue := column.Type.Zero()
 
-		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
-		if err != nil {
-			return err
-		}
+		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
 
 		rowData, err := updatedTable.GetRowData(ctx)
 		if err != nil {
@@ -1127,10 +1124,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	indexColumns []sql.IndexColumn,
 	comment string,
 ) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
@@ -1293,7 +1286,8 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	onUpdate, onDelete sql.ForeignKeyReferenceOption,
 ) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		return types.ErrUnsupportedFormat
+		// todo(andy)
+		return nil
 	}
 
 	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
@@ -1374,7 +1368,8 @@ func (t *AlterableDoltTable) CreateForeignKey(
 // DropForeignKey implements sql.ForeignKeyAlterableTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		return types.ErrUnsupportedFormat
+		// todo(andy)
+		return nil
 	}
 
 	root, err := t.getRoot(ctx)
@@ -1567,7 +1562,7 @@ func createIndexForTable(
 		if err != nil {
 			return nil, err
 		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+		newTable, err = newTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 		if err != nil {
 			return nil, err
 		}

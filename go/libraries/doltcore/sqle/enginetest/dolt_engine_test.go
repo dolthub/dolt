@@ -60,6 +60,7 @@ func TestSingleQuery(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
+	enginetest.CreateIndexes(t, harness, engine)
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
