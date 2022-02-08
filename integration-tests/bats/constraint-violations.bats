@@ -60,7 +60,7 @@ SQL
     [[ "$output" =~ "up to date" ]] || false
 }
 
-@test "constraint-violations: dolt_force_transaction_commit ignores constraint violations" {
+@test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -78,6 +78,7 @@ SQL
     dolt checkout main
 
     run dolt sql <<"SQL"
+SET dolt_allow_commit_conflicts = 0;
 SELECT DOLT_MERGE('other');
 SQL
     [ "$status" -eq "1" ]

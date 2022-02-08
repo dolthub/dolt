@@ -82,8 +82,8 @@ func rowIterFromMapIter(
 	}, nil
 }
 
-func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap []int) {
-	keyMap = make([]int, sch.GetPKCols().Size())
+func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap val.OrdinalMapping) {
+	keyMap = make(val.OrdinalMapping, sch.GetPKCols().Size())
 	for idx := range keyMap {
 		keyMap[idx] = -1
 		idxCol := sch.GetPKCols().GetAtIndex(idx)
@@ -95,7 +95,7 @@ func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap []int
 		}
 	}
 
-	valMap = make([]int, sch.GetNonPKCols().Size())
+	valMap = make(val.OrdinalMapping, sch.GetNonPKCols().Size())
 	for idx := range valMap {
 		valMap[idx] = -1
 		idxCol := sch.GetNonPKCols().GetAtIndex(idx)

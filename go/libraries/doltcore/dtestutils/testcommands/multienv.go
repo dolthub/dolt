@@ -350,7 +350,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 	if err != nil {
 		errhand(err)
 	}
-	indexes, err := tbl.GetIndexData(ctx)
+	indexes, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		errhand(err)
 	}
