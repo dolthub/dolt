@@ -195,27 +195,21 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 		tups[i], tups[j] = tups[j], tups[i]
 	})
 
-	oldPairs := tups[:numUpdates]
-	sort.Slice(oldPairs, func(i, j int) bool {
-		return from.keyDesc.Compare(oldPairs[i][0], oldPairs[j][0]) < 0
+	sub := tups[:numUpdates]
+	sort.Slice(sub, func(i, j int) bool {
+		return from.keyDesc.Compare(sub[i][0], sub[j][0]) < 0
 	})
 
-	kd, vd := from.Descriptors()
-	newPairs := randomTuplePairs(numUpdates, kd, vd)
-	require.Equal(t, len(oldPairs), len(newPairs))
-	for i := range oldPairs {
-		// set keys for updates
-		newPairs[i][0] = oldPairs[i][0]
-	}
-	to := makeMapWithUpdates(t, from, newPairs...)
+	_, vd := from.Descriptors()
+	updates := makeUpdatesToTuples(vd, sub...)
+	to := makeMapWithUpdates(t, from, updates...)
 
 	var cnt int
 	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff Diff) error {
 		assert.Equal(t, ModifiedDiff, diff.Type)
-		assert.Equal(t, oldPairs[cnt][0], diff.Key)
-		assert.Equal(t, oldPairs[cnt][1], diff.From)
-		assert.Equal(t, newPairs[cnt][0], diff.Key)
-		assert.Equal(t, newPairs[cnt][1], diff.To)
+		assert.Equal(t, updates[cnt][0], diff.Key)
+		assert.Equal(t, updates[cnt][1], diff.From)
+		assert.Equal(t, updates[cnt][2], diff.To)
 		cnt++
 		return nil
 	})
@@ -247,6 +241,26 @@ func makeMapWithInserts(t *testing.T, m Map, inserts ...[2]val.Tuple) Map {
 	return mm
 }
 
-func makeMapWithUpdates(t *testing.T, m Map, updates ...[2]val.Tuple) Map {
-	return makeMapWithInserts(t, m, updates...)
+func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
+	ctx := context.Background()
+	mut := m.Mutate()
+	for _, pair := range updates {
+		err := mut.Put(ctx, pair[0], pair[2])
+		require.NoError(t, err)
+	}
+	mm, err := mut.Map(ctx)
+	require.NoError(t, err)
+	return mm
+}
+
+func makeUpdatesToTuples(vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
+	updates = make([][3]val.Tuple, len(tuples))
+
+	valBuilder := val.NewTupleBuilder(vd)
+	for i := range updates {
+		updates[i][0] = tuples[i][0]
+		updates[i][1] = tuples[i][1]
+		updates[i][2] = randomTuple(valBuilder)
+	}
+	return
 }

@@ -17,7 +17,6 @@ package prolly
 import (
 	"context"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,52 +33,169 @@ func Test3WayMapMerge(t *testing.T) {
 		10000,
 	}
 
+	kd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: false},
+	)
+	vd := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+		val.Type{Enc: val.Uint32Enc, Nullable: true},
+	)
+
 	for _, s := range scales {
 		name := fmt.Sprintf("test proCur map at scale %d", s)
 		t.Run(name, func(t *testing.T) {
-			prollyMap, tuples := makeProllyMap(t, s)
-
 			t.Run("merge identical maps", func(t *testing.T) {
-				testEqualMapMerge(t, prollyMap.(Map))
+				testEqualMapMerge(t, s)
 			})
 			t.Run("3way merge inserts", func(t *testing.T) {
 				for k := 0; k < 10; k++ {
-					testMapMergeInserts(t, prollyMap.(Map), tuples, s/10)
+					testThreeWayMapMerge(t, kd, vd, s)
 				}
 			})
+			// todo(andy): tests conflicts, cell-wise merge
 		})
 	}
 }
 
-func testEqualMapMerge(t *testing.T, m Map) {
+func testEqualMapMerge(t *testing.T, sz int) {
+	om, _ := makeProllyMap(t, sz)
+	m := om.(Map)
 	ctx := context.Background()
 	mm, err := ThreeWayMerge(ctx, m, m, m, panicOnConflict)
 	require.NoError(t, err)
 	assert.NotNil(t, mm)
-	//assert.Equal(t, m.Count(), mm.Count())
+	assert.Equal(t, m.HashOf(), mm.HashOf())
 }
 
-func testMapMergeInserts(t *testing.T, final Map, tups [][2]val.Tuple, sz int) {
-	testRand.Shuffle(len(tups), func(i, j int) {
-		tups[i], tups[j] = tups[j], tups[i]
-	})
+func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
+	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz)
+	om := prollyMapFromTuples(t, kd, vd, baseTuples)
 
-	left := makeMapWithDeletes(t, final, tups[:sz]...)
-	right := makeMapWithDeletes(t, final, tups[sz:sz*2]...)
-	base := makeMapWithDeletes(t, final, tups[:sz*2]...)
+	base := om.(Map)
+	left := applyMutationSet(t, base, leftEdits)
+	right := applyMutationSet(t, base, rightEdits)
 
 	ctx := context.Background()
-	final2, err := ThreeWayMerge(ctx, left, right, base, panicOnConflict)
-	require.NoError(t, err)
-	assert.Equal(t, final.HashOf(), final2.HashOf())
+	final, err := ThreeWayMerge(ctx, left, right, base, panicOnConflict)
+	assert.NoError(t, err)
 
-	cnt := 0
-	err = DiffMaps(ctx, final, final2, func(ctx context.Context, diff Diff) error {
-		cnt++
-		return nil
+	for _, add := range leftEdits.adds {
+		ok, err := final.Has(ctx, add[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		err = final.Get(ctx, add[0], func(key, value val.Tuple) error {
+			assert.Equal(t, value, add[1])
+			return nil
+		})
+		assert.NoError(t, err)
+	}
+	for _, add := range rightEdits.adds {
+		ok, err := final.Has(ctx, add[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		err = final.Get(ctx, add[0], func(key, value val.Tuple) error {
+			assert.Equal(t, value, add[1])
+			return nil
+		})
+		assert.NoError(t, err)
+	}
+
+	for _, del := range leftEdits.deletes {
+		ok, err := final.Has(ctx, del)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	}
+	for _, del := range rightEdits.deletes {
+		ok, err := final.Has(ctx, del)
+		assert.NoError(t, err)
+		assert.False(t, ok)
+	}
+
+	for _, up := range leftEdits.updates {
+		ok, err := final.Has(ctx, up[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
+			assert.Equal(t, value, up[1])
+			return nil
+		})
+		assert.NoError(t, err)
+	}
+	for _, up := range rightEdits.updates {
+		ok, err := final.Has(ctx, up[0])
+		assert.NoError(t, err)
+		assert.True(t, ok)
+		err = final.Get(ctx, up[0], func(key, value val.Tuple) error {
+			assert.Equal(t, value, up[1])
+			return nil
+		})
+		assert.NoError(t, err)
+	}
+}
+
+type mutationSet struct {
+	adds    [][2]val.Tuple
+	deletes []val.Tuple
+	updates [][3]val.Tuple
+}
+
+func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int) (base [][2]val.Tuple, left, right mutationSet) {
+	mutSz := sz / 10
+	totalSz := sz + (mutSz * 2)
+	tuples := randomTuplePairs(totalSz, kd, vd)
+
+	base = tuples[:sz]
+
+	left = mutationSet{
+		adds:    tuples[sz : sz+mutSz],
+		deletes: make([]val.Tuple, mutSz),
+	}
+	right = mutationSet{
+		adds:    tuples[sz+mutSz:],
+		deletes: make([]val.Tuple, mutSz),
+	}
+
+	edits := make([][2]val.Tuple, len(base))
+	copy(edits, base)
+	testRand.Shuffle(len(edits), func(i, j int) {
+		edits[i], edits[j] = edits[j], edits[i]
 	})
-	require.Error(t, io.EOF, err)
-	assert.Equal(t, 0, cnt)
+
+	for i, pair := range edits[:mutSz] {
+		left.deletes[i] = pair[0]
+	}
+	for i, pair := range edits[mutSz : mutSz*2] {
+		right.deletes[i] = pair[0]
+	}
+
+	left.updates = makeUpdatesToTuples(vd, edits[mutSz*2:mutSz*3]...)
+	right.updates = makeUpdatesToTuples(vd, edits[mutSz*3:mutSz*4]...)
+
+	return
+}
+
+func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
+	ctx := context.Background()
+	mut := base.Mutate()
+
+	var err error
+	for _, add := range edits.adds {
+		err = mut.Put(ctx, add[0], add[1])
+		require.NoError(t, err)
+	}
+	for _, del := range edits.deletes {
+		err = mut.Delete(ctx, del)
+		require.NoError(t, err)
+	}
+	for _, up := range edits.updates {
+		err = mut.Put(ctx, up[0], up[1])
+		require.NoError(t, err)
+	}
+
+	m, err = mut.Map(ctx)
+	require.NoError(t, err)
+	return
 }
 
 func panicOnConflict(left, right Diff) (Diff, bool) {
