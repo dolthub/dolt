@@ -71,6 +71,25 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	return m, nil
 }
 
+func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
+	differ, err := treeDifferFromMaps(ctx, from, to)
+	if err != nil {
+		return err
+	}
+
+	for {
+		var diff Diff
+		if diff, err = differ.Next(ctx); err != nil {
+			break
+		}
+
+		if err = cb(ctx, diff); err != nil {
+			break
+		}
+	}
+	return err
+}
+
 // Mutate makes a MutableMap from a Map.
 func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
