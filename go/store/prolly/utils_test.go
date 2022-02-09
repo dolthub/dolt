@@ -93,7 +93,7 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 func randomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
 	// preconditions
 	if count%5 != 0 {
-		panic("expected count divisible by 5")
+		panic("expected empty divisible by 5")
 	}
 	if len(keyDesc.Types) < 2 {
 		panic("expected composite key")

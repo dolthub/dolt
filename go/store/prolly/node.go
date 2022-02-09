@@ -79,7 +79,7 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
 	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
 	serial.TupleMapAddTreeLevel(b, byte(level))
-	// todo(andy): tree count
+	// todo(andy): tree empty
 	b.Finish(serial.TupleMapEnd(b))
 
 	return mapNodeFromBytes(b.FinishedBytes())
