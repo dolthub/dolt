@@ -110,11 +110,13 @@ func TestLengthsTransformer(t *testing.T) {
 	lengthBytes := get32Bytes(lengths)
 	offsetBytes := get64Bytes(offsets)
 
-	lengthsReader := bytes.NewReader(lengthBytes)
-	offsetReader := NewOffsetsReader(lengthsReader)
+	t.Run("converts lengths into offsets", func(t *testing.T) {
+		lengthsReader := bytes.NewReader(lengthBytes)
+		offsetReader := NewOffsetsReader(lengthsReader)
 
-	err := testReader(offsetReader, offsetBytes)
-	require.NoError(t, err)
+		err := testReader(offsetReader, offsetBytes)
+		require.NoError(t, err)
+	})
 }
 
 func TestIndexTransformer(t *testing.T) {
@@ -137,9 +139,12 @@ func TestIndexTransformer(t *testing.T) {
 	outBytes = append(outBytes, offsetBytes...)
 	outBytes = append(outBytes, suffixBytes...)
 
-	inReader := bytes.NewBuffer(inBytes)
-	outReader := NewIndexTransformer(inReader, chunkCount)
+	t.Run("only converts lengths into offsets", func(t *testing.T) {
+		inReader := bytes.NewBuffer(inBytes)
+		outReader := NewIndexTransformer(inReader, chunkCount)
 
-	err := testReader(outReader, outBytes)
-	require.NoError(t, err)
+		err := testReader(outReader, outBytes)
+		require.NoError(t, err)
+	})
+
 }
