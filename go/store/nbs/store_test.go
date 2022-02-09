@@ -529,7 +529,7 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 func TestGuessPrefixOrdinal(t *testing.T) {
 	prefixes := make([]uint64, 256)
 	for i := range prefixes {
-		prefixes[i] = uint64(i<<56)
+		prefixes[i] = uint64(i << 56)
 	}
 
 	for i, pre := range prefixes {

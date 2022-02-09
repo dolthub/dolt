@@ -106,7 +106,7 @@ func (cmd InspectCmd) measureChunkIndexDistribution(ctx context.Context, dEnv *e
 
 		cli.Println(summary.format())
 	}
-	cli.Printf("average guess error: %f", sumErr / float64(sumCnt))
+	cli.Printf("average guess error: %f", sumErr/float64(sumCnt))
 
 	return nil
 }
@@ -143,8 +143,8 @@ func (cmd InspectCmd) processTableFile(path string, fs filesys.Filesys) (sum *ch
 }
 
 type chunkIndexSummary struct {
-	file   string
-	count  uint32
+	file  string
+	count uint32
 	//errs   []float64
 	sumErr float64
 	maxErr float64
@@ -157,7 +157,7 @@ func (s *chunkIndexSummary) format() string {
 
 func (s *chunkIndexSummary) addPrefix(i int, prefix uint64) {
 	g := nbs.GuessPrefixOrdinal(prefix, s.count)
-	guessErr := math.Abs(float64(i-g))
+	guessErr := math.Abs(float64(i - g))
 
 	//s.errs = append(s.errs, guessErr)
 	s.sumErr += guessErr
