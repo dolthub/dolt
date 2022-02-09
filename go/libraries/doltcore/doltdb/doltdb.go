@@ -1197,6 +1197,10 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	return collector.GC(ctx, oldGen, newGen)
 }
 
+func (ddb *DoltDB) ShallowGC(ctx context.Context) error {
+	return datas.PruneTableFiles(ctx, ddb.db)
+}
+
 func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	dd, err := ddb.db.Datasets(ctx)
 	if err != nil {
