@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	goerrors "gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -29,6 +30,8 @@ import (
 )
 
 const MergeFuncName = "merge"
+
+var ErrUncommittedChanges = goerrors.NewKind("cannot merge with uncommitted changes")
 
 type MergeFunc struct {
 	children []sql.Expression
@@ -169,7 +172,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 	}
 
 	if rh != hrh {
-		return errors.New("cannot merge with uncommitted changes")
+		return ErrUncommittedChanges.New()
 	}
 	return nil
 }

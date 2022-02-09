@@ -5,6 +5,7 @@ REMOTE=http://localhost:50051/test-org/test-repo
 
 remotesrv_pid=
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
     mkdir remotes-$$
@@ -15,7 +16,6 @@ setup() {
     dolt remote add test-remote $REMOTE
     dolt push test-remote main
     export DOLT_HEAD_COMMIT=`get_head_commit`
-    skiponwindows "git-dolt tests are flaky on Windows"
 }
 
 teardown() {

@@ -302,9 +302,10 @@ SQL
     [[ ! "$output" =~ $working_hash ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE detects merge conflicts, fails to commit and leaves working set clean" {
+@test "sql-merge: DOLT_MERGE detects merge conflicts, fails to commit and leaves working set clean when dolt_allow_commit_conflicts = 0" {
     # The dolt_merge fails here, and leaves the working set clean, no conflicts, no merge in progress
     run dolt sql << SQL
+SET dolt_allow_commit_conflicts = 0;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -354,6 +355,7 @@ SQL
 
 @test "sql-merge: DOLT_MERGE detects conflicts, returns them in dolt_conflicts table" {
     run dolt sql  << SQL
+SET dolt_allow_commit_conflicts = 0;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -485,8 +487,8 @@ SQL
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE with unresolved conflicts throws an error" {
-      run dolt sql << SQL
+@test "sql-merge: DOLT_MERGE can correctly commit unresolved conflicts" {
+     dolt sql << SQL
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -504,8 +506,9 @@ SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');
 SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
-    [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) from dolt_conflicts"
+    [[ "$output" =~ "1" ]] || false
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
@@ -693,7 +696,7 @@ SQL
     [[ "$output" =~ "| 1        |" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE with conflicts is queryablw when autocommit is on" {
+@test "sql-merge: DOLT_MERGE with conflicts is queryable when autocommit is on" {
     skip "This needs to work"
     run dolt sql  --continue << SQL
 CREATE TABLE one_pk (

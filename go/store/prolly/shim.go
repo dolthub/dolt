@@ -37,24 +37,23 @@ func NewEmptyMap(sch schema.Schema) Map {
 
 // PartitionKeysFromMap naively divides the map by its top-level keys.
 func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
-	keys = make([]val.Tuple, m.root.nodeCount()/2)
+	keys = make([]val.Tuple, m.root.nodeCount())
 	for i := range keys {
-		pair := m.root.getPair(i * 2)
-		keys[i] = val.Tuple(pair.key())
+		keys[i] = val.Tuple(m.root.getKey(i))
 	}
 	return
 }
 
 func ValueFromNode(nd Node) types.Value {
-	return types.InlineBlob(nd)
+	return types.InlineBlob(nd.bytes())
 }
 
 func NodeFromValue(v types.Value) Node {
-	return Node(v.(types.InlineBlob))
+	return mapNodeFromBytes(v.(types.InlineBlob))
 }
 
 func ValueFromMap(m Map) types.Value {
-	return types.InlineBlob(m.root)
+	return types.InlineBlob(m.root.bytes())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
@@ -95,11 +94,20 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
 			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
-			Nullable: false,
+			Nullable: columnNullable(col),
 		})
 		return
 	})
 	return val.NewTupleDescriptor(tt...)
+}
+
+func columnNullable(col schema.Column) bool {
+	for _, cnst := range col.Constraints {
+		if cnst.GetConstraintType() == schema.NotNullConstraintType {
+			return false
+		}
+	}
+	return true
 }
 
 func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
@@ -129,6 +137,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.TimestampEnc
 	case query.Type_YEAR:
 		return val.YearEnc
+	case query.Type_GEOMETRY:
+		return val.BytesEnc
 	}
 
 	switch typ {

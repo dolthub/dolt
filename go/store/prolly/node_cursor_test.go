@@ -31,6 +31,7 @@ func TestNodeCursor(t *testing.T) {
 		testNewCursorAtItem(t, 10)
 		testNewCursorAtItem(t, 100)
 		testNewCursorAtItem(t, 1000)
+		testNewCursorAtItem(t, 10_000)
 	})
 }
 
@@ -43,10 +44,8 @@ func testNewCursorAtItem(t *testing.T, count int) {
 		key, value := items[i][0], items[i][1]
 		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
-
-		pair := cur.currentPair()
-		assert.Equal(t, key, pair.key())
-		assert.Equal(t, value, pair.value())
+		assert.Equal(t, key, cur.currentKey())
+		assert.Equal(t, value, cur.currentValue())
 	}
 
 	validateTreeItems(t, ns, root, items)
@@ -84,11 +83,10 @@ var valDesc = val.NewTupleDescriptor(
 )
 
 func searchTestTree(item nodeItem, nd Node) int {
-	idx := sort.Search(nd.nodeCount()/stride, func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getItem(i*stride))
+	return sort.Search(nd.nodeCount(), func(i int) bool {
+		l, r := val.Tuple(item), val.Tuple(nd.getKey(i))
 		return keyDesc.Compare(l, r) <= 0
 	})
-	return idx * stride
 }
 
 func randomTupleItemPairs(count int) (items [][2]nodeItem) {

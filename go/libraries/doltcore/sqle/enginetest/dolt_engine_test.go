@@ -60,6 +60,7 @@ func TestSingleQuery(t *testing.T) {
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
+	enginetest.CreateIndexes(t, harness, engine)
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
@@ -360,6 +361,10 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+
+	for _, script := range DoltSqlFuncTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 }
 
 func TestDoltScripts(t *testing.T) {
@@ -373,6 +378,17 @@ func TestDoltMerge(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltMerge {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestScopedDoltHistorySystemTables(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range ScopedDoltHistoryScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
 	}
 }
 
@@ -464,6 +480,19 @@ func TestSingleTransactionScript(t *testing.T) {
 
 func TestSystemTableQueries(t *testing.T) {
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
+}
+
+func TestUnscopedDoltDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range UnscopedDiffTableTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
 }
 
 func TestTestReadOnlyDatabases(t *testing.T) {

@@ -33,7 +33,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, uint64(1000), root.cumulativeCount())
+	//assert.Equal(t, uint64(1000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 1000)
 	validateTreeItems(t, ns, root, items)
 
@@ -41,7 +41,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, uint64(10_000), root.cumulativeCount())
+	//assert.Equal(t, uint64(10_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 10_000)
 	validateTreeItems(t, ns, root, items)
 
@@ -49,7 +49,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.NotNil(t, root)
 	assert.True(t, root.nodeCount() > 0)
 	assert.True(t, root.level() > 0)
-	assert.Equal(t, uint64(100_000), root.cumulativeCount())
+	//assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 100_000)
 	validateTreeItems(t, ns, root, items)
 }
@@ -90,14 +90,12 @@ func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item nodeItem)
 
 	ok := true
 	for ok {
-		curr := cur.currentPair()
-
-		err = cb(curr.key())
+		err = cb(cur.currentKey())
 		if err != nil {
 			return err
 		}
 
-		err = cb(curr.value())
+		err = cb(cur.currentValue())
 		if err != nil {
 			return err
 		}

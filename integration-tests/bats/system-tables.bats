@@ -2,6 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_common
 
     # Needed for dolt_branches test
@@ -16,6 +17,7 @@ setup() {
 }
 
 teardown() {
+    skiponwindows "tests are flaky on Windows"
     assert_feature_version
     teardown_common
     kill $remotesrv_pid
@@ -356,6 +358,19 @@ teardown() {
     echo ${#lines[@]}
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 6 ]
+
+    # Test DOLT_HISTORY_ table works for tables with no primary keys
+    dolt sql -q "create table nopks (a int, b text);"
+    dolt sql -q "insert into nopks values (123, 'onetwothree'), (234, 'twothreefour');"
+    dolt add nopks
+    dolt commit -m "Adding table nopks"
+    run dolt sql -q "select * from dolt_history_nopks;"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 6 ]
+    run dolt sql -q "select * from dolt_history_nopks where a=123;"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 5 ]
+    [[ "$output" =~ "onetwothree" ]] || false
 }
 
 @test "system-tables: query dolt_commits" {

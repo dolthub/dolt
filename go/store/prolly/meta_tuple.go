@@ -18,66 +18,47 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func fetchChild(ctx context.Context, ns NodeStore, mt metaValue) (Node, error) {
-	// todo(andy) handle nil Node, dangling ref
-	return ns.Read(ctx, mt.GetRef())
+type metaPair struct {
+	k, r      nodeItem
+	treeCount uint64
 }
 
-func writeNewChild(ctx context.Context, ns NodeStore, level uint64, items ...nodeItem) (Node, nodePair, error) {
-	child := makeProllyNode(ns.Pool(), level, items...)
+func (p metaPair) key() val.Tuple {
+	return val.Tuple(p.k)
+}
+
+func (p metaPair) ref() hash.Hash {
+	return hash.New(p.r)
+}
+
+func (p metaPair) subtreeCount() uint64 {
+	return p.treeCount
+}
+
+func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
+	// todo(andy) handle nil Node, dangling ref
+	return ns.Read(ctx, ref)
+}
+
+func writeNewChild(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (Node, metaPair, error) {
+	child := makeMapNode(ns.Pool(), level, keys, values)
 
 	ref, err := ns.Write(ctx, child)
 	if err != nil {
-		return nil, nodePair{}, err
+		return Node{}, metaPair{}, err
 	}
 
-	if len(items) == 0 {
+	if len(keys) == 0 {
 		// empty leaf node
-		return child, nodePair{}, nil
+		return child, metaPair{}, nil
 	}
 
-	lastKey := val.Tuple(items[len(items)-metaPairCount])
+	lastKey := val.Tuple(keys[len(keys)-1])
 	metaKey := val.CloneTuple(ns.Pool(), lastKey)
-	metaVal := newMetaValue(ns.Pool(), child.cumulativeCount(), ref)
-	meta := nodePair{nodeItem(metaKey), nodeItem(metaVal)}
+	meta := metaPair{k: nodeItem(metaKey), r: nodeItem(ref[:])}
 
 	return child, meta, nil
-}
-
-const (
-	metaPairCount  = 2
-	metaPairKeyIdx = 0
-	metaPairValIdx = 1
-
-	metaValueCountIdx = 0
-	metaValueRefIdx   = 1
-)
-
-// metaValue is a value Tuple in an internal Node of a prolly tree.
-// metaValues have two fields: cumulative count and ref.
-type metaValue val.Tuple
-
-func newMetaValue(pool pool.BuffPool, count uint64, ref hash.Hash) metaValue {
-	var cnt [6]byte
-	val.WriteUint48(cnt[:], count)
-	return metaValue(val.NewTuple(pool, cnt[:], ref[:]))
-}
-
-// GetCumulativeCount returns the cumulative number of nodeItems
-// within the subtree pointed to by a metaValue.
-func (mt metaValue) GetCumulativeCount() uint64 {
-	cnt := val.Tuple(mt).GetField(metaValueCountIdx)
-	return val.ReadUint48(cnt)
-}
-
-// GetRef returns the hash.Hash of the child Node pointed
-// to by this metaValue.
-func (mt metaValue) GetRef() hash.Hash {
-	tup := val.Tuple(mt)
-	ref := tup.GetField(metaValueRefIdx)
-	return hash.New(ref)
 }

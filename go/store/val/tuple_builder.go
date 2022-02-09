@@ -24,6 +24,15 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
+// OrdinalMapping is a mapping from one field ordering to another.
+// It's used to construct index tuples from another index's tuples.
+type OrdinalMapping []int
+
+func (om OrdinalMapping) MapOrdinal(to int) (from int) {
+	from = om[to]
+	return
+}
+
 type TupleBuilder struct {
 	Desc TupleDesc
 
@@ -153,11 +162,11 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
-func (tb *TupleBuilder) PutTime(i int, v time.Time) {
-	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc, YearEnc)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+func (tb *TupleBuilder) PutTimestamp(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+timestampSize]
 	WriteTime(tb.fields[i], v)
-	tb.pos += timeSize
+	tb.pos += timestampSize
 }
 
 // PutString writes a string to the ith field of the Tuple being built.
@@ -205,7 +214,7 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.pos += sz
 }
 
-// PutBytes writes a []byte to the ith field of the Tuple being built.
+// PutJSON writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
 	tb.Desc.expectEncoding(i, JSONEnc)
 	buf, err := json.Marshal(v)
@@ -266,7 +275,7 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 	case YearEnc:
 		tb.PutYear(i, v.(int16))
 	case DateEnc, DatetimeEnc, TimestampEnc:
-		tb.PutTime(i, v.(time.Time))
+		tb.PutTimestamp(i, v.(time.Time))
 	case StringEnc:
 		tb.PutString(i, v.(string))
 	case BytesEnc:
@@ -275,6 +284,7 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		}
 		tb.PutBytes(i, v.([]byte))
 	case JSONEnc:
+		// todo(andy): remove GMS dependency
 		tb.PutJSON(i, v.(sql.JSONDocument).Val)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))

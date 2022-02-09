@@ -57,6 +57,7 @@ func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, er
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	// todo(andy): only used by 'AS OF` queries
 	return index.RowIterForIndexLookup(ctx, idt.indexLookup, nil)
 }
 
@@ -80,7 +81,7 @@ func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIt
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), t.projectedCols, part)
+	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
 }
 
 func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
