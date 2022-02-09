@@ -348,6 +348,9 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
+	// TODO: ThreadSafeCRFuncCache is an older and suboptimal filtering approach that should be replaced
+	//       with the unified indexing path that all other tables use. This logic existed before there was a
+	//       reasonable way to apply multiple filter conditions to an indexed table scan.
 	createReaderFunc, err := readerCreateFuncCache.GetOrCreate(schHash, tbl.Format(), tblSch, filters)
 
 	if err != nil {
