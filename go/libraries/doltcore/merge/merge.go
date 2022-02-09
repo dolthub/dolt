@@ -172,7 +172,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		if err != nil {
 			return nil, nil, err
 		}
-		updatedTbl, err = updatedTbl.SetIndexRowData(ctx, addedIndex, newIndexData)
+		updatedTbl, err = updatedTbl.SetNomsIndexRows(ctx, addedIndex, newIndexData)
 		if err != nil {
 			return nil, nil, err
 		}

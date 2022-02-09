@@ -55,6 +55,9 @@ func ModifyColumn(
 	// Modify statements won't include key info, so fill it in from the old column
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
+		if schema.IsColSpatialType(newCol) {
+			return nil, fmt.Errorf("can't use Spatial Types as Primary Key for table")
+		}
 		foundNotNullConstraint := false
 		for _, constraint := range newCol.Constraints {
 			if _, ok := constraint.(schema.NotNullConstraint); ok {
@@ -141,7 +144,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 	}
 
-	indexData, err := tbl.GetIndexData(ctx)
+	indexData, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +171,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 				if err != nil {
 					return nil, err
 				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 				if err != nil {
 					return nil, err
 				}
@@ -179,7 +182,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 				if err != nil {
 					return nil, err
 				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 				if err != nil {
 					return nil, err
 				}

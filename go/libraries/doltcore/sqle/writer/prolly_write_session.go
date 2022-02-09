@@ -21,7 +21,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -32,7 +31,7 @@ import (
 type prollyWriteSession struct {
 	root *doltdb.RootValue
 
-	tables map[string]*prollyWriter
+	tables map[string]*prollyTableWriter
 	mut    *sync.RWMutex
 }
 
@@ -59,36 +58,39 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 	if err != nil {
 		return nil, err
 	}
+	autoCol := autoIncrementColFromSchema(sch)
 
 	pkSch, err := sqlutil.FromDoltSchema(table, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	idx, err := t.GetRowData(ctx)
+	pw, err := getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	m := durable.ProllyMapFromIndex(idx)
-	mut := newProllyIndexWriter(m, pkSch.Schema, sch)
-	autoCol := autoIncrementColFromSchema(sch)
+	sws, err := getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
+	if err != nil {
+		return nil, err
+	}
 
-	wr := &prollyWriter{
+	twr := &prollyTableWriter{
 		tableName: table,
 		dbName:    database,
-		sch:       sch,
-		mut:       mut,
+		primary:   pw,
+		secondary: sws,
 		tbl:       t,
+		sch:       sch,
 		aiCol:     autoCol,
 		aiTracker: ait,
 		sess:      s,
 		setter:    setter,
 		batched:   batched,
 	}
-	s.tables[table] = wr
+	s.tables[table] = twr
 
-	return wr, nil
+	return twr, nil
 }
 
 // Flush implemented WriteSession.

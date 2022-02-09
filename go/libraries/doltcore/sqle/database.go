@@ -343,6 +343,12 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 			return nil, false, err
 		}
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
+	case doltdb.DiffTableName:
+		head, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
 	case doltdb.TableOfTablesWithViolationsName:
@@ -722,6 +728,11 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		return err
 	}
 
+	// Prevent any tables that use Spatial Types as Primary Key from being created
+	if schema.IsUsingSpatialColAsKey(doltSch) {
+		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
 	return db.createDoltTable(ctx, tableName, root, doltSch)
 }
 
@@ -892,6 +903,18 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return "", false, err
+	}
+
+	lwrViewName := strings.ToLower(viewName)
+	switch {
+	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
+		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
+
+		view, err := dtables.NewBlameView(ctx, tableName, root)
+		if err != nil {
+			return "", false, err
+		}
+		return view, true, nil
 	}
 
 	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)

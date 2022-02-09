@@ -612,13 +612,19 @@ SQL
 }
 
 @test "primary-key-changes: dropping primary key retains not null constraint" {
-    dolt sql -q "create table t (pk int)"
-    dolt sql -q "alter table t add primary key (pk)"
+    dolt sql -q "create table t (pk1 int, pk2 int, c1 int)"
+    dolt sql -q "alter table t add primary key (pk1, pk2)"
     dolt sql -q "alter table t drop primary key"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "NOT NULL" ]] || false
+    [[ "$output" =~ "`pk1` int NOT NULL" ]] || false
+    [[ "$output" =~ "`pk2` int NOT NULL" ]] || false
     [[ ! "$output" =~ "PRIMARY KEY" ]] || false
+
+    dolt sql -q "show create table t" > res.txt
+    run grep 'NOT NULL' res.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
 }
 
 @test "primary-key-changes: creating table with null and primary key column throws error" {
@@ -641,4 +647,55 @@ SQL
     dolt sql -q "create table t (c0 int)"
     run dolt sql -q "alter table t add (pk int null primary key)"
     [ $status -eq 1 ]
+}
+
+@test "primary-key-changes: can add primary keys on db.table named tables" {
+    dolt sql <<SQL
+create database mydb;
+create table mydb.test(pk int, c1 int);
+alter table mydb.test add primary key(pk);
+SQL
+    run dolt sql -q "show create table mydb.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY" ]]
+}
+
+@test "primary-key-changes: can add and drop primary keys on keyless db.table named tables" {
+    dolt sql -q "CREATE DATABASE mydb"
+    dolt sql -q "CREATE TABLE mydb.test(pk INT, c1 LONGTEXT, c2 BIGINT, c3 INT)"
+    dolt sql -q "ALTER TABLE mydb.test ADD PRIMARY KEY(pk, c1)"
+    run dolt sql -q "SHOW CREATE TABLE mydb.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`,\`c1\`)" ]] || false
+
+    dolt sql -q "ALTER TABLE mydb.test DROP PRIMARY KEY"
+    run dolt sql -q "SHOW CREATE TABLE mydb.test"
+    [ $status -eq 0 ]
+    [[ ! "$output" =~ "PRIMARY KEY" ]]
+
+    dolt sql -q "SHOW CREATE TABLE mydb.test" > output.txt
+    run grep 'NOT NULL' output.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "primary-key-changes: can drop and add multiple primary keys on db.table named tables" {
+    dolt sql -q "CREATE DATABASE mydb"
+    dolt sql -q "CREATE TABLE mydb.test(pk INT PRIMARY KEY, c1 INT, c2 BIGINT, c3 INT)"
+    dolt sql -q "ALTER TABLE mydb.test DROP PRIMARY KEY"
+    dolt sql -q "SHOW CREATE TABLE mydb.test" > output.txt
+
+    run grep 'NOT NULL' output.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+    dolt sql -q "ALTER TABLE mydb.test ADD PRIMARY KEY(c1, c2)"
+    run dolt sql -q "SHOW CREATE TABLE mydb.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "PRIMARY KEY (\`c1\`,\`c2\`)" ]] || false
+
+    dolt sql -q "SHOW CREATE TABLE mydb.test" > output.txt
+    run grep 'NOT NULL' output.txt
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
 }

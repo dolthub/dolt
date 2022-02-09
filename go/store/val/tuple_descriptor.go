@@ -75,6 +75,10 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	return
 }
 
+func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
+	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
+}
+
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	// todo(andy): compare raw is broken
@@ -230,9 +234,9 @@ func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
 	return
 }
 
-// GetTime reads a time.Time from the ith field of the Tuple.
+// GetTimestamp reads a time.Time from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetTime(i int, tup Tuple) (v time.Time, ok bool) {
+func (td TupleDesc) GetTimestamp(i int, tup Tuple) (v time.Time, ok bool) {
 	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
 	b := tup.GetField(i)
 	if b != nil {
@@ -332,7 +336,7 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 	case YearEnc:
 		v, ok = td.GetYear(i, tup)
 	case TimestampEnc, DateEnc, DatetimeEnc:
-		v, ok = td.GetTime(i, tup)
+		v, ok = td.GetTimestamp(i, tup)
 	case StringEnc:
 		v, ok = td.GetString(i, tup)
 	case BytesEnc:
