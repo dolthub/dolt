@@ -27,9 +27,9 @@ import (
 
 func Test3WayMapMerge(t *testing.T) {
 	scales := []int{
-		//10,
-		//100,
-		//1000,
+		10,
+		100,
+		1000,
 		10000,
 	}
 

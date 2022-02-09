@@ -20,6 +20,7 @@ import (
 	"io"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var testRand = rand.New(rand.NewSource(1))
+var testRand = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 func TestMap(t *testing.T) {
 	scales := []int{
