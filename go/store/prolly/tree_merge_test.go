@@ -27,9 +27,9 @@ import (
 
 func Test3WayMapMerge(t *testing.T) {
 	scales := []int{
-		10,
-		100,
-		1000,
+		//10,
+		//100,
+		//1000,
 		10000,
 	}
 
@@ -53,7 +53,11 @@ func Test3WayMapMerge(t *testing.T) {
 					testThreeWayMapMerge(t, kd, vd, s)
 				}
 			})
-			// todo(andy): tests conflicts, cell-wise merge
+			t.Run("tuple merge fn", func(t *testing.T) {
+				for k := 0; k < 10; k++ {
+					testTupleMergeFn(t, kd, vd, s)
+				}
+			})
 		})
 	}
 }
@@ -134,6 +138,71 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
 	}
 }
 
+func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int) {
+	ctx := context.Background()
+	tuples := randomTuplePairs(sz, kd, vd)
+	om := prollyMapFromTuples(t, kd, vd, tuples)
+	base := om.(Map)
+
+	mutSz := sz / 10
+	testRand.Shuffle(len(tuples), func(i, j int) {
+		tuples[i], tuples[j] = tuples[j], tuples[i]
+	})
+
+	// make overlapping edits
+	left := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
+	right := makeUpdatesToTuples(kd, vd, tuples[:mutSz]...)
+
+	l := base.Mutate()
+	for _, update := range left {
+		err := l.Put(ctx, update[0], update[2])
+		require.NoError(t, err)
+	}
+	leftMap, err := l.Map(ctx)
+	require.NoError(t, err)
+
+	r := base.Mutate()
+	for _, update := range right {
+		err := r.Put(ctx, update[0], update[2])
+		require.NoError(t, err)
+	}
+	rightMap, err := r.Map(ctx)
+	require.NoError(t, err)
+
+	idx := 0
+	final, err := ThreeWayMerge(ctx, leftMap, rightMap, base, func(l, r Diff) (merged Diff, ok bool) {
+		assert.Equal(t, l.Key, r.Key)
+		assert.Equal(t, l.From, r.From)
+
+		assert.Equal(t, l.To, left[idx][2])
+		assert.Equal(t, r.To, right[idx][2])
+
+		// right diff wins
+		merged, ok = r, true
+		idx++
+		return
+	})
+	require.NoError(t, err)
+
+	for _, update := range left {
+		err = final.Get(ctx, update[0], func(key, value val.Tuple) error {
+			assert.Equal(t, key, update[0])
+			assert.NotEqual(t, value, update[2])
+			return nil
+		})
+		require.NoError(t, err)
+	}
+
+	for _, update := range right {
+		err = final.Get(ctx, update[0], func(key, value val.Tuple) error {
+			assert.Equal(t, key, update[0])
+			assert.Equal(t, value, update[2])
+			return nil
+		})
+		require.NoError(t, err)
+	}
+}
+
 type mutationSet struct {
 	adds    [][2]val.Tuple
 	deletes []val.Tuple
@@ -169,8 +238,8 @@ func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int) (base [][2]val.Tuple, 
 		right.deletes[i] = pair[0]
 	}
 
-	left.updates = makeUpdatesToTuples(vd, edits[mutSz*2:mutSz*3]...)
-	right.updates = makeUpdatesToTuples(vd, edits[mutSz*3:mutSz*4]...)
+	left.updates = makeUpdatesToTuples(kd, vd, edits[mutSz*2:mutSz*3]...)
+	right.updates = makeUpdatesToTuples(kd, vd, edits[mutSz*3:mutSz*4]...)
 
 	return
 }

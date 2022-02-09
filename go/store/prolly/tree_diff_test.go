@@ -200,8 +200,8 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 		return from.keyDesc.Compare(sub[i][0], sub[j][0]) < 0
 	})
 
-	_, vd := from.Descriptors()
-	updates := makeUpdatesToTuples(vd, sub...)
+	kd, vd := from.Descriptors()
+	updates := makeUpdatesToTuples(kd, vd, sub...)
 	to := makeMapWithUpdates(t, from, updates...)
 
 	var cnt int
@@ -253,7 +253,7 @@ func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {
 	return mm
 }
 
-func makeUpdatesToTuples(vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
+func makeUpdatesToTuples(kd, vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3]val.Tuple) {
 	updates = make([][3]val.Tuple, len(tuples))
 
 	valBuilder := val.NewTupleBuilder(vd)
@@ -262,5 +262,10 @@ func makeUpdatesToTuples(vd val.TupleDesc, tuples ...[2]val.Tuple) (updates [][3
 		updates[i][1] = tuples[i][1]
 		updates[i][2] = randomTuple(valBuilder)
 	}
+
+	sort.Slice(updates, func(i, j int) bool {
+		return kd.Compare(updates[i][0], updates[j][0]) < 0
+	})
+
 	return
 }

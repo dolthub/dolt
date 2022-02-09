@@ -77,15 +77,26 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 		items[i][1] = randomTuple(valBuilder)
 	}
 
-	sortTuplePairs(items, keyDesc)
+	dupes := make([]int, 0, count)
+	for {
+		sortTuplePairs(items, keyDesc)
+		for i := range items {
+			if i == 0 {
+				continue
+			}
+			if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
+				dupes = append(dupes, i)
+			}
+		}
+		if len(dupes) == 0 {
+			break
+		}
 
-	for i := range items {
-		if i == 0 {
-			continue
+		// replace duplicates and validate again
+		for _, d := range dupes {
+			items[d][0] = randomTuple(keyBuilder)
 		}
-		if keyDesc.Compare(items[i][0], items[i-1][0]) == 0 {
-			panic("duplicate key, unlucky!")
-		}
+		dupes = dupes[:0]
 	}
 	return
 }
