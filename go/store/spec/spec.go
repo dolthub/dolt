@@ -457,20 +457,27 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	case "gs":
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
-		os.Mkdir(sp.DatabaseName, 0777)
+		getStandardLocalStore := func(dbName string) datas.Database {
+			os.Mkdir(dbName, 0777)
 
-		// If the database is already indexed on oldgen return a standard NBS store.
-		if strings.Contains(sp.DatabaseName, "oldgen") {
 			cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
 			d.PanicIfError(err)
 
 			return datas.NewDatabase(cs)
 		}
 
+		// If the database is already indexed on oldgen return a standard NBS store.
+		if strings.Contains(sp.DatabaseName, "oldgen") {
+			return getStandardLocalStore(sp.DatabaseName)
+		}
+
 		oldgenDb := filepath.Join(sp.DatabaseName, "oldgen")
 
 		err := validateDir(oldgenDb)
-		d.PanicIfError(err)
+		// If we can't validate that an oldgen db exists just use a standard local store.
+		if err != nil {
+			return getStandardLocalStore(sp.DatabaseName)
+		}
 
 		os.Mkdir(oldgenDb, 0777)
 
