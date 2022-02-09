@@ -426,7 +426,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 	// variable. These UnscopedDiffTableTests use "commit_hash in (@Commit1)" to work around that bug.
 	// https://github.com/dolthub/go-mysql-server/issues/790
 	{
-		Name: "unscoped-diff-system-table: basic case",
+		Name: "basic case with three tables",
 		SetUpScript: []string{
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
@@ -461,7 +461,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "unscoped-diff-system-table: rename table",
+		Name: "renamed table",
 		SetUpScript: []string{
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
@@ -495,7 +495,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "unscoped-diff-system-table: drop table",
+		Name: "dropped table",
 		SetUpScript: []string{
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
@@ -521,7 +521,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "unscoped-diff-system-table: empty commit",
+		Name: "empty commit handling",
 		SetUpScript: []string{
 			"create table x (a int primary key, b int, c int)",
 			"create table y (a int primary key, b int, c int)",
@@ -553,7 +553,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "unscoped-diff-system-table: commits from all branches",
+		Name: "includes commits from all branches",
 		SetUpScript: []string{
 			"select dolt_checkout('-b', 'branch1')",
 			"create table x (a int primary key, b int, c int)",
@@ -593,7 +593,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 	// When processing a merge commit, diff.GetTableDeltas isn't aware of branch context, so it
 	// doesn't detect that any tables have changed.
 	{
-		Name: "unscoped-diff-system-table: history with merge",
+		Name: "merge history handling",
 		SetUpScript: []string{
 			"select dolt_checkout('-b', 'branch1')",
 			"create table x (a int primary key, b int, c int)",
