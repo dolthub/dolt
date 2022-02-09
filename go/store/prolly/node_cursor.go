@@ -23,6 +23,7 @@ package prolly
 
 import (
 	"context"
+	"math"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -144,6 +145,10 @@ func (cur *nodeCursor) valid() bool {
 	return cur.idx >= 0 && cur.idx < cnt
 }
 
+func (cur *nodeCursor) invalidate() {
+	cur.idx = math.MinInt32
+}
+
 func (cur *nodeCursor) currentKey() nodeItem {
 	return cur.nd.getKey(cur.idx)
 }
@@ -262,7 +267,7 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == cur.lastKeyIdx())
+	assertTrue(cur.atNodeEnd())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.advanceInBounds(ctx)
@@ -312,7 +317,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	assertTrue(cur.idx == 0)
+	assertTrue(cur.atNodeStart())
 
 	if cur.parent != nil {
 		ok, err := cur.parent.retreatInBounds(ctx)
