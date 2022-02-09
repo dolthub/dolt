@@ -117,8 +117,8 @@ func calcOffsets(arr []uint32) []uint64 {
 	return out
 }
 
-func TestLengthsTransformer(t *testing.T) {
-	testSize := rand.Intn(100) + 1
+func TestOffsetReader(t *testing.T) {
+	testSize := rand.Intn(10) + 1
 	lengths := randomUInt32s(testSize)
 	offsets := calcOffsets(lengths)
 
@@ -132,10 +132,34 @@ func TestLengthsTransformer(t *testing.T) {
 		err := testReader(offsetReader, offsetBytes)
 		require.NoError(t, err)
 	})
+
+	t.Run("err not enough bytes when expected", func(t *testing.T) {
+		lengthsReader := bytes.NewReader(lengthBytes[:len(lengthBytes)-1])
+		offsetReader := NewOffsetsReader(lengthsReader)
+		_, err := io.ReadAll(offsetReader)
+		require.ErrorAsf(t, err, &ErrNotEnoughBytes, "should return ErrNotEnoughBytes")
+	})
+
+	t.Run("fills provided buffer correctly", func(t *testing.T) {
+		lengthsReader := bytes.NewReader(lengthBytes)
+		offsetReader := NewOffsetsReader(lengthsReader)
+		p := make([]byte, offsetSize)
+		n, err := offsetReader.Read(p)
+		require.NoError(t, err)
+		require.Equal(t, offsetSize, n)
+	})
+
+	t.Run("works with io.ReadAll", func(t *testing.T) {
+		lengthsReader := bytes.NewReader(lengthBytes[:lengthSize])
+		offsetReader := NewOffsetsReader(lengthsReader)
+		data, err := io.ReadAll(offsetReader)
+		require.NoError(t, err)
+		require.True(t, bytes.Equal(data, offsetBytes[:offsetSize]))
+	})
 }
 
 func TestIndexTransformer(t *testing.T) {
-	chunkCount := rand.Intn(1000) + 1
+	chunkCount := rand.Intn(10) + 1
 	lengths := randomUInt32s(chunkCount)
 	offsets := calcOffsets(lengths)
 	lengthBytes := get32Bytes(lengths)
