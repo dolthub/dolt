@@ -38,15 +38,15 @@ const (
 	mergesParam     = "merges"
 	minParentsParam = "min-parents"
 	parentsParam    = "parents"
-	decorateParam	= "decorate"
-	oneLineParam	= "oneline"
+	decorateParam   = "decorate"
+	oneLineParam    = "oneline"
 )
 
 type logOpts struct {
 	numLines    int
 	showParents bool
 	minParents  int
-	oneLine		bool
+	oneLine     bool
 }
 
 type logNode struct {
@@ -123,7 +123,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
 		showParents: apr.Contains(parentsParam),
 		minParents:  minParents,
-		oneLine: apr.Contains(oneLineParam),
+		oneLine:     apr.Contains(oneLineParam),
 	}
 
 	// Just dolt log
