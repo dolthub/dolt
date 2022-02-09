@@ -40,6 +40,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -457,8 +458,30 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
 		os.Mkdir(sp.DatabaseName, 0777)
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+
+		// If the database is already indexed on oldgen return a standard NBS store.
+		if strings.Contains(sp.DatabaseName, "oldgen") {
+			cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+			d.PanicIfError(err)
+
+			return datas.NewDatabase(cs)
+		}
+
+		oldgenDb := filepath.Join(sp.DatabaseName, "oldgen")
+
+		err := validateDir(oldgenDb)
 		d.PanicIfError(err)
+
+		os.Mkdir(oldgenDb, 0777)
+
+		newGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+		d.PanicIfError(err)
+
+		oldGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), oldgenDb, 1<<28)
+		d.PanicIfError(err)
+
+		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+
 		return datas.NewDatabase(cs)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
@@ -472,6 +495,18 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		d.PanicIfError(err)
 		return r
 	}
+}
+
+func validateDir(path string) error {
+	info, err := os.Stat(path)
+
+	if err != nil {
+		return err
+	} else if !info.IsDir() {
+		return filesys.ErrIsFile
+	}
+
+	return nil
 }
 
 func parseDatabaseSpec(spec string) (protocol, name string, err error) {
