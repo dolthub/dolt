@@ -899,6 +899,18 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return "", false, err
 	}
 
+	lwrViewName := strings.ToLower(viewName)
+	switch {
+	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
+		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
+
+		view, err := dtables.NewBlameView(ctx, tableName, root)
+		if err != nil {
+			return "", false, err
+		}
+		return view, true, nil
+	}
+
 	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return "", false, err

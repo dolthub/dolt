@@ -141,6 +141,10 @@ var generatedSystemTables = []string{
 	RemotesTableName,
 }
 
+var generatedSystemViewPrefixes = []string{
+	DoltBlameViewPrefix,
+}
+
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
@@ -195,6 +199,8 @@ const (
 )
 
 const (
+	// DoltBlameViewPrefix is the prefix assigned to all the generated blame tables
+	DoltBlameViewPrefix = "dolt_blame_"
 	// DoltHistoryTablePrefix is the prefix assigned to all the generated history tables
 	DoltHistoryTablePrefix = "dolt_history_"
 	// DoltDiffTablePrefix is the prefix assigned to all the generated diff tables
