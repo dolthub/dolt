@@ -344,3 +344,27 @@ SQL
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
 
+@test "drop-create: drop table from different database" {
+    dolt sql  <<SQL
+create table test (currentId int primary key, currentText text);
+insert into test values (1, 'text1'), (2, 'text2');
+create schema common;
+create table common.test (commonId integer, commonText text);
+insert into test values (999, 'common database text1');
+SQL
+
+    run dolt sql -q "select * from test"
+    currenttest=$output
+
+    run dolt sql -q "select * from common.test"
+    commontest=$output
+
+    dolt sql -q "drop table common.test"
+
+    run dolt sql -q "select * from test"
+    [ "$output" = "$currenttest" ]
+
+    run dolt sql -q "select * from common.test"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: test" ]] || false
+}
