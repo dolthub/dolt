@@ -94,6 +94,23 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 }
 
+var ScopedDoltHistoryScriptTests = []enginetest.ScriptTest{
+	{
+		Name: "scoped-dolt-history-system-table: filtering results on non-pk tables",
+		SetUpScript: []string{
+			"create table foo1 (n int, abcd text);",
+			"insert into foo1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
+			"select dolt_commit('-am', 'inserting into foo1');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "select n, abcd FROM DOLT_HISTORY_foo1 where n=1;",
+				Expected: []sql.Row{{1, "Eins"}},
+			},
+		},
+	},
+}
+
 var DoltMerge = []enginetest.ScriptTest{
 	{
 		Name: "DOLT_MERGE ff correctly works with autocommit off",
@@ -543,6 +560,215 @@ var DoltMerge = []enginetest.ScriptTest{
 			{
 				Query:       "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErr: dfunctions.ErrUncommittedChanges,
+			},
+		},
+	},
+}
+
+var UnscopedDiffTableTests = []enginetest.ScriptTest{
+	// There's a bug in queries with where clauses that compare column equality with a
+	// variable. These UnscopedDiffTableTests use "commit_hash in (@Commit1)" to work around that bug.
+	// https://github.com/dolthub/go-mysql-server/issues/790
+	{
+		Name: "basic case with three tables",
+		SetUpScript: []string{
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"create table z (a int primary key, b int, c int)",
+			"insert into z values (100, 101, 102)",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+
+			"insert into y values (-1, -2, -3), (-2, -3, -4)",
+			"insert into z values (101, 102, 103)",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y"}, {"z"}},
+			},
+		},
+	},
+	{
+		Name: "renamed table",
+		SetUpScript: []string{
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"create table z (a int primary key, b int, c int)",
+			"insert into z values (100, 101, 102)",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+
+			"rename table x to x1",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"x1"}},
+			},
+		},
+	},
+	{
+		Name: "dropped table",
+		SetUpScript: []string{
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"drop table x",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping table x'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"x"}},
+			},
+		},
+	},
+	{
+		Name: "empty commit handling",
+		SetUpScript: []string{
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"set @Commit2 = (select DOLT_COMMIT('--allow-empty', '-m', 'Empty!'))",
+
+			"insert into y values (-1, -2, -3), (-2, -3, -4)",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y"}},
+			},
+		},
+	},
+	{
+		Name: "includes commits from all branches",
+		SetUpScript: []string{
+			"select dolt_checkout('-b', 'branch1')",
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"select dolt_checkout('-b', 'branch2')",
+			"create table z (a int primary key, b int, c int)",
+			"insert into z values (100, 101, 102)",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+
+			"insert into y values (-1, -2, -3), (-2, -3, -4)",
+			"insert into z values (101, 102, 103)",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{5}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y"}, {"z"}},
+			},
+		},
+	},
+	// The DOLT_DIFF system table doesn't currently show any diff data for a merge commit.
+	// When processing a merge commit, diff.GetTableDeltas isn't aware of branch context, so it
+	// doesn't detect that any tables have changed.
+	{
+		Name: "merge history handling",
+		SetUpScript: []string{
+			"select dolt_checkout('-b', 'branch1')",
+			"create table x (a int primary key, b int, c int)",
+			"create table y (a int primary key, b int, c int)",
+			"insert into x values (1, 2, 3), (2, 3, 4)",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+
+			"select dolt_checkout('-b', 'branch2')",
+			"create table z (a int primary key, b int, c int)",
+			"insert into z values (100, 101, 102)",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+
+			"select DOLT_MERGE('branch1')",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Merging branch1 into branch2'))",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x"}, {"y"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z"}},
+			},
+			{
+				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{},
 			},
 		},
 	},
