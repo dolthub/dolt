@@ -471,6 +471,19 @@ func TestSystemTableQueries(t *testing.T) {
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }
 
+func TestUnscopedDoltDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range UnscopedDiffTableTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
 func TestTestReadOnlyDatabases(t *testing.T) {
 	enginetest.TestReadOnlyDatabases(t, newDoltHarness(t))
 }
