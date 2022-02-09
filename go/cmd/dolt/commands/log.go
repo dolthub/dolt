@@ -38,12 +38,15 @@ const (
 	mergesParam     = "merges"
 	minParentsParam = "min-parents"
 	parentsParam    = "parents"
+	decorateParam	= "decorate"
+	oneLineParam	= "oneline"
 )
 
 type logOpts struct {
 	numLines    int
 	showParents bool
 	minParents  int
+	oneLine		bool
 }
 
 type logNode struct {
@@ -91,6 +94,8 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
 	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
 	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
+	ap.SupportsFlag(decorateParam, "", "Shows refs next to commits.")
+	ap.SupportsFlag(oneLineParam, "", "Shows logs in a compact format.")
 	return ap
 }
 
@@ -118,6 +123,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
 		showParents: apr.Contains(parentsParam),
 		minParents:  minParents,
+		oneLine: apr.Contains(oneLineParam),
 	}
 
 	// Just dolt log
@@ -307,43 +313,77 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 	return nil
 }
 
+func logCompact(opts logOpts, commits []logNode) {
+	pager := outputpager.Start()
+	defer pager.Stop()
+
+	for _, comm := range commits {
+		if len(comm.parentHashes) < opts.minParents {
+			return
+		}
+
+		chStr := comm.commitHash.String()
+		if opts.showParents {
+			for _, h := range comm.parentHashes {
+				chStr += " " + h.String()
+			}
+		}
+
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s \033[0m", chStr[:8])))
+
+		// TODO: write refs here
+
+		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
+		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+	}
+}
+
+func logDefault(opts logOpts, commits []logNode) {
+	pager := outputpager.Start()
+	defer pager.Stop()
+
+	for _, comm := range commits {
+		if len(comm.parentHashes) < opts.minParents {
+			return
+		}
+
+		chStr := comm.commitHash.String()
+		if opts.showParents {
+			for _, h := range comm.parentHashes {
+				chStr += " " + h.String()
+			}
+		}
+
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
+
+		if len(comm.parentHashes) > 1 {
+			pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
+			for _, h := range comm.parentHashes {
+				pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
+			}
+		}
+
+		pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
+
+		timeStr := comm.commitMeta.FormatTS()
+		pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
+
+		formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
+		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+	}
+}
+
 func logToStdOut(opts logOpts, commits []logNode) {
 	if cli.ExecuteWithStdioRestored == nil {
 		return
 	}
 	cli.ExecuteWithStdioRestored(func() {
-		pager := outputpager.Start()
-		defer pager.Stop()
-
-		for _, comm := range commits {
-			if len(comm.parentHashes) < opts.minParents {
-				return
-			}
-
-			chStr := comm.commitHash.String()
-			if opts.showParents {
-				for _, h := range comm.parentHashes {
-					chStr += " " + h.String()
-				}
-			}
-
-			pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
-
-			if len(comm.parentHashes) > 1 {
-				pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
-				for _, h := range comm.parentHashes {
-					pager.Writer.Write([]byte(fmt.Sprintf(" " + h.String())))
-				}
-			}
-
-			pager.Writer.Write([]byte(fmt.Sprintf("\nAuthor: %s <%s>", comm.commitMeta.Name, comm.commitMeta.Email)))
-
-			timeStr := comm.commitMeta.FormatTS()
-			pager.Writer.Write([]byte(fmt.Sprintf("\nDate:  %s", timeStr)))
-
-			formattedDesc := "\n\n\t" + strings.Replace(comm.commitMeta.Description, "\n", "\n\t", -1) + "\n\n"
-			pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
+		if opts.oneLine {
+			logCompact(opts, commits)
+		} else {
+			logDefault(opts, commits)
 		}
+
 	})
 }
 
