@@ -10,92 +10,76 @@ var (
 	ErrNotEnoughBytes = errors.New("reader did not return enough bytes")
 )
 
-// IndexTransformer transforms a table file index byte stream with lengths
-// to a table file index byte stream with offsets
-type IndexTransformer struct {
-	src io.Reader
+func NewIndexTransformer(src io.Reader, chunkCount int) io.Reader {
+	tuplesSize := chunkCount * prefixTupleSize
+	lengthsSize := chunkCount * lengthSize
+	suffixesSize := chunkCount * addrSuffixSize
 
-	lengthsIdx  int64 // Start index of lengths in table file byte stream
-	suffixesIdx int64 // Start index of suffixes in table file byte stream
-	buff        []byte
-	idx         int64
-	offset      uint64
+	tupleReader := io.LimitReader(src, int64(tuplesSize))
+	lengthsReader := io.LimitReader(src, int64(lengthsSize))
+	suffixesReader := io.LimitReader(src, int64(suffixesSize))
+
+	return io.MultiReader(
+		tupleReader,
+		NewOffsetsReader(lengthsReader),
+		suffixesReader,
+	)
 }
 
-// Create an IndexTransform given a src reader, chunkCount, and maximum size of read
-func NewIndexTransformer(src io.Reader, chunkCount int, maxReadSize int) *IndexTransformer {
-	tuplesSize := int64(chunkCount) * prefixTupleSize
-	lengthsSize := int64(chunkCount) * lengthSize
+// OffsetsReader transforms a byte stream of table file lengths
+// into a byte stream of table file offsets
+type OffsetsReader struct {
+	lengthsReader io.Reader
+	offset        uint64
+}
 
-	maxNumOffsetsToRead := maxReadSize / offsetSize
-	buffSize := maxNumOffsetsToRead * lengthSize
-
-	return &IndexTransformer{
-		src:         src,
-		buff:        make([]byte, buffSize),
-		lengthsIdx:  tuplesSize,
-		suffixesIdx: tuplesSize + lengthsSize,
+func NewOffsetsReader(lengthsReader io.Reader) *OffsetsReader {
+	return &OffsetsReader{
+		lengthsReader: lengthsReader,
 	}
 }
 
-func (tra *IndexTransformer) Read(p []byte) (n int, err error) {
-	// If we will read outside of lengths, just read.
-	if tra.idx+int64(len(p)) < tra.lengthsIdx || tra.idx >= tra.suffixesIdx {
-		n, err = tra.src.Read(p)
-		tra.idx += int64(n)
-		return n, err
-	}
+func (tra *OffsetsReader) Read(p []byte) (n int, err error) {
+	// if len(p) < offsetSize {
+	// 	// ASK: Should this be a panic?
+	// 	// If this case is true, 0 bytes will be read and no error will be
+	// 	// returned which is undesirable behavior for io.Reader
 
-	// If we will read on the boundary between tuples and lengths,
-	// read up to the start of the lengths.
-	if tra.idx < tra.lengthsIdx {
-		b := p[:tra.lengthsIdx-tra.idx]
-		n, err := tra.src.Read(b)
-		tra.idx += int64(n)
-		return n, err
-	}
+	// 	// We could return an error instead, but this feels like developer error
+	// 	panic("len(p) must be at-least offsetSize")
+	// }
 
-	if len(p) < offsetSize {
-		// ASK: Should this be a panic?
-		// If this case is true, 0 bytes will be read and no error will be
-		// returned which is undesirable behavior for io.Reader
+	// Read as many lengths, as offsets we can fit into p. Which is half.
+	// Below assumes that lengthSize * 2 = offsetSize
 
-		// We could return an error instead, but this feels like developer error
-		panic("len(p) must be at-least offsetSize")
-	}
+	// Strategy is to first read lengths into the second half of p
+	// Then, while iterating the lengths, compute the current offset,
+	// and write it to the beginning of p.
 
-	// Now we can assume we are on a length boundary.
+	// Align p
+	rem := len(p) % offsetSize
+	p = p[:len(p)-rem]
 
-	// Alter size of p so we don't read any suffix bytes
-	if int64(len(p)) > tra.idx-tra.suffixesIdx {
-		p = p[tra.idx-tra.suffixesIdx:]
-	}
-
-	// Read as many lengths, as offsets we can fit into p. (Assuming lengthsSize < offsetSize)
-
-	num := n / offsetSize
-	readSize := num * lengthSize
-
-	b := p[readSize:]
-	n, err = tra.src.Read(b)
+	// Read lengths into second half of p
+	secondHalf := p[len(p)/2:]
+	n, err = tra.lengthsReader.Read(secondHalf)
 	if err != nil {
-		return n, err
+		return 0, err
 	}
-	if n != readSize {
-		return n, ErrNotEnoughBytes
+	if n%lengthSize != 0 {
+		return 0, ErrNotEnoughBytes
 	}
-	tra.idx += int64(n)
 
-	// Copy lengths
-	copy(tra.buff, b)
-
-	// Calculate offsets
-	for lStart, oStart := 0, 0; lStart < readSize; lStart, oStart = lStart+lengthSize, oStart+offsetSize {
-		lengthBytes := tra.buff[lStart : lStart+lengthSize]
+	// Iterate lengths in second half of p while writing offsets starting from the beginning.
+	// On the last iteration, we overwrite the last length with the final offset.
+	for l, r := 0, 0; r < n; l, r = l+offsetSize, r+lengthSize {
+		lengthBytes := secondHalf[r : r+lengthSize]
 		length := binary.BigEndian.Uint32(lengthBytes)
 		tra.offset += uint64(length)
-		binary.BigEndian.PutUint64(p[oStart:oStart+offsetSize], tra.offset)
+
+		offsetBytes := p[l : l+offsetSize]
+		binary.BigEndian.PutUint64(offsetBytes, tra.offset)
 	}
 
-	return n, nil
+	return n * 2, nil
 }
