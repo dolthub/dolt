@@ -56,7 +56,7 @@ func (r *minByteReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
-// Altered from testing/iotest.TestReader to use alignedByteReader
+// Altered from testing/iotest.TestReader to use minByteReader
 func testReader(r io.Reader, content []byte) error {
 	if len(content) > 0 {
 		n, err := r.Read(nil)
