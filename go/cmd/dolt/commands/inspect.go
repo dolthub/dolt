@@ -83,7 +83,7 @@ func (cmd InspectCmd) Exec(ctx context.Context, commandStr string, args []string
 
 func (cmd InspectCmd) measureChunkIndexDistribution(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
 	newGen := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)
-	oldGen := filepath.Join(newGen, "oldGen")
+	oldGen := filepath.Join(newGen, "oldgen")
 
 	itr, err := NewTableFileIter([]string{newGen, oldGen}, dEnv.FS)
 	if err != nil {
