@@ -10,12 +10,6 @@ teardown() {
     teardown_common
 }
 
-@test "sql-spatial-types: can't make spatial types without enabling feature flag" {
-    run dolt sql -q "create table point_tbl (p point)"
-    [ "$status" -eq 1 ]
-    [[ "$output" =~ "cannot be made" ]] || false
-}
-
 @test "sql-spatial-types: can make spatial types" {
     run dolt sql -q "create table point_tbl (p point)"
     [ "$status" -eq 0 ]
