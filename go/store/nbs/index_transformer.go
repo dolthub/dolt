@@ -54,14 +54,6 @@ func NewOffsetsReader(lengthsReader io.Reader) *OffsetsReader {
 }
 
 func (tra *OffsetsReader) Read(p []byte) (n int, err error) {
-	// if len(p) < offsetSize {
-	// 	// ASK: Should this be a panic?
-	// 	// If this case is true, 0 bytes will be read and no error will be
-	// 	// returned which is undesirable behavior for io.Reader
-
-	// 	// We could return an error instead, but this feels like developer error
-	// 	panic("len(p) must be at-least offsetSize")
-	// }
 
 	// Read as many lengths, as offsets we can fit into p. Which is half.
 	// Below assumes that lengthSize * 2 = offsetSize
