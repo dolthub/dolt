@@ -54,11 +54,11 @@ func (dt *UnscopedDiffTable) String() string {
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
-		{Name: "table_name", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
 		{Name: "committer", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 		{Name: "email", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 		{Name: "date", Type: sql.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
 		{Name: "message", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
+		{Name: "table_name", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
 	}
 }
 
