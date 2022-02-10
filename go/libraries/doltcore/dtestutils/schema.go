@@ -123,7 +123,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 	require.NoError(t, err)
 	rows, err := tbl.GetNomsRowData(ctx)
 	require.NoError(t, err)
-	indexes, err := tbl.GetIndexData(ctx)
+	indexes, err := tbl.GetIndexSet(ctx)
 	require.NoError(t, err)
 	err = putTableToWorking(ctx, dEnv, sch, rows, indexes, tableName, nil)
 	require.NoError(t, err)

@@ -23,20 +23,22 @@ package prolly
 
 import (
 	"context"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const (
-	nodeItemAccumulatorSz = 512
+	nodeItemAccumulatorSz = 256
 )
 
 //  newSplitterFn makes a nodeSplitter.
 type newSplitterFn func(salt byte) nodeSplitter
 
 type treeChunker struct {
-	cur     *nodeCursor
-	current []nodeItem
-	currSz  uint64
-	done    bool
+	cur        *nodeCursor
+	keys, vals []nodeItem
+	currSz     uint64
+	done       bool
 
 	level  uint64
 	parent *treeChunker
@@ -58,7 +60,8 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level uint64, ns NodeS
 
 	sc := &treeChunker{
 		cur:      cur,
-		current:  make([]nodeItem, 0, nodeItemAccumulatorSz),
+		keys:     make([]nodeItem, 0, nodeItemAccumulatorSz),
+		vals:     make([]nodeItem, 0, nodeItemAccumulatorSz),
 		level:    level,
 		parent:   nil,
 		newSplit: newSplit,
@@ -88,9 +91,7 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	tc.cur.skipToNodeStart()
 
 	for tc.cur.idx < idx {
-		pair := tc.cur.currentPair()
-
-		_, err = tc.Append(ctx, pair.key(), pair.value())
+		_, err = tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -142,8 +143,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 
 		// append items until we catchup with |nextMutation|, or until
 		// we resynchronize with the previous tree.
-		pair := tc.cur.currentPair()
-		ok, err := tc.Append(ctx, pair.key(), pair.value())
+		ok, err := tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -169,7 +169,7 @@ func (tc *treeChunker) advanceTo(ctx context.Context, next *nodeCursor) error {
 				}
 
 				// |tc.cur| is now inconsistent with its parent, invalidate it.
-				tc.cur.nd = nil
+				tc.cur.nd = Node{}
 			}
 
 			break
@@ -216,7 +216,7 @@ func (tc *treeChunker) Skip(ctx context.Context) error {
 func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
-	// (2) The total size of a Node's data cannot exceed |maxNodeDataSize|.
+	// (2) The total size of a Node's data cannot exceed |maxVectorOffset|.
 	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
@@ -225,12 +225,12 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 	//     but we enforce this constraint for all internal nodes of the tree.
 
 	// constraint (3)
-	degenerate := !tc.isLeaf() && len(tc.current) < metaPairCount*2
+	degenerate := !tc.isLeaf() && len(tc.keys) == 1
 
 	// constraint (2)
 	overflow := false
 	sum := tc.currSz + uint64(len(key)+len(value))
-	if sum >= maxNodeDataSize {
+	if sum >= maxVectorOffset {
 		overflow = true
 	}
 
@@ -249,15 +249,16 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 		}
 	}
 
-	tc.current = append(tc.current, key, value)
+	tc.keys = append(tc.keys, key)
+	tc.vals = append(tc.vals, value)
 	tc.currSz += uint64(len(key) + len(value))
 	err := tc.splitter.Append(key, value)
 	if err != nil {
 		return false, err
 	}
 
-	// recompute with updated |tc.current|
-	degenerate = !tc.isLeaf() && len(tc.current) < metaPairCount*2
+	// recompute with updated |tc.keys|
+	degenerate = !tc.isLeaf() && len(tc.keys) == 1
 
 	if tc.splitter.CrossedBoundary() && !degenerate {
 		err := tc.handleChunkBoundary(ctx)
@@ -271,7 +272,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 }
 
 func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
-	assertTrue(len(tc.current) > 0)
+	assertTrue(len(tc.keys) > 0)
 	tc.splitter.Reset()
 
 	if tc.parent == nil {
@@ -286,7 +287,8 @@ func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
 		return err
 	}
 
-	_, err = tc.parent.Append(ctx, meta.key(), meta.value())
+	k, r := meta.key(), meta.ref()
+	_, err = tc.parent.Append(ctx, nodeItem(k), nodeItem(r[:]))
 	if err != nil {
 		return err
 	}
@@ -313,20 +315,21 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 	return nil
 }
 
-// createNode creates a Node from the current items in |sc.currentPair|,
-// clears the current items, then returns the new Node and a metaValue that
+// createNode creates a Node from the keys items in |sc.currentPair|,
+// clears the keys items, then returns the new Node and a metaValue that
 // points to it. The Node is always eagerly written.
-func (tc *treeChunker) createNode(ctx context.Context) (Node, nodePair, error) {
-	nd, metaPair, err := writeNewChild(ctx, tc.ns, tc.level, tc.current...)
+func (tc *treeChunker) createNode(ctx context.Context) (Node, metaPair, error) {
+	nd, mp, err := writeNewChild(ctx, tc.ns, tc.level, tc.keys, tc.vals)
 	if err != nil {
-		return nil, nodePair{}, err
+		return Node{}, metaPair{}, err
 	}
 
-	// |tc.currentPair| is copied so it's safe to re-use the memory.
-	tc.current = tc.current[:0]
+	// buffers are copied, it's safe to re-use the memory.
+	tc.keys = tc.keys[:0]
+	tc.vals = tc.vals[:0]
 	tc.currSz = 0
 
-	return nd, metaPair, nil
+	return nd, mp, nil
 }
 
 // Done returns the root Node of the resulting tree.
@@ -337,33 +340,33 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	if tc.cur != nil {
 		if err := tc.finalizeCursor(ctx); err != nil {
-			return nil, err
+			return Node{}, err
 		}
 	}
 
 	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
 	// to find the root of the resulting tree.
 	if tc.parent != nil && tc.parent.anyPending() {
-		if len(tc.current) > 0 {
-			// |tc.current| are the last items at this level of the tree,
+		if len(tc.keys) > 0 {
+			// |tc.keys| are the last items at this level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
-				return nil, err
+				return Node{}, err
 			}
 		}
 
 		return tc.parent.Done(ctx)
 	}
 
-	// At this point, we know |tc.current| contains every item at this level of the tree.
-	// To see this, consider that there are two ways items can enter |tc.current|.
+	// At this point, we know |tc.keys| contains every item at this level of the tree.
+	// To see this, consider that there are two ways items can enter |tc.keys|.
 	//  (1) as the result of resume() with the cursor on anything other than the first item in the Node
 	//  (2) as a result of a child treeChunker hitting an explicit chunk boundary during either Append() or finalize().
 	//
-	// The only way there can be no items in some parent treeChunker's |tc.current| is if this treeChunker began with
+	// The only way there can be no items in some parent treeChunker's |tc.keys| is if this treeChunker began with
 	// a cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
 	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
-	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.current| must contain all items
+	// items up to a parent as a result of chunking). Therefore, this treeChunker's |tc.keys| must contain all items
 	// within the current Node.
 
 	// This level must represent *a* root of the tree, but it is possibly non-canonical. There are three possible cases:
@@ -371,10 +374,10 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	//     (never hit a boundary), or
 	// (2) This in an internal Node of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
-	if tc.isLeaf() || len(tc.current) > metaPairCount {
+	if tc.isLeaf() || len(tc.keys) > 1 {
 		nd, _, err := tc.createNode(ctx)
 		if err != nil {
-			return nil, err
+			return Node{}, err
 		}
 		return nd, nil
 	}
@@ -382,20 +385,20 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	// (3) This is an internal Node of the tree with a single metaPair. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
 	assertTrue(!tc.isLeaf())
-	assertTrue(len(tc.current) == metaPairCount)
+	assertTrue(len(tc.keys) == 1)
 
-	mt := metaValue(tc.current[metaPairValIdx])
+	mt := hash.New(tc.vals[0])
 	for {
 		child, err := fetchChild(ctx, tc.ns, mt)
 		if err != nil {
-			return nil, err
+			return Node{}, err
 		}
 
 		if child.leafNode() || child.nodeCount() > 1 {
 			return child, nil
 		}
 
-		mt = metaValue(child.getItem(metaPairValIdx))
+		mt = child.getRef(0)
 	}
 }
 
@@ -403,10 +406,8 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 // boundary or the end of the Node.
 func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.valid() {
-		pair := tc.cur.currentPair()
-
 		var ok bool
-		ok, err = tc.Append(ctx, pair.key(), pair.value())
+		ok, err = tc.Append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -428,7 +429,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 		}
 
 		// invalidate this cursor to mark it finalized.
-		tc.cur.nd = nil
+		tc.cur.nd = Node{}
 	}
 
 	return nil
@@ -436,7 +437,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
 func (tc *treeChunker) anyPending() bool {
-	if len(tc.current) > 0 {
+	if len(tc.keys) > 0 {
 		return true
 	}
 

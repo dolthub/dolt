@@ -254,7 +254,7 @@ func (t *Table) GetNomsRowData(ctx context.Context) (types.Map, error) {
 		return types.Map{}, err
 	}
 
-	return durable.NomsMapFromIndex(idx)
+	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetRowData retrieves the underlying map which is a map from a primary key to a list of field values.
@@ -307,13 +307,13 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 	return invalid, notFound, &Table{table: table}, nil
 }
 
-// GetIndexData returns the internal index map which goes from index name to a ref of the row data map.
-func (t *Table) GetIndexData(ctx context.Context) (durable.IndexSet, error) {
+// GetIndexSet returns the internal index map which goes from index name to a ref of the row data map.
+func (t *Table) GetIndexSet(ctx context.Context) (durable.IndexSet, error) {
 	return t.table.GetIndexes(ctx)
 }
 
-// SetIndexData replaces the current internal index map, and returns an updated Table.
-func (t *Table) SetIndexData(ctx context.Context, indexes durable.IndexSet) (*Table, error) {
+// SetIndexSet replaces the current internal index map, and returns an updated Table.
+func (t *Table) SetIndexSet(ctx context.Context, indexes durable.IndexSet) (*Table, error) {
 	table, err := t.table.SetIndexes(ctx, indexes)
 	if err != nil {
 		return nil, err
@@ -323,32 +323,57 @@ func (t *Table) SetIndexData(ctx context.Context, indexes durable.IndexSet) (*Ta
 
 // GetNomsIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
 func (t *Table) GetNomsIndexRowData(ctx context.Context, indexName string) (types.Map, error) {
-	indexes, err := t.GetIndexData(ctx)
+	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	idx, err := indexes.GetIndex(ctx, indexName)
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
-	return durable.NomsMapFromIndex(idx)
+	idx, err := indexes.GetIndex(ctx, sch, indexName)
+	if err != nil {
+		return types.EmptyMap, err
+	}
+
+	return durable.NomsMapFromIndex(idx), nil
 }
 
 // GetIndexRowData retrieves the underlying map of an index, in which the primary key consists of all indexed columns.
 func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.Index, error) {
-	indexes, err := t.GetIndexData(ctx)
+	sch, err := t.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return indexes.GetIndex(ctx, indexName)
+	indexes, err := t.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return indexes.GetIndex(ctx, sch, indexName)
 }
 
-// SetIndexRowData replaces the current row data for the given index and returns an updated Table.
-func (t *Table) SetIndexRowData(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
-	indexes, err := t.GetIndexData(ctx)
+// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+func (t *Table) SetIndexRows(ctx context.Context, indexName string, idx durable.Index) (*Table, error) {
+	indexes, err := t.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes, err = indexes.PutIndex(ctx, indexName, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.SetIndexSet(ctx, indexes)
+}
+
+// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+func (t *Table) SetNomsIndexRows(ctx context.Context, indexName string, idx types.Map) (*Table, error) {
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -358,14 +383,14 @@ func (t *Table) SetIndexRowData(ctx context.Context, indexName string, idx types
 		return nil, err
 	}
 
-	return t.SetIndexData(ctx, indexes)
+	return t.SetIndexSet(ctx, indexes)
 }
 
 // DeleteIndexRowData removes the underlying map of an index, along with its key entry. This should only be used
-// when removing an index altogether. If the intent is to clear an index's data, then use SetIndexRowData with
+// when removing an index altogether. If the intent is to clear an index's data, then use SetNomsIndexRows with
 // an empty map.
 func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Table, error) {
-	indexes, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -375,33 +400,23 @@ func (t *Table) DeleteIndexRowData(ctx context.Context, indexName string) (*Tabl
 		return nil, err
 	}
 
-	return t.SetIndexData(ctx, indexes)
+	return t.SetIndexSet(ctx, indexes)
 }
 
 // RenameIndexRowData changes the name for the index data. Does not verify that the new name is unoccupied. If the old
 // name does not exist, then this returns the called table without error.
 func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexName string) (*Table, error) {
-	indexes, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	im, err := indexes.GetIndex(ctx, oldIndexName)
+	indexes, err = indexes.RenameIndex(ctx, oldIndexName, newIndexName)
 	if err != nil {
 		return nil, err
 	}
 
-	indexes, err = indexes.DropIndex(ctx, oldIndexName)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes, err = indexes.PutIndex(ctx, newIndexName, im)
-	if err != nil {
-		return nil, err
-	}
-
-	return t.SetIndexData(ctx, indexes)
+	return t.SetIndexSet(ctx, indexes)
 }
 
 // VerifyIndexRowData verifies that the index with the given name's data matches what the index expects.
@@ -416,21 +431,17 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 		return fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	indexes, err := t.GetIndexData(ctx)
+	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return err
 	}
 
-	idx, err := indexes.GetIndex(ctx, indexName)
+	idx, err := indexes.GetIndex(ctx, sch, indexName)
 	if err != nil {
 		return err
 	}
 
-	im, err := durable.NomsMapFromIndex(idx)
-	if err != nil {
-		return err
-	}
-
+	im := durable.NomsMapFromIndex(idx)
 	iter, err := im.Iterator(ctx)
 	if err != nil {
 		return err

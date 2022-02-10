@@ -94,6 +94,11 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return noConflicts, err
 		}
 
+		err = sess.CommitWorkingSet(ctx, dbName, sess.GetTransaction())
+		if err != nil {
+			return noConflicts, err
+		}
+
 		return noConflicts, nil
 	}
 

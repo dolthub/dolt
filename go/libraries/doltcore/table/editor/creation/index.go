@@ -17,11 +17,16 @@ package creation
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type CreateIndexReturn struct {
@@ -113,11 +118,12 @@ func CreateIndex(
 			return nil, err
 		}
 	} else { // set the index row data and get a new root with the updated table
-		indexRowData, err := editor.RebuildIndex(ctx, newTable, index.Name(), opts)
+		indexRows, err := BuildSecondaryIndex(ctx, newTable, index, opts)
 		if err != nil {
 			return nil, err
 		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+
+		newTable, err = newTable.SetIndexRows(ctx, index.Name(), indexRows)
 		if err != nil {
 			return nil, err
 		}
@@ -129,3 +135,104 @@ func CreateIndex(
 		NewIndex: index,
 	}, nil
 }
+
+func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, opts editor.Options) (durable.Index, error) {
+	switch tbl.Format() {
+	case types.Format_LD_1:
+		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
+		if err != nil {
+			return nil, err
+		}
+		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
+
+	case types.Format_DOLT_1:
+		return BuildSecondaryProllyIndex(ctx, tbl, idx)
+
+	default:
+		return nil, fmt.Errorf("unknown NomsBinFormat")
+	}
+}
+
+func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index) (durable.Index, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	empty, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), idx.Schema())
+	if err != nil {
+		return nil, err
+	}
+	secondary := durable.ProllyMapFromIndex(empty)
+
+	m, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	primary := durable.ProllyMapFromIndex(m)
+
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	pkLen := sch.GetPKCols().Size()
+
+	// create a key builder for index key tuples
+	kd, _ := secondary.Descriptors()
+	keyBld := val.NewTupleBuilder(kd)
+	keyMap := getIndexKeyMapping(sch, idx)
+
+	mut := secondary.Mutate()
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for to := range keyMap {
+			from := keyMap.MapOrdinal(to)
+			if from < pkLen {
+				keyBld.PutRaw(to, k.GetField(from))
+			} else {
+				from -= pkLen
+				keyBld.PutRaw(to, v.GetField(from))
+			}
+		}
+
+		// todo(andy): build permissive?
+		idxKey := keyBld.Build(sharePool)
+		idxVal := val.EmptyTuple
+
+		// todo(andy): periodic flushing
+		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
+			return nil, err
+		}
+	}
+
+	secondary, err = mut.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return durable.IndexFromProllyMap(secondary), nil
+}
+
+func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
+	m = make(val.OrdinalMapping, len(idx.AllTags()))
+
+	for i, tag := range idx.AllTags() {
+		j, ok := sch.GetPKCols().TagToIdx[tag]
+		if !ok {
+			j = sch.GetNonPKCols().TagToIdx[tag]
+			j += sch.GetPKCols().Size()
+		}
+		m[i] = j
+	}
+
+	return
+}
+
+var sharePool = pool.NewBuffPool()

@@ -692,8 +692,7 @@ type doltTablePartition struct {
 }
 
 func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
-	if numElements == 0 {
+	if rows.Empty() {
 		return []doltTablePartition{
 			{start: 0, end: 0, rowData: rows},
 		}
@@ -702,7 +701,8 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 	nbf := rows.Format()
 	switch nbf {
 	case types.Format_LD_1, types.Format_7_18:
-		return partitionsFromNomsRows(rows)
+		nm := durable.NomsMapFromIndex(rows)
+		return partitionsFromNomsRows(nm, durable.VrwFromNomsIndex(rows))
 
 	case types.Format_DOLT_1:
 		return partitionsFromProllyRows(rows)
@@ -711,8 +711,8 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 	return nil
 }
 
-func partitionsFromNomsRows(rows durable.Index) []doltTablePartition {
-	numElements := rows.Count()
+func partitionsFromNomsRows(rows types.Map, vrw types.ValueReadWriter) []doltTablePartition {
+	numElements := rows.Len()
 	itemsPerPartition := MaxRowsPerPartition
 	numPartitions := (numElements / itemsPerPartition) + 1
 
@@ -731,14 +731,14 @@ func partitionsFromNomsRows(rows durable.Index) []doltTablePartition {
 		partitions[i] = doltTablePartition{
 			start:   i * itemsPerPartition,
 			end:     (i + 1) * itemsPerPartition,
-			rowData: rows,
+			rowData: durable.IndexFromNomsMap(rows, vrw),
 		}
 	}
 
 	partitions[numPartitions-1] = doltTablePartition{
 		start:   (numPartitions - 1) * itemsPerPartition,
 		end:     numElements,
-		rowData: rows,
+		rowData: durable.IndexFromNomsMap(rows, vrw),
 	}
 
 	return partitions
@@ -783,10 +783,7 @@ func (p doltTablePartition) Key() []byte {
 // for index = start; index < end.  This iterator is not thread safe and should only be used from a single go routine
 // unless paired with a mutex
 func (p doltTablePartition) IteratorForPartition(ctx context.Context, idx durable.Index) (types.MapTupleIterator, error) {
-	m, err := durable.NomsMapFromIndex(idx)
-	if err != nil {
-		return nil, err
-	}
+	m := durable.NomsMapFromIndex(idx)
 	return m.RangeIterator(ctx, p.start, p.end)
 }
 
@@ -1043,10 +1040,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		initialValue := column.Type.Zero()
 
-		colIdx, err := updatedSch.GetAllCols().IndexOf(columnName)
-		if err != nil {
-			return err
-		}
+		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
 
 		rowData, err := updatedTable.GetRowData(ctx)
 		if err != nil {
@@ -1130,10 +1124,6 @@ func (t *AlterableDoltTable) CreateIndex(
 	indexColumns []sql.IndexColumn,
 	comment string,
 ) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
 		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
@@ -1296,7 +1286,8 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	onUpdate, onDelete sql.ForeignKeyReferenceOption,
 ) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		return types.ErrUnsupportedFormat
+		// todo(andy)
+		return nil
 	}
 
 	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
@@ -1377,7 +1368,8 @@ func (t *AlterableDoltTable) CreateForeignKey(
 // DropForeignKey implements sql.ForeignKeyAlterableTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
-		return types.ErrUnsupportedFormat
+		// todo(andy)
+		return nil
 	}
 
 	root, err := t.getRoot(ctx)
@@ -1570,7 +1562,7 @@ func createIndexForTable(
 		if err != nil {
 			return nil, err
 		}
-		newTable, err = newTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+		newTable, err = newTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 		if err != nil {
 			return nil, err
 		}
@@ -1838,7 +1830,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	// Update the root with then new table
+	// Update the root with the new table
 	newRoot, err = newRoot.PutTable(ctx, t.tableName, table)
 	if err != nil {
 		return err

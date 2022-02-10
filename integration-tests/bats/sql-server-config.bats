@@ -10,6 +10,7 @@ make_repo() {
 }
 
 setup() {
+    skiponwindows "tests are flaky on Windows"
     setup_no_dolt_init
     make_repo repo1
     make_repo repo2

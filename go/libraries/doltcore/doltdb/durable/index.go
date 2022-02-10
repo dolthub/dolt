@@ -17,6 +17,7 @@ package durable
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,6 +33,9 @@ type Index interface {
 	// Count returns the cardinality of the index.
 	Count() uint64
 
+	// Empty returns true if the index is empty.
+	Empty() bool
+
 	// Format returns the types.NomsBinFormat for this index.
 	Format() *types.NomsBinFormat
 }
@@ -42,7 +46,7 @@ type IndexSet interface {
 	HashOf() (hash.Hash, error)
 
 	// GetIndex gets an index from the set.
-	GetIndex(ctx context.Context, name string) (Index, error)
+	GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error)
 
 	// PutIndex puts an index into the set.
 	PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error)
@@ -53,6 +57,9 @@ type IndexSet interface {
 
 	// DropIndex removes an index from the set.
 	DropIndex(ctx context.Context, name string) (IndexSet, error)
+
+	// RenameIndex renames index |oldName| to |newName|.
+	RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error)
 }
 
 // RefFromIndex persists the Index and returns a types.Ref to it.
@@ -120,12 +127,12 @@ type nomsIndex struct {
 }
 
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
-func NomsMapFromIndex(i Index) (types.Map, error) {
-	n, ok := i.(nomsIndex)
-	if !ok {
-		return types.Map{}, fmt.Errorf("unable to unwrap types.Map from Index")
-	}
-	return n.index, nil
+func NomsMapFromIndex(i Index) types.Map {
+	return i.(nomsIndex).index
+}
+
+func VrwFromNomsIndex(i Index) types.ValueReadWriter {
+	return i.(nomsIndex).vrw
 }
 
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.
@@ -146,6 +153,11 @@ func (i nomsIndex) HashOf() (hash.Hash, error) {
 // Count implements Index.
 func (i nomsIndex) Count() uint64 {
 	return i.index.Len()
+}
+
+// Empty implements Index.
+func (i nomsIndex) Empty() bool {
+	return i.index.Len() == 0
 }
 
 // Format implements Index.
@@ -176,7 +188,12 @@ func (i prollyIndex) HashOf() (hash.Hash, error) {
 
 // Count implements Index.
 func (i prollyIndex) Count() uint64 {
-	return i.index.Count()
+	return math.MaxUint64 // 🙃
+}
+
+// Empty implements Index.
+func (i prollyIndex) Empty() bool {
+	return i.index.Empty()
 }
 
 // Format implements Index.
@@ -206,7 +223,7 @@ func (s nomsIndexSet) HashOf() (hash.Hash, error) {
 }
 
 // GetIndex implements IndexSet.
-func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) {
+func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
 	v, ok, err := s.indexes.MaybeGet(ctx, types.String(name))
 	if !ok {
 		err = fmt.Errorf("index %s not found in IndexSet", name)
@@ -215,15 +232,12 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, name string) (Index, error) 
 		return nil, err
 	}
 
-	v, err = v.(types.Ref).TargetValue(ctx, s.vrw)
-	if err != nil {
-		return nil, err
+	idx := sch.Indexes().GetByName(name)
+	if idx == nil {
+		return nil, fmt.Errorf("index not found: %s", name)
 	}
 
-	return nomsIndex{
-		index: v.(types.Map),
-		vrw:   s.vrw,
-	}, nil
+	return IndexFromRef(ctx, s.vrw, idx.Schema(), v.(types.Ref))
 }
 
 // PutIndex implements IndexSet.
@@ -249,6 +263,24 @@ func (s nomsIndexSet) PutIndex(ctx context.Context, name string, idx Index) (Ind
 // DropIndex implements IndexSet.
 func (s nomsIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	im, err := s.indexes.Edit().Remove(types.String(name)).Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsIndexSet{indexes: im, vrw: s.vrw}, nil
+}
+
+func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
+	v, ok, err := s.indexes.MaybeGet(ctx, types.String(oldName))
+	if !ok {
+		err = fmt.Errorf("index %s not found in IndexSet", oldName)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	edit := s.indexes.Edit()
+	im, err := edit.Set(types.String(newName), v).Remove(types.String(oldName)).Map(ctx)
 	if err != nil {
 		return nil, err
 	}
