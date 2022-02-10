@@ -46,7 +46,7 @@ type logOpts struct {
 	numLines    int
 	showParents bool
 	minParents  int
-	decoration	string
+	decoration  string
 	oneLine     bool
 }
 
@@ -97,7 +97,7 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
 	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
 	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
-	ap.SupportsString(decorateParam, "", "decorate_fmt","Shows refs next to commits.")
+	ap.SupportsString(decorateParam, "", "decorate_fmt", "Shows refs next to commits.")
 	ap.SupportsFlag(oneLineParam, "", "Shows logs in a compact format.")
 	return ap
 }
@@ -329,7 +329,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 	return nil
 }
 
-func logRefs (pager *outputpager.Pager, comm logNode) {
+func logRefs(pager *outputpager.Pager, comm logNode) {
 	// TODO: this doesn't handle remote branches
 	pager.Writer.Write([]byte("\033[33m(\033[0m"))
 	if comm.isHead {
