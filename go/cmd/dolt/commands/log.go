@@ -53,6 +53,8 @@ type logNode struct {
 	commitMeta   *doltdb.CommitMeta
 	commitHash   hash.Hash
 	parentHashes []hash.Hash
+	branchNames	 []string
+	isHead		 bool
 }
 
 var logDocs = cli.CommandDocumentationContent{
@@ -158,6 +160,13 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 
+	// TODO: are branches associate to commits somewhere already?
+	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	branchHashToName := map[hash.Hash][]string{}
+	for _, b := range branches {
+		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], b.Ref.String())
+	}
+
 	h, err := commit.HashOf()
 
 	if err != nil {
@@ -201,7 +210,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 			return 1
 		}
 
-		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes})
+		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes, branchHashToName[cmHash], cmHash == h})
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -299,7 +308,8 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 				return err
 			}
 
-			commitsInfo = append(commitsInfo, logNode{meta, prevHash, ph})
+			// TODO: fill this with correct info
+			commitsInfo = append(commitsInfo, logNode{meta, prevHash, ph, []string{}, false})
 
 			numLines--
 		}
@@ -329,9 +339,16 @@ func logCompact(opts logOpts, commits []logNode) {
 			}
 		}
 
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s \033[0m", chStr[:8])))
+		// TODO: use short hash instead
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s\033[0m", chStr)))
 
-		// TODO: write refs here
+		// TODO: write refs and tags here
+		pager.Writer.Write([]byte("\033[33m (\033[0m"))
+		if comm.isHead {
+			pager.Writer.Write([]byte("\033[94mHEAD -> \033[0m"))
+		}
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[92m%s\033[0m", strings.Join(comm.branchNames, ", "))))
+		pager.Writer.Write([]byte("\033[33m) \033[0m"))
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
 		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
