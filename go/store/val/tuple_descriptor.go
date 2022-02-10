@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql/expression/function"
+
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -278,7 +280,7 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-// GetBytes reads a []byte from the ith field of the Tuple.
+// GetJSON reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
 	td.expectEncoding(i, JSONEnc)
@@ -287,6 +289,18 @@ func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
 		if err := json.Unmarshal(b, &v); err != nil {
 			panic(err)
 		}
+		ok = true
+	}
+	return
+}
+
+// GetBytes reads a []byte from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, GeometryEnc)
+	b := tup.GetField(i)
+	if b != nil {
+		v = readBytes(b)
 		ok = true
 	}
 	return
@@ -333,6 +347,12 @@ func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
 		js, ok = td.GetJSON(i, tup)
 		if ok {
 			v = sql.JSONDocument{Val: js}
+		}
+	case GeometryEnc:
+		var geo []byte
+		geo, ok = td.GetGeometry(i, tup)
+		if ok {
+			v = deserializeGeometry(geo)
 		}
 	default:
 		panic("unknown encoding")
@@ -417,4 +437,26 @@ func (td TupleDesc) Format(tup Tuple) string {
 	}
 	sb.WriteString(" )")
 	return sb.String()
+}
+
+func deserializeGeometry(buf []byte) (v interface{}) {
+	var bigEndian, reverse = false, false
+
+	h := readHeaderFrom(buf[:ewkbHeaderSize])
+
+	var err error
+	switch h.typ {
+	case pointType:
+		v, err = function.WKBToPoint(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
+	case linestringType:
+		v, err = function.WKBToLine(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
+	case polygonType:
+		v, err = function.WKBToPoly(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
+	default:
+		panic(fmt.Sprintf("unknown geometry tryp %d", h.typ))
+	}
+	if err != nil {
+		panic(err)
+	}
+	return
 }

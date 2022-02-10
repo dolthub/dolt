@@ -295,7 +295,7 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 		tb.PutBytes(i, v.([]byte))
 	case GeometryEnc:
 		// todo(andy): remove GMS dependency
-		tb.PutGeometry(i, convGeometry(v))
+		tb.PutGeometry(i, serializeGeometry(v))
 	case JSONEnc:
 		// todo(andy): remove GMS dependency
 		tb.PutJSON(i, v.(sql.JSONDocument).Val)
@@ -356,15 +356,96 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func convGeometry(v interface{}) []byte {
+// todo(andy): remove GMS dependency
+//  have the engine pass serialized bytes
+
+const (
+	sridSize       = uint32Size
+	endianSize     = uint8Size
+	typeSize       = uint32Size
+	ewkbHeaderSize = sridSize + endianSize + typeSize
+)
+
+const (
+	pointType      = uint32(1)
+	linestringType = uint32(2)
+	polygonType    = uint32(3)
+
+	littleEndian = uint8(1)
+)
+
+type ewkbHeader struct {
+	srid   uint32
+	endian uint8
+	typ    uint32
+}
+
+func (h ewkbHeader) writeTo(buf []byte) {
+	expectSize(buf, ewkbHeaderSize)
+	writeUint32(buf[:sridSize], h.srid)
+	writeUint8(buf[sridSize:sridSize+endianSize], h.endian)
+	writeUint32(buf[sridSize+endianSize:ewkbHeaderSize], h.typ)
+}
+
+func readHeaderFrom(buf []byte) (h ewkbHeader) {
+	expectSize(buf, ewkbHeaderSize)
+	h.srid = readUint32(buf[:sridSize])
+	h.endian = readUint8(buf[sridSize : sridSize+endianSize])
+	h.typ = readUint32(buf[sridSize+endianSize : ewkbHeaderSize])
+	return
+}
+
+func serializeGeometry(v interface{}) []byte {
 	switch t := v.(type) {
 	case sql.Point:
-		return function.PointToBytes(t)
+		return serializePoint(t)
 	case sql.Linestring:
-		return function.LineToBytes(t)
+		return serializeLinestring(t)
 	case sql.Polygon:
-		return function.PolyToBytes(t)
+		return serializePolygon(t)
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
 	}
+}
+
+func serializePoint(p sql.Point) (buf []byte) {
+	pb := function.PointToBytes(p)
+	buf = make([]byte, ewkbHeaderSize+ByteSize(len(pb)))
+	copy(buf[ewkbHeaderSize:], pb)
+
+	h := ewkbHeader{
+		srid:   p.SRID,
+		endian: littleEndian,
+		typ:    pointType,
+	}
+	h.writeTo(buf[:ewkbHeaderSize])
+	return
+}
+
+func serializeLinestring(l sql.Linestring) (buf []byte) {
+	lb := function.LineToBytes(l)
+	buf = make([]byte, ewkbHeaderSize+ByteSize(len(lb)))
+	copy(buf[ewkbHeaderSize:], lb)
+
+	h := ewkbHeader{
+		srid:   l.SRID,
+		endian: littleEndian,
+		typ:    linestringType,
+	}
+	h.writeTo(buf[:ewkbHeaderSize])
+	return
+}
+
+func serializePolygon(p sql.Polygon) (buf []byte) {
+	pb := function.PolyToBytes(p)
+	buf = make([]byte, ewkbHeaderSize+ByteSize(len(pb)))
+	copy(buf[ewkbHeaderSize:], pb)
+
+	h := ewkbHeader{
+		srid:   p.SRID,
+		endian: littleEndian,
+		typ:    polygonType,
+	}
+	h.writeTo(buf[:ewkbHeaderSize])
+	return
 }

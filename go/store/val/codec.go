@@ -459,3 +459,15 @@ func expectSize(buf []byte, sz ByteSize) {
 		panic("byte slice is not of expected size")
 	}
 }
+
+func expectTrue(b bool) {
+	if !b {
+		panic("expected true")
+	}
+}
+
+func expectFalse(b bool) {
+	if b {
+		panic("expected false")
+	}
+}
