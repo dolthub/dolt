@@ -44,7 +44,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 		return nil, err
 	}
 
-	err = updateDoltConfig(ctx, serverConfig)
+	err = UpdateDoltConfig(ctx, serverConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +152,8 @@ func initDoltRepo(ctx context.Context, config *ServerConfig) (string, error) {
 	return testRepo, nil
 }
 
-// updateDoltConfig updates the dolt config if necessary
-func updateDoltConfig(ctx context.Context, config *ServerConfig) error {
+// UpdateDoltConfig updates the dolt config if necessary
+func UpdateDoltConfig(ctx context.Context, config *ServerConfig) error {
 	err := checkSetDoltConfig(ctx, config, "user.name", "benchmark")
 	if err != nil {
 		return err

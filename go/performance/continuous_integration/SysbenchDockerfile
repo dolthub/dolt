@@ -43,6 +43,6 @@ RUN mysql --version
 WORKDIR /dolt/go/cmd/dolt
 RUN go build -o /usr/local/bin/dolt .
 
-ENV DEBUG=true
+ENV DOLT_TRANSACTION_MERGE_STOMP=1
 WORKDIR /dolt/go/performance/utils/sysbench_runner/cmd
 ENTRYPOINT ["/entrypoint.sh"]

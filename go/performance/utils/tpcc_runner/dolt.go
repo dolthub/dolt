@@ -34,8 +34,14 @@ const (
 	dbName = "sbt"
 )
 
+// BenchmarkDolt executes a set of tpcc tests against a dolt server.
 func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	serverParams := serverConfig.GetServerArgs()
+
+	err := sysbench_runner.UpdateDoltConfig(ctx, serverConfig)
+	if err != nil {
+		return nil, err
+	}
 
 	testRepo, err := initDoltRepo(ctx, serverConfig)
 	if err != nil {
@@ -68,7 +74,7 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 	time.Sleep(5 * time.Second)
 
 	// GetTests and Benchmarks
-	tests := getTests(tppcConfig)
+	tests := getTests(tppcConfig, serverConfig.Server)
 	results := make(sysbench_runner.Results, 0)
 
 	for _, test := range tests {
@@ -138,43 +144,45 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 	return server
 }
 
-func getTests(config *TpccBenchmarkConfig) []*TpccTest {
+// getTests creates a set of tests that the server needs to be executed on.
+func getTests(config *TpccBenchmarkConfig, serverType sysbench_runner.ServerType) []*TpccTest {
 	tests := make([]*TpccTest, 0)
 	for _, sf := range config.ScaleFactors {
 		params := NewDefaultTpccParams()
 		params.ScaleFactor = sf
-		test := NewTpccTest(fmt.Sprintf("scale-factor-%d", sf), params)
+		test := NewTpccTest(fmt.Sprintf("tpcc-%s-scale-factor-%d", serverType, sf), params)
 		tests = append(tests, test)
 	}
 
 	return tests
 }
 
+// benchmark runs the relevant tpcc test against a server with a config.
 func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runner.ServerConfig, config *TpccBenchmarkConfig) (*sysbench_runner.Result, error) {
 	prepare := test.TpccPrepare(ctx, serverConfig, config.ScriptDir)
 	run := test.TpccRun(ctx, serverConfig, config.ScriptDir)
 	cleanup := test.TpccCleanup(ctx, serverConfig, config.ScriptDir)
 
-	out, err := prepare.Output()
+	err := prepare.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := run.Output()
 	if err != nil {
 		fmt.Print(string(out))
 		return nil, err
 	}
 
-	out, err = run.Output()
-	if err != nil {
-		fmt.Print(string(out))
-		return nil, err
-	}
+	fmt.Print(string(out))
 
 	result, err := FromOutputResult(out, config, serverConfig, test, "tpcc", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	out, err = cleanup.Output()
+	err = cleanup.Run()
 	if err != nil {
-		fmt.Print(string(out))
 		return nil, err
 	}
 

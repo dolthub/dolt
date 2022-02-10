@@ -16,8 +16,6 @@ package tpcc_runner
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -30,7 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/performance/utils/sysbench_runner"
 )
 
-// BenchmarkMysql benchmarks mysql based on the provided configurations
+// BenchmarkMysql benchmarks a mysql server based on the provided configurations.
 func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConfig *sysbench_runner.ServerConfig) (sysbench_runner.Results, error) {
 	withKeyCtx, cancel := context.WithCancel(ctx)
 
@@ -53,7 +51,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 		time.Sleep(10 * time.Second)
 
 		// setup mysqldb
-		err := setupDB(ctx, serverConfig)
+		err := sysbench_runner.SetupDB(ctx, serverConfig, dbName)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -72,7 +70,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 		cancel()
 	}()
 
-	tests := getTests(config)
+	tests := getTests(config, serverConfig.Server)
 
 	results := make(sysbench_runner.Results, 0)
 
@@ -113,68 +111,4 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 // getMysqlServer returns a exec.Cmd for a dolt server
 func getMysqlServer(ctx context.Context, config *sysbench_runner.ServerConfig, params []string) *exec.Cmd {
 	return sysbench_runner.ExecCommand(ctx, config.ServerExec, params...)
-}
-
-func setupDB(ctx context.Context, serverConfig *sysbench_runner.ServerConfig) (err error) {
-	dsn, err := formatDSN(serverConfig)
-	if err != nil {
-		return err
-	}
-
-	// TODO make sure this can work on windows
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		err = db.Close()
-	}()
-	err = db.Ping()
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP USER IF EXISTS %s", tpccUserLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE USER %s IDENTIFIED WITH mysql_native_password BY '%s'", tpccUserLocal, tpccPassLocal))
-	if err != nil {
-		return err
-	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("GRANT ALL ON %s.* to %s", dbName, tpccUserLocal))
-	if err != nil {
-		return err
-	}
-
-	// Required for running groupby_scan.lua without error
-	_, err = db.ExecContext(ctx, "SET GLOBAL sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));")
-	if err != nil {
-		return err
-	}
-
-	return
-}
-
-func formatDSN(serverConfig *sysbench_runner.ServerConfig) (string, error) {
-	var socketPath string
-	if serverConfig.Socket != "" {
-		socketPath = serverConfig.Socket
-	} else {
-		socketPath = defaultSocket
-	}
-	if serverConfig.ConnectionProtocol == tcpProtocol {
-		return fmt.Sprintf("root@tcp(%s:%d)/", defaultHost, serverConfig.Port), nil
-	} else if serverConfig.ConnectionProtocol == unixProtocol {
-		return fmt.Sprintf("root@unix(%s)/", socketPath), nil
-	} else {
-		return "", sysbench_runner.ErrUnsupportedConnectionProtocol
-	}
 }

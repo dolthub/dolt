@@ -36,6 +36,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	if _, err = os.Stat(configPath); os.IsNotExist(err) {
 		log.Fatal(err)
 	}

@@ -7,6 +7,13 @@
       "Version": "HEAD",
       "ResultsFormat": "csv",
       "ServerExec": "/usr/local/bin/dolt"
+    },
+    {
+      "Server": "mysql",
+      "Version": "8.0.22",
+      "ResultsFormat": "csv",
+      "ServerExec": "/usr/sbin/mysqld",
+      "ConnectionProtocol": "unix"
     }
   ],
   "ScriptDir":"/sysbench-tpcc",

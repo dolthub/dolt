@@ -33,12 +33,10 @@ const (
 	defaultHost = "127.0.0.1"
 	defaultUser = "root"
 
-	tpccUserLocal = ""
-	tpccPassLocal = ""
-
-	defaultSocket = "/var/run/mysqld/mysqld.sock"
-	tcpProtocol   = "tcp"
-	unixProtocol  = "unix"
+	// Note this is built for the SysbenchDocker file. If you want to run locally you'll need to override these variables
+	// for your local MySQL setup.
+	tpccUserLocal = "'sysbench'@'localhost'"
+	tpccPassLocal = "sysbenchpass"
 )
 
 var defaultTpccParams = []string{
@@ -142,10 +140,13 @@ func FromFileConfig(configPath string) (*TpccBenchmarkConfig, error) {
 
 // TpccTest encapsulates an End to End prepare, run, cleanup test case.
 type TpccTest struct {
+	// Id represents a unique test id
 	Id string
 
+	// Name represents the name of the test case
 	Name string
 
+	// Params are associated parameters this test runs with
 	Params *TpccTestParams
 }
 
@@ -156,7 +157,7 @@ type TpccTestParams struct {
 	// ScaleFactor represents the number of warehouse to test this at scale.
 	ScaleFactor int
 
-	// Tables represents the number of tables to create. TODO: Need to be more specific here
+	// Tables represents the number of tables created per warehouse.
 	Tables int
 
 	// TrxLevel represents what transaction level to use
@@ -172,9 +173,10 @@ type TpccTestParams struct {
 	Time int
 }
 
+// NewDefaultTpccParams returns default TpccTestParams.
 func NewDefaultTpccParams() *TpccTestParams {
 	return &TpccTestParams{
-		NumThreads:     3, // Try with multiple threads. Need to export command line variable
+		NumThreads:     2, // TODO: When ready, expose as command line argument.
 		ScaleFactor:    1,
 		Tables:         1,
 		TrxLevel:       "RR",
@@ -184,6 +186,7 @@ func NewDefaultTpccParams() *TpccTestParams {
 	}
 }
 
+// NewTpccTest instantiates and returns a TPCC test.
 func NewTpccTest(name string, params *TpccTestParams) *TpccTest {
 	return &TpccTest{
 		Id:     uuid.New().String(),
@@ -201,9 +204,8 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
-		params = append(params, "--mysql-socket=/tmp/mysql.sock")
 		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
-		params = append(params, fmt.Sprintf("--mysql-user=%s", tpccUserLocal))
+		params = append(params, fmt.Sprintf("--mysql-user=%s", "sysbench"))
 	} else {
 		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
 		params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
