@@ -19,8 +19,6 @@ import (
 	"encoding/binary"
 	"math"
 	"time"
-
-	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -352,13 +350,7 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func ReadDecimal(val []byte) decimal.Decimal {
-	// todo(andy): temporary lossy implementation
-	//return decimal.NewFromFloat(ReadFloat64(val))
-	return decimal.NewFromFloat(ReadFloat64(val))
-}
-
-func ReadTime(buf []byte) (t time.Time) {
+func ReadTimestamp(buf []byte) (t time.Time) {
 	expectSize(buf, timestampSize)
 	if err := t.UnmarshalBinary(buf); err != nil {
 		panic(err)
@@ -366,7 +358,7 @@ func ReadTime(buf []byte) (t time.Time) {
 	return t
 }
 
-func WriteTime(buf []byte, val time.Time) {
+func WriteTimestamp(buf []byte, val time.Time) {
 	expectSize(buf, timestampSize)
 	// todo(andy): fix allocation here
 	m, _ := val.MarshalBinary()
@@ -410,12 +402,6 @@ func compareBytes(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
-func expectSize(buf []byte, sz ByteSize) {
-	if ByteSize(len(buf)) != sz {
-		panic("byte slice is not of expected size")
-	}
-}
-
 func compare(typ Type, left, right []byte) int {
 	// order NULLs last
 	if left == nil {
@@ -456,7 +442,7 @@ func compare(typ Type, left, right []byte) int {
 	case YearEnc:
 		return compareInt16(ReadInt16(left), ReadInt16(right))
 	case DateEnc, DatetimeEnc, TimestampEnc:
-		return compareTimestamp(ReadTime(left), ReadTime(right))
+		return compareTimestamp(ReadTimestamp(left), ReadTimestamp(right))
 	case TimeEnc:
 		panic("unimplemented")
 	case DecimalEnc:
@@ -471,62 +457,8 @@ func compare(typ Type, left, right []byte) int {
 	}
 }
 
-// rawCmp is an array of indexes used to perform raw Tuple comparisons.
-// Under certain conditions, Tuple comparisons can be optimized by
-// directly comparing Tuples as byte slices, rather than accessing
-// and deserializing each field.
-// If each of these conditions is met, raw comparisons can be used:
-//   (1) All fields in the Tuple must be non-nullable.
-//   (2) All fields in the Tuple must be of constant size
-//  	  (eg Ints, Uints, Floats, Time types, etc.)
-//
-type rawCmp []int
-
-var rawCmpLookup = map[Encoding]rawCmp{
-	Int8Enc:   {0},
-	Uint8Enc:  {0},
-	Int16Enc:  {1, 0},
-	Uint16Enc: {1, 0},
-	Int32Enc:  {3, 2, 1, 0},
-	Uint32Enc: {3, 2, 1, 0},
-	Int64Enc:  {7, 6, 5, 4, 3, 2, 1, 0},
-	Uint64Enc: {7, 6, 5, 4, 3, 2, 1, 0},
-}
-
-func compareRaw(left, right Tuple, mapping rawCmp) int {
-	var l, r byte
-	for _, idx := range mapping {
-		l, r = left[idx], right[idx]
-		if l != r {
-			break
-		}
+func expectSize(buf []byte, sz ByteSize) {
+	if ByteSize(len(buf)) != sz {
+		panic("byte slice is not of expected size")
 	}
-	if l > r {
-		return 1
-	} else if l < r {
-		return -1
-	}
-	return 0
-}
-
-func maybeGetRawComparison(types ...Type) rawCmp {
-	var raw []int
-	offset := 0
-	for _, typ := range types {
-		if typ.Nullable {
-			return nil
-		}
-
-		mapping, ok := rawCmpLookup[typ.Enc]
-		if !ok {
-			return nil
-		}
-
-		for i := range mapping {
-			mapping[i] += offset
-		}
-		raw = append(raw, mapping...)
-		offset += len(mapping)
-	}
-	return raw
 }

@@ -165,7 +165,7 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 func (tb *TupleBuilder) PutTimestamp(i int, v time.Time) {
 	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+timestampSize]
-	WriteTime(tb.fields[i], v)
+	WriteTimestamp(tb.fields[i], v)
 	tb.pos += timestampSize
 }
 

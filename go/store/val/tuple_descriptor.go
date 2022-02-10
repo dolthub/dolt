@@ -27,12 +27,6 @@ import (
 type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
-
-	// Under certain conditions, Tuple comparisons can be
-	// optimized by directly comparing Tuples as byte slices,
-	// rather than accessing and deserializing each field.
-	// See definition of rawCmp for more information.
-	raw rawCmp
 }
 
 type TupleComparator interface {
@@ -71,7 +65,7 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 
 	td.Types = types
 	td.cmp = cmp
-	td.raw = maybeGetRawComparison(types...)
+
 	return
 }
 
@@ -81,13 +75,6 @@ func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
 
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	// todo(andy): compare raw is broken
-	//if td.raw != nil {
-	//	return compareRaw(left, right, td.raw)
-	//} else {
-	//	return td.cmp(left, right, td)
-	//}
-
 	return td.cmp.Compare(left, right, td)
 }
 
@@ -240,7 +227,7 @@ func (td TupleDesc) GetTimestamp(i int, tup Tuple) (v time.Time, ok bool) {
 	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		v, ok = ReadTime(b), true
+		v, ok = ReadTimestamp(b), true
 	}
 	return
 }
