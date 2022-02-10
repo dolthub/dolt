@@ -122,6 +122,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		minParents = 2
 	}
 
+	// TODO: need to handle invalid decorate options
 	decorateOption := apr.GetValueOrDefault(decorateParam, "auto")
 	opts := logOpts{
 		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
@@ -163,15 +164,33 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 
-	// TODO: are branches associated to commits somewhere already?
-	branchHashToName := map[hash.Hash][]string{}
-	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	// TODO: easier way to get these associations?
+	cHashToRefs := map[hash.Hash][]string{}
+	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
+	if err != nil {
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
+		return 1
+	}
 	for _, b := range branches {
 		refName := b.Ref.String()
 		if opts.decoration != "full" {
 			refName = refName[11:] // trim out "refs/heads/"
 		}
-		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], refName)
+		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
+		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
+	}
+	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
+	if err != nil {
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Tag information."))
+		return 1
+	}
+	for _, t := range tags {
+		refName := t.Ref.String()
+		if opts.decoration != "full" {
+			refName = refName[11:] // trim out "refs/heads/"
+		}
+		refName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", refName) // tags names are bright yellow (33;1m)
+		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], refName)
 	}
 
 	h, err := commit.HashOf()
@@ -217,7 +236,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 			return 1
 		}
 
-		commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: cmHash, parentHashes: pHashes, branchNames: branchHashToName[cmHash], isHead: cmHash == h})
+		commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: cmHash, parentHashes: pHashes, branchNames: cHashToRefs[cmHash], isHead: cmHash == h})
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -338,9 +357,9 @@ func logRefs(pager *outputpager.Pager, comm logNode) {
 	// TODO: this doesn't handle remote branches
 	pager.Writer.Write([]byte("\033[33m(\033[0m"))
 	if comm.isHead {
-		pager.Writer.Write([]byte("\033[94mHEAD -> \033[0m"))
+		pager.Writer.Write([]byte("\033[36;1mHEAD -> \033[0m"))
 	}
-	pager.Writer.Write([]byte(fmt.Sprintf("\033[92m%s\033[0m", strings.Join(comm.branchNames, ", "))))
+	pager.Writer.Write([]byte(strings.Join(comm.branchNames, "\033[33m, \033[0m"))) // Separate with Dim Yellow comma
 	pager.Writer.Write([]byte("\033[33m) \033[0m"))
 }
 
@@ -359,7 +378,7 @@ func logCompact(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 
 		// TODO: use short hash instead
 		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s \033[0m", chStr)))
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[33m%s \033[0m", chStr)))
 
 		// TODO: write tags here
 		if opts.decoration != "no" {
@@ -385,7 +404,7 @@ func logDefault(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 		}
 
 		// Write commit hash
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[33mcommit %s \033[0m", chStr))) // Use Dim Yellow (33m)
 
 		// Show decoration
 		if opts.decoration != "no" {

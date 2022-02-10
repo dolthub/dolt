@@ -811,6 +811,30 @@ func (ddb *DoltDB) GetTags(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, tagsRefFilter)
 }
 
+type TagWithHash struct {
+	Ref  ref.DoltRef
+	Hash hash.Hash
+}
+
+func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
+	var refs []TagWithHash
+	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, v types.Value) error {
+		if tr, ok := r.(ref.TagRef); ok {
+			tag, err := ddb.ResolveTag(ctx, tr)
+			if err != nil {
+				return err
+			}
+			h, err := tag.Commit.HashOf()
+			if err != nil {
+				return err
+			}
+			refs = append(refs, TagWithHash{r, h})
+		}
+		return nil
+	})
+	return refs, err
+}
+
 var workspacesRefFilter = map[ref.RefType]struct{}{ref.WorkspaceRefType: {}}
 
 // GetWorkspaces returns a list of all workspaces in the database.
