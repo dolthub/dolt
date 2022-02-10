@@ -46,6 +46,7 @@ type logOpts struct {
 	numLines    int
 	showParents bool
 	minParents  int
+	decoration	string
 	oneLine     bool
 }
 
@@ -96,7 +97,7 @@ func (cmd LogCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(minParentsParam, "", "parent_count", "The minimum number of parents a commit must have to be included in the log.")
 	ap.SupportsFlag(mergesParam, "", "Equivalent to min-parents == 2, this will limit the log to commits with 2 or more parents.")
 	ap.SupportsFlag(parentsParam, "", "Shows all parents of each commit in the log.")
-	ap.SupportsFlag(decorateParam, "", "Shows refs next to commits.")
+	ap.SupportsString(decorateParam, "", "decorate_fmt","Shows refs next to commits.")
 	ap.SupportsFlag(oneLineParam, "", "Shows logs in a compact format.")
 	return ap
 }
@@ -121,11 +122,13 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 		minParents = 2
 	}
 
+	decorateOption := apr.GetValueOrDefault(decorateParam, "auto")
 	opts := logOpts{
 		numLines:    apr.GetIntOrDefault(numLinesParam, -1),
 		showParents: apr.Contains(parentsParam),
 		minParents:  minParents,
 		oneLine:     apr.Contains(oneLineParam),
+		decoration:  decorateOption,
 	}
 
 	// Just dolt log
@@ -161,10 +164,14 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	}
 
 	// TODO: are branches associated to commits somewhere already?
-	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	branchHashToName := map[hash.Hash][]string{}
+	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	for _, b := range branches {
-		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], b.Ref.String()[11:]) // trim out "refs/heads/"
+		refName := b.Ref.String()
+		if opts.decoration != "long" {
+			refName = refName[11:] // trim out "refs/heads/"
+		}
+		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], refName)
 	}
 
 	h, err := commit.HashOf()
@@ -210,7 +217,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 			return 1
 		}
 
-		commitsInfo = append(commitsInfo, logNode{meta, cmHash, pHashes, branchHashToName[cmHash], cmHash == h})
+		commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: cmHash, parentHashes: pHashes, branchNames: branchHashToName[cmHash], isHead: cmHash == h})
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -308,8 +315,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 				return err
 			}
 
-			// TODO: fill this with correct info
-			commitsInfo = append(commitsInfo, logNode{meta, prevHash, ph, []string{}, false})
+			commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: prevHash, parentHashes: ph})
 
 			numLines--
 		}
@@ -325,7 +331,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 
 func logRefs (pager *outputpager.Pager, comm logNode) {
 	// TODO: this doesn't handle remote branches
-	pager.Writer.Write([]byte("\033[33m (\033[0m"))
+	pager.Writer.Write([]byte("\033[33m(\033[0m"))
 	if comm.isHead {
 		pager.Writer.Write([]byte("\033[94mHEAD -> \033[0m"))
 	}
@@ -347,10 +353,13 @@ func logCompact(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 		}
 
 		// TODO: use short hash instead
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s\033[0m", chStr)))
+		// Write commit hash
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s \033[0m", chStr)))
 
 		// TODO: write tags here
-		logRefs(pager, comm)
+		if opts.decoration != "no" {
+			logRefs(pager, comm)
+		}
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
 		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
@@ -370,9 +379,13 @@ func logDefault(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 			}
 		}
 
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s\033[0m", chStr)))
+		// Write commit hash
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
 
-		logRefs(pager, comm)
+		// Show decoration
+		if opts.decoration != "no" {
+			logRefs(pager, comm)
+		}
 
 		if len(comm.parentHashes) > 1 {
 			pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
