@@ -320,5 +320,5 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     sleep 1 # Wait another sec
     run grep -q 'dolt' <(ps) # Ensure no process named dolt is running
     [ "$output" == "" ]
-    run kill -SIGINT $PID # Kill process if it doesn't pass
+    run kill -9 $PID # Kill process if it doesn't pass
 }
