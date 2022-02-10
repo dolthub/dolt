@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression/function"
 
 	"github.com/dolthub/dolt/go/store/pool"
 )
@@ -227,6 +228,15 @@ func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
 	tb.pos += sz
 }
 
+// PutGeometry writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutGeometry(i int, v []byte) {
+	tb.Desc.expectEncoding(i, GeometryEnc)
+	sz := ByteSize(len(v))
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeBytes(tb.fields[i], v)
+	tb.pos += sz
+}
+
 // PutRaw writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	if buf == nil {
@@ -283,6 +293,9 @@ func (tb *TupleBuilder) PutField(i int, v interface{}) {
 			v = []byte(s)
 		}
 		tb.PutBytes(i, v.([]byte))
+	case GeometryEnc:
+		// todo(andy): remove GMS dependency
+		tb.PutGeometry(i, convGeometry(v))
 	case JSONEnc:
 		// todo(andy): remove GMS dependency
 		tb.PutJSON(i, v.(sql.JSONDocument).Val)
@@ -340,5 +353,18 @@ func convUint(v interface{}) uint {
 		return uint(i)
 	default:
 		panic("impossible conversion")
+	}
+}
+
+func convGeometry(v interface{}) []byte {
+	switch t := v.(type) {
+	case sql.Point:
+		return function.PointToBytes(t)
+	case sql.Linestring:
+		return function.LineToBytes(t)
+	case sql.Polygon:
+		return function.PolyToBytes(t)
+	default:
+		panic(fmt.Sprintf("unknown geometry %v", v))
 	}
 }

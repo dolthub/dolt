@@ -41,7 +41,7 @@ const (
 	float64Size ByteSize = 8
 
 	// todo(andy): experimental encoding
-	timestampSize ByteSize = 15
+	timestampSize ByteSize = 8
 )
 
 type Encoding uint8
@@ -75,9 +75,10 @@ const (
 	BytesEnc  Encoding = 129
 
 	// todo(andy): experimental encodings
-	DecimalEnc Encoding = 130
-	JSONEnc    Encoding = 131
-	TimeEnc    Encoding = 132
+	DecimalEnc  Encoding = 130
+	JSONEnc     Encoding = 131
+	TimeEnc     Encoding = 132
+	GeometryEnc Encoding = 133
 
 	// TODO
 	//  BitEnc
@@ -352,17 +353,13 @@ func compareFloat64(l, r float64) int {
 
 func readTimestamp(buf []byte) (t time.Time) {
 	expectSize(buf, timestampSize)
-	if err := t.UnmarshalBinary(buf); err != nil {
-		panic(err)
-	}
-	return t
+	t = time.Unix(0, readInt64(buf)).UTC()
+	return
 }
 
 func writeTimestamp(buf []byte, val time.Time) {
 	expectSize(buf, timestampSize)
-	// todo(andy): fix allocation here
-	m, _ := val.MarshalBinary()
-	copy(buf, m)
+	writeInt64(buf, val.UnixNano())
 }
 
 func compareTimestamp(l, r time.Time) int {

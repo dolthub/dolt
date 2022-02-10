@@ -138,7 +138,7 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 	case query.Type_YEAR:
 		return val.YearEnc
 	case query.Type_GEOMETRY:
-		return val.BytesEnc
+		return val.GeometryEnc
 	}
 
 	switch typ {
