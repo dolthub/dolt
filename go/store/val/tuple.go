@@ -141,9 +141,7 @@ func (tup Tuple) GetField(i int) []byte {
 	// index to compensate for NULL fields
 	i = tup.fieldToValue(i)
 
-	start, stop := slicedTupleBuffer(tup).getBounds(i)
-
-	return tup[start:stop]
+	return slicedTupleBuffer(tup).GetSlice(i)
 }
 
 func (tup Tuple) size() ByteSize {

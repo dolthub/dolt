@@ -23,25 +23,68 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
 	maxVectorOffset = uint64(math.MaxUint16)
 	refSize         = hash.ByteLen
+
+	// These constants are mirrored from serial.TupleMap.KeyOffsetsLength()
+	// and serial.TupleMap.ValueOffsetsLength() respectively.
+	// They are only as stable as the flatbuffers schemas that define them.
+	keyOffsetsVOffset   = 6
+	valueOffsetsVOffset = 10
 )
 
 func init() {
-	//emptyNode = makeMapNode(sharedPool, 0, nil, nil)
-}
-
-type Node struct {
-	buf serial.TupleMap
-	cnt int
+	emptyNode = buildMapNode(sharedPool, 0, nil, nil)
 }
 
 var emptyNode Node
 
-func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node Node) {
+type Node struct {
+	keys, values val.SlicedBuffer
+	refs         refBuffer
+	count, level int
+
+	buf serial.TupleMap
+}
+
+func mapNodeFromBytes(bb []byte) Node {
+	buf := serial.GetRootAsTupleMap(bb, 0)
+	return mapNodeFromFlatbuffer(*buf)
+}
+
+func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
+	keys := val.SlicedBuffer{
+		Buf:  buf.KeyTuplesBytes(),
+		Offs: getKeyOffsetsVector(buf),
+	}
+	values := val.SlicedBuffer{
+		Buf:  buf.ValueTuplesBytes(),
+		Offs: getValueOffsetsVector(buf),
+	}
+	refs := refBuffer{
+		buf: buf.RefArrayBytes(),
+	}
+
+	count := buf.KeyOffsetsLength() + 1
+	if len(keys.Buf) == 0 {
+		count = 0
+	}
+
+	return Node{
+		keys:   keys,
+		values: values,
+		refs:   refs,
+		count:  count,
+		level:  int(buf.TreeLevel()),
+		buf:    buf,
+	}
+}
+
+func buildMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node Node) {
 	var (
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
@@ -83,6 +126,57 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 	b.Finish(serial.TupleMapEnd(b))
 
 	return mapNodeFromBytes(b.FinishedBytes())
+}
+
+func (nd Node) hashOf() hash.Hash {
+	return hash.Of(nd.bytes())
+}
+
+func (nd Node) getKey(i int) nodeItem {
+	return nd.keys.GetSlice(i)
+}
+
+func (nd Node) getValue(i int) nodeItem {
+	if nd.leafNode() {
+		return nd.values.GetSlice(i)
+	} else {
+		r := nd.getRef(i)
+		return r[:]
+	}
+}
+
+func (nd Node) getRef(i int) hash.Hash {
+	return nd.refs.getRef(i)
+}
+
+func (nd Node) nodeCount() int {
+	return nd.count
+}
+
+// todo(andy): should we support this?
+//func (nd Node) cumulativeCount() uint64 {
+//	return nd.buf.TreeCount()
+//}
+
+func (nd Node) leafNode() bool {
+	return nd.level == 0
+}
+
+func (nd Node) empty() bool {
+	return nd.bytes() == nil || nd.nodeCount() == 0
+}
+
+func (nd Node) bytes() []byte {
+	return nd.buf.Table().Bytes
+}
+
+type refBuffer struct {
+	buf []byte
+}
+
+func (rb refBuffer) getRef(i int) hash.Hash {
+	start, stop := i*refSize, (i+1)*refSize
+	return hash.New(rb.buf[start:stop])
 }
 
 func getMapBuilder(pool pool.BuffPool, sz int) *fb.Builder {
@@ -138,87 +232,22 @@ func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
 	return
 }
 
-func mapNodeFromBytes(bb []byte) Node {
-	buf := serial.GetRootAsTupleMap(bb, 0)
-	// first key offset omitted
-	cnt := buf.KeyOffsetsLength() + 1
-	if len(buf.KeyTuplesBytes()) == 0 {
-		cnt = 0
-	}
-	return Node{
-		buf: *buf,
-		cnt: cnt,
-	}
+func getKeyOffsetsVector(buf serial.TupleMap) []byte {
+	sz := buf.KeyOffsetsLength() * 2
+	tab := buf.Table()
+	vec := tab.Offset(keyOffsetsVOffset)
+	start := int(tab.Vector(fb.UOffsetT(vec)))
+	stop := start + sz
+
+	return tab.Bytes[start:stop]
 }
 
-func (nd Node) hashOf() hash.Hash {
-	return hash.Of(nd.bytes())
-}
+func getValueOffsetsVector(buf serial.TupleMap) []byte {
+	sz := buf.ValueOffsetsLength() * 2
+	tab := buf.Table()
+	vec := tab.Offset(valueOffsetsVOffset)
+	start := int(tab.Vector(fb.UOffsetT(vec)))
+	stop := start + sz
 
-func (nd Node) getKey(i int) nodeItem {
-	keys := nd.buf.KeyTuplesBytes()
-
-	start, stop := uint16(0), uint16(len(keys))
-	if i > 0 {
-		start = nd.buf.KeyOffsets(i - 1)
-	}
-	if i < nd.buf.KeyOffsetsLength() {
-		stop = nd.buf.KeyOffsets(i)
-	}
-
-	return keys[start:stop]
-}
-
-func (nd Node) getValue(i int) nodeItem {
-	if nd.leafNode() {
-		return nd.getValueTuple(i)
-	} else {
-		r := nd.getRef(i)
-		return r[:]
-	}
-}
-
-func (nd Node) getValueTuple(i int) nodeItem {
-	values := nd.buf.ValueTuplesBytes()
-
-	start, stop := uint16(0), uint16(len(values))
-	if i > 0 {
-		start = nd.buf.ValueOffsets(i - 1)
-	}
-	if i < nd.buf.ValueOffsetsLength() {
-		stop = nd.buf.ValueOffsets(i)
-	}
-
-	return values[start:stop]
-}
-
-func (nd Node) getRef(i int) hash.Hash {
-	refs := nd.buf.RefArrayBytes()
-	start, stop := i*refSize, (i+1)*refSize
-	return hash.New(refs[start:stop])
-}
-
-func (nd Node) level() int {
-	return int(nd.buf.TreeLevel())
-}
-
-func (nd Node) nodeCount() int {
-	return nd.cnt
-}
-
-// todo(andy): should we support this?
-//func (nd Node) cumulativeCount() uint64 {
-//	return nd.buf.TreeCount()
-//}
-
-func (nd Node) leafNode() bool {
-	return nd.level() == 0
-}
-
-func (nd Node) empty() bool {
-	return nd.bytes() == nil || nd.nodeCount() == 0
-}
-
-func (nd Node) bytes() []byte {
-	return nd.buf.Table().Bytes
+	return tab.Bytes[start:stop]
 }

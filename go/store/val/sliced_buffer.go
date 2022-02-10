@@ -14,37 +14,35 @@
 
 package val
 
-type slicedBuffer struct {
-	buf  []byte
-	offs offsets
+type SlicedBuffer struct {
+	Buf  []byte
+	Offs offsets
 }
 
-func slicedTupleBuffer(tup Tuple) slicedBuffer {
+func slicedTupleBuffer(tup Tuple) SlicedBuffer {
 	mask := tup.mask()
 	offStop := tup.size() - numFieldsSize - mask.size()
 	bufStop := offStop - offsetsSize(mask.count())
 
-	return slicedBuffer{
-		buf:  tup[:bufStop],
-		offs: offsets(tup[bufStop:offStop]),
+	return SlicedBuffer{
+		Buf:  tup[:bufStop],
+		Offs: offsets(tup[bufStop:offStop]),
 	}
 }
 
-// GetBounds returns the ith offset. |last| is the byte position
-// of the _end_ of the last element.
-func (sb slicedBuffer) getBounds(i int) (start, stop ByteSize) {
-	start = sb.offs.getOffset(i)
-	if sb.isLastIndex(i) {
-		stop = ByteSize(len(sb.buf))
-	} else {
-		stop = sb.offs.getOffset(i + 1)
+// GetSlice returns the ith slice of |sb.Buf|.
+func (sb SlicedBuffer) GetSlice(i int) []byte {
+	start := sb.Offs.getOffset(i)
+	stop := ByteSize(len(sb.Buf))
+	if !sb.isLastIndex(i) {
+		stop = sb.Offs.getOffset(i + 1)
 	}
-	return
+	return sb.Buf[start:stop]
 }
 
 // isLastIndex returns true if |i| is the last index in |sl|.
-func (sb slicedBuffer) isLastIndex(i int) bool {
-	return len(sb.offs) == i*2
+func (sb SlicedBuffer) isLastIndex(i int) bool {
+	return len(sb.Offs) == i*2
 }
 
 type offsets []byte
