@@ -20,10 +20,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dolthub/go-mysql-server/sql/expression/function"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type TupleDesc struct {
@@ -306,63 +302,6 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-// GetField reads the value from the ith field of the Tuple as an interface{}.
-func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
-	var ok bool
-	switch td.Types[i].Enc {
-	case Int8Enc:
-		v, ok = td.GetInt8(i, tup)
-	case Uint8Enc:
-		v, ok = td.GetUint8(i, tup)
-	case Int16Enc:
-		v, ok = td.GetInt16(i, tup)
-	case Uint16Enc:
-		v, ok = td.GetUint16(i, tup)
-	case Int32Enc:
-		v, ok = td.GetInt32(i, tup)
-	case Uint32Enc:
-		v, ok = td.GetUint32(i, tup)
-	case Int64Enc:
-		v, ok = td.GetInt64(i, tup)
-	case Uint64Enc:
-		v, ok = td.GetUint64(i, tup)
-	case Float32Enc:
-		v, ok = td.GetFloat32(i, tup)
-	case Float64Enc:
-		v, ok = td.GetFloat64(i, tup)
-	case DecimalEnc:
-		v, ok = td.GetDecimal(i, tup)
-	case TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
-	case YearEnc:
-		v, ok = td.GetYear(i, tup)
-	case TimestampEnc, DateEnc, DatetimeEnc:
-		v, ok = td.GetTimestamp(i, tup)
-	case StringEnc:
-		v, ok = td.GetString(i, tup)
-	case BytesEnc:
-		v, ok = td.GetBytes(i, tup)
-	case JSONEnc:
-		var js interface{}
-		js, ok = td.GetJSON(i, tup)
-		if ok {
-			v = sql.JSONDocument{Val: js}
-		}
-	case GeometryEnc:
-		var geo []byte
-		geo, ok = td.GetGeometry(i, tup)
-		if ok {
-			v = deserializeGeometry(geo)
-		}
-	default:
-		panic("unknown encoding")
-	}
-	if !ok {
-		return nil
-	}
-	return v
-}
-
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
 		if enc == td.Types[i].Enc {
@@ -437,26 +376,4 @@ func (td TupleDesc) Format(tup Tuple) string {
 	}
 	sb.WriteString(" )")
 	return sb.String()
-}
-
-func deserializeGeometry(buf []byte) (v interface{}) {
-	var bigEndian, reverse = false, false
-
-	h := readHeaderFrom(buf[:ewkbHeaderSize])
-
-	var err error
-	switch h.typ {
-	case pointType:
-		v, err = function.WKBToPoint(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
-	case linestringType:
-		v, err = function.WKBToLine(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
-	case polygonType:
-		v, err = function.WKBToPoly(buf[function.WKBHeaderLength:], bigEndian, h.srid, reverse)
-	default:
-		panic(fmt.Sprintf("unknown geometry tryp %d", h.typ))
-	}
-	if err != nil {
-		panic(err)
-	}
-	return
 }

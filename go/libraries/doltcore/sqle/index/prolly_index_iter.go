@@ -144,13 +144,13 @@ func (p prollyIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
 		if rowIdx == -1 {
 			continue
 		}
-		r[rowIdx] = keyDesc.GetField(keyIdx, key)
+		r[rowIdx] = GetField(keyDesc, keyIdx, key)
 	}
 	for valIdx, rowIdx := range p.valMap {
 		if rowIdx == -1 {
 			continue
 		}
-		r[rowIdx] = valDesc.GetField(valIdx, value)
+		r[rowIdx] = GetField(valDesc, valIdx, value)
 	}
 
 	return
@@ -252,7 +252,7 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.
 		if from == -1 {
 			continue
 		}
-		r[to] = p.keyDesc.GetField(from, key)
+		r[to] = GetField(p.keyDesc, from, key)
 	}
 
 	for to := range p.valMap {
@@ -260,7 +260,7 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.
 		if from == -1 {
 			continue
 		}
-		r[to] = p.valDesc.GetField(from, value)
+		r[to] = GetField(p.valDesc, from, value)
 	}
 
 	return
