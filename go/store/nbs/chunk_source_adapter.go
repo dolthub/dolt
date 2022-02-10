@@ -42,7 +42,11 @@ func newReaderFromIndexData(indexCache *indexCache, idxData []byte, name addr, t
 		indexCache.put(name, index)
 	}
 
-	return &chunkSourceAdapter{newTableReader(index, tra, blockSize), name}, nil
+	tr, err := newTableReader(index, tra, blockSize)
+	if err != nil {
+		return nil, err
+	}
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
 func (csa chunkSourceAdapter) Close() error {

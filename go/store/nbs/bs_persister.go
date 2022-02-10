@@ -110,7 +110,11 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 
 		if index, found := indexCache.get(name); found {
 			bsTRA := &bsTableReaderAt{name.String(), bs}
-			return &chunkSourceAdapter{newTableReader(index, bsTRA, blockSize), name}, nil
+			tr, err := newTableReader(index, bsTRA, blockSize)
+			if err != nil {
+				return nil, err
+			}
+			return &chunkSourceAdapter{tr, name}, nil
 		}
 	}
 
@@ -148,7 +152,11 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 		indexCache.put(name, index)
 	}
 
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+	tr, err := newTableReader(index, tra, s3BlockSize)
+	if err != nil {
+		return nil, err
+	}
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
 func (bsp *blobstorePersister) PruneTableFiles(ctx context.Context, contents manifestContents) error {

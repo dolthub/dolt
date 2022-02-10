@@ -81,7 +81,11 @@ func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
 		if err != nil {
 			return nil, err
 		}
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }
@@ -100,7 +104,11 @@ func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader,
 			return nil, err
 		}
 
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }

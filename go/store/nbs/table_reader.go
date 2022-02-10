@@ -143,7 +143,7 @@ func (s mmapOrdinalSlice) Len() int           { return len(s) }
 func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
 func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
-func (i mmapTableIndex) Ordinals() []uint32 {
+func (i mmapTableIndex) Ordinals() ([]uint32, error) {
 	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
 	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
 		mi := idx * mmapIndexEntrySize
@@ -155,7 +155,7 @@ func (i mmapTableIndex) Ordinals() []uint32 {
 	for j, r := range s {
 		res[r.idx] = uint32(j)
 	}
-	return res
+	return res, nil
 }
 
 type mmapTableIndex struct {
@@ -167,8 +167,8 @@ type mmapTableIndex struct {
 	refCnt                *int32
 }
 
-func (i mmapTableIndex) Prefixes() []uint64 {
-	return i.prefixes
+func (i mmapTableIndex) Prefixes() ([]uint64, error) {
+	return i.prefixes, nil
 }
 
 type mmapOrdinal struct {
@@ -298,11 +298,15 @@ func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) 
 
 	refCnt := new(int32)
 	*refCnt = 1
+	p, err := ti.Prefixes()
+	if err != nil {
+		return mmapTableIndex{}, err
+	}
 	return mmapTableIndex{
 		ti.chunkCount,
 		ti.totalUncompressedData,
 		ti.TableFileSize(),
-		ti.Prefixes(),
+		p,
 		arr,
 		refCnt,
 	}, nil
@@ -344,10 +348,10 @@ type tableIndex interface {
 	// the indexed file to its corresponding entry in index. The |i|th
 	// entry in the result is the |i|th chunk in the indexed file, and its
 	// corresponding value in the slice is the index entry that maps to it.
-	Ordinals() []uint32
+	Ordinals() ([]uint32, error)
 	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
 	// entry corresponds to an indexed chunk address.
-	Prefixes() []uint64
+	Prefixes() ([]uint64, error)
 	// TableFileSize returns the total size of the indexed table file, in bytes.
 	TableFileSize() uint64
 	// TotalUncompressedData returns the total uncompressed data size of
@@ -527,12 +531,12 @@ func (ti onHeapTableIndex) Lookup(h *addr) (indexEntry, bool, error) {
 	return indexResult{ti.offsets[ord], ti.lengths[ord]}, true, nil
 }
 
-func (ti onHeapTableIndex) Prefixes() []uint64 {
-	return ti.prefixes
+func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
+	return ti.prefixes, nil
 }
 
-func (ti onHeapTableIndex) Ordinals() []uint32 {
-	return ti.ordinals
+func (ti onHeapTableIndex) Ordinals() ([]uint32, error) {
+	return ti.ordinals, nil
 }
 
 func (ti onHeapTableIndex) ChunkCount() uint32 {
@@ -554,15 +558,19 @@ func (ti onHeapTableIndex) Clone() (tableIndex, error) {
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
-func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableReader {
+func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
+	p, err := index.Prefixes()
+	if err != nil {
+		return tableReader{}, err
+	}
 	return tableReader{
 		index,
-		index.Prefixes(),
+		p,
 		index.ChunkCount(),
 		index.TotalUncompressedData(),
 		r,
 		blockSize,
-	}
+	}, nil
 }
 
 // Scan across (logically) two ordered slices of address prefixes.

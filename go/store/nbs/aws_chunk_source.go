@@ -43,7 +43,11 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 
 		if index, found := indexCache.get(name); found {
 			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+			tr, err := newTableReader(index, tra, s3BlockSize)
+			if err != nil {
+				return &chunkSourceAdapter{}, err
+			}
+			return &chunkSourceAdapter{tr, name}, nil
 		}
 	}
 
@@ -98,7 +102,11 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		indexCache.put(name, ohi)
 	}
 
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+	tr, err := newTableReader(index, tra, s3BlockSize)
+	if err != nil {
+		return &chunkSourceAdapter{}, err
+	}
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
 type awsTableReaderAt struct {

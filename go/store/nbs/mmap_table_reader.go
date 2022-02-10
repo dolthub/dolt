@@ -152,8 +152,12 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		return nil, errors.New("unexpected chunk count")
 	}
 
+	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
+	if err != nil {
+		return nil, err
+	}
 	return &mmapTableReader{
-		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
+		tr,
 		fc,
 		h,
 	}, nil
