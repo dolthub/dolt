@@ -167,8 +167,12 @@ func (mmtr *mmapTableReader) Close() error {
 	return mmtr.tableReader.Close()
 }
 
-func (mmtr *mmapTableReader) Clone() chunkSource {
-	return &mmapTableReader{mmtr.tableReader.Clone(), mmtr.fc, mmtr.h}
+func (mmtr *mmapTableReader) Clone() (chunkSource, error) {
+	tr, err := mmtr.tableReader.Clone()
+	if err != nil {
+		return &mmapTableReader{}, err
+	}
+	return &mmapTableReader{tr, mmtr.fc, mmtr.h}, nil
 }
 
 type cacheReaderAt struct {

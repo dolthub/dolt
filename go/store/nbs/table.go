@@ -238,7 +238,7 @@ type chunkReader interface {
 }
 
 type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
+	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
 	getManyAtOffsets(
 		ctx context.Context,
 		eg *errgroup.Group,
@@ -269,7 +269,7 @@ type chunkSource interface {
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	Clone() chunkSource
+	Clone() (chunkSource, error)
 }
 
 type chunkSources []chunkSource

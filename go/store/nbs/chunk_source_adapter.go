@@ -49,6 +49,10 @@ func (csa chunkSourceAdapter) Close() error {
 	return csa.tableReader.Close()
 }
 
-func (csa chunkSourceAdapter) Clone() chunkSource {
-	return &chunkSourceAdapter{csa.tableReader.Clone(), csa.h}
+func (csa chunkSourceAdapter) Clone() (chunkSource, error) {
+	tr, err := csa.tableReader.Clone()
+	if err != nil {
+		return &chunkSourceAdapter{}, err
+	}
+	return &chunkSourceAdapter{tr, csa.h}, nil
 }

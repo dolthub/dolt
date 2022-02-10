@@ -35,7 +35,10 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	seen := make(map[addr]bool)
 	for i := uint32(0); i < idx.ChunkCount(); i++ {
 		var a addr
-		ie := idx.IndexEntry(i, &a)
+		ie, err := idx.IndexEntry(i, &a)
+		if err != nil {
+			return err
+		}
 		if _, ok := seen[a]; !ok {
 			seen[a] = true
 			chunkBytes, err := readNFrom(rd, ie.Offset(), ie.Length())
