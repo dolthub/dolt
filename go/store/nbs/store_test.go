@@ -525,3 +525,15 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert.Equal(upstream.GetAppendixTableSpecInfo(0), newUpstream.GetTableSpecInfo(0))
 	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
 }
+
+func TestGuessPrefixOrdinal(t *testing.T) {
+	prefixes := make([]uint64, 256)
+	for i := range prefixes {
+		prefixes[i] = uint64(i << 56)
+	}
+
+	for i, pre := range prefixes {
+		guess := GuessPrefixOrdinal(pre, 256)
+		assert.Equal(t, i, guess)
+	}
+}
