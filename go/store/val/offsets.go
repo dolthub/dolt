@@ -14,42 +14,52 @@
 
 package val
 
-// todo(andy): more ergonomic offsets
-// type SlicedBuffer struct {
-//    buf  []byte
-//    offs []uint16
-// }
+type slicedBuffer struct {
+	buf  []byte
+	offs offsets
+}
 
-type Offsets []byte
+func slicedTupleBuffer(tup Tuple) slicedBuffer {
+	mask := tup.mask()
+	offStop := tup.size() - numFieldsSize - mask.size()
+	bufStop := offStop - offsetsSize(mask.count())
 
-// OffsetsSize returns the number of bytes needed to
+	return slicedBuffer{
+		buf:  tup[:bufStop],
+		offs: offsets(tup[bufStop:offStop]),
+	}
+}
+
+// GetBounds returns the ith offset. |last| is the byte position
+// of the _end_ of the last element.
+func (sb slicedBuffer) getBounds(i int) (start, stop ByteSize) {
+	start = sb.offs.getOffset(i)
+	if sb.isLastIndex(i) {
+		stop = ByteSize(len(sb.buf))
+	} else {
+		stop = sb.offs.getOffset(i + 1)
+	}
+	return
+}
+
+// isLastIndex returns true if |i| is the last index in |sl|.
+func (sb slicedBuffer) isLastIndex(i int) bool {
+	return len(sb.offs) == i*2
+}
+
+type offsets []byte
+
+// offsetsSize returns the number of bytes needed to
 // store |fieldCount| offsets.
-func OffsetsSize(count int) ByteSize {
+func offsetsSize(count int) ByteSize {
 	if count == 0 {
 		return 0
 	}
 	return ByteSize((count - 1) * 2)
 }
 
-// Count returns the number of offsets stored in |sl|.
-func (os Offsets) Count() int {
-	return (len(os) / 2) + 1
-}
-
-// GetBounds returns the ith offset. |last| is the byte position
-// of the _end_ of the last element.
-func (os Offsets) GetBounds(i int, last ByteSize) (start, stop ByteSize) {
-	start = os.getOffset(i)
-	if os.isLastIndex(i) {
-		stop = last
-	} else {
-		stop = os.getOffset(i + 1)
-	}
-	return
-}
-
 // getOffset gets the byte position of the _start_ of element |i|.
-func (os Offsets) getOffset(i int) ByteSize {
+func (os offsets) getOffset(i int) ByteSize {
 	if i == 0 {
 		return 0
 	}
@@ -58,16 +68,11 @@ func (os Offsets) getOffset(i int) ByteSize {
 	return ByteSize(off)
 }
 
-// Put writes offset |pos| at index |i|.
-func (os Offsets) Put(i int, off ByteSize) {
+// putOffset writes offset |pos| at index |i|.
+func (os offsets) putOffset(i int, off ByteSize) {
 	if i == 0 {
 		return
 	}
 	start := (i - 1) * 2
 	writeUint16(os[start:start+2], uint16(off))
-}
-
-// isLastIndex returns true if |i| is the last index in |sl|.
-func (os Offsets) isLastIndex(i int) bool {
-	return len(os) == i*2
 }

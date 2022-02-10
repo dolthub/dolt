@@ -30,7 +30,7 @@ const (
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
 //   NULL Field. Values are packed contiguously from the front of the Tuple. The
-//   footer contains offsets, a member mask, and a field count. Offsets enable
+//   footer contains offsets, a member mask, and a field count. offsets enable
 //   random access to Values. The member mask enables NULL-compaction for Values.
 //
 //   Tuples read and write Values as byte slices. (De)serialization is delegated
@@ -42,10 +42,10 @@ const (
 //
 //   Tuple:
 //   +---------+---------+-----+---------+---------+-------------+-------------+
-//   | Value 0 | Value 1 | ... | Value K | Offsets | Member Mask | Field Count |
+//   | Value 0 | Value 1 | ... | Value K | offsets | Member Mask | Field Count |
 //   +---------+---------+-----+---------+---------+-------------+-------------+
 //
-//   Offsets:
+//   offsets:
 //     The offset array contains a uint16 for each non-NULL field after field 0.
 //     Offset i encodes the distance to the ith Value from the front of the Tuple.
 //     The size of the offset array is 2*(K-1) bytes, where K is the number of
@@ -91,7 +91,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		panic("tuple data size exceeds maximum")
 	}
 
-	tup, offs, mask := makeTuple(pool, pos, count, len(values))
+	tup, offs, mask := allocateTuple(pool, pos, count, len(values))
 
 	count = 0
 	pos = ByteSize(0)
@@ -100,7 +100,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 			continue
 		}
 		mask.set(i)
-		offs.Put(count, pos)
+		offs.putOffset(count, pos)
 		count++
 
 		copy(tup[pos:pos+sizeOf(v)], v)
@@ -116,15 +116,15 @@ func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 	return buf
 }
 
-func makeTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs Offsets, ms memberMask) {
-	offSz := OffsetsSize(values)
+func allocateTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs offsets, ms memberMask) {
+	offSz := offsetsSize(values)
 	maskSz := maskSize(fields)
 	countSz := numFieldsSize
 
 	tup = pool.Get(uint64(bufSz + offSz + maskSz + countSz))
 
 	writeFieldCount(tup, fields)
-	offs = Offsets(tup[bufSz : bufSz+offSz])
+	offs = offsets(tup[bufSz : bufSz+offSz])
 	ms = memberMask(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
@@ -141,8 +141,7 @@ func (tup Tuple) GetField(i int) []byte {
 	// index to compensate for NULL fields
 	i = tup.fieldToValue(i)
 
-	offs, valStop := tup.offsets()
-	start, stop := offs.GetBounds(i, valStop)
+	start, stop := slicedTupleBuffer(tup).getBounds(i)
 
 	return tup[start:stop]
 }
@@ -168,14 +167,6 @@ func (tup Tuple) mask() memberMask {
 	stop := tup.size() - numFieldsSize
 	start := stop - maskSize(tup.fieldCount())
 	return memberMask(tup[start:stop])
-}
-
-func (tup Tuple) offsets() (offs Offsets, valStop ByteSize) {
-	mask := tup.mask()
-	offStop := tup.size() - numFieldsSize - mask.size()
-	valStop = offStop - OffsetsSize(mask.count())
-	offs = Offsets(tup[valStop:offStop])
-	return
 }
 
 func (tup Tuple) fieldToValue(i int) int {
