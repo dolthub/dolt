@@ -43,6 +43,5 @@ RUN mysql --version
 WORKDIR /dolt/go/cmd/dolt
 RUN go build -o /usr/local/bin/dolt .
 
-ENV DEBUG=true
 WORKDIR /dolt/go/performance/utils/sysbench_runner/cmd
 ENTRYPOINT ["/entrypoint.sh"]
