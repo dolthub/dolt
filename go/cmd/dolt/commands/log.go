@@ -53,8 +53,8 @@ type logNode struct {
 	commitMeta   *doltdb.CommitMeta
 	commitHash   hash.Hash
 	parentHashes []hash.Hash
-	branchNames	 []string
-	isHead		 bool
+	branchNames  []string
+	isHead       bool
 }
 
 var logDocs = cli.CommandDocumentationContent{
