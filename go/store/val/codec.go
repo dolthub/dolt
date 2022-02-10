@@ -50,11 +50,11 @@ type Encoding uint8
 
 // Constant Size Encodings
 const (
-	NullEnc   Encoding = 0
-	Int8Enc   Encoding = 1
-	Uint8Enc  Encoding = 2
-	Int16Enc  Encoding = 3
-	Uint16Enc Encoding = 4
+	NullEnc    Encoding = 0
+	Int8Enc    Encoding = 1
+	Uint8Enc   Encoding = 2
+	Int16Enc   Encoding = 3
+	Uint16Enc  Encoding = 4
 	Int32Enc   Encoding = 7
 	Uint32Enc  Encoding = 8
 	Int64Enc   Encoding = 9
@@ -131,9 +131,45 @@ func ReadBool(val []byte) bool {
 	expectSize(val, int8Size)
 	return val[0] == 1
 }
+
+func writeBool(buf []byte, val bool) {
+	expectSize(buf, 1)
+	if val {
+		buf[0] = byte(1)
+	} else {
+		buf[0] = byte(0)
+	}
+}
+
+// false is less that true
+func compareBool(l, r bool) int {
+	if l == r {
+		return 0
+	}
+	if !l && r {
+		return -1
+	}
+	return 1
+}
+
 func ReadInt8(val []byte) int8 {
 	expectSize(val, int8Size)
 	return int8(val[0])
+}
+
+func WriteInt8(buf []byte, val int8) {
+	expectSize(buf, int8Size)
+	buf[0] = byte(val)
+}
+
+func compareInt8(l, r int8) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func ReadUint8(val []byte) uint8 {
@@ -141,9 +177,39 @@ func ReadUint8(val []byte) uint8 {
 	return val[0]
 }
 
+func WriteUint8(buf []byte, val uint8) {
+	expectSize(buf, uint8Size)
+	buf[0] = byte(val)
+}
+
+func compareUint8(l, r uint8) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func ReadInt16(val []byte) int16 {
 	expectSize(val, int16Size)
 	return int16(binary.LittleEndian.Uint16(val))
+}
+
+func WriteInt16(buf []byte, val int16) {
+	expectSize(buf, int16Size)
+	binary.LittleEndian.PutUint16(buf, uint16(val))
+}
+
+func compareInt16(l, r int16) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func ReadUint16(val []byte) uint16 {
@@ -151,9 +217,39 @@ func ReadUint16(val []byte) uint16 {
 	return binary.LittleEndian.Uint16(val)
 }
 
+func WriteUint16(buf []byte, val uint16) {
+	expectSize(buf, uint16Size)
+	binary.LittleEndian.PutUint16(buf, val)
+}
+
+func compareUint16(l, r uint16) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func ReadInt32(val []byte) int32 {
 	expectSize(val, int32Size)
 	return int32(binary.LittleEndian.Uint32(val))
+}
+
+func WriteInt32(buf []byte, val int32) {
+	expectSize(buf, int32Size)
+	binary.LittleEndian.PutUint32(buf, uint32(val))
+}
+
+func compareInt32(l, r int32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func ReadUint32(val []byte) uint32 {
@@ -161,9 +257,39 @@ func ReadUint32(val []byte) uint32 {
 	return binary.LittleEndian.Uint32(val)
 }
 
+func WriteUint32(buf []byte, val uint32) {
+	expectSize(buf, uint32Size)
+	binary.LittleEndian.PutUint32(buf, val)
+}
+
+func compareUint32(l, r uint32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func ReadInt64(val []byte) int64 {
 	expectSize(val, int64Size)
 	return int64(binary.LittleEndian.Uint64(val))
+}
+
+func WriteInt64(buf []byte, val int64) {
+	expectSize(buf, int64Size)
+	binary.LittleEndian.PutUint64(buf, uint64(val))
+}
+
+func compareInt64(l, r int64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func ReadUint64(val []byte) uint64 {
@@ -171,14 +297,59 @@ func ReadUint64(val []byte) uint64 {
 	return binary.LittleEndian.Uint64(val)
 }
 
+func WriteUint64(buf []byte, val uint64) {
+	expectSize(buf, uint64Size)
+	binary.LittleEndian.PutUint64(buf, val)
+}
+
+func compareUint64(l, r uint64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func ReadFloat32(val []byte) float32 {
 	expectSize(val, float32Size)
 	return math.Float32frombits(ReadUint32(val))
 }
 
+func WriteFloat32(buf []byte, val float32) {
+	expectSize(buf, float32Size)
+	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
+}
+
+func compareFloat32(l, r float32) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
+}
+
 func ReadFloat64(val []byte) float64 {
 	expectSize(val, float64Size)
 	return math.Float64frombits(ReadUint64(val))
+}
+
+func WriteFloat64(buf []byte, val float64) {
+	expectSize(buf, float64Size)
+	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
+}
+
+func compareFloat64(l, r float64) int {
+	if l == r {
+		return 0
+	} else if l < r {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func ReadDecimal(val []byte) decimal.Decimal {
@@ -195,74 +366,6 @@ func ReadTime(buf []byte) (t time.Time) {
 	return t
 }
 
-func ReadString(val []byte) string {
-	// todo(andy): fix allocation
-	return string(val)
-}
-
-func readBytes(val []byte) []byte {
-	return val
-}
-
-func writeBool(buf []byte, val bool) {
-	expectSize(buf, 1)
-	if val {
-		buf[0] = byte(1)
-	} else {
-		buf[0] = byte(0)
-	}
-}
-
-func WriteInt8(buf []byte, val int8) {
-	expectSize(buf, int8Size)
-	buf[0] = byte(val)
-}
-
-func WriteUint8(buf []byte, val uint8) {
-	expectSize(buf, uint8Size)
-	buf[0] = byte(val)
-}
-
-func WriteInt16(buf []byte, val int16) {
-	expectSize(buf, int16Size)
-	binary.LittleEndian.PutUint16(buf, uint16(val))
-}
-
-func WriteUint16(buf []byte, val uint16) {
-	expectSize(buf, uint16Size)
-	binary.LittleEndian.PutUint16(buf, val)
-}
-
-func WriteInt32(buf []byte, val int32) {
-	expectSize(buf, int32Size)
-	binary.LittleEndian.PutUint32(buf, uint32(val))
-}
-
-func WriteUint32(buf []byte, val uint32) {
-	expectSize(buf, uint32Size)
-	binary.LittleEndian.PutUint32(buf, val)
-}
-
-func WriteInt64(buf []byte, val int64) {
-	expectSize(buf, int64Size)
-	binary.LittleEndian.PutUint64(buf, uint64(val))
-}
-
-func WriteUint64(buf []byte, val uint64) {
-	expectSize(buf, uint64Size)
-	binary.LittleEndian.PutUint64(buf, val)
-}
-
-func WriteFloat32(buf []byte, val float32) {
-	expectSize(buf, float32Size)
-	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
-}
-
-func WriteFloat64(buf []byte, val float64) {
-	expectSize(buf, float64Size)
-	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
-}
-
 func WriteTime(buf []byte, val time.Time) {
 	expectSize(buf, timestampSize)
 	// todo(andy): fix allocation here
@@ -270,14 +373,41 @@ func WriteTime(buf []byte, val time.Time) {
 	copy(buf, m)
 }
 
+func compareTimestamp(l, r time.Time) int {
+	if l.Equal(r) {
+		return 0
+	} else if l.Before(r) {
+		return -1
+	} else {
+		return 1
+	}
+}
+
+func ReadString(val []byte) string {
+	// todo(andy): fix allocation
+	return string(val)
+}
+
 func writeString(buf []byte, val string) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
 }
 
+func compareString(l, r string) int {
+	return bytes.Compare([]byte(l), []byte(r))
+}
+
+func readBytes(val []byte) []byte {
+	return val
+}
+
 func writeBytes(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
+}
+
+func compareBytes(l, r []byte) int {
+	return bytes.Compare(l, r)
 }
 
 func expectSize(buf []byte, sz ByteSize) {
@@ -339,136 +469,6 @@ func compare(typ Type, left, right []byte) int {
 	default:
 		panic("unknown encoding")
 	}
-}
-
-// false is less that true
-func compareBool(l, r bool) int {
-	if l == r {
-		return 0
-	}
-	if !l && r {
-		return -1
-	}
-	return 1
-}
-
-func compareInt8(l, r int8) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareUint8(l, r uint8) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareInt16(l, r int16) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareUint16(l, r uint16) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareInt32(l, r int32) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareUint32(l, r uint32) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareInt64(l, r int64) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareUint64(l, r uint64) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareFloat32(l, r float32) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareFloat64(l, r float64) int {
-	if l == r {
-		return 0
-	} else if l < r {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareTimestamp(l, r time.Time) int {
-	if l.Equal(r) {
-		return 0
-	}
-	if l.Before(r) {
-		return -1
-	} else {
-		return 1
-	}
-}
-
-func compareString(l, r string) int {
-	return bytes.Compare([]byte(l), []byte(r))
-}
-
-func compareBytes(l, r []byte) int {
-	return bytes.Compare(l, r)
 }
 
 // rawCmp is an array of indexes used to perform raw Tuple comparisons.
