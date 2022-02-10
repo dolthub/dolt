@@ -37,8 +37,6 @@ const (
 	uint16Size  ByteSize = 2
 	int32Size   ByteSize = 4
 	uint32Size  ByteSize = 4
-	int48Size   ByteSize = 6
-	uint48Size  ByteSize = 6
 	int64Size   ByteSize = 8
 	uint64Size  ByteSize = 8
 	float32Size ByteSize = 4
@@ -57,8 +55,6 @@ const (
 	Uint8Enc  Encoding = 2
 	Int16Enc  Encoding = 3
 	Uint16Enc Encoding = 4
-	// Int24Enc   Encoding = 5
-	// Uint24Enc  Encoding = 6
 	Int32Enc   Encoding = 7
 	Uint32Enc  Encoding = 8
 	Int64Enc   Encoding = 9
@@ -67,7 +63,6 @@ const (
 	Float64Enc Encoding = 12
 
 	// todo(andy): experimental encodings
-	//  consolidate into one
 	TimestampEnc Encoding = 14
 	DateEnc      Encoding = 15
 	DatetimeEnc  Encoding = 16
@@ -166,17 +161,6 @@ func ReadUint32(val []byte) uint32 {
 	return binary.LittleEndian.Uint32(val)
 }
 
-func ReadUint48(val []byte) (u uint64) {
-	expectSize(val, uint48Size)
-	var tmp [8]byte
-	// copy |val| to |tmp|
-	tmp[5], tmp[4] = val[5], val[4]
-	tmp[3], tmp[2] = val[3], val[2]
-	tmp[1], tmp[0] = val[1], val[0]
-	u = binary.LittleEndian.Uint64(tmp[:])
-	return
-}
-
 func ReadInt64(val []byte) int64 {
 	expectSize(val, int64Size)
 	return int64(binary.LittleEndian.Uint64(val))
@@ -257,21 +241,6 @@ func WriteInt32(buf []byte, val int32) {
 func WriteUint32(buf []byte, val uint32) {
 	expectSize(buf, uint32Size)
 	binary.LittleEndian.PutUint32(buf, val)
-}
-
-func WriteUint48(buf []byte, u uint64) {
-	const maxUint48 = uint64(1<<48 - 1)
-
-	expectSize(buf, uint48Size)
-	if u > maxUint48 {
-		panic("uint is greater than max uint48")
-	}
-	var tmp [8]byte
-	binary.LittleEndian.PutUint64(tmp[:], u)
-	// copy |tmp| to |buf|
-	buf[5], buf[4] = tmp[5], tmp[4]
-	buf[3], buf[2] = tmp[3], tmp[2]
-	buf[1], buf[0] = tmp[1], tmp[0]
 }
 
 func WriteInt64(buf []byte, val int64) {
