@@ -329,7 +329,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 	return nil
 }
 
-func logRefs (pager *outputpager.Pager, comm logNode) {
+func logRefs(pager *outputpager.Pager, comm logNode) {
 	// Do nothing if no associate branches
 	if len(comm.branchNames) == 0 {
 		return
