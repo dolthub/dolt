@@ -174,7 +174,7 @@ func (tb *TupleBuilder) PutSqlTime(i int, v string) {
 	tb.Desc.expectEncoding(i, TimeEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	writeString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -192,7 +192,7 @@ func (tb *TupleBuilder) PutDecimal(i int, v string) {
 	// todo(andy): temporary implementation
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	writeString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -201,7 +201,7 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	writeString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -210,7 +210,7 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 	tb.Desc.expectEncoding(i, BytesEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], v, tb.Desc.Types[i].Coll)
+	writeBytes(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -223,7 +223,7 @@ func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
 	}
 	sz := ByteSize(len(buf))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], buf, tb.Desc.Types[i].Coll)
+	writeBytes(tb.fields[i], buf)
 	tb.pos += sz
 }
 
@@ -236,7 +236,7 @@ func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	}
 	sz := ByteSize(len(buf))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], buf, tb.Desc.Types[i].Coll)
+	writeBytes(tb.fields[i], buf)
 	tb.pos += sz
 }
 

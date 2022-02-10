@@ -25,7 +25,6 @@ import (
 
 type Type struct {
 	Enc      Encoding
-	Coll     Collation
 	Nullable bool
 }
 
@@ -47,12 +46,6 @@ const (
 
 	// todo(andy): experimental encoding
 	timestampSize ByteSize = 15
-)
-
-type Collation uint16
-
-const (
-	ByteOrderCollation Collation = 0
 )
 
 type Encoding uint8
@@ -308,12 +301,12 @@ func WriteTime(buf []byte, val time.Time) {
 	copy(buf, m)
 }
 
-func writeString(buf []byte, val string, coll Collation) {
+func writeString(buf []byte, val string) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
 }
 
-func writeBytes(buf, val []byte, coll Collation) {
+func writeBytes(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
 }
@@ -371,9 +364,9 @@ func compare(typ Type, left, right []byte) int {
 		// todo(andy): temporary Decimal implementation
 		fallthrough
 	case StringEnc:
-		return compareString(ReadString(left), ReadString(right), typ.Coll)
+		return compareString(ReadString(left), ReadString(right))
 	case BytesEnc:
-		return compareBytes(readBytes(left), readBytes(right), typ.Coll)
+		return compareBytes(readBytes(left), readBytes(right))
 	default:
 		panic("unknown encoding")
 	}
@@ -501,13 +494,11 @@ func compareTimestamp(l, r time.Time) int {
 	}
 }
 
-func compareString(l, r string, coll Collation) int {
-	// todo(andy): collations
+func compareString(l, r string) int {
 	return bytes.Compare([]byte(l), []byte(r))
 }
 
-func compareBytes(l, r []byte, coll Collation) int {
-	// todo(andy): collations
+func compareBytes(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
