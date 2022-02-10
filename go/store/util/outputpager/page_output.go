@@ -22,6 +22,7 @@
 package outputpager
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -77,6 +78,13 @@ func Start() *Pager {
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
 	go func() {
 		err := cmd.Wait()
+		// ^C returns 'exit status 0xc000013a' err on Windows
+		if err != nil {
+			if _, ok := err.(*exec.ExitError); !ok {
+				fmt.Errorf("cmd.Wait: %v", err)
+			}
+			err = nil
+		}
 		d.Chk.NoError(err)
 		p.closePipe()
 		p.doneCh <- struct{}{}
