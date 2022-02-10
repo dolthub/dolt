@@ -18,26 +18,26 @@ teardown() {
 
 @test "log: log respects branches" {
     dolt branch branch1
-    dolt commit --allow-empty -m "commit 1 main"
-    dolt commit	--allow-empty -m "commit 2 main"
-    dolt commit	--allow-empty -m "commit 3 main"
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt commit	--allow-empty -m "commit 3 MAIN"
     run dolt log
     [ $status -eq 0 ]
-    [[ "$output" =~ "main" ]] || false
-    [[ ! "$output" =~ "branch1" ]] || false
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
     dolt checkout branch1
-    dolt commit	--allow-empty -m "commit 1 branch1"
-    dolt commit --allow-empty -m "commit 2 branch1"
-    dolt commit --allow-empty -m "commit 3 branch1"
+    dolt commit	--allow-empty -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
     run	dolt log
     [ $status -eq 0 ]
-    [[ ! "$output" =~ "main" ]] || false
-    [[ "$output" =~ "branch1" ]] || false
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
     dolt checkout main
     run	dolt log
     [ $status -eq 0 ]
-    [[ "$output" =~ "main" ]] || false
-    [[ ! "$output" =~ "branch1" ]] || false
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
 @test "log: with -n specified" {
