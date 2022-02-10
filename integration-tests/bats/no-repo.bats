@@ -319,4 +319,5 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     sleep 1 # Wait another sec
     run grep -q 'dolt' <(ps aux)
     [ "$output" == "" ]
+    run kill -9 $(ps aux | grep 'dolt' | awk {'print $1'}) # This looks for process dolt and sends it a SIGINT (CTRL + C)
 }
