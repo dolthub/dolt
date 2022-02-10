@@ -330,6 +330,11 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 }
 
 func logRefs (pager *outputpager.Pager, comm logNode) {
+	// Do nothing if no associate branches
+	if len(comm.branchNames) == 0 {
+		return
+	}
+
 	// TODO: this doesn't handle remote branches
 	pager.Writer.Write([]byte("\033[33m(\033[0m"))
 	if comm.isHead {
