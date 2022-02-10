@@ -303,6 +303,22 @@ func TestVersionedViews(t *testing.T) {
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
+func TestWindowFunctions(t *testing.T) {
+	enginetest.TestWindowFunctions(t, newDoltHarness(t))
+}
+
+func TestWindowRowFrames(t *testing.T) {
+	enginetest.TestWindowRowFrames(t, newDoltHarness(t))
+}
+
+func TestWindowRangeFrames(t *testing.T) {
+	enginetest.TestWindowRangeFrames(t, newDoltHarness(t))
+}
+
+func TestNamedWindows(t *testing.T) {
+	enginetest.TestNamedWindows(t, newDoltHarness(t))
+}
+
 func TestNaturalJoin(t *testing.T) {
 	enginetest.TestNaturalJoin(t, newDoltHarness(t))
 }
