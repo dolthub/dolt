@@ -168,7 +168,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	for _, b := range branches {
 		refName := b.Ref.String()
-		if opts.decoration != "long" {
+		if opts.decoration != "full" {
 			refName = refName[11:] // trim out "refs/heads/"
 		}
 		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], refName)
