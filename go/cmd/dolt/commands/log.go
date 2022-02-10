@@ -160,11 +160,11 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 
-	// TODO: are branches associate to commits somewhere already?
+	// TODO: are branches associated to commits somewhere already?
 	branches, _ := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	branchHashToName := map[hash.Hash][]string{}
 	for _, b := range branches {
-		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], b.Ref.String())
+		branchHashToName[b.Hash] = append(branchHashToName[b.Hash], b.Ref.String()[11:]) // trim out "refs/heads/"
 	}
 
 	h, err := commit.HashOf()
@@ -323,10 +323,17 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 	return nil
 }
 
-func logCompact(opts logOpts, commits []logNode) {
-	pager := outputpager.Start()
-	defer pager.Stop()
+func logRefs (pager *outputpager.Pager, comm logNode) {
+	// TODO: this doesn't handle remote branches
+	pager.Writer.Write([]byte("\033[33m (\033[0m"))
+	if comm.isHead {
+		pager.Writer.Write([]byte("\033[94mHEAD -> \033[0m"))
+	}
+	pager.Writer.Write([]byte(fmt.Sprintf("\033[92m%s\033[0m", strings.Join(comm.branchNames, ", "))))
+	pager.Writer.Write([]byte("\033[33m) \033[0m"))
+}
 
+func logCompact(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 	for _, comm := range commits {
 		if len(comm.parentHashes) < opts.minParents {
 			return
@@ -342,23 +349,15 @@ func logCompact(opts logOpts, commits []logNode) {
 		// TODO: use short hash instead
 		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33m%s\033[0m", chStr)))
 
-		// TODO: write refs and tags here
-		pager.Writer.Write([]byte("\033[33m (\033[0m"))
-		if comm.isHead {
-			pager.Writer.Write([]byte("\033[94mHEAD -> \033[0m"))
-		}
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[92m%s\033[0m", strings.Join(comm.branchNames, ", "))))
-		pager.Writer.Write([]byte("\033[33m) \033[0m"))
+		// TODO: write tags here
+		logRefs(pager, comm)
 
 		formattedDesc := strings.Replace(comm.commitMeta.Description, "\n", " ", -1) + "\n"
 		pager.Writer.Write([]byte(fmt.Sprintf(formattedDesc)))
 	}
 }
 
-func logDefault(opts logOpts, commits []logNode) {
-	pager := outputpager.Start()
-	defer pager.Stop()
-
+func logDefault(pager *outputpager.Pager, opts logOpts, commits []logNode) {
 	for _, comm := range commits {
 		if len(comm.parentHashes) < opts.minParents {
 			return
@@ -371,7 +370,9 @@ func logDefault(opts logOpts, commits []logNode) {
 			}
 		}
 
-		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s \033[0m", chStr)))
+		pager.Writer.Write([]byte(fmt.Sprintf("\033[1;33mcommit %s\033[0m", chStr)))
+
+		logRefs(pager, comm)
 
 		if len(comm.parentHashes) > 1 {
 			pager.Writer.Write([]byte(fmt.Sprintf("\nMerge:")))
@@ -395,12 +396,13 @@ func logToStdOut(opts logOpts, commits []logNode) {
 		return
 	}
 	cli.ExecuteWithStdioRestored(func() {
+		pager := outputpager.Start()
+		defer pager.Stop()
 		if opts.oneLine {
-			logCompact(opts, commits)
+			logCompact(pager, opts, commits)
 		} else {
-			logDefault(opts, commits)
+			logDefault(pager, opts, commits)
 		}
-
 	})
 }
 
