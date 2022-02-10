@@ -125,7 +125,7 @@ func sizeFromType(t Type) (ByteSize, bool) {
 	}
 }
 
-func ReadBool(val []byte) bool {
+func readBool(val []byte) bool {
 	expectSize(val, int8Size)
 	return val[0] == 1
 }
@@ -150,12 +150,12 @@ func compareBool(l, r bool) int {
 	return 1
 }
 
-func ReadInt8(val []byte) int8 {
+func readInt8(val []byte) int8 {
 	expectSize(val, int8Size)
 	return int8(val[0])
 }
 
-func WriteInt8(buf []byte, val int8) {
+func writeInt8(buf []byte, val int8) {
 	expectSize(buf, int8Size)
 	buf[0] = byte(val)
 }
@@ -170,12 +170,12 @@ func compareInt8(l, r int8) int {
 	}
 }
 
-func ReadUint8(val []byte) uint8 {
+func readUint8(val []byte) uint8 {
 	expectSize(val, uint8Size)
 	return val[0]
 }
 
-func WriteUint8(buf []byte, val uint8) {
+func writeUint8(buf []byte, val uint8) {
 	expectSize(buf, uint8Size)
 	buf[0] = byte(val)
 }
@@ -190,12 +190,12 @@ func compareUint8(l, r uint8) int {
 	}
 }
 
-func ReadInt16(val []byte) int16 {
+func readInt16(val []byte) int16 {
 	expectSize(val, int16Size)
 	return int16(binary.LittleEndian.Uint16(val))
 }
 
-func WriteInt16(buf []byte, val int16) {
+func writeInt16(buf []byte, val int16) {
 	expectSize(buf, int16Size)
 	binary.LittleEndian.PutUint16(buf, uint16(val))
 }
@@ -210,12 +210,12 @@ func compareInt16(l, r int16) int {
 	}
 }
 
-func ReadUint16(val []byte) uint16 {
+func readUint16(val []byte) uint16 {
 	expectSize(val, uint16Size)
 	return binary.LittleEndian.Uint16(val)
 }
 
-func WriteUint16(buf []byte, val uint16) {
+func writeUint16(buf []byte, val uint16) {
 	expectSize(buf, uint16Size)
 	binary.LittleEndian.PutUint16(buf, val)
 }
@@ -230,12 +230,12 @@ func compareUint16(l, r uint16) int {
 	}
 }
 
-func ReadInt32(val []byte) int32 {
+func readInt32(val []byte) int32 {
 	expectSize(val, int32Size)
 	return int32(binary.LittleEndian.Uint32(val))
 }
 
-func WriteInt32(buf []byte, val int32) {
+func writeInt32(buf []byte, val int32) {
 	expectSize(buf, int32Size)
 	binary.LittleEndian.PutUint32(buf, uint32(val))
 }
@@ -250,12 +250,12 @@ func compareInt32(l, r int32) int {
 	}
 }
 
-func ReadUint32(val []byte) uint32 {
+func readUint32(val []byte) uint32 {
 	expectSize(val, uint32Size)
 	return binary.LittleEndian.Uint32(val)
 }
 
-func WriteUint32(buf []byte, val uint32) {
+func writeUint32(buf []byte, val uint32) {
 	expectSize(buf, uint32Size)
 	binary.LittleEndian.PutUint32(buf, val)
 }
@@ -270,12 +270,12 @@ func compareUint32(l, r uint32) int {
 	}
 }
 
-func ReadInt64(val []byte) int64 {
+func readInt64(val []byte) int64 {
 	expectSize(val, int64Size)
 	return int64(binary.LittleEndian.Uint64(val))
 }
 
-func WriteInt64(buf []byte, val int64) {
+func writeInt64(buf []byte, val int64) {
 	expectSize(buf, int64Size)
 	binary.LittleEndian.PutUint64(buf, uint64(val))
 }
@@ -290,12 +290,12 @@ func compareInt64(l, r int64) int {
 	}
 }
 
-func ReadUint64(val []byte) uint64 {
+func readUint64(val []byte) uint64 {
 	expectSize(val, uint64Size)
 	return binary.LittleEndian.Uint64(val)
 }
 
-func WriteUint64(buf []byte, val uint64) {
+func writeUint64(buf []byte, val uint64) {
 	expectSize(buf, uint64Size)
 	binary.LittleEndian.PutUint64(buf, val)
 }
@@ -310,12 +310,12 @@ func compareUint64(l, r uint64) int {
 	}
 }
 
-func ReadFloat32(val []byte) float32 {
+func readFloat32(val []byte) float32 {
 	expectSize(val, float32Size)
-	return math.Float32frombits(ReadUint32(val))
+	return math.Float32frombits(readUint32(val))
 }
 
-func WriteFloat32(buf []byte, val float32) {
+func writeFloat32(buf []byte, val float32) {
 	expectSize(buf, float32Size)
 	binary.LittleEndian.PutUint32(buf, math.Float32bits(val))
 }
@@ -330,12 +330,12 @@ func compareFloat32(l, r float32) int {
 	}
 }
 
-func ReadFloat64(val []byte) float64 {
+func readFloat64(val []byte) float64 {
 	expectSize(val, float64Size)
-	return math.Float64frombits(ReadUint64(val))
+	return math.Float64frombits(readUint64(val))
 }
 
-func WriteFloat64(buf []byte, val float64) {
+func writeFloat64(buf []byte, val float64) {
 	expectSize(buf, float64Size)
 	binary.LittleEndian.PutUint64(buf, math.Float64bits(val))
 }
@@ -350,7 +350,7 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func ReadTimestamp(buf []byte) (t time.Time) {
+func readTimestamp(buf []byte) (t time.Time) {
 	expectSize(buf, timestampSize)
 	if err := t.UnmarshalBinary(buf); err != nil {
 		panic(err)
@@ -358,7 +358,7 @@ func ReadTimestamp(buf []byte) (t time.Time) {
 	return t
 }
 
-func WriteTimestamp(buf []byte, val time.Time) {
+func writeTimestamp(buf []byte, val time.Time) {
 	expectSize(buf, timestampSize)
 	// todo(andy): fix allocation here
 	m, _ := val.MarshalBinary()
@@ -375,7 +375,7 @@ func compareTimestamp(l, r time.Time) int {
 	}
 }
 
-func ReadString(val []byte) string {
+func readString(val []byte) string {
 	// todo(andy): fix allocation
 	return string(val)
 }
@@ -420,36 +420,36 @@ func compare(typ Type, left, right []byte) int {
 
 	switch typ.Enc {
 	case Int8Enc:
-		return compareInt8(ReadInt8(left), ReadInt8(right))
+		return compareInt8(readInt8(left), readInt8(right))
 	case Uint8Enc:
-		return compareUint8(ReadUint8(left), ReadUint8(right))
+		return compareUint8(readUint8(left), readUint8(right))
 	case Int16Enc:
-		return compareInt16(ReadInt16(left), ReadInt16(right))
+		return compareInt16(readInt16(left), readInt16(right))
 	case Uint16Enc:
-		return compareUint16(ReadUint16(left), ReadUint16(right))
+		return compareUint16(readUint16(left), readUint16(right))
 	case Int32Enc:
-		return compareInt32(ReadInt32(left), ReadInt32(right))
+		return compareInt32(readInt32(left), readInt32(right))
 	case Uint32Enc:
-		return compareUint32(ReadUint32(left), ReadUint32(right))
+		return compareUint32(readUint32(left), readUint32(right))
 	case Int64Enc:
-		return compareInt64(ReadInt64(left), ReadInt64(right))
+		return compareInt64(readInt64(left), readInt64(right))
 	case Uint64Enc:
-		return compareUint64(ReadUint64(left), ReadUint64(right))
+		return compareUint64(readUint64(left), readUint64(right))
 	case Float32Enc:
-		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
+		return compareFloat32(readFloat32(left), readFloat32(right))
 	case Float64Enc:
-		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
+		return compareFloat64(readFloat64(left), readFloat64(right))
 	case YearEnc:
-		return compareInt16(ReadInt16(left), ReadInt16(right))
+		return compareInt16(readInt16(left), readInt16(right))
 	case DateEnc, DatetimeEnc, TimestampEnc:
-		return compareTimestamp(ReadTimestamp(left), ReadTimestamp(right))
+		return compareTimestamp(readTimestamp(left), readTimestamp(right))
 	case TimeEnc:
 		panic("unimplemented")
 	case DecimalEnc:
 		// todo(andy): temporary Decimal implementation
 		fallthrough
 	case StringEnc:
-		return compareString(ReadString(left), ReadString(right))
+		return compareString(readString(left), readString(right))
 	case BytesEnc:
 		return compareBytes(readBytes(left), readBytes(right))
 	default:

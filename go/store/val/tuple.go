@@ -157,7 +157,7 @@ func (tup Tuple) Count() int {
 
 func (tup Tuple) fieldCount() int {
 	sl := tup[tup.size()-numFieldsSize:]
-	return int(ReadUint16(sl))
+	return int(readUint16(sl))
 }
 
 func (tup Tuple) valueCount() int {
@@ -192,5 +192,5 @@ func sizeOf(val []byte) ByteSize {
 
 func writeFieldCount(tup Tuple, count int) {
 	sl := tup[len(tup)-int(numFieldsSize):]
-	WriteUint16(sl, uint16(count))
+	writeUint16(sl, uint16(count))
 }

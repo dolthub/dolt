@@ -54,7 +54,7 @@ func (os Offsets) getOffset(i int) ByteSize {
 		return 0
 	}
 	start := (i - 1) * 2
-	off := ReadUint16(os[start : start+2])
+	off := readUint16(os[start : start+2])
 	return ByteSize(off)
 }
 
@@ -64,7 +64,7 @@ func (os Offsets) Put(i int, off ByteSize) {
 		return
 	}
 	start := (i - 1) * 2
-	WriteUint16(os[start:start+2], uint16(off))
+	writeUint16(os[start:start+2], uint16(off))
 }
 
 // isLastIndex returns true if |i| is the last index in |sl|.
