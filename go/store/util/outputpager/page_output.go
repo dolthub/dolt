@@ -88,7 +88,7 @@ func Start() *Pager {
 			p.closePipe()
 			p.doneCh <- struct{}{}
 		case <-p.doneCh:
-				return
+			return
 		}
 	}()
 
