@@ -1853,3 +1853,37 @@ SQL
     [[ "$output" =~ "4,5,6" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
 }
+
+@test "foreign-keys: alter table add constraint for different database" {
+    skip "add constraint on foreign key without create index should be failing"
+    run dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.cities (pk integer NOT NULL, city varchar(255), state varchar(2));
+CREATE TABLE public.states (state_id integer NOT NULL, state varchar(2));
+ALTER TABLE public.cities ADD CONSTRAINT cities_pkey PRIMARY KEY (pk);
+ALTER TABLE public.states ADD CONSTRAINT states_pkey PRIMARY KEY (state_id);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state)";
+SQL
+    [ $status -eq 1 ]
+    [[ $output =~ "error" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "PRIMARY KEY (\`pk\`)" ]] || false
+    [[ ! $output =~ "CONSTRAINT" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "PRIMARY KEY (\`state_id\`)" ]] || false
+    [[ ! $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+
+    run dolt sql <<SQL
+CREATE INDEX foreign_key1 ON public.states(state);
+ALTER TABLE public.cities ADD CONSTRAINT foreign_key1 FOREIGN KEY (state) REFERENCES public.states(state);
+SQL
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SHOW CREATE TABLE public.cities"
+    [[ $output =~ "CONSTRAINT \`foreign_key1\` FOREIGN KEY (\`state\`) REFERENCES \`states\` (\`state\`)" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE public.states"
+    [[ $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
+}
