@@ -311,6 +311,34 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
+@test "log: --oneline removes all new lines" {
+    dolt commit --allow-empty -m "commit 1"
+    dolt commit --allow-empty -m "commit 2"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+}
+
+@test "log: --decorate=short shows trimmed branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=short
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "tag_v0" ]] || false
+}
+
+@test "log: --decorate=full shows full branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=full
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    [[ "$output" =~ "refs/tags/tag_v0" ]] || false
+}
+
+@test "log: --decorate=no doesn't show branches or tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=no
+    [[ !("$output" =~ "main") ]] || false
+    [[ !("$output" =~ "tag_v0") ]] || false
+}
+
 @test "log: check pager" {
     skiponwindows "Need to install expect and make this script work on windows."
     dolt commit --allow-empty -m "commit 1"

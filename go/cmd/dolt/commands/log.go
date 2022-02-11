@@ -187,7 +187,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	for _, t := range tags {
 		refName := t.Ref.String()
 		if opts.decoration != "full" {
-			refName = refName[11:] // trim out "refs/heads/"
+			refName = refName[10:] // trim out "refs/tags/"
 		}
 		refName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", refName) // tags names are bright yellow (33;1m)
 		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], refName)
