@@ -26,7 +26,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	flag "github.com/juju/gnuflag"
 	goisatty "github.com/mattn/go-isatty"
@@ -76,16 +78,20 @@ func Start() *Pager {
 	cmd.Start()
 
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		p.closePipe()
+		p.doneCh <- struct{}{}
+	}()
+
 	go func() {
 		err := cmd.Wait()
-		// ^C returns 'exit status 0xc000013a' err on Windows
 		if err != nil {
-			if _, ok := err.(*exec.ExitError); !ok {
-				fmt.Errorf("cmd.Wait: %v", err)
-			}
+			fmt.Errorf("cmd.Wait: %v", err)
 			err = nil
 		}
-		d.Chk.NoError(err)
 		p.closePipe()
 		p.doneCh <- struct{}{}
 	}()
