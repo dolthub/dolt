@@ -358,7 +358,7 @@ SQL
     currenttest=$output
 
     run dolt sql -q "select * from common.test"
-    commontest=$output
+    [[ "$output" =~ "common database text1" ]] || false
 
     dolt sql -q "drop table common.test"
 
