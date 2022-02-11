@@ -23,15 +23,14 @@ package outputpager
 
 import (
 	"fmt"
+	flag "github.com/juju/gnuflag"
+	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
-
-	flag "github.com/juju/gnuflag"
-	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
@@ -78,18 +77,14 @@ func Start() *Pager {
 	cmd.Start()
 
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
-	sigtermChannel := make(chan os.Signal, 1)
-	defer close(sigtermChannel)
 
-	signal.Notify(sigtermChannel, os.Interrupt, syscall.SIGTERM)
+	interruptChannel := make(chan os.Signal, 1)
+	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
-		select {
-		case <-sigtermChannel:
-			p.closePipe()
-			p.doneCh <- struct{}{}
-		case <-p.doneCh:
-			return
-		}
+		<-interruptChannel
+		close(interruptChannel)
+		p.closePipe()
+		p.doneCh <- struct{}{}
 	}()
 
 	go func() {
