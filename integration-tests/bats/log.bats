@@ -311,32 +311,65 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
-@test "log: --oneline removes all new lines" {
-    dolt commit --allow-empty -m "commit 1"
-    dolt commit --allow-empty -m "commit 2"
+@test "log: --oneline only shows commit message in one line" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ !("$output" =~ "commit") ]] || false
     res=$(dolt log --oneline | wc -l)
     [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
 }
 
 @test "log: --decorate=short shows trimmed branches and tags" {
     dolt tag tag_v0
     run dolt log --decorate=short
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
     [[ "$output" =~ "main" ]] || false
-    [[ "$output" =~ "tag_v0" ]] || false
+    [[ "$output" =~ "tag: tag_v0" ]] || false
+    [[ !("$output" =~ "/refs/heads/") ]] || false
+    [[ !("$output" =~ "/refs/tags/") ]] || false
 }
 
 @test "log: --decorate=full shows full branches and tags" {
     dolt tag tag_v0
     run dolt log --decorate=full
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
     [[ "$output" =~ "refs/heads/main" ]] || false
-    [[ "$output" =~ "refs/tags/tag_v0" ]] || false
+    [[ "$output" =~ "tag: refs/tags/tag_v0" ]] || false
 }
 
 @test "log: --decorate=no doesn't show branches or tags" {
     dolt tag tag_v0
     run dolt log --decorate=no
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
     [[ !("$output" =~ "main") ]] || false
     [[ !("$output" =~ "tag_v0") ]] || false
+}
+
+@test "log: decorate and oneline work together" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline --decorate=full
+    [[ !("$output" =~ "commit") ]] || false
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    res=$(dolt log --oneline --decorate=full | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
 }
 
 @test "log: check pager" {
