@@ -29,6 +29,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/geometry"
 )
 
 var ErrUnknownType = errors.New("unknown type $@")
@@ -374,27 +375,27 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 	case PointKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := ParseEWKBHeader(buf)
-		if geomType != PointID {
+		srid, _, geomType := geometry.ParseEWKBHeader(buf)
+		if geomType != geometry.PointType {
 			return nil, ErrUnknownType
 		}
-		return ParseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
 	case LinestringKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := ParseEWKBHeader(buf)
-		if geomType != LinestringID {
+		srid, _, geomType := geometry.ParseEWKBHeader(buf)
+		if geomType != geometry.LinestringType {
 			return nil, ErrUnknownType
 		}
-		return ParseEWKBLine(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
 	case PolygonKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
-		srid, _, geomType := ParseEWKBHeader(buf)
-		if geomType != PolygonID {
+		srid, _, geomType := geometry.ParseEWKBHeader(buf)
+		if geomType != geometry.PolygonType {
 			return nil, ErrUnknownType
 		}
-		return ParseEWKBPoly(buf[EWKBHeaderSize:], srid), nil
+		return ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid), nil
 	case TypeKind:
 		r.skipKind()
 		return r.readType()

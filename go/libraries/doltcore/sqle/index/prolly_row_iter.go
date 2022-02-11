@@ -121,13 +121,19 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx] = GetField(it.keyDesc, keyIdx, key)
+		row[rowIdx], err = GetField(it.keyDesc, keyIdx, key)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for valIdx, rowIdx := range it.valProj {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx] = GetField(it.valDesc, valIdx, value)
+		row[rowIdx], err = GetField(it.valDesc, valIdx, value)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return row, nil

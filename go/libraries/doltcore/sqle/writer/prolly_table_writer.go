@@ -351,26 +351,30 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 }
 
 func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	dupe := make(sql.Row, len(m.keyMap)+len(m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
 		for from := range m.keyMap {
 			to := m.keyMap.MapOrdinal(from)
-			existing[to] = index.GetField(kd, from, key)
+			if dupe[to], err = index.GetField(kd, from, key); err != nil {
+				return err
+			}
 		}
 
 		vd := m.valBld.Desc
 		for from := range m.valMap {
 			to := m.valMap.MapOrdinal(from)
-			existing[to] = index.GetField(vd, from, value)
+			if dupe[to], err = index.GetField(vd, from, value); err != nil {
+				return err
+			}
 		}
 		return
 	})
 
 	s := m.keyBld.Desc.Format(key)
 
-	return sql.NewUniqueKeyErr(s, true, existing)
+	return sql.NewUniqueKeyErr(s, true, dupe)
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {

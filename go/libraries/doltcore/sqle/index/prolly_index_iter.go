@@ -137,20 +137,26 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 	}
 }
 
-func (p prollyIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) {
+func (p prollyIndexIter) rowFromTuples(key, value val.Tuple, r sql.Row) (err error) {
 	keyDesc, valDesc := p.primary.Descriptors()
 
 	for keyIdx, rowIdx := range p.keyMap {
 		if rowIdx == -1 {
 			continue
 		}
-		r[rowIdx] = GetField(keyDesc, keyIdx, key)
+		r[rowIdx], err = GetField(keyDesc, keyIdx, key)
+		if err != nil {
+			return err
+		}
 	}
 	for valIdx, rowIdx := range p.valMap {
 		if rowIdx == -1 {
 			continue
 		}
-		r[rowIdx] = GetField(valDesc, valIdx, value)
+		r[rowIdx], err = GetField(valDesc, valIdx, value)
+		if err != nil {
+			return err
+		}
 	}
 
 	return
@@ -241,18 +247,23 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, len(p.keyMap))
-	p.writeRowFromTuples(k, v, r)
+	if err := p.writeRowFromTuples(k, v, r); err != nil {
+		return nil, err
+	}
 
 	return r, nil
 }
 
-func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.Row) {
+func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.Row) (err error) {
 	for to := range p.keyMap {
 		from := p.keyMap.MapOrdinal(to)
 		if from == -1 {
 			continue
 		}
-		r[to] = GetField(p.keyDesc, from, key)
+		r[to], err = GetField(p.keyDesc, from, key)
+		if err != nil {
+			return err
+		}
 	}
 
 	for to := range p.valMap {
@@ -260,7 +271,10 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.
 		if from == -1 {
 			continue
 		}
-		r[to] = GetField(p.valDesc, from, value)
+		r[to], err = GetField(p.valDesc, from, value)
+		if err != nil {
+			return err
+		}
 	}
 
 	return

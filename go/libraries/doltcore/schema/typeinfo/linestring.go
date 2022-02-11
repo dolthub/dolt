@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -108,9 +109,9 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Linestring); ok {
-		buf := make([]byte, types.EWKBHeaderSize+types.LengthSize+types.PointDataSize*len(val.Points))
-		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
-		types.WriteEWKBLineData(val, buf[types.EWKBHeaderSize:])
+		buf := make([]byte, geometry.EWKBHeaderSize+types.LengthSize+geometry.PointSize*len(val.Points))
+		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
+		types.WriteEWKBLineData(val, buf[geometry.EWKBHeaderSize:])
 		resStr := string(buf)
 		return &resStr, nil
 	}

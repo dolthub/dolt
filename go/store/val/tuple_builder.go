@@ -15,7 +15,6 @@
 package val
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -212,15 +211,11 @@ func (tb *TupleBuilder) PutBytes(i int, v []byte) {
 }
 
 // PutJSON writes a []byte to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutJSON(i int, v interface{}) {
+func (tb *TupleBuilder) PutJSON(i int, v []byte) {
 	tb.Desc.expectEncoding(i, JSONEnc)
-	buf, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	sz := ByteSize(len(buf))
+	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], buf)
+	writeBytes(tb.fields[i], v)
 	tb.pos += sz
 }
 

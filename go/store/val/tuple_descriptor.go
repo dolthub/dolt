@@ -15,7 +15,6 @@
 package val
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -278,13 +277,11 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 
 // GetJSON reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
+func (td TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, JSONEnc)
 	b := tup.GetField(i)
 	if b != nil {
-		if err := json.Unmarshal(b, &v); err != nil {
-			panic(err)
-		}
+		v = readBytes(b)
 		ok = true
 	}
 	return

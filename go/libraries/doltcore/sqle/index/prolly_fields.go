@@ -15,18 +15,18 @@
 package index
 
 import (
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/expression/function"
 
+	geo "github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 // GetField reads the value from the ith field of the Tuple as an interface{}.
-func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}) {
+func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error) {
 	var ok bool
 	switch td.Types[i].Enc {
 	case val.Int8Enc:
@@ -62,30 +62,32 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}) {
 	case val.BytesEnc:
 		v, ok = td.GetBytes(i, tup)
 	case val.JSONEnc:
-		var js interface{}
-		js, ok = td.GetJSON(i, tup)
+		var buf []byte
+		buf, ok = td.GetJSON(i, tup)
 		if ok {
-			v = sql.JSONDocument{Val: js}
+			var doc sql.JSONDocument
+			err = json.Unmarshal(buf, &doc.Val)
+			v = doc
 		}
 	case val.GeometryEnc:
-		var geo []byte
-		geo, ok = td.GetGeometry(i, tup)
+		var buf []byte
+		buf, ok = td.GetGeometry(i, tup)
 		if ok {
-			v = deserializeGeometry(geo)
+			v = deserializeGeometry(buf)
 		}
 	default:
 		panic("unknown val.encoding")
 	}
-	if !ok {
-		return nil
+	if !ok || err != nil {
+		return nil, err
 	}
-	return v
+	return v, err
 }
 
 // PutField writes an interface{} to the ith field of the Tuple being built.
-func PutField(tb *val.TupleBuilder, i int, v interface{}) {
+func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	if v == nil {
-		return // NULL
+		return nil // NULL
 	}
 
 	enc := tb.Desc.Types[i].Enc
@@ -126,17 +128,16 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) {
 		}
 		tb.PutBytes(i, v.([]byte))
 	case val.GeometryEnc:
-		// todo(andy): remove GMS dependency
 		tb.PutGeometry(i, serializeGeometry(v))
 	case val.JSONEnc:
-		// todo(andy): remove GMS dependency
-		tb.PutJSON(i, v.(sql.JSONDocument).Val)
+		buf, err := json.Marshal(v.(sql.JSONDocument).Val)
+		if err != nil {
+			return err
+		}
+		tb.PutJSON(i, buf)
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
-}
-
-func deserializeGeometry(buf []byte) (v interface{}) {
 	return nil
 }
 
@@ -192,102 +193,31 @@ func convUint(v interface{}) uint {
 	}
 }
 
-// todo(andy): remove GMS dependency
-//  have the engine pass serialized bytes
-
-const (
-	sridSize       = val.ByteSize(4)
-	endianSize     = val.ByteSize(1)
-	typeSize       = val.ByteSize(4)
-	ewkbHeaderSize = sridSize + endianSize + typeSize
-)
-
-const (
-	pointType      = uint32(1)
-	linestringType = uint32(2)
-	polygonType    = uint32(3)
-
-	littleEndian = uint8(1)
-)
-
-type ewkbHeader struct {
-	srid   uint32
-	endian uint8
-	typ    uint32
-}
-
-func (h ewkbHeader) writeTo(buf []byte) {
-	expectSize(buf, ewkbHeaderSize)
-	binary.LittleEndian.PutUint32(buf[:sridSize], h.srid)
-	buf[sridSize] = h.endian
-	binary.LittleEndian.PutUint32(buf[sridSize+endianSize:ewkbHeaderSize], h.typ)
-}
-
-func readHeaderFrom(buf []byte) (h ewkbHeader) {
-	expectSize(buf, ewkbHeaderSize)
-	h.srid = binary.LittleEndian.Uint32(buf[:sridSize])
-	h.endian = uint8(buf[sridSize])
-	h.typ = binary.LittleEndian.Uint32(buf[sridSize+endianSize : ewkbHeaderSize])
+func deserializeGeometry(buf []byte) (v interface{}) {
+	srid, _, typ := geo.ParseEWKBHeader(buf)
+	buf = buf[geo.EWKBHeaderSize:]
+	switch typ {
+	case geo.PointType:
+		v = geo.DeserializePoint(buf, srid)
+	case geo.LinestringType:
+		v = geo.DeserializeLinestring(buf, srid)
+	case geo.PolygonType:
+		v = geo.DeserializePolygon(srid, buf)
+	default:
+		panic(fmt.Sprintf("unknown geometry type %d", typ))
+	}
 	return
 }
 
 func serializeGeometry(v interface{}) []byte {
 	switch t := v.(type) {
 	case sql.Point:
-		return serializePoint(t)
+		return geo.SerializePoint(t)
 	case sql.Linestring:
-		return serializeLinestring(t)
+		return geo.SerializeLinestring(t)
 	case sql.Polygon:
-		return serializePolygon(t)
+		return geo.SerializePolygon(t)
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
-	}
-}
-
-func serializePoint(p sql.Point) (buf []byte) {
-	pb := function.PointToBytes(p)
-	buf = make([]byte, ewkbHeaderSize+val.ByteSize(len(pb)))
-	copy(buf[ewkbHeaderSize:], pb)
-
-	h := ewkbHeader{
-		srid:   p.SRID,
-		endian: littleEndian,
-		typ:    pointType,
-	}
-	h.writeTo(buf[:ewkbHeaderSize])
-	return
-}
-
-func serializeLinestring(l sql.Linestring) (buf []byte) {
-	lb := function.LineToBytes(l)
-	buf = make([]byte, ewkbHeaderSize+val.ByteSize(len(lb)))
-	copy(buf[ewkbHeaderSize:], lb)
-
-	h := ewkbHeader{
-		srid:   l.SRID,
-		endian: littleEndian,
-		typ:    linestringType,
-	}
-	h.writeTo(buf[:ewkbHeaderSize])
-	return
-}
-
-func serializePolygon(p sql.Polygon) (buf []byte) {
-	pb := function.PolyToBytes(p)
-	buf = make([]byte, ewkbHeaderSize+val.ByteSize(len(pb)))
-	copy(buf[ewkbHeaderSize:], pb)
-
-	h := ewkbHeader{
-		srid:   p.SRID,
-		endian: littleEndian,
-		typ:    polygonType,
-	}
-	h.writeTo(buf[:ewkbHeaderSize])
-	return
-}
-
-func expectSize(buf []byte, sz val.ByteSize) {
-	if val.ByteSize(len(buf)) != sz {
-		panic("byte slice is not of expected size")
 	}
 }
