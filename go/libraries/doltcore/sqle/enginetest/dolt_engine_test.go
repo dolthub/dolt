@@ -303,6 +303,22 @@ func TestVersionedViews(t *testing.T) {
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
+func TestWindowFunctions(t *testing.T) {
+	enginetest.TestWindowFunctions(t, newDoltHarness(t))
+}
+
+func TestWindowRowFrames(t *testing.T) {
+	enginetest.TestWindowRowFrames(t, newDoltHarness(t))
+}
+
+func TestWindowRangeFrames(t *testing.T) {
+	enginetest.TestWindowRangeFrames(t, newDoltHarness(t))
+}
+
+func TestNamedWindows(t *testing.T) {
+	enginetest.TestNamedWindows(t, newDoltHarness(t))
+}
+
 func TestNaturalJoin(t *testing.T) {
 	enginetest.TestNaturalJoin(t, newDoltHarness(t))
 }
@@ -378,6 +394,17 @@ func TestDoltMerge(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltMerge {
 		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestScopedDoltHistorySystemTables(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range ScopedDoltHistoryScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
 	}
 }
 
@@ -469,6 +496,19 @@ func TestSingleTransactionScript(t *testing.T) {
 
 func TestSystemTableQueries(t *testing.T) {
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
+}
+
+func TestUnscopedDoltDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range UnscopedDiffTableTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
 }
 
 func TestTestReadOnlyDatabases(t *testing.T) {

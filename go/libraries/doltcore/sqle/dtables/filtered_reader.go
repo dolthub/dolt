@@ -249,18 +249,20 @@ func CreateReaderFuncLimitedByExpressions(nbf *types.NomsBinFormat, tblSch schem
 	pkCols := tblSch.GetPKCols()
 	var keySet setalgebra.Set = setalgebra.UniversalSet{}
 	var err error
-	for _, filter := range filters {
-		var setForFilter setalgebra.Set
-		setForFilter, err = getSetForKeyColumn(nbf, pkCols.GetByIndex(0), filter)
 
-		if err != nil {
-			break
-		}
+	if len(pkCols.GetColumns()) > 0 {
+		for _, filter := range filters {
+			var setForFilter setalgebra.Set
 
-		keySet, err = keySet.Intersect(setForFilter)
+			setForFilter, err = getSetForKeyColumn(nbf, pkCols.GetByIndex(0), filter)
+			if err != nil {
+				break
+			}
 
-		if err != nil {
-			break
+			keySet, err = keySet.Intersect(setForFilter)
+			if err != nil {
+				break
+			}
 		}
 	}
 

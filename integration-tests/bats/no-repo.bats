@@ -311,3 +311,14 @@ NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
     [[ "$output" =~ "__DOLT_1__" ]]
     [[ ! "$output" =~ "__LD_1__" ]]
 }
+
+@test "no-repo: dolt login exits when receiving SIGINT" {
+    dolt login & # run this in the background
+    PID=$! # capture background PID
+    sleep 1 # Wait a sec
+    kill -SIGINT $PID # Send SIGINT (CTRL + C) to PID
+    sleep 1 # Wait another sec
+    run grep -q 'dolt' <(ps) # Ensure no process named dolt is running
+    [ "$output" == "" ]
+    run kill -9 $PID # Kill process if it doesn't pass
+}

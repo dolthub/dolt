@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"io"
+	"math"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
@@ -62,6 +63,26 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 	}
 
 	return nil
+}
+
+func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
+	idx, err := ReadTableIndex(rd)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		cerr := idx.Close()
+		if err == nil {
+			err = cerr
+		}
+	}()
+
+	return idx.prefixes, nil
+}
+
+func GuessPrefixOrdinal(prefix uint64, n uint32) int {
+	hi := prefix >> 32
+	return int((hi * uint64(n)) / uint64(math.MaxUint32))
 }
 
 func readNFrom(rd io.ReadSeeker, offset uint64, length uint32) ([]byte, error) {

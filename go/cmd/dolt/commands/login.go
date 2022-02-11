@@ -45,7 +45,14 @@ var loginDocs = cli.CommandDocumentationContent{
 	Synopsis: []string{"[{{.LessThan}}creds{{.GreaterThan}}]"},
 }
 
+// The LoginCmd doesn't handle its own signals, but should stop cancel global context when receiving SIGINT signal
+func (cmd LoginCmd) InstallsSignalHandlers() bool {
+	return true
+}
+
 type LoginCmd struct{}
+
+var _ cli.SignalCommand = SqlCmd{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd LoginCmd) Name() string {
