@@ -213,6 +213,14 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+func TestUserPrivileges(t *testing.T) {
+	enginetest.TestUserPrivileges(t, newDoltHarness(t))
+}
+
+func TestUserAuthentication(t *testing.T) {
+	enginetest.TestUserAuthentication(t, newDoltHarness(t))
+}
+
 func TestComplexIndexQueries(t *testing.T) {
 	enginetest.TestComplexIndexQueries(t, newDoltHarness(t))
 }
