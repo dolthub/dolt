@@ -23,14 +23,15 @@ package outputpager
 
 import (
 	"fmt"
-	flag "github.com/juju/gnuflag"
-	goisatty "github.com/mattn/go-isatty"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"sync"
 	"syscall"
+
+	flag "github.com/juju/gnuflag"
+	goisatty "github.com/mattn/go-isatty"
 
 	"github.com/dolthub/dolt/go/store/d"
 )
