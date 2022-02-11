@@ -2599,3 +2599,17 @@ SQL
     [[ "$output" =~ "Bbbb" ]] || false
     [[ "$output" =~ "bBbb" ]] || false
 }
+
+@test "index: alter table create index for different database" {
+    skip "create index for different database fix in progress"
+    dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.test (pk integer NOT NULL, c1 integer);
+ALTER TABLE public.test ADD CONSTRAINT index_test_pkey PRIMARY KEY (pk);
+CREATE INDEX index_test_c1_idx ON public.test (c1);
+SQL
+
+    run dolt sql -q "show create table public.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "KEY \`index_test_c1_idx\`" ]] || false
+}
