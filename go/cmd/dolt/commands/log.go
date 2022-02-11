@@ -260,10 +260,10 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		}
 
 		commitsInfo = append(commitsInfo, logNode{commitMeta: meta,
-			commitHash: cmHash,
+			commitHash:   cmHash,
 			parentHashes: pHashes,
-			branchNames: cHashToRefs[cmHash],
-			isHead: cmHash == h})
+			branchNames:  cHashToRefs[cmHash],
+			isHead:       cmHash == h})
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -362,7 +362,7 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 			}
 
 			commitsInfo = append(commitsInfo, logNode{commitMeta: meta,
-				commitHash: prevHash,
+				commitHash:   prevHash,
 				parentHashes: ph})
 
 			numLines--
