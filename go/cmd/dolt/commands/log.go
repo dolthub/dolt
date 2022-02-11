@@ -164,8 +164,9 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		return 1
 	}
 
-	// TODO: easier way to get these associations?
 	cHashToRefs := map[hash.Hash][]string{}
+
+	// Get all branches
 	branches, err := dEnv.DoltDB.GetBranchesWithHashes(ctx)
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
@@ -179,6 +180,10 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
 		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
 	}
+
+	// TODO: Get all remote branches
+
+	// Get all tags
 	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
 	if err != nil {
 		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Tag information."))
@@ -236,7 +241,11 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 			return 1
 		}
 
-		commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: cmHash, parentHashes: pHashes, branchNames: cHashToRefs[cmHash], isHead: cmHash == h})
+		commitsInfo = append(commitsInfo, logNode{commitMeta: meta,
+			commitHash: cmHash,
+			parentHashes: pHashes,
+			branchNames: cHashToRefs[cmHash],
+			isHead: cmHash == h})
 	}
 
 	logToStdOut(opts, commitsInfo)
@@ -334,7 +343,9 @@ func logTableCommits(ctx context.Context, dEnv *env.DoltEnv, opts logOpts, cs *d
 				return err
 			}
 
-			commitsInfo = append(commitsInfo, logNode{commitMeta: meta, commitHash: prevHash, parentHashes: ph})
+			commitsInfo = append(commitsInfo, logNode{commitMeta: meta,
+				commitHash: prevHash,
+				parentHashes: ph})
 
 			numLines--
 		}
