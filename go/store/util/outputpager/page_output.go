@@ -78,19 +78,24 @@ func Start() *Pager {
 	cmd.Start()
 
 	p := &Pager{stdout, stdin, stdout, &sync.Mutex{}, make(chan struct{})}
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	sigtermChannel := make(chan os.Signal, 1)
+	defer close(sigtermChannel)
+
+	signal.Notify(sigtermChannel, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-c
-		p.closePipe()
-		p.doneCh <- struct{}{}
+		select {
+		case <-sigtermChannel:
+			p.closePipe()
+			p.doneCh <- struct{}{}
+		case <-p.doneCh:
+				return
+		}
 	}()
 
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			fmt.Errorf("cmd.Wait: %v", err)
-			err = nil
+			fmt.Println("cmd.Wait: ", err)
 		}
 		p.closePipe()
 		p.doneCh <- struct{}{}
