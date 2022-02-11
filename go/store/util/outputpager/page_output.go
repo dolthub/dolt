@@ -81,10 +81,10 @@ func Start() *Pager {
 
 	interruptChannel := make(chan os.Signal, 1)
 	signal.Notify(interruptChannel, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	defer func() {
-		signal.Stop(interruptChannel)
-		//close(interruptChannel)
-	}()
+	//defer func() {
+	//	signal.Stop(interruptChannel)
+	//	close(interruptChannel)
+	//}()
 
 	go func() {
 		for {
