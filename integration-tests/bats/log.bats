@@ -372,6 +372,12 @@ teardown() {
     [ "$res" -eq 4 ] # exactly 1 line is added
 }
 
+@test "log: --decorate=notanoption throws error" {
+    run dolt log --decorate=notanoption
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: invalid --decorate option" ]] || false
+}
+
 @test "log: check pager" {
     skiponwindows "Need to install expect and make this script work on windows."
     dolt commit --allow-empty -m "commit 1"

@@ -126,7 +126,7 @@ func (cmd LogCmd) logWithLoggerFunc(ctx context.Context, commandStr string, args
 	switch decorateOption {
 	case "short", "full", "auto", "no":
 	default:
-		cli.PrintErrln(color.HiRedString("fatal : invalid --decorate option: " + decorateOption))
+		cli.PrintErrln(color.HiRedString("fatal: invalid --decorate option: " + decorateOption))
 		return 1
 	}
 	opts := logOpts{
