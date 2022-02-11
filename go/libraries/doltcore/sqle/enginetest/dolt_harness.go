@@ -51,6 +51,7 @@ type DoltHarness struct {
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
 var _ enginetest.SkippingHarness = (*DoltHarness)(nil)
+var _ enginetest.ClientHarness = (*DoltHarness)(nil)
 var _ enginetest.IndexHarness = (*DoltHarness)(nil)
 var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
@@ -144,32 +145,36 @@ func (d *DoltHarness) Parallelism() int {
 }
 
 func (d *DoltHarness) NewContext() *sql.Context {
-	return sql.NewContext(
-		context.Background(),
-		sql.WithSession(d.session))
+	return sql.NewContext(context.Background(), sql.WithSession(d.session))
+}
+
+func (d *DoltHarness) NewContextWithClient(client sql.Client) *sql.Context {
+	return sql.NewContext(context.Background(), sql.WithSession(d.newSessionWithClient(client)))
 }
 
 func (d *DoltHarness) NewSession() *sql.Context {
+	d.session = d.newSessionWithClient(sql.Client{Address: "localhost", User: "root"})
+	return d.NewContext()
+}
+
+func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
 	states := make([]dsess.InitialDbState, len(d.databases))
 	for i, db := range d.databases {
 		states[i] = getDbState(d.t, db, d.env)
 	}
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
-
 	localConfig := d.env.Config.WriteableConfig()
 
-	var err error
-	d.session, err = dsess.NewDoltSession(
+	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
-		enginetest.NewBaseSession(),
+		sql.NewBaseSessionWithClientServer("address", client, 1),
 		pro.(dsess.RevisionDatabaseProvider),
 		localConfig,
 		states...,
 	)
 	require.NoError(d.t, err)
-
-	return d.NewContext()
+	return dSession
 }
 
 func (d *DoltHarness) SupportsNativeIndexCreation() bool {
@@ -224,6 +229,9 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
+	if d.env == nil {
+		d.env = dtestutils.CreateTestEnv()
+	}
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
 	require.NoError(d.t, err)
 	pro := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv.FileSystem(), dbs...)
