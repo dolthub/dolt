@@ -174,7 +174,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	for _, b := range branches {
 		refName := b.Ref.String()
 		if opts.decoration != "full" {
-			refName = refName[11:] // trim out "refs/heads/"
+			refName = b.Ref.GetPath() // trim out "refs/heads/"
 		}
 		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
 		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
@@ -187,7 +187,7 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	for _, t := range tags {
 		refName := t.Ref.String()
 		if opts.decoration != "full" {
-			refName = refName[10:] // trim out "refs/tags/"
+			refName = t.Ref.GetPath() // trim out "refs/tags/"
 		}
 		refName = fmt.Sprintf("\033[33;1mtag: %s\033[0m", refName) // tags names are bright yellow (33;1m)
 		cHashToRefs[t.Hash] = append(cHashToRefs[t.Hash], refName)
