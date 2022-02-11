@@ -816,6 +816,7 @@ type TagWithHash struct {
 	Hash hash.Hash
 }
 
+// GetTagsWithHashes returns a list of objects containing TagRefs with their associated Commit's hash
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
 	var refs []TagWithHash
 	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, v types.Value) error {
@@ -847,6 +848,22 @@ var remotesRefFilter = map[ref.RefType]struct{}{ref.RemoteRefType: {}}
 // GetRemoteRefs returns a list of all remotes in the database.
 func (ddb *DoltDB) GetRemoteRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, remotesRefFilter)
+}
+
+type RemoteWithHash struct {
+	Ref  ref.DoltRef
+	Hash hash.Hash
+}
+
+func (ddb *DoltDB) GetRemotesWithHashes(ctx context.Context) ([]RemoteWithHash, error) {
+	var refs []RemoteWithHash
+	err := ddb.VisitRefsOfType(ctx, remotesRefFilter, func(r ref.DoltRef, v types.Value) error {
+		if tr, ok := v.(types.Ref); ok {
+			refs = append(refs, RemoteWithHash{r, tr.TargetHash()})
+		}
+		return nil
+	})
+	return refs, err
 }
 
 // GetHeadRefs returns a list of all refs that point to a Commit

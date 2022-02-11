@@ -175,13 +175,26 @@ func logCommits(ctx context.Context, dEnv *env.DoltEnv, cs *doltdb.CommitSpec, o
 	for _, b := range branches {
 		refName := b.Ref.String()
 		if opts.decoration != "full" {
-			refName = b.Ref.GetPath() // trim out "refs/heads/"
+			refName = b.Ref.GetPath() // trim out "refs/remotes/"
 		}
-		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // branch names are bright green (32;1m)
+		refName = fmt.Sprintf("\033[31;1m%s\033[0m", refName) // branch names are bright red (31;1m)
 		cHashToRefs[b.Hash] = append(cHashToRefs[b.Hash], refName)
 	}
 
-	// TODO: Get all remote branches
+	// Get all remote branches
+	remotes, err := dEnv.DoltDB.GetRemotesWithHashes(ctx)
+	if err != nil {
+		cli.PrintErrln(color.HiRedString("Fatal error: cannot get Branch information."))
+		return 1
+	}
+	for _, r := range remotes {
+		refName := r.Ref.String()
+		if opts.decoration != "full" {
+			refName = r.Ref.GetPath() // trim out "refs/heads/"
+		}
+		refName = fmt.Sprintf("\033[32;1m%s\033[0m", refName) // remote names are bright red (32;1m)
+		cHashToRefs[r.Hash] = append(cHashToRefs[r.Hash], refName)
+	}
 
 	// Get all tags
 	tags, err := dEnv.DoltDB.GetTagsWithHashes(ctx)
