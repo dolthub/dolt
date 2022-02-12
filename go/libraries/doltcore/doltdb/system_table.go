@@ -141,6 +141,10 @@ var generatedSystemTables = []string{
 	RemotesTableName,
 }
 
+var generatedSystemViewPrefixes = []string{
+	DoltBlameViewPrefix,
+}
+
 var generatedSystemTablePrefixes = []string{
 	DoltDiffTablePrefix,
 	DoltCommitDiffTablePrefix,
@@ -195,6 +199,8 @@ const (
 )
 
 const (
+	// DoltBlameViewPrefix is the prefix assigned to all the generated blame tables
+	DoltBlameViewPrefix = "dolt_blame_"
 	// DoltHistoryTablePrefix is the prefix assigned to all the generated history tables
 	DoltHistoryTablePrefix = "dolt_history_"
 	// DoltDiffTablePrefix is the prefix assigned to all the generated diff tables
@@ -210,6 +216,9 @@ const (
 const (
 	// LogTableName is the log system table name
 	LogTableName = "dolt_log"
+
+	// DiffTableName is the name of the table with a map of commits to tables changed
+	DiffTableName = "dolt_diff"
 
 	// TableOfTablesInConflictName is the conflicts system table name
 	TableOfTablesInConflictName = "dolt_conflicts"

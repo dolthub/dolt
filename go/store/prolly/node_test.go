@@ -25,7 +25,7 @@ import (
 
 func TestRoundTripInts(t *testing.T) {
 	keys, values := ascendingIntPairs(t, 10)
-	require.True(t, sumSize(keys)+sumSize(values) < maxNodeDataSize)
+	require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
 
 	nd := newLeafNode(keys, values)
 	assert.True(t, nd.leafNode())
@@ -39,7 +39,7 @@ func TestRoundTripInts(t *testing.T) {
 func TestRoundTripNodeItems(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < maxNodeDataSize)
+		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.leafNode())

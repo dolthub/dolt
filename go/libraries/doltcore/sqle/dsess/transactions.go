@@ -164,26 +164,9 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	err := checkForConflictsAndConstraintViolations(ctx, workingSet)
 	if err != nil {
 		return nil, nil, err
-	}
-	if forceTransactionCommit.(int8) != 1 {
-		workingRoot := workingSet.WorkingRoot()
-		hasConflicts, err := workingRoot.HasConflicts(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConflicts {
-			return nil, nil, doltdb.ErrUnresolvedConflicts
-		}
-		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		if hasConstraintViolations {
-			return nil, nil, doltdb.ErrUnresolvedConstraintViolations
-		}
 	}
 
 	for i := 0; i < maxTxCommitRetries; i++ {
@@ -273,6 +256,46 @@ func (tx *DoltTransaction) doCommit(
 
 	// TODO: different error type for retries exhausted
 	return nil, nil, datas.ErrOptimisticLockFailed
+}
+
+// checkForConflictsAndConstraintViolations determines which conflicts and constraint violations are ok to commit
+// given the state of certain system variables.
+func checkForConflictsAndConstraintViolations(ctx *sql.Context, workingSet *doltdb.WorkingSet) error {
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	if err != nil {
+		return err
+	}
+
+	allowCommitConflicts, err := ctx.GetSessionVariable(ctx, AllowCommitConflicts)
+	if err != nil {
+		return err
+	}
+
+	workingRoot := workingSet.WorkingRoot()
+
+	if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
+		hasConflicts, err := workingRoot.HasConflicts(ctx)
+		if err != nil {
+			return err
+		}
+		if hasConflicts {
+			return doltdb.ErrUnresolvedConflicts
+		}
+	}
+
+	// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
+	// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
+	if forceTransactionCommit.(int8) != 1 {
+		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+		if err != nil {
+			return err
+		}
+		if hasConstraintViolations {
+			return doltdb.ErrUnresolvedConstraintViolations
+		}
+	}
+
+	return nil
 }
 
 // stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the

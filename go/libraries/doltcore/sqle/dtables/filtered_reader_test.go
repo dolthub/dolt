@@ -37,7 +37,13 @@ const (
 	pk1Tag  = 1
 	c1Name  = "c1"
 	c1Tag   = 2
+	c2Name  = "c2"
+	c2Tag   = 3
 )
+
+var noPKSch = schema.MustSchemaFromCols(schema.NewColCollection(
+	schema.NewColumn(c1Name, c1Tag, types.IntKind, false),
+	schema.NewColumn(c2Name, c2Tag, types.IntKind, false)))
 
 var oneIntPKSch = schema.MustSchemaFromCols(schema.NewColCollection(
 	schema.NewColumn(pk0Name, pk0Tag, types.IntKind, true),
@@ -55,6 +61,22 @@ func int64Range(start, end, stride int64) []int64 {
 	}
 
 	return vals
+}
+
+func genNoPKRows(cols ...int64) []row.Row {
+	rows := make([]row.Row, len(cols))
+
+	var err error
+	for i, col := range cols {
+		taggedVals := row.TaggedValues{c1Tag: types.Int(col), c2Tag: types.Int(col)}
+		rows[i], err = row.New(types.Format_Default, noPKSch, taggedVals)
+
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return rows
 }
 
 func genOneIntPKRows(pks ...int64) []row.Row {
@@ -123,6 +145,24 @@ func TestFilteredReader(t *testing.T) {
 		rowData      []row.Row
 		expectedRows []row.Row
 	}{
+		{
+			"unfiltered test no pks",
+			noPKSch,
+			nil,
+			genNoPKRows(int64Range(0, 20, 1)...),
+			genNoPKRows(int64Range(0, 20, 1)...),
+		},
+		{
+			// When there are no PKs to use to filter, FilteredReader should
+			// return all table data, without throwing any errors.
+			"no pks equality",
+			noPKSch,
+			[]sql.Expression{expression.NewEquals(
+				expression.NewGetField(0, sql.Int64, c1Name, false),
+				expression.NewLiteral(int64(10), sql.Int64))},
+			genNoPKRows(int64Range(0, 20, 1)...),
+			genNoPKRows(int64Range(0, 20, 1)...),
+		},
 		{
 			"unfiltered test one pk",
 			oneIntPKSch,

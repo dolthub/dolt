@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"fmt"
 	"math"
 
 	fb "github.com/google/flatbuffers/go"
@@ -25,7 +26,7 @@ import (
 )
 
 const (
-	maxNodeDataSize = uint64(math.MaxUint16)
+	maxVectorOffset = uint64(math.MaxUint16)
 	refSize         = hash.ByteLen
 )
 
@@ -95,6 +96,14 @@ func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
 		valSz += len(values[i])
+	}
+
+	// constraints enforced upstream
+	if keySz > int(maxVectorOffset) {
+		panic(fmt.Sprintf("key vector exceeds size limit ( %d > %d )", keySz, maxVectorOffset))
+	}
+	if valSz > int(maxVectorOffset) {
+		panic(fmt.Sprintf("value vector exceeds size limit ( %d > %d )", valSz, maxVectorOffset))
 	}
 
 	bufSz += keySz + valSz               // tuples

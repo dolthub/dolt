@@ -36,8 +36,6 @@ const (
 	uint8Size   ByteSize = 1
 	int16Size   ByteSize = 2
 	uint16Size  ByteSize = 2
-	int24Size   ByteSize = 3
-	uint24Size  ByteSize = 3
 	int32Size   ByteSize = 4
 	uint32Size  ByteSize = 4
 	int48Size   ByteSize = 6
@@ -48,7 +46,7 @@ const (
 	float64Size ByteSize = 8
 
 	// todo(andy): experimental encoding
-	timeSize ByteSize = 15
+	timestampSize ByteSize = 15
 )
 
 type Collation uint16
@@ -76,7 +74,7 @@ const (
 	Float64Enc Encoding = 12
 
 	// todo(andy): experimental encodings
-	//TimeEnc      Encoding = 13
+	//  consolidate into one
 	TimestampEnc Encoding = 14
 	DateEnc      Encoding = 15
 	DatetimeEnc  Encoding = 16
@@ -109,6 +107,37 @@ const (
 	//  ExpressionEnc
 	//  GeometryEnc
 )
+
+func sizeFromType(t Type) (ByteSize, bool) {
+	switch t.Enc {
+	case Int8Enc:
+		return int8Size, true
+	case Uint8Enc:
+		return uint8Size, true
+	case Int16Enc:
+		return int16Size, true
+	case Uint16Enc:
+		return uint16Size, true
+	case Int32Enc:
+		return int32Size, true
+	case Uint32Enc:
+		return uint32Size, true
+	case Int64Enc:
+		return int64Size, true
+	case Uint64Enc:
+		return uint64Size, true
+	case Float32Enc:
+		return float32Size, true
+	case Float64Enc:
+		return float64Size, true
+	case DateEnc, DatetimeEnc, TimestampEnc:
+		return timestampSize, true
+	case YearEnc:
+		return int16Size, true
+	default:
+		return 0, false
+	}
+}
 
 func ReadBool(val []byte) bool {
 	expectSize(val, int8Size)
@@ -182,7 +211,7 @@ func ReadDecimal(val []byte) decimal.Decimal {
 }
 
 func ReadTime(buf []byte) (t time.Time) {
-	expectSize(buf, timeSize)
+	expectSize(buf, timestampSize)
 	if err := t.UnmarshalBinary(buf); err != nil {
 		panic(err)
 	}
@@ -273,7 +302,7 @@ func WriteFloat64(buf []byte, val float64) {
 }
 
 func WriteTime(buf []byte, val time.Time) {
-	expectSize(buf, timeSize)
+	expectSize(buf, timestampSize)
 	// todo(andy): fix allocation here
 	m, _ := val.MarshalBinary()
 	copy(buf, m)
@@ -332,8 +361,12 @@ func compare(typ Type, left, right []byte) int {
 		return compareFloat32(ReadFloat32(left), ReadFloat32(right))
 	case Float64Enc:
 		return compareFloat64(ReadFloat64(left), ReadFloat64(right))
-	case DateEnc, DatetimeEnc, TimeEnc, TimestampEnc, YearEnc:
-		return compareTime(ReadTime(left), ReadTime(right))
+	case YearEnc:
+		return compareInt16(ReadInt16(left), ReadInt16(right))
+	case DateEnc, DatetimeEnc, TimestampEnc:
+		return compareTimestamp(ReadTime(left), ReadTime(right))
+	case TimeEnc:
+		panic("unimplemented")
 	case DecimalEnc:
 		// todo(andy): temporary Decimal implementation
 		fallthrough
@@ -457,12 +490,15 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func compareTime(l, r time.Time) int {
-	cmp := compareInt64(l.Unix(), r.Unix())
-	if cmp != 0 {
-		return cmp
+func compareTimestamp(l, r time.Time) int {
+	if l.Equal(r) {
+		return 0
 	}
-	return compareInt64(l.UnixNano(), r.UnixNano())
+	if l.Before(r) {
+		return -1
+	} else {
+		return 1
+	}
 }
 
 func compareString(l, r string, coll Collation) int {

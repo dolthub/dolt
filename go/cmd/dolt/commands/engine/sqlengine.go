@@ -167,7 +167,8 @@ func (se *SqlEngine) NewContext(ctx context.Context) (*sql.Context, error) {
 }
 
 func (se *SqlEngine) NewDoltSession(ctx context.Context, mysqlSess *sql.BaseSession) (*dsess.DoltSession, error) {
-	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases())
+	tempCtx := sql.NewContext(ctx, sql.WithSession(mysqlSess))
+	return se.dsessFactory(ctx, mysqlSess, se.engine.Analyzer.Catalog.AllDatabases(tempCtx))
 }
 
 // GetReturnFormat() returns the printing format the engine is associated with.

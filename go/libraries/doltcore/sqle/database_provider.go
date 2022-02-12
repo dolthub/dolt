@@ -98,7 +98,7 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 	return p
 }
 
-func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error) {
+func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
 	name = strings.ToLower(name)
 	var ok bool
 	p.mu.RLock()
@@ -108,7 +108,7 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 		return db, nil
 	}
 
-	db, _, ok, err = p.databaseForRevision(context.Background(), name)
+	db, _, ok, err = p.databaseForRevision(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -128,12 +128,12 @@ func (p DoltDatabaseProvider) Database(name string) (db sql.Database, err error)
 
 }
 
-func (p DoltDatabaseProvider) HasDatabase(name string) bool {
-	_, err := p.Database(name)
+func (p DoltDatabaseProvider) HasDatabase(ctx *sql.Context, name string) bool {
+	_, err := p.Database(ctx, name)
 	return err == nil
 }
 
-func (p DoltDatabaseProvider) AllDatabases() (all []sql.Database) {
+func (p DoltDatabaseProvider) AllDatabases(ctx *sql.Context) (all []sql.Database) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -286,7 +286,7 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 	return init, nil
 }
 
-func (p DoltDatabaseProvider) Function(name string) (sql.Function, error) {
+func (p DoltDatabaseProvider) Function(ctx *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
 		return nil, sql.ErrFunctionNotFound.New(name)

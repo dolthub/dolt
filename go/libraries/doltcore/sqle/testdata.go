@@ -537,7 +537,7 @@ func UpdateTables(t *testing.T, ctx context.Context, root *doltdb.RootValue, tbl
 		var indexData durable.IndexSet
 		require.NoError(t, err)
 		if tbl != nil {
-			indexData, err = tbl.GetIndexData(ctx)
+			indexData, err = tbl.GetIndexSet(ctx)
 			require.NoError(t, err)
 		}
 
