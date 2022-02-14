@@ -8,8 +8,9 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/mmap-go"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 type tableIndex interface {
