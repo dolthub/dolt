@@ -24,6 +24,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/val"
+
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -319,7 +321,7 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 // clears the keys items, then returns the new Node and a metaValue that
 // points to it. The Node is always eagerly written.
 func (tc *treeChunker) createNode(ctx context.Context) (Node, metaPair, error) {
-	nd, mp, err := writeNewChild(ctx, tc.ns, tc.level, tc.keys, tc.vals)
+	nd, mp, err := writeNewChildNode(ctx, tc.ns, tc.level, tc.keys, tc.vals)
 	if err != nil {
 		return Node{}, metaPair{}, err
 	}
@@ -389,7 +391,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	mt := hash.New(tc.vals[0])
 	for {
-		child, err := fetchChild(ctx, tc.ns, mt)
+		child, err := fetchChildNode(ctx, tc.ns, mt)
 		if err != nil {
 			return Node{}, err
 		}
@@ -450,4 +452,36 @@ func (tc *treeChunker) anyPending() bool {
 
 func (tc *treeChunker) isLeaf() bool {
 	return tc.level == 0
+}
+
+type metaPair struct {
+	k, r nodeItem
+}
+
+func (p metaPair) key() val.Tuple {
+	return val.Tuple(p.k)
+}
+
+func (p metaPair) ref() hash.Hash {
+	return hash.New(p.r)
+}
+
+func writeNewChildNode(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (Node, metaPair, error) {
+	child := buildMapNode(ns.Pool(), level, keys, values)
+
+	ref, err := ns.Write(ctx, child)
+	if err != nil {
+		return Node{}, metaPair{}, err
+	}
+
+	if len(keys) == 0 {
+		// empty leaf node
+		return child, metaPair{}, nil
+	}
+
+	lastKey := val.Tuple(keys[len(keys)-1])
+	metaKey := val.CloneTuple(ns.Pool(), lastKey)
+	meta := metaPair{k: nodeItem(metaKey), r: nodeItem(ref[:])}
+
+	return child, meta, nil
 }
