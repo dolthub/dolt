@@ -28,7 +28,7 @@ const patchBufferSize = 1024
 
 // TupleMergeFn is a callback that handles 3-way merging of tuples.
 // A typical implementation will attempt a cell-wise merge of the tuples,
-// or register a conflict if a such a merge is not possible.
+// or register a conflict if such a merge is not possible.
 type TupleMergeFn func(left, right Diff) (Diff, bool)
 
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
@@ -54,7 +54,7 @@ func ThreeWayMerge(ctx context.Context, left, right, base Map, cb TupleMergeFn) 
 	// iterate |ld| and |rd| in parallel, populating |buf|
 	eg.Go(func() (err error) {
 		defer func() {
-			if cerr := buf.close(); err != nil {
+			if cerr := buf.close(); err == nil {
 				err = cerr
 			}
 		}()
@@ -195,9 +195,9 @@ func sendPatches(ctx context.Context, l, r treeDiffer, buf patchBuffer, cb Tuple
 		}
 	}
 
-	for lok {
+	if lok {
 		// already in left
-		break
+		return nil
 	}
 
 	for rok {

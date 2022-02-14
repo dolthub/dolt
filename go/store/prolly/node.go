@@ -31,7 +31,7 @@ const (
 )
 
 func init() {
-	//emptyNode = makeMapNode(sharedPool, 0, nil, nil)
+	emptyNode = makeMapNode(sharedPool, 0, nil, nil)
 }
 
 type Node struct {
@@ -79,7 +79,7 @@ func makeMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (nod
 	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
 	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
 	serial.TupleMapAddTreeLevel(b, byte(level))
-	// todo(andy): tree empty
+	// todo(andy): tree count
 	b.Finish(serial.TupleMapEnd(b))
 
 	return mapNodeFromBytes(b.FinishedBytes())

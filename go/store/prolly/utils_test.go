@@ -51,7 +51,7 @@ func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
 		require.NoError(t, err)
 		cnt++
 	}
-	return
+	return cnt
 }
 
 func keyDescFromMap(om orderedMap) val.TupleDesc {
@@ -98,7 +98,7 @@ func randomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 		}
 		dupes = dupes[:0]
 	}
-	return
+	return items
 }
 
 func randomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
