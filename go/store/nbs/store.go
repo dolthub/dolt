@@ -402,11 +402,7 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		globalIndexCache,
 		ns,
 		func(bs []byte) (tableIndex, error) {
-			ohi, err := parseTableIndex(bs)
-			if err != nil {
-				return nil, err
-			}
-			return newMmapTableIndex(ohi, nil)
+			return parseTableIndex(bs)
 		},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
