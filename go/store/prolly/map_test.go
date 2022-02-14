@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// todo(andy): randomize test seed
 var testRand = rand.New(rand.NewSource(1))
 
 func TestMap(t *testing.T) {
@@ -76,7 +77,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	)
 
 	tuples := randomTuplePairs(count, kd, vd)
-	om := prollyMapFromTuples(t, count, kd, vd, tuples)
+	om := prollyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
@@ -89,12 +90,12 @@ func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tup
 	vd := val.NewTupleDescriptor()
 
 	tuples := randomCompositeTuplePairs(count, kd, vd)
-	om := prollyMapFromTuples(t, count, kd, vd, tuples)
+	om := prollyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
 }
 
-func prollyMapFromTuples(t *testing.T, count int, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
+func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 

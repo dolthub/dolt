@@ -31,7 +31,7 @@ const (
 )
 
 func init() {
-	//emptyNode = makeMapNode(sharedPool, 0, nil, nil)
+	emptyNode = makeMapNode(sharedPool, 0, nil, nil)
 }
 
 type Node struct {
