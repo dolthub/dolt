@@ -80,7 +80,7 @@ func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
 		}
 	}()
 
-	return idx.prefixes, nil
+	return idx.Prefixes()
 }
 
 func GuessPrefixOrdinal(prefix uint64, n uint32) int {
