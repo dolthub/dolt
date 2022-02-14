@@ -18,6 +18,10 @@ import (
 	"encoding/binary"
 	"math/rand"
 	"testing"
+	"unsafe"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/val"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,8 +55,33 @@ func TestRoundTripNodeItems(t *testing.T) {
 	}
 }
 
+func TestGetKeyValueOffsetsVectors(t *testing.T) {
+	for trial := 0; trial < 100; trial++ {
+		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
+		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+		nd := newLeafNode(keys, values)
+
+		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
+		ko2, vo2 := offsetsFromFlatbuffer(nd.buf)
+
+		assert.Equal(t, len(ko1), len(ko2))
+		assert.Equal(t, len(ko1), len(keys)-1)
+		assert.Equal(t, ko1, ko2)
+
+		assert.Equal(t, len(vo1), len(vo2))
+		assert.Equal(t, len(vo1), len(values)-1)
+		assert.Equal(t, vo1, vo2)
+
+	}
+}
+
+func TestNodeSize(t *testing.T) {
+	sz := unsafe.Sizeof(Node{})
+	assert.Equal(t, 168, int(sz))
+}
+
 func newLeafNode(keys, values []nodeItem) Node {
-	return makeMapNode(sharedPool, 0, keys, values)
+	return buildMapNode(sharedPool, 0, keys, values)
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
@@ -86,6 +115,35 @@ func ascendingIntPairs(t *testing.T, count int) (keys, values []nodeItem) {
 func sumSize(items []nodeItem) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
+	}
+	return
+}
+
+func offsetsFromFlatbuffer(buf serial.TupleMap) (ko, vo []uint16) {
+	ko = make([]uint16, buf.KeyOffsetsLength())
+	for i := range ko {
+		ko[i] = buf.KeyOffsets(i)
+	}
+
+	vo = make([]uint16, buf.ValueOffsetsLength())
+	for i := range vo {
+		vo[i] = buf.ValueOffsets(i)
+	}
+
+	return
+}
+
+func offsetsFromSlicedBuffers(keys, values val.SlicedBuffer) (ko, vo []uint16) {
+	ko = deserializeOffsets(keys.Offs)
+	vo = deserializeOffsets(values.Offs)
+	return
+}
+
+func deserializeOffsets(buf []byte) (offs []uint16) {
+	offs = make([]uint16, len(buf)/2)
+	for i := range offs {
+		start, stop := i*2, (i+1)*2
+		offs[i] = binary.LittleEndian.Uint16(buf[start:stop])
 	}
 	return
 }
