@@ -3,7 +3,6 @@ package memprof
 import (
 	"context"
 	"flag"
-	"log"
 	"os"
 	"testing"
 
@@ -19,9 +18,6 @@ var ddb *doltdb.DoltDB
 
 func TestMain(m *testing.M) {
 	flag.Parse()
-	if *loc == "" {
-		log.Panicf("doltDir must be specified")
-	}
 
 	urlStr = "file://" + *loc + dbfactory.DoltDataDir
 
@@ -30,6 +26,7 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkLoadDoltDBMemory(b *testing.B) {
+	b.SkipNow()
 	for i := 0; i < b.N; i++ {
 		ctx := context.Background()
 		var err error
