@@ -45,10 +45,12 @@ func TestParseTableIndex(t *testing.T) {
 	seen := make(map[addr]bool)
 	for i := uint32(0); i < idx.ChunkCount(); i++ {
 		var onheapaddr addr
-		e := idx.IndexEntry(i, &onheapaddr)
+		e, err := idx.IndexEntry(i, &onheapaddr)
+		require.NoError(t, err)
 		if _, ok := seen[onheapaddr]; !ok {
 			seen[onheapaddr] = true
-			lookupe, ok := idx.Lookup(&onheapaddr)
+			lookupe, ok, err := idx.Lookup(&onheapaddr)
+			require.NoError(t, err)
 			assert.True(t, ok)
 			assert.Equal(t, e.Offset(), lookupe.Offset(), "%v does not match %v for address %v", e, lookupe, onheapaddr)
 			assert.Equal(t, e.Length(), lookupe.Length())
@@ -72,15 +74,18 @@ func TestMMapIndex(t *testing.T) {
 	seen := make(map[addr]bool)
 	for i := uint32(0); i < idx.ChunkCount(); i++ {
 		var onheapaddr addr
-		onheapentry := idx.IndexEntry(i, &onheapaddr)
+		onheapentry, err := idx.IndexEntry(i, &onheapaddr)
+		require.NoError(t, err)
 		var mmaddr addr
-		mmentry := mmidx.IndexEntry(i, &mmaddr)
+		mmentry, err := mmidx.IndexEntry(i, &mmaddr)
+		require.NoError(t, err)
 		assert.Equal(t, onheapaddr, mmaddr)
 		assert.Equal(t, onheapentry.Offset(), mmentry.Offset())
 		assert.Equal(t, onheapentry.Length(), mmentry.Length())
 		if _, ok := seen[onheapaddr]; !ok {
 			seen[onheapaddr] = true
-			mmentry, found := mmidx.Lookup(&onheapaddr)
+			mmentry, found, err := mmidx.Lookup(&onheapaddr)
+			require.NoError(t, err)
 			assert.True(t, found)
 			assert.Equal(t, onheapentry.Offset(), mmentry.Offset(), "%v does not match %v for address %v", onheapentry, mmentry, onheapaddr)
 			assert.Equal(t, onheapentry.Length(), mmentry.Length())
@@ -88,13 +93,21 @@ func TestMMapIndex(t *testing.T) {
 		wrongaddr := onheapaddr
 		if wrongaddr[19] != 0 {
 			wrongaddr[19] = 0
-			_, found := mmidx.Lookup(&wrongaddr)
+			_, found, err := mmidx.Lookup(&wrongaddr)
+			require.NoError(t, err)
 			assert.False(t, found)
 		}
 	}
-
-	assert.Equal(t, idx.Ordinals(), mmidx.Ordinals())
-	assert.Equal(t, idx.Prefixes(), mmidx.Prefixes())
+	o1, err := idx.Ordinals()
+	require.NoError(t, err)
+	o2, err := mmidx.Ordinals()
+	require.NoError(t, err)
+	assert.Equal(t, o1, o2)
+	p1, err := idx.Prefixes()
+	require.NoError(t, err)
+	p2, err := mmidx.Prefixes()
+	require.NoError(t, err)
+	assert.Equal(t, p1, p2)
 	assert.Equal(t, idx.TableFileSize(), mmidx.TableFileSize())
 	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
 }

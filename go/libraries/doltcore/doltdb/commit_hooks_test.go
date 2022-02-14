@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -128,13 +129,17 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
+		require.NoError(t, err)
+
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
 		err = hook.Execute(ctx, ds, ddb.db)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		cs, _ = NewCommitSpec(defaultBranch)
 		destCommit, err := destDB.Resolve(context.Background(), cs, nil)
-
+		require.NoError(t, err)
 		srcHash, _ := srcCommit.HashOf()
 		destHash, _ := destCommit.HashOf()
 		assert.Equal(t, srcHash, destHash)
@@ -252,12 +257,15 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 			meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
 			if err != nil {
-				t.Error("Failed to commit")
+				t.Error("Failed to create CommitMeta")
 			}
 
 			_, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
+			require.NoError(t, err)
 			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+			require.NoError(t, err)
 			err = hook.Execute(ctx, ds, ddb.db)
+			require.NoError(t, err)
 		}
 	})
 }

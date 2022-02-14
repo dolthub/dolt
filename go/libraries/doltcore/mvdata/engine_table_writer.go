@@ -298,7 +298,7 @@ func (s *SqlEngineTableWriter) createTable() error {
 		return err
 	}
 
-	analyzedQueryProcess := analyzer.StripQueryProcess(analyzed.(*plan.QueryProcess))
+	analyzedQueryProcess := analyzer.StripPassthroughNodes(analyzed.(*plan.QueryProcess))
 
 	ri, err := analyzedQueryProcess.RowIter(s.sqlCtx, nil)
 	if err != nil {
@@ -342,7 +342,7 @@ func (s *SqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignor
 		return nil, err
 	}
 
-	analyzed = analyzer.StripQueryProcess(analyzed)
+	analyzed = analyzer.StripPassthroughNodes(analyzed)
 
 	// Get the first insert (wrapped with the error handler)
 	plan.Inspect(analyzed, func(node sql.Node) bool {

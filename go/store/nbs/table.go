@@ -130,6 +130,7 @@ const (
 	uint32Size      = 4
 	ordinalSize     = uint32Size
 	lengthSize      = uint32Size
+	offsetSize      = uint64Size
 	magicNumber     = "\xff\xb5\xd8\xc2\x24\x63\xee\x50"
 	magicNumberSize = 8 //len(magicNumber)
 	footerSize      = uint32Size + uint64Size + magicNumberSize
@@ -238,7 +239,7 @@ type chunkReader interface {
 }
 
 type chunkReadPlanner interface {
-	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool)
+	findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error)
 	getManyAtOffsets(
 		ctx context.Context,
 		eg *errgroup.Group,
@@ -269,7 +270,7 @@ type chunkSource interface {
 	// cannot be |Close|d more than once, so if a |chunkSource| is being
 	// retained in two objects with independent life-cycle, it should be
 	// |Clone|d first.
-	Clone() chunkSource
+	Clone() (chunkSource, error)
 }
 
 type chunkSources []chunkSource

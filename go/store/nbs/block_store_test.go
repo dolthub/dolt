@@ -418,7 +418,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	assertContainAll := func(t *testing.T, store chunks.ChunkStore, srcs ...chunkSource) {
 		rdrs := make(chunkReaderGroup, len(srcs))
 		for i, src := range srcs {
-			rdrs[i] = src.Clone()
+			c, err := src.Clone()
+			require.NoError(t, err)
+			rdrs[i] = c
 		}
 		chunkChan := make(chan extractRecord, mustUint32(rdrs.count()))
 		err := rdrs.extract(context.Background(), chunkChan)

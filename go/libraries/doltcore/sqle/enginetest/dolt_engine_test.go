@@ -73,14 +73,20 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "CrossDB Queries",
+			Name: "insert into sparse auto_increment table",
 			SetUpScript: []string{
-				"create table mytable (i bigint primary key, s varchar(200));",
+				"create table auto (pk int primary key auto_increment)",
+				"insert into auto values (10), (20), (30)",
+				"insert into auto values (NULL)",
+				"insert into auto values (40)",
+				"insert into auto values (0)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:    "ALTER TABLE mytable ADD COLUMN s2 TEXT COMMENT 'hello' AFTER i",
-					Expected: nil,
+					Query: "select * from auto order by 1",
+					Expected: []sql.Row{
+						{10}, {20}, {30}, {31}, {40}, {41},
+					},
 				},
 			},
 		},
@@ -213,6 +219,14 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+func TestUserPrivileges(t *testing.T) {
+	enginetest.TestUserPrivileges(t, newDoltHarness(t))
+}
+
+func TestUserAuthentication(t *testing.T) {
+	enginetest.TestUserAuthentication(t, newDoltHarness(t))
+}
+
 func TestComplexIndexQueries(t *testing.T) {
 	enginetest.TestComplexIndexQueries(t, newDoltHarness(t))
 }
@@ -301,6 +315,22 @@ func TestViews(t *testing.T) {
 
 func TestVersionedViews(t *testing.T) {
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
+}
+
+func TestWindowFunctions(t *testing.T) {
+	enginetest.TestWindowFunctions(t, newDoltHarness(t))
+}
+
+func TestWindowRowFrames(t *testing.T) {
+	enginetest.TestWindowRowFrames(t, newDoltHarness(t))
+}
+
+func TestWindowRangeFrames(t *testing.T) {
+	enginetest.TestWindowRangeFrames(t, newDoltHarness(t))
+}
+
+func TestNamedWindows(t *testing.T) {
+	enginetest.TestNamedWindows(t, newDoltHarness(t))
 }
 
 func TestNaturalJoin(t *testing.T) {
