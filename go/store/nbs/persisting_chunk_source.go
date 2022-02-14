@@ -100,9 +100,9 @@ func (ccs *persistingChunkSource) Close() error {
 	return nil
 }
 
-func (ccs *persistingChunkSource) Clone() chunkSource {
+func (ccs *persistingChunkSource) Clone() (chunkSource, error) {
 	// persistingChunkSource does not own |cs| or |mt|. No need to Clone.
-	return ccs
+	return ccs, nil
 }
 
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
@@ -308,6 +308,6 @@ func (ecs emptyChunkSource) Close() error {
 	return nil
 }
 
-func (ecs emptyChunkSource) Clone() chunkSource {
-	return ecs
+func (ecs emptyChunkSource) Clone() (chunkSource, error) {
+	return ecs, nil
 }

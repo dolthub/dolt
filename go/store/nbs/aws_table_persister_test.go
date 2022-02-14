@@ -548,6 +548,7 @@ func bytesToChunkSource(t *testing.T, bs ...[]byte) chunkSource {
 	data := buff[:tableSize]
 	ti, err := parseTableIndex(data)
 	require.NoError(t, err)
-	rdr := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	rdr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+	require.NoError(t, err)
 	return chunkSourceAdapter{rdr, name}
 }

@@ -152,8 +152,12 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		return nil, errors.New("unexpected chunk count")
 	}
 
+	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
+	if err != nil {
+		return nil, err
+	}
 	return &mmapTableReader{
-		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
+		tr,
 		fc,
 		h,
 	}, nil
@@ -167,8 +171,12 @@ func (mmtr *mmapTableReader) Close() error {
 	return mmtr.tableReader.Close()
 }
 
-func (mmtr *mmapTableReader) Clone() chunkSource {
-	return &mmapTableReader{mmtr.tableReader.Clone(), mmtr.fc, mmtr.h}
+func (mmtr *mmapTableReader) Clone() (chunkSource, error) {
+	tr, err := mmtr.tableReader.Clone()
+	if err != nil {
+		return &mmapTableReader{}, err
+	}
+	return &mmapTableReader{tr, mmtr.fc, mmtr.h}, nil
 }
 
 type cacheReaderAt struct {

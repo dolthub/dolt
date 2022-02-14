@@ -256,8 +256,14 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			return compactionPlan{}, err
 		}
 
-		ordinals := index.Ordinals()
-		prefixes := index.Prefixes()
+		ordinals, err := index.Ordinals()
+		if err != nil {
+			return compactionPlan{}, err
+		}
+		prefixes, err := index.Prefixes()
+		if err != nil {
+			return compactionPlan{}, err
+		}
 
 		// Add all the prefix tuples from this index to the list of all prefixIndexRecs, modifying the ordinals such that all entries from the 1st item in sources come after those in the 0th and so on.
 		for j, prefix := range prefixes {
@@ -294,7 +300,10 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 			// Build up the index one entry at a time.
 			var a addr
 			for i := 0; i < len(ordinals); i++ {
-				e := index.IndexEntry(uint32(i), &a)
+				e, err := index.IndexEntry(uint32(i), &a)
+				if err != nil {
+					return compactionPlan{}, err
+				}
 				li := lengthsPos + lengthSize*uint64(ordinals[i])
 				si := suffixesPos + addrSuffixSize*uint64(ordinals[i])
 				binary.BigEndian.PutUint32(plan.mergedIndex[li:], e.Length())

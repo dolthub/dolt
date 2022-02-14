@@ -129,7 +129,8 @@ func TestFSTablePersisterPersist(t *testing.T) {
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 }
@@ -229,7 +230,8 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 	}
 
@@ -267,7 +269,8 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 		require.NoError(t, err)
 		ti, err := parseTableIndex(buff)
 		require.NoError(t, err)
-		tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		require.NoError(t, err)
 		assertChunksInReader(testChunks, tr, assert)
 		assert.EqualValues(reps*len(testChunks), mustUint32(tr.count()))
 	}

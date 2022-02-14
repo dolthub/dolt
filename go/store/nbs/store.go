@@ -117,7 +117,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 		for _, cs := range css {
 			switch tr := cs.(type) {
 			case *mmapTableReader:
-				offsetRecSlice, _ := tr.findOffsets(gr)
+				offsetRecSlice, _, err := tr.findOffsets(gr)
+				if err != nil {
+					return err
+				}
 				if len(offsetRecSlice) > 0 {
 					y, ok := ranges[hash.Hash(tr.h)]
 
@@ -154,7 +157,10 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 				var foundHashes []hash.Hash
 				for h := range hashes {
 					a := addr(h)
-					e, ok := tableIndex.Lookup(&a)
+					e, ok, err := tableIndex.Lookup(&a)
+					if err != nil {
+						return err
+					}
 					if ok {
 						foundHashes = append(foundHashes, h)
 						y[h] = Range{Offset: e.Offset(), Length: e.Length()}
