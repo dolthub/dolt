@@ -240,7 +240,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/nomdl/parser.go", NomsPath: "go/nomdl/parser.go", HadCopyrightNotice: true},
 	{Path: "store/nomdl/parser_test.go", NomsPath: "go/nomdl/parser_test.go", HadCopyrightNotice: true},
 	{Path: "store/perf/codec-perf-rig/main.go", NomsPath: "go/perf/codec-perf-rig/main.go", HadCopyrightNotice: true},
-	{Path: "store/perf/hash-perf-rig/main.go", NomsPath: "go/perf/hash-perf-rig/main.go", HadCopyrightNotice: true},
 	{Path: "store/perf/suite/suite.go", NomsPath: "go/perf/suite/suite.go", HadCopyrightNotice: true},
 	{Path: "store/perf/suite/suite_test.go", NomsPath: "go/perf/suite/suite_test.go", HadCopyrightNotice: true},
 	{Path: "store/sloppy/sloppy.go", NomsPath: "go/sloppy/sloppy.go", HadCopyrightNotice: true},
