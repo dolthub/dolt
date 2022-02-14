@@ -72,6 +72,8 @@ const (
 
 type Tuple []byte
 
+var EmptyTuple = Tuple([]byte{0, 0})
+
 func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	var count int
 	var pos ByteSize

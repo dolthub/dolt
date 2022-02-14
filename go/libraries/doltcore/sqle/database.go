@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/grant_tables"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -59,8 +60,15 @@ type SqlDatabase interface {
 func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 	dsqlDBs := make([]SqlDatabase, 0, len(dbs))
 	for _, db := range dbs {
-		sqlDb, ok := db.(SqlDatabase)
-		if !ok {
+		var sqlDb SqlDatabase
+		if sqlDatabase, ok := db.(SqlDatabase); ok {
+			sqlDb = sqlDatabase
+		} else if privDatabase, ok := db.(grant_tables.PrivilegedDatabase); ok {
+			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
+				sqlDb = sqlDatabase
+			}
+		}
+		if sqlDb == nil {
 			continue
 		}
 		switch v := sqlDb.(type) {
@@ -343,6 +351,12 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 			return nil, false, err
 		}
 		dt, found = dtables.NewLogTable(ctx, db.ddb, head), true
+	case doltdb.DiffTableName:
+		head, err := sess.GetHeadCommit(ctx, db.name)
+		if err != nil {
+			return nil, false, err
+		}
+		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
 		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
 	case doltdb.TableOfTablesWithViolationsName:
@@ -897,6 +911,18 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return "", false, err
+	}
+
+	lwrViewName := strings.ToLower(viewName)
+	switch {
+	case strings.HasPrefix(lwrViewName, doltdb.DoltBlameViewPrefix):
+		tableName := lwrViewName[len(doltdb.DoltBlameViewPrefix):]
+
+		view, err := dtables.NewBlameView(ctx, tableName, root)
+		if err != nil {
+			return "", false, err
+		}
+		return view, true, nil
 	}
 
 	tbl, ok, err := root.GetTable(ctx, doltdb.SchemasTableName)

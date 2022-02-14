@@ -137,7 +137,10 @@ func (ts tableSet) getMany(ctx context.Context, eg *errgroup.Group, reqs []getRe
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining := rp.findOffsets(reqs)
+				offsets, remaining, err := rp.findOffsets(reqs)
+				if err != nil {
+					return true
+				}
 				err = rp.getManyAtOffsets(ctx, eg, offsets, found, stats)
 				if err != nil {
 					return true
@@ -165,7 +168,10 @@ func (ts tableSet) getManyCompressed(ctx context.Context, eg *errgroup.Group, re
 	f := func(css chunkSources) bool {
 		for _, haver := range css {
 			if rp, ok := haver.(chunkReadPlanner); ok {
-				offsets, remaining := rp.findOffsets(reqs)
+				offsets, remaining, err := rp.findOffsets(reqs)
+				if err != nil {
+					return true
+				}
 				if len(offsets) > 0 {
 					err = rp.getManyCompressedAtOffsets(ctx, eg, offsets, found, stats)
 					if err != nil {
@@ -428,7 +434,11 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		}
 
 		if cnt > 0 {
-			merged.novel = append(merged.novel, t.Clone())
+			t2, err := t.Clone()
+			if err != nil {
+				return tableSet{}, err
+			}
+			merged.novel = append(merged.novel, t2)
 		}
 	}
 
@@ -465,7 +475,12 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 					if spec.name == h {
-						merged.upstream[idx] = existing.Clone()
+						c, err := existing.Clone()
+						if err != nil {
+							ae.SetIfError(err)
+							return
+						}
+						merged.upstream[idx] = c
 						return
 					}
 				}

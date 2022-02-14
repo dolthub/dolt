@@ -64,7 +64,9 @@ func makeTestSrcs(t *testing.T, tableSizes []uint32, p tablePersister) (srcs chu
 		}
 		cs, err := p.Persist(context.Background(), mt, nil, &Stats{})
 		require.NoError(t, err)
-		srcs = append(srcs, cs.Clone())
+		c, err := cs.Clone()
+		require.NoError(t, err)
+		srcs = append(srcs, c)
 	}
 	return
 }

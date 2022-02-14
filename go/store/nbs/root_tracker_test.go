@@ -467,7 +467,11 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 				return nil, err
 			}
 
-			ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+			s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+			if err != nil {
+				return emptyChunkSource{}, err
+			}
+			ftp.sources[name] = s
 			return chunkSourceAdapter{ftp.sources[name], name}, nil
 		}
 	}
@@ -490,7 +494,11 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 			return nil, err
 		}
 
-		ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		if err != nil {
+			return nil, err
+		}
+		ftp.sources[name] = s
 		return chunkSourceAdapter{ftp.sources[name], name}, nil
 	}
 	return emptyChunkSource{}, nil

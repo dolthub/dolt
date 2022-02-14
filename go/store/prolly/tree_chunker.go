@@ -216,7 +216,7 @@ func (tc *treeChunker) Skip(ctx context.Context) error {
 func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
-	// (2) The total size of a Node's data cannot exceed |maxNodeDataSize|.
+	// (2) The total size of a Node's data cannot exceed |maxVectorOffset|.
 	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single metaPair with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
@@ -230,7 +230,7 @@ func (tc *treeChunker) Append(ctx context.Context, key, value nodeItem) (bool, e
 	// constraint (2)
 	overflow := false
 	sum := tc.currSz + uint64(len(key)+len(value))
-	if sum >= maxNodeDataSize {
+	if sum >= maxVectorOffset {
 		overflow = true
 	}
 

@@ -144,7 +144,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 	}
 
-	indexData, err := tbl.GetIndexData(ctx)
+	indexData, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +171,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 				if err != nil {
 					return nil, err
 				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 				if err != nil {
 					return nil, err
 				}
@@ -182,7 +182,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 				if err != nil {
 					return nil, err
 				}
-				updatedTable, err = updatedTable.SetIndexRowData(ctx, index.Name(), indexRowData)
+				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
 				if err != nil {
 					return nil, err
 				}

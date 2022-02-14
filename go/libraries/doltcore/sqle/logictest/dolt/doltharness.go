@@ -133,7 +133,7 @@ func innerInit(h *DoltHarness, dEnv *env.DoltEnv) error {
 	ctx := dsql.NewTestSQLCtx(context.Background())
 	h.sess = ctx.Session.(*dsess.DoltSession)
 
-	dbs := h.engine.Analyzer.Catalog.AllDatabases()
+	dbs := h.engine.Analyzer.Catalog.AllDatabases(ctx)
 	dsqlDBs := make([]dsql.Database, len(dbs))
 	for i, db := range dbs {
 		dsqlDB := db.(dsql.Database)

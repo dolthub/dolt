@@ -94,11 +94,20 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
 			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
-			Nullable: false,
+			Nullable: columnNullable(col),
 		})
 		return
 	})
 	return val.NewTupleDescriptor(tt...)
+}
+
+func columnNullable(col schema.Column) bool {
+	for _, cnst := range col.Constraints {
+		if cnst.GetConstraintType() == schema.NotNullConstraintType {
+			return false
+		}
+	}
+	return true
 }
 
 func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
@@ -128,6 +137,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.TimestampEnc
 	case query.Type_YEAR:
 		return val.YearEnc
+	case query.Type_GEOMETRY:
+		return val.BytesEnc
 	}
 
 	switch typ {

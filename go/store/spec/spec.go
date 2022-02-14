@@ -40,6 +40,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/aws/aws-sdk-go/service/s3"
 
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -456,9 +457,27 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 	case "gs":
 		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
 	case "nbs":
-		os.Mkdir(sp.DatabaseName, 0777)
-		cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
+		// If the database is the oldgen database return a standard NBS store.
+		if strings.Contains(sp.DatabaseName, "oldgen") {
+			return getStandardLocalStore(ctx, sp.DatabaseName)
+		}
+
+		oldgenDb := filepath.Join(sp.DatabaseName, "oldgen")
+
+		err := validateDir(oldgenDb)
+		// If we can't validate that an oldgen db exists just use a standard local store.
+		if err != nil {
+			return getStandardLocalStore(ctx, sp.DatabaseName)
+		}
+
+		newGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28)
 		d.PanicIfError(err)
+
+		oldGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), oldgenDb, 1<<28)
+		d.PanicIfError(err)
+
+		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
+
 		return datas.NewDatabase(cs)
 	case "mem":
 		storage := &chunks.MemoryStorage{}
@@ -472,6 +491,27 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 		d.PanicIfError(err)
 		return r
 	}
+}
+
+func getStandardLocalStore(ctx context.Context, dbName string) datas.Database {
+	os.Mkdir(dbName, 0777)
+
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28)
+	d.PanicIfError(err)
+
+	return datas.NewDatabase(cs)
+}
+
+func validateDir(path string) error {
+	info, err := os.Stat(path)
+
+	if err != nil {
+		return err
+	} else if !info.IsDir() {
+		return filesys.ErrIsFile
+	}
+
+	return nil
 }
 
 func parseDatabaseSpec(spec string) (protocol, name string, err error) {
