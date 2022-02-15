@@ -34,7 +34,7 @@ func TestNewTag(t *testing.T) {
 	}
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))

@@ -24,6 +24,7 @@ package datas
 import (
 	"container/heap"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/dolt/go/store/d"
@@ -103,26 +104,24 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
+func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
+	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
+		return types.Struct{}, errors.New("cannot create commit without parents")
+	}
+
+	if opts.Meta.IsZeroValue() {
+		opts.Meta = types.EmptyStruct(vrw.Format())
+	}
+
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, opts.ParentsList)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	return newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
+}
+
 func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
-	t1, err := types.TypeOf(c1)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	// precondition checks
-	if !IsRefOfCommitType(c1.Format(), t1) {
-		d.Panic("first reference is not a commit")
-	}
-
-	t2, err := types.TypeOf(c2)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	if !IsRefOfCommitType(c2.Format(), t2) {
-		d.Panic("second reference is not a commit")
-	}
-
 	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
@@ -131,7 +130,7 @@ func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
 				return common, true, nil
 			}
-			err = parentsToQueue(ctx, c1Parents, &c1Q, vr1)
+			err := parentsToQueue(ctx, c1Parents, &c1Q, vr1)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
@@ -140,12 +139,12 @@ func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 				return types.Ref{}, false, err
 			}
 		} else if c1Ht > c2Ht {
-			err = parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
+			err := parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
 		} else {
-			err = parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
+			err := parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
 			if err != nil {
 				return types.Ref{}, false, err
 			}
@@ -209,16 +208,6 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 // where |cl| is the transitive closure of one or more refs. If a common ancestor
 // exists, |ok| is set to true, else false.
 func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
-	t, err := types.TypeOf(cm)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-
-	// precondition checks
-	if !IsRefOfCommitType(cm.Format(), t) {
-		d.Panic("reference is not a commit")
-	}
-
 	q := &RefByHeightHeap{cm}
 	var curr types.RefSlice
 
@@ -263,6 +252,9 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 		c, ok := v.(types.Struct)
 		if !ok {
 			return fmt.Errorf("target ref is not struct: %v", v)
+		}
+		if c.Name() != CommitName {
+			return fmt.Errorf("target ref is not commit: %v", v)
 		}
 		ps, ok, err := c.MaybeGet(ParentsListField)
 		if err != nil {
@@ -462,6 +454,9 @@ func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueR
 	s, ok := sv.(types.Struct)
 	if !ok {
 		return nil, fmt.Errorf("target ref is not struct: %v", sv)
+	}
+	if s.Name() != CommitName {
+		return nil, fmt.Errorf("target ref is not commit: %v", sv)
 	}
 
 	fv, ok, err := s.MaybeGet(ParentsClosureField)

@@ -59,7 +59,7 @@ func setupCommitFlags() *flag.FlagSet {
 
 func runCommit(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	db, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
+	db, vrw, ds, err := cfg.GetDataset(ctx, args[len(args)-1])
 	util.CheckError(err)
 	defer db.Close()
 
@@ -74,7 +74,7 @@ func runCommit(ctx context.Context, args []string) int {
 	absPath, err := spec.NewAbsolutePath(path)
 	util.CheckError(err)
 
-	value := absPath.Resolve(ctx, db)
+	value := absPath.Resolve(ctx, db, vrw)
 	if value == nil {
 		util.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
@@ -91,9 +91,9 @@ func runCommit(ctx context.Context, args []string) int {
 			return 1
 		}
 
-		hh, err := head.Hash(db.Format())
+		hh, err := head.Hash(vrw.Format())
 		d.PanicIfError(err)
-		vh, err := value.Hash(db.Format())
+		vh, err := value.Hash(vrw.Format())
 		d.PanicIfError(err)
 
 		if hh == vh && !allowDupe {
@@ -102,7 +102,7 @@ func runCommit(ctx context.Context, args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ctx, db, "", "", nil, nil)
+	meta, err := spec.CreateCommitMetaStruct(ctx, db, vrw, "", "", nil, nil)
 	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})

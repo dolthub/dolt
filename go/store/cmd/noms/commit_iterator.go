@@ -32,16 +32,16 @@ import (
 )
 
 type CommitIterator struct {
-	db       datas.Database
+	vr       types.ValueReader
 	branches branchList
 }
 
 // NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
-func NewCommitIterator(db datas.Database, commit types.Struct) *CommitIterator {
-	cr, err := types.NewRef(commit, db.Format())
+func NewCommitIterator(vr types.ValueReader, commit types.Struct) *CommitIterator {
+	cr, err := types.NewRef(commit, vr.Format())
 	d.PanicIfError(err)
 
-	return &CommitIterator{db: db, branches: branchList{branch{cr: cr, commit: commit}}}
+	return &CommitIterator{vr: vr, branches: branchList{branch{cr: cr, commit: commit}}}
 }
 
 // Next returns information about the next commit to be printed. LogNode contains enough contextual
@@ -76,7 +76,7 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 
 	parents := commitRefsFromSet(ctx, pFld.(types.Set))
 	for _, p := range parents {
-		v, err := iter.db.ReadValue(ctx, p.TargetHash())
+		v, err := iter.vr.ReadValue(ctx, p.TargetHash())
 		d.PanicIfError(err)
 
 		b := branch{cr: p, commit: v.(types.Struct)}

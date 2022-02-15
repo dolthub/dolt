@@ -25,20 +25,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/merge"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/util/random"
 )
 
 type database struct {
 	*types.ValueStore
-	rt              rootTracker
-	postCommitHooks []CommitHook
+	rt rootTracker
 }
 
 var (
@@ -46,20 +41,8 @@ var (
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
 )
 
-// CommitHook is an abstraction for executing arbitrary commands after atomic database commits
-type CommitHook interface {
-	// Execute is arbitrary read-only function whose arguments are new Dataset commit into a specific Database
-	Execute(ctx context.Context, ds Dataset, db Database) error
-	// HandleError is an bridge function to handle Execute errors
-	HandleError(ctx context.Context, err error) error
-	// SetLogger lets clients specify an output stream for HandleError
-	SetLogger(ctx context.Context, wr io.Writer) error
-}
-
-// TODO: fix panics
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
 type rootTracker interface {
-	Rebase(ctx context.Context) error
 	Root(ctx context.Context) (hash.Hash, error)
 	Commit(ctx context.Context, current, last hash.Hash) (bool, error)
 }
@@ -81,44 +64,12 @@ func (db *database) chunkStore() chunks.ChunkStore {
 	return db.ChunkStore()
 }
 
-func (db *database) NomsRoot(ctx context.Context) (hash.Hash, error) {
-	return db.ChunkStore().Root(ctx)
-}
-
-func (db *database) CommitRoot(ctx context.Context, current, last hash.Hash) (bool, error) {
-	return db.rt.Commit(ctx, current, last)
-}
-
 func (db *database) Stats() interface{} {
 	return db.ChunkStore().Stats()
 }
 
 func (db *database) StatsSummary() string {
 	return db.ChunkStore().StatsSummary()
-}
-
-func (db *database) Flush(ctx context.Context) error {
-	ds, err := db.GetDataset(ctx, fmt.Sprintf("-/flush/%s", random.Id()))
-
-	if err != nil {
-		return err
-	}
-
-	r, err := db.WriteValue(ctx, types.Bool(true))
-
-	if err != nil {
-		return err
-	}
-
-	ds, err = db.CommitValue(ctx, ds, r)
-
-	if err != nil {
-		return err
-	}
-
-	_, err = db.Delete(ctx, ds)
-
-	return err
 }
 
 // DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
@@ -307,17 +258,12 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, datase
 		return Dataset{}, err
 	} else if ok {
 		head, err = r.(types.Ref).TargetValue(ctx, db)
-
 		if err != nil {
 			return Dataset{}, err
 		}
 	}
 
 	return newDataset(db, datasetID, head)
-}
-
-func (db *database) Rebase(ctx context.Context) error {
-	return db.rt.Rebase(ctx)
 }
 
 func (db *database) Close() error {
@@ -330,32 +276,11 @@ func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Re
 
 func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
 	newSt, err := newHeadRef.TargetValue(ctx, db)
-
 	if err != nil {
 		return err
 	}
 
 	headType := newSt.(types.Struct).Name()
-
-	currentHeadRef, ok, err := ds.MaybeHeadRef()
-	if err != nil {
-		return err
-	}
-	if ok {
-		if newHeadRef.Equals(currentHeadRef) {
-			return nil
-		}
-
-		currSt, err := currentHeadRef.TargetValue(ctx, db)
-
-		if err != nil {
-			return err
-		}
-
-		headType = currSt.(types.Struct).Name()
-	}
-
-	// the new head value must match the type of the old head value
 	switch headType {
 	case CommitName:
 		_, err = db.validateRefAsCommit(ctx, newHeadRef)
@@ -364,42 +289,35 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
 	}
-
 	if err != nil {
 		return err
 	}
 
-	currentRootHash, err := db.rt.Root(ctx)
+	key := types.String(ds.ID())
 
+	ref, err := types.ToRefOfValue(newHeadRef, db.Format())
 	if err != nil {
 		return err
 	}
 
-	currentDatasets, err := db.Datasets(ctx)
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		currRef, ok, err := datasets.MaybeGet(ctx, key)
+		if err != nil {
+			return types.Map{}, err
+		}
+		if ok {
+			currSt, err := currRef.(types.Ref).TargetValue(ctx, db)
+			if err != nil {
+				return types.Map{}, err
+			}
+			currType := currSt.(types.Struct).Name()
+			if currType != headType {
+				return types.Map{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
+			}
+		}
 
-	if err != nil {
-		return err
-	}
-
-	refSt, err := db.WriteValue(ctx, newSt) // will be orphaned if the tryCommitChunks() below fails
-
-	if err != nil {
-		return err
-	}
-
-	ref, err := types.ToRefOfValue(refSt, db.Format())
-
-	if err != nil {
-		return err
-	}
-
-	currentDatasets, err = currentDatasets.Edit().Set(types.String(ds.ID()), ref).Map(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+		return datasets.Edit().Set(key, ref).Map(ctx)
+	})
 }
 
 func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error) {
@@ -427,7 +345,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadRef ty
 		return err
 	}
 
-	return db.doCommit(ctx, ds.ID(), commit, nil)
+	return db.doCommit(ctx, ds.ID(), commit)
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
@@ -441,44 +359,13 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 				return err
 			}
 
-			return db.doCommit(ctx, ds.ID(), st, opts.Policy)
+			return db.doCommit(ctx, ds.ID(), st)
 		},
 	)
 }
 
-func (db *database) CommitDangling(ctx context.Context, v types.Value, opts CommitOptions) (types.Struct, error) {
-	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
-		return types.Struct{}, errors.New("cannot create commit without parents")
-	}
-
-	if opts.Meta.IsZeroValue() {
-		opts.Meta = types.EmptyStruct(db.Format())
-	}
-
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, opts.ParentsList)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	commitStruct, err := newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	_, err = db.WriteValue(ctx, commitStruct)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	err = db.Flush(ctx)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	return commitStruct, nil
-}
-
-func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) (Dataset, error) {
+// Calls db.Commit with empty CommitOptions{}.
+func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (Dataset, error) {
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }
 
@@ -487,149 +374,44 @@ func (db *database) CommitValue(ctx context.Context, ds Dataset, v types.Value) 
 // current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g.
 // because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and
 // return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct, mergePolicy merge.Policy) error {
+func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct) error {
 	if is, err := IsCommit(commit); err != nil {
 		return err
 	} else if !is {
-		d.Panic("Can't commit a non-Commit struct to dataset %s", datasetID)
+		return fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
 	}
 
-	var tryCommitErr error
-	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
-		currentRootHash, err := db.rt.Root(ctx)
-		if err != nil {
-			return err
-		}
+	commitRef, err := db.WriteValue(ctx, commit)
+	if err != nil {
+		return err
+	}
 
-		currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
-		if err != nil {
-			return err
-		}
+	ref, err := types.ToRefOfValue(commitRef, db.Format())
+	if err != nil {
+		return err
+	}
 
-		commitRef, err := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		curr, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
 		if err != nil {
-			return err
+			return types.Map{}, err
 		}
-
-		// If there's nothing in the DB yet, skip all this logic.
-		if !currentRootHash.IsEmpty() {
-			r, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
+		if hasHead {
+			currRef := curr.(types.Ref)
+			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currRef, db, db)
 			if err != nil {
-				return err
+				return types.Map{}, err
 			}
-
-			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
-			if hasHead {
-				// TODO: We have to do a round-trip here (target the ref, then take a ref of it) because the type of the entry
-				//  stored in the dataset is a ValueType, rather than Struct (commit). See types.ToRefOfValue
-				//  We should rip this out along with much other type info
-				head, err := r.(types.Ref).TargetValue(ctx, db)
-				if err != nil {
-					return err
-				}
-
-				currentHeadRef, err := types.NewRef(head, db.Format())
-				if err != nil {
-					return err
-				}
-
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-				if err != nil {
-					return err
-				}
-
-				if !found {
-					return ErrMergeNeeded
-				}
-
-				if mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
-					if mergePolicy == nil {
-						return ErrMergeNeeded
-					}
-
-					commitRef, err = db.doMerge(ctx, ancestorRef, currentHeadRef, commit, commitRef, mergePolicy)
-					if err != nil {
-						return err
-					}
-				}
+			if !found {
+				return types.Map{}, ErrMergeNeeded
+			}
+			if mergeNeeded(currRef, ancestorRef, commitRef) {
+				return types.Map{}, ErrMergeNeeded
 			}
 		}
 
-		ref, err := types.ToRefOfValue(commitRef, db.Format())
-		if err != nil {
-			return err
-		}
-
-		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
-		if err != nil {
-			return err
-		}
-
-		tryCommitErr = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
-	}
-
-	return tryCommitErr
-}
-
-// doMerge applies the merge policy given to the refs given to return a merged commit ref
-func (db *database) doMerge(
-	ctx context.Context,
-	ancestorRef types.Ref,
-	currentHeadRef types.Ref,
-	commit types.Struct,
-	commitRef types.Ref,
-	mergePolicy merge.Policy,
-) (types.Ref, error) {
-	ancestor, err := db.validateRefAsCommit(ctx, ancestorRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	currentHead, err := db.validateRefAsCommit(ctx, currentHeadRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	cmVal, _, err := commit.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	curVal, _, err := currentHead.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	ancVal, _, err := ancestor.MaybeGet(ValueField)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	merged, err := mergePolicy(ctx, cmVal, curVal, ancVal, db, nil)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	parents, err := types.NewList(ctx, db, commitRef, currentHeadRef)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, db, parents)
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	newCom, err := newCommit(ctx, merged, parents, parentsClosure, includeParentsClosure, types.EmptyStruct(db.Format()))
-	if err != nil {
-		return types.Ref{}, err
-	}
-
-	commitRef, err = db.WriteValue(ctx, newCom)
-	if err != nil {
-		return types.Ref{}, err
-	}
-	return commitRef, nil
+		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+	})
 }
 
 func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef types.Ref) bool {
@@ -661,50 +443,27 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 		return err
 	}
 
-	var tryCommitErr error
-	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed; {
-		currentRootHash, err := db.rt.Root(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		currentDatasets, err := db.Datasets(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		tagRef, err := db.WriteValue(ctx, tag) // will be orphaned if the tryCommitChunks() below fails
-
-		if err != nil {
-			return err
-		}
-
-		_, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(datasetID))
-
-		if err != nil {
-			return err
-		}
-
-		if hasHead {
-			return fmt.Errorf(fmt.Sprintf("tag %s already exists and cannot be altered after creation", datasetID))
-		}
-
-		ref, err := types.ToRefOfValue(tagRef, db.Format())
-		if err != nil {
-			return err
-		}
-
-		currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
-		if err != nil {
-			return err
-		}
-
-		tryCommitErr = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+	tagRef, err := db.WriteValue(ctx, tag)
+	if err != nil {
+		return err
 	}
 
-	return tryCommitErr
+	ref, err := types.ToRefOfValue(tagRef, db.Format())
+	if err != nil {
+		return err
+	}
+
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		_, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
+		if err != nil {
+			return types.Map{}, err
+		}
+		if hasHead {
+			return types.Map{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
+		}
+
+		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+	})
 }
 
 func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet WorkingSetSpec, prevHash hash.Hash) (Dataset, error) {
@@ -722,18 +481,18 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 	)
 }
 
-// doUpdateWorkingSet manages concurrent access the single logical piece of mutable state: the current Root. It uses
-// the same optimistic locking write algorithm as doCommit (see above). Unlike doCommit and other methods in this file,
-// an error is returned if the current value of the ref being written has changed.
-// Workspace updates are serialized, but all other changes to a database's root value can proceed independently with the
-// normal optimistic locking.
+// Update the entry in the datasets map for |datasetID| to point to a ref of
+// |workingSet|. Unlike |doCommit|, |doTag|, etc., this method requires a
+// compare-and-set for the current target hash of the datasets entry, and will
+// return an error if the application is working with a stale value for the
+// workingset.
 func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, workingSet types.Struct, currHash hash.Hash) error {
 	err := db.validateWorkingSet(workingSet)
 	if err != nil {
 		return err
 	}
 
-	workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
+	workingSetRef, err := db.WriteValue(ctx, workingSet)
 	if err != nil {
 		return err
 	}
@@ -743,70 +502,36 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 		return err
 	}
 
-	var tryCommitErr error
-	testSetFailed := false
-	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
-		tryCommitErr = func() error {
-			currentRootHash, err := db.rt.Root(ctx)
-			if err != nil {
-				return err
-			}
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		success, err := assertDatasetHash(ctx, datasets, datasetID, currHash)
+		if err != nil {
+			return types.Map{}, err
+		}
+		if !success {
+			return types.Map{}, ErrOptimisticLockFailed
+		}
 
-			currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
-			if err != nil {
-				return err
-			}
-
-			success, err := db.assertDatasetHash(ctx, currentDatasets, datasetID, currHash)
-			if err != nil {
-				return err
-			}
-
-			if !success {
-				testSetFailed = true
-				return nil
-			}
-
-			currentDatasets, err = currentDatasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
-			if err != nil {
-				return err
-			}
-
-			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
-		}()
-	}
-
-	return tryCommitErr
+		return datasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
+	})
 }
 
 // assertDatasetHash returns true if the hash of the dataset matches the one given. Use an empty hash for a dataset you
 // expect not to exist.
 // Typically this is called using optimistic locking by the caller in order to implement atomic test-and-set semantics.
-func (db *database) assertDatasetHash(
+func assertDatasetHash(
 	ctx context.Context,
 	datasets types.Map,
 	datasetID string,
 	currHash hash.Hash,
 ) (bool, error) {
-
-	ds, err := db.datasetFromMap(ctx, datasetID, datasets)
+	curr, ok, err := datasets.MaybeGet(ctx, types.String(datasetID))
 	if err != nil {
 		return false, err
 	}
-
-	if head, ok := ds.MaybeHead(); ok {
-		h, err := head.Hash(db.Format())
-		if err != nil {
-			return false, err
-		}
-		if h != currHash {
-			return false, err
-		}
-	} else if !currHash.IsEmpty() {
-		return false, nil
+	if !ok {
+		return currHash.IsEmpty(), nil
 	}
-
-	return true, nil
+	return curr.(types.Ref).TargetHash().Equal(currHash), nil
 }
 
 // CommitWithWorkingSet updates two Datasets atomically: the working set, and its corresponding HEAD. Uses the same
@@ -827,7 +552,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	workingSetRef, err := db.WriteValue(ctx, workingSet) // will be orphaned if the tryCommitChunks() below fails
+	workingSetRef, err := db.WriteValue(ctx, workingSet)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -842,7 +567,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	commitRef, err := db.WriteValue(ctx, commit) // will be orphaned if the tryCommitChunks() below fails
+	commitRef, err := db.WriteValue(ctx, commit)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -852,70 +577,41 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	var tryCommitErr error
-	testSetFailed := false
-	for tryCommitErr = ErrOptimisticLockFailed; tryCommitErr == ErrOptimisticLockFailed && !testSetFailed; {
-		tryCommitErr = func() error {
-			currentRootHash, err := db.rt.Root(ctx)
+	err = db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		success, err := assertDatasetHash(ctx, datasets, workingSetDS.ID(), prevWsHash)
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		if !success {
+			return types.Map{}, ErrOptimisticLockFailed
+		}
+
+		r, hasHead, err := datasets.MaybeGet(ctx, types.String(commitDS.ID()))
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		if hasHead {
+			currentHeadRef := r.(types.Ref)
+			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
 			if err != nil {
-				return err
+				return types.Map{}, err
 			}
 
-			currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
-			if err != nil {
-				return err
+			if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
+				return types.Map{}, ErrMergeNeeded
 			}
+		}
 
-			success, err := db.assertDatasetHash(ctx, currentDatasets, workingSetDS.ID(), prevWsHash)
-			if err != nil {
-				return err
-			}
+		return datasets.Edit().
+			Set(types.String(workingSetDS.ID()), wsValRef).
+			Set(types.String(commitDS.ID()), commitValRef).
+			Map(ctx)
+	})
 
-			if !success {
-				testSetFailed = true
-				return nil
-			}
-
-			r, hasHead, err := currentDatasets.MaybeGet(ctx, types.String(commitDS.ID()))
-			if err != nil {
-				return err
-			}
-
-			// First commit in dataset is always fast-forward, so go through all this iff there's already a Head for datasetID.
-			if hasHead {
-				// TODO: We have to do a round-trip here (target the ref, then take a ref of it) because the type of the entry
-				//  stored in the dataset is a ValueType, rather than Struct (commit). See types.ToRefOfValue
-				//  We should rip this out along with much other type info
-				head, err := r.(types.Ref).TargetValue(ctx, db)
-				if err != nil {
-					return err
-				}
-
-				currentHeadRef, err := types.NewRef(head, db.Format())
-				if err != nil {
-					return err
-				}
-
-				ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-				if err != nil {
-					return err
-				}
-
-				if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
-					return ErrMergeNeeded
-				}
-			}
-
-			currentDatasets, err = currentDatasets.Edit().
-				Set(types.String(workingSetDS.ID()), wsValRef).
-				Set(types.String(commitDS.ID()), commitValRef).
-				Map(ctx)
-			if err != nil {
-				return err
-			}
-
-			return db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
-		}()
+	if err != nil {
+		return Dataset{}, Dataset{}, err
 	}
 
 	currentRootHash, err := db.rt.Root(ctx)
@@ -938,8 +634,6 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	db.ExecuteCommitHooks(ctx, commitDS)
-
 	return commitDS, workingSetDS, nil
 }
 
@@ -947,67 +641,56 @@ func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
 
-// doDelete manages concurrent access the single logical piece of mutable state: the current Root. doDelete is
-// optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the
-// current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails
-// (e.g. because of a race with another writer) and the entire algorithm must be tried again.
-func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
-	datasetID := types.String(datasetIDstr)
-	currentRootHash, err := db.rt.Root(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	currentDatasets, err := db.Datasets(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	var initialHead types.Ref
-	if r, hasHead, err := currentDatasets.MaybeGet(ctx, datasetID); err != nil {
-		return err
-	} else if !hasHead {
-		return nil
-	} else {
-		initialHead = r.(types.Ref)
-	}
-
+func (db *database) update(ctx context.Context, edit func(context.Context, types.Map) (types.Map, error)) error {
+	var (
+		err      error
+		root     hash.Hash
+		datasets types.Map
+	)
 	for {
-		currentDatasets, err = currentDatasets.Edit().Remove(datasetID).Map(ctx)
+		root, err = db.rt.Root(ctx)
 		if err != nil {
 			return err
 		}
-		err = db.tryCommitChunks(ctx, currentDatasets, currentRootHash)
+
+		datasets, err = db.DatasetsInRoot(ctx, root)
+		if err != nil {
+			return err
+		}
+
+		datasets, err = edit(ctx, datasets)
+		if err != nil {
+			return err
+		}
+
+		err = db.tryCommitChunks(ctx, datasets, root)
 		if err != ErrOptimisticLockFailed {
-			break
-		}
-
-		// If the optimistic lock failed because someone changed the Head of datasetID, then return ErrMergeNeeded. If it
-		// failed because someone changed a different Dataset, we should try again.
-		currentRootHash, err = db.rt.Root(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		currentDatasets, err = db.Datasets(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		var r types.Value
-		var hasHead bool
-		if r, hasHead, err = currentDatasets.MaybeGet(ctx, datasetID); err != nil {
-			return err
-		} else if !hasHead || (hasHead && !initialHead.Equals(r)) {
-			err = ErrMergeNeeded
 			break
 		}
 	}
 	return err
+}
+
+func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
+	var first types.Value
+
+	datasetID := types.String(datasetIDstr)
+	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
+		curr, ok, err := datasets.MaybeGet(ctx, datasetID)
+		if err != nil {
+			return types.Map{}, err
+		} else if !ok {
+			if first != nil {
+				return types.Map{}, ErrMergeNeeded
+			}
+			return datasets, nil
+		} else if first == nil {
+			first = curr
+		} else if !first.Equals(curr) {
+			return types.Map{}, ErrMergeNeeded
+		}
+		return datasets.Edit().Remove(datasetID).Map(ctx)
+	})
 }
 
 // GC traverses the database starting at the Root and removes all unreferenced data from persistent storage.
@@ -1037,17 +720,17 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	v, err := db.ReadValue(ctx, r.TargetHash())
 
 	if err != nil {
-		return types.EmptyStruct(r.Format()), err
+		return types.Struct{}, err
 	}
 
 	if v == nil {
-		panic(r.TargetHash().String() + " not found")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
 
 	is, err := IsCommit(v)
 
 	if err != nil {
-		return types.EmptyStruct(r.Format()), err
+		return types.Struct{}, err
 	}
 
 	if !is {
@@ -1107,30 +790,30 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 	parents := opts.ParentsList
 	if parents == types.EmptyList || parents.Len() == 0 {
 		var err error
-		parents, err = types.NewList(ctx, ds.Database())
+		parents, err = types.NewList(ctx, ds.db)
 		if err != nil {
-			return types.EmptyStruct(ds.Database().Format()), err
+			return types.Struct{}, err
 		}
 
 		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
-			return types.EmptyStruct(ds.Database().Format()), err
+			return types.Struct{}, err
 		} else if ok {
 			le := parents.Edit().Append(headRef)
 			parents, err = le.List(ctx)
 			if err != nil {
-				return types.EmptyStruct(ds.Database().Format()), err
+				return types.Struct{}, err
 			}
 		}
 	}
 
 	meta := opts.Meta
 	if meta.IsZeroValue() {
-		meta = types.EmptyStruct(ds.Database().Format())
+		meta = types.EmptyStruct(ds.db.Format())
 	}
 
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.Database(), parents)
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.db, parents)
 	if err != nil {
-		return types.EmptyStruct(ds.Database().Format()), err
+		return types.Struct{}, err
 	}
 
 	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)
@@ -1143,30 +826,4 @@ func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc fun
 	}
 
 	return db.GetDataset(ctx, ds.ID())
-}
-
-func (db *database) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *database {
-	db.postCommitHooks = postHooks
-	return db
-}
-
-func (db *database) SetCommitHookLogger(ctx context.Context, wr io.Writer) *database {
-	for _, h := range db.postCommitHooks {
-		h.SetLogger(ctx, wr)
-	}
-	return db
-}
-
-func (db *database) PostCommitHooks() []CommitHook {
-	return db.postCommitHooks
-}
-
-func (db *database) ExecuteCommitHooks(ctx context.Context, ds Dataset) {
-	var err error
-	for _, hook := range db.postCommitHooks {
-		err = hook.Execute(ctx, ds, db)
-		if err != nil {
-			hook.HandleError(ctx, err)
-		}
-	}
 }

@@ -40,11 +40,12 @@ func poe(err error) {
 	}
 }
 
-func getDBAtDir(ctx context.Context, dir string) datas.Database {
+func getDBAtDir(ctx context.Context, dir string) (datas.Database, types.ValueReadWriter) {
 	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, 1<<28)
 	poe(err)
 
-	return datas.NewDatabase(nbs.NewNBSMetricWrapper(cs))
+	vrw := types.NewValueStore(nbs.NewNBSMetricWrapper(cs))
+	return datas.NewTypesDatabase(vrw), vrw
 }
 
 const (
@@ -56,23 +57,23 @@ const (
 var benchmarkTmpDir = os.TempDir()
 var genOnce = &sync.Once{}
 
-func getBenchmarkDB(ctx context.Context) datas.Database {
+func getBenchmarkDB(ctx context.Context) (datas.Database, types.ValueReadWriter) {
 	return getDBAtDir(ctx, benchmarkTmpDir)
 }
 
-func writeTupleToDB(ctx context.Context, db datas.Database, dsID string, vals ...types.Value) {
-	root, err := types.NewTuple(db.Format(), vals...)
+func writeTupleToDB(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, dsID string, vals ...types.Value) {
+	root, err := types.NewTuple(vrw.Format(), vals...)
 	poe(err)
 
 	ds, err := db.GetDataset(ctx, dsID)
 	poe(err)
 
-	_, err = db.CommitValue(ctx, ds, root)
+	_, err = datas.CommitValue(ctx, db, ds, root)
 	poe(err)
 }
 
 func readTupleFromDB(ctx context.Context, t require.TestingT, dsID string) (*types.NomsBinFormat, []types.Value) {
-	db := getBenchmarkDB(ctx)
+	db, vrw := getBenchmarkDB(ctx)
 	ds, err := db.GetDataset(ctx, dsID)
 	require.NoError(t, err)
 
@@ -80,7 +81,7 @@ func readTupleFromDB(ctx context.Context, t require.TestingT, dsID string) (*typ
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	val, err := ref.TargetValue(ctx, db)
+	val, err := ref.TargetValue(ctx, vrw)
 	require.NoError(t, err)
 
 	st := val.(types.Struct)
@@ -90,7 +91,7 @@ func readTupleFromDB(ctx context.Context, t require.TestingT, dsID string) (*typ
 	tup := val.(types.Tuple)
 	valSlice, err := tup.AsSlice()
 	require.NoError(t, err)
-	return db.Format(), valSlice
+	return vrw.Format(), valSlice
 }
 
 var testDataCols = []schema.Column{
@@ -107,13 +108,13 @@ var testDataCols = []schema.Column{
 
 func generateTestData(ctx context.Context) {
 	genOnce.Do(func() {
-		db := getBenchmarkDB(ctx)
-		nbf := db.Format()
+		db, vrw := getBenchmarkDB(ctx)
+		nbf := vrw.Format()
 
-		m, err := types.NewMap(ctx, db)
+		m, err := types.NewMap(ctx, vrw)
 		poe(err)
 
-		idx, err := types.NewMap(ctx, db)
+		idx, err := types.NewMap(ctx, vrw)
 		poe(err)
 
 		me := m.Edit()
@@ -138,7 +139,7 @@ func generateTestData(ctx context.Context) {
 		idx, err = idxMe.Map(ctx)
 		poe(err)
 
-		writeTupleToDB(ctx, db, simIdxBenchDataset, m, idx)
+		writeTupleToDB(ctx, db, vrw, simIdxBenchDataset, m, idx)
 	})
 }
 

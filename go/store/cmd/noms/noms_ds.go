@@ -56,7 +56,7 @@ func setupDsFlags() *flag.FlagSet {
 func runDs(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 	if toDelete != "" {
-		db, set, err := cfg.GetDataset(ctx, toDelete)
+		db, _, set, err := cfg.GetDataset(ctx, toDelete)
 		util.CheckError(err)
 		defer db.Close()
 
@@ -76,7 +76,7 @@ func runDs(ctx context.Context, args []string) int {
 		if len(args) >= 1 {
 			dbSpec = args[0]
 		}
-		store, err := cfg.GetDatabase(ctx, dbSpec)
+		store, _, err := cfg.GetDatabase(ctx, dbSpec)
 		util.CheckError(err)
 		defer store.Close()
 

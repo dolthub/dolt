@@ -68,7 +68,8 @@ func nomsMapNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	m, err := types.NewMap(ctx, db)
+	vrw := sp.GetVRW(ctx)
+	m, err := types.NewMap(ctx, vrw)
 	d.PanicIfError(err)
 	applyMapEdits(ctx, db, sp, m, nil, args)
 	return 0
@@ -113,7 +114,7 @@ func applyMapEdits(ctx context.Context, db datas.Database, sp spec.Spec, rootVal
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i += 2 {
 		kp := parseKeyPart(args, i)
-		vv, err := argumentToValue(ctx, args[i+1], db)
+		vv, err := argumentToValue(ctx, args[i+1], db, sp.GetVRW(ctx))
 		if err != nil {
 			util.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i+1], i+1, err))
 		}

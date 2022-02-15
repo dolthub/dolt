@@ -66,13 +66,13 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	id := "testdataset"
 	set, err := db.GetDataset(context.Background(), id)
 	s.NoError(err)
-	set, err = db.CommitValue(context.Background(), set, types.String("Commit Value"))
+	set, err = datas.CommitValue(context.Background(), db, set, types.String("Commit Value"))
 	s.NoError(err)
 
 	id2 := "testdataset2"
 	set2, err := db.GetDataset(context.Background(), id2)
 	s.NoError(err)
-	set2, err = db.CommitValue(context.Background(), set2, types.String("Commit Value2"))
+	set2, err = datas.CommitValue(context.Background(), db, set2, types.String("Commit Value2"))
 	s.NoError(err)
 
 	err = db.Close()

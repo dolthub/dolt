@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -65,6 +66,7 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 
 	ds, err := addCommit(sp.GetDataset(context.Background()), "first commit")
 	s.NoError(err)
@@ -82,16 +84,16 @@ func (s *nomsDiffTestSuite) TestNomsDiffStat() {
 	out, _ = s.MustRun(main, []string{"diff", "--stat", r1 + ".value", r2 + ".value"})
 	s.NotContains(out, "Comparing commit values")
 
-	l, err := types.NewList(context.Background(), db, types.Float(1), types.Float(2), types.Float(3), types.Float(4))
+	l, err := types.NewList(context.Background(), vrw, types.Float(1), types.Float(2), types.Float(3), types.Float(4))
 	s.NoError(err)
-	ds, err = db.CommitValue(context.Background(), ds, l)
+	ds, err = datas.CommitValue(context.Background(), db, ds, l)
 	s.NoError(err)
 
 	r3 := spec.CreateHashSpecString("nbs", s.DBDir, mustHeadRef(ds).TargetHash()) + ".value"
 
-	l, err = types.NewList(context.Background(), db, types.Float(1), types.Float(222), types.Float(4))
+	l, err = types.NewList(context.Background(), vrw, types.Float(1), types.Float(222), types.Float(4))
 	s.NoError(err)
-	ds, err = db.CommitValue(context.Background(), ds, l)
+	ds, err = datas.CommitValue(context.Background(), db, ds, l)
 	s.NoError(err)
 	r4 := spec.CreateHashSpecString("nbs", s.DBDir, mustHeadRef(ds).TargetHash()) + ".value"
 

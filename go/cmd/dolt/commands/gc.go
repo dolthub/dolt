@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/nbs"
 )
 
@@ -99,15 +98,12 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 
 	var err error
 	if apr.Contains(gcShallowFlag) {
-		db, ok := dEnv.DoltDB.ValueReadWriter().(datas.Database)
-		if !ok {
-			verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
-			return HandleVErrAndExitCode(verr, usage)
-		}
-
-		err = datas.PruneTableFiles(ctx, db)
-
+		err = dEnv.DoltDB.ShallowGC(ctx)
 		if err != nil {
+			if err == chunks.ErrUnsupportedOperation {
+				verr = errhand.BuildDError("this database does not support shallow garbage collection").Build()
+				return HandleVErrAndExitCode(verr, usage)
+			}
 			verr = errhand.BuildDError("an error occurred during garbage collection").AddCause(err).Build()
 		}
 	} else {

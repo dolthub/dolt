@@ -67,7 +67,7 @@ func setupShowFlags() *flag.FlagSet {
 
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	database, value, err := cfg.GetPath(ctx, args[0])
+	database, vrw, value, err := cfg.GetPath(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer database.Close()
 
@@ -82,7 +82,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showRaw {
-		ch, err := types.EncodeValue(value, database.Format())
+		ch, err := types.EncodeValue(value, vrw.Format())
 		util.CheckError(err)
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
@@ -91,7 +91,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(ctx, os.Stdout, value, database)
+		types.WriteValueStats(ctx, os.Stdout, value, vrw)
 		return 0
 	}
 

@@ -35,7 +35,7 @@ type PushOnWriteHook struct {
 	out    io.Writer
 }
 
-var _ datas.CommitHook = (*PushOnWriteHook)(nil)
+var _ CommitHook = (*PushOnWriteHook)(nil)
 
 // NewPushOnWriteHook creates a ReplicateHook, parameterizaed by the backup database
 // and a local tempfile for pushing
@@ -43,12 +43,12 @@ func NewPushOnWriteHook(destDB *DoltDB, tmpDir string) *PushOnWriteHook {
 	return &PushOnWriteHook{destDB: destDB.db, tmpDir: tmpDir}
 }
 
-// Execute implements datas.CommitHook, replicates head updates to the destDb field
+// Execute implements CommitHook, replicates head updates to the destDb field
 func (ph *PushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
 	return pushDataset(ctx, ph.destDB, db, ph.tmpDir, ds)
 }
 
-// HandleError implements datas.CommitHook
+// HandleError implements CommitHook
 func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
 	if ph.out != nil {
 		ph.out.Write([]byte(err.Error()))
@@ -56,7 +56,7 @@ func (ph *PushOnWriteHook) HandleError(ctx context.Context, err error) error {
 	return nil
 }
 
-// SetLogger implements datas.CommitHook
+// SetLogger implements CommitHook
 func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	ph.out = wr
 	return nil
@@ -124,7 +124,7 @@ const (
 	asyncPushSyncReplica   = "async_push_sync_replica"
 )
 
-var _ datas.CommitHook = (*AsyncPushOnWriteHook)(nil)
+var _ CommitHook = (*AsyncPushOnWriteHook)(nil)
 
 // NewAsyncPushOnWriteHook creates a AsyncReplicateHook
 func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tmpDir string, logger io.Writer) (*AsyncPushOnWriteHook, error) {
@@ -136,7 +136,7 @@ func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tm
 	return &AsyncPushOnWriteHook{ch: ch}, nil
 }
 
-// Execute implements datas.CommitHook, replicates head updates to the destDb field
+// Execute implements CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
 	rf, ok, err := ds.MaybeHeadRef()
 	if err != nil {
@@ -155,7 +155,7 @@ func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, d
 	return nil
 }
 
-// HandleError implements datas.CommitHook
+// HandleError implements CommitHook
 func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) error {
 	if ah.out != nil {
 		ah.out.Write([]byte(err.Error()))
@@ -163,7 +163,7 @@ func (ah *AsyncPushOnWriteHook) HandleError(ctx context.Context, err error) erro
 	return nil
 }
 
-// SetLogger implements datas.CommitHook
+// SetLogger implements CommitHook
 func (ah *AsyncPushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	ah.out = wr
 	return nil
@@ -174,14 +174,14 @@ type LogHook struct {
 	out io.Writer
 }
 
-var _ datas.CommitHook = (*LogHook)(nil)
+var _ CommitHook = (*LogHook)(nil)
 
 // NewLogHook is a noop that logs to a writer when invoked
 func NewLogHook(msg []byte) *LogHook {
 	return &LogHook{msg: msg}
 }
 
-// Execute implements datas.CommitHook, writes message to log channel
+// Execute implements CommitHook, writes message to log channel
 func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
 	if lh.out != nil {
 		_, err := lh.out.Write(lh.msg)
@@ -190,7 +190,7 @@ func (lh *LogHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Datab
 	return nil
 }
 
-// HandleError implements datas.CommitHook
+// HandleError implements CommitHook
 func (lh *LogHook) HandleError(ctx context.Context, err error) error {
 	if lh.out != nil {
 		lh.out.Write([]byte(err.Error()))
@@ -198,7 +198,7 @@ func (lh *LogHook) HandleError(ctx context.Context, err error) error {
 	return nil
 }
 
-// SetLogger implements datas.CommitHook
+// SetLogger implements CommitHook
 func (lh *LogHook) SetLogger(ctx context.Context, wr io.Writer) error {
 	lh.out = wr
 	return nil

@@ -51,27 +51,28 @@ func NewDoltRemoteFactory(insecure bool) DoltRemoteFactory {
 
 // CreateDB creates a database backed by a remote server that implements the GRPC rpcs defined by
 // remoteapis.ChunkStoreServiceClient
-func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
+func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
 	var db datas.Database
 
 	dpi, ok := params[GRPCDialProviderParam]
 	if dpi == nil || !ok {
-		return nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
+		return nil, nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
 	}
 	dp, ok := dpi.(GRPCDialProvider)
 	if !ok {
-		return nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
+		return nil, nil, errors.New("DoltRemoteFactory.CreateDB must provide a GRPCDialProvider param through GRPCDialProviderParam")
 	}
 
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params, dp)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	db = datas.NewDatabase(cs)
+	vrw := types.NewValueStore(cs)
+	db = datas.NewTypesDatabase(vrw)
 
-	return db, err
+	return db, vrw, err
 }
 
 var NoCachingParameter = "__dolt__NO_CACHING"
