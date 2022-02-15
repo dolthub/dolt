@@ -766,6 +766,9 @@ func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Co
 func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error) {
 	ds, err := ddb.db.GetDataset(ctx, doltRef.String())
 	if err != nil {
+		if errors.Is(err, datas.ErrInvalidDatasetID) {
+			return false, nil
+		}
 		return false, err
 	}
 	return ds.HasHead(), nil

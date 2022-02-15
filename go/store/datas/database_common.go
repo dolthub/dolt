@@ -263,10 +263,12 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 	return nomsDatasetsMap{db, m}, nil
 }
 
+var ErrInvalidDatasetID = errors.New("Invalid dataset ID")
+
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
-		return Dataset{}, fmt.Errorf("Invalid dataset ID: %s", datasetID)
+		return Dataset{}, fmt.Errorf("%w: %s", ErrInvalidDatasetID, datasetID)
 	}
 
 	rootHash, err := db.rt.Root(ctx)
