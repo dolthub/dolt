@@ -283,15 +283,16 @@ func planConjoin(sources chunkSources, stats *Stats) (plan compactionPlan, err e
 		if onHeap, ok := index.(onHeapTableIndex); ok {
 			// TODO: copy the lengths and suffixes as a byte-copy from src BUG #3438
 			// Bring over the lengths block, in order
-			for _, length := range onHeap.lengths {
-				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], length)
+			for ord := uint32(0); ord < onHeap.chunkCount; ord++ {
+				e := onHeap.getIndexEntry(ord)
+				binary.BigEndian.PutUint32(plan.mergedIndex[lengthsPos:], e.Length())
 				lengthsPos += lengthSize
 			}
 
 			// Bring over the suffixes block, in order
-			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixes)
+			n := copy(plan.mergedIndex[suffixesPos:], onHeap.suffixB)
 
-			if n != len(onHeap.suffixes) {
+			if n != len(onHeap.suffixB) {
 				return compactionPlan{}, errors.New("failed to copy all data")
 			}
 

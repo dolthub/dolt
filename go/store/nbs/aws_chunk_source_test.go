@@ -74,7 +74,7 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index, err := parseTableIndex(tableData)
+			index, err := parseTableIndexByCopy(tableData)
 			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
@@ -98,7 +98,7 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index, err := parseTableIndex(tableData)
+			index, err := parseTableIndexByCopy(tableData)
 			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
