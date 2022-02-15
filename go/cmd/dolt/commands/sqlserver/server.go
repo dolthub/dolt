@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -176,6 +177,19 @@ func Serve(
 		return err, nil
 	}
 	defer sqlEngine.Close()
+
+	if serverConfig.PrivilegeFilePath() != "" {
+		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
+	}
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
+	users, roles, err := privileges.LoadPrivileges()
+	if err != nil {
+		return err, nil
+	}
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
+	if err != nil {
+		return err, nil
+	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
