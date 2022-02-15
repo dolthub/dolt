@@ -1,0 +1,21 @@
+{
+  "Servers": [
+    {
+      "Host": "0.0.0.0",
+      "Port": 4433,
+      "Server": "dolt",
+      "Version": "HEAD",
+      "ResultsFormat": "csv",
+      "ServerExec": "/usr/local/bin/dolt"
+    },
+    {
+      "Server": "mysql",
+      "Version": "8.0.22",
+      "ResultsFormat": "csv",
+      "ServerExec": "/usr/sbin/mysqld",
+      "ConnectionProtocol": "unix"
+    }
+  ],
+  "ScriptDir":"/sysbench-tpcc",
+  "ScaleFactors": [1]
+}
