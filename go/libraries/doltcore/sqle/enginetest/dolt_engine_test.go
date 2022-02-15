@@ -39,22 +39,11 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT 
-					myTable.i, 
-					(SELECT 
-						dolt_commit_diff_mytable.diff_type 
-					FROM 
-						dolt_commit_diff_mytable
-					WHERE (
-						dolt_commit_diff_mytable.from_commit = 'abc' AND 
-						dolt_commit_diff_mytable.to_commit = 'abc' AND
-						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
-					)) AS diff_type 
-				FROM myTable`,
+		Query: `SELECT * from mytable`,
 		Expected: []sql.Row{},
 	}
 

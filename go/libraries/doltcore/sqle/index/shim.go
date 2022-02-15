@@ -142,6 +142,7 @@ func (it sqlRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 		return err
 	}
 
+	// TODO: handle out of order projections
 	for keyIdx, rowIdx := range it.keyProj {
 		if rowIdx == -1 {
 			continue
