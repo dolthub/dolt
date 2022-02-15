@@ -129,6 +129,9 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 				}()
 				copy(buff, mm[indexOffset-aligned:])
 			}()
+			if err != nil {
+				return onHeapTableIndex{}, err
+			}
 
 			ti, err = parseTableIndex(buff)
 
