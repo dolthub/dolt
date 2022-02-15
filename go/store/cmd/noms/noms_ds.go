@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/util/verbose"
 )
 
@@ -87,7 +87,7 @@ func runDs(ctx context.Context, args []string) int {
 			return 1
 		}
 
-		_ = dss.IterAll(ctx, func(k, v types.Value) error {
+		_ = dss.IterAll(ctx, func(k string, _ hash.Hash) error {
 			fmt.Println(k)
 			return nil
 		})

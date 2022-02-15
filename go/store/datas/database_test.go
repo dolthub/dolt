@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -263,6 +264,12 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.Equal(uint64(2), datasets2.Len())
 }
 
+func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
+	m, ok := dsm.toNomsMap()
+	require.True(t, ok)
+	return m
+}
+
 func (suite *DatabaseSuite) TestDatasetsMapType() {
 	dsID1, dsID2 := "ds1", "ds2"
 
@@ -274,7 +281,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NoError(err)
 	dss, err := suite.db.Datasets(context.Background())
 	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), dss, datasets, suite.db)
+	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
 
 	datasets, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -284,7 +291,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), dss, datasets, suite.db)
+	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
 
 	datasets, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -292,7 +299,7 @@ func (suite *DatabaseSuite) TestDatasetsMapType() {
 	suite.NoError(err)
 	dss, err = suite.db.Datasets(context.Background())
 	suite.NoError(err)
-	assertMapOfStringToRefOfCommit(context.Background(), dss, datasets, suite.db)
+	assertMapOfStringToRefOfCommit(context.Background(), mustNomsMap(suite.T(), dss), mustNomsMap(suite.T(), datasets), suite.db)
 }
 
 func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets types.Map, vr types.ValueReader) {

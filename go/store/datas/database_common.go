@@ -73,7 +73,7 @@ func (db *database) StatsSummary() string {
 }
 
 // DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
-func (db *database) DatasetsInRoot(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
+func (db *database) datasetsInRoot(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
 	if rootHash.IsEmpty() {
 		return types.NewMap(ctx, db)
 	}
@@ -226,25 +226,57 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 	return r, true, nil
 }
 
+type nomsDatasetsMap struct {
+	db *database
+	m  types.Map
+}
+
+func (m nomsDatasetsMap) Len() uint64 {
+	return m.m.Len()
+}
+
+func (m nomsDatasetsMap) toNomsMap() (types.Map, bool) {
+	return m.m, true
+}
+
+func (m nomsDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
+	return m.m.IterAll(ctx, func(k, v types.Value) error {
+		// TODO: very fast and loose with error checking here.
+		return cb(string(k.(types.String)), v.(types.Ref).TargetHash())
+	})
+}
+
 // Datasets returns the Map of Datasets in the current root. If you intend to edit the map and commit changes back,
 // then you should fetch the current root, then call DatasetsInRoot with that hash. Otherwise another writer could
 // change the root value between when you get the root hash and call this method.
-func (db *database) Datasets(ctx context.Context) (types.Map, error) {
+func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 	rootHash, err := db.rt.Root(ctx)
 	if err != nil {
-		return types.EmptyMap, err
+		return nil, err
 	}
 
-	return db.DatasetsInRoot(ctx, rootHash)
+	m, err := db.datasetsInRoot(ctx, rootHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsDatasetsMap{db, m}, nil
 }
+
+var ErrInvalidDatasetID = errors.New("Invalid dataset ID")
 
 func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, error) {
 	// precondition checks
 	if !DatasetFullRe.MatchString(datasetID) {
-		return Dataset{}, fmt.Errorf("Invalid dataset ID: %s", datasetID)
+		return Dataset{}, fmt.Errorf("%w: %s", ErrInvalidDatasetID, datasetID)
 	}
 
-	datasets, err := db.Datasets(ctx)
+	rootHash, err := db.rt.Root(ctx)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	datasets, err := db.datasetsInRoot(ctx, rootHash)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -619,7 +651,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	currentDatasets, err := db.DatasetsInRoot(ctx, currentRootHash)
+	currentDatasets, err := db.datasetsInRoot(ctx, currentRootHash)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -653,7 +685,7 @@ func (db *database) update(ctx context.Context, edit func(context.Context, types
 			return err
 		}
 
-		datasets, err = db.DatasetsInRoot(ctx, root)
+		datasets, err = db.datasetsInRoot(ctx, root)
 		if err != nil {
 			return err
 		}

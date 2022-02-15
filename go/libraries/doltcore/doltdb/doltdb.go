@@ -764,13 +764,14 @@ func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Co
 
 // HasRef returns whether the branch given exists in this database.
 func (ddb *DoltDB) HasRef(ctx context.Context, doltRef ref.DoltRef) (bool, error) {
-	dss, err := ddb.db.Datasets(ctx)
-
+	ds, err := ddb.db.GetDataset(ctx, doltRef.String())
 	if err != nil {
+		if errors.Is(err, datas.ErrInvalidDatasetID) {
+			return false, nil
+		}
 		return false, err
 	}
-
-	return dss.Has(ctx, types.String(doltRef.String()))
+	return ds.HasHead(), nil
 }
 
 var branchRefFilter = map[ref.RefType]struct{}{ref.BranchRefType: {}}
@@ -787,10 +788,8 @@ type BranchWithHash struct {
 
 func (ddb *DoltDB) GetBranchesWithHashes(ctx context.Context) ([]BranchWithHash, error) {
 	var refs []BranchWithHash
-	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, v types.Value) error {
-		if tr, ok := v.(types.Ref); ok {
-			refs = append(refs, BranchWithHash{r, tr.TargetHash()})
-		}
+	err := ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, addr hash.Hash) error {
+		refs = append(refs, BranchWithHash{r, addr})
 		return nil
 	})
 	return refs, err
@@ -811,7 +810,7 @@ type TagWithHash struct {
 // GetTagsWithHashes returns a list of objects containing TagRefs with their associated Commit's hash
 func (ddb *DoltDB) GetTagsWithHashes(ctx context.Context) ([]TagWithHash, error) {
 	var refs []TagWithHash
-	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, v types.Value) error {
+	err := ddb.VisitRefsOfType(ctx, tagsRefFilter, func(r ref.DoltRef, _ hash.Hash) error {
 		if tr, ok := r.(ref.TagRef); ok {
 			tag, err := ddb.ResolveTag(ctx, tr)
 			if err != nil {
@@ -849,10 +848,8 @@ type RemoteWithHash struct {
 
 func (ddb *DoltDB) GetRemotesWithHashes(ctx context.Context) ([]RemoteWithHash, error) {
 	var refs []RemoteWithHash
-	err := ddb.VisitRefsOfType(ctx, remotesRefFilter, func(r ref.DoltRef, v types.Value) error {
-		if tr, ok := v.(types.Ref); ok {
-			refs = append(refs, RemoteWithHash{r, tr.TargetHash()})
-		}
+	err := ddb.VisitRefsOfType(ctx, remotesRefFilter, func(r ref.DoltRef, addr hash.Hash) error {
+		refs = append(refs, RemoteWithHash{r, addr})
 		return nil
 	})
 	return refs, err
@@ -863,14 +860,14 @@ func (ddb *DoltDB) GetHeadRefs(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, ref.HeadRefTypes)
 }
 
-func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, v types.Value) error) error {
+func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}, visit func(r ref.DoltRef, addr hash.Hash) error) error {
 	dss, err := ddb.db.Datasets(ctx)
 	if err != nil {
 		return err
 	}
 
-	return dss.IterAll(ctx, func(key, v types.Value) error {
-		keyStr := string(key.(types.String))
+	return dss.IterAll(ctx, func(key string, addr hash.Hash) error {
+		keyStr := key
 
 		var dref ref.DoltRef
 		if ref.IsRef(keyStr) {
@@ -880,7 +877,7 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 			}
 
 			if _, ok := refTypeFilter[dref.GetType()]; ok {
-				err = visit(dref, v)
+				err = visit(dref, addr)
 				if err != nil {
 					return err
 				}
@@ -893,7 +890,7 @@ func (ddb *DoltDB) VisitRefsOfType(ctx context.Context, refTypeFilter map[ref.Re
 
 func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefType]struct{}) ([]ref.DoltRef, error) {
 	var refs []ref.DoltRef
-	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, v types.Value) error {
+	err := ddb.VisitRefsOfType(ctx, refTypeFilter, func(r ref.DoltRef, _ hash.Hash) error {
 		refs = append(refs, r)
 		return nil
 	})
@@ -1209,10 +1206,7 @@ func (ddb *DoltDB) GC(ctx context.Context, uncommitedVals ...hash.Hash) error {
 	}
 	newGen := hash.NewHashSet(uncommitedVals...)
 	oldGen := make(hash.HashSet)
-	err = datasets.IterAll(ctx, func(key, value types.Value) error {
-		keyStr := string(key.(types.String))
-		h := value.(types.Ref).TargetHash()
-
+	err = datasets.IterAll(ctx, func(keyStr string, h hash.Hash) error {
 		var isOldGen bool
 		switch {
 		case ref.IsRef(keyStr):
@@ -1252,12 +1246,11 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 	}
 
 	var deletes []string
-	_ = dd.Iter(ctx, func(ds, _ types.Value) (stop bool, err error) {
-		dsID := string(ds.(types.String))
+	_ = dd.IterAll(ctx, func(dsID string, _ hash.Hash) (err error) {
 		if !ref.IsRef(dsID) && !ref.IsWorkingSet(dsID) {
 			deletes = append(deletes, dsID)
 		}
-		return false, nil
+		return nil
 	})
 
 	// e.g. flushes
