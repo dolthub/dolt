@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -39,6 +40,7 @@ type sqlRowIter struct {
 }
 
 var _ sql.RowIter = sqlRowIter{}
+var _ sql.RowIter2 = sqlRowIter{}
 
 func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, rng prolly.Range, projections []string) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
@@ -133,6 +135,124 @@ func (it sqlRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	return row, nil
 }
+
+func (it sqlRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
+	key, value, err := it.iter.Next(it.ctx)
+	if err != nil {
+		return err
+	}
+
+	for keyIdx, rowIdx := range it.keyProj {
+		if rowIdx == -1 {
+			continue
+		}
+
+		appendToRowFrame(key, it.keyDesc.Types[keyIdx], keyIdx, frame)
+	}
+
+	for valIdx, rowIdx := range it.valProj {
+		if rowIdx == -1 {
+			continue
+		}
+
+		appendToRowFrame(value, it.valDesc.Types[valIdx], valIdx, frame)
+	}
+
+	return nil
+}
+
+func appendToRowFrame(tuple val.Tuple, typ val.Type, idx int, frame *sql.RowFrame) {
+	switch typ.Enc {
+	case val.Int8Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_INT8,
+			Val: tuple.GetField(idx),
+		})
+	case val.Uint8Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_UINT8,
+			Val: tuple.GetField(idx),
+		})
+	case val.Int16Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_INT16,
+			Val: tuple.GetField(idx),
+		})
+	case val.Uint16Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_UINT16,
+			Val: tuple.GetField(idx),
+		})
+	case val.Int32Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_INT32,
+			Val: tuple.GetField(idx),
+		})
+	case val.Uint32Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_UINT32,
+			Val: tuple.GetField(idx),
+		})
+	case val.Int64Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_INT64,
+			Val: tuple.GetField(idx),
+		})
+	case val.Uint64Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_UINT64,
+			Val: tuple.GetField(idx),
+		})
+	case val.Float32Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_FLOAT32,
+			Val: tuple.GetField(idx),
+		})
+	case val.Float64Enc:
+		frame.Append(sql.Value{
+			Typ: query.Type_FLOAT64,
+			Val: tuple.GetField(idx),
+		})
+	case val.DecimalEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_DECIMAL,
+			Val: tuple.GetField(idx),
+		})
+	case val.TimeEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_TIME,
+			Val: tuple.GetField(idx),
+		})
+	case val.YearEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_YEAR,
+			Val: tuple.GetField(idx),
+		})
+	case val.TimestampEnc, val.DateEnc, val.DatetimeEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_TIMESTAMP,
+			Val: tuple.GetField(idx),
+		})
+	case val.StringEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_VARCHAR,
+			Val: tuple.GetField(idx),
+		})
+	case val.BytesEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_VARBINARY,
+			Val: tuple.GetField(idx),
+		})
+	case val.JSONEnc:
+		frame.Append(sql.Value{
+			Typ: query.Type_JSON,
+			Val: tuple.GetField(idx),
+		})
+	default:
+		panic("unknown encoding")
+	}
+}
+
 
 func (it sqlRowIter) Close(ctx *sql.Context) error {
 	return nil
