@@ -33,6 +33,15 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type DatasetsMap interface {
+	// How many datasets are in the map
+	Len() uint64
+
+	IterAll(ctx context.Context, cb func(id string, addr hash.Hash) error) error
+
+	toNomsMap() (types.Map, bool)
+}
+
 // Database provides versioned storage for noms values. While Values can be
 // directly read and written from a Database, it is generally more appropriate
 // to read data by inspecting the Head of a Dataset and write new data by
@@ -48,7 +57,7 @@ type Database interface {
 
 	// Datasets returns the root of the database which is a
 	// Map<String, Ref<Commit>> where string is a datasetID.
-	Datasets(ctx context.Context) (types.Map, error)
+	Datasets(ctx context.Context) (DatasetsMap, error)
 
 	// GetDataset returns a Dataset struct containing the current mapping of
 	// datasetID in the above Datasets Map.
