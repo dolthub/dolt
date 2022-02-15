@@ -268,6 +268,9 @@ func getCommitStForHash(ctx context.Context, vr types.ValueReader, c string) (ty
 	if err != nil {
 		return types.Struct{}, err
 	}
+	if val == nil {
+		return types.Struct{}, ErrHashNotFound
+	}
 
 	valSt, ok := val.(types.Struct)
 	if !ok || valSt.Name() != CommitStructName {
