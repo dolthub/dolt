@@ -117,6 +117,7 @@ type YAMLConfig struct {
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 	DataDirStr        *string               `yaml:"data_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
+	PrivilegeFile     *string               `yaml:"privilege_file"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -314,6 +315,13 @@ func (cfg YAMLConfig) MetricsPort() int {
 	}
 
 	return *cfg.MetricsConfig.Port
+}
+
+func (cfg YAMLConfig) PrivilegeFilePath() string {
+	if cfg.PrivilegeFile != nil {
+		return *cfg.PrivilegeFile
+	}
+	return ""
 }
 
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
