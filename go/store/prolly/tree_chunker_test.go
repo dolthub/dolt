@@ -26,6 +26,11 @@ func TestTreeChunker(t *testing.T) {
 	t.Run("round trip tree items", func(t *testing.T) {
 		roundTripTreeItems(t)
 	})
+	t.Run("tree count accounting", func(t *testing.T) {
+		for k := 0; k < 100; k++ {
+			testTreeChunkerAccounting(t)
+		}
+	})
 }
 
 func roundTripTreeItems(t *testing.T) {
@@ -52,6 +57,13 @@ func roundTripTreeItems(t *testing.T) {
 	//assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 100_000)
 	validateTreeItems(t, ns, root, items)
+}
+
+func testTreeChunkerAccounting(t *testing.T) {
+	cnt := int(testRand.Int63n(9000) + 1000)
+	root, _, _ := randomTree(t, cnt*2)
+	require.True(t, root.level > 0)
+	assert.Equal(t, cnt, root.treeCount())
 }
 
 func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {

@@ -138,7 +138,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 }
 
 func (cur *nodeCursor) valid() bool {
-	if cur.nd.empty() {
+	if cur == nil || cur.nd.empty() {
 		return false
 	}
 	cnt := cur.nd.nodeCount()

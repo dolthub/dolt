@@ -121,7 +121,7 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {
-		_, err := chunker.Append(ctx, nodeItem(pair[0]), nodeItem(pair[1]))
+		err = chunker.AddPair(ctx, pair[0], pair[1])
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

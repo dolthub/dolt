@@ -21,29 +21,30 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var expected = hash.Hash{
-	0xa2, 0x81, 0x3b, 0xf, 0xdb,
-	0x2f, 0x27, 0x1d, 0x60, 0x86,
-	0x22, 0x97, 0x0, 0x86, 0x9b,
-	0x6e, 0x55, 0xb2, 0xec, 0x5c,
+	0x4f, 0x28, 0x1c, 0x10, 0xcd,
+	0x28, 0xab, 0xcb, 0x6f, 0x90,
+	0xa6, 0xa7, 0x39, 0x4d, 0xbe,
+	0x5c, 0x86, 0x2b, 0xd8, 0x49,
 }
 
 func TestContentAddress(t *testing.T) {
-	keys, values := ascendingIntPairs(t, 12345)
+	keys, values := ascendingIntTuples(t, 12345)
 	m := makeTree(t, keys, values)
 	require.Equal(t, expected, m.hashOf())
 }
 
-func makeTree(t *testing.T, keys, values []nodeItem) Node {
+func makeTree(t *testing.T, keys, values []val.Tuple) Node {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 	for i := range keys {
-		_, err := chunker.Append(ctx, keys[i], values[i])
+		err := chunker.AddPair(ctx, keys[i], values[i])
 		require.NoError(t, err)
 	}
 

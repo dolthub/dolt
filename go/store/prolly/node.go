@@ -38,7 +38,7 @@ const (
 )
 
 func init() {
-	emptyNode = buildMapNode(sharedPool, 0, nil, nil)
+	emptyNode = buildMapNode(sharedPool, 0, 0, nil, nil)
 }
 
 var emptyNode Node
@@ -84,7 +84,7 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 	}
 }
 
-func buildMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (node Node) {
+func buildMapNode(pool pool.BuffPool, level, treeCount int, keys, values []nodeItem) (node Node) {
 	var (
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
@@ -121,8 +121,8 @@ func buildMapNode(pool pool.BuffPool, level uint64, keys, values []nodeItem) (no
 	}
 	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
 	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
-	serial.TupleMapAddTreeLevel(b, byte(level))
-	// todo(andy): tree count
+	serial.TupleMapAddTreeLevel(b, uint8(level))
+	serial.TupleMapAddTreeCount(b, uint64(treeCount))
 	b.Finish(serial.TupleMapEnd(b))
 
 	return mapNodeFromBytes(b.FinishedBytes())
@@ -153,10 +153,9 @@ func (nd Node) nodeCount() int {
 	return nd.count
 }
 
-// todo(andy): should we support this?
-//func (nd Node) cumulativeCount() uint64 {
-//	return nd.buf.TreeCount()
-//}
+func (nd Node) treeCount() int {
+	return int(nd.buf.TreeCount())
+}
 
 func (nd Node) leafNode() bool {
 	return nd.level == 0

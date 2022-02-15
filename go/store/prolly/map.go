@@ -57,8 +57,7 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	}
 
 	for i := 0; i < len(tups); i += 2 {
-		_, err = ch.Append(ctx, nodeItem(tups[i]), nodeItem(tups[i+1]))
-		if err != nil {
+		if err = ch.AddPair(ctx, tups[i], tups[i+1]); err != nil {
 			return Map{}, err
 		}
 	}
