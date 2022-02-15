@@ -52,7 +52,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		time.Sleep(10 * time.Second)
 
 		// setup mysqldb
-		err := setupDB(ctx, serverConfig)
+		err := SetupDB(ctx, serverConfig, dbName)
 		if err != nil {
 			cancel()
 			return nil, err
@@ -99,7 +99,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 			// we expect a kill error
 			// we only exit in error if this is not the
 			// error
-			if err.Error() != "signal: killed" {
+			if err.Error() != "signal: killed" && err.Error() != "exit status 1" {
 				close(quit)
 				wg.Wait()
 				return nil, err
@@ -118,7 +118,7 @@ func getMysqlServer(ctx context.Context, config *ServerConfig, params []string) 
 	return ExecCommand(ctx, config.ServerExec, params...)
 }
 
-func setupDB(ctx context.Context, serverConfig *ServerConfig) (err error) {
+func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName string) (err error) {
 	dsn, err := formatDSN(serverConfig)
 	if err != nil {
 		return err
@@ -136,11 +136,11 @@ func setupDB(ctx context.Context, serverConfig *ServerConfig) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", dbName))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", databaseName))
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", dbName))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", databaseName))
 	if err != nil {
 		return err
 	}
@@ -152,7 +152,7 @@ func setupDB(ctx context.Context, serverConfig *ServerConfig) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, fmt.Sprintf("GRANT ALL ON %s.* to %s", dbName, sysbenchUserLocal))
+	_, err = db.ExecContext(ctx, fmt.Sprintf("GRANT ALL ON %s.* to %s", databaseName, sysbenchUserLocal))
 	if err != nil {
 		return err
 	}

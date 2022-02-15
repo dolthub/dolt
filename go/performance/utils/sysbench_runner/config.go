@@ -67,16 +67,16 @@ var defaultMysqlServerParams = []string{"--user=mysql"}
 
 var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
-	NewConfigTest("oltp_insert", []string{}, false),
-	NewConfigTest("bulk_insert", []string{}, false),
-	NewConfigTest("oltp_point_select", []string{}, false),
-	NewConfigTest("select_random_points", []string{}, false),
-	NewConfigTest("select_random_ranges", []string{}, false),
-	NewConfigTest("oltp_delete", []string{}, false),
-	NewConfigTest("oltp_write_only", []string{}, false),
-	NewConfigTest("oltp_read_write", []string{}, false),
-	NewConfigTest("oltp_update_index", []string{}, false),
-	NewConfigTest("oltp_update_non_index", []string{}, false),
+	//NewConfigTest("oltp_insert", []string{}, false),
+	//NewConfigTest("bulk_insert", []string{}, false),
+	//NewConfigTest("oltp_point_select", []string{}, false),
+	//NewConfigTest("select_random_points", []string{}, false),
+	//NewConfigTest("select_random_ranges", []string{}, false),
+	//NewConfigTest("oltp_delete", []string{}, false),
+	//NewConfigTest("oltp_write_only", []string{}, false),
+	//NewConfigTest("oltp_read_write", []string{}, false),
+	//NewConfigTest("oltp_update_index", []string{}, false),
+	//NewConfigTest("oltp_update_non_index", []string{}, false),
 }
 
 type ServerType string
@@ -100,12 +100,12 @@ func (t *Test) Prepare() []string {
 	return withCommand(t.Params, "prepare")
 }
 
-// Prepare returns a test's args for sysbench's run step
+// Run returns a test's args for sysbench's run step
 func (t *Test) Run() []string {
 	return withCommand(t.Params, "run")
 }
 
-// Prepare returns a test's args for sysbench's cleanup step
+// Cleanup returns a test's args for sysbench's cleanup step
 func (t *Test) Cleanup() []string {
 	return withCommand(t.Params, "cleanup")
 }
@@ -189,8 +189,8 @@ func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == MySql && serverConfig.Host == defaultHost {
-		params = append(params, "--mysql-user=sysbench")
-		params = append(params, fmt.Sprintf("--mysql-password=%s", sysbenchPassLocal))
+		params = append(params, "--mysql-user=vinairachakonda")
+		params = append(params, fmt.Sprintf("--mysql-password=%s", "vinai"))
 	} else {
 		params = append(params, "--mysql-user=root")
 	}
@@ -315,13 +315,13 @@ func (c *Config) validateServerConfigs() error {
 			return fmt.Errorf("unsupported server type: %s", s.Server)
 		}
 
-		err := validateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
+		err := ValidateRequiredFields(string(s.Server), s.Version, s.ResultsFormat)
 		if err != nil {
 			return err
 		}
 
 		if s.Server == MySql {
-			err = checkProtocol(s.ConnectionProtocol)
+			err = CheckProtocol(s.ConnectionProtocol)
 			if err != nil {
 				return err
 			}
@@ -331,12 +331,12 @@ func (c *Config) validateServerConfigs() error {
 			s.Host = defaultHost
 		}
 
-		portMap, err = checkUpdatePortMap(s, portMap)
+		portMap, err = CheckUpdatePortMap(s, portMap)
 		if err != nil {
 			return err
 		}
 
-		err = checkExec(s)
+		err = CheckExec(s)
 		if err != nil {
 			return err
 		}
@@ -344,7 +344,7 @@ func (c *Config) validateServerConfigs() error {
 	return nil
 }
 
-func validateRequiredFields(server, version, format string) error {
+func ValidateRequiredFields(server, version, format string) error {
 	if server == "" {
 		return getMustSupplyError("server")
 	}
@@ -389,8 +389,8 @@ func (c *Config) setDefaults() error {
 	return nil
 }
 
-// checkUpdatePortMap returns an error if multiple servers have specified the same port
-func checkUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
+// CheckUpdatePortMap returns an error if multiple servers have specified the same port
+func CheckUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) (map[int]ServerType, error) {
 	if serverConfig.Port == 0 {
 		serverConfig.Port = defaultPort
 	}
@@ -404,8 +404,8 @@ func checkUpdatePortMap(serverConfig *ServerConfig, portMap map[int]ServerType) 
 	return portMap, nil
 }
 
-// checkExec verifies the binary exists
-func checkExec(serverConfig *ServerConfig) error {
+// CheckExec verifies the binary exists
+func CheckExec(serverConfig *ServerConfig) error {
 	if serverConfig.ServerExec == "" {
 		return getMustSupplyError("server exec")
 	}
@@ -420,8 +420,8 @@ func checkExec(serverConfig *ServerConfig) error {
 	return nil
 }
 
-// checkProtocol ensures the given protocol is supported
-func checkProtocol(protocol string) error {
+// CheckProtocol ensures the given protocol is supported
+func CheckProtocol(protocol string) error {
 	if protocol == "" {
 		return getMustSupplyError("connection protocol")
 	}
