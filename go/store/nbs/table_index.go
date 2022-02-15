@@ -17,6 +17,7 @@ package nbs
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"os"
 	"sort"
@@ -25,6 +26,11 @@ import (
 	"github.com/dolthub/mmap-go"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+)
+
+var (
+	ErrWrongBufferSize = errors.New("buffer length and/or capacity incorrect for chunkCount specified in footer")
+	ErrWrongCopySize   = errors.New("could not copy enough bytes")
 )
 
 type tableIndex interface {
@@ -88,26 +94,31 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 }
 
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
-// and footer, though it may contain an unspecified number of bytes before that data.
-// |tableIndex| doesn't keep alive any references to |buff|.
-// Does not allocate new memory except for offsets, computes on buff in place.
+// and footer and its length and capacity must match the expected indexSize for the chunkCount specified in the footer.
+// Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
 func parseTableIndex(buff []byte) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-
-	iS := indexSize(chunkCount)
+	iS := indexSize(chunkCount) + footerSize
+	if uint64(len(buff)) != iS || uint64(cap(buff)) != iS {
+		return onHeapTableIndex{}, ErrWrongBufferSize
+	}
 	buff = buff[:len(buff)-footerSize]
-	// Trim away any extra bytes
-	buff = buff[uint64(len(buff))-iS:]
-
 	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData)
 }
 
-// ReadTableIndex loads an index into memory from an io.ReadSeeker
+// parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
+// Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
+func parseTableIndexByCopy(buff []byte) (onHeapTableIndex, error) {
+	r := bytes.NewReader(buff)
+	return ReadTableIndexByCopy(r)
+}
+
+// ReadTableIndexByCopy loads an index into memory from an io.ReadSeeker
 // Caution: Allocates new memory for entire index
-func ReadTableIndex(rd io.ReadSeeker) (onHeapTableIndex, error) {
+func ReadTableIndexByCopy(rd io.ReadSeeker) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(rd)
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -152,6 +163,11 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
+	/**
+	TODO: Optimize memory usage further
+	There's wasted space here. The lengths segment in the buffer is retained unnecessarily. We can use that space to
+	store half the offsets and then allocate an additional len(lengths) to store the rest.
+	*/
 
 	return onHeapTableIndex{
 		tupleB:                tuples,
