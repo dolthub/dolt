@@ -22,20 +22,16 @@
 package nbs
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"io"
-	"os"
 	"sort"
 	"sync/atomic"
 
-	"github.com/dolthub/mmap-go"
 	"github.com/golang/snappy"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -107,14 +103,6 @@ func init() {
 // ErrInvalidTableFile is an error returned when a table file is corrupt or invalid.
 var ErrInvalidTableFile = errors.New("invalid or corrupt table file")
 
-type onHeapTableIndex struct {
-	chunkCount            uint32
-	totalUncompressedData uint64
-	prefixes, offsets     []uint64
-	lengths, ordinals     []uint32
-	suffixes              []byte
-}
-
 type indexEntry interface {
 	Offset() uint64
 	Length() uint32
@@ -131,181 +119,6 @@ func (ir indexResult) Offset() uint64 {
 
 func (ir indexResult) Length() uint32 {
 	return ir.l
-}
-
-// An mmapIndexEntry is an addrSuffix, a BigEndian uint64 for the offset and a
-// BigEnding uint32 for the chunk size.
-const mmapIndexEntrySize = addrSuffixSize + uint64Size + lengthSize
-
-type mmapOrdinalSlice []mmapOrdinal
-
-func (s mmapOrdinalSlice) Len() int           { return len(s) }
-func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
-func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-func (i mmapTableIndex) Ordinals() []uint32 {
-	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
-	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
-		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-		s[idx] = mmapOrdinal{idx, e.Offset()}
-	}
-	sort.Sort(s)
-	res := make([]uint32, i.chunkCount)
-	for j, r := range s {
-		res[r.idx] = uint32(j)
-	}
-	return res
-}
-
-type mmapTableIndex struct {
-	chunkCount            uint32
-	totalUncompressedData uint64
-	fileSz                uint64
-	prefixes              []uint64
-	data                  mmap.MMap
-	refCnt                *int32
-}
-
-func (i mmapTableIndex) Prefixes() []uint64 {
-	return i.prefixes
-}
-
-type mmapOrdinal struct {
-	idx    int
-	offset uint64
-}
-
-func (i mmapTableIndex) TableFileSize() uint64 {
-	return i.fileSz
-}
-
-func (i mmapTableIndex) ChunkCount() uint32 {
-	return i.chunkCount
-}
-
-func (i mmapTableIndex) TotalUncompressedData() uint64 {
-	return i.totalUncompressedData
-}
-
-func (i mmapTableIndex) Close() error {
-	cnt := atomic.AddInt32(i.refCnt, -1)
-	if cnt == 0 {
-		return i.data.Unmap()
-	}
-	if cnt < 0 {
-		panic("Close() called and reduced ref count to < 0.")
-	}
-	return nil
-}
-
-func (i mmapTableIndex) Clone() tableIndex {
-	cnt := atomic.AddInt32(i.refCnt, 1)
-	if cnt == 1 {
-		panic("Clone() called after last Close(). This index is no longer valid.")
-	}
-	return i
-}
-
-func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
-	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
-	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, i.chunkCount
-	for idx < j {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if i.prefixes[h] < prefix {
-			idx = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-	return
-}
-
-func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool) {
-	prefix := binary.BigEndian.Uint64(h[:])
-	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
-		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-		if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
-			return e, true
-		}
-	}
-	return mmapIndexEntry{}, false
-}
-
-func (i mmapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
-	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-	return bytes.Equal(e.suffix(), h[addrPrefixSize:])
-}
-
-func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
-	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-	if a != nil {
-		binary.BigEndian.PutUint64(a[:], i.prefixes[idx])
-		copy(a[addrPrefixSize:], e.suffix())
-	}
-	return e
-}
-
-type mmapIndexEntry []byte
-
-const mmapIndexEntryOffsetStart = addrSuffixSize
-const mmapIndexEntryLengthStart = addrSuffixSize + uint64Size
-
-func (e mmapIndexEntry) suffix() []byte {
-	return e[:addrSuffixSize]
-}
-
-func (e mmapIndexEntry) Offset() uint64 {
-	return binary.BigEndian.Uint64(e[mmapIndexEntryOffsetStart:])
-}
-
-func (e mmapIndexEntry) Length() uint32 {
-	return binary.BigEndian.Uint32(e[mmapIndexEntryLengthStart:])
-}
-
-func mmapOffheapSize(chunks int) int {
-	pageSize := 4096
-	esz := addrSuffixSize + uint64Size + lengthSize
-	min := esz * chunks
-	if min%pageSize == 0 {
-		return min
-	} else {
-		return (min/pageSize + 1) * pageSize
-	}
-}
-
-func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) {
-	flags := 0
-	if f == nil {
-		flags = mmap.ANON
-	}
-	arr, err := mmap.MapRegion(f, mmapOffheapSize(len(ti.ordinals)), mmap.RDWR, flags, 0)
-	if err != nil {
-		return mmapTableIndex{}, err
-	}
-	for i := range ti.ordinals {
-		idx := i * mmapIndexEntrySize
-		si := addrSuffixSize * ti.ordinals[i]
-		copy(arr[idx:], ti.suffixes[si:si+addrSuffixSize])
-		binary.BigEndian.PutUint64(arr[idx+mmapIndexEntryOffsetStart:], ti.offsets[ti.ordinals[i]])
-		binary.BigEndian.PutUint32(arr[idx+mmapIndexEntryLengthStart:], ti.lengths[ti.ordinals[i]])
-	}
-
-	refCnt := new(int32)
-	*refCnt = 1
-	return mmapTableIndex{
-		ti.chunkCount,
-		ti.totalUncompressedData,
-		ti.TableFileSize(),
-		ti.Prefixes(),
-		arr,
-		refCnt,
-	}, nil
 }
 
 type tableReaderAt interface {
@@ -326,234 +139,22 @@ type tableReader struct {
 	blockSize             uint64
 }
 
-type tableIndex interface {
-	// ChunkCount returns the total number of chunks in the indexed file.
-	ChunkCount() uint32
-	// EntrySuffixMatches returns true if the entry at index |idx| matches
-	// the suffix of the address |h|. Used by |Lookup| after finding
-	// matching indexes based on |Prefixes|.
-	EntrySuffixMatches(idx uint32, h *addr) bool
-	// IndexEntry returns the |indexEntry| at |idx|. Optionally puts the
-	// full address of that entry in |a| if |a| is not |nil|.
-	IndexEntry(idx uint32, a *addr) indexEntry
-	// Lookup returns an |indexEntry| for the chunk corresponding to the
-	// provided address |h|. Second returns is |true| if an entry exists
-	// and |false| otherwise.
-	Lookup(h *addr) (indexEntry, bool)
-	// Ordinals returns a slice of indexes which maps the |i|th chunk in
-	// the indexed file to its corresponding entry in index. The |i|th
-	// entry in the result is the |i|th chunk in the indexed file, and its
-	// corresponding value in the slice is the index entry that maps to it.
-	Ordinals() []uint32
-	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
-	// entry corresponds to an indexed chunk address.
-	Prefixes() []uint64
-	// TableFileSize returns the total size of the indexed table file, in bytes.
-	TableFileSize() uint64
-	// TotalUncompressedData returns the total uncompressed data size of
-	// the table file. Used for informational statistics only.
-	TotalUncompressedData() uint64
-
-	// Close releases any resources used by this tableIndex.
-	Close() error
-
-	// Clone returns a |tableIndex| with the same contents which can be
-	// |Close|d independently.
-	Clone() tableIndex
-}
-
-var _ tableIndex = mmapTableIndex{}
-
-// parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
-// and footer, though it may contain an unspecified number of bytes before that data.
-// |tableIndex| doesn't keep alive any references to |buff|.
-func parseTableIndex(buff []byte) (onHeapTableIndex, error) {
-	return ReadTableIndex(bytes.NewReader(buff))
-}
-
-func ReadTableIndex(rd io.ReadSeeker) (onHeapTableIndex, error) {
-	footerSize := int64(magicNumberSize + uint64Size + uint32Size)
-	_, err := rd.Seek(-footerSize, io.SeekEnd)
-
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-
-	footer, err := iohelp.ReadNBytes(rd, int(footerSize))
-
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-
-	if string(footer[uint32Size+uint64Size:]) != magicNumber {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	chunkCount := binary.BigEndian.Uint32(footer)
-	totalUncompressedData := binary.BigEndian.Uint64(footer[uint32Size:])
-
-	// index
-	suffixesSize := int64(chunkCount) * addrSuffixSize
-	lengthsSize := int64(chunkCount) * lengthSize
-	tuplesSize := int64(chunkCount) * prefixTupleSize
-	indexSize := suffixesSize + lengthsSize + tuplesSize
-
-	_, err = rd.Seek(-(indexSize + footerSize), io.SeekEnd)
-	if err != nil {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	indexBytes, err := iohelp.ReadNBytes(rd, int(indexSize))
-	if err != nil {
-		return onHeapTableIndex{}, ErrInvalidTableFile
-	}
-
-	prefixes, ordinals := computePrefixes(chunkCount, indexBytes[:tuplesSize])
-	lengths, offsets := computeOffsets(chunkCount, indexBytes[tuplesSize:tuplesSize+lengthsSize])
-	suffixes := indexBytes[tuplesSize+lengthsSize:]
-
-	return onHeapTableIndex{
-		chunkCount, totalUncompressedData,
-		prefixes, offsets,
-		lengths, ordinals,
-		suffixes,
-	}, nil
-}
-
-func computeOffsets(count uint32, buff []byte) (lengths []uint32, offsets []uint64) {
-	lengths = make([]uint32, count)
-	offsets = make([]uint64, count)
-
-	lengths[0] = binary.BigEndian.Uint32(buff)
-
-	for i := uint64(1); i < uint64(count); i++ {
-		lengths[i] = binary.BigEndian.Uint32(buff[i*lengthSize:])
-		offsets[i] = offsets[i-1] + uint64(lengths[i-1])
-	}
-	return
-}
-
-func computePrefixes(count uint32, buff []byte) (prefixes []uint64, ordinals []uint32) {
-	prefixes = make([]uint64, count)
-	ordinals = make([]uint32, count)
-
-	for i := uint64(0); i < uint64(count); i++ {
-		idx := i * prefixTupleSize
-		prefixes[i] = binary.BigEndian.Uint64(buff[idx:])
-		ordinals[i] = binary.BigEndian.Uint32(buff[idx+addrPrefixSize:])
-	}
-	return
-}
-
-func (ti onHeapTableIndex) prefixIdxToOrdinal(idx uint32) uint32 {
-	return ti.ordinals[idx]
-}
-
-// TableFileSize returns the size of the table file that this index references.
-// This assumes that the index follows immediately after the last chunk in the
-// file and that the last chunk in the file is in the index.
-func (ti onHeapTableIndex) TableFileSize() uint64 {
-	if ti.chunkCount == 0 {
-		return footerSize
-	}
-	len, offset := ti.offsets[ti.chunkCount-1], uint64(ti.lengths[ti.chunkCount-1])
-	return offset + len + indexSize(ti.chunkCount) + footerSize
-}
-
-// prefixIdx returns the first position in |tr.prefixes| whose value ==
-// |prefix|. Returns |tr.chunkCount| if absent
-func (ti onHeapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
-	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
-	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, ti.chunkCount
-	for idx < j {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if ti.prefixes[h] < prefix {
-			idx = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-
-	return
-}
-
-// EntrySuffixMatches returns true IFF the suffix for prefix entry |idx|
-// matches the address |a|.
-func (ti onHeapTableIndex) EntrySuffixMatches(idx uint32, h *addr) bool {
-	li := uint64(ti.ordinals[idx]) * addrSuffixSize
-	return bytes.Equal(h[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
-}
-
-// lookupOrdinal returns the ordinal of |h| if present. Returns |ti.chunkCount|
-// if absent.
-func (ti onHeapTableIndex) lookupOrdinal(h *addr) uint32 {
-	prefix := h.Prefix()
-
-	for idx := ti.prefixIdx(prefix); idx < ti.chunkCount && ti.prefixes[idx] == prefix; idx++ {
-		if ti.EntrySuffixMatches(idx, h) {
-			return ti.ordinals[idx]
-		}
-	}
-
-	return ti.chunkCount
-}
-
-func (ti onHeapTableIndex) IndexEntry(idx uint32, a *addr) indexEntry {
-	ord := ti.ordinals[idx]
-	if a != nil {
-		binary.BigEndian.PutUint64(a[:], ti.prefixes[idx])
-		li := uint64(ord) * addrSuffixSize
-		copy(a[addrPrefixSize:], ti.suffixes[li:li+addrSuffixSize])
-	}
-	return indexResult{ti.offsets[ord], ti.lengths[ord]}
-}
-
-func (ti onHeapTableIndex) Lookup(h *addr) (indexEntry, bool) {
-	ord := ti.lookupOrdinal(h)
-	if ord == ti.chunkCount {
-		return indexResult{}, false
-	}
-	return indexResult{ti.offsets[ord], ti.lengths[ord]}, true
-}
-
-func (ti onHeapTableIndex) Prefixes() []uint64 {
-	return ti.prefixes
-}
-
-func (ti onHeapTableIndex) Ordinals() []uint32 {
-	return ti.ordinals
-}
-
-func (i onHeapTableIndex) ChunkCount() uint32 {
-	return i.chunkCount
-}
-
-func (i onHeapTableIndex) TotalUncompressedData() uint64 {
-	return i.totalUncompressedData
-}
-
-func (i onHeapTableIndex) Close() error {
-	return nil
-}
-
-func (i onHeapTableIndex) Clone() tableIndex {
-	return i
-}
-
 // newTableReader parses a valid nbs table byte stream and returns a reader. buff must end with an NBS index
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
-func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) tableReader {
+func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
+	p, err := index.Prefixes()
+	if err != nil {
+		return tableReader{}, err
+	}
 	return tableReader{
 		index,
-		index.Prefixes(),
+		p,
 		index.ChunkCount(),
 		index.TotalUncompressedData(),
 		r,
 		blockSize,
-	}
+	}, nil
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
@@ -584,7 +185,11 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
 		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
-			if tr.EntrySuffixMatches(j, addr.a) {
+			m, err := tr.EntrySuffixMatches(j, addr.a)
+			if err != nil {
+				return false, err
+			}
+			if m {
 				addrs[i].has = true
 				break
 			}
@@ -612,14 +217,17 @@ func (tr tableReader) index() (tableIndex, error) {
 
 // returns true iff |h| can be found in this table.
 func (tr tableReader) has(h addr) (bool, error) {
-	_, ok := tr.Lookup(&h)
-	return ok, nil
+	_, ok, err := tr.Lookup(&h)
+	return ok, err
 }
 
 // returns the storage associated with |h|, iff present. Returns nil if absent. On success,
 // the returned byte slice directly references the underlying storage.
 func (tr tableReader) get(ctx context.Context, h addr, stats *Stats) ([]byte, error) {
-	e, found := tr.Lookup(&h)
+	e, found, err := tr.Lookup(&h)
+	if err != nil {
+		return nil, err
+	}
 	if !found {
 		return nil, nil
 	}
@@ -746,15 +354,21 @@ func (tr tableReader) getMany(
 
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
-	offsetRecords, remaining := tr.findOffsets(reqs)
-	err := tr.getManyAtOffsets(ctx, eg, offsetRecords, found, stats)
+	offsetRecords, remaining, err := tr.findOffsets(reqs)
+	if err != nil {
+		return false, err
+	}
+	err = tr.getManyAtOffsets(ctx, eg, offsetRecords, found, stats)
 	return remaining, err
 }
 func (tr tableReader) getManyCompressed(ctx context.Context, eg *errgroup.Group, reqs []getRecord, found func(context.Context, CompressedChunk), stats *Stats) (bool, error) {
 	// Pass #1: Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
 	// of table locations which must be read in order to satisfy the getMany operation.
-	offsetRecords, remaining := tr.findOffsets(reqs)
-	err := tr.getManyCompressedAtOffsets(ctx, eg, offsetRecords, found, stats)
+	offsetRecords, remaining, err := tr.findOffsets(reqs)
+	if err != nil {
+		return false, err
+	}
+	err = tr.getManyCompressedAtOffsets(ctx, eg, offsetRecords, found, stats)
 	return remaining, err
 }
 
@@ -867,7 +481,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 // chunks remaining will be set to false upon return. If some are not here,
 // then remaining will be true. The result offsetRecSlice is sorted in offset
 // order.
-func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool) {
+func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error) {
 	filterIdx := uint32(0)
 	filterLen := uint32(len(tr.prefixes))
 	ors = make(offsetRecSlice, 0, len(reqs))
@@ -896,9 +510,16 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 
 		// record all offsets within the table which contain the data required.
 		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
-			if tr.EntrySuffixMatches(j, req.a) {
+			m, err := tr.EntrySuffixMatches(j, req.a)
+			if err != nil {
+				return nil, false, err
+			}
+			if m {
 				reqs[i].found = true
-				entry := tr.IndexEntry(j, nil)
+				entry, err := tr.IndexEntry(j, nil)
+				if err != nil {
+					return nil, false, err
+				}
 				ors = append(ors, offsetRec{req.a, entry.Offset(), entry.Length()})
 				break
 			}
@@ -906,7 +527,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 	}
 
 	sort.Sort(ors)
-	return ors, remaining
+	return ors, remaining, nil
 }
 
 func canReadAhead(fRec offsetRec, curStart, curEnd, blockSize uint64) (newEnd uint64, canRead bool) {
@@ -933,7 +554,10 @@ func canReadAhead(fRec offsetRec, curStart, curEnd, blockSize uint64) (newEnd ui
 func (tr tableReader) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	var offsetRecords offsetRecSlice
 	// Pass #1: Build the set of table locations which must be read in order to find all the elements of |reqs| which are present in this table.
-	offsetRecords, remaining = tr.findOffsets(reqs)
+	offsetRecords, remaining, err = tr.findOffsets(reqs)
+	if err != nil {
+		return 0, false, err
+	}
 
 	// Now |offsetRecords| contains all locations within the table which must
 	// be searched (note that there may be duplicates of a particular
@@ -997,7 +621,10 @@ func (tr tableReader) extract(ctx context.Context, chunks chan<- extractRecord) 
 	var ors offsetRecSlice
 	for i := uint32(0); i < tr.chunkCount; i++ {
 		a := new(addr)
-		e := tr.IndexEntry(i, a)
+		e, err := tr.IndexEntry(i, a)
+		if err != nil {
+			return err
+		}
 		ors = append(ors, offsetRec{a, e.Offset(), e.Length()})
 	}
 	sort.Sort(ors)
@@ -1020,8 +647,12 @@ func (tr tableReader) Close() error {
 	return tr.tableIndex.Close()
 }
 
-func (tr tableReader) Clone() tableReader {
-	return tableReader{tr.tableIndex.Clone(), tr.prefixes, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}
+func (tr tableReader) Clone() (tableReader, error) {
+	ti, err := tr.tableIndex.Clone()
+	if err != nil {
+		return tableReader{}, err
+	}
+	return tableReader{ti, tr.prefixes, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}, nil
 }
 
 type readerAdapter struct {

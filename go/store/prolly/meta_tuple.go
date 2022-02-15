@@ -44,7 +44,7 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 }
 
 func writeNewChild(ctx context.Context, ns NodeStore, level uint64, keys, values []nodeItem) (Node, metaPair, error) {
-	child := makeMapNode(ns.Pool(), level, keys, values)
+	child := buildMapNode(ns.Pool(), level, keys, values)
 
 	ref, err := ns.Write(ctx, child)
 	if err != nil {

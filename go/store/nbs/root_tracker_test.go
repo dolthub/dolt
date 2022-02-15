@@ -461,13 +461,17 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ti, err := parseTableIndex(data)
+			ti, err := parseTableIndexByCopy(data)
 
 			if err != nil {
 				return nil, err
 			}
 
-			ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+			s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+			if err != nil {
+				return emptyChunkSource{}, err
+			}
+			ftp.sources[name] = s
 			return chunkSourceAdapter{ftp.sources[name], name}, nil
 		}
 	}
@@ -484,13 +488,17 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ti, err := parseTableIndex(data)
+		ti, err := parseTableIndexByCopy(data)
 
 		if err != nil {
 			return nil, err
 		}
 
-		ftp.sources[name] = newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		s, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
+		if err != nil {
+			return nil, err
+		}
+		ftp.sources[name] = s
 		return chunkSourceAdapter{ftp.sources[name], name}, nil
 	}
 	return emptyChunkSource{}, nil

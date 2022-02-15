@@ -35,9 +35,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	// Setup a TableReader to read compressed chunks out of
-	ti, err := parseTableIndex(buff)
+	ti, err := parseTableIndexByCopy(buff)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
 
 	hashes := make(hash.HashSet)
 	for _, chnk := range testMDChunks {
@@ -72,9 +73,10 @@ func TestCmpChunkTableWriter(t *testing.T) {
 	require.NoError(t, err)
 
 	outputBuff := output.Bytes()
-	outputTI, err := parseTableIndex(outputBuff)
+	outputTI, err := parseTableIndexByCopy(outputBuff)
 	require.NoError(t, err)
-	outputTR := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
+	outputTR, err := newTableReader(outputTI, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
 
 	compareContentsOfTables(t, ctx, hashes, tr, outputTR)
 }

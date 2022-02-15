@@ -200,6 +200,10 @@ func NewTableFileIter(dirs []string, fs filesys.Filesys) (*TableFileIter, error)
 }
 
 func (itr *TableFileIter) next() (string, time.Time) {
+	if itr.pos >= len(itr.files) {
+		return "", time.Time{}
+	}
+
 	curr := itr.files[itr.pos]
 	itr.pos++
 

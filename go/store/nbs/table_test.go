@@ -77,9 +77,10 @@ func TestSimple(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	assertChunksInReader(chunks, tr, assert)
 
@@ -123,9 +124,10 @@ func TestHasMany(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	hasAddrs := []hasRecord{
@@ -173,9 +175,10 @@ func TestHasManySequentialPrefix(t *testing.T) {
 	require.NoError(t, err)
 	buff = buff[:length]
 
-	ti, err := parseTableIndex(buff)
+	ti, err := parseTableIndexByCopy(buff)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+	require.NoError(t, err)
 
 	hasAddrs := make([]hasRecord, 2)
 	// Leave out the first address
@@ -201,9 +204,10 @@ func TestGetMany(t *testing.T) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	addrs := addrSlice{computeAddr(data[0]), computeAddr(data[1]), computeAddr(data[2])}
 	getBatch := []getRecord{
@@ -234,9 +238,10 @@ func TestCalcReads(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), 0)
+	require.NoError(t, err)
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 	getBatch := []getRecord{
 		{&addrs[0], binary.BigEndian.Uint64(addrs[0][:addrPrefixSize]), false},
@@ -270,9 +275,10 @@ func TestExtract(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	addrs := addrSlice{computeAddr(chunks[0]), computeAddr(chunks[1]), computeAddr(chunks[2])}
 
@@ -308,9 +314,10 @@ func Test65k(t *testing.T) {
 
 	tableData, _, err := buildTable(chunks)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	for i := 0; i < count; i++ {
 		data := dataFn(i)
@@ -360,9 +367,10 @@ func doTestNGetMany(t *testing.T, count int) {
 
 	tableData, _, err := buildTable(data)
 	require.NoError(t, err)
-	ti, err := parseTableIndex(tableData)
+	ti, err := parseTableIndexByCopy(tableData)
 	require.NoError(t, err)
-	tr := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	tr, err := newTableReader(ti, tableReaderAtFromBytes(tableData), fileBlockSize)
+	require.NoError(t, err)
 
 	getBatch := make([]getRecord, len(data))
 	for i := 0; i < count; i++ {

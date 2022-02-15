@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
@@ -284,7 +285,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		m.keyBld.PutField(to, sqlRow[from])
+		index.PutField(m.keyBld, to, sqlRow[from])
 	}
 	k := m.keyBld.Build(sharePool)
 
@@ -297,7 +298,7 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		m.valBld.PutField(to, sqlRow[from])
+		index.PutField(m.valBld, to, sqlRow[from])
 	}
 	v := m.valBld.Build(sharePool)
 
@@ -307,7 +308,7 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		m.keyBld.PutField(to, sqlRow[from])
+		index.PutField(m.keyBld, to, sqlRow[from])
 	}
 	k := m.keyBld.Build(sharePool)
 
@@ -317,7 +318,7 @@ func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		m.keyBld.PutField(to, oldRow[from])
+		index.PutField(m.keyBld, to, oldRow[from])
 	}
 	oldKey := m.keyBld.Build(sharePool)
 
@@ -329,7 +330,7 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		m.keyBld.PutField(to, newRow[from])
+		index.PutField(m.keyBld, to, newRow[from])
 	}
 	newKey := m.keyBld.Build(sharePool)
 
@@ -342,7 +343,7 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		m.valBld.PutField(to, newRow[from])
+		index.PutField(m.valBld, to, newRow[from])
 	}
 	v := m.valBld.Build(sharePool)
 
@@ -350,26 +351,30 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 }
 
 func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) error {
-	existing := make(sql.Row, len(m.keyMap)+len(m.valMap))
+	dupe := make(sql.Row, len(m.keyMap)+len(m.valMap))
 
 	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
 		kd := m.keyBld.Desc
 		for from := range m.keyMap {
 			to := m.keyMap.MapOrdinal(from)
-			existing[to] = kd.GetField(from, key)
+			if dupe[to], err = index.GetField(kd, from, key); err != nil {
+				return err
+			}
 		}
 
 		vd := m.valBld.Desc
 		for from := range m.valMap {
 			to := m.valMap.MapOrdinal(from)
-			existing[to] = vd.GetField(from, value)
+			if dupe[to], err = index.GetField(vd, from, value); err != nil {
+				return err
+			}
 		}
 		return
 	})
 
 	s := m.keyBld.Desc.Format(key)
 
-	return sql.NewUniqueKeyErr(s, true, existing)
+	return sql.NewUniqueKeyErr(s, true, dupe)
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {

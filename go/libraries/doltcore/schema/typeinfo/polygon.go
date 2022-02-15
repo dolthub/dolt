@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -108,13 +109,13 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 // FormatValue implements TypeInfo interface.
 func (ti *polygonType) FormatValue(v types.Value) (*string, error) {
 	if val, ok := v.(types.Polygon); ok {
-		size := types.EWKBHeaderSize + types.LengthSize
+		size := geometry.EWKBHeaderSize + types.LengthSize
 		for _, l := range val.Lines {
-			size += types.LengthSize + types.PointDataSize*len(l.Points)
+			size += types.LengthSize + geometry.PointSize*len(l.Points)
 		}
 		buf := make([]byte, size)
-		types.WriteEWKBHeader(val, buf[:types.EWKBHeaderSize])
-		types.WriteEWKBPolyData(val, buf[types.EWKBHeaderSize:])
+		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
+		types.WriteEWKBPolyData(val, buf[geometry.EWKBHeaderSize:])
 		resStr := string(buf)
 		return &resStr, nil
 	}

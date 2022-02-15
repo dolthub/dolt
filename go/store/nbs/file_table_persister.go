@@ -90,7 +90,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", ferr
 		}
 
-		index, ferr := parseTableIndex(data)
+		index, ferr := parseTableIndexByCopy(data)
 
 		if ferr != nil {
 			return "", ferr

@@ -203,7 +203,7 @@ func (cur *nodeCursor) isLeaf() bool {
 }
 
 func (cur *nodeCursor) level() uint64 {
-	return uint64(cur.nd.level())
+	return uint64(cur.nd.level)
 }
 
 func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (err error) {

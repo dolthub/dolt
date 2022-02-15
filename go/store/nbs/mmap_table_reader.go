@@ -105,29 +105,35 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 			// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
 			indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
 			aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
+			length := int(fi.Size() - aligned)
 
 			if fi.Size()-aligned > maxInt {
 				err = fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
 				return
 			}
 
-			var mm mmap.MMap
-			mm, err = mmap.MapRegion(f, int(fi.Size()-aligned), mmap.RDONLY, 0, aligned)
+			buff := make([]byte, indexSize(chunkCount)+footerSize)
+			func() {
+				var mm mmap.MMap
+				mm, err = mmap.MapRegion(f, length, mmap.RDONLY, 0, aligned)
+				if err != nil {
+					return
+				}
 
+				defer func() {
+					unmapErr := mm.Unmap()
+
+					if unmapErr != nil {
+						err = unmapErr
+					}
+				}()
+				copy(buff, mm[indexOffset-aligned:])
+			}()
 			if err != nil {
-				return
+				return onHeapTableIndex{}, err
 			}
 
-			defer func() {
-				unmapErr := mm.Unmap()
-
-				if unmapErr != nil {
-					err = unmapErr
-				}
-			}()
-
-			buff := []byte(mm)
-			ti, err = parseTableIndex(buff[indexOffset-aligned:])
+			ti, err = parseTableIndex(buff)
 
 			if err != nil {
 				return
@@ -152,8 +158,12 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 		return nil, errors.New("unexpected chunk count")
 	}
 
+	tr, err := newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize)
+	if err != nil {
+		return nil, err
+	}
 	return &mmapTableReader{
-		newTableReader(index, &cacheReaderAt{path, fc}, fileBlockSize),
+		tr,
 		fc,
 		h,
 	}, nil
@@ -167,8 +177,12 @@ func (mmtr *mmapTableReader) Close() error {
 	return mmtr.tableReader.Close()
 }
 
-func (mmtr *mmapTableReader) Clone() chunkSource {
-	return &mmapTableReader{mmtr.tableReader.Clone(), mmtr.fc, mmtr.h}
+func (mmtr *mmapTableReader) Clone() (chunkSource, error) {
+	tr, err := mmtr.tableReader.Clone()
+	if err != nil {
+		return &mmapTableReader{}, err
+	}
+	return &mmapTableReader{tr, mmtr.fc, mmtr.h}, nil
 }
 
 type cacheReaderAt struct {

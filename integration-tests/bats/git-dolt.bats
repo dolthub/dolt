@@ -192,5 +192,5 @@ EOF
 }
 
 get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 15-46
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }

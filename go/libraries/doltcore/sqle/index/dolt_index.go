@@ -478,7 +478,7 @@ func isBindingCut(cut sql.RangeCut) bool {
 
 func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
 	for i, v := range keys {
-		tb.PutField(i, v)
+		PutField(tb, i, v)
 	}
 	return tb.BuildPermissive(sharePool), nil
 }
