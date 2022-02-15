@@ -58,12 +58,21 @@ teardown() {
     cd repo1
     start_sql_server repo1
 
-    insert_query repo1 1 "SET @@PERSIST.dolt_transaction_commit = 1"
+    insert_query repo1 1 "SET @@GLOBAL.dolt_transaction_commit = 1"
     server_query repo1 1 "select @@GLOBAL.dolt_transaction_commit" "@@GLOBAL.dolt_transaction_commit\n1"
+    server_query repo1 1 "select @@SESSION.dolt_transaction_commit" "@@SESSION.dolt_transaction_commit\n1"
+    server_query repo1 1 "select @@dolt_transaction_commit" "@@SESSION.dolt_transaction_commit\n1"
 
-    run dolt config --local --list
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "sqlserver.global.dolt_transaction_commit = 1" ]] || false
+    # only 1 commit
+    commits=$(dolt log --oneline | wc -l)
+    [ $commits -eq 1 ]
+
+    # create a table
+    server_query repo1 1 "create table tmp (i int)"
+
+    # now there are two commits
+    commits=$(dolt log --oneline | wc -l)
+    [ $commits -eq 2 ]
 }
 
 @test "sql-server-config: persist only global variable during server session" {
