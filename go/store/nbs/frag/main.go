@@ -111,7 +111,6 @@ func main() {
 	var optimal, sum int
 	visited := map[hash.Hash]bool{}
 
-
 	current := hash.HashSlice{root}
 	for numNodes := 1; numNodes > 0; numNodes = len(current) {
 		// Start by reading the values of the current level of the graph

@@ -228,7 +228,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 
 type nomsDatasetsMap struct {
 	db *database
-	m types.Map
+	m  types.Map
 }
 
 func (m nomsDatasetsMap) Len() uint64 {
