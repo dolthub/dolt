@@ -54,6 +54,18 @@ teardown() {
     [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
+@test "sql-server-config: dolt_transaction_commit is global variable" {
+    cd repo1
+    start_sql_server repo1
+
+    insert_query repo1 1 "SET @@PERSIST.dolt_transaction_commit = 1"
+    server_query repo1 1 "select @@GLOBAL.dolt_transaction_commit" "@@GLOBAL.dolt_transaction_commit\n1"
+
+    run dolt config --local --list
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "sqlserver.global.dolt_transaction_commit = 1" ]] || false
+}
+
 @test "sql-server-config: persist only global variable during server session" {
     cd repo1
     start_sql_server repo1
