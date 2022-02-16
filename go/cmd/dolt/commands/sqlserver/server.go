@@ -165,8 +165,15 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
+	if serverConfig.PrivilegeFilePath() != "" {
+		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
+	}
+	users, roles, err := privileges.LoadPrivileges()
+	if err != nil {
+		return err, nil
+	}
 	var tempUsers []gms.TemporaryUser
-	if len(serverConfig.User()) > 0 {
+	if len(users) == 0 && len(serverConfig.User()) > 0 {
 		tempUsers = append(tempUsers, gms.TemporaryUser{
 			Username: serverConfig.User(),
 			Password: serverConfig.Password(),
@@ -178,14 +185,7 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	if serverConfig.PrivilegeFilePath() != "" {
-		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
-	}
 	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	users, roles, err := privileges.LoadPrivileges()
-	if err != nil {
-		return err, nil
-	}
 	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
