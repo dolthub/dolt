@@ -57,7 +57,7 @@ func (rdRd *RowDiffSource) GetSchema() schema.Schema {
 	return rdRd.joiner.GetSchema()
 }
 
-// NextDiff reads a row from a table.  If there is a bad row the returned error will be non nil, and callin IsBadRow(err)
+// NextDiff reads a row from a table.  If there is a bad row the returned error will be non nil, and calling IsBadRow(err)
 // will be return true. This is a potentially non-fatal error and callers can decide if they want to continue on a bad row, or fail.
 func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, error) {
 	diffs, hasMore, err := rdRd.ad.GetDiffs(1, time.Second)
