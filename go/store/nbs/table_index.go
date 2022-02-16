@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"bytes"
-	"encoding/base32"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -331,103 +330,99 @@ func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 	return buf
 }
 
+// prefixIdxLBound returns the first position in |tr.prefixes| whose value is <= |prefix|.
+// will return index less than where prefix would be if prefix is not found.
+func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) (idx uint32) {
+	idx, j := 0, ti.chunkCount
+	for j - idx != 1 {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		if ti.prefixAt(h) < prefix {
+			idx = h + 1 // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+
+	return
+}
+
+// prefixIdxLBound returns the first position in |tr.prefixes| whose value is >= |prefix|.
+// will return index greater than where prefix would be if prefix is not found.
+func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
+	idx, j := uint32(0), ti.chunkCount
+	for j - idx != 1 {
+		h := idx + (j-idx)/2 // avoid overflow when computing h
+		// i ≤ h < j
+		if ti.prefixAt(h) <= prefix {
+			idx = h // preserves f(i-1) == false
+		} else {
+			j = h // preserves f(j) == true
+		}
+	}
+
+	return idx + 1
+}
+
+func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
+	// Pad string
+	for i := len(s); i < 16; i++ {
+		s += p
+	}
+	// Decode
+	h, _ := encoding.DecodeString(s)
+	return binary.BigEndian.Uint64(h)
+}
+
 func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
-	// TODO: can currently autocomplete when given at least half of hash
-	// Must be at least 4 bytes long
-	if len(short) < 16 { // TODO: not sure how git handles anything less
-		return []string{}, errors.New("hash too short")
-	}
+	// Calculate length
+	sLen := len(short)
 
-	// TODO: refactor this code
-	encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
-	sPrefixHash, err := encoding.DecodeString(short[:16]) // Returns corrupt err when len(short) is not a multiple of 16
-	if err != nil {
-		return []string{}, err
-	}
+	// Find lower and upper bounds of prefix indexes to check
+	var pIdxL, pIdxU uint32
+	if sLen >= 13 {
+		// Convert short string to prefix
+		sPrefix := ti.padStringAndDecode(short, "0")
 
-	// Find prefix
-	var sPrefix uint64
-	// Is long enough to have prefix?
-	if len(sPrefixHash) >= 8 {
-		// Calculate Prefix
-		sPrefix = binary.BigEndian.Uint64(sPrefixHash)
-	} else {
-		// perform prefix match
-		return []string{}, errors.New("????")
-	}
+		// Binary Search for prefix
+		pIdxL = ti.prefixIdx(sPrefix)
 
-	// Binary Search for prefix
-	pIdx := ti.prefixIdx(sPrefix)
-
-	// Prefix doesn't exist
-	if pIdx == ti.chunkCount {
-		return []string{}, errors.New("can't find prefix")
-	}
-
-	// prefix is unique
-	if ti.prefixAt(pIdx+1) != sPrefix {
-		h := ti.hashAt(pIdx)
-		return []string{h.String()}, nil
-	}
-
-	// match suffixes
-	n := len(short)
-	var res []string
-	for {
-		// get next prefix
-		nPrefix := ti.prefixAt(pIdx)
-
-		// stop if not equal
-		if nPrefix != sPrefix {
-			break
+		// Prefix doesn't exist
+		if pIdxL == ti.chunkCount {
+			return []string{}, errors.New("can't find prefix")
 		}
 
+		// Find last equal
+		pIdxU = pIdxL + 1
+		for sPrefix == ti.prefixAt(pIdxU) {
+			pIdxU++
+		}
+	} else {
+		// Convert short string to lower and upper bounds
+		sPrefixL := ti.padStringAndDecode(short, "0")
+		sPrefixU := ti.padStringAndDecode(short, "v")
+
+		// Binary search for lower and upper bounds
+		pIdxL = ti.prefixIdxLBound(sPrefixL)
+		pIdxU = ti.prefixIdxUBound(sPrefixU)
+	}
+
+	// Go through all equal prefixes
+	var res []string
+	for i := pIdxL; i < pIdxU; i++ {
 		// Get full hash at index
-		h := ti.hashAt(pIdx)
+		h := ti.hashAt(i)
 
 		// Convert to string representation
 		hashStr := h.String()
 
 		// If it matches append to result
-		if hashStr[:n] == short {
+		if hashStr[:sLen] == short {
 			res = append(res, hashStr)
 		}
-
-		// move index
-		pIdx++
 	}
 
 	return res, nil
-
-	// TODO: check prefixes before suffixes
-	// Iterate over all tuples
-	//hashes := make([]hash.Hash, ti.chunkCount)
-	//hashmap := make(map[string]hash.Hash)
-	//for idx := uint32(0); idx < ti.chunkCount; idx++ {
-	//	// Get tuple
-	//	off := int64(prefixTupleSize * idx)
-	//	tuple := ti.tupleB[off : off+prefixTupleSize]
-	//
-	//	// Get prefix, ordinal, and suffix
-	//	prefix := tuple[:addrPrefixSize]
-	//	ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
-	//	suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
-	//
-	//	// Combine prefix and suffix to get hash
-	//	buf := [hash.ByteLen]byte{}
-	//	copy(buf[:addrPrefixSize], prefix)
-	//	copy(buf[addrPrefixSize:], suffix)
-	//
-	//	// Add to slice of hashes
-	//	hashes[idx] = buf
-	//
-	//	hashStr := hash.Hash(buf).String()
-	//
-	//	// TODO: lazy and memory inefficient way to map short hashes to hash
-	//	for i := 0; i < hash.StringLen; i++ {
-	//		hashmap[hashStr[:i+1]] = buf
-	//	}
-	//}
 }
 
 // TableFileSize returns the size of the table file that this index references.
