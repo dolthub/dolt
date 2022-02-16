@@ -102,3 +102,21 @@ func TestMMapIndex(t *testing.T) {
 	assert.Equal(t, idx.TableFileSize(), mmidx.TableFileSize())
 	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
 }
+
+
+func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
+	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
+	require.NoError(t, err)
+	defer f.Close()
+	bs, err := io.ReadAll(f)
+	bs1 := make([]byte, len(bs), len(bs))
+	copy(bs1, bs)
+	require.NoError(t, err)
+	idx, err := parseTableIndex(bs1)
+	require.NoError(t, err)
+	defer idx.Close()
+	res, err := idx.ResolveShortHash("5ckvoqdsg5p64na6n")
+	require.NoError(t, err)
+	assert.Less(t, 1, len(res))
+	assert.Equal(t, "5ckvoqdsg5p64na6n2re8ba0vmq1lbf5", res[0])
+}

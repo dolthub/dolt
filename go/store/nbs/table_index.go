@@ -16,6 +16,7 @@ package nbs
 
 import (
 	"bytes"
+	"encoding/base32"
 	"encoding/binary"
 	"errors"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -68,8 +69,6 @@ type tableIndex interface {
 	// Clone returns a |tableIndex| with the same contents which can be
 	// |Close|d independently.
 	Clone() (tableIndex, error)
-
-	ResolveShortHash(short []byte) (hash.Hash, error)
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -314,36 +313,121 @@ func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
 	return p, nil
 }
 
-func (ti onHeapTableIndex) ResolveShortHash(short []byte) (hash.Hash, error) {
-	// TODO: check prefixes before suffixes
-	// Iterate over all tuples
-	hashes := make([]hash.Hash, ti.chunkCount)
-	hashmap := make(map[string]hash.Hash)
-	for idx := uint32(0); idx < ti.chunkCount; idx++ {
-		// Get tuple
-		off := int64(prefixTupleSize * idx)
-		tuple := ti.tupleB[off : off+prefixTupleSize]
+func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
+	// Get tuple
+	off := int64(prefixTupleSize * idx)
+	tuple := ti.tupleB[off : off+prefixTupleSize]
 
-		// Get prefix, ordinal, and suffix
-		prefix := tuple[:addrPrefixSize]
-		ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
-		suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
+	// Get prefix, ordinal, and suffix
+	prefix := tuple[:addrPrefixSize]
+	ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
+	suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
 
-		// Combine prefix and suffix to get hash
-		buf := [hash.ByteLen]byte{}
-		copy(buf[:addrPrefixSize], prefix)
-		copy(buf[addrPrefixSize:], suffix)
+	// Combine prefix and suffix to get hash
+	buf := [hash.ByteLen]byte{}
+	copy(buf[:addrPrefixSize], prefix)
+	copy(buf[addrPrefixSize:], suffix)
 
-		// Add to slice of hashes
-		hashes[idx] = buf
+	return buf
+}
 
-		// TODO: lazy and memory inefficient way to map short hashes to hash
-		for i := 1; i < hash.ByteLen; i++ {
-			hashmap[string(buf[:i])] = buf
-		}
+func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
+	// TODO: can currently autocomplete when given at least half of hash
+	// Must be at least 4 bytes long
+	if len(short) < 16 { // TODO: not sure how git handles anything less
+		return []string{}, errors.New("hash too short")
 	}
 
-	return hashmap[string(short)], nil
+	// TODO: refactor this code
+	encoding = base32.NewEncoding("0123456789abcdefghijklmnopqrstuv")
+	sPrefixHash, err := encoding.DecodeString(short[:16]) // Returns corrupt err when len(short) is not a multiple of 16
+	if err != nil {
+		return []string{}, err
+	}
+
+	// Find prefix
+	var sPrefix uint64
+	// Is long enough to have prefix?
+	if len(sPrefixHash) >= 8 {
+		// Calculate Prefix
+		sPrefix = binary.BigEndian.Uint64(sPrefixHash)
+	} else {
+		// perform prefix match
+		return []string{}, errors.New("????")
+	}
+
+	// Binary Search for prefix
+	pIdx := ti.prefixIdx(sPrefix)
+
+	// Prefix doesn't exist
+	if pIdx == ti.chunkCount {
+		return []string{}, errors.New("can't find prefix")
+	}
+
+	// prefix is unique
+	if ti.prefixAt(pIdx + 1) != sPrefix {
+		h := ti.hashAt(pIdx)
+		return []string{h.String()}, nil
+	}
+
+	// match suffixes
+	n := len(short)
+	var res []string
+	for {
+		// get next prefix
+		nPrefix := ti.prefixAt(pIdx)
+
+		// stop if not equal
+		if nPrefix != sPrefix {
+			break
+		}
+
+		// Get full hash at index
+		h := ti.hashAt(pIdx)
+
+		// Convert to string representation
+		hashStr := h.String()
+
+		// If it matches append to result
+		if hashStr[:n] == short {
+			res = append(res, hashStr)
+		}
+
+		// move index
+		pIdx++
+	}
+
+	return res, nil
+
+	// TODO: check prefixes before suffixes
+	// Iterate over all tuples
+	//hashes := make([]hash.Hash, ti.chunkCount)
+	//hashmap := make(map[string]hash.Hash)
+	//for idx := uint32(0); idx < ti.chunkCount; idx++ {
+	//	// Get tuple
+	//	off := int64(prefixTupleSize * idx)
+	//	tuple := ti.tupleB[off : off+prefixTupleSize]
+	//
+	//	// Get prefix, ordinal, and suffix
+	//	prefix := tuple[:addrPrefixSize]
+	//	ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
+	//	suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
+	//
+	//	// Combine prefix and suffix to get hash
+	//	buf := [hash.ByteLen]byte{}
+	//	copy(buf[:addrPrefixSize], prefix)
+	//	copy(buf[addrPrefixSize:], suffix)
+	//
+	//	// Add to slice of hashes
+	//	hashes[idx] = buf
+	//
+	//	hashStr := hash.Hash(buf).String()
+	//
+	//	// TODO: lazy and memory inefficient way to map short hashes to hash
+	//	for i := 0; i < hash.StringLen; i++ {
+	//		hashmap[hashStr[:i+1]] = buf
+	//	}
+	//}
 }
 
 // TableFileSize returns the size of the table file that this index references.
@@ -554,16 +638,4 @@ func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 		}
 	}
 	return
-}
-
-func (i mmapTableIndex) ResolveShortHash(short []byte) (hash.Hash, error) {
-	// TODO: check prefixes before suffixes
-	// Iterate over all tuples
-	// hashes := make([]hash.Hash, i.chunkCount)
-	hashmap := make(map[string]hash.Hash)
-	for idx := uint32(0); idx < i.chunkCount; idx++ {
-		// TODO:
-	}
-
-	return hashmap[string(short)], nil
 }
