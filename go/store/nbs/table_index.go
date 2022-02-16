@@ -68,6 +68,8 @@ type tableIndex interface {
 	// Clone returns a |tableIndex| with the same contents which can be
 	// |Close|d independently.
 	Clone() (tableIndex, error)
+
+	ResolveShortHash(short []byte) (hash.Hash, error)
 }
 
 func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData uint64, err error) {
@@ -315,7 +317,7 @@ func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
 func (ti onHeapTableIndex) ResolveShortHash(short []byte) (hash.Hash, error) {
 	// TODO: check prefixes before suffixes
 	// Iterate over all tuples
-	hashes := make([]hash.Hash,ti.chunkCount)
+	hashes := make([]hash.Hash, ti.chunkCount)
 	hashmap := make(map[string]hash.Hash)
 	for idx := uint32(0); idx < ti.chunkCount; idx++ {
 		// Get tuple
@@ -552,4 +554,16 @@ func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
 		}
 	}
 	return
+}
+
+func (i mmapTableIndex) ResolveShortHash(short []byte) (hash.Hash, error) {
+	// TODO: check prefixes before suffixes
+	// Iterate over all tuples
+	// hashes := make([]hash.Hash, i.chunkCount)
+	hashmap := make(map[string]hash.Hash)
+	for idx := uint32(0); idx < i.chunkCount; idx++ {
+		// TODO:
+	}
+
+	return hashmap[string(short)], nil
 }
