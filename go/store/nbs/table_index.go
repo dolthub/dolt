@@ -19,7 +19,6 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"errors"
-	"github.com/dolthub/dolt/go/store/hash"
 	"io"
 	"os"
 	"sort"
@@ -28,6 +27,7 @@ import (
 	"github.com/dolthub/mmap-go"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var (
@@ -365,7 +365,7 @@ func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
 	}
 
 	// prefix is unique
-	if ti.prefixAt(pIdx + 1) != sPrefix {
+	if ti.prefixAt(pIdx+1) != sPrefix {
 		h := ti.hashAt(pIdx)
 		return []string{h.String()}, nil
 	}

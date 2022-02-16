@@ -103,7 +103,6 @@ func TestMMapIndex(t *testing.T) {
 	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
 }
 
-
 func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
 	require.NoError(t, err)
