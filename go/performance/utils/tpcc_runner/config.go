@@ -234,7 +234,7 @@ func (t *TpccTest) TpccPrepare(ctx context.Context, serverConfig *sysbench_runne
 
 // TpccRun prepares the command executable for the Run step.
 func (t *TpccTest) TpccRun(ctx context.Context, serverConfig *sysbench_runner.ServerConfig, scriptDir string) *exec.Cmd {
-	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
+	cmd := exec.CommandContext(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
 	return addParamsToCmd(cmd, scriptDir)
 }
 

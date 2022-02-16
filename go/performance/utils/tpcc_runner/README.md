@@ -31,3 +31,4 @@ want expose small amounts of independent variables until Dolt gets more robust. 
 variables TPCC varies.
 
 
+# TODO: Leave note about env bariable
