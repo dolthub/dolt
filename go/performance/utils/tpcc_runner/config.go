@@ -75,6 +75,11 @@ func (c *TpccBenchmarkConfig) updateDefaults() error {
 		return sysbench_runner.ErrNoServersDefined
 	}
 
+	// TODO: Eventually we need to support scale factors all the way to 10
+	if len(c.ScaleFactors) == 0 {
+		c.ScaleFactors = append(c.ScaleFactors, 1)
+	}
+
 	if c.RuntimeOS == "" {
 		c.RuntimeOS = runtime.GOOS
 	}

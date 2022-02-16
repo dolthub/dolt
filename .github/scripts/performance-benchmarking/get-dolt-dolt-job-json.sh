@@ -39,7 +39,7 @@ echo '
         "containers": [
           {
             "name": "performance-benchmarking",
-            "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:vinai",
+            "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
             "resources": {
               "limits": {
                 "cpu": "7000m"
@@ -64,7 +64,6 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              "--withTpcc=true",
               "'"$medianLatencyChangeReadsQuery"'",
               "'"$medianLatencyChangeWritesQuery"'"
             ]

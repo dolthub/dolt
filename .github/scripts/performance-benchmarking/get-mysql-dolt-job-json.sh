@@ -43,7 +43,7 @@ echo '
         "containers": [
           {
             "name": "performance-benchmarking",
-            "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:vinai",
+            "image": "407903926827.dkr.ecr.us-west-2.amazonaws.com/liquidata/performance-benchmarking:latest",
             "resources": {
               "limits": {
                 "cpu": "7000m"
@@ -69,7 +69,6 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
-              "--withTpcc=true",
               "'"$medianLatencyMultiplierReadsQuery"'",
               "'"$meanMultiplierReadsQuery"'",
               "'"$medianLatencyMultiplierWritesQuery"'",
