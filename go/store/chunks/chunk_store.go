@@ -117,7 +117,6 @@ type PrefixChunkStore interface {
 	ResolveShortHash(ctx context.Context, short []byte) (hash.Hash, error)
 }
 
-
 // GenerationalCS is an interface supporting the getting old gen and new gen chunk stores
 type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
