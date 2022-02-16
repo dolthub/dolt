@@ -511,13 +511,12 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 		return err
 	}
 
-	rf, err := types.NewRef(commit.commitSt, ddb.vrw.Format())
-
+	addr, err := commit.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, rf)
+	_, err = ddb.db.FastForward(ctx, ds, addr)
 
 	return err
 }

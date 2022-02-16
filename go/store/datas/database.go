@@ -123,7 +123,7 @@ type Database interface {
 	// used e.g. after a call to Pull(). If the update cannot be performed,
 	// e.g., because another process moved the current Head out from under
 	// you, err will be non-nil.
-	FastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is

@@ -116,7 +116,7 @@ func runSync(ctx context.Context, args []string) int {
 		}
 
 		var tempDS datas.Dataset
-		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
+		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef.TargetHash())
 		if err == datas.ErrMergeNeeded {
 			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, addr)
 			nonFF = true
