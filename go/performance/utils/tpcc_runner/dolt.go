@@ -168,6 +168,10 @@ func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runne
 		return nil, err
 	}
 
+	if run.Stdout != nil {
+		run.Stdout = nil
+	}
+
 	out, err := run.Output()
 	if err != nil {
 		fmt.Print(string(out))
