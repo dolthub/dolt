@@ -94,11 +94,10 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
-// todo(andy): support this?
-//// Count returns the number of key-value pairs in the Map.
-//func (m Map) Count() uint64 {
-//	return m.root.cumulativeCount() / 2
-//}
+// Count returns the number of key-value pairs in the Map.
+func (m Map) Count() int {
+	return m.root.treeCount()
+}
 
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {

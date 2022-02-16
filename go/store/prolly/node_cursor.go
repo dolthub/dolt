@@ -400,3 +400,9 @@ func assertTrue(b bool) {
 		panic("assertion failed")
 	}
 }
+
+func assertFalse(b bool) {
+	if b {
+		panic("assertion failed")
+	}
+}

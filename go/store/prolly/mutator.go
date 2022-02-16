@@ -78,14 +78,11 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		}
 
 		if oldValue == nil {
-			// insert
 			err = chunker.AddPair(ctx, newKey, newValue)
 		} else {
 			if newValue != nil {
-				// update
 				err = chunker.UpdatePair(ctx, newKey, newValue)
 			} else {
-				// delete
 				err = chunker.DeletePair(ctx, newKey, oldValue)
 			}
 		}

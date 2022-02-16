@@ -35,8 +35,8 @@ func TestRoundTripInts(t *testing.T) {
 	assert.True(t, nd.leafNode())
 	assert.Equal(t, len(keys), nd.nodeCount())
 	for i := range keys {
-		assert.Equal(t, keys[i], nd.getKey(i))
-		assert.Equal(t, values[i], nd.getValue(i))
+		assert.Equal(t, keys[i], val.Tuple(nd.getKey(i)))
+		assert.Equal(t, values[i], val.Tuple(nd.getValue(i)))
 	}
 }
 

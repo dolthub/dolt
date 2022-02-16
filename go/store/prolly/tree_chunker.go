@@ -25,12 +25,6 @@ import (
 	"context"
 
 	"github.com/dolthub/dolt/go/store/val"
-
-	"github.com/dolthub/dolt/go/store/hash"
-)
-
-const (
-	nodeItemAccumulatorSz = 256
 )
 
 //  newSplitterFn makes a nodeSplitter.
@@ -42,7 +36,7 @@ type treeChunker struct {
 	level  int
 	done   bool
 
-	mut *nodeMutator
+	builder *nodeBuilder
 
 	splitter nodeSplitter
 	newSplit newSplitterFn
@@ -62,7 +56,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		cur:      cur,
 		parent:   nil,
 		level:    level,
-		mut:      newNodeMutator(),
+		builder:  newNodeBuilder(),
 		newSplit: newSplit,
 		splitter: newSplit(byte(level % 256)),
 		ns:       ns,
@@ -90,10 +84,12 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	tc.cur.skipToNodeStart()
 
 	for tc.cur.idx < idx {
-		_, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), 0)
+		var ok bool
+		ok, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
+		assertFalse(ok)
 
 		_, err = tc.cur.advance(ctx)
 		if err != nil {
@@ -104,22 +100,42 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	return nil
 }
 
-// advanceTo advances the treeChunker to |nextMutation|, the nextMutation mutation point.
+// AddPair adds a val.Tuple pair to the treeChunker.
+func (tc *treeChunker) AddPair(ctx context.Context, key, value val.Tuple) error {
+	_, err := tc.append(ctx, nodeItem(key), nodeItem(value))
+	return err
+}
+
+// UpdatePair updates a val.Tuple pair in the treeChunker.
+func (tc *treeChunker) UpdatePair(ctx context.Context, key, value val.Tuple) error {
+	if err := tc.skip(ctx); err != nil {
+		return err
+	}
+	_, err := tc.append(ctx, nodeItem(key), nodeItem(value))
+	return err
+}
+
+// DeletePair deletes a val.Tuple pair from the treeChunker.
+func (tc *treeChunker) DeletePair(ctx context.Context, _, _ val.Tuple) error {
+	return tc.skip(ctx)
+}
+
+// AdvanceTo advances the treeChunker to |next|, the nextMutation mutation point.
 func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 	// There a four cases to handle when advancing the tree chunker
-	//  (1) |tc.cur| and |nextMutation| are aligned, we're done
+	//  (1) |tc.cur| and |next| are aligned, we're done
 	//
-	//  (2) |tc.cur| is "ahead" of |nextMutation|. This can be caused by advances
-	//      at a lower level of the tree. In this case, advance |nextMutation|
+	//  (2) |tc.cur| is "ahead" of |next|. This can be caused by advances
+	//      at a lower level of the tree. In this case, advance |next|
 	//      until it is even with |tc.cur|.
 	//
-	//  (3) |tc.cur| is behind |nextMutation|, we must consume elements between the
-	//      two cursors until |tc.cur| catches up with |nextMutation|.
+	//  (3) |tc.cur| is behind |next|, we must consume elements between the
+	//      two cursors until |tc.cur| catches up with |next|.
 	//
 	//  (4) This is a special case of (3) where we can "Fast-Forward" |tc.cur|
-	//      towards |nextMutation|. As we consume elements between the two cursors, if
+	//      towards |next|. As we consume elements between the two cursors, if
 	//      we re-synchronize with the previous tree, we can skip over the
-	//      chunks between the re-synchronization boundary and |nextMutation|.
+	//      chunks between the re-synchronization boundary and |next|.
 
 	cmp := tc.cur.compare(next)
 
@@ -140,9 +156,9 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 
 	for tc.cur.compare(next) < 0 { // Case (3) or (4)
 
-		// append items until we catchup with |nextMutation|, or until
+		// append items until we catchup with |next|, or until
 		// we resynchronize with the previous tree.
-		ok, err := tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), 0)
+		ok, err := tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -154,8 +170,8 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 
 			if tc.cur.parent != nil {
 				if tc.cur.parent.compare(next.parent) < 0 { // Case (4)
-					// |tc| re-synchronized at |tc.level|, but we're still behind |nextMutation|.
-					// We can advance |tc| at level+1 to get to |nextMutation| faster.
+					// |tc| re-synchronized at |tc.level|, but we're still behind |next|.
+					// We can advance |tc| at level+1 to get to |next| faster.
 					fastForward = true
 				}
 
@@ -168,7 +184,7 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 				}
 
 				// |tc.cur| is now inconsistent with its parent, invalidate it.
-				tc.cur.nd = Node{}
+				tc.cur.invalidate()
 			}
 
 			break
@@ -180,9 +196,8 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 	}
 
 	if tc.parent != nil && next.parent != nil {
-		// At this point we've either caught up to |nextMutation|, or we've
+		// At this point we've either caught up to |next|, or we've
 		// re-synchronized at |tc.level| and we're fast-forwarding
-		// at the nextMutation level up in the tree.
 		err := tc.parent.AdvanceTo(ctx, next.parent)
 		if err != nil {
 			return err
@@ -190,7 +205,7 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 	}
 
 	// We may have invalidated cursors as we re-synchronized,
-	// so copy |nextMutation| here.
+	// so copy |next| here.
 	tc.cur.copy(next)
 
 	if fastForward { // Case (4)
@@ -204,24 +219,6 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 	return nil
 }
 
-func (tc *treeChunker) AddPair(ctx context.Context, key, value val.Tuple) error {
-	_, err := tc.append(ctx, nodeItem(key), nodeItem(value), 1)
-	return err
-}
-
-func (tc *treeChunker) UpdatePair(ctx context.Context, key, value val.Tuple) error {
-	if err := tc.skip(ctx); err != nil {
-		return err
-	}
-	_, err := tc.append(ctx, nodeItem(key), nodeItem(value), 0)
-	return err
-}
-
-func (tc *treeChunker) DeletePair(ctx context.Context, key, value val.Tuple) error {
-	tc.mut.skip()
-	return tc.skip(ctx)
-}
-
 func (tc *treeChunker) skip(ctx context.Context) error {
 	_, err := tc.cur.advance(ctx)
 	return err
@@ -230,22 +227,22 @@ func (tc *treeChunker) skip(ctx context.Context) error {
 // Append adds a new key-value pair to the chunker, validating the new pair to ensure
 // that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
-func (tc *treeChunker) append(ctx context.Context, key, value nodeItem, delta int) (bool, error) {
+func (tc *treeChunker) append(ctx context.Context, key, value nodeItem) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
 	// (2) The total size of a Node's data cannot exceed |maxVectorOffset|.
 	// (3) Internal Nodes (level > 0) must contain at least 2 key-value pairs (4 node items).
-	//     Infinite recursion can occur if internal nodes contain a single newNodeResult with a key
+	//     Infinite recursion can occur if internal nodes contain a single novelNode with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
-	//     key will lead to an identical newNodeResult in the nextMutation level in the tree, triggering
+	//     key will lead to an identical novelNode in the nextMutation level in the tree, triggering
 	//     the same state infinitely. This problem can only occur at levels 2 and above,
 	//     but we enforce this constraint for all internal nodes of the tree.
 
 	// constraint (3)
-	degenerate := !tc.isLeaf() && tc.mut.count() == 1
+	degenerate := !tc.isLeaf() && tc.builder.count() == 1
 
 	// constraint (2)
-	overflow := !tc.mut.nodeHasCapacity(key, value)
+	overflow := !tc.builder.hasCapacity(key, value)
 
 	if overflow && degenerate {
 		// Constraints (2) and (3) are in conflict
@@ -262,7 +259,7 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem, delta in
 		}
 	}
 
-	tc.mut.append(key, value, delta)
+	tc.builder.append(key, value)
 
 	err := tc.splitter.Append(key, value)
 	if err != nil {
@@ -270,7 +267,7 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem, delta in
 	}
 
 	// recompute with updated |tc.keys|
-	degenerate = !tc.isLeaf() && tc.mut.count() == 1
+	degenerate = !tc.isLeaf() && tc.builder.count() == 1
 
 	if tc.splitter.CrossedBoundary() && !degenerate {
 		err := tc.handleChunkBoundary(ctx)
@@ -283,32 +280,31 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem, delta in
 	return false, nil
 }
 
-func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
-	assertTrue(tc.mut.count() > 0)
-	tc.splitter.Reset()
-
+func (tc *treeChunker) appendToParent(ctx context.Context, novel novelNode) (bool, error) {
 	if tc.parent == nil {
-		err := tc.createParentChunker(ctx)
-		if err != nil {
-			return err
+		if err := tc.createParentChunker(ctx); err != nil {
+			return false, err
 		}
 	}
+	// todo(andy): append count
 
-	var prev Node
-	if tc.cur.valid() {
-		prev = tc.cur.nd
-	}
+	return tc.parent.append(ctx, novel.lastKey, novel.ref[:])
+}
 
-	_, meta, err := tc.mut.createNode(ctx, tc.ns, prev, tc.level)
+func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
+	assertTrue(tc.builder.count() > 0)
+
+	novel, err := tc.builder.writeNewNode(ctx, tc.ns, tc.level)
 	if err != nil {
 		return err
 	}
-	tc.mut.reset()
 
-	_, err = tc.parent.append(ctx, meta.key, meta.ref[:], meta.delta)
-	if err != nil {
+	if _, err = tc.appendToParent(ctx, novel); err != nil {
 		return err
 	}
+
+	tc.splitter.Reset()
+	tc.builder.reset()
 
 	return nil
 }
@@ -347,7 +343,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
 	// to find the root of the resulting tree.
 	if tc.parent != nil && tc.parent.anyPending() {
-		if tc.mut.count() > 0 {
+		if tc.builder.count() > 0 {
 			// |tc.keys| are the last items at this level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
@@ -374,24 +370,20 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	//     (never hit a boundary), or
 	// (2) This in an internal Node of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
-	if tc.isLeaf() || tc.mut.count() > 1 {
-		var prev Node
-		if tc.cur.valid() {
-			prev = tc.cur.nd
-		}
-		nd, _, err := tc.mut.createNode(ctx, tc.ns, prev, tc.level)
+	if tc.isLeaf() || tc.builder.count() > 1 {
+		newNd, err := tc.builder.writeNewNode(ctx, tc.ns, tc.level)
 		if err != nil {
 			return Node{}, err
 		}
-		return nd, nil
+		return newNd.node, nil
 	}
 
-	// (3) This is an internal Node of the tree with a single newNodeResult. This is a non-canonical root, and we must walk
+	// (3) This is an internal Node of the tree with a single novelNode. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
 	assertTrue(!tc.isLeaf())
-	assertTrue(tc.mut.count() == 1)
+	assertTrue(tc.builder.count() == 1)
 
-	mt := tc.mut.getFirstRef()
+	mt := tc.builder.getFirstRef()
 	for {
 		child, err := fetchChildNode(ctx, tc.ns, mt)
 		if err != nil {
@@ -411,7 +403,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.valid() {
 		var ok bool
-		ok, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue(), 0)
+		ok, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
 		if err != nil {
 			return err
 		}
@@ -441,7 +433,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
 func (tc *treeChunker) anyPending() bool {
-	if tc.mut.count() > 0 {
+	if tc.builder.count() > 0 {
 		return true
 	}
 
@@ -454,93 +446,4 @@ func (tc *treeChunker) anyPending() bool {
 
 func (tc *treeChunker) isLeaf() bool {
 	return tc.level == 0
-}
-
-type nodeMutator struct {
-	keys, vals []nodeItem
-	currSz     uint64
-	delta      int
-}
-
-func newNodeMutator() *nodeMutator {
-	return &nodeMutator{
-		keys: make([]nodeItem, 0, nodeItemAccumulatorSz),
-		vals: make([]nodeItem, 0, nodeItemAccumulatorSz),
-	}
-}
-
-func (m *nodeMutator) count() int {
-	return len(m.keys)
-}
-
-func (m *nodeMutator) size() uint64 {
-	return m.currSz
-}
-
-func (m *nodeMutator) nodeHasCapacity(key, value nodeItem) bool {
-	sum := m.currSz + uint64(len(key)+len(value))
-	return sum <= maxVectorOffset
-}
-
-func (m *nodeMutator) append(key, value nodeItem, delta int) {
-	m.keys = append(m.keys, key)
-	m.vals = append(m.vals, value)
-	m.currSz += uint64(len(key) + len(value))
-	m.delta += delta
-}
-
-func (m *nodeMutator) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	m.keys = m.keys[:0]
-	m.vals = m.vals[:0]
-	m.currSz = 0
-	m.delta = 0
-}
-
-func (m *nodeMutator) skip() {
-	m.delta--
-}
-
-// todo(andy): better name
-type newNodeResult struct {
-	key, ref nodeItem
-	delta    int
-}
-
-// createNode creates a Node from the keys items in |sc.currentPair|,
-// clears the keys items, then returns the new Node and a metaValue that
-// points to it. The Node is always eagerly written.
-func (m *nodeMutator) createNode(ctx context.Context, ns NodeStore, prev Node, level int) (Node, newNodeResult, error) {
-	treeCount := 0
-	if !prev.empty() {
-		treeCount = prev.treeCount()
-	}
-	treeCount = treeCount + m.delta
-
-	child := buildMapNode(ns.Pool(), level, treeCount, m.keys, m.vals)
-
-	ref, err := ns.Write(ctx, child)
-	if err != nil {
-		return Node{}, newNodeResult{}, err
-	}
-
-	if len(m.keys) == 0 {
-		// empty leaf node
-		return child, newNodeResult{}, nil
-	}
-
-	lastKey := val.Tuple(m.keys[len(m.keys)-1])
-	metaKey := val.CloneTuple(ns.Pool(), lastKey)
-
-	res := newNodeResult{
-		key:   nodeItem(metaKey),
-		ref:   nodeItem(ref[:]),
-		delta: m.delta,
-	}
-
-	return child, res, nil
-}
-
-func (m *nodeMutator) getFirstRef() hash.Hash {
-	return hash.New(m.vals[0])
 }
