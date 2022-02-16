@@ -334,7 +334,7 @@ func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 // will return index less than where prefix would be if prefix is not found.
 func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) (idx uint32) {
 	idx, j := 0, ti.chunkCount
-	for j - idx != 1 {
+	for j-idx != 1 {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		if ti.prefixAt(h) < prefix {
@@ -351,7 +351,7 @@ func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) (idx uint32) {
 // will return index greater than where prefix would be if prefix is not found.
 func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
 	idx, j := uint32(0), ti.chunkCount
-	for j - idx != 1 {
+	for j-idx != 1 {
 		h := idx + (j-idx)/2 // avoid overflow when computing h
 		// i ≤ h < j
 		if ti.prefixAt(h) <= prefix {
