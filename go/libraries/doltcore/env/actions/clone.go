@@ -23,7 +23,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -35,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dustin/go-humanize"
+	"github.com/gosuri/uilive"
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
@@ -99,10 +99,14 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
 		tableFiles        = make(map[string]*nbs.TableFile)
-		cliPos            int
+		//cliPos            int
 	)
 
-	cliPos = cli.DeleteAndPrint(cliPos, "Retrieving remote information.")
+	writer := uilive.New()
+	writer.Start()
+	fmt.Fprintf(writer, "Retrieving remote information.\n")
+	writer.Stop()
+
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
 		case pull.Listed:
@@ -133,18 +137,18 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			}
 		}
 
-		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		// Starting and stopping for each event seems to be less jumpy
+		writer.Start()
+		fmt.Fprintf(writer, "%s of %s chunks complete. %s chunks being downloaded currently.\n", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			str = fmt.Sprintf("%s\nFile: %s (%s chunks) - %.2f%% downloaded, %s",
-				str, fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
+			fmt.Fprintf(writer.Newline(), "File: %s (%s chunks) - %.2f%% downloaded, %s\n",
+				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
 		}
-		cliPos = cli.DeleteAndPrint(cliPos, str)
+		writer.Stop()
 	}
-
-	cli.Println()
 }
 
 func sortedKeys(m map[string]iohelp.ReadStats) []string {

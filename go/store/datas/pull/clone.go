@@ -155,7 +155,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 				})
 
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rdStats, contentLength, nil)
 				if err != nil {
 					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})
 					return err
