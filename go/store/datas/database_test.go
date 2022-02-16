@@ -518,11 +518,11 @@ func (suite *DatabaseSuite) TestSetHead() {
 	suite.True(mustHeadValue(ds).Equals(b))
 	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
 
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
-	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 }
@@ -554,7 +554,7 @@ func (suite *DatabaseSuite) TestFastForward() {
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 

@@ -109,14 +109,14 @@ type Database interface {
 
 	// SetHead ignores any lineage constraints (e.g. the current head being
 	// an ancestor of the new Commit) and force-sets a mapping from
-	// datasetID: newHeadRef in this database. newHeadRef can point to a
-	// Commit or a Tag, but if Dataset is already present in the Database,
-	// it must point to the type of struct.
+	// datasetID: addr in this database. addr can point to a Commit or a
+	// Tag, but if Dataset is already present in the Database, it must
+	// point to the type of struct.
 	//
-	// All values that have been written to this Database are guaranteed to be
-	// persistent after SetHead(). If the update cannot be performed, error
-	// will be non-nil.
-	SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	// All values that have been written to this Database are guaranteed to
+	// be persistent after SetHead(). If the update cannot be performed,
+	// error will be non-nil.
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be

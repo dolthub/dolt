@@ -108,7 +108,8 @@ func runSync(ctx context.Context, args []string) int {
 	util.CheckError(err)
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
-		err := pull.Pull(ctx, srcCS, sinkCS, wrf, sourceRef.TargetHash(), progressCh)
+		addr := sourceRef.TargetHash()
+		err := pull.Pull(ctx, srcCS, sinkCS, wrf, addr, progressCh)
 
 		if err != nil {
 			return err
@@ -117,7 +118,7 @@ func runSync(ctx context.Context, args []string) int {
 		var tempDS datas.Dataset
 		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
 		if err == datas.ErrMergeNeeded {
-			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
+			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, addr)
 			nonFF = true
 		} else if err == nil {
 			sinkDataset = tempDS

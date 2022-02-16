@@ -302,8 +302,8 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadRef.TargetHash()) })
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr) })
 }
 
 func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) error {
