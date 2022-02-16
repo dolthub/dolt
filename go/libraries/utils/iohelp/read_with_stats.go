@@ -63,6 +63,17 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 	}()
 }
 
+// Close closes this reader. Only one of Close or Stop should be called
+func (rws *ReaderWithStats) Close() error {
+	close(rws.closeCh)
+
+	if closer, ok := rws.rd.(io.Closer); ok {
+		return closer.Close()
+	}
+
+	return nil
+}
+
 func (rws *ReaderWithStats) Stop() {
 	close(rws.closeCh)
 

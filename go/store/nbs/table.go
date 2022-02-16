@@ -283,8 +283,8 @@ type TableFile interface {
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
-	// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-	Open(ctx context.Context) (io.ReadCloser, error)
+	// Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
+	Open(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // Describes what is possible to do with TableFiles in a TableFileStore.

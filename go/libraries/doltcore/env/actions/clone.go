@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -28,9 +29,12 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dustin/go-humanize"
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
@@ -93,6 +97,8 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		chunks            int64
 		chunksDownloading int64
 		chunksDownloaded  int64
+		currStats         = make(map[string]iohelp.ReadStats)
+		tableFiles        = make(map[string]*nbs.TableFile)
 		cliPos            int
 	)
 
@@ -101,26 +107,53 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		switch tblFEvt.EventType {
 		case pull.Listed:
 			for _, tf := range tblFEvt.TableFiles {
+				c := tf
+				tableFiles[c.FileID()] = &c
 				chunks += int64(tf.NumChunks())
 			}
 		case pull.DownloadStart:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading += int64(tf.NumChunks())
 			}
+		case pull.DownloadStats:
+			for i, s := range tblFEvt.Stats {
+				tf := tblFEvt.TableFiles[i]
+				currStats[tf.FileID()] = s
+			}
 		case pull.DownloadSuccess:
 			for _, tf := range tblFEvt.TableFiles {
 				chunksDownloading -= int64(tf.NumChunks())
 				chunksDownloaded += int64(tf.NumChunks())
+				delete(currStats, tf.FileID())
 			}
 		case pull.DownloadFailed:
 			// Ignore for now and output errors on the main thread
+			for _, tf := range tblFEvt.TableFiles {
+				delete(currStats, tf.FileID())
+			}
 		}
 
 		str := fmt.Sprintf("%s of %s chunks complete. %s chunks being downloaded currently.", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		for _, fileId := range sortedKeys(currStats) {
+			s := currStats[fileId]
+			bps := float64(s.Read) / s.Elapsed.Seconds()
+			rate := humanize.Bytes(uint64(bps)) + "/s"
+			str = fmt.Sprintf("%s\nFile: %s (%s chunks) - %.2f%% downloaded, %s",
+				str, fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
+		}
 		cliPos = cli.DeleteAndPrint(cliPos, str)
 	}
 
 	cli.Println()
+}
+
+func sortedKeys(m map[string]iohelp.ReadStats) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch string, dEnv *env.DoltEnv) error {

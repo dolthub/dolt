@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/cenkalti/backoff"
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
@@ -59,6 +60,7 @@ type CloneTableFileEvent int
 const (
 	Listed = iota
 	DownloadStart
+	DownloadStats
 	DownloadSuccess
 	DownloadFailed
 )
@@ -66,6 +68,7 @@ const (
 type TableFileEvent struct {
 	EventType  CloneTableFileEvent
 	TableFiles []nbs.TableFile
+	Stats      []iohelp.ReadStats
 }
 
 // mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to nbs.TableFile
@@ -111,7 +114,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	desiredFiles, fileIDToTF, fileIDToNumChunks := mapTableFiles(tblFiles)
 	completed := make([]bool, len(desiredFiles))
 
-	report(TableFileEvent{Listed, tblFiles})
+	report(TableFileEvent{EventType: Listed, TableFiles: tblFiles})
 
 	download := func(ctx context.Context) error {
 		sem := semaphore.NewWeighted(concurrentTableFileDownloads)
@@ -136,20 +139,29 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				var rd io.ReadCloser
-				if rd, err = tblFile.Open(ctx); err != nil {
+				rd, contentLength, err := tblFile.Open(ctx)
+				if err != nil {
 					return err
 				}
-				defer CloseWithErr(rd, &err)
+				rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
+				defer CloseWithErr(rdStats, &err)
 
-				report(TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}})
+				rdStats.Start(func(s iohelp.ReadStats) {
+					report(TableFileEvent{
+						EventType:  DownloadStats,
+						TableFiles: []nbs.TableFile{tblFile},
+						Stats:      []iohelp.ReadStats{s},
+					})
+				})
+
+				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
 				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
 				if err != nil {
-					report(TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}})
+					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})
 					return err
 				}
 
-				report(TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}})
+				report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []nbs.TableFile{tblFile}})
 				completed[idx] = true
 				return nil
 			})
