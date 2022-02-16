@@ -1611,23 +1611,3 @@ func (nbs *NomsBlockStore) SetRootChunk(ctx context.Context, root, previous hash
 		// I guess this thing infinitely retries without backoff in the case off errOptimisticLockFailedTables
 	}
 }
-
-func (nbs *NomsBlockStore) ResolveShortHash(ctx context.Context, short []byte) (hash.Hash, error) {
-	// Get all existing hashes
-	//css := nbs.tables.novel
-	//for _, cs := range css {
-	//	tableIndex, err := cs.index()
-	//	if err != nil {
-	//		return hash.Hash{}, err
-	//	}
-	//	prefixes, err := tableIndex.Prefixes()
-	//	if err != nil {
-	//		return hash.Hash{}, nil
-	//	}
-	//
-	//
-	//}
-
-	// Build auto complete tree
-	return hash.Hash{}, nil
-}
