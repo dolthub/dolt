@@ -77,11 +77,12 @@ type Database interface {
 	// an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// Tag stores an immutable reference to a Commit. It takes a Ref and a
-	// Dataset whose head must be nil (ie a newly created Dataset).  The
-	// new Tag struct is constructed with `ref` and metadata about the tag
-	// contained in the struct `opts.Meta`.
-	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+	// Tag stores an immutable reference to a Commit. It takes a Hash to
+	// the Commit and a Dataset whose head must be nil (ie a newly created
+	// Dataset).  The new Tag struct is constructed pointing at
+	// |commitAddr| and metadata about the tag contained in the struct
+	// `opts.Meta`.
+	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
 
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given

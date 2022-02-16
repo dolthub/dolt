@@ -1030,8 +1030,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 		return fmt.Errorf("dataset already exists for tag %s", tagRef.String())
 	}
 
-	r, err := types.NewRef(c.commitSt, ddb.Format())
-
+	commitAddr, err := c.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
@@ -1044,7 +1043,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 	tag := datas.TagOptions{Meta: st}
 
-	ds, err = ddb.db.Tag(ctx, ds, r, tag)
+	ds, err = ddb.db.Tag(ctx, ds, commitAddr, tag)
 
 	return err
 }

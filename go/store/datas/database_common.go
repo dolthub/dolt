@@ -473,13 +473,20 @@ func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef type
 	return currentHeadRef.TargetHash() != ancestorRef.TargetHash()
 }
 
-func (db *database) Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error) {
+func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
+			commitSt, err := db.ReadValue(ctx, commitAddr)
+			if err != nil {
+				return err
+			}
+			ref, err := types.NewRef(commitSt, db.Format())
+			if err != nil {
+				return err
+			}
 			st, err := NewTag(ctx, ref, opts.Meta)
-
 			if err != nil {
 				return err
 			}
