@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/dolthub/dolt/go/store/hash"
 	"io"
 	"os"
 	"sort"
@@ -309,6 +310,38 @@ func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
 		p[i] = binary.BigEndian.Uint64(b)
 	}
 	return p, nil
+}
+
+func (ti onHeapTableIndex) ResolveShortHash(short []byte) (hash.Hash, error) {
+	// TODO: check prefixes before suffixes
+	// Iterate over all tuples
+	hashes := make([]hash.Hash,ti.chunkCount)
+	hashmap := make(map[string]hash.Hash)
+	for idx := uint32(0); idx < ti.chunkCount; idx++ {
+		// Get tuple
+		off := int64(prefixTupleSize * idx)
+		tuple := ti.tupleB[off : off+prefixTupleSize]
+
+		// Get prefix, ordinal, and suffix
+		prefix := tuple[:addrPrefixSize]
+		ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
+		suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
+
+		// Combine prefix and suffix to get hash
+		buf := [hash.ByteLen]byte{}
+		copy(buf[:addrPrefixSize], prefix)
+		copy(buf[addrPrefixSize:], suffix)
+
+		// Add to slice of hashes
+		hashes[idx] = buf
+
+		// TODO: lazy and memory inefficient way to map short hashes to hash
+		for i := 1; i < hash.ByteLen; i++ {
+			hashmap[string(buf[:i])] = buf
+		}
+	}
+
+	return hashmap[string(short)], nil
 }
 
 // TableFileSize returns the size of the table file that this index references.

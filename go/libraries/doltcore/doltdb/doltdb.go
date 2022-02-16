@@ -345,6 +345,16 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 	var err error
 	switch cs.csType {
 	case hashCommitSpec:
+		// TODO: expand cs.baseSpec to from short hash to existing full hash
+		// TODO: get all existing commit hashes
+		// TODO: autofill using MWT or TST
+
+		dss, _ := ddb.db.Datasets(ctx)
+		dss.IterAll(ctx, func(k, v types.Value) error {
+			return nil
+		})
+
+
 		commitSt, err = getCommitStForHash(ctx, ddb.db, cs.baseSpec)
 	case refCommitSpec:
 		// For a ref in a CommitSpec, we have the following behavior.
