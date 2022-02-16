@@ -303,21 +303,35 @@ func (db *database) Close() error {
 }
 
 func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadRef) })
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadRef.TargetHash()) })
 }
 
-func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
-	newSt, err := newHeadRef.TargetValue(ctx, db)
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) error {
+	newV, err := db.ReadValue(ctx, addr)
 	if err != nil {
 		return err
 	}
+	if newV == nil {
+		return fmt.Errorf("SetHead failed: target hash %v is not in chunk store", addr)
+	}
+	newSt, ok := newV.(types.Struct)
+	if !ok {
+		return fmt.Errorf("Unrecognized dataset value for addr: %v", addr)
+	}
 
-	headType := newSt.(types.Struct).Name()
+	headType := newSt.Name()
 	switch headType {
 	case CommitName:
-		_, err = db.validateRefAsCommit(ctx, newHeadRef)
+		var iscommit bool
+		iscommit, err = IsCommit(newSt)
+		if err != nil {
+			break
+		}
+		if !iscommit {
+			err = fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+		}
 	case TagName:
-		err = db.validateTag(ctx, newSt.(types.Struct))
+		err = db.validateTag(ctx, newSt)
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
 	}
@@ -327,7 +341,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 
 	key := types.String(ds.ID())
 
-	ref, err := types.ToRefOfValue(newHeadRef, db.Format())
+	vref, err := types.NewRef(newSt, db.Format())
+	if err != nil {
+		return err
+	}
+
+	ref, err := types.ToRefOfValue(vref, db.Format())
 	if err != nil {
 		return err
 	}
@@ -766,7 +785,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	if !is {
-		panic("Not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
 	}
 
 	return v.(types.Struct), nil

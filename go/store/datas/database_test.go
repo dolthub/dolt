@@ -51,8 +51,9 @@ func TestValidateRef(t *testing.T) {
 	r, err := db.WriteValue(context.Background(), b)
 	assert.NoError(t, err)
 
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), r) })
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18))) })
+	_, err = db.validateRefAsCommit(context.Background(), r)
+	assert.Error(t, err)
+	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18)))
 }
 
 type DatabaseSuite struct {
