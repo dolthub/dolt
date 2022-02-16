@@ -191,6 +191,8 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	return dp.getRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }
 
+// tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
+// and the schema of the table (or EmptySchema if tbl is null).
 func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
 	var data types.Map
 	var err error
@@ -386,6 +388,7 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *sch
 // If the primary key sets changed between the two commits, it may not be
 // possible to diff them.
 func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
+	// dp.from is nil when the to commit created a new table
 	if dp.from == nil {
 		return true, nil
 	}
@@ -393,6 +396,13 @@ func (dp *diffPartition) isDiffablePartition(ctx *sql.Context) (bool, error) {
 	fromSch, err := dp.from.GetSchema(ctx)
 	if err != nil {
 		return false, err
+	}
+
+	// dp.to is nil when a table has been deleted previously. In this case, we return
+	// false, to stop processing diffs, since that previously deleted table is considered
+	// a logically different table and we don't want to mix the diffs together.
+	if dp.to == nil {
+		return false, nil
 	}
 
 	toSch, err := dp.to.GetSchema(ctx)
@@ -544,7 +554,6 @@ func (dp *diffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *
 func (dp *diffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	for {
 		cmHash, cm, err := dp.cmItr.Next(ctx)
-
 		if err != nil {
 			return nil, err
 		}
@@ -588,7 +597,7 @@ func (dp *diffPartitions) Close(*sql.Context) error {
 	return nil
 }
 
-// creates a RowConverter for transforming rows with the the given schema to this super schema.
+// creates a RowConverter for transforming rows with the given schema to this super schema.
 func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
 	if schema.SchemasAreEqual(sch, schema.EmptySchema) {
 		return rowconv.IdentityConverter, nil
