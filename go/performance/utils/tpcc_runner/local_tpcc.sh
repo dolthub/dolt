@@ -22,7 +22,7 @@ done
 
 DOLTPATH=`which dolt`
 
-cat <<JSON > tpcc-config.json
+cat <<JSON > local-tpcc-config.json
 {
   "Servers": [
     {
@@ -39,7 +39,7 @@ cat <<JSON > tpcc-config.json
 }
 JSON
 
-go run cmd/main.go --config=tpcc-config.json
+go run cmd/main.go --config=local-tpcc-config.json
 
 # cleanup our env var
 unset DOLT_FORMAT_FEATURE_FLAG
