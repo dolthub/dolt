@@ -189,8 +189,8 @@ func fromConfigTestParams(ct *ConfigTest, serverConfig *ServerConfig) []string {
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == MySql && serverConfig.Host == defaultHost {
-		params = append(params, "--mysql-user=vinairachakonda")
-		params = append(params, fmt.Sprintf("--mysql-password=%s", "vinai"))
+		params = append(params, "--mysql-user=sysbench")
+		params = append(params, fmt.Sprintf("--mysql-password=%s", sysbenchPassLocal))
 	} else {
 		params = append(params, "--mysql-user=root")
 	}

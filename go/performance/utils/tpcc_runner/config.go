@@ -209,8 +209,8 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
-		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
 		params = append(params, fmt.Sprintf("--mysql-user=%s", "sysbench"))
+		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
 	} else {
 		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
 		params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
