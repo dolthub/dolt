@@ -47,6 +47,9 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 		return newIdentityConverter(mapping), nil
 	}
 
+	// Panic if there are any duplicate columns mapped to the same destination tag.
+	panicOnDuplicateMappings(mapping)
+
 	convFuncs := make(map[uint64]types.MarshalCallback, len(mapping.SrcToDest))
 	for srcTag, destTag := range mapping.SrcToDest {
 		destCol, destOk := mapping.DestSch.GetAllCols().GetByTag(destTag)
@@ -66,6 +69,18 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 	}
 
 	return &RowConverter{mapping, false, convFuncs}, nil
+}
+
+// panicOnDuplicateMappings checks if more than one input field is mapped to the same output field.
+// Multiple input fields mapped to the same output field results in a race condition.
+func panicOnDuplicateMappings(mapping *FieldMapping) {
+	destToSrcMapping := make(map[uint64]uint64, len(mapping.SrcToDest))
+	for srcTag, destTag := range mapping.SrcToDest {
+		if _, found := destToSrcMapping[destTag]; found {
+			panic("multiple columns mapped to the same destination tag '" + types.Uint(destTag).HumanReadableString() + "'")
+		}
+		destToSrcMapping[destTag] = srcTag
+	}
 }
 
 // Convert takes a row maps its columns to their destination columns, and performs any type conversion needed to create
