@@ -226,6 +226,20 @@ func (ccs *persistingChunkSource) reader(ctx context.Context) (io.Reader, error)
 	return ccs.cs.reader(ctx)
 }
 
+func (ccs *persistingChunkSource) size() (uint64, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return 0, err
+	}
+
+	if ccs.cs == nil {
+		return 0, ErrNoChunkSource
+	}
+
+	return ccs.cs.size()
+}
+
 func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	err = ccs.wait()
 
@@ -294,6 +308,10 @@ func (ecs emptyChunkSource) index() (tableIndex, error) {
 
 func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
 	return &bytes.Buffer{}, nil
+}
+
+func (ecs emptyChunkSource) size() (uint64, error) {
+	return 0, nil
 }
 
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {

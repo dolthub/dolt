@@ -263,6 +263,8 @@ type chunkSource interface {
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+	// size returns the total size of the chunkSource: chunks, index, and footer
+	size() (uint64, error)
 	index() (tableIndex, error)
 
 	// Clone returns a |chunkSource| with the same contents as the
