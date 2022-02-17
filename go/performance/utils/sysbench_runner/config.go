@@ -327,7 +327,7 @@ func (c *Config) validateServerConfigs() error {
 			}
 		}
 
-		if s.ConnectionProtocol == "" && s.Host == "" {
+		if s.Host == "" {
 			s.Host = defaultHost
 		}
 
