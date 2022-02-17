@@ -468,7 +468,7 @@ func TestIndexCollectionDuplicateIndexes(t *testing.T) {
 
 	// Create original index
 	origIndex := struct {
-		cols[] string
+		cols  []string
 		index *indexImpl
 	}{
 		[]string{"v1"},
@@ -482,7 +482,7 @@ func TestIndexCollectionDuplicateIndexes(t *testing.T) {
 
 	// Create duplicate index
 	copyIndex := struct {
-		cols[] string
+		cols  []string
 		index *indexImpl
 	}{
 		[]string{"v1"},
@@ -517,7 +517,6 @@ func TestIndexCollectionDuplicateIndexes(t *testing.T) {
 	assert.True(t, indexColl.Contains(resOrigIndex.Name()))
 	assert.True(t, indexColl.hasIndexOnColumns(resOrigIndex.ColumnNames()...))
 	assert.True(t, indexColl.hasIndexOnTags(resOrigIndex.IndexedColumnTags()...))
-
 
 	// Check that indexColl doesn't yet contain copyIndex by name, but by other properties
 	assert.False(t, indexColl.Contains(copyIndex.index.Name()))
