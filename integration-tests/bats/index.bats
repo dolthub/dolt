@@ -548,27 +548,27 @@ SQL
 INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
 CREATE INDEX idx_v1 ON onepk(v1);
 SQL
-    run dolt sql -q "CREATE INDEX idx_bad ON onepk(v1)"
-    [ "$status" -eq "1" ]
+    run dolt sql -q "CREATE INDEX idx_v1_dup ON onepk(v1)"
+    [ "$status" -eq "0" ]
     run dolt index ls onepk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ "idx_bad(v1)" ]] || false
+    [[ "$output" =~ "idx_v1_dup(v1)" ]] || false
     run dolt schema show onepk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ 'KEY `idx_bad` (`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v1_dup` (`v1`)' ]] || false
     
     dolt sql <<SQL
 INSERT INTO twopk VALUES (1, 99, 51, 63), (2, 11, 55, 64), (3, 88, 52, 61), (4, 22, 54, 65), (5, 77, 53, 61);
-CREATE INDEX idx_v ON twopk(v2, v1);
+CREATE INDEX idx_v2_v1 ON twopk(v2, v1);
 SQL
-    run dolt sql -q "CREATE INDEX idx_bud ON twopk(v2, v1)"
-    [ "$status" -eq "1" ]
+    run dolt sql -q "CREATE INDEX idx_v2_v1_dup ON twopk(v2, v1)"
+    [ "$status" -eq "0" ]
     run dolt index ls twopk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ "idx_bud(v2, v1)" ]] || false
+    [[ "$output" =~ "idx_v2_v1_dup(v2, v1)" ]] || false
     run dolt schema show twopk
     [ "$status" -eq "0" ]
-    ! [[ "$output" =~ 'KEY `idx_bud` (`v2`,`v1`)' ]] || false
+    [[ "$output" =~ 'KEY `idx_v2_v1_dup` (`v2`,`v1`)' ]] || false
 }
 
 @test "index: Disallow 'dolt_' name prefix" {
@@ -2444,8 +2444,7 @@ SQL
     # Check index creation
     dolt sql -q "CREATE INDEX abc ON child (parent_value);"
     run dolt sql -q "CREATE INDEX abc_idx ON child_idx (parent_value);"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "duplicate" ]] || false
+    [ "$status" -eq "0" ]
     dolt sql -q "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);"
     run dolt sql -q "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);"
     [ "$status" -eq "1" ]
@@ -2459,7 +2458,7 @@ SQL
     run dolt schema show child_idx
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'KEY `parent_value` (`parent_value`)' ]] || false
-    ! [[ "$output" =~ 'KEY `abc_idx` (`parent_value`)' ]] || false
+    [[ "$output" =~ 'KEY `abc_idx` (`parent_value`)' ]] || false
     run dolt schema show child_unq
     [ "$status" -eq "0" ]
     [[ "$output" =~ 'KEY `abc_unq` (`parent_value`)' ]] || false
