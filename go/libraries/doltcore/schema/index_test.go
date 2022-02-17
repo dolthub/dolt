@@ -456,6 +456,96 @@ func TestIndexCollectionRenameIndex(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestIndexCollectionDuplicateIndexes(t *testing.T) {
+	colColl := NewColCollection(
+		NewColumn("pk1", 1, types.IntKind, true, NotNullConstraint{}),
+		NewColumn("pk2", 2, types.IntKind, true, NotNullConstraint{}),
+		NewColumn("v1", 3, types.IntKind, false),
+		NewColumn("v2", 4, types.UintKind, false),
+		NewColumn("v3", 5, types.StringKind, false),
+	)
+	indexColl := NewIndexCollection(colColl, nil).(*indexCollectionImpl)
+
+	// Create original index
+	origIndex := struct {
+		cols[] string
+		index *indexImpl
+	}{
+		[]string{"v1"},
+		&indexImpl{
+			name:      "v1_orig",
+			tags:      []uint64{3},
+			allTags:   []uint64{3, 1, 2},
+			indexColl: indexColl,
+		},
+	}
+
+	// Create duplicate index
+	copyIndex := struct {
+		cols[] string
+		index *indexImpl
+	}{
+		[]string{"v1"},
+		&indexImpl{
+			name:      "v1_copy",
+			tags:      []uint64{3},
+			allTags:   []uint64{3, 1, 2},
+			indexColl: indexColl,
+		},
+	}
+
+	// Check that indexColl doesn't yet contain origIndex
+	assert.False(t, indexColl.Contains(origIndex.index.Name()))
+	assert.False(t, indexColl.hasIndexOnColumns(origIndex.index.ColumnNames()...))
+	assert.False(t, indexColl.hasIndexOnTags(origIndex.index.IndexedColumnTags()...))
+	assert.Nil(t, indexColl.GetByName(origIndex.index.Name()))
+
+	// Insert origIndex and see that no errors occur
+	resOrigIndex, err := indexColl.AddIndexByColNames(origIndex.index.Name(), origIndex.cols, IndexProperties{IsUnique: origIndex.index.IsUnique(), Comment: origIndex.index.Comment()})
+	assert.NoError(t, err)
+	assert.Equal(t, origIndex.index, resOrigIndex)
+	assert.Equal(t, origIndex.index, indexColl.GetByName(resOrigIndex.Name()))
+	assert.Equal(t, []Index{origIndex.index}, indexColl.AllIndexes())
+
+	// Check that indexColl now contains origIndex
+	for _, tag := range resOrigIndex.IndexedColumnTags() {
+		assert.Equal(t, []Index{resOrigIndex}, indexColl.IndexesWithTag(tag))
+	}
+	for _, col := range resOrigIndex.ColumnNames() {
+		assert.Equal(t, []Index{resOrigIndex}, indexColl.IndexesWithColumn(col))
+	}
+	assert.True(t, indexColl.Contains(resOrigIndex.Name()))
+	assert.True(t, indexColl.hasIndexOnColumns(resOrigIndex.ColumnNames()...))
+	assert.True(t, indexColl.hasIndexOnTags(resOrigIndex.IndexedColumnTags()...))
+
+
+	// Check that indexColl doesn't yet contain copyIndex by name, but by other properties
+	assert.False(t, indexColl.Contains(copyIndex.index.Name()))
+	assert.True(t, indexColl.hasIndexOnColumns(copyIndex.index.ColumnNames()...))
+	assert.True(t, indexColl.hasIndexOnTags(copyIndex.index.IndexedColumnTags()...))
+	assert.Nil(t, indexColl.GetByName(copyIndex.index.Name()))
+
+	// Insert copyIndex and see that no errors occur
+	resCopyIndex, err := indexColl.AddIndexByColNames(copyIndex.index.Name(), copyIndex.cols, IndexProperties{IsUnique: copyIndex.index.IsUnique(), Comment: copyIndex.index.Comment()})
+	assert.NoError(t, err)
+	assert.Equal(t, copyIndex.index, resCopyIndex)
+	assert.Equal(t, copyIndex.index, indexColl.GetByName(resCopyIndex.Name()))
+	assert.Equal(t, []Index{copyIndex.index, origIndex.index}, indexColl.AllIndexes())
+
+	// Check that indexColl contains both resOrigIndex and resCopyIndex
+	for _, tag := range resCopyIndex.IndexedColumnTags() {
+		assert.Equal(t, []Index{resOrigIndex, resCopyIndex}, indexColl.IndexesWithTag(tag))
+	}
+	for _, col := range resCopyIndex.ColumnNames() {
+		assert.Equal(t, []Index{resOrigIndex, resCopyIndex}, indexColl.IndexesWithColumn(col))
+	}
+	assert.True(t, indexColl.Contains(resCopyIndex.Name()))
+	assert.True(t, indexColl.hasIndexOnColumns(resCopyIndex.ColumnNames()...))
+	assert.True(t, indexColl.hasIndexOnTags(resCopyIndex.IndexedColumnTags()...))
+
+	indexColl.clear(t)
+}
+
 func (ixc *indexCollectionImpl) clear(_ *testing.T) {
 	ixc.indexes = make(map[string]*indexImpl)
 	for key := range ixc.colTagToIndex {
