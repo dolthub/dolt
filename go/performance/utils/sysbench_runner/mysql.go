@@ -38,6 +38,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 	var serverCtx context.Context
 	var server *exec.Cmd
 	if serverConfig.Host == defaultHost {
+		fmt.Println("Launching the default server")
 		localServer = true
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
