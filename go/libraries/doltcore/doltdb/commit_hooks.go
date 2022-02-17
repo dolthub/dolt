@@ -102,7 +102,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 		return err
 	}
 
-	_, err = destDB.SetHead(ctx, ds, stRef)
+	_, err = destDB.SetHead(ctx, ds, stRef.TargetHash())
 	return err
 }
 

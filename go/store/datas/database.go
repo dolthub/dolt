@@ -77,11 +77,12 @@ type Database interface {
 	// an 'ErrMergeNeeded' error.
 	Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error)
 
-	// Tag stores an immutable reference to a Commit. It takes a Ref and a
-	// Dataset whose head must be nil (ie a newly created Dataset).  The
-	// new Tag struct is constructed with `ref` and metadata about the tag
-	// contained in the struct `opts.Meta`.
-	Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error)
+	// Tag stores an immutable reference to a Commit. It takes a Hash to
+	// the Commit and a Dataset whose head must be nil (ie a newly created
+	// Dataset).  The new Tag struct is constructed pointing at
+	// |commitAddr| and metadata about the tag contained in the struct
+	// `opts.Meta`.
+	Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error)
 
 	// UpdateWorkingSet updates the dataset given, setting its value to a new
 	// working set value object with the ref and meta given. If the dataset given
@@ -109,21 +110,21 @@ type Database interface {
 
 	// SetHead ignores any lineage constraints (e.g. the current head being
 	// an ancestor of the new Commit) and force-sets a mapping from
-	// datasetID: newHeadRef in this database. newHeadRef can point to a
-	// Commit or a Tag, but if Dataset is already present in the Database,
-	// it must point to the type of struct.
+	// datasetID: addr in this database. addr can point to a Commit or a
+	// Tag, but if Dataset is already present in the Database, it must
+	// point to the type of struct.
 	//
-	// All values that have been written to this Database are guaranteed to be
-	// persistent after SetHead(). If the update cannot be performed, error
-	// will be non-nil.
-	SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	// All values that have been written to this Database are guaranteed to
+	// be persistent after SetHead(). If the update cannot be performed,
+	// error will be non-nil.
+	SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
 
 	// FastForward takes a types.Ref to a Commit object and makes it the new
 	// Head of ds iff it is a descendant of the current Head. Intended to be
 	// used e.g. after a call to Pull(). If the update cannot be performed,
 	// e.g., because another process moved the current Head out from under
 	// you, err will be non-nil.
-	FastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error)
+	FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error)
 
 	// Stats may return some kind of struct that reports statistics about the
 	// ChunkStore that backs this Database instance. The type is

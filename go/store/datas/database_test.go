@@ -51,8 +51,9 @@ func TestValidateRef(t *testing.T) {
 	r, err := db.WriteValue(context.Background(), b)
 	assert.NoError(t, err)
 
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), r) })
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18))) })
+	_, err = db.validateRefAsCommit(context.Background(), r)
+	assert.Error(t, err)
+	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18)))
 }
 
 type DatabaseSuite struct {
@@ -517,11 +518,11 @@ func (suite *DatabaseSuite) TestSetHead() {
 	suite.True(mustHeadValue(ds).Equals(b))
 	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
 
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
-	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 }
@@ -549,16 +550,16 @@ func (suite *DatabaseSuite) TestFastForward() {
 	cCommitRef := mustHeadRef(ds) // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
-	_, err = suite.db.FastForward(context.Background(), ds, aCommitRef)
+	_, err = suite.db.FastForward(context.Background(), ds, aCommitRef.TargetHash())
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
-	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef)
+	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }
