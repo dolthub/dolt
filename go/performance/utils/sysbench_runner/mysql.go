@@ -60,7 +60,6 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 			cancel()
 			return nil, err
 		}
-		fmt.Println("Completed creating the default server")
 	}
 
 	// handle user interrupt
@@ -103,7 +102,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 			// we expect a kill error
 			// we only exit in error if this is not the
 			// error
-			if err.Error() != "signal: killed" && err.Error() != "exit status 1" {
+			if err.Error() != "signal: killed" {
 				close(quit)
 				wg.Wait()
 				return nil, err
@@ -134,7 +133,11 @@ func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName strin
 		return err
 	}
 	defer func() {
-		err = db.Close()
+		if err != nil {
+			db.Close()
+		} else {
+			err = db.Close()
+		}
 	}()
 	err = db.Ping()
 	if err != nil {
