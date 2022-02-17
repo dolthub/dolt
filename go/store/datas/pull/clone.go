@@ -17,7 +17,6 @@ package pull
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/cenkalti/backoff"
 	"golang.org/x/sync/errgroup"
@@ -86,8 +85,8 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 	return fileIds, fileIDtoTblFile, fileIDtoNumChunks
 }
 
-func CloseWithErr(c io.Closer, err *error) {
-	e := c.Close()
+func stopWithErr(stats *iohelp.ReaderWithStats, err *error) {
+	e := stats.Stop()
 	if *err == nil && e != nil {
 		*err = e
 	}
@@ -144,7 +143,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 					return err
 				}
 				rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
-				defer CloseWithErr(rdStats, &err)
+				defer stopWithErr(rdStats, &err)
 
 				rdStats.Start(func(s iohelp.ReadStats) {
 					report(TableFileEvent{

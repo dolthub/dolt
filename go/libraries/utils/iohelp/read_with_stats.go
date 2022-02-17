@@ -66,11 +66,9 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 	}()
 }
 
-// Close is equivalent to Stop
-func (rws *ReaderWithStats) Close() error {
-	return rws.Stop()
-}
-
+// Stop "closes" ReaderWithStats. Occasionally, we might pass this ReaderWithStats as the body of
+// a http.Request. Since http.Request will close the body if it is an io.Closer, we can't have ReaderWithStats conform
+// to io.Closer. We want full control over the Start and Stop of ReaderWithStats.
 func (rws *ReaderWithStats) Stop() error {
 	close(rws.closeCh)
 
