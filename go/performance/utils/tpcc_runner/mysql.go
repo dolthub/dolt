@@ -94,7 +94,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 			// we expect a kill error
 			// we only exit in error if this is not the
 			// error
-			if err.Error() != "signal: killed" && err.Error() != "exit status 1" {
+			if err.Error() != "signal: killed" {
 				close(quit)
 				wg.Wait()
 				return nil, err
