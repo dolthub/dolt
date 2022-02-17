@@ -23,6 +23,9 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dustin/go-humanize"
+	"github.com/gosuri/uilive"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -33,8 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dustin/go-humanize"
-	"github.com/gosuri/uilive"
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
