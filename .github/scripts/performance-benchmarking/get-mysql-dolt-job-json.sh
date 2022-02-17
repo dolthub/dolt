@@ -55,6 +55,7 @@ echo '
               { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
+            "imagePullPolicy": "Always",
             "args": [
               "--schema=/schema.sql",
               "--useDoltHubLuaScriptsRepo",
@@ -69,6 +70,7 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
+              "--withTpcc=true",
               "'"$medianLatencyMultiplierReadsQuery"'",
               "'"$meanMultiplierReadsQuery"'",
               "'"$medianLatencyMultiplierWritesQuery"'",
