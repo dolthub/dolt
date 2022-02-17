@@ -55,7 +55,10 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 			case <-timer.C:
 				read := atomic.LoadUint64(&rws.read)
 				elapsed := time.Since(rws.start)
-				percent := float64(read) / float64(rws.size)
+				var percent float64
+				if rws.size != 0 {
+					percent = float64(read) / float64(rws.size)
+				}
 				updateFunc(ReadStats{Read: read, Elapsed: elapsed, Percent: percent})
 				timer.Reset(updateFrequency)
 			}
@@ -63,8 +66,12 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 	}()
 }
 
-// Close closes this reader. Only one of Close or Stop should be called
+// Close is equivalent to Stop
 func (rws *ReaderWithStats) Close() error {
+	return rws.Stop()
+}
+
+func (rws *ReaderWithStats) Stop() error {
 	close(rws.closeCh)
 
 	if closer, ok := rws.rd.(io.Closer); ok {
@@ -72,14 +79,6 @@ func (rws *ReaderWithStats) Close() error {
 	}
 
 	return nil
-}
-
-func (rws *ReaderWithStats) Stop() {
-	close(rws.closeCh)
-
-	if closer, ok := rws.rd.(io.Closer); ok {
-		_ = closer.Close()
-	}
 }
 
 func (rws *ReaderWithStats) Read(p []byte) (int, error) {

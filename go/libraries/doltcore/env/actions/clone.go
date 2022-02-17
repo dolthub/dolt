@@ -100,7 +100,6 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		chunksDownloaded  int64
 		currStats         = make(map[string]iohelp.ReadStats)
 		tableFiles        = make(map[string]*nbs.TableFile)
-		//cliPos            int
 	)
 
 	writer := uilive.New()
@@ -140,7 +139,8 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 
 		// Starting and stopping for each event seems to be less jumpy
 		writer.Start()
-		fmt.Fprintf(writer, "%s of %s chunks complete. %s chunks being downloaded currently.\n", strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
+		fmt.Fprintf(writer, "%s of %s chunks complete. %s chunks being downloaded currently.\n",
+			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()

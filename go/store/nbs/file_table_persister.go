@@ -133,9 +133,6 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 
 func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSources, stats *Stats) (chunkSource, error) {
 	plan, err := planConjoin(sources, stats)
-	for _, source := range sources {
-		source.Close()
-	}
 
 	if err != nil {
 		return emptyChunkSource{}, err

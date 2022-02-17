@@ -1216,12 +1216,7 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 				return nil, 0, err
 			}
 
-			len, err := cs.uncompressedLen()
-			if err != nil {
-				return nil, 0, err
-			}
-
-			return io.NopCloser(r), len, nil
+			return io.NopCloser(r), 0, nil
 		},
 	}
 }
