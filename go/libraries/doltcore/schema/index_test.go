@@ -218,13 +218,12 @@ func TestIndexCollectionAddIndexByColNames(t *testing.T) {
 		for _, testIndex := range testIndexes {
 			_, err := indexColl.AddIndexByColNames(testIndex.index.Name(), testIndex.cols, IndexProperties{IsUnique: testIndex.index.IsUnique(), Comment: testIndex.index.Comment()})
 			assert.NoError(t, err)
-			_, err = indexColl.AddIndexByColNames("nonsense", testIndex.cols, IndexProperties{IsUnique: testIndex.index.IsUnique(), Comment: testIndex.index.Comment()})
+			_, err = indexColl.AddIndexByColNames(testIndex.index.Name() + "copy", testIndex.cols, IndexProperties{IsUnique: testIndex.index.IsUnique(), Comment: testIndex.index.Comment()})
 			assert.NoError(t, err)
 			_, err = indexColl.AddIndexByColNames(testIndex.index.Name(), []string{"v2"}, IndexProperties{IsUnique: testIndex.index.IsUnique(), Comment: testIndex.index.Comment()})
 			assert.Error(t, err)
-			indexColl.clear(t)
 		}
-		//indexColl.clear(t)
+		indexColl.clear(t)
 	})
 
 	t.Run("Non-existing Columns", func(t *testing.T) {
@@ -302,8 +301,8 @@ func TestIndexCollectionAddIndexByColTags(t *testing.T) {
 		for _, testIndex := range testIndexes {
 			_, err := indexColl.AddIndexByColTags(testIndex.Name(), testIndex.tags, IndexProperties{IsUnique: testIndex.IsUnique(), Comment: testIndex.Comment()})
 			assert.NoError(t, err)
-			_, err = indexColl.AddIndexByColTags("nonsense", testIndex.tags, IndexProperties{IsUnique: testIndex.IsUnique(), Comment: testIndex.Comment()})
-			assert.Error(t, err)
+			_, err = indexColl.AddIndexByColTags(testIndex.Name() + "copy", testIndex.tags, IndexProperties{IsUnique: testIndex.IsUnique(), Comment: testIndex.Comment()})
+			assert.NoError(t, err)
 			_, err = indexColl.AddIndexByColTags(testIndex.Name(), []uint64{4}, IndexProperties{IsUnique: testIndex.IsUnique(), Comment: testIndex.Comment()})
 			assert.Error(t, err)
 		}
