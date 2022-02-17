@@ -105,17 +105,18 @@ type AWSFactory struct {
 }
 
 // CreateDB creates an AWS backed database
-func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
+func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
 	var db datas.Database
 	cs, err := fact.newChunkStore(ctx, nbf, urlObj, params)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	db = datas.NewDatabase(cs)
+	vrw := types.NewValueStore(cs)
+	db = datas.NewTypesDatabase(vrw)
 
-	return db, nil
+	return db, vrw, nil
 }
 
 func (fact AWSFactory) newChunkStore(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (chunks.ChunkStore, error) {

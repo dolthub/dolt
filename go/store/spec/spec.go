@@ -56,7 +56,6 @@ const (
 
 type ProtocolImpl interface {
 	NewChunkStore(sp Spec) (chunks.ChunkStore, error)
-	NewDatabase(sp Spec) (datas.Database, error)
 }
 
 var ExternalProtocols = map[string]ProtocolImpl{}
@@ -165,7 +164,8 @@ type Spec struct {
 	Path AbsolutePath
 
 	// db is lazily created, so it needs to be a pointer to a Database.
-	db *datas.Database
+	db  *datas.Database
+	vrw *types.ValueReadWriter
 }
 
 func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
@@ -179,6 +179,7 @@ func newSpec(dbSpec string, opts SpecOptions) (Spec, error) {
 		DatabaseName: dbName,
 		Options:      opts,
 		db:           new(datas.Database),
+		vrw:          new(types.ValueReadWriter),
 	}, nil
 }
 
@@ -272,9 +273,20 @@ func (sp Spec) String() string {
 // is called. If the Spec is closed, it is re-opened with a new Database.
 func (sp Spec) GetDatabase(ctx context.Context) datas.Database {
 	if *sp.db == nil {
-		*sp.db = sp.createDatabase(ctx)
+		db, vrw := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
 	}
 	return *sp.db
+}
+
+func (sp Spec) GetVRW(ctx context.Context) types.ValueReadWriter {
+	if *sp.db == nil {
+		db, vrw := sp.createDatabase(ctx)
+		*sp.db = db
+		*sp.vrw = vrw
+	}
+	return *sp.vrw
 }
 
 // NewChunkStore returns a new ChunkStore instance that this Spec's
@@ -386,7 +398,7 @@ func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 // if this isn't a Path Spec or if that path isn't found.
 func (sp Spec) GetValue(ctx context.Context) (val types.Value) {
 	if !sp.Path.IsEmpty() {
-		val = sp.Path.Resolve(ctx, sp.GetDatabase(ctx))
+		val = sp.Path.Resolve(ctx, sp.GetDatabase(ctx), sp.GetVRW(ctx))
 	}
 	return
 }
@@ -429,7 +441,7 @@ func (sp Spec) Pin(ctx context.Context) (Spec, bool) {
 		return Spec{}, false
 	}
 
-	nbf := sp.GetDatabase(ctx).Format()
+	nbf := sp.GetVRW(ctx).Format()
 	r := sp
 
 	var err error
@@ -450,12 +462,16 @@ func (sp Spec) Close() error {
 	return db.Close()
 }
 
-func (sp Spec) createDatabase(ctx context.Context) datas.Database {
+func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueReadWriter) {
 	switch sp.Protocol {
 	case "aws":
-		return datas.NewDatabase(parseAWSSpec(ctx, sp.Href(), sp.Options))
+		cs := parseAWSSpec(ctx, sp.Href(), sp.Options)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw), vrw
 	case "gs":
-		return datas.NewDatabase(parseGCSSpec(ctx, sp.Href(), sp.Options))
+		cs := parseGCSSpec(ctx, sp.Href(), sp.Options)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw), vrw
 	case "nbs":
 		// If the database is the oldgen database return a standard NBS store.
 		if strings.Contains(sp.DatabaseName, "oldgen") {
@@ -478,28 +494,33 @@ func (sp Spec) createDatabase(ctx context.Context) datas.Database {
 
 		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)
 
-		return datas.NewDatabase(cs)
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw), vrw
 	case "mem":
 		storage := &chunks.MemoryStorage{}
-		return datas.NewDatabase(storage.NewViewWithDefaultFormat())
+		cs := storage.NewViewWithDefaultFormat()
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw), vrw
 	default:
 		impl, ok := ExternalProtocols[sp.Protocol]
 		if !ok {
 			d.PanicIfError(fmt.Errorf("unknown protocol: %s", sp.Protocol))
 		}
-		r, err := impl.NewDatabase(sp)
+		cs, err := impl.NewChunkStore(sp)
 		d.PanicIfError(err)
-		return r
+		vrw := types.NewValueStore(cs)
+		return datas.NewTypesDatabase(vrw), vrw
 	}
 }
 
-func getStandardLocalStore(ctx context.Context, dbName string) datas.Database {
+func getStandardLocalStore(ctx context.Context, dbName string) (datas.Database, types.ValueReadWriter) {
 	os.Mkdir(dbName, 0777)
 
 	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dbName, 1<<28)
 	d.PanicIfError(err)
 
-	return datas.NewDatabase(cs)
+	vrw := types.NewValueStore(cs)
+	return datas.NewTypesDatabase(vrw), vrw
 }
 
 func validateDir(path string) error {

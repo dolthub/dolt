@@ -50,13 +50,14 @@ func testCommitInResults(s *nomsLogTestSuite, str string, i int) {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
-	db.CommitValue(context.Background(), sp.GetDataset(context.Background()), types.Float(i))
+	vrw := sp.GetVRW(context.Background())
+	datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), types.Float(i))
 	s.NoError(err)
 
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok)
 	res, _ := s.MustRun(main, []string{"log", str})
-	h, err := commit.Hash(db.Format())
+	h, err := commit.Hash(vrw.Format())
 	s.NoError(err)
 	s.Contains(res, h.String())
 }
@@ -79,13 +80,14 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 	ds := sp.GetDataset(context.Background())
 	for i := 0; i < 3; i++ {
-		data, err := types.NewStruct(db.Format(), "", types.StructData{
+		data, err := types.NewStruct(vrw.Format(), "", types.StructData{
 			"bar": types.Float(i),
 		})
 		s.NoError(err)
-		ds, err = db.CommitValue(context.Background(), ds, data)
+		ds, err = datas.CommitValue(context.Background(), db, ds, data)
 		s.NoError(err)
 	}
 
@@ -99,11 +101,13 @@ func (s *nomsLogTestSuite) TestNomsLogPath() {
 }
 
 func addCommit(ds datas.Dataset, v string) (datas.Dataset, error) {
-	return ds.Database().CommitValue(context.Background(), ds, types.String(v))
+	db := ds.Database()
+	return datas.CommitValue(context.Background(), db, ds, types.String(v))
 }
 
 func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) {
-	return ds.Database().CommitValue(context.Background(), ds, v)
+	db := ds.Database()
+	return datas.CommitValue(context.Background(), db, ds, v)
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
@@ -165,20 +169,21 @@ func (s *nomsLogTestSuite) TestNArg() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 	ds, err := db.GetDataset(context.Background(), dsName)
 	s.NoError(err)
 
 	ds, err = addCommit(ds, "1")
 	s.NoError(err)
-	h1, err := mustHead(ds).Hash(db.Format())
+	h1, err := mustHead(ds).Hash(vrw.Format())
 	s.NoError(err)
 	ds, err = addCommit(ds, "2")
 	s.NoError(err)
-	h2, err := mustHead(ds).Hash(db.Format())
+	h2, err := mustHead(ds).Hash(vrw.Format())
 	s.NoError(err)
 	ds, err = addCommit(ds, "3")
 	s.NoError(err)
-	h3, err := mustHead(ds).Hash(db.Format())
+	h3, err := mustHead(ds).Hash(vrw.Format())
 	s.NoError(err)
 
 	dsSpec := spec.CreateValueSpecString("nbs", s.DBDir, dsName)
@@ -204,11 +209,12 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 	ds, err := db.GetDataset(context.Background(), "ds1")
 
 	s.NoError(err)
 
-	meta, err := types.NewStruct(db.Format(), "Meta", map[string]types.Value{
+	meta, err := types.NewStruct(vrw.Format(), "Meta", map[string]types.Value{
 		"longNameForTest": types.String("Yoo"),
 		"test2":           types.String("Hoo"),
 	})
@@ -232,6 +238,7 @@ func (s *nomsLogTestSuite) TestTruncation() {
 	s.NoError(err)
 	defer sp.Close()
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 
 	toNomsList := func(l []string) types.List {
 		nv := []types.Value{}
@@ -239,7 +246,7 @@ func (s *nomsLogTestSuite) TestTruncation() {
 			nv = append(nv, types.String(v))
 		}
 
-		lst, err := types.NewList(context.Background(), db, nv...)
+		lst, err := types.NewList(context.Background(), vrw, nv...)
 		s.NoError(err)
 
 		return lst

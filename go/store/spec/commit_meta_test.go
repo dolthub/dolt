@@ -39,14 +39,16 @@ func isEmptyStruct(s types.Struct) bool {
 	return s.Equals(types.EmptyStruct(types.Format_7_18))
 }
 
-func newTestDB() datas.Database {
-	return datas.NewDatabase(chunks.NewMemoryStoreFactory().CreateStore(context.Background(), ""))
+func newTestDB() (datas.Database, types.ValueReadWriter) {
+	vrw := types.NewValueStore(chunks.NewMemoryStoreFactory().CreateStore(context.Background(), ""))
+	return datas.NewTypesDatabase(vrw), vrw
 }
 
 func TestCreateCommitMetaStructBasic(t *testing.T) {
 	assert := assert.New(t)
 
-	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
+	db, vrw := newTestDB()
+	meta, err := CreateCommitMetaStruct(context.Background(), db, vrw, "", "", nil, nil)
 	assert.NoError(err)
 	assert.False(isEmptyStruct(meta))
 	assert.Equal("Struct Meta {\n  date: String,\n}", mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
@@ -58,7 +60,8 @@ func TestCreateCommitMetaStructFromFlags(t *testing.T) {
 	setCommitMetaFlags(time.Now().UTC().Format(CommitMetaDateFormat), "this is a message", "k1=v1,k2=v2,k3=v3")
 	defer resetCommitMetaFlags()
 
-	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
+	db, vrw := newTestDB()
+	meta, err := CreateCommitMetaStruct(context.Background(), db, vrw, "", "", nil, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
 		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
@@ -75,7 +78,8 @@ func TestCreateCommitMetaStructFromArgs(t *testing.T) {
 	dateArg := time.Now().UTC().Format(CommitMetaDateFormat)
 	messageArg := "this is a message"
 	keyValueArg := map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"}
-	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), dateArg, messageArg, keyValueArg, nil)
+	db, vrw := newTestDB()
+	meta, err := CreateCommitMetaStruct(context.Background(), db, vrw, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  message: String,\n}",
 		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
@@ -96,8 +100,9 @@ func TestCreateCommitMetaStructFromFlagsAndArgs(t *testing.T) {
 	messageArg := "this is a message"
 	keyValueArg := map[string]string{"k1": "v1", "k2": "v2", "k3": "v3"}
 
+	db, vrw := newTestDB()
 	// args passed in should win over the ones in the flags
-	meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), dateArg, messageArg, keyValueArg, nil)
+	meta, err := CreateCommitMetaStruct(context.Background(), db, vrw, dateArg, messageArg, keyValueArg, nil)
 	assert.NoError(err)
 	assert.Equal("Struct Meta {\n  date: String,\n  k1: String,\n  k2: String,\n  k3: String,\n  k4: String,\n  message: String,\n}",
 		mustString(mustType(types.TypeOf(meta)).Describe(context.Background())))
@@ -116,10 +121,10 @@ func TestCreateCommitMetaStructBadDate(t *testing.T) {
 		setCommitMetaFlags(cliDateString, "", "")
 		defer resetCommitMetaFlags()
 
-		meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), argDateString, "", nil, nil)
+		db, vrw := newTestDB()
+		_, err := CreateCommitMetaStruct(context.Background(), db, vrw, argDateString, "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "unable to parse date: "))
-		assert.True(isEmptyStruct(meta))
 	}
 	testBadDateMultipleWays := func(dateString string) {
 		testBadDates(dateString, "")
@@ -139,10 +144,10 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 		setCommitMetaFlags("", "", fmt.Sprintf("%s%s%s", k, sep, v))
 		defer resetCommitMetaFlags()
 
-		meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
+		db, vrw := newTestDB()
+		_, err := CreateCommitMetaStruct(context.Background(), db, vrw, "", "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "unable to parse meta value: "))
-		assert.True(isEmptyStruct(meta))
 	}
 
 	testBadMetaKeys := func(k, v string) {
@@ -151,18 +156,18 @@ func TestCreateCommitMetaStructBadMetaStrings(t *testing.T) {
 
 		setCommitMetaFlags("", "", fmt.Sprintf("%s=%s", k, v))
 
-		meta, err := CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", nil, nil)
+		db, vrw := newTestDB()
+		_, err := CreateCommitMetaStruct(context.Background(), db, vrw, "", "", nil, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "invalid meta key: "))
-		assert.True(isEmptyStruct(meta))
 
 		resetCommitMetaFlags()
 
 		metaValues := map[string]string{k: v}
-		meta, err = CreateCommitMetaStruct(context.Background(), newTestDB(), "", "", metaValues, nil)
+		db, vrw = newTestDB()
+		_, err = CreateCommitMetaStruct(context.Background(), db, vrw, "", "", metaValues, nil)
 		assert.Error(err)
 		assert.True(strings.HasPrefix(err.Error(), "invalid meta key: "))
-		assert.True(isEmptyStruct(meta))
 	}
 
 	// Valid names must start with `a-zA-Z` and after that `a-zA-Z0-9_`.

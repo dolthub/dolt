@@ -281,8 +281,8 @@ func TestLDNoms(t *testing.T) {
 		}
 
 		tSchema := createTestSchema(t)
-		rowData, _ := createTestRowData(t, ddb.db, tSchema)
-		tbl, err = CreateTestTable(ddb.db, tSchema, rowData)
+		rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+		tbl, err = CreateTestTable(ddb.vrw, tSchema, rowData)
 
 		if err != nil {
 			t.Fatal("Failed to create test table with data")
@@ -293,17 +293,13 @@ func TestLDNoms(t *testing.T) {
 
 		valHash, err = ddb.WriteRootValue(context.Background(), root)
 		assert.NoError(t, err)
-	}
 
-	// reopen the db and commit the value.  Perform a couple checks for
-	{
-		ddb, _ := LoadDoltDB(context.Background(), types.Format_Default, LocalDirDoltDB, filesys.LocalFS)
-		meta, err := NewCommitMeta(committerName, committerEmail, "Sample data")
+		meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
 			t.Error("Failed to commit")
 		}
 
-		commit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
+		commit, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef("master"), meta)
 		if err != nil {
 			t.Error("Failed to commit")
 		}
@@ -315,7 +311,7 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Unexpected ancestry")
 		}
 
-		root, err := commit.GetRootValue()
+		root, err = commit.GetRootValue()
 		assert.NoError(t, err)
 
 		readTable, ok, err := root.GetTable(context.Background(), "test")

@@ -157,7 +157,7 @@ func runCat(ctx context.Context, args []string) int {
 
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
-		db := sp.GetDatabase(ctx)
+		vrw := sp.GetVRW(ctx)
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
 
@@ -175,7 +175,7 @@ func runCat(ctx context.Context, args []string) int {
 		}
 
 		if !catNoShow {
-			value, err := types.DecodeValue(chunk, db)
+			value, err := types.DecodeValue(chunk, vrw)
 
 			if err != nil {
 				fmt.Println("        error reading value (Could be a format issue).")
@@ -189,7 +189,7 @@ func runCat(ctx context.Context, args []string) int {
 		}
 
 		refIdx := 0
-		err = types.WalkRefs(chunk, db.Format(), func(ref types.Ref) error {
+		err = types.WalkRefs(chunk, vrw.Format(), func(ref types.Ref) error {
 			if refIdx == 0 {
 				fmt.Printf("    chunk[%d] references chunks:\n", cidx)
 			}

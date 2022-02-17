@@ -105,8 +105,8 @@ func TestPushOnWriteHook(t *testing.T) {
 	}
 
 	tSchema := createTestSchema(t)
-	rowData, _ := createTestRowData(t, ddb.db, tSchema)
-	tbl, err := CreateTestTable(ddb.db, tSchema, rowData)
+	rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+	tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
 
 	if err != nil {
 		t.Fatal("Failed to create test table with data")
@@ -125,7 +125,7 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	// setup hook
 	hook := NewPushOnWriteHook(destDB, tmpDir)
-	ddb.SetCommitHooks(ctx, []datas.CommitHook{hook})
+	ddb.SetCommitHooks(ctx, []CommitHook{hook})
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
@@ -242,8 +242,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			assert.NoError(t, err)
 
 			tSchema := createTestSchema(t)
-			rowData, _ := createTestRowData(t, ddb.db, tSchema)
-			tbl, err := CreateTestTable(ddb.db, tSchema, rowData)
+			rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+			tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
 
 			if err != nil {
 				t.Fatal("Failed to create test table with data")

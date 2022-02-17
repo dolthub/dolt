@@ -116,9 +116,9 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 	return nbs.IterChunks(rdCloser.(io.ReadSeeker), func(chunk chunks.Chunk) (stop bool, err error) {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
-		db := sp.GetDatabase(ctx)
+		vrw := sp.GetVRW(ctx)
 
-		value, err := types.DecodeValue(chunk, db)
+		value, err := types.DecodeValue(chunk, vrw)
 
 		if err != nil {
 			return false, err

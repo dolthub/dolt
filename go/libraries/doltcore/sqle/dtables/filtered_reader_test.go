@@ -497,18 +497,18 @@ func TestFilteredReader(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
-			memDB, err := dbfactory.MemFactory{}.CreateDB(ctx, types.Format_Default, nil, nil)
+			_, vrw, err := dbfactory.MemFactory{}.CreateDB(ctx, types.Format_Default, nil, nil)
 			require.NoError(t, err)
 
 			createFunc, err := CreateReaderFuncLimitedByExpressions(types.Format_Default, test.sch, test.filters)
 			require.NoError(t, err)
 
-			tblData, err := mapFromRows(ctx, memDB, test.sch, test.rowData...)
+			tblData, err := mapFromRows(ctx, vrw, test.sch, test.rowData...)
 			require.NoError(t, err)
 			rd, err := createFunc(ctx, tblData)
 			require.NoError(t, err)
 
-			resMap, err := types.NewMap(ctx, memDB)
+			resMap, err := types.NewMap(ctx, vrw)
 			require.NoError(t, err)
 
 			me := resMap.Edit()
@@ -526,7 +526,7 @@ func TestFilteredReader(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, uint64(me.NumEdits()), resMap.Len())
 
-			expectedMap, err := mapFromRows(ctx, memDB, test.sch, test.expectedRows...)
+			expectedMap, err := mapFromRows(ctx, vrw, test.sch, test.expectedRows...)
 			require.NoError(t, err)
 
 			assert.Equal(t, expectedMap.Len(), resMap.Len())

@@ -43,11 +43,11 @@ type FileFactory struct {
 }
 
 // CreateDB creates an local filesys backed database
-func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
+func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
 	path, err := url.PathUnescape(urlObj.Path)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	path = filepath.FromSlash(path)
@@ -55,38 +55,40 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 
 	err = validateDir(path)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	oldgenPath := filepath.Join(path, "oldgen")
 	err = validateDir(oldgenPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return nil, err
+			return nil, nil, err
 		}
 
 		err = os.Mkdir(oldgenPath, os.ModePerm)
 		if err != nil && !errors.Is(err, os.ErrExist) {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
 	oldGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), oldgenPath, defaultMemTableSize)
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	st := nbs.NewGenerationalCS(oldGenSt, newGenSt)
 	// metrics?
 
-	return datas.NewDatabase(st), nil
+	vrw := types.NewValueStore(st)
+
+	return datas.NewTypesDatabase(vrw), vrw, nil
 }
 
 func validateDir(path string) error {
