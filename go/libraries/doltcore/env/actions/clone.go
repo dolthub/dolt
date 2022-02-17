@@ -145,7 +145,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			fmt.Fprintf(writer.Newline(), "File: %s (%s chunks) - %.2f%% downloaded, %s\n",
+			fmt.Fprintf(writer.Newline(), "Downloading file: %s (%s chunks) - %.2f%% downloaded, %s, \n",
 				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
 		}
 		writer.Stop()
