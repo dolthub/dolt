@@ -333,6 +333,62 @@ func (dp diffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
+// getLegacyRowIter returns a row iterator for this diffPartition, using older logic that disambiguates column
+// names with unique tag suffixes when collisions occur. No new code should use this function.
+//
+// TODO: This legacy method is still used by commit_diff_table until we switch it over to the new, simplified
+//       diff format that diff_table just switched to. Once we switch commit_diff_table over, we should
+//       remove this legacy function.
+func (dp diffPartition) getLegacyRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, ss *schema.SuperSchema, joiner *rowconv.Joiner) (sql.RowIter, error) {
+	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
+
+	if err != nil {
+		return nil, err
+	}
+
+	toData, toSch, err := tableData(ctx, dp.to, ddb)
+
+	if err != nil {
+		return nil, err
+	}
+
+	fromConv, err := rowConvForSchema(ctx, ddb.ValueReadWriter(), ss, fromSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	toConv, err := rowConvForSchema(ctx, ddb.ValueReadWriter(), ss, toSch)
+
+	if err != nil {
+		return nil, err
+	}
+
+	sch := joiner.GetSchema()
+	toCol, _ := sch.GetAllCols().GetByName(toCommit)
+	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
+	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
+	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
+
+	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
+	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
+
+	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
+	rd.Start(ctx, fromData, toData)
+
+	src := diff.NewRowDiffSource(rd, joiner, ctx)
+	src.AddInputRowConversion(fromConv, toConv)
+
+	return &diffRowItr{
+		ad:             rd,
+		diffSrc:        src,
+		joiner:         joiner,
+		sch:            joiner.GetSchema(),
+		fromCommitInfo: fromCmInfo,
+		toCommitInfo:   toCmInfo,
+	}, nil
+}
+
 // TODO: This is reused from commit_diff_table and we have likely changed it's behavior by not
 //       passing in super schema any more and changing this logic. Need to test and resolve this
 //       before releasing these changes.

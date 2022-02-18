@@ -367,7 +367,8 @@ func (dt *CommitDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expressio
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(diffPartition)
-	// TODO: commit_diff_table depends on diffPartition from diff_table
-	//       does dropping the SuperSchema argument here work?
-	return dp.getRowIter(ctx, dt.ddb, dt.joiner)
+	// TODO: commit_diff_table reuses diffPartition from diff_table and we've switched diff_table over
+	//       to a new format. After we switch commit_diff_table over to the same new format, we can
+	//       remove this getLegacyRowIter method.
+	return dp.getLegacyRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }
