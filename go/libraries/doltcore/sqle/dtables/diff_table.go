@@ -376,7 +376,9 @@ func (dp diffPartition) getLegacyRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, s
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	rd.Start(ctx, fromData, toData)
 
-	src := diff.NewRowDiffSource(rd, joiner, ctx)
+	// For the LegacyRowIter codepath, we don't want to change behavior,
+	// so we don't pass in a WarnFunction to ensure we get the old behavior.
+	src := diff.NewRowDiffSource(rd, joiner, nil)
 	src.AddInputRowConversion(fromConv, toConv)
 
 	return &diffRowItr{
@@ -389,9 +391,6 @@ func (dp diffPartition) getLegacyRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, s
 	}, nil
 }
 
-// TODO: This is reused from commit_diff_table and we have likely changed it's behavior by not
-//       passing in super schema any more and changing this logic. Need to test and resolve this
-//       before releasing these changes.
 func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
@@ -429,7 +428,11 @@ func (dp diffPartition) getRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	rd.Start(ctx, fromData, toData)
 
-	src := diff.NewRowDiffSource(rd, joiner, ctx)
+	warnFn := func(code int, message string, args ...string) {
+		ctx.Warn(code, message, args)
+	}
+
+	src := diff.NewRowDiffSource(rd, joiner, warnFn)
 	src.AddInputRowConversion(fromConv, toConv)
 
 	return &diffRowItr{

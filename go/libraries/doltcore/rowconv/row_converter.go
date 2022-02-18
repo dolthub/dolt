@@ -17,7 +17,6 @@ package rowconv
 import (
 	"context"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -27,6 +26,10 @@ import (
 )
 
 var IdentityConverter = &RowConverter{nil, true, nil}
+
+// WarnFunction is a callback function that callers can optionally provide during row conversion
+// to take an extra action when a value cannot be automatically converted to the output data type.
+type WarnFunction func(int, string, ...string)
 
 var DatatypeCoercionFailureWarning = "unable to coerce value from field '%s' into latest column schema"
 
@@ -89,22 +92,22 @@ func panicOnDuplicateMappings(mapping *FieldMapping) {
 	}
 }
 
-// ConvertWithWarnings takes a row and maps its columns to their destination columns, performing any type conversions
-// needed to create a row of the expected destination schema, and logging SQL warnings for any fields that cannot
-// be cleanly converted.
-func (rc *RowConverter) ConvertWithWarnings(ctx *sql.Context, inRow row.Row) (row.Row, error) {
-	return rc.convert(ctx, inRow, true)
+// ConvertWithWarnings takes an input row, maps its columns to their destination columns, performing any type
+// conversions needed to create a row of the expected destination schema, and uses the optional WarnFunction
+// callback to let callers handle logging a warning when a field cannot be cleanly converted.
+func (rc *RowConverter) ConvertWithWarnings(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
+	return rc.convert(inRow, warnFn)
 }
 
-// Convert takes a row and maps its columns to their destination columns, and performs any type conversion needed to
+// Convert takes an input row, maps its columns to destination columns, and performs any type conversion needed to
 // create a row of the expected destination schema.
 func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
-	return rc.convert(nil, inRow, false)
+	return rc.convert(inRow, nil)
 }
 
 // convert takes a row and maps its columns to their destination columns, automatically performing any type conversion
-// needed, and optionally logging SQL warnings on type conversion errors if the warnOnCoercionError flag is set to true
-func (rc *RowConverter) convert(ctx *sql.Context, inRow row.Row, warnOnCoercionError bool) (row.Row, error) {
+// needed, and using the optional WarnFunction to let callers log warnings on any type conversion errors.
+func (rc *RowConverter) convert(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
 	if rc.IdentityConverter {
 		return inRow, nil
 	}
@@ -117,12 +120,10 @@ func (rc *RowConverter) convert(ctx *sql.Context, inRow row.Row, warnOnCoercionE
 			outTag := rc.SrcToDest[tag]
 			outVal, err := convFunc(val)
 
-			if sql.ErrInvalidValue.Is(err) && warnOnCoercionError {
-				if ctx != nil {
-					col, _ := rc.SrcSch.GetAllCols().GetByTag(tag)
-					ctx.Warn(DatatypeCoercionFailureWarningCode, DatatypeCoercionFailureWarning, col.Name)
-					outVal = types.NullValue
-				}
+			if sql.ErrInvalidValue.Is(err) && warnFn != nil {
+				col, _ := rc.SrcSch.GetAllCols().GetByTag(tag)
+				warnFn(DatatypeCoercionFailureWarningCode, DatatypeCoercionFailureWarning, col.Name)
+				outVal = types.NullValue
 				err = nil
 			}
 
