@@ -38,6 +38,7 @@ import (
 
 var (
 	noPager bool
+	testing = false
 )
 
 type Pager struct {
@@ -48,7 +49,7 @@ type Pager struct {
 }
 
 func Start() *Pager {
-	if noPager || !IsStdoutTty() {
+	if noPager || !IsStdoutTty() || !testing {
 		return &Pager{os.Stdout, nil, nil, nil, nil}
 	}
 
@@ -131,4 +132,8 @@ func RegisterOutputpagerFlags(flags *flag.FlagSet) {
 
 func IsStdoutTty() bool {
 	return goisatty.IsTerminal(os.Stdout.Fd())
+}
+
+func SetTestingArg(s bool) {
+	testing = s
 }
