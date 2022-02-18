@@ -114,10 +114,6 @@ func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
 }
 
-func (m Map) Empty() bool {
-	return m.root.empty()
-}
-
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {

@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,14 +53,12 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 		return novelNode{}, err
 	}
 
-	if len(bld.keys) == 0 {
-		// todo(andy)
-		// empty leaf node
-		return novelNode{}, nil
+	var lastKey val.Tuple
+	if len(bld.keys) > 0 {
+		lastKey = val.Tuple(bld.keys[len(bld.keys)-1])
+		lastKey = val.CloneTuple(ns.Pool(), lastKey)
 	}
 
-	lastKey := val.Tuple(bld.keys[len(bld.keys)-1])
-	lastKey = val.CloneTuple(ns.Pool(), lastKey)
 	treeCount := uint64(node.treeCount())
 
 	return novelNode{
