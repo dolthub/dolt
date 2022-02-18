@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -36,6 +37,7 @@ func TestContentAddress(t *testing.T) {
 	m := makeTree(t, keys, values)
 	require.NotNil(t, m)
 	//require.Equal(t, expected, m.hashOf())
+	assert.Equal(t, 12345, m.treeCount())
 }
 
 func makeTree(t *testing.T, keys, values []val.Tuple) Node {

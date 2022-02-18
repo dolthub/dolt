@@ -26,6 +26,12 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+func TestCounts(t *testing.T) {
+	t.Run("point counts", func(t *testing.T) {
+		testPointInserts(t, 10_000)
+	})
+}
+
 func TestMutableMapWrites(t *testing.T) {
 	scales := []int{
 		10,
@@ -137,6 +143,7 @@ func testMultiplePointUpdates(t *testing.T, batch int, mapCount int) {
 func testPointInserts(t *testing.T, mapCount int) {
 	// create map of even numbers
 	orig := ascendingIntMapWithStep(t, mapCount, 2)
+	assert.Equal(t, mapCount, orig.Count())
 
 	inserts := make([][2]val.Tuple, mapCount)
 	for i := range inserts {
@@ -155,6 +162,7 @@ func testPointInserts(t *testing.T, mapCount int) {
 		require.NoError(t, err)
 
 		m := materializeMap(t, mut)
+		//assert.Equal(t, mapCount+1, m.Count())
 		//assert.Equal(t, mapCount+1, countOrderedMap(t, m))
 
 		ok, err := m.Has(ctx, in[0])

@@ -23,80 +23,238 @@ package prolly
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 
+	fb "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
-	nodeItemAccumulatorSz = 256
+	nodeBuilderListSize = 256
 )
 
 type novelNode struct {
-	node    Node
-	ref     hash.Hash
-	lastKey nodeItem
+	node      Node
+	ref       hash.Hash
+	lastKey   nodeItem
+	treeCount uint64
 }
 
-func newNodeBuilder() *nodeBuilder {
-	return &nodeBuilder{
-		keys: make([]nodeItem, 0, nodeItemAccumulatorSz),
-		vals: make([]nodeItem, 0, nodeItemAccumulatorSz),
-	}
-}
+func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNode, error) {
+	node := bld.build(ns.Pool())
 
-type nodeBuilder struct {
-	keys, vals []nodeItem
-	size       int
-}
-
-func (m *nodeBuilder) count() int {
-	return len(m.keys)
-}
-
-func (m *nodeBuilder) hasCapacity(key, value nodeItem) bool {
-	sum := m.size + len(key) + len(value)
-	return sum <= int(maxVectorOffset)
-}
-
-func (m *nodeBuilder) append(key, value nodeItem) {
-	m.keys = append(m.keys, key)
-	m.vals = append(m.vals, value)
-	m.size += len(key) + len(value)
-}
-
-func (m *nodeBuilder) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	m.keys = m.keys[:0]
-	m.vals = m.vals[:0]
-	m.size = 0
-}
-
-// writeNewNode creates a Node from the keys items in |sc.currentPair|,
-// clears the keys items, then returns the new Node and a metaValue that
-// points to it. The Node is always eagerly written.
-func (m *nodeBuilder) writeNewNode(ctx context.Context, ns NodeStore, level int) (novelNode, error) {
-	node := buildMapNode(ns.Pool(), level, 0, m.keys, m.vals)
 	ref, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
 	}
 
-	if len(m.keys) == 0 {
+	if len(bld.keys) == 0 {
+		// todo(andy)
 		// empty leaf node
 		return novelNode{}, nil
 	}
 
-	lastKey := val.Tuple(m.keys[len(m.keys)-1])
+	lastKey := val.Tuple(bld.keys[len(bld.keys)-1])
 	lastKey = val.CloneTuple(ns.Pool(), lastKey)
+	treeCount := uint64(node.treeCount())
 
 	return novelNode{
-		ref:     ref,
-		node:    node,
-		lastKey: nodeItem(lastKey),
+		ref:       ref,
+		node:      node,
+		lastKey:   nodeItem(lastKey),
+		treeCount: treeCount,
 	}, nil
 }
 
-func (m *nodeBuilder) getFirstRef() hash.Hash {
-	return hash.New(m.vals[0])
+type nodeBuilder struct {
+	keys, values []nodeItem
+	size, level  int
+
+	subtrees subtreeCounts
+}
+
+func (nb *nodeBuilder) hasCapacity(key, value nodeItem) bool {
+	sum := nb.size + len(key) + len(value)
+	return sum <= int(maxVectorOffset)
+}
+
+func (nb *nodeBuilder) appendItems(key, value nodeItem, subtree uint64) {
+	nb.keys = append(nb.keys, key)
+	nb.values = append(nb.values, value)
+	nb.size += len(key) + len(value)
+	nb.subtrees = append(nb.subtrees, subtree)
+}
+
+func (nb *nodeBuilder) nodeCount() int {
+	return len(nb.keys)
+}
+
+func (nb *nodeBuilder) reset() {
+	// buffers are copied, it's safe to re-use the memory.
+	nb.keys = nb.keys[:0]
+	nb.values = nb.values[:0]
+	nb.size = 0
+	nb.subtrees = nb.subtrees[:0]
+}
+
+func (nb *nodeBuilder) firstChildRef() hash.Hash {
+	return hash.New(nb.values[0])
+}
+
+// writeNewNode creates a Node from the keys items in |sc.currentPair|,
+// clears the keys items, then returns the new Node and a metaValue that
+// points to it. The Node is always eagerly written.
+func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
+	var (
+		keyTups, keyOffs fb.UOffsetT
+		valTups, valOffs fb.UOffsetT
+		refArr, cardArr  fb.UOffsetT
+	)
+
+	keySz, valSz, bufSz := measureNodeSize(nb.keys, nb.values)
+	b := getMapBuilder(pool, bufSz)
+
+	// serialize keys and offsets
+	keyTups = writeItemBytes(b, nb.keys, keySz)
+	serial.TupleMapStartKeyOffsetsVector(b, len(nb.keys)-1)
+	keyOffs = b.EndVector(writeItemOffsets(b, nb.keys, keySz))
+
+	if nb.level == 0 {
+		// serialize ref tuples for leaf nodes
+		valTups = writeItemBytes(b, nb.values, valSz)
+		serial.TupleMapStartValueOffsetsVector(b, len(nb.values)-1)
+		valOffs = b.EndVector(writeItemOffsets(b, nb.values, valSz))
+	} else {
+		// serialize child refs and subtree counts for internal nodes
+		refArr = writeItemBytes(b, nb.values, valSz)
+		cardArr = writeCountArray(b, nb.subtrees)
+	}
+
+	// populate the node's vtable
+	serial.TupleMapStart(b)
+	serial.TupleMapAddKeyTuples(b, keyTups)
+	serial.TupleMapAddKeyOffsets(b, keyOffs)
+	if nb.level == 0 {
+		serial.TupleMapAddValueTuples(b, valTups)
+		serial.TupleMapAddValueOffsets(b, valOffs)
+		serial.TupleMapAddTreeCount(b, uint64(len(nb.keys)))
+	} else {
+		serial.TupleMapAddRefArray(b, refArr)
+		serial.TupleMapAddRefCardinalities(b, cardArr)
+		serial.TupleMapAddTreeCount(b, nb.subtrees.sum())
+	}
+	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
+	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
+	serial.TupleMapAddTreeLevel(b, uint8(nb.level))
+	b.Finish(serial.TupleMapEnd(b))
+
+	buf := b.FinishedBytes()
+	return mapNodeFromBytes(buf)
+}
+
+func newSubtreeCounts(count int) subtreeCounts {
+	return make([]uint64, 0, count)
+}
+
+type subtreeCounts []uint64
+
+func (sc subtreeCounts) sum() (s uint64) {
+	for _, count := range sc {
+		s += count
+	}
+	return
+}
+
+func readSubtreeCounts(n int, buf []byte) (sc subtreeCounts) {
+	sc = make([]uint64, 0, n)
+	for len(buf) > 0 {
+		count, n := binary.Uvarint(buf)
+		sc = append(sc, count)
+		buf = buf[n:]
+	}
+	return
+}
+
+func writeSubtreeCounts(sc subtreeCounts) (buf []byte) {
+	buf = make([]byte, len(sc)*binary.MaxVarintLen64)
+	pos := 0
+	for _, count := range sc {
+		n := binary.PutUvarint(buf[pos:], count)
+		pos += n
+	}
+	return buf
+}
+
+func newNodeBuilder(level int) *nodeBuilder {
+	return &nodeBuilder{
+		keys:     make([]nodeItem, 0, nodeBuilderListSize),
+		values:   make([]nodeItem, 0, nodeBuilderListSize),
+		subtrees: newSubtreeCounts(nodeBuilderListSize),
+		level:    level,
+	}
+}
+
+func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
+	b = fb.NewBuilder(0)
+	b.Bytes = pool.Get(uint64(sz))
+	return
+}
+
+// measureNodeSize returns the exact size of the tuple vectors for keys and values,
+// and an estimate of the overall size of the final flatbuffer.
+func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
+	for i := range keys {
+		keySz += len(keys[i])
+		valSz += len(values[i])
+	}
+
+	// constraints enforced upstream
+	if keySz > int(maxVectorOffset) {
+		panic(fmt.Sprintf("key vector exceeds size limit ( %d > %d )", keySz, maxVectorOffset))
+	}
+	if valSz > int(maxVectorOffset) {
+		panic(fmt.Sprintf("value vector exceeds size limit ( %d > %d )", valSz, maxVectorOffset))
+	}
+
+	bufSz += keySz + valSz               // tuples
+	bufSz += len(keys)*2 + len(values)*2 // offsets
+	bufSz += 8 + 1 + 1 + 1               // metadata
+	bufSz += 72                          // vtable (approx)
+
+	return
+}
+
+func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
+	b.Prep(fb.SizeUOffsetT, sumSz)
+
+	stop := int(b.Head())
+	start := stop - sumSz
+	for _, item := range items {
+		copy(b.Bytes[start:stop], item)
+		start += len(item)
+	}
+
+	start = stop - sumSz
+	return b.CreateByteVector(b.Bytes[start:stop])
+}
+
+func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
+	off := sz
+	for i := len(items) - 1; i > 0; i-- { // omit first offset
+		off -= len(items[i])
+		b.PrependUint16(uint16(off))
+		cnt++
+	}
+	return
+}
+
+func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
+	// todo(andy) write without copy
+	arr := writeSubtreeCounts(sc)
+	return b.CreateByteVector(arr)
 }

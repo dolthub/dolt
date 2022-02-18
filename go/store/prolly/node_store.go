@@ -77,6 +77,8 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 	if err != nil {
 		return Node{}, err
 	}
+	assertTrue(c.Size() > 0)
+
 	ns.cache.insert(c)
 
 	return mapNodeFromBytes(c.Data()), err
@@ -85,6 +87,8 @@ func (ns nodeStore) Read(ctx context.Context, ref hash.Hash) (Node, error) {
 // Write implements NodeStore.
 func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	c := chunks.NewChunk(nd.bytes())
+	assertTrue(c.Size() > 0)
+
 	if err := ns.store.Put(ctx, c); err != nil {
 		return hash.Hash{}, err
 	}

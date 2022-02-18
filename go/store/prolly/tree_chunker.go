@@ -56,7 +56,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		cur:      cur,
 		parent:   nil,
 		level:    level,
-		builder:  newNodeBuilder(),
+		builder:  newNodeBuilder(level),
 		newSplit: newSplit,
 		splitter: newSplit(byte(level % 256)),
 		ns:       ns,
@@ -83,13 +83,17 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	idx := tc.cur.idx
 	tc.cur.skipToNodeStart()
 
+	var ok bool
 	for tc.cur.idx < idx {
-		var ok bool
-		ok, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
+		ok, err = tc.append(ctx,
+			tc.cur.currentKey(),
+			tc.cur.currentValue(),
+			tc.cur.currentSubtreeSz())
+		assertFalse(ok)
+
 		if err != nil {
 			return err
 		}
-		assertFalse(ok)
 
 		_, err = tc.cur.advance(ctx)
 		if err != nil {
@@ -102,7 +106,7 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 
 // AddPair adds a val.Tuple pair to the treeChunker.
 func (tc *treeChunker) AddPair(ctx context.Context, key, value val.Tuple) error {
-	_, err := tc.append(ctx, nodeItem(key), nodeItem(value))
+	_, err := tc.append(ctx, nodeItem(key), nodeItem(value), 1)
 	return err
 }
 
@@ -111,7 +115,7 @@ func (tc *treeChunker) UpdatePair(ctx context.Context, key, value val.Tuple) err
 	if err := tc.skip(ctx); err != nil {
 		return err
 	}
-	_, err := tc.append(ctx, nodeItem(key), nodeItem(value))
+	_, err := tc.append(ctx, nodeItem(key), nodeItem(value), 1)
 	return err
 }
 
@@ -158,7 +162,10 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 
 		// append items until we catchup with |next|, or until
 		// we resynchronize with the previous tree.
-		ok, err := tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
+		ok, err := tc.append(ctx,
+			tc.cur.currentKey(),
+			tc.cur.currentValue(),
+			tc.cur.currentSubtreeSz())
 		if err != nil {
 			return err
 		}
@@ -227,7 +234,7 @@ func (tc *treeChunker) skip(ctx context.Context) error {
 // Append adds a new key-value pair to the chunker, validating the new pair to ensure
 // that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
-func (tc *treeChunker) append(ctx context.Context, key, value nodeItem) (bool, error) {
+func (tc *treeChunker) append(ctx context.Context, key, value nodeItem, subtree uint64) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
 	// (2) The total size of a Node's data cannot exceed |maxVectorOffset|.
@@ -239,7 +246,7 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem) (bool, e
 	//     but we enforce this constraint for all internal nodes of the tree.
 
 	// constraint (3)
-	degenerate := !tc.isLeaf() && tc.builder.count() == 1
+	degenerate := !tc.isLeaf() && tc.builder.nodeCount() == 1
 
 	// constraint (2)
 	overflow := !tc.builder.hasCapacity(key, value)
@@ -259,7 +266,7 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem) (bool, e
 		}
 	}
 
-	tc.builder.append(key, value)
+	tc.builder.appendItems(key, value, subtree)
 
 	err := tc.splitter.Append(key, value)
 	if err != nil {
@@ -267,7 +274,7 @@ func (tc *treeChunker) append(ctx context.Context, key, value nodeItem) (bool, e
 	}
 
 	// recompute with updated |tc.keys|
-	degenerate = !tc.isLeaf() && tc.builder.count() == 1
+	degenerate = !tc.isLeaf() && tc.builder.nodeCount() == 1
 
 	if tc.splitter.CrossedBoundary() && !degenerate {
 		err := tc.handleChunkBoundary(ctx)
@@ -286,15 +293,14 @@ func (tc *treeChunker) appendToParent(ctx context.Context, novel novelNode) (boo
 			return false, err
 		}
 	}
-	// todo(andy): append count
 
-	return tc.parent.append(ctx, novel.lastKey, novel.ref[:])
+	return tc.parent.append(ctx, novel.lastKey, novel.ref[:], novel.treeCount)
 }
 
 func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {
-	assertTrue(tc.builder.count() > 0)
+	assertTrue(tc.builder.nodeCount() > 0)
 
-	novel, err := tc.builder.writeNewNode(ctx, tc.ns, tc.level)
+	novel, err := writeNewNode(ctx, tc.ns, tc.builder)
 	if err != nil {
 		return err
 	}
@@ -343,7 +349,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	// There is pending content above us, so we must push any remaining items from this level up and allow some parent
 	// to find the root of the resulting tree.
 	if tc.parent != nil && tc.parent.anyPending() {
-		if tc.builder.count() > 0 {
+		if tc.builder.nodeCount() > 0 {
 			// |tc.keys| are the last items at this level of the tree,
 			// make a chunk out of them
 			if err := tc.handleChunkBoundary(ctx); err != nil {
@@ -370,20 +376,16 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 	//     (never hit a boundary), or
 	// (2) This in an internal Node of the tree which contains multiple references to child nodes. In either case,
 	//     this is the canonical root of the tree.
-	if tc.isLeaf() || tc.builder.count() > 1 {
-		newNd, err := tc.builder.writeNewNode(ctx, tc.ns, tc.level)
-		if err != nil {
-			return Node{}, err
-		}
-		return newNd.node, nil
+	if tc.isLeaf() || tc.builder.nodeCount() > 1 {
+		novel, err := writeNewNode(ctx, tc.ns, tc.builder)
+		return novel.node, err
 	}
-
 	// (3) This is an internal Node of the tree with a single novelNode. This is a non-canonical root, and we must walk
 	//     down until we find cases (1) or (2), above.
 	assertTrue(!tc.isLeaf())
-	assertTrue(tc.builder.count() == 1)
+	assertTrue(tc.builder.nodeCount() == 1)
 
-	mt := tc.builder.getFirstRef()
+	mt := tc.builder.firstChildRef()
 	for {
 		child, err := fetchChildNode(ctx, tc.ns, mt)
 		if err != nil {
@@ -403,7 +405,10 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.valid() {
 		var ok bool
-		ok, err = tc.append(ctx, tc.cur.currentKey(), tc.cur.currentValue())
+		ok, err = tc.append(ctx,
+			tc.cur.currentKey(),
+			tc.cur.currentValue(),
+			tc.cur.currentSubtreeSz())
 		if err != nil {
 			return err
 		}
@@ -433,7 +438,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
 func (tc *treeChunker) anyPending() bool {
-	if tc.builder.count() > 0 {
+	if tc.builder.nodeCount() > 0 {
 		return true
 	}
 

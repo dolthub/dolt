@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 	"unsafe"
@@ -77,11 +78,36 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 168, int(sz))
+	assert.Equal(t, 144, int(sz))
+}
+
+func TestCountArray(t *testing.T) {
+	for k := 0; k < 100; k++ {
+		n := testRand.Intn(45) + 5
+
+		counts := make(subtreeCounts, n)
+		sum := uint64(0)
+		for i := range counts {
+			c := testRand.Uint64() % math.MaxUint32
+			counts[i] = c
+			sum += c
+		}
+		assert.Equal(t, sum, counts.sum())
+
+		// round trip the array
+		buf := writeSubtreeCounts(counts)
+		counts = readSubtreeCounts(n, buf)
+		assert.Equal(t, sum, counts.sum())
+	}
 }
 
 func newLeafNode(keys, values []nodeItem) Node {
-	return buildMapNode(sharedPool, 0, 0, keys, values)
+	b := &nodeBuilder{
+		keys:   keys,
+		values: values,
+		level:  0,
+	}
+	return b.build(sharedPool)
 }
 
 func newTupleLeafNode(keys, values []val.Tuple) Node {
@@ -93,7 +119,7 @@ func newTupleLeafNode(keys, values []val.Tuple) Node {
 	for i := range vs {
 		vs[i] = nodeItem(values[i])
 	}
-	return buildMapNode(sharedPool, 0, 0, ks, vs)
+	return newLeafNode(ks, vs)
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
