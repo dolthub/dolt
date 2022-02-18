@@ -125,7 +125,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 
 func TestResolveOneHash(t *testing.T) {
 	// create chunks
-	chunks := [][]byte {
+	chunks := [][]byte{
 		[]byte("chunk1"),
 	}
 
@@ -154,7 +154,7 @@ func TestResolveOneHash(t *testing.T) {
 
 func TestResolveFewHash(t *testing.T) {
 	// create chunks
-	chunks := [][]byte {
+	chunks := [][]byte{
 		[]byte("chunk1"),
 		[]byte("chunk2"),
 		[]byte("chunk3"),
