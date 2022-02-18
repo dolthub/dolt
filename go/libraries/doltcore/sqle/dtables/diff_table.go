@@ -239,7 +239,7 @@ type commitInfo struct {
 }
 
 // Next returns the next row
-func (itr *diffRowItr) Next(sqlCtx *sql.Context) (sql.Row, error) {
+func (itr *diffRowItr) Next(*sql.Context) (sql.Row, error) {
 	r, _, err := itr.diffSrc.NextDiff()
 
 	if err != nil {
