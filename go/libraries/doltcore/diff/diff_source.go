@@ -24,6 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -36,14 +38,16 @@ type RowDiffSource struct {
 	joiner     *rowconv.Joiner
 	oldRowConv *rowconv.RowConverter
 	newRowConv *rowconv.RowConverter
+	sqlCtx     *sql.Context
 }
 
-func NewRowDiffSource(ad RowDiffer, joiner *rowconv.Joiner) *RowDiffSource {
+func NewRowDiffSource(ad RowDiffer, joiner *rowconv.Joiner, ctx *sql.Context) *RowDiffSource {
 	return &RowDiffSource{
 		ad,
 		joiner,
 		rowconv.IdentityConverter,
 		rowconv.IdentityConverter,
+		ctx,
 	}
 }
 
@@ -90,8 +94,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 			return nil, pipeline.ImmutableProperties{}, err
 		}
 
-		rows[From], err = rdRd.oldRowConv.Convert(oldRow)
-
+		rows[From], err = rdRd.oldRowConv.ConvertWithWarnings(rdRd.sqlCtx, oldRow)
 		if err != nil {
 			return nil, pipeline.NoProps, err
 		}
@@ -109,8 +112,7 @@ func (rdRd *RowDiffSource) NextDiff() (row.Row, pipeline.ImmutableProperties, er
 			return nil, pipeline.ImmutableProperties{}, err
 		}
 
-		rows[To], err = rdRd.newRowConv.Convert(newRow)
-
+		rows[To], err = rdRd.newRowConv.ConvertWithWarnings(rdRd.sqlCtx, newRow)
 		if err != nil {
 			return nil, pipeline.NoProps, err
 		}

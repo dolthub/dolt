@@ -49,6 +49,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type diffOutput int
@@ -639,7 +641,8 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw type
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
 
-	src := diff.NewRowDiffSource(rd, joiner)
+	sqlCtx := ctx.(sql.Context)
+	src := diff.NewRowDiffSource(rd, joiner, &sqlCtx)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)
