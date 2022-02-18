@@ -122,3 +122,63 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 		t.Log("\t", h)
 	}
 }
+
+func TestResolveOneHash(t *testing.T) {
+	// create chunks
+	chunks := [][]byte {
+		[]byte("chunk1"),
+	}
+
+	// build table index
+	td, _, err := buildTable(chunks)
+	tIdx, err := parseTableIndexByCopy(td)
+	require.NoError(t, err)
+
+	// get hashes out
+	hashes := make([]string, len(chunks))
+	for i, c := range chunks {
+		hashes[i] = computeAddr(c).String()
+		t.Log(hashes[i])
+	}
+
+	// resolve them
+	for _, h := range hashes {
+		// try every length
+		for i := 0; i < 32; i++ {
+			res, err := tIdx.ResolveShortHash(h[:i])
+			require.NoError(t, err)
+			assert.Equal(t, 1, len(res))
+		}
+	}
+}
+
+func TestResolveFewHash(t *testing.T) {
+	// create chunks
+	chunks := [][]byte {
+		[]byte("chunk1"),
+		[]byte("chunk2"),
+		[]byte("chunk3"),
+	}
+
+	// build table index
+	td, _, err := buildTable(chunks)
+	tIdx, err := parseTableIndexByCopy(td)
+	require.NoError(t, err)
+
+	// get hashes out
+	hashes := make([]string, len(chunks))
+	for i, c := range chunks {
+		hashes[i] = computeAddr(c).String()
+		t.Log(hashes[i])
+	}
+
+	// resolve them
+	for _, h := range hashes {
+		// try every length
+		for i := 0; i < 32; i++ {
+			res, err := tIdx.ResolveShortHash(h[:i])
+			require.NoError(t, err)
+			assert.Less(t, 0, len(res))
+		}
+	}
+}
