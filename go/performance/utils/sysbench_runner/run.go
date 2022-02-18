@@ -39,8 +39,10 @@ func Run(config *Config) error {
 		var results Results
 		switch serverConfig.Server {
 		case Dolt:
+			fmt.Println("Running dolt sysbench test")
 			results, err = BenchmarkDolt(ctx, config, serverConfig)
 		case MySql:
+			fmt.Println("Running mysql sysbench test")
 			results, err = BenchmarkMysql(ctx, config, serverConfig)
 		default:
 			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))

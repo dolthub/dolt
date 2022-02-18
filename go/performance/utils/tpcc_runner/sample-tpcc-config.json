@@ -1,11 +1,19 @@
 {
   "Servers": [
     {
+      "Host": "127.0.0.1",
+      "Port": 3307,
+      "Server": "dolt",
+      "Version": "HEAD",
+      "ResultsFormat": "csv",
+      "ServerExec": "/Users/vinairachakonda/go/bin/dolt"
+    },
+    {
       "Server": "mysql",
       "Version": "8.0.22",
       "ResultsFormat": "csv",
       "ServerExec": "/usr/local/bin/mysqld",
-      "ConnectionProtocol": "unix"
+      "ConnectionProtocol": "tcp"
     }
   ],
   "ScriptDir":"/Users/vinairachakonda/go/src/dolthub/sysbench-tpcc",
