@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
-	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
@@ -640,8 +639,7 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw type
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
 
-	sqlCtx := ctx.(sql.Context)
-	src := diff.NewRowDiffSource(rd, joiner, &sqlCtx)
+	src := diff.NewRowDiffSource(rd, joiner, nil)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)
