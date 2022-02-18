@@ -100,7 +100,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 			continue
 		}
 		mask.set(i)
-		offs.putOffset(count, pos)
+		writeOffset(count, pos, offs)
 		count++
 
 		copy(tup[pos:pos+sizeOf(v)], v)
@@ -132,16 +132,33 @@ func allocateTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup 
 
 // GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
-	// first check if the field is NULL
-	if !tup.mask().present(i) {
+	sz := tup.size()
+
+	// slice the null bitmask
+	bitmaskSz := maskSize(tup.fieldCount())
+	maskStop := sz - numFieldsSize
+	maskStart := maskStop - bitmaskSz
+	bitmask := memberMask(tup[maskStart:maskStop])
+
+	// check if the field is NULL
+	if !bitmask.present(i) {
 		return nil
 	}
 
 	// translate from field index to value
 	// index to compensate for NULL fields
-	i = tup.fieldToValue(i)
+	j := bitmask.countPrefix(i) - 1
 
-	return slicedTupleBuffer(tup).GetSlice(i)
+	// slice the offsets array
+	offStop := sz - numFieldsSize - bitmaskSz
+	bufStop := offStop - offsetsSize(bitmask.count())
+
+	sb := SlicedBuffer{
+		Buf:  tup[:bufStop],
+		Offs: offsets(tup[bufStop:offStop]),
+	}
+
+	return sb.GetSlice(j)
 }
 
 func (tup Tuple) size() ByteSize {
