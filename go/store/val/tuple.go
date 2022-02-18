@@ -27,6 +27,7 @@ const (
 	numFieldsSize ByteSize = 2
 )
 
+// todo(andy): update comment
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
 //   NULL Field. Values are packed contiguously from the front of the Tuple. The
@@ -91,17 +92,17 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		panic("tuple data size exceeds maximum")
 	}
 
-	tup, offs, mask := allocateTuple(pool, pos, count, len(values))
+	tup, offs := allocateTuple(pool, pos, len(values))
 
 	count = 0
 	pos = ByteSize(0)
-	for i, v := range values {
+	for _, v := range values {
+		writeOffset(count, pos, offs)
+		count++
+
 		if isNull(v) {
 			continue
 		}
-		mask.set(i)
-		writeOffset(count, pos, offs)
-		count++
 
 		copy(tup[pos:pos+sizeOf(v)], v)
 		pos += sizeOf(v)
@@ -116,49 +117,35 @@ func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 	return buf
 }
 
-func allocateTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs offsets, ms memberMask) {
-	offSz := offsetsSize(values)
-	maskSz := maskSize(fields)
-	countSz := numFieldsSize
-
-	tup = pool.Get(uint64(bufSz + offSz + maskSz + countSz))
+func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, offs offsets) {
+	offSz := offsetsSize(fields)
+	tup = pool.Get(uint64(bufSz + offSz + numFieldsSize))
 
 	writeFieldCount(tup, fields)
 	offs = offsets(tup[bufSz : bufSz+offSz])
-	ms = memberMask(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
 }
 
 // GetField returns the value for field |i|.
-func (tup Tuple) GetField(i int) []byte {
+func (tup Tuple) GetField(i int) (field []byte) {
 	sz := tup.size()
-
-	// slice the null bitmask
-	bitmaskSz := maskSize(tup.fieldCount())
-	maskStop := sz - numFieldsSize
-	maskStart := maskStop - bitmaskSz
-	bitmask := memberMask(tup[maskStart:maskStop])
-
-	// check if the field is NULL
-	if !bitmask.present(i) {
-		return nil
-	}
-
-	// translate from field index to value
-	// index to compensate for NULL fields
-	j := bitmask.countPrefix(i) - 1
+	cnt := tup.Count()
 
 	// slice the offsets array
-	offStop := sz - numFieldsSize - bitmaskSz
-	bufStop := offStop - offsetsSize(bitmask.count())
+	offStop := sz - numFieldsSize
+	bufStop := offStop - offsetsSize(cnt)
 
 	sb := SlicedBuffer{
 		Buf:  tup[:bufStop],
 		Offs: offsets(tup[bufStop:offStop]),
 	}
+	field = sb.GetSlice(i)
 
-	return sb.GetSlice(j)
+	if len(field) == 0 {
+		field = nil // NULL
+	}
+	return
 }
 
 func (tup Tuple) size() ByteSize {
@@ -172,20 +159,6 @@ func (tup Tuple) Count() int {
 func (tup Tuple) fieldCount() int {
 	sl := tup[tup.size()-numFieldsSize:]
 	return int(readUint16(sl))
-}
-
-func (tup Tuple) valueCount() int {
-	return tup.mask().count()
-}
-
-func (tup Tuple) mask() memberMask {
-	stop := tup.size() - numFieldsSize
-	start := stop - maskSize(tup.fieldCount())
-	return memberMask(tup[start:stop])
-}
-
-func (tup Tuple) fieldToValue(i int) int {
-	return tup.mask().countPrefix(i) - 1
 }
 
 func isNull(val []byte) bool {
