@@ -49,8 +49,10 @@ type Pager struct {
 }
 
 func Start() *Pager {
-	if noPager || !IsStdoutTty() || !testing {
-		return &Pager{os.Stdout, nil, nil, nil, nil}
+	if !testing {
+		if noPager || !IsStdoutTty() {
+			return &Pager{os.Stdout, nil, nil, nil, nil}
+		}
 	}
 
 	var lessPath string
