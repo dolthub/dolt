@@ -48,12 +48,18 @@ func Run(config *Config) error {
 			panic(fmt.Sprintf("unexpected server type: %s", serverConfig.Server))
 		}
 		if err != nil {
-			return err
+			panic(err)
 		}
+
+		fmt.Println(fmt.Sprintf("Successfuly finished %s", serverConfig.Server))
+
 		err = WriteResults(serverConfig, results)
 		if err != nil {
-			return err
+			fmt.Println("fucked  writign results")
+			panic(err)
 		}
+
+		fmt.Println(fmt.Sprintf("Successfuly wrote results for %s", serverConfig.Server))
 	}
 	return nil
 }
@@ -66,7 +72,7 @@ func sysbenchVersion(ctx context.Context) error {
 func WriteResults(serverConfig *ServerConfig, results Results) error {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return err
+		panic(err)
 	}
 	var writePath string
 	switch serverConfig.ResultsFormat {
