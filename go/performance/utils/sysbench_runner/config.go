@@ -67,8 +67,8 @@ var defaultMysqlServerParams = []string{"--user=mysql"}
 
 var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
-	NewConfigTest("oltp_insert", []string{}, false),
-	NewConfigTest("bulk_insert", []string{}, false),
+	//NewConfigTest("oltp_insert", []string{}, false),
+	//NewConfigTest("bulk_insert", []string{}, false),
 	//NewConfigTest("oltp_point_select", []string{}, false),
 	//NewConfigTest("select_random_points", []string{}, false),
 	//NewConfigTest("select_random_ranges", []string{}, false),
