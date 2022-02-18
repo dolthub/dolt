@@ -46,8 +46,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 
 		// launch the mysql server
 		gServer.Go(func() error {
-			err := server.Run()
-			return err
+			return server.Run()
 		})
 
 		// sleep to allow the server to start

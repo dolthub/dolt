@@ -250,7 +250,7 @@ func WriteResultsCsv(filename string, results Results) (err error) {
 	var file *os.File
 	file, err = os.Create(filename)
 	if err != nil {
-		return err
+		return
 	}
 	defer func() {
 		closeErr := file.Close()
