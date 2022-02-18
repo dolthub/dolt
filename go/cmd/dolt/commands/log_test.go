@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/osutil"
-	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"os"
 	"strings"
 	"syscall"
@@ -28,7 +26,9 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/osutil"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/util/outputpager"
 )
 
 func TestLog(t *testing.T) {
