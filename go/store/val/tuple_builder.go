@@ -201,12 +201,12 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.pos += sz
 }
 
-// PutBytes writes a []byte to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutBytes(i int, v []byte) {
-	tb.Desc.expectEncoding(i, BytesEnc)
+// PutByteString writes a []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutByteString(i int, v []byte) {
+	tb.Desc.expectEncoding(i, ByteStringEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], v)
+	writeByteString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -215,7 +215,7 @@ func (tb *TupleBuilder) PutJSON(i int, v []byte) {
 	tb.Desc.expectEncoding(i, JSONEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], v)
+	writeByteString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -224,7 +224,7 @@ func (tb *TupleBuilder) PutGeometry(i int, v []byte) {
 	tb.Desc.expectEncoding(i, GeometryEnc)
 	sz := ByteSize(len(v))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], v)
+	writeByteString(tb.fields[i], v)
 	tb.pos += sz
 }
 
@@ -237,6 +237,6 @@ func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	}
 	sz := ByteSize(len(buf))
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeBytes(tb.fields[i], buf)
+	writeRaw(tb.fields[i], buf)
 	tb.pos += sz
 }

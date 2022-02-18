@@ -308,10 +308,10 @@ func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 // GetBytes reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
-	td.expectEncoding(i, BytesEnc)
+	td.expectEncoding(i, ByteStringEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v = readBytes(b)
+		v = readByteString(b)
 		ok = true
 	}
 	return
@@ -323,7 +323,7 @@ func (td TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, JSONEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v = readBytes(b)
+		v = readByteString(b)
 		ok = true
 	}
 	return
@@ -335,7 +335,7 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, GeometryEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v = readBytes(b)
+		v = readByteString(b)
 		ok = true
 	}
 	return
@@ -406,7 +406,7 @@ func (td TupleDesc) Format(tup Tuple) string {
 		case StringEnc:
 			v, _ := td.GetString(i, tup)
 			sb.WriteString(v)
-		case BytesEnc:
+		case ByteStringEnc:
 			v, _ := td.GetBytes(i, tup)
 			sb.Write(v)
 		default:
