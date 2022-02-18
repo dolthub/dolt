@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
@@ -49,8 +50,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type diffOutput int
