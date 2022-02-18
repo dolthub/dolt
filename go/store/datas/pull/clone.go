@@ -17,12 +17,12 @@ package pull
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/cenkalti/backoff"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
 
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -59,6 +59,7 @@ type CloneTableFileEvent int
 const (
 	Listed = iota
 	DownloadStart
+	DownloadStats
 	DownloadSuccess
 	DownloadFailed
 )
@@ -66,6 +67,7 @@ const (
 type TableFileEvent struct {
 	EventType  CloneTableFileEvent
 	TableFiles []nbs.TableFile
+	Stats      []iohelp.ReadStats
 }
 
 // mapTableFiles returns the list of all fileIDs for the table files, and a map from fileID to nbs.TableFile
@@ -83,8 +85,8 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 	return fileIds, fileIDtoTblFile, fileIDtoNumChunks
 }
 
-func CloseWithErr(c io.Closer, err *error) {
-	e := c.Close()
+func stopWithErr(stats *iohelp.ReaderWithStats, err *error) {
+	e := stats.Stop()
 	if *err == nil && e != nil {
 		*err = e
 	}
@@ -111,7 +113,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 	desiredFiles, fileIDToTF, fileIDToNumChunks := mapTableFiles(tblFiles)
 	completed := make([]bool, len(desiredFiles))
 
-	report(TableFileEvent{Listed, tblFiles})
+	report(TableFileEvent{EventType: Listed, TableFiles: tblFiles})
 
 	download := func(ctx context.Context) error {
 		sem := semaphore.NewWeighted(concurrentTableFileDownloads)
@@ -136,20 +138,29 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				var rd io.ReadCloser
-				if rd, err = tblFile.Open(ctx); err != nil {
-					return err
-				}
-				defer CloseWithErr(rd, &err)
-
-				report(TableFileEvent{DownloadStart, []nbs.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rd, 0, nil)
+				rd, contentLength, err := tblFile.Open(ctx)
 				if err != nil {
-					report(TableFileEvent{DownloadFailed, []nbs.TableFile{tblFile}})
+					return err
+				}
+				rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
+				defer stopWithErr(rdStats, &err)
+
+				rdStats.Start(func(s iohelp.ReadStats) {
+					report(TableFileEvent{
+						EventType:  DownloadStats,
+						TableFiles: []nbs.TableFile{tblFile},
+						Stats:      []iohelp.ReadStats{s},
+					})
+				})
+
+				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rdStats, contentLength, nil)
+				if err != nil {
+					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})
 					return err
 				}
 
-				report(TableFileEvent{DownloadSuccess, []nbs.TableFile{tblFile}})
+				report(TableFileEvent{EventType: DownloadSuccess, TableFiles: []nbs.TableFile{tblFile}})
 				completed[idx] = true
 				return nil
 			})

@@ -643,6 +643,11 @@ func (tr tableReader) reader(ctx context.Context) (io.Reader, error) {
 	return io.LimitReader(&readerAdapter{tr.r, 0, ctx}, int64(i.TableFileSize())), nil
 }
 
+func (tr tableReader) size() (uint64, error) {
+	i, _ := tr.index()
+	return i.TableFileSize(), nil
+}
+
 func (tr tableReader) Close() error {
 	return tr.tableIndex.Close()
 }

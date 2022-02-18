@@ -385,8 +385,8 @@ func (ttf *TestFailingTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
+func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
+	return io.NopCloser(bytes.NewReader([]byte{0x00})), 1, errors.New("this is a test error")
 }
 
 type TestTableFile struct {
@@ -403,8 +403,8 @@ func (ttf *TestTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(ttf.data)), nil
+func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
+	return io.NopCloser(bytes.NewReader(ttf.data)), uint64(len(ttf.data)), nil
 }
 
 type TestTableFileWriter struct {
