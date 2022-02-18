@@ -250,8 +250,7 @@ func WriteResultsCsv(filename string, results Results) (err error) {
 	var file *os.File
 	file, err = os.Create(filename)
 	if err != nil {
-		panic(err)
-		return
+		return err
 	}
 	defer func() {
 		closeErr := file.Close()
@@ -274,7 +273,7 @@ func WriteResultsCsv(filename string, results Results) (err error) {
 		for _, field := range headers {
 			val, err := FromHeaderResultColumnValue(field, r)
 			if err != nil {
-				panic(err)
+				return err
 			}
 			row = append(row, val)
 		}
@@ -286,7 +285,7 @@ func WriteResultsCsv(filename string, results Results) (err error) {
 
 	csvWriter.Flush()
 	if err := csvWriter.Error(); err != nil {
-		panic(err)
+		return err
 	}
 	return
 }

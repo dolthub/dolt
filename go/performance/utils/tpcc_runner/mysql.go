@@ -71,7 +71,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 		cancel()
 	}()
 
-	tests := getTests(config, serverConfig.Server)
+	tests := getTests(config)
 
 	results := make(sysbench_runner.Results, 0)
 
