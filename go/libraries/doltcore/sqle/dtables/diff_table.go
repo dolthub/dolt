@@ -77,7 +77,7 @@ const PrimaryKeyChangeWarningCode int = 1105 // Since this our own custom warnin
 func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
 
-	table, ok, err := root.GetTable(ctx, tblName)
+	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
