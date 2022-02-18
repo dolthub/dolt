@@ -165,10 +165,10 @@ func (tb *TupleBuilder) PutTimestamp(i int, v time.Time) {
 	tb.pos += timestampSize
 }
 
-// PutString writes a string to the ith field of the Tuple being built.
+// PutSqlTime writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutSqlTime(i int, v string) {
 	tb.Desc.expectEncoding(i, TimeEnc)
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeString(tb.fields[i], v)
 	tb.pos += sz
@@ -186,7 +186,7 @@ func (tb *TupleBuilder) PutYear(i int, v int16) {
 func (tb *TupleBuilder) PutDecimal(i int, v string) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
 	// todo(andy): temporary implementation
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeString(tb.fields[i], v)
 	tb.pos += sz
@@ -195,7 +195,7 @@ func (tb *TupleBuilder) PutDecimal(i int, v string) {
 // PutString writes a string to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutString(i int, v string) {
 	tb.Desc.expectEncoding(i, StringEnc)
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeString(tb.fields[i], v)
 	tb.pos += sz
@@ -204,7 +204,7 @@ func (tb *TupleBuilder) PutString(i int, v string) {
 // PutByteString writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutByteString(i int, v []byte) {
 	tb.Desc.expectEncoding(i, ByteStringEnc)
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeByteString(tb.fields[i], v)
 	tb.pos += sz
@@ -213,7 +213,7 @@ func (tb *TupleBuilder) PutByteString(i int, v []byte) {
 // PutJSON writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutJSON(i int, v []byte) {
 	tb.Desc.expectEncoding(i, JSONEnc)
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeByteString(tb.fields[i], v)
 	tb.pos += sz
@@ -222,7 +222,7 @@ func (tb *TupleBuilder) PutJSON(i int, v []byte) {
 // PutGeometry writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutGeometry(i int, v []byte) {
 	tb.Desc.expectEncoding(i, GeometryEnc)
-	sz := ByteSize(len(v))
+	sz := ByteSize(len(v)) + 1
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeByteString(tb.fields[i], v)
 	tb.pos += sz

@@ -104,6 +104,11 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 	return
 }
 
+func (td TupleDesc) WithoutFixedAccess() TupleDesc {
+	td.fast = nil
+	return td
+}
+
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
 		start, stop := td.fast[i][0], td.fast[i][1]
