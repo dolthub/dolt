@@ -64,8 +64,8 @@ type defaultCompare struct{}
 
 func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i := range desc.fast {
-		l, r := desc.fast.GetField(i, left), desc.fast.GetField(i, right)
-		cmp = compare(desc.Types[i], l, r)
+		start, stop := desc.fast[i][0], desc.fast[i][1]
+		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
 		if cmp != 0 {
 			return cmp
 		}
@@ -85,10 +85,6 @@ func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 var _ TupleComparator = defaultCompare{}
 
 type fixedAccess [][2]ByteSize
-
-func (acc fixedAccess) GetField(i int, tup Tuple) []byte {
-	return tup[acc[i][0]:acc[i][1]]
-}
 
 func makeFixedAccess(types []Type) (acc fixedAccess) {
 	acc = make(fixedAccess, 0, len(types))
@@ -110,7 +106,8 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
-		return td.fast.GetField(i, tup)
+		start, stop := td.fast[i][0], td.fast[i][1]
+		return tup[start:stop]
 	}
 	return tup.GetField(i)
 }
