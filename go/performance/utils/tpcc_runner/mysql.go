@@ -16,6 +16,7 @@ package tpcc_runner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -95,6 +96,7 @@ func BenchmarkMysql(ctx context.Context, config *TpccBenchmarkConfig, serverConf
 			// we only exit in error if this is not the
 			// error
 			if err.Error() != "signal: killed" {
+				fmt.Println(err.Error())
 				close(quit)
 				wg.Wait()
 				return nil, err

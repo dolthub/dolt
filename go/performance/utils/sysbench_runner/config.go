@@ -69,14 +69,14 @@ var defaultSysbenchTests = []*ConfigTest{
 	NewConfigTest("oltp_read_only", []string{}, false),
 	NewConfigTest("oltp_insert", []string{}, false),
 	NewConfigTest("bulk_insert", []string{}, false),
-	NewConfigTest("oltp_point_select", []string{}, false),
-	NewConfigTest("select_random_points", []string{}, false),
-	NewConfigTest("select_random_ranges", []string{}, false),
-	NewConfigTest("oltp_delete", []string{}, false),
-	NewConfigTest("oltp_write_only", []string{}, false),
-	NewConfigTest("oltp_read_write", []string{}, false),
-	NewConfigTest("oltp_update_index", []string{}, false),
-	NewConfigTest("oltp_update_non_index", []string{}, false),
+	//NewConfigTest("oltp_point_select", []string{}, false),
+	//NewConfigTest("select_random_points", []string{}, false),
+	//NewConfigTest("select_random_ranges", []string{}, false),
+	//NewConfigTest("oltp_delete", []string{}, false),
+	//NewConfigTest("oltp_write_only", []string{}, false),
+	//NewConfigTest("oltp_read_write", []string{}, false),
+	//NewConfigTest("oltp_update_index", []string{}, false),
+	//NewConfigTest("oltp_update_non_index", []string{}, false),
 }
 
 type ServerType string

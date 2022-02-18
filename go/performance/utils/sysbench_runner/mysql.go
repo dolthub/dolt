@@ -109,6 +109,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		}
 	}
 
+	fmt.Println("Successfully killed server")
 	close(quit)
 	wg.Wait()
 
