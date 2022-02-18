@@ -447,7 +447,7 @@ func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) 
 	return ss, nil
 }
 
-// creates a RowConverter for transforming rows with the given schema to this super schema.
+// rowConvForSchema creates a RowConverter for transforming rows with the given schema to this super schema.
 func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
 	if schema.SchemasAreEqual(sch, schema.EmptySchema) {
 		return rowconv.IdentityConverter, nil
