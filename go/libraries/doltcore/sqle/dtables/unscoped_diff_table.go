@@ -52,6 +52,8 @@ func (dt *UnscopedDiffTable) String() string {
 
 // Schema is a sql.Table interface function that returns the sql.Schema for this system table.
 func (dt *UnscopedDiffTable) Schema() sql.Schema {
+	// TODO: Would be nice to fix this ordering, but make sure to fix tests, too
+	// TODO: Why do these say the source is LogTable ?
 	return []*sql.Column{
 		{Name: "commit_hash", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
 		{Name: "committer", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
@@ -59,6 +61,8 @@ func (dt *UnscopedDiffTable) Schema() sql.Schema {
 		{Name: "date", Type: sql.Datetime, Source: doltdb.LogTableName, PrimaryKey: false},
 		{Name: "message", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: false},
 		{Name: "table_name", Type: sql.Text, Source: doltdb.LogTableName, PrimaryKey: true},
+		{Name: "data_change", Type: sql.Boolean, Source: doltdb.LogTableName, PrimaryKey: true},
+		{Name: "schema_change", Type: sql.Boolean, Source: doltdb.LogTableName, PrimaryKey: true},
 	}
 }
 
