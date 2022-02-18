@@ -24,7 +24,7 @@ const (
 	MaxTupleFields            = 4096
 	MaxTupleDataSize ByteSize = math.MaxUint16
 
-	numFieldsSize ByteSize = 2
+	countSize ByteSize = 2
 )
 
 // todo(andy): update comment
@@ -119,7 +119,7 @@ func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 
 func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, offs offsets) {
 	offSz := offsetsSize(fields)
-	tup = pool.Get(uint64(bufSz + offSz + numFieldsSize))
+	tup = pool.Get(uint64(bufSz + offSz + countSize))
 
 	writeFieldCount(tup, fields)
 	offs = offsets(tup[bufSz : bufSz+offSz])
@@ -129,35 +129,81 @@ func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, o
 
 // GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) (field []byte) {
-	sz := tup.size()
 	cnt := tup.Count()
+	if i >= cnt {
+		return nil
+	}
 
-	// slice the offsets array
-	offStop := sz - numFieldsSize
-	bufStop := offStop - offsetsSize(cnt)
+	sz := ByteSize(len(tup))
+	split := sz - uint16Size*ByteSize(cnt)
 
 	sb := SlicedBuffer{
-		Buf:  tup[:bufStop],
-		Offs: offsets(tup[bufStop:offStop]),
+		Buf:  tup[:split],
+		Offs: offsets(tup[split : sz-countSize]),
 	}
+
 	field = sb.GetSlice(i)
 
 	if len(field) == 0 {
-		field = nil // NULL
+		return nil // NULL
 	}
 	return
 }
 
-func (tup Tuple) size() ByteSize {
-	return ByteSize(len(tup))
+// GetManyFields returns the fields specified in |indexes|. It assumes
+// field indexes are provided in ascending order. It populates field data
+// into |slices| to avoid allocating.
+func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
+	cnt := tup.Count()
+
+	sz := ByteSize(len(tup))
+	split := sz - uint16Size*ByteSize(cnt)
+	offs := offsets(tup[split : sz-countSize])
+
+	k, start, stop := int(0), uint16(0), uint16(0)
+
+	// we don't have an explicit "start" for the
+	// first field, handle it separately
+	if indexes[k] == 0 {
+		if cnt == 1 {
+			stop = uint16(split)
+		} else {
+			stop = readUint16(offs[:uint16Size])
+		}
+		slices[0] = tup[:stop]
+		k++
+	}
+
+	// we don't have an explicit "stop" for the
+	// last field, handle it separately
+	last := cnt - 1
+
+	for ; k < len(indexes) && indexes[k] < last; k++ {
+		i := indexes[k]
+		start = readUint16(offs[(i-1)*2 : i*2])
+		stop = readUint16(offs[i*2 : (i+1)*2])
+		slices[k] = tup[start:stop]
+	}
+
+	if k < len(indexes) && indexes[k] == last {
+		os := ByteSize(len(offs))
+		start = readUint16(offs[os-uint16Size:])
+		stop = uint16(split)
+		slices[k] = tup[start:stop]
+	}
+
+	// set NULL values
+	for i, s := range slices {
+		if len(s) == 0 {
+			slices[i] = nil
+		}
+	}
+
+	return slices
 }
 
 func (tup Tuple) Count() int {
-	return tup.fieldCount()
-}
-
-func (tup Tuple) fieldCount() int {
-	sl := tup[tup.size()-numFieldsSize:]
+	sl := tup[len(tup)-int(countSize):]
 	return int(readUint16(sl))
 }
 
@@ -170,6 +216,6 @@ func sizeOf(val []byte) ByteSize {
 }
 
 func writeFieldCount(tup Tuple, count int) {
-	sl := tup[len(tup)-int(numFieldsSize):]
+	sl := tup[len(tup)-int(countSize):]
 	writeUint16(sl, uint16(count))
 }
