@@ -123,18 +123,17 @@ func getReadStageFunc(ctx *sql.Context, iter sql.RowIter, batchSize int) pipelin
 	isDone := false
 
 	useRow2 := false
+	var f *sql.RowFrame
+	var iter2 sql.RowIter2
 	if ri2, ok := iter.(sql.RowIterTypeSelector); ok && ri2.IsNode2() {
 		useRow2 = true
+		iter2 = iter.(sql.RowIter2)
+		f = sql.NewRowFrame()
 	}
 
 	return func(_ context.Context, _ []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
 		if isDone {
 			return nil, io.EOF
-		}
-
-		var f *sql.RowFrame
-		if useRow2 {
-			f = sql.NewRowFrame()
 		}
 
 		items := make([]pipeline.ItemWithProps, 0, batchSize)
@@ -143,7 +142,7 @@ func getReadStageFunc(ctx *sql.Context, iter sql.RowIter, batchSize int) pipelin
 			var err error
 			if useRow2 {
 				f.Clear()
-				err = iter.(sql.RowIter2).Next2(ctx, f)
+				err = iter2.Next2(ctx, f)
 				if err != nil {
 					r = f.Row2Copy()
 				}
