@@ -203,6 +203,30 @@ func (nbs *NomsBlockStore) GetChunkLocations(hashes hash.HashSet) (map[hash.Hash
 	return ranges, nil
 }
 
+// UpdateManifestAndClose updates the manifest and closes the block store
+func (nbs *NomsBlockStore) UpdateManifestAndClose(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	updatedContents, err := nbs.updateManifestContents(ctx, updates)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	err = nbs.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return updatedContents, nil
+}
+
 func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.Hash]uint32) (mi ManifestInfo, err error) {
 	nbs.mm.LockForUpdate()
 	defer func() {
@@ -216,7 +240,28 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 	nbs.mu.Lock()
 	defer nbs.mu.Unlock()
 
-	var updatedContents manifestContents
+	updatedContents, err := nbs.updateManifestContents(ctx, updates)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	nbs.upstream = updatedContents
+	oldTables := nbs.tables
+	nbs.tables = newTables
+	err = oldTables.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return updatedContents, nil
+}
+
+func (nbs *NomsBlockStore) updateManifestContents(ctx context.Context, updates map[hash.Hash]uint32) (updatedContents manifestContents, err error) {
 	for {
 		ok, contents, ferr := nbs.mm.Fetch(ctx, nbs.stats)
 		if ferr != nil {
@@ -262,20 +307,6 @@ func (nbs *NomsBlockStore) UpdateManifest(ctx context.Context, updates map[hash.
 			break
 		}
 	}
-
-	newTables, err := nbs.tables.Rebase(ctx, updatedContents.specs, nbs.stats)
-	if err != nil {
-		return manifestContents{}, err
-	}
-
-	nbs.upstream = updatedContents
-	oldTables := nbs.tables
-	nbs.tables = newTables
-	err = oldTables.Close()
-	if err != nil {
-		return manifestContents{}, err
-	}
-
 	return updatedContents, nil
 }
 
