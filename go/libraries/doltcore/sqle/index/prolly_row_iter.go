@@ -153,7 +153,7 @@ func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 			continue
 		}
 
-		appendToRowFrame(key, it.keyDesc.Types[keyIdx], keyIdx, frame)
+		appendToRowFrame(key, it.keyDesc, keyIdx, frame)
 	}
 
 	for valIdx, rowIdx := range it.valProj {
@@ -161,98 +161,98 @@ func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 			continue
 		}
 
-		appendToRowFrame(value, it.valDesc.Types[valIdx], valIdx, frame)
+		appendToRowFrame(value, it.valDesc, valIdx, frame)
 	}
 
 	return nil
 }
 
-func appendToRowFrame(tuple val.Tuple, typ val.Type, idx int, frame *sql.RowFrame) {
-	switch typ.Enc {
+func appendToRowFrame(tuple val.Tuple, desc val.TupleDesc, idx int, frame *sql.RowFrame) {
+	switch desc.Types[idx].Enc {
 	case val.Int8Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_INT8,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Uint8Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_UINT8,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Int16Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_INT16,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Uint16Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_UINT16,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Int32Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_INT32,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Uint32Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_UINT32,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Int64Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_INT64,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Uint64Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_UINT64,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Float32Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_FLOAT32,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.Float64Enc:
 		frame.Append(sql.Value{
 			Typ: query.Type_FLOAT64,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.DecimalEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_DECIMAL,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.TimeEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_TIME,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.YearEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_YEAR,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.TimestampEnc, val.DateEnc, val.DatetimeEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_TIMESTAMP,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.StringEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_VARCHAR,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.BytesEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_VARBINARY,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	case val.JSONEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_JSON,
-			Val: tuple.GetField(idx),
+			Val: desc.GetField(idx, tuple),
 		})
 	default:
 		panic("unknown encoding")
