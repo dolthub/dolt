@@ -511,7 +511,7 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 
 		atomic.AddInt64(&badCount, 1)
 
-		// We can ignore the out of skipped rows when the ignore-skipped-rows param is specified.
+		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
 		if options.ignoreSkippedRows {
 			return false
 		}
