@@ -43,7 +43,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "othertestdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewView()).(*database)
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)
@@ -51,7 +51,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err = store.CommitValue(context.Background(), ds1, a)
+	ds1, err = CommitValue(context.Background(), store, ds1, a)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
 
@@ -65,14 +65,14 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a| <- |b|
 	b := types.String("b")
-	ds1, err = store.CommitValue(context.Background(), ds1, b)
+	ds1, err = CommitValue(context.Background(), store, ds1, b)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.String("c")
-	ds2, err = store.CommitValue(context.Background(), ds2, c)
+	ds2, err = CommitValue(context.Background(), store, ds2, c)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(c))
 
@@ -104,7 +104,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 
 	// dsx: || -> |a|
 	a := types.String("a")
-	dsx, err = store.CommitValue(context.Background(), dsx, a)
+	dsx, err = CommitValue(context.Background(), store, dsx, a)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
 
@@ -112,14 +112,14 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	_, ok := dsy.MaybeHead()
 	assert.False(ok)
 	b := types.String("b")
-	_, err = store.CommitValue(context.Background(), dsy, b)
+	_, err = CommitValue(context.Background(), store, dsy, b)
 	assert.Error(err)
 
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |a| -> |b|
 	dsy, err = store.GetDataset(context.Background(), id1)
 	assert.NoError(err)
-	dsy, err = store.CommitValue(context.Background(), dsy, b)
+	dsy, err = CommitValue(context.Background(), store, dsy, b)
 	assert.NoError(err)
 	headVal := mustHeadValue(dsy)
 	assert.True(headVal.Equals(b))
@@ -137,7 +137,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 		// ds1: || -> |a|
 		ds1, err := store.GetDataset(context.Background(), id1)
 		assert.NoError(err)
-		ds1, err = store.CommitValue(context.Background(), ds1, a)
+		ds1, err = CommitValue(context.Background(), store, ds1, a)
 		assert.NoError(err)
 		assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(a))
 	}
@@ -150,20 +150,20 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	// dsx: |a| -> |b|
 	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(a))
 	b := types.String("b")
-	dsx, err = store.CommitValue(context.Background(), dsx, b)
+	dsx, err = CommitValue(context.Background(), store, dsx, b)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(dsx).MaybeGet(ValueField)).Equals(b))
 
 	// dsy: |a| -> |c|
 	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(a))
 	c := types.String("c")
-	_, err = store.CommitValue(context.Background(), dsy, c)
+	_, err = CommitValue(context.Background(), store, dsy, c)
 	assert.Error(err)
 	// Commit failed, but dsy now has latest head, so we should be able to just try again.
 	// dsy: |b| -> |c|
 	dsy, err = store.GetDataset(context.Background(), id1)
 	assert.NoError(err)
-	dsy, err = store.CommitValue(context.Background(), dsy, c)
+	dsy, err = CommitValue(context.Background(), store, dsy, c)
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(dsy).MaybeGet(ValueField)).Equals(c))
 }
@@ -195,7 +195,7 @@ func TestHeadValueFunctions(t *testing.T) {
 
 	// ds1: |a|
 	a := types.String("a")
-	ds1, err = store.CommitValue(context.Background(), ds1, a)
+	ds1, err = CommitValue(context.Background(), store, ds1, a)
 	assert.NoError(err)
 	assert.True(ds1.HasHead())
 

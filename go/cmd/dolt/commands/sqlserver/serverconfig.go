@@ -122,6 +122,9 @@ type ServerConfig interface {
 	MetricsLabels() map[string]string
 	MetricsHost() string
 	MetricsPort() int
+	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
+	// JSON string.
+	PrivilegeFilePath() string
 }
 
 type commandLineServerConfig struct {
@@ -141,6 +144,7 @@ type commandLineServerConfig struct {
 	tlsCert                string
 	requireSecureTransport bool
 	persistenceBehavior    string
+	privilegeFilePath      string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -233,6 +237,10 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 	return defaultMetricsPort
 }
 
+func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
+	return cfg.privilegeFilePath
+}
+
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
 // a multiple db configuration. If nil is returned the server will look for a database in the current directory and
 // give it a name automatically.
@@ -311,6 +319,11 @@ func (cfg *commandLineServerConfig) withDataDir(dataDir string) *commandLineServ
 
 func (cfg *commandLineServerConfig) withPersistenceBehavior(persistenceBehavior string) *commandLineServerConfig {
 	cfg.persistenceBehavior = persistenceBehavior
+	return cfg
+}
+
+func (cfg *commandLineServerConfig) withPrivilegeFilePath(privFilePath string) *commandLineServerConfig {
+	cfg.privilegeFilePath = privFilePath
 	return cfg
 }
 

@@ -46,6 +46,7 @@ const (
 	queryParallelismFlag    = "query-parallelism"
 	maxConnectionsFlag      = "max-connections"
 	persistenceBehaviorFlag = "persistence-behavior"
+	privilegeFilePathFlag   = "privilege-file"
 )
 
 func indentLines(s string) string {
@@ -143,7 +144,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsInt(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
-
+	ap.SupportsString(privilegeFilePathFlag, "", "Privilege File", "Points to the file that privileges will be loaded from, in addition to being overwritten when privileges have been modified.")
 	return ap
 }
 
@@ -268,6 +269,10 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
 	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
 		serverConfig.withPersistenceBehavior(persistenceBehavior)
+	}
+
+	if privilegeFilePath, ok := apr.GetValue(privilegeFilePathFlag); ok {
+		serverConfig.withPrivilegeFilePath(privilegeFilePath)
 	}
 
 	return serverConfig, nil

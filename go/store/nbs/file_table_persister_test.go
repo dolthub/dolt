@@ -127,7 +127,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff)
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff)
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)
@@ -267,7 +267,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	if assert.True(mustUint32(src.count()) > 0) {
 		buff, err := os.ReadFile(filepath.Join(dir, mustAddr(src.hash()).String()))
 		require.NoError(t, err)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff)
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
 		require.NoError(t, err)

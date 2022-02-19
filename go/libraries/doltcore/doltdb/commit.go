@@ -337,12 +337,6 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	// TODO: is this flush necessary?
-	err = ddb.db.Flush(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	ds, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {
 		return nil, err
@@ -353,7 +347,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	parents, err := types.NewList(ctx, ddb.db)
+	parents, err := types.NewList(ctx, ddb.vrw)
 	if err != nil {
 		return nil, err
 	}
@@ -364,7 +358,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	}
 
 	for _, pc := range parentCommits {
-		rf, err := types.NewRef(pc.commitSt, ddb.db.Format())
+		rf, err := types.NewRef(pc.commitSt, ddb.vrw.Format())
 		if err != nil {
 			return nil, err
 		}
@@ -377,12 +371,12 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	st, err := cm.toNomsStruct(ddb.db.Format())
+	st, err := cm.toNomsStruct(ddb.vrw.Format())
 	if err != nil {
 		return nil, err
 	}
 
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st, Policy: nil}
+	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
 	return &PendingCommit{
 		Roots:         roots,
 		Val:           val,

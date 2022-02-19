@@ -116,19 +116,19 @@ func TestCompare(t *testing.T) {
 
 func encInt(i int64) []byte {
 	buf := make([]byte, 8)
-	WriteInt64(buf, i)
+	writeInt64(buf, i)
 	return buf
 }
 
 func encUint(u uint64) []byte {
 	buf := make([]byte, 8)
-	WriteUint64(buf, u)
+	writeUint64(buf, u)
 	return buf
 }
 
 func encFloat(f float64) []byte {
 	buf := make([]byte, 8)
-	WriteFloat64(buf, f)
+	writeFloat64(buf, f)
 	return buf
 }
 
@@ -156,7 +156,7 @@ func roundTripBools(t *testing.T) {
 	integers := []bool{true, false}
 	for _, exp := range integers {
 		writeBool(buf, exp)
-		assert.Equal(t, exp, ReadBool(buf))
+		assert.Equal(t, exp, readBool(buf))
 		zero(buf)
 	}
 }
@@ -166,8 +166,8 @@ func roundTripInts(t *testing.T) {
 	integers := []int64{-1, 0, -1, math.MaxInt8, math.MinInt8}
 	for _, value := range integers {
 		exp := int8(value)
-		WriteInt8(buf, exp)
-		assert.Equal(t, exp, ReadInt8(buf))
+		writeInt8(buf, exp)
+		assert.Equal(t, exp, readInt8(buf))
 		zero(buf)
 	}
 
@@ -175,8 +175,8 @@ func roundTripInts(t *testing.T) {
 	integers = append(integers, math.MaxInt16, math.MaxInt16)
 	for _, value := range integers {
 		exp := int16(value)
-		WriteInt16(buf, exp)
-		assert.Equal(t, exp, ReadInt16(buf))
+		writeInt16(buf, exp)
+		assert.Equal(t, exp, readInt16(buf))
 		zero(buf)
 	}
 
@@ -184,8 +184,8 @@ func roundTripInts(t *testing.T) {
 	integers = append(integers, math.MaxInt32, math.MaxInt32)
 	for _, value := range integers {
 		exp := int32(value)
-		WriteInt32(buf, exp)
-		assert.Equal(t, exp, ReadInt32(buf))
+		writeInt32(buf, exp)
+		assert.Equal(t, exp, readInt32(buf))
 		zero(buf)
 	}
 
@@ -193,8 +193,8 @@ func roundTripInts(t *testing.T) {
 	integers = append(integers, math.MaxInt64, math.MaxInt64)
 	for _, value := range integers {
 		exp := int64(value)
-		WriteInt64(buf, exp)
-		assert.Equal(t, exp, ReadInt64(buf))
+		writeInt64(buf, exp)
+		assert.Equal(t, exp, readInt64(buf))
 		zero(buf)
 	}
 }
@@ -204,8 +204,8 @@ func roundTripUints(t *testing.T) {
 	uintegers := []uint64{0, 1, math.MaxUint8}
 	for _, value := range uintegers {
 		exp := uint8(value)
-		WriteUint8(buf, exp)
-		assert.Equal(t, exp, ReadUint8(buf))
+		writeUint8(buf, exp)
+		assert.Equal(t, exp, readUint8(buf))
 		zero(buf)
 	}
 
@@ -213,8 +213,8 @@ func roundTripUints(t *testing.T) {
 	uintegers = append(uintegers, math.MaxUint16)
 	for _, value := range uintegers {
 		exp := uint16(value)
-		WriteUint16(buf, exp)
-		assert.Equal(t, exp, ReadUint16(buf))
+		writeUint16(buf, exp)
+		assert.Equal(t, exp, readUint16(buf))
 		zero(buf)
 	}
 
@@ -222,8 +222,8 @@ func roundTripUints(t *testing.T) {
 	uintegers = append(uintegers, math.MaxUint32)
 	for _, value := range uintegers {
 		exp := uint32(value)
-		WriteUint32(buf, exp)
-		assert.Equal(t, exp, ReadUint32(buf))
+		writeUint32(buf, exp)
+		assert.Equal(t, exp, readUint32(buf))
 		zero(buf)
 	}
 
@@ -231,8 +231,8 @@ func roundTripUints(t *testing.T) {
 	uintegers = append(uintegers, math.MaxUint64)
 	for _, value := range uintegers {
 		exp := uint64(value)
-		WriteUint64(buf, exp)
-		assert.Equal(t, exp, ReadUint64(buf))
+		writeUint64(buf, exp)
+		assert.Equal(t, exp, readUint64(buf))
 		zero(buf)
 	}
 }
@@ -242,8 +242,8 @@ func roundTripFloats(t *testing.T) {
 	floats := []float64{-1, 0, 1, math.MaxFloat32, math.SmallestNonzeroFloat32}
 	for _, value := range floats {
 		exp := float32(value)
-		WriteFloat32(buf, exp)
-		assert.Equal(t, exp, ReadFloat32(buf))
+		writeFloat32(buf, exp)
+		assert.Equal(t, exp, readFloat32(buf))
 		zero(buf)
 	}
 
@@ -251,8 +251,8 @@ func roundTripFloats(t *testing.T) {
 	floats = append(floats, math.MaxFloat64, math.SmallestNonzeroFloat64)
 	for _, value := range floats {
 		exp := float64(value)
-		WriteFloat64(buf, exp)
-		assert.Equal(t, exp, ReadFloat64(buf))
+		writeFloat64(buf, exp)
+		assert.Equal(t, exp, readFloat64(buf))
 		zero(buf)
 	}
 }

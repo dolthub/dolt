@@ -461,7 +461,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ti, err := parseTableIndex(data)
+			ti, err := parseTableIndexByCopy(data)
 
 			if err != nil {
 				return nil, err
@@ -488,7 +488,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ti, err := parseTableIndex(data)
+		ti, err := parseTableIndexByCopy(data)
 
 		if err != nil {
 			return nil, err

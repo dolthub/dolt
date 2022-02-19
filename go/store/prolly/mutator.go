@@ -21,20 +21,17 @@ import (
 )
 
 type mutationIter interface {
-	nextMutation() (key, val val.Tuple)
-	count() int
+	nextMutation(ctx context.Context) (key, value val.Tuple)
 	close() error
 }
 
 var _ mutationIter = &memRangeIter{}
 
 func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, error) {
-	var err error
-	if edits.count() == 0 {
-		return m, err
+	newKey, newValue := edits.nextMutation(ctx)
+	if newKey == nil {
+		return m, nil // no mutations
 	}
-
-	newKey, newValue := edits.nextMutation()
 
 	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(newKey), m.searchNode)
 	if err != nil {
@@ -65,11 +62,11 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		}
 
 		if oldValue == nil && newValue == nil {
-			newKey, newValue = edits.nextMutation()
+			newKey, newValue = edits.nextMutation(ctx)
 			continue // already non-present
 		}
 		if oldValue != nil && compareValues(m, newValue, oldValue) == 0 {
-			newKey, newValue = edits.nextMutation()
+			newKey, newValue = edits.nextMutation(ctx)
 			continue // same newValue
 		}
 
@@ -94,7 +91,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 			}
 		}
 
-		newKey, newValue = edits.nextMutation()
+		newKey, newValue = edits.nextMutation(ctx)
 	}
 
 	m.root, err = chunker.Done(ctx)

@@ -28,10 +28,12 @@ type MemFactory struct {
 }
 
 // CreateDB creates an in memory backed database
-func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, error) {
+func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, urlObj *url.URL, params map[string]interface{}) (datas.Database, types.ValueReadWriter, error) {
 	var db datas.Database
 	storage := &chunks.MemoryStorage{}
-	db = datas.NewDatabase(storage.NewViewWithDefaultFormat())
+	cs := storage.NewViewWithDefaultFormat()
+	vrw := types.NewValueStore(cs)
+	db = datas.NewTypesDatabase(vrw)
 
-	return db, nil
+	return db, vrw, nil
 }

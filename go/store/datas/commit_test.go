@@ -136,7 +136,7 @@ func TestNewCommit(t *testing.T) {
 	}
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
@@ -255,7 +255,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
 	metaCommit, err := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
@@ -302,7 +302,7 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 ty
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
-func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Database) {
+func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *database) {
 	assert := assert.New(t)
 
 	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
@@ -342,7 +342,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb Da
 }
 
 // Add a commit and return it.
-func addCommit(t *testing.T, db Database, datasetID string, val string, parents ...types.Struct) (types.Struct, types.Ref) {
+func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, types.Ref) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
 	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{ParentsList: mustList(toRefList(db, parents...))})
@@ -405,7 +405,7 @@ func TestCommitParentsClosure(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 
 	type expected struct {
 		height int
@@ -539,7 +539,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 
 	// Build commit DAG
 	//
@@ -599,11 +599,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert.NoError(db.Close())
 
 	storage = &chunks.TestStorage{}
-	db = NewDatabase(storage.NewView())
+	db = NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
 	rstorage := &chunks.TestStorage{}
-	rdb := NewDatabase(rstorage.NewView())
+	rdb := NewDatabase(rstorage.NewView()).(*database)
 	defer rdb.Close()
 
 	// Rerun the tests when using two difference Databases for left and
@@ -661,7 +661,7 @@ func TestFindCommonAncestor(t *testing.T) {
 
 func TestNewCommitRegressionTest(t *testing.T) {
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView())
+	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))

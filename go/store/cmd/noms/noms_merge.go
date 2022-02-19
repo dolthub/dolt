@@ -74,7 +74,7 @@ func runMerge(ctx context.Context, args []string) int {
 	if len(args) != 4 {
 		util.CheckErrorNoUsage(fmt.Errorf("incorrect number of arguments"))
 	}
-	db, err := cfg.GetDatabase(ctx, args[0])
+	db, vrw, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckError(err)
 	defer db.Close()
 
@@ -85,7 +85,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	left, right, ancestor, err := getMergeCandidates(ctx, db, leftDS, rightDS)
+	left, right, ancestor, err := getMergeCandidates(ctx, db, vrw, leftDS, rightDS)
 
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err.Error())
@@ -94,7 +94,7 @@ func runMerge(ctx context.Context, args []string) int {
 
 	policy := decidePolicy(resolver)
 	pc, closer := newMergeProgressChan()
-	merged, err := policy(ctx, left, right, ancestor, db, pc)
+	merged, err := policy(ctx, left, right, ancestor, vrw, pc)
 	closer()
 	util.CheckErrorNoUsage(err)
 
@@ -114,7 +114,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	p, err := types.NewList(ctx, db, leftHeadRef, rightHeadRef)
+	p, err := types.NewList(ctx, vrw, leftHeadRef, rightHeadRef)
 	d.PanicIfError(err)
 
 	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{
@@ -157,14 +157,14 @@ func resolveDatasets(ctx context.Context, db datas.Database, leftName, rightName
 	return
 }
 
-func getMergeCandidates(ctx context.Context, db datas.Database, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
+func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, leftDS, rightDS datas.Dataset) (left, right, ancestor types.Value, err error) {
 	leftRef, ok, err := leftDS.MaybeHeadRef()
 	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", leftDS.ID())
 	rightRef, ok, err := rightDS.MaybeHeadRef()
 	d.PanicIfError(err)
 	checkIfTrue(!ok, "Dataset %s has no data", rightDS.ID())
-	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, db)
+	ancestorCommit, ok := getCommonAncestor(ctx, leftRef, rightRef, vrw)
 	checkIfTrue(!ok, "Datasets %s and %s have no common ancestor", leftDS.ID(), rightDS.ID())
 
 	leftHead, ok, err := leftDS.MaybeHeadValue()

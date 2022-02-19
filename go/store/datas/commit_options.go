@@ -22,7 +22,6 @@
 package datas
 
 import (
-	"github.com/dolthub/dolt/go/store/merge"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -35,10 +34,4 @@ type CommitOptions struct {
 	// Meta is a Struct that describes arbitrary metadata about this Commit,
 	// e.g. a timestamp or descriptive text.
 	Meta types.Struct
-
-	// Policy will be called to attempt to merge this Commit with the current
-	// Head, if this is not a fast-forward. If Policy is nil, no merging will
-	// be attempted. Note that because Commit() retries in some cases, Policy
-	// might also be called multiple times with different values.
-	Policy merge.Policy
 }

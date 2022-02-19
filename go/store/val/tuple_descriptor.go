@@ -15,43 +15,21 @@
 package val
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
-
-	// Under certain conditions, Tuple comparisons can be
-	// optimized by directly comparing Tuples as byte slices,
-	// rather than accessing and deserializing each field.
-	// See definition of rawCmp for more information.
-	raw rawCmp
+	fast  fixedAccess
 }
 
 type TupleComparator interface {
 	Compare(left, right Tuple, desc TupleDesc) int
 }
-
-type defaultCompare struct{}
-
-func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
-	for i, typ := range desc.Types {
-		cmp = compare(typ, left.GetField(i), right.GetField(i))
-		if cmp != 0 {
-			break
-		}
-	}
-	return
-}
-
-var _ TupleComparator = defaultCompare{}
 
 func NewTupleDescriptor(types ...Type) TupleDesc {
 	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
@@ -69,9 +47,12 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 		}
 	}
 
-	td.Types = types
-	td.cmp = cmp
-	td.raw = maybeGetRawComparison(types...)
+	td = TupleDesc{
+		Types: types,
+		cmp:   cmp,
+		fast:  makeFixedAccess(types),
+	}
+
 	return
 }
 
@@ -79,15 +60,60 @@ func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
 	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
 }
 
+type defaultCompare struct{}
+
+func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
+	for i := range desc.fast {
+		start, stop := desc.fast[i][0], desc.fast[i][1]
+		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
+		if cmp != 0 {
+			return cmp
+		}
+	}
+
+	off := len(desc.fast)
+	for i, typ := range desc.Types[off:] {
+		j := i + off
+		cmp = compare(typ, left.GetField(j), right.GetField(j))
+		if cmp != 0 {
+			return cmp
+		}
+	}
+	return
+}
+
+var _ TupleComparator = defaultCompare{}
+
+type fixedAccess [][2]ByteSize
+
+func makeFixedAccess(types []Type) (acc fixedAccess) {
+	acc = make(fixedAccess, 0, len(types))
+
+	off := ByteSize(0)
+	for _, typ := range types {
+		if typ.Nullable {
+			break
+		}
+		sz, ok := sizeFromType(typ)
+		if !ok {
+			break
+		}
+		acc = append(acc, [2]ByteSize{off, off + sz})
+		off += sz
+	}
+	return
+}
+
+func (td TupleDesc) GetField(i int, tup Tuple) []byte {
+	if i < len(td.fast) {
+		start, stop := td.fast[i][0], td.fast[i][1]
+		return tup[start:stop]
+	}
+	return tup.GetField(i)
+}
+
 // Compare returns the Comaparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
-	// todo(andy): compare raw is broken
-	//if td.raw != nil {
-	//	return compareRaw(left, right, td.raw)
-	//} else {
-	//	return td.cmp(left, right, td)
-	//}
-
 	return td.cmp.Compare(left, right, td)
 }
 
@@ -98,7 +124,7 @@ func (td TupleDesc) Count() int {
 
 // IsNull returns true if the ith field of the Tuple is NULL.
 func (td TupleDesc) IsNull(i int, tup Tuple) bool {
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	return b == nil
 }
 
@@ -106,9 +132,9 @@ func (td TupleDesc) IsNull(i int, tup Tuple) bool {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetBool(i int, tup Tuple) (v bool, ok bool) {
 	td.expectEncoding(i, Int8Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadBool(b), true
+		v, ok = readBool(b), true
 	}
 	return
 }
@@ -117,9 +143,9 @@ func (td TupleDesc) GetBool(i int, tup Tuple) (v bool, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetInt8(i int, tup Tuple) (v int8, ok bool) {
 	td.expectEncoding(i, Int8Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadInt8(b), true
+		v, ok = readInt8(b), true
 	}
 	return
 }
@@ -128,9 +154,9 @@ func (td TupleDesc) GetInt8(i int, tup Tuple) (v int8, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetUint8(i int, tup Tuple) (v uint8, ok bool) {
 	td.expectEncoding(i, Uint8Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadUint8(b), true
+		v, ok = readUint8(b), true
 	}
 	return
 }
@@ -139,9 +165,9 @@ func (td TupleDesc) GetUint8(i int, tup Tuple) (v uint8, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetInt16(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, Int16Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadInt16(b), true
+		v, ok = readInt16(b), true
 	}
 	return
 }
@@ -150,9 +176,9 @@ func (td TupleDesc) GetInt16(i int, tup Tuple) (v int16, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetUint16(i int, tup Tuple) (v uint16, ok bool) {
 	td.expectEncoding(i, Uint16Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadUint16(b), true
+		v, ok = readUint16(b), true
 	}
 	return
 }
@@ -161,9 +187,9 @@ func (td TupleDesc) GetUint16(i int, tup Tuple) (v uint16, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetInt32(i int, tup Tuple) (v int32, ok bool) {
 	td.expectEncoding(i, Int32Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadInt32(b), true
+		v, ok = readInt32(b), true
 	}
 	return
 }
@@ -172,9 +198,9 @@ func (td TupleDesc) GetInt32(i int, tup Tuple) (v int32, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetUint32(i int, tup Tuple) (v uint32, ok bool) {
 	td.expectEncoding(i, Uint32Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadUint32(b), true
+		v, ok = readUint32(b), true
 	}
 	return
 }
@@ -183,9 +209,9 @@ func (td TupleDesc) GetUint32(i int, tup Tuple) (v uint32, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetInt64(i int, tup Tuple) (v int64, ok bool) {
 	td.expectEncoding(i, Int64Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadInt64(b), true
+		v, ok = readInt64(b), true
 	}
 	return
 }
@@ -194,9 +220,9 @@ func (td TupleDesc) GetInt64(i int, tup Tuple) (v int64, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetUint64(i int, tup Tuple) (v uint64, ok bool) {
 	td.expectEncoding(i, Uint64Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadUint64(b), true
+		v, ok = readUint64(b), true
 	}
 	return
 }
@@ -205,9 +231,9 @@ func (td TupleDesc) GetUint64(i int, tup Tuple) (v uint64, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetFloat32(i int, tup Tuple) (v float32, ok bool) {
 	td.expectEncoding(i, Float32Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadFloat32(b), true
+		v, ok = readFloat32(b), true
 	}
 	return
 }
@@ -216,9 +242,9 @@ func (td TupleDesc) GetFloat32(i int, tup Tuple) (v float32, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	td.expectEncoding(i, Float64Enc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadFloat64(b), true
+		v, ok = readFloat64(b), true
 	}
 	return
 }
@@ -227,9 +253,9 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, DecimalEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadString(b), true
+		v, ok = readString(b), true
 	}
 	return
 }
@@ -238,9 +264,9 @@ func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetTimestamp(i int, tup Tuple) (v time.Time, ok bool) {
 	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadTime(b), true
+		v, ok = readTimestamp(b), true
 	}
 	return
 }
@@ -249,9 +275,9 @@ func (td TupleDesc) GetTimestamp(i int, tup Tuple) (v time.Time, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, TimeEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadString(b), true
+		v, ok = readString(b), true
 	}
 	return
 }
@@ -260,9 +286,9 @@ func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, YearEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = ReadInt16(b), true
+		v, ok = readInt16(b), true
 	}
 	return
 }
@@ -271,9 +297,9 @@ func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 	td.expectEncoding(i, StringEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
 	if b != nil {
-		v = ReadString(b)
+		v = readString(b)
 		ok = true
 	}
 	return
@@ -283,7 +309,19 @@ func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, BytesEnc)
-	b := tup.GetField(i)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = readBytes(b)
+		ok = true
+	}
+	return
+}
+
+// GetJSON reads a []byte from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, JSONEnc)
+	b := td.GetField(i, tup)
 	if b != nil {
 		v = readBytes(b)
 		ok = true
@@ -293,67 +331,14 @@ func (td TupleDesc) GetBytes(i int, tup Tuple) (v []byte, ok bool) {
 
 // GetBytes reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetJSON(i int, tup Tuple) (v interface{}, ok bool) {
-	td.expectEncoding(i, JSONEnc)
-	b := tup.GetField(i)
+func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, GeometryEnc)
+	b := td.GetField(i, tup)
 	if b != nil {
-		if err := json.Unmarshal(b, &v); err != nil {
-			panic(err)
-		}
+		v = readBytes(b)
 		ok = true
 	}
 	return
-}
-
-// GetField reads the value from the ith field of the Tuple as an interface{}.
-func (td TupleDesc) GetField(i int, tup Tuple) (v interface{}) {
-	var ok bool
-	switch td.Types[i].Enc {
-	case Int8Enc:
-		v, ok = td.GetInt8(i, tup)
-	case Uint8Enc:
-		v, ok = td.GetUint8(i, tup)
-	case Int16Enc:
-		v, ok = td.GetInt16(i, tup)
-	case Uint16Enc:
-		v, ok = td.GetUint16(i, tup)
-	case Int32Enc:
-		v, ok = td.GetInt32(i, tup)
-	case Uint32Enc:
-		v, ok = td.GetUint32(i, tup)
-	case Int64Enc:
-		v, ok = td.GetInt64(i, tup)
-	case Uint64Enc:
-		v, ok = td.GetUint64(i, tup)
-	case Float32Enc:
-		v, ok = td.GetFloat32(i, tup)
-	case Float64Enc:
-		v, ok = td.GetFloat64(i, tup)
-	case DecimalEnc:
-		v, ok = td.GetDecimal(i, tup)
-	case TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
-	case YearEnc:
-		v, ok = td.GetYear(i, tup)
-	case TimestampEnc, DateEnc, DatetimeEnc:
-		v, ok = td.GetTimestamp(i, tup)
-	case StringEnc:
-		v, ok = td.GetString(i, tup)
-	case BytesEnc:
-		v, ok = td.GetBytes(i, tup)
-	case JSONEnc:
-		var js interface{}
-		js, ok = td.GetJSON(i, tup)
-		if ok {
-			v = sql.JSONDocument{Val: js}
-		}
-	default:
-		panic("unknown encoding")
-	}
-	if !ok {
-		return nil
-	}
-	return v
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {

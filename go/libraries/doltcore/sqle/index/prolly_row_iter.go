@@ -23,12 +23,11 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type sqlRowIter struct {
+type prollyRowIter struct {
 	ctx  context.Context
 	iter prolly.MapRangeIter
 
@@ -39,8 +38,8 @@ type sqlRowIter struct {
 	rowLen  int
 }
 
-var _ sql.RowIter = sqlRowIter{}
-var _ sql.RowIter2 = sqlRowIter{}
+var _ sql.RowIter = prollyRowIter{}
+var _ sql.RowIter2 = prollyRowIter{}
 
 func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, rng prolly.Range, projections []string) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
@@ -73,7 +72,7 @@ func rowIterFromMapIter(
 
 	kd, vd := m.Descriptors()
 
-	return sqlRowIter{
+	return prollyRowIter{
 		ctx:     ctx,
 		iter:    iter,
 		keyDesc: kd,
@@ -112,7 +111,7 @@ func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap val.O
 	return
 }
 
-func (it sqlRowIter) Next(ctx *sql.Context) (sql.Row, error) {
+func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	key, value, err := it.iter.Next(it.ctx)
 	if err != nil {
 		return nil, err
@@ -124,19 +123,25 @@ func (it sqlRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx] = it.keyDesc.GetField(keyIdx, key)
+		row[rowIdx], err = GetField(it.keyDesc, keyIdx, key)
+		if err != nil {
+			return nil, err
+		}
 	}
 	for valIdx, rowIdx := range it.valProj {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx] = it.valDesc.GetField(valIdx, value)
+		row[rowIdx], err = GetField(it.valDesc, valIdx, value)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return row, nil
 }
 
-func (it sqlRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
+func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 	key, value, err := it.iter.Next(it.ctx)
 	if err != nil {
 		return err
@@ -255,8 +260,6 @@ func appendToRowFrame(tuple val.Tuple, typ val.Type, idx int, frame *sql.RowFram
 }
 
 
-func (it sqlRowIter) Close(ctx *sql.Context) error {
+func (it prollyRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
-
-var shimPool = pool.NewBuffPool()

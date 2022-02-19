@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/suite"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -49,11 +50,12 @@ func (s *nomsRootTestSuite) TestBasic() {
 
 	ds := sp.GetDataset(context.Background())
 	dbSpecStr := spec.CreateDatabaseSpecString("nbs", s.DBDir)
-	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("hello!"))
+	db := ds.Database()
+	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))
 	c1, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal("maojl4udo9a7mtk2rnhuc08r0u7hc0fn\n", c1)
 
-	ds, _ = ds.Database().CommitValue(context.Background(), ds, types.String("goodbye"))
+	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("goodbye"))
 	c2, _ := s.MustRun(main, []string{"root", dbSpecStr})
 	s.Equal("cac1ilk2nnbk5vmdctlg9r5abj0m1u6f\n", c2)
 

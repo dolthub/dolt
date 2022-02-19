@@ -68,10 +68,10 @@ func nomsStruct(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdCla
 func nomsStructNew(ctx context.Context, dbStr string, name string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
-	db := sp.GetDatabase(ctx)
-	st, err := types.NewStruct(db.Format(), name, nil)
+	vrw := sp.GetVRW(ctx)
+	st, err := types.NewStruct(vrw.Format(), name, nil)
 	d.PanicIfError(err)
-	applyStructEdits(ctx, db, sp, st, nil, args)
+	applyStructEdits(ctx, sp.GetDatabase(ctx), sp, st, nil, args)
 	return 0
 }
 
@@ -107,7 +107,7 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
-	rootVal = rootPath.Resolve(ctx, db)
+	rootVal = rootPath.Resolve(ctx, db, sp.GetVRW(ctx))
 	if rootVal == nil {
 		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return
@@ -129,7 +129,7 @@ func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, root
 		if !types.IsValidStructFieldName(args[i]) {
 			util.CheckError(fmt.Errorf("Invalid field name: %s at position: %d", args[i], i))
 		}
-		nv, err := argumentToValue(ctx, args[i+1], db)
+		nv, err := argumentToValue(ctx, args[i+1], db, sp.GetVRW(ctx))
 		if err != nil {
 			util.CheckError(fmt.Errorf("Invalid field value: %s at position %d: %s", args[i+1], i+1, err))
 		}
@@ -143,23 +143,24 @@ func applyStructEdits(ctx context.Context, db datas.Database, sp spec.Spec, root
 }
 
 func appplyPatch(ctx context.Context, db datas.Database, sp spec.Spec, rootVal types.Value, basePath types.Path, patch diff.Patch) {
-	baseVal, err := basePath.Resolve(ctx, rootVal, db)
+	vrw := sp.GetVRW(ctx)
+	baseVal, err := basePath.Resolve(ctx, rootVal, vrw)
 	util.CheckError(err)
 	if baseVal == nil {
 		util.CheckErrorNoUsage(fmt.Errorf("No value at: %s", sp.String()))
 	}
 
-	newRootVal, err := diff.Apply(ctx, db.Format(), rootVal, patch)
+	newRootVal, err := diff.Apply(ctx, vrw.Format(), rootVal, patch)
 	util.CheckError(err)
 	d.Chk.NotNil(newRootVal)
-	r, err := db.WriteValue(ctx, newRootVal)
+	r, err := vrw.WriteValue(ctx, newRootVal)
 	util.CheckError(err)
-	db.Flush(ctx)
 	newAbsPath := spec.AbsolutePath{
 		Hash: r.TargetHash(),
 		Path: basePath,
 	}
 	newSpec := sp
 	newSpec.Path = newAbsPath
+	// TODO: This value is not actually in the database.
 	fmt.Println(newSpec.String())
 }

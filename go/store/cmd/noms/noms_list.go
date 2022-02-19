@@ -76,7 +76,8 @@ func nomsListNew(ctx context.Context, dbStr string, args []string) int {
 	sp, err := spec.ForDatabase(dbStr)
 	d.PanicIfError(err)
 	db := sp.GetDatabase(ctx)
-	l, err := types.NewList(ctx, db)
+	vrw := sp.GetVRW(ctx)
+	l, err := types.NewList(ctx, vrw)
 	d.PanicIfError(err)
 	applyListInserts(ctx, db, sp, l, nil, 0, args)
 	return 0
@@ -130,7 +131,7 @@ func applyListInserts(ctx context.Context, db datas.Database, sp spec.Spec, root
 	}
 	patch := diff.Patch{}
 	for i := 0; i < len(args); i++ {
-		vv, err := argumentToValue(ctx, args[i], db)
+		vv, err := argumentToValue(ctx, args[i], db, sp.GetVRW(ctx))
 		if err != nil {
 			util.CheckError(fmt.Errorf("Invalid value: %s at position %d: %s", args[i], i, err))
 		}

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -81,9 +82,10 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
-	r1, err := db.WriteValue(context.Background(), value)
+	vrw := sp.GetVRW(context.Background())
+	r1, err := vrw.WriteValue(context.Background(), value)
 	s.NoError(err)
-	_, err = db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
+	_, err = datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), r1)
 	s.NoError(err)
 
 	return r1
@@ -104,7 +106,7 @@ func (s *nomsShowTestSuite) TestNomsShow() {
 
 	sp := s.spec(str)
 	defer sp.Close()
-	list, err := types.NewList(context.Background(), sp.GetDatabase(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
+	list, err := types.NewList(context.Background(), sp.GetVRW(context.Background()), types.String("elem1"), types.Float(2), types.String("elem3"))
 	s.NoError(err)
 	r = s.writeTestData(str, list)
 	res, _ = s.MustRun(main, []string{"show", str})
@@ -135,17 +137,18 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
+	vrw := sp.GetVRW(context.Background())
 
 	// Put a value into the db, get its raw serialization, then deserialize it and ensure it comes
 	// out to same thing.
 	test := func(in types.Value) {
-		r1, err := db.WriteValue(context.Background(), in)
+		r1, err := vrw.WriteValue(context.Background(), in)
 		s.NoError(err)
-		db.CommitValue(context.Background(), sp.GetDataset(context.Background()), r1)
+		datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), r1)
 		res, _ := s.MustRun(main, []string{"show", "--raw",
 			spec.CreateValueSpecString("nbs", s.DBDir, "#"+r1.TargetHash().String())})
 		ch := chunks.NewChunk([]byte(res))
-		out, err := types.DecodeValue(ch, db)
+		out, err := types.DecodeValue(ch, vrw)
 		s.NoError(err)
 		s.True(out.Equals(in))
 	}
@@ -154,18 +157,18 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	test(types.String("hello"))
 
 	// Ref (one child chunk)
-	test(mustValue(db.WriteValue(context.Background(), types.Float(42))))
+	test(mustValue(vrw.WriteValue(context.Background(), types.Float(42))))
 
 	// Prolly tree with multiple child chunks
 	items := make([]types.Value, 10000)
 	for i := 0; i < len(items); i++ {
 		items[i] = types.Float(i)
 	}
-	l, err := types.NewList(context.Background(), db, items...)
+	l, err := types.NewList(context.Background(), vrw, items...)
 	s.NoError(err)
 
 	numChildChunks := 0
-	_ = l.WalkRefs(db.Format(), func(r types.Ref) error {
+	_ = l.WalkRefs(vrw.Format(), func(r types.Ref) error {
 		numChildChunks++
 		return nil
 	})

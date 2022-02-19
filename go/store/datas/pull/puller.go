@@ -223,7 +223,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicEr
 		}))
 	})
 	defer func() {
-		fWithStats.Stop()
+		_ = fWithStats.Stop()
 
 		go func() {
 			_ = file.Remove(tmpTblFile.path)
