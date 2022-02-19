@@ -150,12 +150,44 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
 	sf, err := selectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
-
 	if err != nil {
 		return nil, err
 	}
 
-	return newDiffPartitions(ctx, cmItr, dt.workingRoot, dt.name, sf, dt.targetSch)
+	t, exactName, ok, err := dt.workingRoot.GetTableInsensitive(ctx, dt.name)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("table: %s does not exist", dt.name))
+	}
+
+	wrTblHash, _, err := dt.workingRoot.GetTableHash(ctx, exactName)
+	if err != nil {
+		return nil, err
+	}
+
+	cmHash, _, err := cmItr.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cmHashToTblInfo := make(map[hash.Hash]tblInfoAtCommit)
+	cmHashToTblInfo[cmHash] = tblInfoAtCommit{"WORKING", nil, t, wrTblHash}
+
+	err = cmItr.Reset(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &diffPartitions{
+		tblName:         exactName,
+		cmItr:           cmItr,
+		cmHashToTblInfo: cmHashToTblInfo,
+		selectFunc:      sf,
+		targetSch:       dt.targetSch,
+	}, nil
 }
 
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
@@ -524,47 +556,6 @@ type diffPartitions struct {
 	cmHashToTblInfo map[hash.Hash]tblInfoAtCommit
 	selectFunc      partitionSelectFunc
 	targetSch       schema.Schema
-}
-
-func newDiffPartitions(ctx *sql.Context, cmItr doltdb.CommitItr, wr *doltdb.RootValue, tblName string, selectFunc partitionSelectFunc, targetSch schema.Schema) (*diffPartitions, error) {
-	t, exactName, ok, err := wr.GetTableInsensitive(ctx, tblName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !ok {
-		return nil, errors.New(fmt.Sprintf("table: %s does not exist", tblName))
-	}
-
-	wrTblHash, _, err := wr.GetTableHash(ctx, exactName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	cmHash, _, err := cmItr.Next(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	cmHashToTblInfo := make(map[hash.Hash]tblInfoAtCommit)
-	cmHashToTblInfo[cmHash] = tblInfoAtCommit{"WORKING", nil, t, wrTblHash}
-
-	err = cmItr.Reset(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &diffPartitions{
-		tblName:         tblName,
-		cmItr:           cmItr,
-		cmHashToTblInfo: cmHashToTblInfo,
-		selectFunc:      selectFunc,
-		targetSch:       targetSch,
-	}, nil
 }
 
 // called in a commit iteration loop. Adds partitions when it finds a commit and it's parent that have different values
