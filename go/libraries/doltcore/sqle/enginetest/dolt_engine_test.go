@@ -39,7 +39,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
