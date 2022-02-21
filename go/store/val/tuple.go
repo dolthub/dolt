@@ -150,9 +150,8 @@ func (tup Tuple) GetField(i int) (field []byte) {
 	return
 }
 
-// GetManyFields returns the fields specified in |indexes|. It assumes
-// field indexes are provided in ascending order. It populates field data
-// into |slices| to avoid allocating.
+// GetManyFields takes a sorted slice of ordinals |indexes| and returns the requested
+// tuple fields. It populates field data into |slices| to avoid allocating.
 func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
 	return sliceManyFields(tup, indexes, slices)
 }
@@ -193,8 +192,7 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 	}
 
 	subset := slices
-	// we don't have an explicit |stop| offset
-	// for the last field
+	// we don't have a "stop" offset for the last field
 	n := len(slices)
 	if indexes[n-1] == cnt-1 {
 		o := readUint16(offs[len(offs)-2:])
@@ -203,8 +201,7 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 		subset = subset[:n-1]
 	}
 
-	// we don't have an explicit |start| offset
-	// for the first field
+	// we don't have a "start" offset for the first field
 	if indexes[0] == 0 {
 		o := readUint16(offs[:2])
 		slices[0] = data[:o]
