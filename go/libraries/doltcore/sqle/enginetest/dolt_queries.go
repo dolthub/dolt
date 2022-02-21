@@ -861,20 +861,11 @@ var DiffTableTests = []enginetest.ScriptTest{
 				},
 			},
 			{
-				// TODO: What's the best way to test show warnings? With a custom/non-scripted test?
-				//       script_queries provides ExpectedWarning, but still expects you to provide expected sql.Rows
-				// TODO: SQL console shows this as four warnings, but the test framework is returning 8
-				Query: "show warnings;",
-				Expected: []sql.Row{
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-					{"Warning", 1105, "unable to coerce value from field '[c]' into latest column schema"},
-				},
+				Query:                           "select * from dolt_diff_t;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           4,
+				ExpectedWarningMessageSubstring: "unable to coerce value from field",
+				SkipResultsCheck:                true,
 			},
 		},
 	},
@@ -944,16 +935,14 @@ var DiffTableTests = []enginetest.ScriptTest{
 
 			"insert into t values (7, 8);",
 			"set @Commit4 = (select DOLT_COMMIT('-am', 'adding more data'));",
-
-			"select * from dolt_diff_t;",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				// TODO: What's the best way to test show warnings? With a custom/non-scripted test?
-				//       script_queries provides ExpectedWarning, but still expects you to provide expected sql.Rows
-				//Query: "show warnings;",
-				//Expected: []sql.Row{},
-				//ExpectedWarning: 1105,
+				Query:                           "select * from dolt_diff_t;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
+				SkipResultsCheck:                true,
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;;",
