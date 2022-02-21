@@ -355,7 +355,6 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 	return iter.(sql.RowIter2), err
 }
 
-
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:

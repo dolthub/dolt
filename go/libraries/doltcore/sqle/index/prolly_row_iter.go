@@ -259,7 +259,6 @@ func appendToRowFrame(tuple val.Tuple, desc val.TupleDesc, idx int, frame *sql.R
 	}
 }
 
-
 func (it prollyRowIter) Close(ctx *sql.Context) error {
 	return nil
 }
