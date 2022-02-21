@@ -620,12 +620,16 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
 
 			"rename table x to x1",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1'))",
+			"insert into x1 values (1000, 1001, 1002);",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1 and inserting data'))",
+
+			"rename table x1 to x2",
+			"set @Commit4 = (select DOLT_COMMIT('-am', 'Renaming table x1 to x2'))",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{5}},
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
@@ -637,7 +641,11 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"x1", true, false}},
+				Expected: []sql.Row{{"x1", true, true}},
+			},
+			{
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit4)",
+				Expected: []sql.Row{{"x2", true, false}},
 			},
 		},
 	},
@@ -650,10 +658,10 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
 
 			"drop table x",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping table x'))",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping non-empty table x'))",
 
 			"drop table y",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Dropping table y'))",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Dropping empty table y'))",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{

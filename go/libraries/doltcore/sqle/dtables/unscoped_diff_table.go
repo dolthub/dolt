@@ -15,7 +15,7 @@
 package dtables
 
 import (
-	"github.com/dolthub/go-mysql-server/sql"
+	"errors"
 	"io"
 	"sort"
 
@@ -23,6 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // UnscopedDiffTable is a sql.Table implementation of a system table that shows which tables have
@@ -98,9 +100,19 @@ func NewUnscopedDiffTableItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.
 func (itr *UnscopedDiffTableItr) HasNext() bool {
 	// There are more diff records to iterate over if:
 	//   1) there is more than one commit left to process, or
-	//   2) the tableNames array isn't nilled out and has data to process
-
+	//   2) the tableChanges array isn't nilled out and has data left to process
 	return itr.commitIdx+1 < len(itr.commits) || itr.tableChanges != nil
+}
+
+// IncrementIndexes increments the table changes index, and if it's the end of the table changes array, moves
+// to the next commit, and resets the table changes index so that it can be populated when Next() is called.
+func (itr *UnscopedDiffTableItr) IncrementIndexes() {
+	itr.tableChangesIdx++
+	if itr.tableChangesIdx >= len(itr.tableChanges) {
+		itr.tableChangesIdx = -1
+		itr.tableChanges = nil
+		itr.commitIdx++
+	}
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
@@ -109,18 +121,7 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 	if !itr.HasNext() {
 		return nil, io.EOF
 	}
-
-	defer func() {
-		// Increment the table name index, and if it's the end of the table names array,
-		// move to the next commit and reset the table name index
-		// TODO: Move to function on iterator?
-		itr.tableChangesIdx++
-		if itr.tableChangesIdx >= len(itr.tableChanges) {
-			itr.tableChangesIdx = -1
-			itr.tableChanges = nil
-			itr.commitIdx++
-		}
-	}()
+	defer itr.IncrementIndexes()
 
 	// Load table changes if we don't have them for this commit yet
 	for itr.tableChanges == nil {
@@ -147,7 +148,7 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 		meta.Description, tableChange.dataChange, tableChange.schemaChange), nil
 }
 
-// loadTableChanges loads the set of changed tables for the current commit into this iterator, taking
+// loadTableChanges loads the set of table changes for the current commit into this iterator, taking
 // care of advancing the iterator if that commit didn't mutate any tables and checking for EOF condition.
 func (itr *UnscopedDiffTableItr) loadTableChanges(commit *doltdb.Commit) error {
 	tableChanges, err := itr.calculateTableChanges(commit)
@@ -221,7 +222,10 @@ func (itr *UnscopedDiffTableItr) calculateTableChanges(commit *doltdb.Commit) ([
 	return tableChanges, nil
 }
 
+// processTableDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
+// table rename, table create, or data update) and returns a tableChange struct representing the change.
 func (itr *UnscopedDiffTableItr) processTableDelta(delta diff.TableDelta) (*tableChange, error) {
+	// Dropping a table is always a schema change, and also a data change if the table contained data
 	if itr.isTableDropChange(delta) {
 		isEmpty, err := itr.isTableDataEmpty(delta.FromTable)
 		if err != nil {
@@ -235,19 +239,21 @@ func (itr *UnscopedDiffTableItr) processTableDelta(delta diff.TableDelta) (*tabl
 		}, nil
 	}
 
+	// Renaming a table is always a schema change, and also a data change if the table data differs
 	if itr.isRenameChange(delta) {
-		dataChange, err := itr.didTableDataChange(delta)
+		dataChanged, err := itr.isTableDataDifferent(delta)
 		if err != nil {
 			return nil, err
 		}
 
 		return &tableChange{
 			tableName:    delta.ToName,
-			dataChange:   dataChange,
+			dataChange:   dataChanged,
 			schemaChange: true,
 		}, nil
 	}
 
+	// Creating a table is always a schema change, and also a data change if data was inserted
 	if itr.isTableCreateChange(delta) {
 		isEmpty, err := itr.isTableDataEmpty(delta.ToTable)
 		if err != nil {
@@ -261,30 +267,20 @@ func (itr *UnscopedDiffTableItr) processTableDelta(delta diff.TableDelta) (*tabl
 		}, nil
 	}
 
-	fromTableHash, err := delta.FromTable.HashOf()
+	dataChanged, err := itr.isTableDataDifferent(delta)
 	if err != nil {
 		return nil, err
 	}
 
-	toTableHash, err := delta.ToTable.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	fromSchemaHash, err := delta.FromTable.GetSchemaHash(itr.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	toSchemaHash, err := delta.ToTable.GetSchemaHash(itr.ctx)
+	schemaChanged, err := itr.isTableSchemaDifferent(delta)
 	if err != nil {
 		return nil, err
 	}
 
 	return &tableChange{
 		tableName:    delta.ToName,
-		dataChange:   fromTableHash != toTableHash,
-		schemaChange: fromSchemaHash != toSchemaHash,
+		dataChange:   dataChanged,
+		schemaChange: schemaChanged,
 	}, nil
 }
 
@@ -303,27 +299,59 @@ func (itr *UnscopedDiffTableItr) isTableDataEmpty(table *doltdb.Table) (bool, er
 	return rowData.Empty(), nil
 }
 
-func (itr *UnscopedDiffTableItr) didTableDataChange(delta diff.TableDelta) (bool, error) {
-	// TODO: Check for nil to/from table
-
-	rowData, err := delta.ToTable.GetNomsRowData(itr.ctx)
-	if err != nil {
-		return false, err
-	}
-
-	return rowData.Empty(), nil
-}
-
+// isRenameChange returns true if the specified TableDelta represents a table rename change.
 func (itr *UnscopedDiffTableItr) isRenameChange(delta diff.TableDelta) bool {
 	return delta.FromTable != nil &&
 		delta.ToTable != nil &&
 		delta.FromName != delta.ToName
 }
 
+// isTableDropChange return true if the specified TableDelta represents a table drop change.
 func (itr *UnscopedDiffTableItr) isTableDropChange(delta diff.TableDelta) bool {
 	return len(delta.FromName) > 0 && len(delta.ToName) == 0
 }
 
+// isTableCreateChange returns true if the specified TableDelta represents a table create change.
 func (itr *UnscopedDiffTableItr) isTableCreateChange(delta diff.TableDelta) bool {
 	return delta.FromTable == nil && delta.ToTable != nil
+}
+
+// isTableDataDifferent returns true if the data in the from and to tables is different. This method
+// should only be called with both from and to tables are not nil.
+func (itr *UnscopedDiffTableItr) isTableDataDifferent(delta diff.TableDelta) (bool, error) {
+	if delta.FromTable == nil || delta.ToTable == nil {
+		return false, errors.New("specified FromTable and ToTable should never be nil")
+	}
+
+	fromTableHash, err := delta.FromTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	toTableHash, err := delta.ToTable.HashOf()
+	if err != nil {
+		return false, err
+	}
+
+	return fromTableHash != toTableHash, nil
+}
+
+// isTableSchemaDifferent returns true if the schema in the from and to tables is different. This method
+// should only be called with both from and to tables are not nil.
+func (itr *UnscopedDiffTableItr) isTableSchemaDifferent(delta diff.TableDelta) (bool, error) {
+	if delta.FromTable == nil || delta.ToTable == nil {
+		return false, errors.New("specified FromTable and ToTable should never be nil")
+	}
+
+	fromSchemaHash, err := delta.FromTable.GetSchemaHash(itr.ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toSchemaHash, err := delta.ToTable.GetSchemaHash(itr.ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return fromSchemaHash != toSchemaHash, nil
 }
