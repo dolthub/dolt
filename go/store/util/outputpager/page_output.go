@@ -103,7 +103,7 @@ func Start() *Pager {
 	go func() {
 		err := cmd.Wait()
 		if err != nil {
-			fmt.Println("cmd.Wait: ", err)
+			fmt.Printf("error occurred during exit: %s ", err)
 		}
 		p.closePipe()
 		p.doneCh <- struct{}{}

@@ -86,5 +86,4 @@ func TestLogSigterm(t *testing.T) {
 
 	err = process.Signal(syscall.SIGTERM)
 	require.NoError(t, err)
-
 }
