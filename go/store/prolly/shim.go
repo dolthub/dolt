@@ -37,7 +37,7 @@ func NewEmptyMap(sch schema.Schema) Map {
 
 // PartitionKeysFromMap naively divides the map by its top-level keys.
 func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
-	keys = make([]val.Tuple, m.root.nodeCount())
+	keys = make([]val.Tuple, m.root.count)
 	for i := range keys {
 		keys[i] = val.Tuple(m.root.getKey(i))
 	}

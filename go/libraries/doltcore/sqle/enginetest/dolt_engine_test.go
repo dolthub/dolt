@@ -43,7 +43,7 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT * from mytable`,
+		Query:    `SELECT * from mytable`,
 		Expected: []sql.Row{},
 	}
 

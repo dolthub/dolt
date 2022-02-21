@@ -51,7 +51,6 @@ func init() {
 
 var encodingToType [256]query.Type
 
-
 type prollyRowIter struct {
 	ctx  context.Context
 	iter prolly.MapRangeIter

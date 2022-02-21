@@ -33,7 +33,7 @@ func TestRoundTripInts(t *testing.T) {
 
 	nd := newLeafNode(keys, values)
 	assert.True(t, nd.leafNode())
-	assert.Equal(t, len(keys), nd.nodeCount())
+	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
 		assert.Equal(t, keys[i], nd.getKey(i))
 		assert.Equal(t, values[i], nd.getValue(i))
@@ -47,7 +47,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.leafNode())
-		assert.Equal(t, len(keys), nd.nodeCount())
+		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.getKey(i))
 			assert.Equal(t, values[i], nd.getValue(i))
