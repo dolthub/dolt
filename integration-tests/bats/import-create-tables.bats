@@ -741,3 +741,21 @@ DELIM
     [ "${#lines[@]}" -eq 2 ]
     [ "${lines[1]}" = 5,5 ]
 }
+
+@test "import-create-tables: --ignore-skipped-rows correctly prevents skipped rows from printing" {
+    cat <<DELIM > 1pk5col-rpt-ints.csv
+pk,c1,c2,c3,c4,c5
+1,1,2,3,4,5
+1,1,2,3,4,7
+1,1,2,3,4,8
+DELIM
+
+    run dolt table import -c --continue  --ignore-skipped-rows --pk=pk test 1pk5col-rpt-ints.csv
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+    ! [[ "$output" =~ "1,1,2,3,4,7" ]] || false
+    ! [[ "$output" =~ "1,1,2,3,4,8" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Lines skipped: 2" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}

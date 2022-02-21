@@ -98,3 +98,5 @@ oltp_update_non_index
 `Options` are additional sysbench test options. These will be provided to sysbench in the form:
 
 `sysbench [options]... [testname] [command]`
+
+Note: Be sure that all mysql processes are off when running this locally.
