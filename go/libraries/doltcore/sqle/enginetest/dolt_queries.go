@@ -751,7 +751,6 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			},
 		},
 	},
-	// TODO: Revisit this?
 	// The DOLT_DIFF system table doesn't currently show any diff data for a merge commit.
 	// When processing a merge commit, diff.GetTableDeltas isn't aware of branch context, so it
 	// doesn't detect that any tables have changed.
