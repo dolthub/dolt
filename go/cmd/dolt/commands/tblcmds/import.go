@@ -48,18 +48,19 @@ import (
 )
 
 const (
-	createParam      = "create-table"
-	updateParam      = "update-table"
-	replaceParam     = "replace-table"
-	tableParam       = "table"
-	fileParam        = "file"
-	schemaParam      = "schema"
-	mappingFileParam = "map"
-	forceParam       = "force"
-	contOnErrParam   = "continue"
-	primaryKeyParam  = "pk"
-	fileTypeParam    = "file-type"
-	delimParam       = "delim"
+	createParam       = "create-table"
+	updateParam       = "update-table"
+	replaceParam      = "replace-table"
+	tableParam        = "table"
+	fileParam         = "file"
+	schemaParam       = "schema"
+	mappingFileParam  = "map"
+	forceParam        = "force"
+	contOnErrParam    = "continue"
+	primaryKeyParam   = "pk"
+	fileTypeParam     = "file-type"
+	delimParam        = "delim"
+	ignoreSkippedRows = "ignore-skipped-rows"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -70,7 +71,7 @@ The schema for the new table can be specified explicitly by providing a SQL sche
 
 If {{.EmphasisLeft}}--update-table | -u{{.EmphasisRight}} is given the operation will update {{.LessThan}}table{{.GreaterThan}} with the contents of file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
-During import, if there is an error importing any row, the import will be aborted by default.  Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered.
+During import, if there is an error importing any row, the import will be aborted by default. Use the {{.EmphasisLeft}}--continue{{.EmphasisRight}} flag to continue importing when an error is encountered. You can add the {{.EmphasisLeft}}--ignore-skipped-rows{{.EmphasisRight}} flag to prevent the import utility from printing all the skipped rows. 
 
 If {{.EmphasisLeft}}--replace-table | -r{{.EmphasisRight}} is given the operation will replace {{.LessThan}}table{{.GreaterThan}} with the contents of the file. The table's existing schema will be used, and field names will be used to match file fields with table fields unless a mapping file is specified.
 
@@ -79,27 +80,27 @@ If the schema for the existing table does not match the schema for the new file,
 A mapping file can be used to map fields between the file being imported and the table being written to. This can be used when creating a new table, or updating or replacing an existing table.
 
 ` + schcmds.MappingFileHelp +
-
 		`
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
-		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
 
 type importOptions struct {
-	operation     mvdata.TableImportOp
-	destTableName string
-	contOnErr     bool
-	force         bool
-	schFile       string
-	primaryKeys   []string
-	nameMapper    rowconv.NameMapper
-	src           mvdata.DataLocation
-	srcOptions    interface{}
+	operation         mvdata.TableImportOp
+	destTableName     string
+	contOnErr         bool
+	force             bool
+	schFile           string
+	primaryKeys       []string
+	nameMapper        rowconv.NameMapper
+	src               mvdata.DataLocation
+	srcOptions        interface{}
+	ignoreSkippedRows bool
 }
 
 func (m importOptions) WritesToTable() bool {
@@ -157,6 +158,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	schemaFile, _ := apr.GetValue(schemaParam)
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
+	ignore := apr.Contains(ignoreSkippedRows)
 
 	val, _ := apr.GetValue(primaryKeyParam)
 	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
@@ -225,15 +227,16 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	}
 
 	return &importOptions{
-		operation:     moveOp,
-		destTableName: tableName,
-		contOnErr:     contOnErr,
-		force:         force,
-		schFile:       schemaFile,
-		nameMapper:    colMapper,
-		primaryKeys:   pks,
-		src:           srcLoc,
-		srcOptions:    srcOpts,
+		operation:         moveOp,
+		destTableName:     tableName,
+		contOnErr:         contOnErr,
+		force:             force,
+		schFile:           schemaFile,
+		nameMapper:        colMapper,
+		primaryKeys:       pks,
+		src:               srcLoc,
+		srcOptions:        srcOpts,
+		ignoreSkippedRows: ignore,
 	}, nil
 
 }
@@ -323,6 +326,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(forceParam, "f", "If a create operation is being executed, data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
+	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
@@ -505,6 +509,13 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			return true
 		}
 
+		atomic.AddInt64(&badCount, 1)
+
+		// Don't log the skipped rows when the ignore-skipped-rows param is specified.
+		if options.ignoreSkippedRows {
+			return false
+		}
+
 		if !printStarted {
 			cli.PrintErrln("The following rows were skipped:")
 			printStarted = true
@@ -516,7 +527,6 @@ func move(ctx context.Context, rd table.SqlRowReader, wr *mvdata.SqlEngineTableW
 			cli.PrintErr(sql.FormatRow(r))
 		}
 
-		atomic.AddInt64(&badCount, 1)
 		return false
 	}
 
