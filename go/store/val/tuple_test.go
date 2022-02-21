@@ -49,7 +49,7 @@ func roundTripBytes(t *testing.T) {
 }
 
 func testTupleGetMany(t *testing.T) {
-	for n := 0; n < 100; n++ {
+	for n := 0; n < 1000; n++ {
 		fields := randomByteFields(t)
 		tup := NewTuple(testPool, fields...)
 

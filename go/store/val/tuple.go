@@ -202,7 +202,7 @@ func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
 	}
 
 	// we don't have a "start" offset for the first field
-	if indexes[0] == 0 {
+	if len(indexes) > 0 && indexes[0] == 0 {
 		o := readUint16(offs[:2])
 		slices[0] = data[:o]
 		indexes = indexes[1:]
