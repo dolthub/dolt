@@ -154,52 +154,7 @@ func (tup Tuple) GetField(i int) (field []byte) {
 // field indexes are provided in ascending order. It populates field data
 // into |slices| to avoid allocating.
 func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
-	cnt := tup.Count()
-
-	sz := ByteSize(len(tup))
-	split := sz - uint16Size*ByteSize(cnt)
-	offs := offsets(tup[split : sz-countSize])
-
-	k, start, stop := int(0), uint16(0), uint16(0)
-
-	// we don't have an explicit "start" for the
-	// first field, handle it separately
-	if indexes[k] == 0 {
-		if cnt == 1 {
-			stop = uint16(split)
-		} else {
-			stop = readUint16(offs[:uint16Size])
-		}
-		slices[0] = tup[:stop]
-		k++
-	}
-
-	// we don't have an explicit "stop" for the
-	// last field, handle it separately
-	last := cnt - 1
-
-	for ; k < len(indexes) && indexes[k] < last; k++ {
-		i := indexes[k]
-		start = readUint16(offs[(i-1)*2 : i*2])
-		stop = readUint16(offs[i*2 : (i+1)*2])
-		slices[k] = tup[start:stop]
-	}
-
-	if k < len(indexes) && indexes[k] == last {
-		os := ByteSize(len(offs))
-		start = readUint16(offs[os-uint16Size:])
-		stop = uint16(split)
-		slices[k] = tup[start:stop]
-	}
-
-	// set NULL values
-	for i, s := range slices {
-		if len(s) == 0 {
-			slices[i] = nil
-		}
-	}
-
-	return slices
+	return sliceManyFields(tup, indexes, slices)
 }
 
 func (tup Tuple) Count() int {
@@ -218,4 +173,56 @@ func sizeOf(val []byte) ByteSize {
 func writeFieldCount(tup Tuple, count int) {
 	sl := tup[len(tup)-int(countSize):]
 	writeUint16(sl, uint16(count))
+}
+
+func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
+	cnt := tuple.Count()
+	sz := ByteSize(len(tuple))
+	split := sz - uint16Size*ByteSize(cnt)
+
+	data := tuple[:split]
+	offs := offsets(tuple[split : sz-countSize])
+
+	// if count is 1, we assume |indexes| is [0]
+	if cnt == 1 {
+		slices[0] = data
+		if len(data) == 0 {
+			slices[0] = nil
+		}
+		return slices
+	}
+
+	subset := slices
+	// we don't have an explicit |stop| offset
+	// for the last field
+	n := len(slices)
+	if indexes[n-1] == cnt-1 {
+		o := readUint16(offs[len(offs)-2:])
+		slices[n-1] = data[o:]
+		indexes = indexes[:n-1]
+		subset = subset[:n-1]
+	}
+
+	// we don't have an explicit |start| offset
+	// for the first field
+	if indexes[0] == 0 {
+		o := readUint16(offs[:2])
+		slices[0] = data[:o]
+		indexes = indexes[1:]
+		subset = subset[1:]
+	}
+
+	for i, k := range indexes {
+		start := readUint16(offs[(k-1)*2 : k*2])
+		stop := readUint16(offs[k*2 : (k+1)*2])
+		subset[i] = tuple[start:stop]
+	}
+
+	for i := range slices {
+		if len(slices[i]) == 0 {
+			slices[i] = nil
+		}
+	}
+
+	return slices
 }
