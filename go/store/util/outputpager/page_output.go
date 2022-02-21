@@ -49,6 +49,8 @@ type Pager struct {
 }
 
 func Start() *Pager {
+	// `testing` is set to true only to test this function because when testing this function, stdout is not Terminal.
+	// otherwise, it must be always false.
 	if !testing {
 		if noPager || !IsStdoutTty() {
 			return &Pager{os.Stdout, nil, nil, nil, nil}

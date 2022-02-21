@@ -1338,6 +1338,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
+	// TODO : ALTER TABLE statements should return error for ForeignKeyConstraints
 	if fkChecks.(int8) == 1 {
 		root, foreignKey, err = creation.ResolveForeignKey(ctx, root, table, foreignKey, t.opts)
 		if err != nil {
