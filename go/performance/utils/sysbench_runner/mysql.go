@@ -132,10 +132,9 @@ func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName strin
 		return err
 	}
 	defer func() {
-		if err != nil {
-			db.Close()
-		} else {
-			err = db.Close()
+		rerr := db.Close()
+		if err == nil {
+			err = rerr
 		}
 	}()
 	err = db.Ping()
