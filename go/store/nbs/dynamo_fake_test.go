@@ -62,7 +62,12 @@ func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
 			return nil, err
 		}
 
-		return newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), fileBlockSize)
+		if err != nil {
+			return nil, err
+		}
+
+		return tr, nil
 	}
 	return nil, nil
 }

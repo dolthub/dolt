@@ -48,7 +48,7 @@ func Run(config *Config) error {
 		if err != nil {
 			return err
 		}
-		err = writeResults(serverConfig, results)
+		err = WriteResults(serverConfig, results)
 		if err != nil {
 			return err
 		}
@@ -61,7 +61,7 @@ func sysbenchVersion(ctx context.Context) error {
 	return sysbenchVersion.Run()
 }
 
-func writeResults(serverConfig *ServerConfig, results Results) error {
+func WriteResults(serverConfig *ServerConfig, results Results) error {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err

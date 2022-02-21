@@ -15,7 +15,6 @@
 package json
 
 import (
-	"context"
 	js "encoding/json"
 	"fmt"
 	"strings"
@@ -26,7 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -180,39 +178,31 @@ func TestJSONStructuralSharing(t *testing.T) {
 		}
 		sb.WriteRune('}')
 
-		ctx := context.Background()
-		ts := &chunks.TestStorage{}
-		db := datas.NewDatabase(ts.NewViewWithDefaultFormat())
+		ts := &chunks.MemoryStorage{}
+		vrw := types.NewValueStore(ts.NewViewWithDefaultFormat())
 
-		val := MustNomsJSONWithVRW(db, sb.String())
+		val := MustNomsJSONWithVRW(vrw, sb.String())
 
-		err := db.Flush(ctx)
+		json_refs := make(hash.HashSet)
+		err := types.JSON(val).WalkRefs(vrw.Format(), func(r types.Ref) error {
+			json_refs.Insert(r.TargetHash())
+			return nil
+		})
 		require.NoError(t, err)
-		before := ts.Len()
 
-		// assert |val| is chunked given that
-		// Database.Flush() writes a chunk itself
-		assert.GreaterOrEqual(t, before, 2)
+		tup, err := types.NewTuple(types.Format_Default, types.Int(12), types.JSON(val))
+		require.NoError(t, err)
+		tuple_refs := make(hash.HashSet)
+		tup.WalkRefs(vrw.Format(), func(r types.Ref) error {
+			tuple_refs.Insert(r.TargetHash())
+			return nil
+		})
 
-		i = 0
-		const tuples = 20
-		for i < tuples {
-			tup, err := types.NewTuple(types.Format_Default, types.Int(i), types.JSON(val))
-			require.NoError(t, err)
-			_, err = db.WriteValue(ctx, tup)
-			require.NoError(t, err)
-			i++
+		assert.Greater(t, len(json_refs), 0)
+		assert.Equal(t, len(json_refs), len(tuple_refs))
+		for k, _ := range tuple_refs {
+			json_refs.Remove(k)
 		}
-
-		err = db.Flush(ctx)
-		require.NoError(t, err)
-		err = db.(datas.GarbageCollector).GC(ctx, hash.HashSet{}, hash.HashSet{})
-		require.NoError(t, err)
-		after := ts.Len()
-
-		// extras chunks are sometimes written
-		const errMargin = 5
-
-		assert.Greater(t, before+tuples+errMargin, after)
+		assert.Equal(t, 0, len(json_refs))
 	})
 }

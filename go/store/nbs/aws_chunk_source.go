@@ -43,52 +43,58 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 
 		if index, found := indexCache.get(name); found {
 			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+			tr, err := newTableReader(index, tra, s3BlockSize)
+			if err != nil {
+				return &chunkSourceAdapter{}, err
+			}
+			return &chunkSourceAdapter{tr, name}, nil
 		}
 	}
 
 	t1 := time.Now()
-	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
+	index, tra, err := func() (tableIndex, tableReaderAt, error) {
 		if al.tableMayBeInDynamo(chunkCount) {
 			data, err := ddb.ReadTable(ctx, name, stats)
 
 			if data == nil && err == nil { // There MUST be either data or an error
-				return nil, &dynamoTableReaderAt{}, errors.New("no data available")
+				return onHeapTableIndex{}, &dynamoTableReaderAt{}, errors.New("no data available")
 			}
 
 			if data != nil {
-				return data, &dynamoTableReaderAt{ddb: ddb, h: name}, nil
+				stats.IndexBytesPerRead.Sample(uint64(len(data)))
+				ind, err := parseTableIndexByCopy(data)
+				if err != nil {
+					return onHeapTableIndex{}, nil, err
+				}
+				return ind, &dynamoTableReaderAt{ddb: ddb, h: name}, nil
 			}
 
 			if _, ok := err.(tableNotInDynamoErr); !ok {
-				return nil, &dynamoTableReaderAt{}, err
+				return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
 			}
 		}
-
 		size := indexSize(chunkCount) + footerSize
 		buff := make([]byte, size)
-
 		n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
-
 		if err != nil {
-			return nil, &dynamoTableReaderAt{}, err
+			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
 		}
-
 		if size != uint64(n) {
-			return nil, &dynamoTableReaderAt{}, errors.New("failed to read all data")
+			return onHeapTableIndex{}, &dynamoTableReaderAt{}, errors.New("failed to read all data")
 		}
-
-		return buff, &s3TableReaderAt{s3: s3, h: name}, nil
+		stats.IndexBytesPerRead.Sample(uint64(len(buff)))
+		ind, err := parseTableIndex(buff)
+		if err != nil {
+			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
+		}
+		return ind, &s3TableReaderAt{s3: s3, h: name}, nil
 	}()
 
 	if err != nil {
 		return &chunkSourceAdapter{}, err
 	}
 
-	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
 	stats.IndexReadLatency.SampleTimeSince(t1)
-
-	index, err := parseIndex(indexBytes)
 
 	if err != nil {
 		return emptyChunkSource{}, err
@@ -98,7 +104,11 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		indexCache.put(name, ohi)
 	}
 
-	return &chunkSourceAdapter{newTableReader(index, tra, s3BlockSize), name}, nil
+	tr, err := newTableReader(index, tra, s3BlockSize)
+	if err != nil {
+		return &chunkSourceAdapter{}, err
+	}
+	return &chunkSourceAdapter{tr, name}, nil
 }
 
 type awsTableReaderAt struct {

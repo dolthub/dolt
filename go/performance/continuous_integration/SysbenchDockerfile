@@ -28,8 +28,10 @@ RUN \
 WORKDIR /
 COPY ./go /dolt/go
 COPY ./config.json /config.json
+COPY ./tpcc-config.json /tpcc-config.json
 COPY ./sysbench-runner-tests-entrypoint.sh /entrypoint.sh
 RUN git clone https://github.com/dolthub/sysbench-lua-scripts.git
+RUN git clone https://github.com/Percona-Lab/sysbench-tpcc.git
 
 WORKDIR /mysql
 RUN curl -L -O https://dev.mysql.com/get/mysql-apt-config_0.8.22-1_all.deb
@@ -41,5 +43,6 @@ RUN mysql --version
 WORKDIR /dolt/go/cmd/dolt
 RUN go build -o /usr/local/bin/dolt .
 
+ENV DOLT_TRANSACTION_MERGE_STOMP=1
 WORKDIR /dolt/go/performance/utils/sysbench_runner/cmd
 ENTRYPOINT ["/entrypoint.sh"]

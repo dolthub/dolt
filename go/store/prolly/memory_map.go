@@ -171,17 +171,13 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 	}
 }
 
-func (it *memRangeIter) nextMutation() (key, value val.Tuple) {
+func (it *memRangeIter) nextMutation(context.Context) (key, value val.Tuple) {
 	key, value = it.iter.Current()
 	if key == nil {
 		return
 	}
 	it.iter.Advance()
 	return
-}
-
-func (it *memRangeIter) count() int {
-	return it.iter.Count()
 }
 
 func (it *memRangeIter) close() error {

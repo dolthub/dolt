@@ -682,3 +682,15 @@ SQL
     [[ "${lines[2]}" =~ "2" ]] || false    
 }
 
+@test "auto_increment: alter table add constraint for different database" {
+    dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.test (pk integer NOT NULL, c1 integer, c2 integer);
+ALTER TABLE public.test ADD CONSTRAINT serial_pk_pkey PRIMARY KEY (pk);
+ALTER TABLE public.test MODIFY pk integer auto_increment;
+SQL
+
+    run dolt sql -q "SHOW CREATE TABLE public.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "NOT NULL AUTO_INCREMENT" ]] || false
+}

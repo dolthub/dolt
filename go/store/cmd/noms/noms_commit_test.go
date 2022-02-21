@@ -49,11 +49,14 @@ func (s *nomsCommitTestSuite) setupDataset(name string, doCommit bool) (sp spec.
 	s.NoError(err)
 
 	v := types.String("testcommit")
-	ref, err = sp.GetDatabase(context.Background()).WriteValue(context.Background(), v)
+	ctx := context.Background()
+	vrw := sp.GetVRW(ctx)
+	ref, err = vrw.WriteValue(context.Background(), v)
 	s.NoError(err)
 
 	if doCommit {
-		_, err = sp.GetDatabase(context.Background()).CommitValue(context.Background(), sp.GetDataset(context.Background()), ref)
+		db := sp.GetDatabase(context.Background())
+		_, err = datas.CommitValue(context.Background(), db, sp.GetDataset(context.Background()), ref)
 		s.NoError(err)
 	}
 	return

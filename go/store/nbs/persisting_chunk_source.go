@@ -100,9 +100,9 @@ func (ccs *persistingChunkSource) Close() error {
 	return nil
 }
 
-func (ccs *persistingChunkSource) Clone() chunkSource {
+func (ccs *persistingChunkSource) Clone() (chunkSource, error) {
 	// persistingChunkSource does not own |cs| or |mt|. No need to Clone.
-	return ccs
+	return ccs, nil
 }
 
 func (ccs *persistingChunkSource) has(h addr) (bool, error) {
@@ -226,6 +226,20 @@ func (ccs *persistingChunkSource) reader(ctx context.Context) (io.Reader, error)
 	return ccs.cs.reader(ctx)
 }
 
+func (ccs *persistingChunkSource) size() (uint64, error) {
+	err := ccs.wait()
+
+	if err != nil {
+		return 0, err
+	}
+
+	if ccs.cs == nil {
+		return 0, ErrNoChunkSource
+	}
+
+	return ccs.cs.size()
+}
+
 func (ccs *persistingChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	err = ccs.wait()
 
@@ -296,6 +310,10 @@ func (ecs emptyChunkSource) reader(context.Context) (io.Reader, error) {
 	return &bytes.Buffer{}, nil
 }
 
+func (ecs emptyChunkSource) size() (uint64, error) {
+	return 0, nil
+}
+
 func (ecs emptyChunkSource) calcReads(reqs []getRecord, blockSize uint64) (reads int, remaining bool, err error) {
 	return 0, true, nil
 }
@@ -308,6 +326,6 @@ func (ecs emptyChunkSource) Close() error {
 	return nil
 }
 
-func (ecs emptyChunkSource) Clone() chunkSource {
-	return ecs
+func (ecs emptyChunkSource) Clone() (chunkSource, error) {
+	return ecs, nil
 }

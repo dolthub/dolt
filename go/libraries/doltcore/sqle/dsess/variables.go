@@ -39,7 +39,7 @@ func init() {
 	sql.SystemVariables.AddSystemVariables([]sql.SystemVariable{
 		{ // If true, causes a Dolt commit to occur when you commit a transaction.
 			Name:              DoltCommitOnTransactionCommit,
-			Scope:             sql.SystemVariableScope_Session,
+			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(DoltCommitOnTransactionCommit),

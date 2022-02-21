@@ -50,13 +50,13 @@ func createTestSchema() schema.Schema {
 
 func TestNomsMarshalling(t *testing.T) {
 	tSchema := createTestSchema()
-	db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
+	_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), types.Format_Default, nil, nil)
 
 	if err != nil {
 		t.Fatal("Could not create in mem noms db.")
 	}
 
-	val, err := MarshalSchemaAsNomsValue(context.Background(), db, tSchema)
+	val, err := MarshalSchemaAsNomsValue(context.Background(), vrw, tSchema)
 
 	if err != nil {
 		t.Fatal("Failed to marshal Schema as a types.Value.")
@@ -85,7 +85,7 @@ func TestNomsMarshalling(t *testing.T) {
 	tSuperSchema, err := schema.NewSuperSchema(tSchema)
 	require.NoError(t, err)
 
-	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), db, tSuperSchema)
+	ssVal, err := MarshalSuperSchemaAsNomsValue(context.Background(), vrw, tSuperSchema)
 	require.NoError(t, err)
 
 	unMarshalledSS, err := UnmarshalSuperSchemaNomsValue(context.Background(), types.Format_Default, ssVal)
@@ -154,9 +154,9 @@ func TestTypeInfoMarshalling(t *testing.T) {
 
 			nbf, err := types.GetFormatForVersionString(constants.FormatDefaultString)
 			require.NoError(t, err)
-			db, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
+			_, vrw, err := dbfactory.MemFactory{}.CreateDB(context.Background(), nbf, nil, nil)
 			require.NoError(t, err)
-			val, err := MarshalSchemaAsNomsValue(context.Background(), db, originalSch)
+			val, err := MarshalSchemaAsNomsValue(context.Background(), vrw, originalSch)
 			require.NoError(t, err)
 			unmarshalledSch, err := UnmarshalSchemaNomsValue(context.Background(), nbf, val)
 			require.NoError(t, err)

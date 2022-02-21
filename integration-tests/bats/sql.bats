@@ -1530,6 +1530,8 @@ SQL
     head_commit=$(get_head_commit)
 
     run dolt sql -q "SELECT COUNT(*) from dolt_diff_mytable where dolt_diff_mytable.to_commit IN ('$head_commit', '00200202')"
+    echo $head_commit
+    echo $output
     [ "$status" -eq 0 ]
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 2        |" ]] || false
@@ -1633,7 +1635,7 @@ SQL
 }
 
 get_head_commit() {
-    dolt log -n 1 | grep -m 1 commit | cut -c 15-46
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
 
 @test "sql: sql -q query vertical format check" {

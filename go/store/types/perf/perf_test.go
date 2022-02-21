@@ -32,6 +32,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/store/atomicerr"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/perf/suite"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -49,7 +50,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
 	ae := atomicerr.New()
-	out := types.NewStreamingList(context.Background(), s.Database, ae, in)
+	out := types.NewStreamingList(context.Background(), s.VS, ae, in)
 
 	for i := 0; i < 1e7; i++ {
 		in <- types.Float(s.r.Int63())
@@ -59,7 +60,7 @@ func (s *perfSuite) Test01BuildList10mNumbers() {
 	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mNumbers")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, <-out)
 	assert.NoError(err)
 
 	assert.NoError(ae.Get())
@@ -70,7 +71,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	assert := s.NewAssert()
 	in := make(chan types.Value, 16)
 	ae := atomicerr.New()
-	out := types.NewStreamingList(context.Background(), s.Database, ae, in)
+	out := types.NewStreamingList(context.Background(), s.VS, ae, in)
 
 	for i := 0; i < 1e7; i++ {
 		st, err := types.NewStruct(types.Format_7_18, "", types.StructData{
@@ -85,7 +86,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	ds, err := s.Database.GetDataset(context.Background(), "BuildList10mStructs")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, <-out)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, <-out)
 	assert.NoError(err)
 
 	assert.NoError(ae.Get())
@@ -114,7 +115,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	l1Len, l2Len := l1.Len(), l2.Len()
 	l1Last, l2Last := last(l1), last(l2)
 
-	l3, err := types.NewList(context.Background(), s.Database)
+	l3, err := types.NewList(context.Background(), s.VS)
 	assert.NoError(err)
 	for i := uint64(0); i < 1e3; i++ { // 1k iterations * 2 concat ops = 2k times
 		// Include some basic sanity checks.
@@ -131,7 +132,7 @@ func (s *perfSuite) Test05Concat10mValues2kTimes() {
 	ds, err := s.Database.GetDataset(context.Background(), "Concat10mValues2kTimes")
 	assert.NoError(err)
 
-	ds, err = s.Database.CommitValue(context.Background(), ds, l3)
+	ds, err = datas.CommitValue(context.Background(), s.Database, ds, l3)
 	assert.NoError(err)
 
 	s.Database = ds.Database()
@@ -183,7 +184,7 @@ func (s *perfSuite) testBuild500megBlob(p int) {
 		}
 	})
 
-	b, err := types.NewBlob(context.Background(), s.Database, readers...)
+	b, err := types.NewBlob(context.Background(), s.VS, readers...)
 	assert.NoError(err)
 	assert.Equal(uint64(size), b.Len())
 }

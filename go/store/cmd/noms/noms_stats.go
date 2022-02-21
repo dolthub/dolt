@@ -37,7 +37,7 @@ func nomsStats(ctx context.Context, noms *kingpin.Application) (*kingpin.CmdClau
 
 	return stats, func(input string) int {
 		cfg := config.NewResolver()
-		store, err := cfg.GetDatabase(ctx, *database)
+		store, _, err := cfg.GetDatabase(ctx, *database)
 		util.CheckError(err)
 		defer store.Close()
 

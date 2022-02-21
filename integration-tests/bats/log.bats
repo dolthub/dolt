@@ -18,26 +18,26 @@ teardown() {
 
 @test "log: log respects branches" {
     dolt branch branch1
-    dolt commit --allow-empty -m "commit 1 main"
-    dolt commit	--allow-empty -m "commit 2 main"
-    dolt commit	--allow-empty -m "commit 3 main"
+    dolt commit --allow-empty -m "commit 1 MAIN"
+    dolt commit	--allow-empty -m "commit 2 MAIN"
+    dolt commit	--allow-empty -m "commit 3 MAIN"
     run dolt log
     [ $status -eq 0 ]
-    [[ "$output" =~ "main" ]] || false
-    [[ ! "$output" =~ "branch1" ]] || false
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
     dolt checkout branch1
-    dolt commit	--allow-empty -m "commit 1 branch1"
-    dolt commit --allow-empty -m "commit 2 branch1"
-    dolt commit --allow-empty -m "commit 3 branch1"
+    dolt commit	--allow-empty -m "commit 1 BRANCH1"
+    dolt commit --allow-empty -m "commit 2 BRANCH1"
+    dolt commit --allow-empty -m "commit 3 BRANCH1"
     run	dolt log
     [ $status -eq 0 ]
-    [[ ! "$output" =~ "main" ]] || false
-    [[ "$output" =~ "branch1" ]] || false
+    [[ ! "$output" =~ "MAIN" ]] || false
+    [[ "$output" =~ "BRANCH1" ]] || false
     dolt checkout main
     run	dolt log
     [ $status -eq 0 ]
-    [[ "$output" =~ "main" ]] || false
-    [[ ! "$output" =~ "branch1" ]] || false
+    [[ "$output" =~ "MAIN" ]] || false
+    [[ ! "$output" =~ "BRANCH1" ]] || false
 }
 
 @test "log: with -n specified" {
@@ -309,6 +309,73 @@ teardown() {
     [ $status -eq 0 ]
     regex='commit .* .*\n'
     [[ "$output" =~ $regex ]] || false
+}
+
+@test "log: --oneline only shows commit message in one line" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ !("$output" =~ "commit") ]] || false
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
+}
+
+@test "log: --decorate=short shows trimmed branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=short
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "tag: tag_v0" ]] || false
+    [[ !("$output" =~ "/refs/heads/") ]] || false
+    [[ !("$output" =~ "/refs/tags/") ]] || false
+}
+
+@test "log: --decorate=full shows full branches and tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=full
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    [[ "$output" =~ "tag: refs/tags/tag_v0" ]] || false
+}
+
+@test "log: --decorate=no doesn't show branches or tags" {
+    dolt tag tag_v0
+    run dolt log --decorate=no
+    [[ "$output" =~ "commit" ]] || false
+    [[ "$output" =~ "Author" ]] || false
+    [[ "$output" =~ "Date" ]] || false
+    [[ !("$output" =~ "main") ]] || false
+    [[ !("$output" =~ "tag_v0") ]] || false
+}
+
+@test "log: decorate and oneline work together" {
+    dolt commit --allow-empty -m "a message 1"
+    dolt commit --allow-empty -m "a message 2"
+    run dolt log --oneline --decorate=full
+    [[ !("$output" =~ "commit") ]] || false
+    [[ !("$output" =~ "Author") ]] || false
+    [[ !("$output" =~ "Date") ]] || false
+    [[ "$output" =~ "refs/heads/main" ]] || false
+    res=$(dolt log --oneline --decorate=full | wc -l)
+    [ "$res" -eq 3 ] # don't forget initial commit
+    dolt commit --allow-empty -m "a message 3"
+    res=$(dolt log --oneline | wc -l)
+    [ "$res" -eq 4 ] # exactly 1 line is added
+}
+
+@test "log: --decorate=notanoption throws error" {
+    run dolt log --decorate=notanoption
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "fatal: invalid --decorate option" ]] || false
 }
 
 @test "log: check pager" {

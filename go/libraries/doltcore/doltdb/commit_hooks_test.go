@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/buffer"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -104,8 +105,8 @@ func TestPushOnWriteHook(t *testing.T) {
 	}
 
 	tSchema := createTestSchema(t)
-	rowData, _ := createTestRowData(t, ddb.db, tSchema)
-	tbl, err := CreateTestTable(ddb.db, tSchema, rowData)
+	rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+	tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
 
 	if err != nil {
 		t.Fatal("Failed to create test table with data")
@@ -124,17 +125,21 @@ func TestPushOnWriteHook(t *testing.T) {
 
 	// setup hook
 	hook := NewPushOnWriteHook(destDB, tmpDir)
-	ddb.SetCommitHooks(ctx, []datas.CommitHook{hook})
+	ddb.SetCommitHooks(ctx, []CommitHook{hook})
 
 	t.Run("replicate to remote", func(t *testing.T) {
 		srcCommit, err := ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
+		require.NoError(t, err)
+
 		ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+		require.NoError(t, err)
+
 		err = hook.Execute(ctx, ds, ddb.db)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 
 		cs, _ = NewCommitSpec(defaultBranch)
 		destCommit, err := destDB.Resolve(context.Background(), cs, nil)
-
+		require.NoError(t, err)
 		srcHash, _ := srcCommit.HashOf()
 		destHash, _ := destCommit.HashOf()
 		assert.Equal(t, srcHash, destHash)
@@ -237,8 +242,8 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			assert.NoError(t, err)
 
 			tSchema := createTestSchema(t)
-			rowData, _ := createTestRowData(t, ddb.db, tSchema)
-			tbl, err := CreateTestTable(ddb.db, tSchema, rowData)
+			rowData, _ := createTestRowData(t, ddb.vrw, tSchema)
+			tbl, err := CreateTestTable(ddb.vrw, tSchema, rowData)
 
 			if err != nil {
 				t.Fatal("Failed to create test table with data")
@@ -252,12 +257,15 @@ func TestAsyncPushOnWrite(t *testing.T) {
 
 			meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
 			if err != nil {
-				t.Error("Failed to commit")
+				t.Error("Failed to create CommitMeta")
 			}
 
 			_, err = ddb.Commit(context.Background(), valHash, ref.NewBranchRef(defaultBranch), meta)
+			require.NoError(t, err)
 			ds, err := ddb.db.GetDataset(ctx, "refs/heads/main")
+			require.NoError(t, err)
 			err = hook.Execute(ctx, ds, ddb.db)
+			require.NoError(t, err)
 		}
 	})
 }

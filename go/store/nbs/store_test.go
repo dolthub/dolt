@@ -94,8 +94,9 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		expected, ok := fileToData[fileID]
 		require.True(t, ok)
 
-		rd, err := src.Open(context.Background())
+		rd, contentLength, err := src.Open(context.Background())
 		require.NoError(t, err)
+		require.Equal(t, len(expected), int(contentLength))
 
 		data, err := io.ReadAll(rd)
 		require.NoError(t, err)
@@ -524,4 +525,16 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert.Equal(upstream.NumAppendixSpecs(), newUpstream.NumAppendixSpecs())
 	assert.Equal(upstream.GetAppendixTableSpecInfo(0), newUpstream.GetTableSpecInfo(0))
 	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
+}
+
+func TestGuessPrefixOrdinal(t *testing.T) {
+	prefixes := make([]uint64, 256)
+	for i := range prefixes {
+		prefixes[i] = uint64(i << 56)
+	}
+
+	for i, pre := range prefixes {
+		guess := GuessPrefixOrdinal(pre, 256)
+		assert.Equal(t, i, guess)
+	}
 }

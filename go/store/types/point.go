@@ -16,24 +16,13 @@ package types
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	"math"
 	"strconv"
 
-	"github.com/dolthub/dolt/go/store/hash"
-)
+	"github.com/dolthub/dolt/go/store/geometry"
 
-const (
-	SRIDSize       = 4
-	EndianSize     = 1
-	TypeSize       = 4
-	EWKBHeaderSize = SRIDSize + EndianSize + TypeSize
-	PointDataSize  = 16
-	PointID        = 1
-	LinestringID   = 2
-	PolygonID      = 3
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // Point is a Noms Value wrapper around the primitive string type (for now).
@@ -93,29 +82,21 @@ func (v Point) valueReadWriter() ValueReadWriter {
 // WriteEWKBHeader writes the SRID, endianness, and type to the byte buffer
 // This function assumes v is a valid spatial type
 func WriteEWKBHeader(v interface{}, buf []byte) {
-	// Write endianness byte (always little endian)
-	buf[SRIDSize] = 1
-
-	// Parse data
 	switch v := v.(type) {
 	case Point:
 		// Write SRID and type
-		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], PointID)
+		geometry.WriteEWKBHeader(buf, v.SRID, geometry.PointType)
 	case Linestring:
-		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], LinestringID)
+		geometry.WriteEWKBHeader(buf, v.SRID, geometry.LinestringType)
 	case Polygon:
-		binary.LittleEndian.PutUint32(buf[0:SRIDSize], v.SRID)
-		binary.LittleEndian.PutUint32(buf[SRIDSize+EndianSize:EWKBHeaderSize], PolygonID)
+		geometry.WriteEWKBHeader(buf, v.SRID, geometry.PolygonType)
 	}
 }
 
 // WriteEWKBPointData converts a Point into a byte array in EWKB format
 // Very similar to function in GMS
 func WriteEWKBPointData(p Point, buf []byte) {
-	binary.LittleEndian.PutUint64(buf[:PointDataSize/2], math.Float64bits(p.X))
-	binary.LittleEndian.PutUint64(buf[PointDataSize/2:], math.Float64bits(p.Y))
+	geometry.WriteEWKBPointData(buf, p.X, p.Y)
 }
 
 func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
@@ -126,49 +107,39 @@ func (v Point) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	}
 
 	// Allocate buffer for point 4 + 1 + 4 + 16
-	buf := make([]byte, EWKBHeaderSize+PointDataSize)
+	buf := make([]byte, geometry.EWKBHeaderSize+geometry.PointSize)
 
 	// Write header and data to buffer
 	WriteEWKBHeader(v, buf)
-	WriteEWKBPointData(v, buf[EWKBHeaderSize:])
+	WriteEWKBPointData(v, buf[geometry.EWKBHeaderSize:])
 
 	w.writeString(string(buf))
 	return nil
 }
 
-// ParseEWKBHeader converts the header potion of a EWKB byte array to srid, endianness, and geometry type
-func ParseEWKBHeader(buf []byte) (uint32, bool, uint32) {
-	srid := binary.LittleEndian.Uint32(buf[0:SRIDSize])                               // First 4 bytes is SRID always in little endian
-	isBig := buf[SRIDSize] == 0                                                       // Next byte is endianness
-	geomType := binary.LittleEndian.Uint32(buf[SRIDSize+EndianSize : EWKBHeaderSize]) // Next 4 bytes is type
-	return srid, isBig, geomType
-}
-
 // ParseEWKBPoint converts the data portion of a WKB point to Point
 // Very similar logic to the function in GMS
 func ParseEWKBPoint(buf []byte, srid uint32) Point {
-	// Read floats x and y
-	x := math.Float64frombits(binary.LittleEndian.Uint64(buf[:PointDataSize/2]))
-	y := math.Float64frombits(binary.LittleEndian.Uint64(buf[PointDataSize/2:]))
+	x, y := geometry.ParseEWKBPoint(buf)
 	return Point{SRID: srid, X: x, Y: y}
 }
 
 func readPoint(nbf *NomsBinFormat, b *valueDecoder) (Point, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf) // Assume it's always little endian
-	if geomType != PointID {
+	srid, _, geomType := geometry.ParseEWKBHeader(buf) // Assume it's always little endian
+	if geomType != geometry.PointType {
 		return Point{}, errors.New("not a point")
 	}
-	return ParseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
+	return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
 }
 
 func (v Point) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
-	srid, _, geomType := ParseEWKBHeader(buf) // Assume it's always little endian
-	if geomType != PointID {
+	srid, _, geomType := geometry.ParseEWKBHeader(buf) // Assume it's always little endian
+	if geomType != geometry.PointType {
 		return Point{}, errors.New("not a point")
 	}
-	return ParseEWKBPoint(buf[EWKBHeaderSize:], srid), nil
+	return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
 }
 
 func (v Point) skip(nbf *NomsBinFormat, b *binaryNomsReader) {

@@ -72,20 +72,21 @@ func WriteValueFile(ctx context.Context, filepath string, store *FileValueStore,
 
 // WriteToWriter writes the values out to the provided writer in the value file format
 func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, values ...types.Value) error {
-	db := datas.NewDatabase(store)
+	vrw := types.NewValueStore(store)
+	db := datas.NewTypesDatabase(vrw)
 	ds, err := db.GetDataset(ctx, env.DefaultInitBranch)
 
 	if err != nil {
 		return err
 	}
 
-	l, err := types.NewList(ctx, db, values...)
+	l, err := types.NewList(ctx, vrw, values...)
 
 	if err != nil {
 		return err
 	}
 
-	ds, err = db.CommitValue(ctx, ds, l)
+	ds, err = datas.CommitValue(ctx, db, ds, l)
 
 	if err != nil {
 		return err
@@ -164,8 +165,9 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, err
 	}
 
-	db := datas.NewDatabase(store)
-	v, err := db.ReadValue(ctx, h)
+	vrw := types.NewValueStore(store)
+
+	v, err := vrw.ReadValue(ctx, h)
 
 	if err != nil {
 		return nil, err

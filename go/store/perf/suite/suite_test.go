@@ -54,9 +54,9 @@ func (s *testSuite) TestNonEmptyPaths() {
 func (s *testSuite) TestDatabase() {
 	assert := s.NewAssert()
 	val := types.Bool(true)
-	r, err := s.Database.WriteValue(context.Background(), val)
+	r, err := s.VS.WriteValue(context.Background(), val)
 	require.NoError(s.T, err)
-	v2, err := s.Database.ReadValue(context.Background(), r.TargetHash())
+	v2, err := s.VS.ReadValue(context.Background(), r.TargetHash())
 	require.NoError(s.T, err)
 	assert.True(v2.Equals(val))
 }

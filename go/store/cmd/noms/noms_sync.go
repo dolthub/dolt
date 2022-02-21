@@ -63,7 +63,7 @@ func setupSyncFlags() *flag.FlagSet {
 
 func runSync(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
-	sourceStore, sourceObj, err := cfg.GetPath(ctx, args[0])
+	sourceStore, sourceVRW, sourceObj, err := cfg.GetPath(ctx, args[0])
 	util.CheckError(err)
 	defer sourceStore.Close()
 
@@ -71,7 +71,7 @@ func runSync(ctx context.Context, args []string) int {
 		util.CheckErrorNoUsage(fmt.Errorf("Object not found: %s", args[0]))
 	}
 
-	sinkDB, sinkDataset, err := cfg.GetDataset(ctx, args[1])
+	sinkDB, _, sinkDataset, err := cfg.GetDataset(ctx, args[1])
 	util.CheckError(err)
 	defer sinkDB.Close()
 
@@ -97,7 +97,7 @@ func runSync(ctx context.Context, args []string) int {
 		lastProgressCh <- last
 	}()
 
-	sourceRef, err := types.NewRef(sourceObj, sourceStore.Format())
+	sourceRef, err := types.NewRef(sourceObj, sourceVRW.Format())
 	util.CheckError(err)
 	sinkRef, sinkExists, err := sinkDataset.MaybeHeadRef()
 	util.CheckError(err)
@@ -108,16 +108,17 @@ func runSync(ctx context.Context, args []string) int {
 	util.CheckError(err)
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
-		err := pull.Pull(ctx, srcCS, sinkCS, wrf, sourceRef.TargetHash(), progressCh)
+		addr := sourceRef.TargetHash()
+		err := pull.Pull(ctx, srcCS, sinkCS, wrf, addr, progressCh)
 
 		if err != nil {
 			return err
 		}
 
 		var tempDS datas.Dataset
-		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef)
+		tempDS, err = sinkDB.FastForward(ctx, sinkDataset, sourceRef.TargetHash())
 		if err == datas.ErrMergeNeeded {
-			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, sourceRef)
+			sinkDataset, err = sinkDB.SetHead(ctx, sinkDataset, addr)
 			nonFF = true
 		} else if err == nil {
 			sinkDataset = tempDS

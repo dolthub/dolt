@@ -86,12 +86,12 @@ func runRoot(ctx context.Context, args []string) int {
 	}
 
 	// If BUG 3407 is correct, we might be able to just take cs and make a Database directly from that.
-	db, err := cfg.GetDatabase(ctx, args[0])
+	db, vrw, err := cfg.GetDatabase(ctx, args[0])
 	util.CheckErrorNoUsage(err)
 	defer db.Close()
-	v, err := db.ReadValue(ctx, h)
+	v, err := vrw.ReadValue(ctx, h)
 	util.CheckErrorNoUsage(err)
-	if !validate(ctx, db.Format(), v) {
+	if !validate(ctx, vrw.Format(), v) {
 		return 1
 	}
 

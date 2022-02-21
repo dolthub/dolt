@@ -76,12 +76,16 @@ func (m *fakeS3) readerForTable(name addr) (chunkReader, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if buff, present := m.data[name.String()]; present {
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff)
 
 		if err != nil {
 			return nil, err
 		}
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }
@@ -94,13 +98,17 @@ func (m *fakeS3) readerForTableWithNamespace(ns string, name addr) (chunkReader,
 		key = ns + "/" + key
 	}
 	if buff, present := m.data[key]; present {
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndexByCopy(buff)
 
 		if err != nil {
 			return nil, err
 		}
 
-		return newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize), nil
+		tr, err := newTableReader(ti, tableReaderAtFromBytes(buff), s3BlockSize)
+		if err != nil {
+			return nil, err
+		}
+		return tr, nil
 	}
 	return nil, nil
 }

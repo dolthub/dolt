@@ -811,7 +811,6 @@ SQL
 }
 
 @test "index: TRUNCATE TABLE" {
-    skip "TRUNCATE not yet supported"
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
@@ -2598,4 +2597,17 @@ SQL
     [[ "$output" =~ "aAaa" ]] || false
     [[ "$output" =~ "Bbbb" ]] || false
     [[ "$output" =~ "bBbb" ]] || false
+}
+
+@test "index: alter table create index for different database" {
+    dolt sql  <<SQL
+CREATE DATABASE public;
+CREATE TABLE public.test (pk integer NOT NULL, c1 integer);
+ALTER TABLE public.test ADD CONSTRAINT index_test_pkey PRIMARY KEY (pk);
+CREATE INDEX index_test_c1_idx ON public.test (c1);
+SQL
+
+    run dolt sql -q "show create table public.test"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "KEY \`index_test_c1_idx\`" ]] || false
 }
