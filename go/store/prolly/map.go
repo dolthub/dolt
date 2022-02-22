@@ -370,7 +370,7 @@ func fetchChildNodes(ctx context.Context, ns NodeStore, nd Node) (err error) {
 	buf := nd.buf.RefArrayBytes()
 
 	for i := 0; i < len(buf); i += 20 {
-		refs.Insert(hash.New(buf[i:i+20]))
+		refs.Insert(hash.New(buf[i : i+20]))
 	}
 
 	return ns.FetchMany(ctx, refs)

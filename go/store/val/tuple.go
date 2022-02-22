@@ -136,18 +136,19 @@ func (tup Tuple) GetField(i int) (field []byte) {
 
 	sz := ByteSize(len(tup))
 	split := sz - uint16Size*ByteSize(cnt)
+	offs := tup[split : sz-countSize]
 
-	sb := SlicedBuffer{
-		Buf:  tup[:split],
-		Offs: offsets(tup[split : sz-countSize]),
+	start, stop := uint16(0), uint16(split)
+	if i*2 < len(offs) {
+		pos := i * 2
+		stop = readUint16(offs[pos : pos+2])
+	}
+	if i > 0 {
+		pos := (i - 1) * 2
+		start = readUint16(offs[pos : pos+2])
 	}
 
-	field = sb.GetSlice(i)
-
-	if len(field) == 0 {
-		return nil // NULL
-	}
-	return
+	return tup[start:stop]
 }
 
 // GetManyFields takes a sorted slice of ordinals |indexes| and returns the requested
