@@ -639,7 +639,7 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw type
 	rd.Start(ctx, fromRows, toRows)
 	defer rd.Close()
 
-	src := diff.NewRowDiffSource(rd, joiner)
+	src := diff.NewRowDiffSource(rd, joiner, nil)
 	defer src.Close()
 
 	oldColNames, verr := mapTagToColName(fromSch, unionSch)

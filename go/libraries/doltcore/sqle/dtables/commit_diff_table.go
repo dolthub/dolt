@@ -253,7 +253,7 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	}
 
 	if !isDiffable {
-		ctx.Warn(PrimaryKeyChanceWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
+		ctx.Warn(PrimaryKeyChangeWarningCode, fmt.Sprintf(PrimaryKeyChangeWarning, dp.fromName, dp.toName))
 		return NewSliceOfPartitionsItr([]sql.Partition{}), nil
 	}
 
@@ -367,5 +367,8 @@ func (dt *CommitDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expressio
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(diffPartition)
-	return dp.getRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
+	// TODO: commit_diff_table reuses diffPartition from diff_table and we've switched diff_table over
+	//       to a new format. After we switch commit_diff_table over to the same new format, we can
+	//       remove this getLegacyRowIter method.
+	return dp.getLegacyRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
 }

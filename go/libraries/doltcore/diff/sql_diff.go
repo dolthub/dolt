@@ -97,21 +97,23 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 			case DiffModifiedOld:
 				return nil
 			case DiffModifiedNew:
-				// Pass in the update as a setStr
-				keys := make([]string, len(colDiffs))
+				if len(colDiffs) > 0 {
+					// Pass in the update as a setStr
+					keys := make([]string, len(colDiffs))
 
-				i := 0
-				for k := range colDiffs {
-					keys[i] = k
-					i++
+					i := 0
+					for k := range colDiffs {
+						keys[i] = k
+						i++
+					}
+					stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch, set.NewStrSet(keys))
+
+					if err != nil {
+						return err
+					}
+
+					return iohelp.WriteLine(sds.wr, stmt)
 				}
-				stmt, err := sqlfmt.RowAsUpdateStmt(r, sds.tableName, sds.sch, set.NewStrSet(keys))
-
-				if err != nil {
-					return err
-				}
-
-				return iohelp.WriteLine(sds.wr, stmt)
 			}
 			// Treat the diff indicator string as a diff of the same type
 			colDiffs[diffColName] = dt
