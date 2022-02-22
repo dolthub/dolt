@@ -38,8 +38,6 @@ type NodeStore interface {
 	// Write writes a prolly tree Node to the store.
 	Write(ctx context.Context, nd Node) (hash.Hash, error)
 
-	FetchMany(ctx context.Context, refs hash.HashSet) error
-
 	// Pool returns a buffer pool.
 	Pool() pool.BuffPool
 
@@ -92,19 +90,6 @@ func (ns nodeStore) Write(ctx context.Context, nd Node) (hash.Hash, error) {
 	}
 	ns.cache.insert(c)
 	return c.Hash(), nil
-}
-
-func (ns nodeStore) FetchMany(ctx context.Context, refs hash.HashSet) error {
-	absent := refs.Copy()
-	for h := range absent {
-		if _, ok := ns.cache.get(h); ok {
-			delete(absent, h)
-		}
-	}
-
-	return ns.store.GetMany(ctx, absent, func(ctx context.Context, chunk *chunks.Chunk) {
-		ns.cache.insert(*chunk)
-	})
 }
 
 // Pool implements NodeStore.

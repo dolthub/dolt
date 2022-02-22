@@ -203,16 +203,10 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 		start = nil // empty range
 	}
 
-	iter := &prollyRangeIter{
+	return &prollyRangeIter{
 		curr: start,
 		stop: stop,
-	}
-
-	if err = prefetchChunkRange(ctx, m.ns, iter); err != nil {
-		return nil, err
-	}
-
-	return iter, nil
+	}, nil
 }
 
 func (m Map) rangeStartSearchFn(rng Range) searchFn {
@@ -336,42 +330,4 @@ func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
 	}
 
 	return
-}
-
-// todo(andy): this over fetches
-func prefetchChunkRange(ctx context.Context, ns NodeStore, iter *prollyRangeIter) (err error) {
-	if iter.curr.parent == nil {
-		return nil
-	}
-
-	// get level 1 cursors
-	start := iter.curr.parent.clone()
-	end := iter.stop.parent
-
-	for start.compare(end) < 0 {
-		if err = fetchChildNodes(ctx, ns, start.nd); err != nil {
-			return err
-		}
-		start.skipToNodeEnd()
-
-		if _, err = start.advance(ctx); err != nil {
-			return err
-		}
-	}
-	return
-}
-
-func fetchChildNodes(ctx context.Context, ns NodeStore, nd Node) (err error) {
-	if nd.level() == 0 {
-		return
-	}
-
-	refs := hash.NewHashSet()
-	buf := nd.buf.RefArrayBytes()
-
-	for i := 0; i < len(buf); i += 20 {
-		refs.Insert(hash.New(buf[i : i+20]))
-	}
-
-	return ns.FetchMany(ctx, refs)
 }

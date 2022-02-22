@@ -382,31 +382,20 @@ func (cur *nodeCursor) copy(other *nodeCursor) {
 	}
 }
 
-func compareCursors(left, right *nodeCursor) int {
-	// assumes max tree height of 8
-	var diffs [8]int16
-
-	// recurse up the tree and compute diffs
-	level := 0
+func compareCursors(left, right *nodeCursor) (diff int) {
+	diff = 0
 	for {
-		diffs[level] = int16(left.idx - right.idx)
+		d := left.idx - right.idx
+		if d != 0 {
+			diff = d
+		}
 
-		left, right = left.parent, right.parent
-		if left == nil || right == nil {
+		if left.parent == nil || right.parent == nil {
 			break
 		}
-
-		level++
+		left, right = left.parent, right.parent
 	}
-
-	// traverse back down and return the first diff
-	for level >= 0 {
-		if diffs[level] != 0 {
-			return int(diffs[level])
-		}
-		level--
-	}
-	return 0
+	return
 }
 
 func assertTrue(b bool) {

@@ -128,7 +128,7 @@ func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, o
 }
 
 // GetField returns the value for field |i|.
-func (tup Tuple) GetField(i int) (field []byte) {
+func (tup Tuple) GetField(i int) []byte {
 	cnt := tup.Count()
 	if i >= cnt {
 		return nil
@@ -146,6 +146,10 @@ func (tup Tuple) GetField(i int) (field []byte) {
 	if i > 0 {
 		pos := (i - 1) * 2
 		start = readUint16(offs[pos : pos+2])
+	}
+
+	if start == stop {
+		return nil // NULL
 	}
 
 	return tup[start:stop]
