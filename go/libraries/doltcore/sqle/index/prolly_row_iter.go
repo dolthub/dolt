@@ -244,7 +244,7 @@ func appendToRowFrame(tuple val.Tuple, desc val.TupleDesc, idx int, frame *sql.R
 			Typ: query.Type_VARCHAR,
 			Val: desc.GetField(idx, tuple),
 		})
-	case val.BytesEnc:
+	case val.ByteStringEnc:
 		frame.Append(sql.Value{
 			Typ: query.Type_VARBINARY,
 			Val: desc.GetField(idx, tuple),
