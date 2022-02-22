@@ -37,8 +37,8 @@ type prollyTableWriter struct {
 	primary   prollyIndexWriter
 	secondary []prollyIndexWriter
 
-	tbl       *doltdb.Table
-	sch       schema.Schema
+	tbl *doltdb.Table
+	sch schema.Schema
 
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
