@@ -392,7 +392,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 			return Node{}, err
 		}
 
-		if child.leafNode() || child.nodeCount() > 1 {
+		if child.leafNode() || child.count > 1 {
 			return child, nil
 		}
 

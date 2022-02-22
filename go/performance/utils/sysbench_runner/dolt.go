@@ -106,12 +106,14 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 		// we only exit in error if this is not the
 		// error
 		if err.Error() != "signal: killed" {
+			fmt.Println(err)
 			close(quit)
 			wg.Wait()
 			return nil, err
 		}
 	}
 
+	fmt.Println("Successfully killed server")
 	close(quit)
 	wg.Wait()
 
@@ -190,7 +192,7 @@ func getDoltServer(ctx context.Context, config *ServerConfig, testRepo string, p
 
 // sysbenchPrepare returns a exec.Cmd for running the sysbench prepare step
 func sysbenchPrepare(ctx context.Context, test *Test, scriptDir string) *exec.Cmd {
-	cmd := ExecCommand(ctx, "sysbench", test.Prepare()...)
+	cmd := exec.CommandContext(ctx, "sysbench", test.Prepare()...)
 	if test.FromScript {
 		lp := filepath.Join(scriptDir, luaPath)
 		cmd.Env = os.Environ()
@@ -234,12 +236,13 @@ func benchmark(
 	run := sysbenchRun(ctx, test, config.ScriptDir)
 	cleanup := sysbenchCleanup(ctx, test, config.ScriptDir)
 
-	err := prepare.Run()
+	out, err := prepare.Output()
 	if err != nil {
+		fmt.Println(string(out))
 		return nil, err
 	}
 
-	out, err := run.Output()
+	out, err = run.Output()
 	if err != nil {
 		fmt.Print(string(out))
 		return nil, err

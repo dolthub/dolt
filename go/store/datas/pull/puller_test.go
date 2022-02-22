@@ -334,7 +334,7 @@ func TestPuller(t *testing.T) {
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")
 			require.NoError(t, err)
-			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootRef)
+			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootRef.TargetHash())
 			require.NoError(t, err)
 
 			require.NoError(t, err)

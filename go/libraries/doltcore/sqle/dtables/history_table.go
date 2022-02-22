@@ -446,3 +446,27 @@ func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) 
 
 	return ss, nil
 }
+
+// rowConvForSchema creates a RowConverter for transforming rows with the given schema to this super schema.
+func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
+	if schema.SchemasAreEqual(sch, schema.EmptySchema) {
+		return rowconv.IdentityConverter, nil
+	}
+
+	inNameToOutName, err := ss.NameMapForSchema(sch)
+	if err != nil {
+		return nil, err
+	}
+
+	ssch, err := ss.GenerateSchema()
+	if err != nil {
+		return nil, err
+	}
+
+	fm, err := rowconv.NameMapping(sch, ssch, inNameToOutName)
+	if err != nil {
+		return nil, err
+	}
+
+	return rowconv.NewRowConverter(ctx, vrw, fm)
+}

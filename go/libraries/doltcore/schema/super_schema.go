@@ -58,9 +58,7 @@ func UnmarshalSuperSchema(allCols *ColCollection, tagNames map[uint64][]string) 
 
 // AddColumn adds a column and its name to the SuperSchema
 func (ss *SuperSchema) AddColumn(col Column) (err error) {
-	ct := col.Tag
-	ac := ss.allCols
-	existingCol, found := ac.GetByTag(ct)
+	existingCol, found := ss.allCols.GetByTag(col.Tag)
 	if found {
 		// TODO: We need to rethink the nature of column compatibility with primary key changes being allowed.
 		// We can't necessary say compatibility == diffability as primary key set changes cannot be diffed
@@ -87,7 +85,7 @@ func (ss *SuperSchema) AddColumn(col Column) (err error) {
 	ss.tagNames[col.Tag] = append(names, col.Name)
 	ss.allCols = ss.allCols.Append(simpleColumn(col))
 
-	return err
+	return nil
 }
 
 // AddSchemas adds all names and columns of each schema to the SuperSchema
@@ -249,30 +247,6 @@ func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
 	}
 
 	return inNameToOutName, nil
-}
-
-// RebaseTag changes the tag of a column from oldTag to newTag.
-func (ss *SuperSchema) RebaseTag(tagMapping map[uint64]uint64) (*SuperSchema, error) {
-	tn := make(map[uint64][]string)
-	var cc []Column
-	err := ss.allCols.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		if newTag, found := tagMapping[tag]; found {
-			col.Tag = newTag
-			tn[newTag] = ss.tagNames[tag]
-		} else {
-			tn[tag] = ss.tagNames[tag]
-		}
-		cc = append(cc, col)
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	ac := NewColCollection(cc...)
-
-	return &SuperSchema{ac, tn}, nil
 }
 
 // SuperSchemaUnion combines multiple SuperSchemas.

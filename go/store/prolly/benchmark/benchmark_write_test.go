@@ -72,7 +72,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 			}
 			mm, err := mut.Map(ctx)
 			require.NoError(b, err)
-			assert.Equal(b, int(size) + iters, mm.Count())
+			assert.Equal(b, int(size)+iters, mm.Count())
 		}
 		b.ReportAllocs()
 	})

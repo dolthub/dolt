@@ -94,8 +94,9 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		expected, ok := fileToData[fileID]
 		require.True(t, ok)
 
-		rd, err := src.Open(context.Background())
+		rd, contentLength, err := src.Open(context.Background())
 		require.NoError(t, err)
+		require.Equal(t, len(expected), int(contentLength))
 
 		data, err := io.ReadAll(rd)
 		require.NoError(t, err)

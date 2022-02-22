@@ -811,7 +811,6 @@ SQL
 }
 
 @test "index: TRUNCATE TABLE" {
-    skip "TRUNCATE not yet supported"
     dolt sql <<SQL
 CREATE INDEX idx_v1 ON onepk(v1);
 INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
@@ -2601,7 +2600,6 @@ SQL
 }
 
 @test "index: alter table create index for different database" {
-    skip "create index for different database fix in progress"
     dolt sql  <<SQL
 CREATE DATABASE public;
 CREATE TABLE public.test (pk integer NOT NULL, c1 integer);

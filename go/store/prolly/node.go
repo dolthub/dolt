@@ -37,9 +37,8 @@ const (
 
 type Node struct {
 	keys, values val.SlicedBuffer
-	count, level int
-
-	buf serial.TupleMap
+	buf          serial.TupleMap
+	count        uint16
 }
 
 func mapNodeFromBytes(bb []byte) Node {
@@ -65,8 +64,7 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 	return Node{
 		keys:   keys,
 		values: values,
-		count:  count,
-		level:  int(buf.TreeLevel()),
+		count:  uint16(count),
 		buf:    buf,
 	}
 }
@@ -89,13 +87,9 @@ func (nd Node) getValue(i int) nodeItem {
 }
 
 func (nd Node) getRef(i int) hash.Hash {
+	refs := nd.buf.RefArrayBytes()
 	start, stop := i*refSize, (i+1)*refSize
-	h := nd.buf.RefArrayBytes()[start:stop]
-	return hash.New(h)
-}
-
-func (nd Node) nodeCount() int {
-	return nd.count
+	return hash.New(refs[start:stop])
 }
 
 func (nd Node) treeCount() int {
@@ -104,15 +98,19 @@ func (nd Node) treeCount() int {
 
 func (nd Node) getSubtreeCounts() subtreeCounts {
 	buf := nd.buf.RefCardinalitiesBytes()
-	return readSubtreeCounts(nd.count, buf)
+	return readSubtreeCounts(int(nd.count), buf)
+}
+
+func (nd Node) level() int {
+	return int(nd.buf.TreeLevel())
 }
 
 func (nd Node) leafNode() bool {
-	return nd.level == 0
+	return nd.level() == 0
 }
 
 func (nd Node) empty() bool {
-	return nd.bytes() == nil || nd.nodeCount() == 0
+	return nd.bytes() == nil || nd.count == 0
 }
 
 func (nd Node) bytes() []byte {

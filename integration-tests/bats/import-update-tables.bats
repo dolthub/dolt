@@ -632,3 +632,24 @@ DELIM
     [ "${lines[1]}" = "0,42,2" ]
     [ "${lines[2]}" = "0,1,0" ]
 }
+
+@test "import-update-tables: --ignore-skipped-rows correctly prevents skipped rows from printing" {
+   cat <<DELIM > persons.csv
+ID,LastName,FirstName,Age
+1,"jon","doe", 20
+2,"little","doe", 10
+3,"little","doe",4
+4,"little","doe",1
+DELIM
+
+    dolt sql < check-constraint-sch.sql
+
+    run dolt table import -u --continue --ignore-skipped-rows persons persons.csv
+    [ "$status" -eq 0 ]
+    ! [[ "$output" =~ "The following rows were skipped:" ]] || false
+    ! [[ "$output" =~ "[2,little,doe,10]" ]] || false
+    ! [[ "$output" =~ "[3,little,doe,4]" ]] || false
+    ! [[ "$output" =~ "[4,little,doe,1]" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Import completed successfully." ]] || false
+}

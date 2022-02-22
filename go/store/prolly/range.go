@@ -34,6 +34,10 @@ type Range struct {
 	KeyDesc     val.TupleDesc
 }
 
+type MapRangeIter interface {
+	Next(ctx context.Context) (key, value val.Tuple, err error)
+}
+
 func (r Range) insideStart(key val.Tuple) bool {
 	if r.Start.Unbound {
 		return true
@@ -58,7 +62,7 @@ func (r Range) insideStop(key val.Tuple) bool {
 	return cmp < 0
 }
 
-func NewMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
+func NewMutableMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
 	if memory == nil {
 		memory = emptyIter{}
 	}
@@ -66,15 +70,15 @@ func NewMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
 		prolly = emptyIter{}
 	}
 
-	return MapRangeIter{
+	return MutableMapRangeIter{
 		memory: memory,
 		prolly: prolly,
 		rng:    rng,
 	}
 }
 
-// MapRangeIter iterates over a Range of Tuples.
-type MapRangeIter struct {
+// MutableMapRangeIter iterates over a Range of Tuples.
+type MutableMapRangeIter struct {
 	memory rangeIter
 	prolly rangeIter
 	rng    Range
@@ -86,7 +90,7 @@ type rangeIter interface {
 }
 
 // Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
-func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+func (it MutableMapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
 	for {
 		mk, mv := it.memory.current()
 		pk, pv := it.prolly.current()
@@ -129,7 +133,7 @@ func (it MapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err erro
 	}
 }
 
-func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
+func (it MutableMapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
 	if it.memory != nil {
 		memKey, _ = it.memory.current()
 	}
@@ -139,7 +143,7 @@ func (it MapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
 	return
 }
 
-func (it MapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
+func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 	if memKey == nil {
 		return 1
 	}
