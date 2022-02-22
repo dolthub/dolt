@@ -27,6 +27,30 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+func init() {
+	encodingToType[val.Int8Enc] = query.Type_INT8
+	encodingToType[val.Uint8Enc] = query.Type_UINT8
+	encodingToType[val.Int16Enc] = query.Type_INT16
+	encodingToType[val.Uint16Enc] = query.Type_UINT16
+	encodingToType[val.Int32Enc] = query.Type_INT32
+	encodingToType[val.Uint32Enc] = query.Type_UINT32
+	encodingToType[val.Int64Enc] = query.Type_INT64
+	encodingToType[val.Uint64Enc] = query.Type_UINT64
+	encodingToType[val.Float32Enc] = query.Type_FLOAT32
+	encodingToType[val.Float64Enc] = query.Type_FLOAT64
+	encodingToType[val.DecimalEnc] = query.Type_DECIMAL
+	encodingToType[val.TimeEnc] = query.Type_TIME
+	encodingToType[val.YearEnc] = query.Type_YEAR
+	encodingToType[val.TimestampEnc] = query.Type_TIMESTAMP
+	encodingToType[val.DateEnc] = query.Type_TIMESTAMP
+	encodingToType[val.DatetimeEnc] = query.Type_TIMESTAMP
+	encodingToType[val.StringEnc] = query.Type_VARCHAR
+	encodingToType[val.ByteStringEnc] = query.Type_VARBINARY
+	encodingToType[val.JSONEnc] = query.Type_JSON
+}
+
+var encodingToType [256]query.Type
+
 type prollyRowIter struct {
 	ctx  context.Context
 	iter prolly.MapRangeIter
@@ -153,7 +177,12 @@ func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 			continue
 		}
 
-		appendToRowFrame(key, it.keyDesc, keyIdx, frame)
+		enc := it.keyDesc.Types[keyIdx].Enc
+
+		frame.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: it.keyDesc.GetField(keyIdx, key),
+		})
 	}
 
 	for valIdx, rowIdx := range it.valProj {
@@ -161,102 +190,15 @@ func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 			continue
 		}
 
-		appendToRowFrame(value, it.valDesc, valIdx, frame)
+		enc := it.valDesc.Types[valIdx].Enc
+
+		frame.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: it.valDesc.GetField(valIdx, value),
+		})
 	}
 
 	return nil
-}
-
-func appendToRowFrame(tuple val.Tuple, desc val.TupleDesc, idx int, frame *sql.RowFrame) {
-	switch desc.Types[idx].Enc {
-	case val.Int8Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_INT8,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Uint8Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_UINT8,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Int16Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_INT16,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Uint16Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_UINT16,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Int32Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_INT32,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Uint32Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_UINT32,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Int64Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_INT64,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Uint64Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_UINT64,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Float32Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_FLOAT32,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.Float64Enc:
-		frame.Append(sql.Value{
-			Typ: query.Type_FLOAT64,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.DecimalEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_DECIMAL,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.TimeEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_TIME,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.YearEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_YEAR,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.TimestampEnc, val.DateEnc, val.DatetimeEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_TIMESTAMP,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.StringEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_VARCHAR,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.ByteStringEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_VARBINARY,
-			Val: desc.GetField(idx, tuple),
-		})
-	case val.JSONEnc:
-		frame.Append(sql.Value{
-			Typ: query.Type_JSON,
-			Val: desc.GetField(idx, tuple),
-		})
-	default:
-		panic("unknown encoding")
-	}
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {

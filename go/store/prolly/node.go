@@ -45,10 +45,8 @@ var emptyNode Node
 
 type Node struct {
 	keys, values val.SlicedBuffer
-	refs         refBuffer
-	count, level int
-
-	buf serial.TupleMap
+	buf          serial.TupleMap
+	count        uint16
 }
 
 func mapNodeFromBytes(bb []byte) Node {
@@ -65,9 +63,6 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 		Buf:  buf.ValueTuplesBytes(),
 		Offs: getValueOffsetsVector(buf),
 	}
-	refs := refBuffer{
-		buf: buf.RefArrayBytes(),
-	}
 
 	count := buf.KeyOffsetsLength() + 1
 	if len(keys.Buf) == 0 {
@@ -77,9 +72,7 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 	return Node{
 		keys:   keys,
 		values: values,
-		refs:   refs,
-		count:  count,
-		level:  int(buf.TreeLevel()),
+		count:  uint16(count),
 		buf:    buf,
 	}
 }
@@ -146,11 +139,9 @@ func (nd Node) getValue(i int) nodeItem {
 }
 
 func (nd Node) getRef(i int) hash.Hash {
-	return nd.refs.getRef(i)
-}
-
-func (nd Node) nodeCount() int {
-	return nd.count
+	refs := nd.buf.RefArrayBytes()
+	start, stop := i*refSize, (i+1)*refSize
+	return hash.New(refs[start:stop])
 }
 
 // todo(andy): should we support this?
@@ -158,25 +149,20 @@ func (nd Node) nodeCount() int {
 //	return nd.buf.TreeCount()
 //}
 
+func (nd Node) level() int {
+	return int(nd.buf.TreeLevel())
+}
+
 func (nd Node) leafNode() bool {
-	return nd.level == 0
+	return nd.level() == 0
 }
 
 func (nd Node) empty() bool {
-	return nd.bytes() == nil || nd.nodeCount() == 0
+	return nd.bytes() == nil || nd.count == 0
 }
 
 func (nd Node) bytes() []byte {
 	return nd.buf.Table().Bytes
-}
-
-type refBuffer struct {
-	buf []byte
-}
-
-func (rb refBuffer) getRef(i int) hash.Hash {
-	start, stop := i*refSize, (i+1)*refSize
-	return hash.New(rb.buf[start:stop])
 }
 
 func getMapBuilder(pool pool.BuffPool, sz int) *fb.Builder {
