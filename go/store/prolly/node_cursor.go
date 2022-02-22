@@ -38,11 +38,10 @@ func (i nodeItem) size() val.ByteSize {
 
 // nodeCursor explores a tree of Node items.
 type nodeCursor struct {
-	nd       Node
-	idx      int
-	parent   *nodeCursor
-	subtrees subtreeCounts
-	nrw      NodeStore
+	nd     Node
+	idx    int
+	parent *nodeCursor
+	nrw    NodeStore
 }
 
 type compareFn func(left, right nodeItem) int
@@ -159,16 +158,6 @@ func (cur *nodeCursor) currentValue() nodeItem {
 
 func (cur *nodeCursor) currentRef() hash.Hash {
 	return cur.nd.getRef(cur.idx)
-}
-
-func (cur *nodeCursor) currentSubtreeSz() uint64 {
-	if cur.isLeaf() {
-		return uint64(1)
-	}
-	if cur.subtrees == nil {
-		cur.subtrees = cur.nd.getSubtreeCounts()
-	}
-	return cur.subtrees[cur.idx]
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {

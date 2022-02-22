@@ -31,12 +31,13 @@ import (
 type newSplitterFn func(salt byte) nodeSplitter
 
 type treeChunker struct {
-	cur    *nodeCursor
-	parent *treeChunker
-	level  int
-	done   bool
+	cur      *nodeCursor
+	parent   *treeChunker
+	subtrees subtreeCounts
+	level    int
 
 	builder *nodeBuilder
+	done    bool
 
 	splitter nodeSplitter
 	newSplit newSplitterFn
@@ -80,6 +81,10 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 		}
 	}
 
+	if !tc.isLeaf() {
+		tc.subtrees = tc.cur.nd.getSubtreeCounts()
+	}
+
 	idx := tc.cur.idx
 	tc.cur.skipToNodeStart()
 
@@ -87,7 +92,7 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 		_, err = tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.cur.currentSubtreeSz())
+			tc.currentSubtreeSize())
 
 		// todo(andy): seek to correct chunk
 		//  currently when inserting tuples between chunks
@@ -108,6 +113,16 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 
 	return nil
 }
+
+//func (cur *nodeCursor) currentSubtreeSz() uint64 {
+//	if cur.isLeaf() {
+//		return uint64(1)
+//	}
+//	if cur.subtrees == nil {
+//		cur.subtrees = cur.nd.getSubtreeCounts()
+//	}
+//	return cur.subtrees[cur.idx]
+//}
 
 // AddPair adds a val.Tuple pair to the treeChunker.
 func (tc *treeChunker) AddPair(ctx context.Context, key, value val.Tuple) error {
@@ -170,7 +185,7 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 		ok, err := tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.cur.currentSubtreeSz())
+			tc.currentSubtreeSize())
 		if err != nil {
 			return err
 		}
@@ -413,7 +428,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 		ok, err = tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.cur.currentSubtreeSz())
+			tc.currentSubtreeSize())
 		if err != nil {
 			return err
 		}
@@ -439,6 +454,13 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	}
 
 	return nil
+}
+
+func (tc *treeChunker) currentSubtreeSize() uint64 {
+	if tc.isLeaf() {
+		return 1
+	}
+	return tc.subtrees[tc.cur.idx]
 }
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
