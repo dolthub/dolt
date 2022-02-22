@@ -83,13 +83,14 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	idx := tc.cur.idx
 	tc.cur.skipToNodeStart()
 
-	var ok bool
 	for tc.cur.idx < idx {
-		ok, err = tc.append(ctx,
+		_, err = tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
 			tc.cur.currentSubtreeSz())
-		assertFalse(ok)
+
+		// todo(andy): seek to correct chunk
+		//assertFalse(ok)
 
 		if err != nil {
 			return err
