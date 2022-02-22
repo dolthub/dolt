@@ -180,7 +180,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 	var currentTreeLevel int
 	var percentBuffered float64
 	var tableFilesClosed int
-	var filesUploaded int
+	var filesTransfered int
 	var ts TextSpinner
 
 	uploadRate := ""
@@ -222,7 +222,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 			uploadRate = humanize.Bytes(uint64(bps)) + "/s"
 
 		case pull.EndUploadTableFileEvent:
-			filesUploaded += 1
+			filesTransfered += 1
 		}
 
 		if currentTreeLevel == -1 {
@@ -233,12 +233,12 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 		msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%,", ts.next(), currentTreeLevel, percentBuffered)
 
 		if language == downloadLanguage {
-			msg = fmt.Sprintf("%s Files Written: %d", msg, filesUploaded)
+			msg = fmt.Sprintf("%s Files Written: %d", msg, filesTransfered)
 		} else {
 			if len(uploadRate) > 0 {
-				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", msg, tableFilesClosed, filesUploaded, uploadRate)
+				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", msg, tableFilesClosed, filesTransfered, uploadRate)
 			} else {
-				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d", msg, tableFilesClosed, filesUploaded)
+				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d", msg, tableFilesClosed, filesTransfered)
 			}
 		}
 
