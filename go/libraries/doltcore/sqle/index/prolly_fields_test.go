@@ -102,7 +102,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "bytes",
-			typ:   val.Type{Enc: val.BytesEnc},
+			typ:   val.Type{Enc: val.ByteStringEnc},
 			value: []byte("lorem ipsum"),
 		},
 		{

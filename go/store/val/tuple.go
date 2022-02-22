@@ -24,9 +24,10 @@ const (
 	MaxTupleFields            = 4096
 	MaxTupleDataSize ByteSize = math.MaxUint16
 
-	numFieldsSize ByteSize = 2
+	countSize ByteSize = 2
 )
 
+// todo(andy): update comment
 // Tuples are byte slices containing field values and a footer. Tuples only
 //   contain Values for non-NULL Fields. Value i contains the data for ith non-
 //   NULL Field. Values are packed contiguously from the front of the Tuple. The
@@ -91,17 +92,17 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 		panic("tuple data size exceeds maximum")
 	}
 
-	tup, offs, mask := allocateTuple(pool, pos, count, len(values))
+	tup, offs := allocateTuple(pool, pos, len(values))
 
 	count = 0
 	pos = ByteSize(0)
-	for i, v := range values {
+	for _, v := range values {
+		writeOffset(count, pos, offs)
+		count++
+
 		if isNull(v) {
 			continue
 		}
-		mask.set(i)
-		writeOffset(count, pos, offs)
-		count++
 
 		copy(tup[pos:pos+sizeOf(v)], v)
 		pos += sizeOf(v)
@@ -116,76 +117,48 @@ func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 	return buf
 }
 
-func allocateTuple(pool pool.BuffPool, bufSz ByteSize, values, fields int) (tup Tuple, offs offsets, ms memberMask) {
-	offSz := offsetsSize(values)
-	maskSz := maskSize(fields)
-	countSz := numFieldsSize
-
-	tup = pool.Get(uint64(bufSz + offSz + maskSz + countSz))
+func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, offs offsets) {
+	offSz := offsetsSize(fields)
+	tup = pool.Get(uint64(bufSz + offSz + countSize))
 
 	writeFieldCount(tup, fields)
 	offs = offsets(tup[bufSz : bufSz+offSz])
-	ms = memberMask(tup[bufSz+offSz : bufSz+offSz+maskSz])
 
 	return
 }
 
 // GetField returns the value for field |i|.
-func (tup Tuple) GetField(i int) []byte {
-	sz := tup.size()
-
-	// slice the null bitmask
-	bitmaskSz := maskSize(tup.fieldCount())
-	maskStop := sz - numFieldsSize
-	maskStart := maskStop - bitmaskSz
-	bitmask := memberMask(tup[maskStart:maskStop])
-
-	// check if the field is NULL
-	if !bitmask.present(i) {
+func (tup Tuple) GetField(i int) (field []byte) {
+	cnt := tup.Count()
+	if i >= cnt {
 		return nil
 	}
 
-	// translate from field index to value
-	// index to compensate for NULL fields
-	j := bitmask.countPrefix(i) - 1
-
-	// slice the offsets array
-	offStop := sz - numFieldsSize - bitmaskSz
-	bufStop := offStop - offsetsSize(bitmask.count())
+	sz := ByteSize(len(tup))
+	split := sz - uint16Size*ByteSize(cnt)
 
 	sb := SlicedBuffer{
-		Buf:  tup[:bufStop],
-		Offs: offsets(tup[bufStop:offStop]),
+		Buf:  tup[:split],
+		Offs: offsets(tup[split : sz-countSize]),
 	}
 
-	return sb.GetSlice(j)
+	field = sb.GetSlice(i)
+
+	if len(field) == 0 {
+		return nil // NULL
+	}
+	return
 }
 
-func (tup Tuple) size() ByteSize {
-	return ByteSize(len(tup))
+// GetManyFields takes a sorted slice of ordinals |indexes| and returns the requested
+// tuple fields. It populates field data into |slices| to avoid allocating.
+func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
+	return sliceManyFields(tup, indexes, slices)
 }
 
 func (tup Tuple) Count() int {
-	return tup.fieldCount()
-}
-
-func (tup Tuple) fieldCount() int {
-	sl := tup[tup.size()-numFieldsSize:]
+	sl := tup[len(tup)-int(countSize):]
 	return int(readUint16(sl))
-}
-
-func (tup Tuple) valueCount() int {
-	return tup.mask().count()
-}
-
-func (tup Tuple) mask() memberMask {
-	stop := tup.size() - numFieldsSize
-	start := stop - maskSize(tup.fieldCount())
-	return memberMask(tup[start:stop])
-}
-
-func (tup Tuple) fieldToValue(i int) int {
-	return tup.mask().countPrefix(i) - 1
 }
 
 func isNull(val []byte) bool {
@@ -197,6 +170,56 @@ func sizeOf(val []byte) ByteSize {
 }
 
 func writeFieldCount(tup Tuple, count int) {
-	sl := tup[len(tup)-int(numFieldsSize):]
+	sl := tup[len(tup)-int(countSize):]
 	writeUint16(sl, uint16(count))
+}
+
+func sliceManyFields(tuple Tuple, indexes []int, slices [][]byte) [][]byte {
+	cnt := tuple.Count()
+	sz := ByteSize(len(tuple))
+	split := sz - uint16Size*ByteSize(cnt)
+
+	data := tuple[:split]
+	offs := offsets(tuple[split : sz-countSize])
+
+	// if count is 1, we assume |indexes| is [0]
+	if cnt == 1 {
+		slices[0] = data
+		if len(data) == 0 {
+			slices[0] = nil
+		}
+		return slices
+	}
+
+	subset := slices
+	// we don't have a "stop" offset for the last field
+	n := len(slices)
+	if indexes[n-1] == cnt-1 {
+		o := readUint16(offs[len(offs)-2:])
+		slices[n-1] = data[o:]
+		indexes = indexes[:n-1]
+		subset = subset[:n-1]
+	}
+
+	// we don't have a "start" offset for the first field
+	if len(indexes) > 0 && indexes[0] == 0 {
+		o := readUint16(offs[:2])
+		slices[0] = data[:o]
+		indexes = indexes[1:]
+		subset = subset[1:]
+	}
+
+	for i, k := range indexes {
+		start := readUint16(offs[(k-1)*2 : k*2])
+		stop := readUint16(offs[k*2 : (k+1)*2])
+		subset[i] = tuple[start:stop]
+	}
+
+	for i := range slices {
+		if len(slices[i]) == 0 {
+			slices[i] = nil
+		}
+	}
+
+	return slices
 }
