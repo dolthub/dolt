@@ -48,11 +48,6 @@ const (
 	SmallKeyOffsetsSz   = 18
 	SmallValueOffsetsSz = 18
 
-	// data        3200 = 800 + 3200
-	// offsets     796  = sizeof(uint16) * (199 + 199)
-	// metadata    11   = TupleFormat * 2, tree_count, tree_level
-	// flatbuffers 65   = (1.6% overhead)
-	// total size  4072
 	LargeLeafNodeSz     = 4080
 	LargeLeafNodeCount  = 200
 	LargeKeyTuplesSz    = 800
