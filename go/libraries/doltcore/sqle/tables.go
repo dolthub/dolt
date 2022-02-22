@@ -130,7 +130,7 @@ func (t DoltTable) LockedToRoot(rootValue *doltdb.RootValue) *DoltTable {
 // Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
 // Add new interfaces supported here, rather than in separate type assertions
 type doltReadOnlyTableInterface interface {
-	sql.Table
+	sql.Table2
 	sql.TemporaryTable
 	sql.IndexedTable
 	sql.ForeignKeyTable
@@ -345,6 +345,16 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	return partitionRows(ctx, table, t.projectedCols, partition)
 }
 
+func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	iter, err := partitionRows(ctx, table, t.projectedCols, part)
+	return iter.(sql.RowIter2), err
+}
+
 func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
@@ -367,6 +377,7 @@ var _ doltTableInterface = (*WritableDoltTable)(nil)
 
 // Internal interface for declaring the interfaces that writable dolt tables are expected to implement
 type doltTableInterface interface {
+	sql.Table2
 	sql.UpdatableTable
 	sql.DeletableTable
 	sql.InsertableTable
@@ -1403,6 +1414,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	if err != nil {
 		return err
 	}
+
 	if fkChecks.(int8) == 1 {
 		root, foreignKey, err = creation.ResolveForeignKey(ctx, root, table, foreignKey, t.opts)
 		if err != nil {

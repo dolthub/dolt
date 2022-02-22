@@ -26,6 +26,10 @@ type Type struct {
 	Nullable bool
 }
 
+const (
+	strTerm = byte(0)
+)
+
 type ByteSize uint16
 
 const (
@@ -71,8 +75,8 @@ const (
 
 // Variable Size Encodings
 const (
-	StringEnc Encoding = 128
-	BytesEnc  Encoding = 129
+	StringEnc     Encoding = 128
+	ByteStringEnc Encoding = 129
 
 	// todo(andy): experimental encodings
 	DecimalEnc  Encoding = 130
@@ -374,29 +378,35 @@ func compareTimestamp(l, r time.Time) int {
 
 func readString(val []byte) string {
 	// todo(andy): fix allocation
-	return string(val)
+	return string(readByteString(val))
 }
 
 func writeString(buf []byte, val string) {
-	expectSize(buf, ByteSize(len(val)))
-	copy(buf, val)
+	writeByteString(buf, []byte(val))
 }
 
 func compareString(l, r string) int {
 	return bytes.Compare([]byte(l), []byte(r))
 }
 
-func readBytes(val []byte) []byte {
-	return val
+func readByteString(val []byte) []byte {
+	length := len(val) - 1
+	return val[:length]
 }
 
-func writeBytes(buf, val []byte) {
+func writeByteString(buf, val []byte) {
+	expectSize(buf, ByteSize(len(val))+1)
+	copy(buf, val)
+	buf[len(val)] = strTerm
+}
+
+func compareByteString(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
+func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
-}
-
-func compareBytes(l, r []byte) int {
-	return bytes.Compare(l, r)
 }
 
 func compare(typ Type, left, right []byte) int {
@@ -447,8 +457,8 @@ func compare(typ Type, left, right []byte) int {
 		fallthrough
 	case StringEnc:
 		return compareString(readString(left), readString(right))
-	case BytesEnc:
-		return compareBytes(readBytes(left), readBytes(right))
+	case ByteStringEnc:
+		return compareByteString(readByteString(left), readByteString(right))
 	default:
 		panic("unknown encoding")
 	}
