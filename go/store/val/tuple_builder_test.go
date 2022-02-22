@@ -43,7 +43,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 		Type{Enc: Float32Enc},
 		Type{Enc: Float64Enc},
 		Type{Enc: StringEnc},
-		Type{Enc: BytesEnc},
+		Type{Enc: ByteStringEnc},
 	)
 
 	tb := NewTupleBuilder(desc)
@@ -58,7 +58,7 @@ func smokeTestTupleBuilder(t *testing.T) {
 	tb.PutFloat32(8, math.MaxFloat32)
 	tb.PutFloat64(9, math.MaxFloat64)
 	tb.PutString(10, "123")
-	tb.PutBytes(11, []byte("abc"))
+	tb.PutByteString(11, []byte("abc"))
 
 	tup := tb.Build(testPool)
 	i8, ok := desc.GetInt8(0, tup)

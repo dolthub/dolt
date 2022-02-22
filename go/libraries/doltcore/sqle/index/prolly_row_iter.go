@@ -45,7 +45,7 @@ func init() {
 	encodingToType[val.DateEnc] = query.Type_TIMESTAMP
 	encodingToType[val.DatetimeEnc] = query.Type_TIMESTAMP
 	encodingToType[val.StringEnc] = query.Type_VARCHAR
-	encodingToType[val.BytesEnc] = query.Type_VARBINARY
+	encodingToType[val.ByteStringEnc] = query.Type_VARBINARY
 	encodingToType[val.JSONEnc] = query.Type_JSON
 }
 

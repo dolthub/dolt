@@ -16,12 +16,16 @@ timePrefix="$6"
 actorPrefix="$7"
 format="$8"
 issueNumber="$9"
+tpccRegex="tpcc%"
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan')"
 medianLatencyChangeReadsQuery="select f.test_name as read_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
 
 writeTests="('oltp_read_write', 'oltp_update_index', 'oltp_update_non_index', 'oltp_insert', 'bulk_insert', 'oltp_write_only', 'oltp_delete')"
 medianLatencyChangeWritesQuery="select f.test_name as write_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name;"
+
+tppcMedianLatencyChangeReadsQuery="select f.test_name as read_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
+tpccMedianLatencyChangeWritesQuery="select f.test_name as write_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
 
 echo '
 {
@@ -51,6 +55,7 @@ echo '
               { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
+            "imagePullPolicy": "Always",
             "args": [
               "--schema=/schema.sql",
               "--useDoltHubLuaScriptsRepo",
@@ -64,8 +69,11 @@ echo '
               "--issue-number='$issueNumber'",
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
-              "'"$medianLatencyChangeReadsQuery"'",
-              "'"$medianLatencyChangeWritesQuery"'"
+              "--withTpcc=true",
+              "--sysbenchQueries='"$medianLatencyChangeReadsQuery"'",
+              "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
+              "--tpccQueries='"$tppcMedianLatencyChangeReadsQuery"'",
+              "--tpccQueries='"$tpccMedianLatencyChangeWritesQuery"'"
             ]
           }
         ],

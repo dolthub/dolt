@@ -59,7 +59,7 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		v, ok = td.GetTimestamp(i, tup)
 	case val.StringEnc:
 		v, ok = td.GetString(i, tup)
-	case val.BytesEnc:
+	case val.ByteStringEnc:
 		v, ok = td.GetBytes(i, tup)
 	case val.JSONEnc:
 		var buf []byte
@@ -122,11 +122,11 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutTimestamp(i, v.(time.Time))
 	case val.StringEnc:
 		tb.PutString(i, v.(string))
-	case val.BytesEnc:
+	case val.ByteStringEnc:
 		if s, ok := v.(string); ok {
 			v = []byte(s)
 		}
-		tb.PutBytes(i, v.([]byte))
+		tb.PutByteString(i, v.([]byte))
 	case val.GeometryEnc:
 		tb.PutGeometry(i, serializeGeometry(v))
 	case val.JSONEnc:
