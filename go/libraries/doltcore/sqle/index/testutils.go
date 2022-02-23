@@ -165,6 +165,19 @@ func NullRange() *noms.ReadRange {
 	}
 }
 
+func NotNullRange() *noms.ReadRange {
+	return &noms.ReadRange{
+		Start:     types.EmptyTuple(types.Format_Default),
+		Inclusive: true,
+		Reverse:   false,
+		Check: nomsRangeCheck{
+			{
+				boundsCase: boundsCase_infinity_infinity,
+			},
+		},
+	}
+}
+
 func AllRange() *noms.ReadRange {
 	return &noms.ReadRange{
 		Start:     types.EmptyTuple(types.Format_Default),

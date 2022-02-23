@@ -354,28 +354,6 @@ func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid b
 	}
 	nbf := tuple.Format()
 
-	if len(nrc) == 0 && itr.HasMore() {
-		// dolt integrator has an idiosyncrasy where we
-		// remove all range filters if RangeBound_All,
-		// when what we really want is an IS NOT NULL filter
-		for itr.HasMore() {
-			if err := itr.Skip(); err != nil {
-				return false, false, err
-			}
-			_, val, err := itr.Next()
-			if err != nil {
-				return false, false, err
-			}
-			if val == nil {
-				break
-			}
-			if val.Kind() == types.NullKind {
-				return false, false, nil
-			}
-		}
-
-	}
-
 	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
 		if err := itr.Skip(); err != nil {
 			return false, false, err
