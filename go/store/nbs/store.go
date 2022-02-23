@@ -43,8 +43,11 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ErrFetchFailure = errors.New("fetch failed")
-var ErrSpecWithoutChunkSource = errors.New("manifest referenced table file for which there is no chunkSource.")
+var (
+	ErrFetchFailure                           = errors.New("fetch failed")
+	ErrSpecWithoutChunkSource                 = errors.New("manifest referenced table file for which there is no chunkSource.")
+	ErrConcurrentManifestWriteDuringOverwrite = errors.New("concurrent manifest write during manifest overwrite")
+)
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
 // names of the tables that hold all the chunks in the store. The number of
@@ -388,6 +391,66 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	default:
 		return manifestContents{}, ErrUnsupportedManifestAppendixOption
 	}
+}
+
+// OverwriteManifestAndClose overwrites the existing manifest with the given root hash, tableFiles,
+// and appendixTableFiles. After writing the manifest, it closes the store since it is now out of date.
+// It returns the updated manifest contents.
+func (nbs *NomsBlockStore) OverwriteManifestAndClose(ctx context.Context, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+	nbs.mm.LockForUpdate()
+	defer func() {
+		unlockErr := nbs.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+
+	nbs.mu.Lock()
+	defer nbs.mu.Unlock()
+
+	var originalLock addr
+	{
+		_, c, err := nbs.mm.Fetch(ctx, nbs.stats)
+		if err != nil {
+			return manifestContents{}, err
+		}
+		originalLock = c.lock
+	}
+
+	contents := manifestContents{
+		root:    root,
+		nbfVers: nbs.upstream.nbfVers,
+	}
+
+	// Appendix table files should come first in specs
+	for h, c := range appendixTableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.appendix = append(contents.appendix, s)
+		contents.specs = append(contents.specs, s)
+	}
+
+	for h, c := range tableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.specs = append(contents.specs, s)
+	}
+
+	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
+	updatedContents, err := nbs.mm.Update(ctx, originalLock, contents, nbs.stats, nil)
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	if updatedContents.lock != contents.lock {
+		return manifestContents{}, ErrConcurrentManifestWriteDuringOverwrite
+	}
+
+	err = nbs.Close()
+	if err != nil {
+		return manifestContents{}, err
+	}
+
+	return updatedContents, nil
 }
 
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {

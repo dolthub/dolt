@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -525,6 +526,33 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert.Equal(upstream.NumAppendixSpecs(), newUpstream.NumAppendixSpecs())
 	assert.Equal(upstream.GetAppendixTableSpecInfo(0), newUpstream.GetTableSpecInfo(0))
 	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
+}
+
+func TestNBSOverwriteManifestAndClose(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+
+	// Generate a random root hash
+	newRoot := hash.New(test.RandomData(20))
+	// Create new table files and appendices
+	newTableFiles, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
+	newAppendices, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
+
+	// Verify that the returned contents are correct
+	newContents, err := store.OverwriteManifestAndClose(ctx, newRoot, newTableFiles, newAppendices)
+	require.NoError(t, err)
+	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
+	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
+	assert.Equal(newRoot, newContents.GetRoot())
+
+	// Verify that the persisted contents are correct
+	_, newContents, err = fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
+	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
+	assert.Equal(newRoot, newContents.GetRoot())
 }
 
 func TestGuessPrefixOrdinal(t *testing.T) {
