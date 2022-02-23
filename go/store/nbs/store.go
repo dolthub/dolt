@@ -393,13 +393,23 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	}
 }
 
-// OverwriteManifest overwrites the existing manifest with the given root hash, tableFiles,
-// and appendixTableFiles.
-// It returns the updated manifest contents.
-func (nbs *NomsBlockStore) OverwriteManifest(ctx context.Context, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (mi ManifestInfo, err error) {
+// OverwriteStoreManifest is a low level interface to completely replace the manifest contents
+// of |store| with the supplied |root|, |tableFiles| and |appendixTableFiles|. It performs concurrency
+// control on the existing |store| manifest, and can fail with |ErrConcurrentManifestWriteDuringOverwrite|
+// if the |store|'s view is stale. If contents should be unconditionally replaced without regard for the existing
+// contents, run this in a loop, rebasing |store| after each failure.
+//
+// Regardless of success or failure, |OverwriteStoreManifest| does *not* Rebase the |store|. The persisted
+// manifest contents will have been updated, but nothing about the in-memory view of the |store| will reflect
+// those updates. If |store| is Rebase'd, then the new upstream contents will be picked up.
+//
+// Extreme care should be taken when updating manifest contents through this interface. Logic typically
+// assumes that stores grow monotonically unless the |gcGen| of a manifest changes. Since this interface
+// cannot set |gcGen|, callers must ensure that calls to this function grow the store monotonically.
+func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
 	contents := manifestContents{
 		root:    root,
-		nbfVers: nbs.upstream.nbfVers,
+		nbfVers: store.upstream.nbfVers,
 	}
 	// Appendix table files should come first in specs
 	for h, c := range appendixTableFiles {
@@ -413,30 +423,25 @@ func (nbs *NomsBlockStore) OverwriteManifest(ctx context.Context, root hash.Hash
 	}
 	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
 
-	nbs.mm.LockForUpdate()
+	store.mm.LockForUpdate()
 	defer func() {
-		unlockErr := nbs.mm.UnlockForUpdate()
+		unlockErr := store.mm.UnlockForUpdate()
 
 		if err == nil {
 			err = unlockErr
 		}
 	}()
-
-	nbs.mu.Lock()
-	defer nbs.mu.Unlock()
-
-	updatedContents, err := nbs.mm.Update(ctx, nbs.upstream.lock, contents, nbs.stats, nil)
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	updatedContents, err := store.mm.Update(ctx, store.upstream.lock, contents, store.stats, nil)
 	if err != nil {
-		return manifestContents{}, err
+		return err
 	}
-
 	if updatedContents.lock != contents.lock {
-		return manifestContents{}, ErrConcurrentManifestWriteDuringOverwrite
+		return ErrConcurrentManifestWriteDuringOverwrite
 	}
-
-	// We don't update nbs.upstream here since the tables have not been rebased
-
-	return updatedContents, nil
+	// We don't update |nbs.upstream| here since the tables have not been rebased
+	return nil
 }
 
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {

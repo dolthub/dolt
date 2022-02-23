@@ -544,15 +544,11 @@ func TestNBSOverwriteManifest(t *testing.T) {
 	newTableFiles, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
 	newAppendices, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
 
-	// Verify that the returned contents are correct
-	newContents, err := store.OverwriteManifest(ctx, newRoot, newTableFiles, newAppendices)
+	err := OverwriteStoreManifest(ctx, store, newRoot, newTableFiles, newAppendices)
 	require.NoError(t, err)
-	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
-	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
-	assert.Equal(newRoot, newContents.GetRoot())
 
 	// Verify that the persisted contents are correct
-	_, newContents, err = fm.ParseIfExists(ctx, stats, nil)
+	_, newContents, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
 	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
 	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
