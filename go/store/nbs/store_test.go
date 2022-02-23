@@ -528,11 +528,15 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
 }
 
-func TestNBSOverwriteManifestAndClose(t *testing.T) {
+func TestNBSOverwriteManifest(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
 	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		err := store.Close()
+		require.NoError(t, err, "failed to close store")
+	}()
 
 	// Generate a random root hash
 	newRoot := hash.New(test.RandomData(20))
@@ -541,7 +545,7 @@ func TestNBSOverwriteManifestAndClose(t *testing.T) {
 	newAppendices, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
 
 	// Verify that the returned contents are correct
-	newContents, err := store.OverwriteManifestAndClose(ctx, newRoot, newTableFiles, newAppendices)
+	newContents, err := store.OverwriteManifest(ctx, newRoot, newTableFiles, newAppendices)
 	require.NoError(t, err)
 	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
 	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
