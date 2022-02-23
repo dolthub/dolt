@@ -75,6 +75,11 @@ func (c *TpccBenchmarkConfig) updateDefaults() error {
 		return sysbench_runner.ErrNoServersDefined
 	}
 
+	// TODO: Eventually we need to support scale factors all the way to 10
+	if len(c.ScaleFactors) == 0 {
+		c.ScaleFactors = append(c.ScaleFactors, 1)
+	}
+
 	if c.RuntimeOS == "" {
 		c.RuntimeOS = runtime.GOOS
 	}
@@ -204,8 +209,8 @@ func (t *TpccTest) getArgs(serverConfig *sysbench_runner.ServerConfig) []string 
 
 	// handle sysbench user for local mysql server
 	if serverConfig.Server == sysbench_runner.MySql && serverConfig.Host == defaultHost {
-		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
 		params = append(params, fmt.Sprintf("--mysql-user=%s", "sysbench"))
+		params = append(params, fmt.Sprintf("--mysql-password=%s", tpccPassLocal))
 	} else {
 		params = append(params, fmt.Sprintf("--mysql-port=%d", serverConfig.Port))
 		params = append(params, fmt.Sprintf("--mysql-user=%s", defaultUser))
@@ -229,7 +234,7 @@ func (t *TpccTest) TpccPrepare(ctx context.Context, serverConfig *sysbench_runne
 
 // TpccRun prepares the command executable for the Run step.
 func (t *TpccTest) TpccRun(ctx context.Context, serverConfig *sysbench_runner.ServerConfig, scriptDir string) *exec.Cmd {
-	cmd := sysbench_runner.ExecCommand(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
+	cmd := exec.CommandContext(ctx, scriptDir+"/tpcc.lua", append(t.getArgs(serverConfig), "run")...)
 	return addParamsToCmd(cmd, scriptDir)
 }
 

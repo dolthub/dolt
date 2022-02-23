@@ -20,11 +20,36 @@ import (
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+func init() {
+	encodingToType[val.Int8Enc] = query.Type_INT8
+	encodingToType[val.Uint8Enc] = query.Type_UINT8
+	encodingToType[val.Int16Enc] = query.Type_INT16
+	encodingToType[val.Uint16Enc] = query.Type_UINT16
+	encodingToType[val.Int32Enc] = query.Type_INT32
+	encodingToType[val.Uint32Enc] = query.Type_UINT32
+	encodingToType[val.Int64Enc] = query.Type_INT64
+	encodingToType[val.Uint64Enc] = query.Type_UINT64
+	encodingToType[val.Float32Enc] = query.Type_FLOAT32
+	encodingToType[val.Float64Enc] = query.Type_FLOAT64
+	encodingToType[val.DecimalEnc] = query.Type_DECIMAL
+	encodingToType[val.TimeEnc] = query.Type_TIME
+	encodingToType[val.YearEnc] = query.Type_YEAR
+	encodingToType[val.TimestampEnc] = query.Type_TIMESTAMP
+	encodingToType[val.DateEnc] = query.Type_TIMESTAMP
+	encodingToType[val.DatetimeEnc] = query.Type_TIMESTAMP
+	encodingToType[val.StringEnc] = query.Type_VARCHAR
+	encodingToType[val.ByteStringEnc] = query.Type_VARBINARY
+	encodingToType[val.JSONEnc] = query.Type_JSON
+}
+
+var encodingToType [256]query.Type
 
 type prollyRowIter struct {
 	ctx  context.Context
@@ -38,6 +63,7 @@ type prollyRowIter struct {
 }
 
 var _ sql.RowIter = prollyRowIter{}
+var _ sql.RowIter2 = prollyRowIter{}
 
 func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, rng prolly.Range, projections []string) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
@@ -137,6 +163,42 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	return row, nil
+}
+
+func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
+	key, value, err := it.iter.Next(it.ctx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: handle out of order projections
+	for keyIdx, rowIdx := range it.keyProj {
+		if rowIdx == -1 {
+			continue
+		}
+
+		enc := it.keyDesc.Types[keyIdx].Enc
+
+		frame.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: it.keyDesc.GetField(keyIdx, key),
+		})
+	}
+
+	for valIdx, rowIdx := range it.valProj {
+		if rowIdx == -1 {
+			continue
+		}
+
+		enc := it.valDesc.Types[valIdx].Enc
+
+		frame.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: it.valDesc.GetField(valIdx, value),
+		})
+	}
+
+	return nil
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {

@@ -112,7 +112,7 @@ func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var verr errhand.VerboseError
-	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, runProgFuncs, stopProgFuncs)
+	err = actions.DoPush(ctx, dEnv.RepoStateReader(), dEnv.RepoStateWriter(), dEnv.DoltDB, dEnv.TempTableFilesDir(), opts, buildProgStarter(defaultLanguage), stopProgFuncs)
 	if err != nil {
 		verr = printInfoForPushError(err, opts.Remote, opts.DestRef, opts.RemoteRef)
 	}
@@ -175,12 +175,12 @@ func (ts *TextSpinner) next() string {
 	return string([]rune{spinnerSeq[ts.seqPos]})
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent) {
+func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, language progLanguage) {
 	var pos int
 	var currentTreeLevel int
 	var percentBuffered float64
-	var tableFilesBuffered int
-	var filesUploaded int
+	var tableFilesClosed int
+	var filesTransfered int
 	var ts TextSpinner
 
 	uploadRate := ""
@@ -213,7 +213,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent) {
 		case pull.LevelDoneTWEvent:
 
 		case pull.TableFileClosedEvent:
-			tableFilesBuffered += 1
+			tableFilesClosed += 1
 
 		case pull.StartUploadTableFileEvent:
 
@@ -222,7 +222,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent) {
 			uploadRate = humanize.Bytes(uint64(bps)) + "/s"
 
 		case pull.EndUploadTableFileEvent:
-			filesUploaded += 1
+			filesTransfered += 1
 		}
 
 		if currentTreeLevel == -1 {
@@ -230,10 +230,16 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent) {
 		}
 
 		var msg string
-		if len(uploadRate) > 0 {
-			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%, Files Written: %d, Files Uploaded: %d, Current Upload Speed: %s", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded, uploadRate)
+		msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%,", ts.next(), currentTreeLevel, percentBuffered)
+
+		if language == downloadLanguage {
+			msg = fmt.Sprintf("%s Files Written: %d", msg, filesTransfered)
 		} else {
-			msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%% Files Written: %d, Files Uploaded: %d", ts.next(), currentTreeLevel, percentBuffered, tableFilesBuffered, filesUploaded)
+			if len(uploadRate) > 0 {
+				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", msg, tableFilesClosed, filesTransfered, uploadRate)
+			} else {
+				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d", msg, tableFilesClosed, filesTransfered)
+			}
 		}
 
 		pos = cli.DeleteAndPrint(pos, msg)
@@ -278,24 +284,34 @@ func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
-	pullerEventCh := make(chan pull.PullerEvent, 128)
-	progChan := make(chan pull.PullProgress, 128)
-	wg := &sync.WaitGroup{}
+// progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.
+type progLanguage int
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		progFunc(ctx, progChan)
-	}()
+const (
+	defaultLanguage progLanguage = iota
+	downloadLanguage
+)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pullerProgFunc(ctx, pullerEventCh)
-	}()
+func buildProgStarter(language progLanguage) actions.ProgStarter {
+	return func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
+		pullerEventCh := make(chan pull.PullerEvent, 128)
+		progChan := make(chan pull.PullProgress, 128)
+		wg := &sync.WaitGroup{}
 
-	return wg, progChan, pullerEventCh
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			progFunc(ctx, progChan)
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			pullerProgFunc(ctx, pullerEventCh, language)
+		}()
+
+		return wg, progChan, pullerEventCh
+	}
 }
 
 func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) {
@@ -303,7 +319,6 @@ func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan 
 	close(progChan)
 	close(pullerEventCh)
 	wg.Wait()
-
 }
 
 func bytesPerSec(bytes uint64, start time.Time) string {

@@ -148,6 +148,10 @@ func NewHashSet(hashes ...Hash) HashSet {
 	return out
 }
 
+func (hs HashSet) Size() int {
+	return len(hs)
+}
+
 // Insert adds a Hash to the set.
 func (hs HashSet) Insert(hash Hash) {
 	hs[hash] = struct{}{}
@@ -179,5 +183,11 @@ func (hs HashSet) Copy() HashSet {
 func (hs HashSet) InsertAll(other HashSet) {
 	for h, _ := range other {
 		hs[h] = struct{}{}
+	}
+}
+
+func (hs HashSet) Empty() {
+	for h := range hs {
+		delete(hs, h)
 	}
 }

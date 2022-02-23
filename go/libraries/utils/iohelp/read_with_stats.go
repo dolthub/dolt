@@ -55,7 +55,10 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 			case <-timer.C:
 				read := atomic.LoadUint64(&rws.read)
 				elapsed := time.Since(rws.start)
-				percent := float64(read) / float64(rws.size)
+				var percent float64
+				if rws.size != 0 {
+					percent = float64(read) / float64(rws.size)
+				}
 				updateFunc(ReadStats{Read: read, Elapsed: elapsed, Percent: percent})
 				timer.Reset(updateFrequency)
 			}
@@ -63,12 +66,17 @@ func (rws *ReaderWithStats) Start(updateFunc func(ReadStats)) {
 	}()
 }
 
-func (rws *ReaderWithStats) Stop() {
+// Stop "closes" ReaderWithStats. Occasionally, we might pass this ReaderWithStats as the body of
+// a http.Request. Since http.Request will close the body if it is an io.Closer, we can't have ReaderWithStats conform
+// to io.Closer. We want full control over the Start and Stop of ReaderWithStats.
+func (rws *ReaderWithStats) Stop() error {
 	close(rws.closeCh)
 
 	if closer, ok := rws.rd.(io.Closer); ok {
-		_ = closer.Close()
+		return closer.Close()
 	}
+
+	return nil
 }
 
 func (rws *ReaderWithStats) Read(p []byte) (int, error) {

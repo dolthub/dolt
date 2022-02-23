@@ -22,9 +22,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var IdentityConverter = &RowConverter{nil, true, nil}
+
+// WarnFunction is a callback function that callers can optionally provide during row conversion
+// to take an extra action when a value cannot be automatically converted to the output data type.
+type WarnFunction func(int, string, ...string)
+
+var DatatypeCoercionFailureWarning = "unable to coerce value from field '%s' into latest column schema"
+
+const DatatypeCoercionFailureWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
 
 // RowConverter converts rows from one schema to another
 type RowConverter struct {
@@ -47,6 +57,9 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 		return newIdentityConverter(mapping), nil
 	}
 
+	// Panic if there are any duplicate columns mapped to the same destination tag.
+	panicOnDuplicateMappings(mapping)
+
 	convFuncs := make(map[uint64]types.MarshalCallback, len(mapping.SrcToDest))
 	for srcTag, destTag := range mapping.SrcToDest {
 		destCol, destOk := mapping.DestSch.GetAllCols().GetByTag(destTag)
@@ -68,9 +81,34 @@ func NewRowConverter(ctx context.Context, vrw types.ValueReadWriter, mapping *Fi
 	return &RowConverter{mapping, false, convFuncs}, nil
 }
 
-// Convert takes a row maps its columns to their destination columns, and performs any type conversion needed to create
-// a row of the expected destination schema.
+// panicOnDuplicateMappings checks if more than one input field is mapped to the same output field.
+// Multiple input fields mapped to the same output field results in a race condition.
+func panicOnDuplicateMappings(mapping *FieldMapping) {
+	destToSrcMapping := make(map[uint64]uint64, len(mapping.SrcToDest))
+	for srcTag, destTag := range mapping.SrcToDest {
+		if _, found := destToSrcMapping[destTag]; found {
+			panic("multiple columns mapped to the same destination tag '" + types.Uint(destTag).HumanReadableString() + "'")
+		}
+		destToSrcMapping[destTag] = srcTag
+	}
+}
+
+// ConvertWithWarnings takes an input row, maps its columns to their destination columns, performing any type
+// conversions needed to create a row of the expected destination schema, and uses the optional WarnFunction
+// callback to let callers handle logging a warning when a field cannot be cleanly converted.
+func (rc *RowConverter) ConvertWithWarnings(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
+	return rc.convert(inRow, warnFn)
+}
+
+// Convert takes an input row, maps its columns to destination columns, and performs any type conversion needed to
+// create a row of the expected destination schema.
 func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
+	return rc.convert(inRow, nil)
+}
+
+// convert takes a row and maps its columns to their destination columns, automatically performing any type conversion
+// needed, and using the optional WarnFunction to let callers log warnings on any type conversion errors.
+func (rc *RowConverter) convert(inRow row.Row, warnFn WarnFunction) (row.Row, error) {
 	if rc.IdentityConverter {
 		return inRow, nil
 	}
@@ -82,6 +120,13 @@ func (rc *RowConverter) Convert(inRow row.Row) (row.Row, error) {
 		if ok {
 			outTag := rc.SrcToDest[tag]
 			outVal, err := convFunc(val)
+
+			if sql.ErrInvalidValue.Is(err) && warnFn != nil {
+				col, _ := rc.SrcSch.GetAllCols().GetByTag(tag)
+				warnFn(DatatypeCoercionFailureWarningCode, DatatypeCoercionFailureWarning, col.Name)
+				outVal = types.NullValue
+				err = nil
+			}
 
 			if err != nil {
 				return false, err

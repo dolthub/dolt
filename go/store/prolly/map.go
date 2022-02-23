@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -156,7 +157,7 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return
 }
 
-// IterAll returns a MapRangeIter that iterates over the entire Map.
+// IterAll returns a MutableMapRangeIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
@@ -166,14 +167,9 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterRange(ctx, rng)
 }
 
-// IterRange returns a MapRangeIter that iterates over a Range.
+// IterRange returns a MutableMapRangeIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	iter, err := m.iterFromRange(ctx, rng)
-	if err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return NewMapRangeIter(nil, iter, rng), nil
+	return m.iterFromRange(ctx, rng)
 }
 
 func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {
@@ -216,7 +212,7 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 func (m Map) rangeStartSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		return sort.Search(nd.nodeCount(), func(i int) bool {
+		return sort.Search(int(nd.count), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
 
@@ -234,7 +230,7 @@ func (m Map) rangeStartSearchFn(rng Range) searchFn {
 func (m Map) rangeStopSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		return sort.Search(nd.nodeCount(), func(i int) bool {
+		return sort.Search(int(nd.count), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
 
@@ -252,7 +248,7 @@ func (m Map) rangeStopSearchFn(rng Range) searchFn {
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query nodeItem, nd Node) int {
-	n := nd.nodeCount()
+	n := int(nd.count)
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
 	i, j := 0, n
@@ -291,12 +287,33 @@ type prollyRangeIter struct {
 }
 
 var _ rangeIter = &prollyRangeIter{}
+var _ MapRangeIter = &prollyRangeIter{}
+
+func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	if it.curr == nil {
+		return nil, nil, io.EOF
+	}
+
+	key = it.curr.nd.keys.GetSlice(it.curr.idx)
+	value = it.curr.nd.values.GetSlice(it.curr.idx)
+
+	_, err = it.curr.advance(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if it.curr.compare(it.stop) >= 0 {
+		// past the end of the range
+		it.curr = nil
+	}
+
+	return
+}
 
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.valid() {
-		key = val.Tuple(it.curr.currentKey())
-		value = val.Tuple(it.curr.currentValue())
+		key = it.curr.nd.keys.GetSlice(it.curr.idx)
+		value = it.curr.nd.values.GetSlice(it.curr.idx)
 	}
 	return
 }

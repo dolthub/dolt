@@ -38,6 +38,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 	var serverCtx context.Context
 	var server *exec.Cmd
 	if serverConfig.Host == defaultHost {
+		fmt.Println("Launching the default server")
 		localServer = true
 		gServer, serverCtx = errgroup.WithContext(withKeyCtx)
 		serverParams := serverConfig.GetServerArgs()
@@ -99,7 +100,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 			// we expect a kill error
 			// we only exit in error if this is not the
 			// error
-			if err.Error() != "signal: killed" && err.Error() != "exit status 1" {
+			if err.Error() != "signal: killed" {
 				close(quit)
 				wg.Wait()
 				return nil, err
@@ -107,6 +108,7 @@ func BenchmarkMysql(ctx context.Context, config *Config, serverConfig *ServerCon
 		}
 	}
 
+	fmt.Println("Successfully killed server")
 	close(quit)
 	wg.Wait()
 
@@ -130,7 +132,10 @@ func SetupDB(ctx context.Context, serverConfig *ServerConfig, databaseName strin
 		return err
 	}
 	defer func() {
-		err = db.Close()
+		rerr := db.Close()
+		if err == nil {
+			err = rerr
+		}
 	}()
 	err = db.Ping()
 	if err != nil {

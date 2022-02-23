@@ -43,8 +43,11 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-var ErrFetchFailure = errors.New("fetch failed")
-var ErrSpecWithoutChunkSource = errors.New("manifest referenced table file for which there is no chunkSource.")
+var (
+	ErrFetchFailure                           = errors.New("fetch failed")
+	ErrSpecWithoutChunkSource                 = errors.New("manifest referenced table file for which there is no chunkSource.")
+	ErrConcurrentManifestWriteDuringOverwrite = errors.New("concurrent manifest write during manifest overwrite")
+)
 
 // The root of a Noms Chunk Store is stored in a 'manifest', along with the
 // names of the tables that hold all the chunks in the store. The number of
@@ -388,6 +391,57 @@ func fromManifestAppendixOptionNewContents(upstream manifestContents, appendixSp
 	default:
 		return manifestContents{}, ErrUnsupportedManifestAppendixOption
 	}
+}
+
+// OverwriteStoreManifest is a low level interface to completely replace the manifest contents
+// of |store| with the supplied |root|, |tableFiles| and |appendixTableFiles|. It performs concurrency
+// control on the existing |store| manifest, and can fail with |ErrConcurrentManifestWriteDuringOverwrite|
+// if the |store|'s view is stale. If contents should be unconditionally replaced without regard for the existing
+// contents, run this in a loop, rebasing |store| after each failure.
+//
+// Regardless of success or failure, |OverwriteStoreManifest| does *not* Rebase the |store|. The persisted
+// manifest contents will have been updated, but nothing about the in-memory view of the |store| will reflect
+// those updates. If |store| is Rebase'd, then the new upstream contents will be picked up.
+//
+// Extreme care should be taken when updating manifest contents through this interface. Logic typically
+// assumes that stores grow monotonically unless the |gcGen| of a manifest changes. Since this interface
+// cannot set |gcGen|, callers must ensure that calls to this function grow the store monotonically.
+func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root hash.Hash, tableFiles map[hash.Hash]uint32, appendixTableFiles map[hash.Hash]uint32) (err error) {
+	contents := manifestContents{
+		root:    root,
+		nbfVers: store.upstream.nbfVers,
+	}
+	// Appendix table files should come first in specs
+	for h, c := range appendixTableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.appendix = append(contents.appendix, s)
+		contents.specs = append(contents.specs, s)
+	}
+	for h, c := range tableFiles {
+		s := tableSpec{name: addr(h), chunkCount: c}
+		contents.specs = append(contents.specs, s)
+	}
+	contents.lock = generateLockHash(contents.root, contents.specs, contents.appendix)
+
+	store.mm.LockForUpdate()
+	defer func() {
+		unlockErr := store.mm.UnlockForUpdate()
+
+		if err == nil {
+			err = unlockErr
+		}
+	}()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	updatedContents, err := store.mm.Update(ctx, store.upstream.lock, contents, store.stats, nil)
+	if err != nil {
+		return err
+	}
+	if updatedContents.lock != contents.lock {
+		return ErrConcurrentManifestWriteDuringOverwrite
+	}
+	// We don't update |nbs.upstream| here since the tables have not been rebased
+	return nil
 }
 
 func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
@@ -1135,7 +1189,7 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 // tableFile is our implementation of TableFile.
 type tableFile struct {
 	info TableSpecInfo
-	open func(ctx context.Context) (io.ReadCloser, error)
+	open func(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // FileID gets the id of the file
@@ -1148,8 +1202,8 @@ func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
 
-// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+// Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
+func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 	return tf.open(ctx)
 }
 
@@ -1210,13 +1264,18 @@ func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
-		open: func(ctx context.Context) (io.ReadCloser, error) {
+		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
 			r, err := cs.reader(ctx)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
-			return io.NopCloser(r), nil
+			s, err := cs.size()
+			if err != nil {
+				return nil, 0, err
+			}
+
+			return io.NopCloser(r), s, nil
 		},
 	}
 }
