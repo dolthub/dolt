@@ -82,7 +82,7 @@ func TestDatetimeConvertValueToNomsValue(t *testing.T) {
 		{
 			DateType,
 			time.Date(1880, 1, 2, 4, 6, 3, 472382485, time.UTC),
-			types.Timestamp(time.Date(1880, 1, 2, 0, 0, 0, 0, time.UTC)),
+			types.Timestamp(time.Date(1880, 1, 2, 4, 6, 3, 472382485, time.UTC)),
 			false,
 		},
 		{
@@ -187,7 +187,7 @@ func TestDatetimeConversion(t *testing.T) {
 		{
 			DateType,
 			"1880-01-02 04:06:03.472382",
-			types.Timestamp(time.Date(1880, 1, 2, 0, 0, 0, 0, time.UTC)),
+			types.Timestamp(time.Date(1880, 1, 2, 4, 6, 3, 472382000, time.UTC)),
 			false,
 		},
 		{

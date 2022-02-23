@@ -208,6 +208,7 @@ const (
 	boundsCase_greater_infinity
 	boundsCase_greater_lessEquals
 	boundsCase_greater_less
+	boundsCase_isNull
 )
 
 // columnBounds are used to compare a given value in the noms row iterator.
@@ -244,6 +245,18 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+	// most checks do not correctly consider nulls
+	// when the check is not null related but val is null, we want to return false
+	// if check handles null related just continue
+	if val.Kind() == types.NullKind {
+		switch {
+		case cb.boundsCase == boundsCase_isNull:
+			return true, false, nil
+		default:
+			return false, true, nil
+		}
+	}
+
 	switch cb.boundsCase {
 	case boundsCase_infinity_infinity:
 		return true, false, nil
@@ -303,6 +316,9 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 		if err != nil || !ok {
 			return false, true, err
 		}
+	case boundsCase_isNull:
+		isNull := val.Kind() == types.NullKind
+		return isNull, isNull, nil
 	default:
 		return false, false, fmt.Errorf("unknown bounds")
 	}
@@ -340,6 +356,25 @@ func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid b
 		return false, false, err
 	}
 	nbf := tuple.Format()
+
+	if len(nrc) == 0 && itr.HasMore() {
+		for itr.HasMore() {
+			if err := itr.Skip(); err != nil {
+				return false, false, err
+			}
+			_, val, err := itr.Next()
+			if err != nil {
+				return false, false, err
+			}
+			if val == nil {
+				break
+			}
+			if val.Kind() == types.NullKind {
+				return false, false, nil
+			}
+		}
+
+	}
 
 	for i := 0; i < len(nrc) && itr.HasMore(); i++ {
 		if err := itr.Skip(); err != nil {

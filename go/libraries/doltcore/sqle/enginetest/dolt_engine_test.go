@@ -533,6 +533,10 @@ func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
+func TestNullRanges(t *testing.T) {
+	enginetest.TestNullRanges(t, newDoltHarness(t))
+}
+
 func TestPersist(t *testing.T) {
 	harness := newDoltHarness(t)
 	dEnv := dtestutils.CreateTestEnv()

@@ -1391,21 +1391,21 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NULL",
 			[]*noms.ReadRange{
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{2, 4, 6},
 		},
 		{
 			"v1 IS NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{2, 4, 6},
 		},
 		{
 			"v1 IS NULL AND v1 IS NULL",
 			[]*noms.ReadRange{
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{2, 4, 6},
 		},
@@ -1413,7 +1413,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			"v1 IS NULL OR v1 = 11",
 			[]*noms.ReadRange{
 				index.ClosedRange(idxv1.tuple(11), idxv1.tuple(11)),
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{1, 2, 4, 6},
 		},
@@ -1421,13 +1421,14 @@ func TestMergeableIndexesNulls(t *testing.T) {
 			"v1 IS NULL OR v1 < 16",
 			[]*noms.ReadRange{
 				index.LessThanRange(idxv1.tuple(16)),
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6},
 		},
 		{
 			"v1 IS NULL OR v1 > 16",
 			[]*noms.ReadRange{
+				index.NullRange(),
 				index.GreaterThanRange(idxv1.tuple(16)),
 			},
 			[]int64{2, 4, 6, 7, 8, 9},
@@ -1439,16 +1440,15 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		},
 		{
 			"v1 IS NULL AND v1 > 16",
-			[]*noms.ReadRange{
-				index.ClosedRange(idxv1.nilTuple(), idxv1.nilTuple()),
-			},
+			[]*noms.ReadRange{},
 			[]int64{},
 		},
 		{
 			"v1 IS NULL OR v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				index.AllRange(),
-			},
+				index.LessThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
+				index.NullRange()},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
@@ -1467,7 +1467,9 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				index.AllRange(),
+				index.LessThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.nilTuple()),
+				index.NullRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},

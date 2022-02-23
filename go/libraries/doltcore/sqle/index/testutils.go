@@ -152,6 +152,19 @@ func LessOrEqualRange(tpl types.Tuple) *noms.ReadRange {
 	}
 }
 
+func NullRange() *noms.ReadRange {
+	return &noms.ReadRange{
+		Start:     types.EmptyTuple(types.Format_Default),
+		Inclusive: true,
+		Reverse:   false,
+		Check: nomsRangeCheck{
+			{
+				boundsCase: boundsCase_isNull,
+			},
+		},
+	}
+}
+
 func AllRange() *noms.ReadRange {
 	return &noms.ReadRange{
 		Start:     types.EmptyTuple(types.Format_Default),

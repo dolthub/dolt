@@ -258,6 +258,9 @@ RangeLoop:
 				}
 				cb.upperbound = val
 			}
+			if rangeColumnExpr.Type() == sql.RangeType_Null {
+				cb.boundsCase = boundsCase_isNull
+			}
 			rangeCheck[i] = cb
 		}
 
