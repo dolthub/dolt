@@ -17,7 +17,6 @@ package dtables
 import (
 	"errors"
 	"io"
-	"sort"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -112,9 +111,9 @@ func (itr *UnscopedDiffTableItr) HasNext() bool {
 	return itr.commitIdx+1 < len(itr.commits) || itr.tableChanges != nil
 }
 
-// IncrementIndexes increments the table changes index, and if it's the end of the table changes array, moves
+// incrementIndexes increments the table changes index, and if it's the end of the table changes array, moves
 // to the next commit, and resets the table changes index so that it can be populated when Next() is called.
-func (itr *UnscopedDiffTableItr) IncrementIndexes() {
+func (itr *UnscopedDiffTableItr) incrementIndexes() {
 	itr.tableChangesIdx++
 	if itr.tableChangesIdx >= len(itr.tableChanges) {
 		itr.tableChangesIdx = -1
@@ -129,7 +128,7 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 	if !itr.HasNext() {
 		return nil, io.EOF
 	}
-	defer itr.IncrementIndexes()
+	defer itr.incrementIndexes()
 
 	// Load table changes if we don't have them for this commit yet
 	for itr.tableChanges == nil {
@@ -202,24 +201,20 @@ func (itr *UnscopedDiffTableItr) calculateTableChanges(commit *doltdb.Commit) ([
 		return nil, err
 	}
 
-	tableChanges := make([]tableChange, 0)
-	for _, delta := range deltas {
-		change, err := itr.processTableDelta(delta)
+	tableChanges := make([]tableChange, len(deltas))
+	for i := 0; i < len(deltas); i++ {
+		change, err := itr.processTableDelta(deltas[i])
 		if err != nil {
 			return nil, err
 		}
 
-		tableChanges = append(tableChanges, *change)
+		tableChanges[i] = *change
 	}
 
 	// Not all commits mutate tables (e.g. empty commits)
 	if len(tableChanges) == 0 {
 		return nil, nil
 	}
-
-	sort.Slice(tableChanges, func(i, j int) bool {
-		return tableChanges[i].tableName < tableChanges[j].tableName
-	})
 
 	return tableChanges, nil
 }
@@ -293,7 +288,7 @@ func (itr *UnscopedDiffTableItr) Close(*sql.Context) error {
 
 // isTableDataEmpty return true if the table does not contain any data
 func (itr *UnscopedDiffTableItr) isTableDataEmpty(table *doltdb.Table) (bool, error) {
-	rowData, err := table.GetNomsRowData(itr.ctx)
+	rowData, err := table.GetRowData(itr.ctx)
 	if err != nil {
 		return false, err
 	}
