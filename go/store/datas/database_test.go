@@ -265,6 +265,10 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.Equal(uint64(2), datasets2.Len())
 }
 
+func (m nomsDatasetsMap) toNomsMap() (types.Map, bool) {
+	return m.m, true
+}
+
 func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
 	m, ok := dsm.toNomsMap()
 	require.True(t, ok)

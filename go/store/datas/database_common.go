@@ -227,17 +227,29 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 	return r, true, nil
 }
 
+type refmapDatasetsMap struct {
+	rm refmap
+}
+
+func (m refmapDatasetsMap) Len() uint64 {
+	return uint64(len(m.rm.entries))
+}
+
+func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
+	for _, e := range m.rm.entries {
+		if err := cb(e.name, e.addr); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type nomsDatasetsMap struct {
-	db *database
 	m  types.Map
 }
 
 func (m nomsDatasetsMap) Len() uint64 {
 	return m.m.Len()
-}
-
-func (m nomsDatasetsMap) toNomsMap() (types.Map, bool) {
-	return m.m, true
 }
 
 func (m nomsDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
@@ -261,7 +273,7 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	return nomsDatasetsMap{db, m}, nil
+	return nomsDatasetsMap{m}, nil
 }
 
 var ErrInvalidDatasetID = errors.New("Invalid dataset ID")
