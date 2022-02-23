@@ -81,7 +81,7 @@ func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	}
 	updateMode := ref.UpdateMode{Force: apr.Contains(cli.ForceFlag)}
 
-	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, runProgFuncs, stopProgFuncs)
+	err = actions.FetchRefSpecs(ctx, dEnv.DbData(), refSpecs, r, updateMode, buildProgStarter(downloadLanguage), stopProgFuncs)
 	switch err {
 	case doltdb.ErrUpToDate:
 		return HandleVErrAndExitCode(nil, usage)

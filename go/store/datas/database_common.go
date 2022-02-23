@@ -39,6 +39,7 @@ type database struct {
 var (
 	ErrOptimisticLockFailed = errors.New("optimistic lock failed on database Root update")
 	ErrMergeNeeded          = errors.New("dataset head is not ancestor of commit")
+	ErrAlreadyCommitted     = errors.New("dataset head already pointing at given commit")
 )
 
 // rootTracker is a narrowing of the ChunkStore interface, to keep Database disciplined about working directly with Chunks
@@ -302,22 +303,36 @@ func (db *database) Close() error {
 	return db.ValueStore.Close()
 }
 
-func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadRef) })
+func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doSetHead(ctx, ds, newHeadAddr) })
 }
 
-func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
-	newSt, err := newHeadRef.TargetValue(ctx, db)
+func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) error {
+	newV, err := db.ReadValue(ctx, addr)
 	if err != nil {
 		return err
 	}
+	if newV == nil {
+		return fmt.Errorf("SetHead failed: target hash %v is not in chunk store", addr)
+	}
+	newSt, ok := newV.(types.Struct)
+	if !ok {
+		return fmt.Errorf("Unrecognized dataset value for addr: %v", addr)
+	}
 
-	headType := newSt.(types.Struct).Name()
+	headType := newSt.Name()
 	switch headType {
 	case CommitName:
-		_, err = db.validateRefAsCommit(ctx, newHeadRef)
+		var iscommit bool
+		iscommit, err = IsCommit(newSt)
+		if err != nil {
+			break
+		}
+		if !iscommit {
+			err = fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+		}
 	case TagName:
-		err = db.validateTag(ctx, newSt.(types.Struct))
+		err = db.validateTag(ctx, newSt)
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
 	}
@@ -327,7 +342,12 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 
 	key := types.String(ds.ID())
 
-	ref, err := types.ToRefOfValue(newHeadRef, db.Format())
+	vref, err := types.NewRef(newSt, db.Format())
+	if err != nil {
+		return err
+	}
+
+	ref, err := types.ToRefOfValue(vref, db.Format())
 	if err != nil {
 		return err
 	}
@@ -352,32 +372,32 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, newHeadRef types.
 	})
 }
 
-func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) (Dataset, error) {
-	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doFastForward(ctx, ds, newHeadRef) })
+func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) (Dataset, error) {
+	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doFastForward(ctx, ds, newHeadAddr) })
 }
 
-func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadRef types.Ref) error {
-	currentHeadRef, ok, err := ds.MaybeHeadRef()
-
+func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) error {
+	v, err := db.ReadValue(ctx, newHeadAddr)
 	if err != nil {
 		return err
 	}
+	if v == nil {
+		return fmt.Errorf("FastForward: new head address %v not found", newHeadAddr)
+	}
 
-	if ok && newHeadRef.Equals(currentHeadRef) {
+	iscommit, err := IsCommit(v)
+	if err != nil {
+		return err
+	}
+	if !iscommit {
+		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
+	}
+
+	err = db.doCommit(ctx, ds.ID(), v.(types.Struct))
+	if err == ErrAlreadyCommitted {
 		return nil
 	}
-
-	if ok && newHeadRef.Height() <= currentHeadRef.Height() {
-		return ErrMergeNeeded
-	}
-
-	commit, err := db.validateRefAsCommit(ctx, newHeadRef)
-
-	if err != nil {
-		return err
-	}
-
-	return db.doCommit(ctx, ds.ID(), commit)
+	return err
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
@@ -430,6 +450,9 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 		}
 		if hasHead {
 			currRef := curr.(types.Ref)
+			if currRef.TargetHash() == commitRef.TargetHash() {
+				return types.Map{}, ErrAlreadyCommitted
+			}
 			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currRef, db, db)
 			if err != nil {
 				return types.Map{}, err
@@ -447,16 +470,23 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 }
 
 func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef types.Ref) bool {
-	return currentHeadRef.TargetHash() != ancestorRef.TargetHash() || currentHeadRef.TargetHash() == commitRef.TargetHash()
+	return currentHeadRef.TargetHash() != ancestorRef.TargetHash()
 }
 
-func (db *database) Tag(ctx context.Context, ds Dataset, ref types.Ref, opts TagOptions) (Dataset, error) {
+func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error) {
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
+			commitSt, err := db.ReadValue(ctx, commitAddr)
+			if err != nil {
+				return err
+			}
+			ref, err := types.NewRef(commitSt, db.Format())
+			if err != nil {
+				return err
+			}
 			st, err := NewTag(ctx, ref, opts.Meta)
-
 			if err != nil {
 				return err
 			}
@@ -766,7 +796,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	if !is {
-		panic("Not a commit")
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
 	}
 
 	return v.(types.Struct), nil

@@ -16,6 +16,7 @@ timeprefix="$6"
 actorprefix="$7"
 format="$8"
 precision="1"
+tpccRegex="tpcc%"
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan')"
 medianLatencyMultiplierReadsQuery="select f.test_name as read_tests, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
@@ -26,6 +27,12 @@ medianLatencyMultiplierWritesQuery="select f.test_name as write_tests, f.server_
 meanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $writeTests group by f.test_name)"
 
 meanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
+
+tpccMedianLatencyMultiplierReadsQuery="select f.test_name as read_tests, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
+tpccMeanMultiplierReadsQuery="select round(avg(multipliers), $precision) as reads_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name)"
+tpccMedianLatencyMultiplierWritesQuery="select f.test_name as write_tests, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
+tpccMeanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name)"
+tpccMeanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
 
 echo '
 {
@@ -55,6 +62,7 @@ echo '
               { "name": "ACTOR_EMAIL", "value": "'$ACTOR_EMAIL'" },
               { "name": "REPO_ACCESS_TOKEN", "value": "'$REPO_ACCESS_TOKEN'" }
             ],
+            "imagePullPolicy": "Always",
             "args": [
               "--schema=/schema.sql",
               "--useDoltHubLuaScriptsRepo",
@@ -69,11 +77,17 @@ echo '
               "--region=us-west-2",
               "--results-dir='$timeprefix'",
               "--results-prefix='$actorprefix'",
-              "'"$medianLatencyMultiplierReadsQuery"'",
-              "'"$meanMultiplierReadsQuery"'",
-              "'"$medianLatencyMultiplierWritesQuery"'",
-              "'"$meanMultiplierWritesQuery"'",
-              "'"$meanMultiplierOverallQuery"'"
+              "--withTpcc=true",
+              "--sysbenchQueries='"$medianLatencyMultiplierReadsQuery"'",
+              "--sysbenchQueries='"$meanMultiplierReadsQuery"'",
+              "--sysbenchQueries='"$medianLatencyMultiplierWritesQuery"'",
+              "--sysbenchQueries='"$meanMultiplierWritesQuery"'",
+              "--sysbenchQueries='"$meanMultiplierOverallQuery"'",
+              "--tpccQueries='"$tpccMedianLatencyMultiplierReadsQuery"'",
+              "--tpccQueries='"$tpccMeanMultiplierReadsQuery"'",
+              "--tpccQueries='"$tpccMedianLatencyMultiplierWritesQuery"'",
+              "--tpccQueries='"$tpccMeanMultiplierWritesQuery"'",
+              "--tpccQueries='"$tpccMeanMultiplierOverallQuery"'"
             ]
           }
         ],

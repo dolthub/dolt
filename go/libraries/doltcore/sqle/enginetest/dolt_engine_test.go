@@ -43,18 +43,7 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT 
-					myTable.i, 
-					(SELECT 
-						dolt_commit_diff_mytable.diff_type 
-					FROM 
-						dolt_commit_diff_mytable
-					WHERE (
-						dolt_commit_diff_mytable.from_commit = 'abc' AND 
-						dolt_commit_diff_mytable.to_commit = 'abc' AND
-						dolt_commit_diff_mytable.to_i = myTable.i  -- extra filter clause
-					)) AS diff_type 
-				FROM myTable`,
+		Query:    `SELECT * from mytable`,
 		Expected: []sql.Row{},
 	}
 
@@ -519,6 +508,17 @@ func TestUnscopedDoltDiffSystemTable(t *testing.T) {
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		engine.Analyzer.Debug = true
 		engine.Analyzer.Verbose = true
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
+func TestDoltDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range DiffTableTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptWithEngine(t, engine, harness, test)
 		})

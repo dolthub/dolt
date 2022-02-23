@@ -30,4 +30,4 @@ Note that this configuration is still incomplete for the amount of the variable 
 want expose small amounts of independent variables until Dolt gets more robust. See `config.go` to get a breakdown of all the
 variables TPCC varies.
 
-
+As of now the TPCC runner test requires the environment variable `DOLT_TRANSACTION_MERGE_STOMP` to be 1.

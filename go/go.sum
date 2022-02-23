@@ -170,12 +170,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/dolthub/fslock v0.0.3 h1:iLMpUIvJKMKm92+N1fmHVdxJP5NdyDK5bK7z7Ba2s2U=
 github.com/dolthub/fslock v0.0.3/go.mod h1:QWql+P17oAAMLnL4HGB5tiovtDuAjdDTPbuqx7bYfa0=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220222225125-d15b50f7f2bc h1:TqPLV1GDRgvNsQdy5JYeLwcPelBDy48irsNnL+aAvTU=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220222225125-d15b50f7f2bc/go.mod h1:Dv6LWctwrwgjiHPdWcTsmtLylEVT9AaMxjjuzzz5JDk=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220223001502-99e6563577fe h1:pRZxBfqDg6IsCLflN6eTbuV8J4FAh+XXw74wSipTGhY=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220223001502-99e6563577fe/go.mod h1:Dv6LWctwrwgjiHPdWcTsmtLylEVT9AaMxjjuzzz5JDk=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220223004725-30cce9037d66 h1:TUAXUT2OrMz0BX32WOi5kS/Jl/f0jJiuJUC1DNyT8ew=
-github.com/dolthub/go-mysql-server v0.11.1-0.20220223004725-30cce9037d66/go.mod h1:Dv6LWctwrwgjiHPdWcTsmtLylEVT9AaMxjjuzzz5JDk=
+github.com/dolthub/go-mysql-server v0.11.1-0.20220223170047-1fbed24bbd03 h1:XnNznIYd7yqzEDh7B44cieQyVZJncPHeZDimBvKQJnM=
+github.com/dolthub/go-mysql-server v0.11.1-0.20220223170047-1fbed24bbd03/go.mod h1:Dv6LWctwrwgjiHPdWcTsmtLylEVT9AaMxjjuzzz5JDk=
 github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371 h1:oyPHJlzumKta1vnOQqUnfdz+pk3EmnHS3Nd0cCT0I2g=
 github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371/go.mod h1:dhGBqcCEfK5kuFmeO5+WOx3hqc1k3M29c1oS/R7N4ms=
 github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474 h1:xTrR+l5l+1Lfq0NvhiEsctylXinUMFhhsqaEcl414p8=
@@ -385,6 +381,8 @@ github.com/gorilla/websocket v1.4.0/go.mod h1:E7qHFY5m1UJ88s3WnNqhKjPHQ0heANvMoA
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gostaticanalysis/analysisutil v0.0.0-20190318220348-4088753ea4d3/go.mod h1:eEOZF4jCKGi+aprrirO9e7WKB3beBRtWgqGunKl6pKE=
 github.com/gostaticanalysis/analysisutil v0.0.3/go.mod h1:eEOZF4jCKGi+aprrirO9e7WKB3beBRtWgqGunKl6pKE=
+github.com/gosuri/uilive v0.0.4 h1:hUEBpQDj8D8jXgtCdBu7sWsy5sbW/5GhuO8KBwJ2jyY=
+github.com/gosuri/uilive v0.0.4/go.mod h1:V/epo5LjjlDE5RJUcqx8dbw+zc93y5Ya3yg8tfZ74VI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0/go.mod h1:8NvIoxWQoOIhqOTXgfV/d3M/q6VIi02HzZEHgUlZvzk=

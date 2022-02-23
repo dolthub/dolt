@@ -27,6 +27,8 @@ import (
 var configFile = flag.String("config", "", "path to config file q")
 
 func main() {
+	fmt.Println("Running the TPCC benchmark.")
+
 	flag.Parse()
 	if *configFile == "" {
 		log.Fatal("Must supply config")

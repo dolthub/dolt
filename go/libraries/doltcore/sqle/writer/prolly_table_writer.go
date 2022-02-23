@@ -37,10 +37,12 @@ type prollyTableWriter struct {
 	primary   prollyIndexWriter
 	secondary []prollyIndexWriter
 
-	tbl       *doltdb.Table
-	sch       schema.Schema
+	tbl *doltdb.Table
+	sch schema.Schema
+
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
+	aiUpdate  bool
 
 	sess    WriteSession
 	setter  SessionRootSetter
@@ -62,6 +64,7 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if err := w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
+	w.aiUpdate = true
 	return nil
 }
 
@@ -94,6 +97,7 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	if err := w.primary.Update(ctx, oldRow, newRow); err != nil {
 		return err
 	}
+	w.aiUpdate = true
 	return nil
 }
 
@@ -183,7 +187,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
-	if w.aiCol.AutoIncrement {
+	if w.aiCol.AutoIncrement && w.aiUpdate {
 		seq, err := w.aiTracker.Next(w.tableName, nil, nil)
 		if err != nil {
 			return nil, err
@@ -199,6 +203,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		if err != nil {
 			return nil, err
 		}
+		w.aiUpdate = false
 	}
 
 	return t, nil
