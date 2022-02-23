@@ -121,7 +121,7 @@ func testTypeInfoConvertRoundTrip(t *testing.T, tiArrays [][]TypeInfo, vaArrays 
 								outVal, err := ti.ConvertValueToNomsValue(context.Background(), vrw, vInterface)
 								require.NoError(t, err)
 								if ti == DateType { // Special case as DateType removes the hh:mm:ss
-									val = types.Timestamp(time.Time(val.(types.Timestamp)))
+									val = types.Timestamp(time.Time(val.(types.Timestamp)).Truncate(24 * time.Hour))
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)
 								} else if ti.GetTypeIdentifier() != DecimalTypeIdentifier { // Any Decimal's on-disk representation varies by precision/scale
 									require.True(t, val.Equals(outVal), "\"%v\"\n\"%v\"", val, outVal)

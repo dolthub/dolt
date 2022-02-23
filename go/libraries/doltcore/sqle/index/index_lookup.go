@@ -245,9 +245,7 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
-	// most checks do not correctly consider nulls
-	// when the check is not null related but val is null, we want to return false
-	// if check handles null related just continue
+	// bound comparisons do not properly handle nulls
 	if val.Kind() == types.NullKind {
 		switch {
 		case cb.boundsCase == boundsCase_isNull:
@@ -317,8 +315,7 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 			return false, true, err
 		}
 	case boundsCase_isNull:
-		isNull := val.Kind() == types.NullKind
-		return isNull, isNull, nil
+		return false, false, nil
 	default:
 		return false, false, fmt.Errorf("unknown bounds")
 	}
@@ -358,6 +355,9 @@ func (nrc nomsRangeCheck) Check(ctx context.Context, tuple types.Tuple) (valid b
 	nbf := tuple.Format()
 
 	if len(nrc) == 0 && itr.HasMore() {
+		// dolt integrator has an idiosyncrasy where we
+		// remove all range filters if RangeBound_All,
+		// when what we really want is an IS NOT NULL filter
 		for itr.HasMore() {
 			if err := itr.Skip(); err != nil {
 				return false, false, err
