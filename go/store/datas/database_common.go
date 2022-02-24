@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2019-2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,18 +74,33 @@ func (db *database) StatsSummary() string {
 }
 
 // DatasetsInRoot returns the Map of datasets in the root represented by the |rootHash| given
-func (db *database) datasetsInRoot(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
+func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash) (types.Map, error) {
 	if rootHash.IsEmpty() {
 		return types.NewMap(ctx, db)
 	}
 
 	val, err := db.ReadValue(ctx, rootHash)
-
 	if err != nil {
 		return types.EmptyMap, err
 	}
 
 	return val.(types.Map), nil
+}
+
+func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (refmap, error) {
+	if rootHash == (hash.Hash{}) {
+		return refmap{}, nil
+	}
+
+	chunk, err := db.chunkStore().Get(ctx, rootHash)
+	if err != nil {
+		return refmap{}, err
+	}
+	if chunk.IsEmpty() {
+		return refmap{}, errors.New("root hash not found in database")
+	}
+
+	return parse_refmap(chunk.Data()), nil
 }
 
 func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
@@ -268,7 +283,15 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	m, err := db.datasetsInRoot(ctx, rootHash)
+	if db.Format() == types.Format_DOLT_1 {
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+		if err != nil {
+			return nil, err
+		}
+		return refmapDatasetsMap{rm}, nil
+	}
+
+	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}
@@ -284,12 +307,7 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 		return Dataset{}, fmt.Errorf("%w: %s", ErrInvalidDatasetID, datasetID)
 	}
 
-	rootHash, err := db.rt.Root(ctx)
-	if err != nil {
-		return Dataset{}, err
-	}
-
-	datasets, err := db.datasetsInRoot(ctx, rootHash)
+	datasets, err := db.Datasets(ctx)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -297,18 +315,34 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	return db.datasetFromMap(ctx, datasetID, datasets)
 }
 
-func (db *database) datasetFromMap(ctx context.Context, datasetID string, datasets types.Map) (Dataset, error) {
-	var head types.Value
-	if r, ok, err := datasets.MaybeGet(ctx, types.String(datasetID)); err != nil {
-		return Dataset{}, err
-	} else if ok {
-		head, err = r.(types.Ref).TargetValue(ctx, db)
-		if err != nil {
+func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap DatasetsMap) (Dataset, error) {
+	if ndsmap, ok := dsmap.(nomsDatasetsMap); ok {
+		datasets := ndsmap.m
+		var head types.Value
+		if r, ok, err := datasets.MaybeGet(ctx, types.String(datasetID)); err != nil {
 			return Dataset{}, err
+		} else if ok {
+			head, err = r.(types.Ref).TargetValue(ctx, db)
+			if err != nil {
+				return Dataset{}, err
+			}
 		}
-	}
 
-	return newDataset(db, datasetID, head)
+		return newDataset(db, datasetID, head)
+	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
+		var head types.Value
+		var err error
+		curr := rmdsmap.rm.lookup(datasetID)
+		if !curr.IsEmpty() {
+			head, err = db.ReadValue(ctx, curr)
+			if err != nil {
+				return Dataset{}, err
+			}
+		}
+		return newDataset(db, datasetID, head)
+	} else {
+		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
+	}
 }
 
 func (db *database) Close() error {
@@ -762,12 +796,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	currentRootHash, err := db.rt.Root(ctx)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	currentDatasets, err := db.datasetsInRoot(ctx, currentRootHash)
+	currentDatasets, err := db.Datasets(ctx)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -803,17 +832,47 @@ func (db *database) update(ctx context.Context,
 			return err
 		}
 
-		datasets, err = db.datasetsInRoot(ctx, root)
-		if err != nil {
-			return err
+		var newRootHash hash.Hash
+
+		if db.Format() == types.Format_DOLT_1 {
+			datasets, err := db.loadDatasetsRefmap(ctx, root)
+			if err != nil {
+				return err
+			}
+
+			datasets, err = editFB(ctx, datasets)
+			if err != nil {
+				return err
+			}
+
+			data := datasets.flatbuffer()
+			chunk := chunks.NewChunk(data)
+			err = db.chunkStore().Put(ctx, chunk)
+			if err != nil {
+				return err
+			}
+
+			newRootHash = chunk.Hash()
+		} else {
+			datasets, err = db.loadDatasetsNomsMap(ctx, root)
+			if err != nil {
+				return err
+			}
+
+			datasets, err = edit(ctx, datasets)
+			if err != nil {
+				return err
+			}
+
+			newRoot, err := db.WriteValue(ctx, datasets)
+			if err != nil {
+				return err
+			}
+
+			newRootHash = newRoot.TargetHash()
 		}
 
-		datasets, err = edit(ctx, datasets)
-		if err != nil {
-			return err
-		}
-
-		err = db.tryCommitChunks(ctx, datasets, root)
+		err = db.tryCommitChunks(ctx, newRootHash, root)
 		if err != ErrOptimisticLockFailed {
 			break
 		}
@@ -859,21 +918,12 @@ func (db *database) GC(ctx context.Context, oldGenRefs, newGenRefs hash.HashSet)
 	return db.ValueStore.GC(ctx, oldGenRefs, newGenRefs)
 }
 
-func (db *database) tryCommitChunks(ctx context.Context, currentDatasets types.Map, currentRootHash hash.Hash) error {
-	newRoot, err := db.WriteValue(ctx, currentDatasets)
-
-	if err != nil {
-		return err
-	}
-
-	newRootHash := newRoot.TargetHash()
-
+func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, currentRootHash hash.Hash) error {
 	if success, err := db.rt.Commit(ctx, newRootHash, currentRootHash); err != nil {
 		return err
 	} else if !success {
 		return ErrOptimisticLockFailed
 	}
-
 	return nil
 }
 
