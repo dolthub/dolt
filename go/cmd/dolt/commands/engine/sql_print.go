@@ -121,6 +121,16 @@ func noParallelizationInitFunc(ctx context.Context, index int) error {
 // getReadStageFunc is a general purpose stage func used by multiple pipelines to read the rows into batches
 func getReadStageFunc(ctx *sql.Context, iter sql.RowIter, batchSize int) pipeline.StageFunc {
 	isDone := false
+
+	useRow2 := false
+	var f *sql.RowFrame
+	var iter2 sql.RowIter2
+	if ri2, ok := iter.(sql.RowIterTypeSelector); ok && ri2.IsNode2() {
+		useRow2 = true
+		iter2 = iter.(sql.RowIter2)
+		f = sql.NewRowFrame()
+	}
+
 	return func(_ context.Context, _ []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
 		if isDone {
 			return nil, io.EOF
@@ -128,7 +138,17 @@ func getReadStageFunc(ctx *sql.Context, iter sql.RowIter, batchSize int) pipelin
 
 		items := make([]pipeline.ItemWithProps, 0, batchSize)
 		for i := 0; i < 10; i++ {
-			r, err := iter.Next(ctx)
+			var r interface{}
+			var err error
+			if useRow2 {
+				f.Clear()
+				err = iter2.Next2(ctx, f)
+				if err != nil {
+					r = f.Row2Copy()
+				}
+			} else {
+				r, err = iter.Next(ctx)
+			}
 
 			if err == io.EOF {
 				isDone = true

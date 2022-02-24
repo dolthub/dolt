@@ -51,6 +51,9 @@ func OpenCommitEditor(ed string, initialContents string) (string, error) {
 	}
 	fmt.Printf("Waiting for command to finish.\n")
 	err = cmd.Wait()
+	if err != nil {
+		return "", err
+	}
 
 	data, err := os.ReadFile(filename)
 

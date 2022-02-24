@@ -209,7 +209,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return errors.New("commit without head")
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, headRef)
+	_, err = ddb.db.SetHead(ctx, ds, headRef.TargetHash())
 
 	return err
 }
@@ -511,13 +511,12 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 		return err
 	}
 
-	rf, err := types.NewRef(commit.commitSt, ddb.vrw.Format())
-
+	addr, err := commit.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.FastForward(ctx, ds, rf)
+	_, err = ddb.db.FastForward(ctx, ds, addr)
 
 	return err
 }
@@ -556,7 +555,7 @@ func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, stRef types.Ref
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, stRef)
+	_, err = ddb.db.SetHead(ctx, ds, stRef.TargetHash())
 	return err
 }
 
@@ -911,12 +910,12 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	rf, err := types.NewRef(commit.commitSt, ddb.vrw.Format())
+	addr, err := commit.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, rf)
+	_, err = ddb.db.SetHead(ctx, ds, addr)
 	if err != nil {
 		return err
 	}
@@ -1031,8 +1030,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 		return fmt.Errorf("dataset already exists for tag %s", tagRef.String())
 	}
 
-	r, err := types.NewRef(c.commitSt, ddb.Format())
-
+	commitAddr, err := c.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
@@ -1045,7 +1043,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 
 	tag := datas.TagOptions{Meta: st}
 
-	ds, err = ddb.db.Tag(ctx, ds, r, tag)
+	ds, err = ddb.db.Tag(ctx, ds, commitAddr, tag)
 
 	return err
 }
@@ -1165,12 +1163,12 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 		return err
 	}
 
-	r, err := types.NewRef(c.commitSt, ddb.Format())
+	addr, err := c.commitSt.Hash(ddb.Format())
 	if err != nil {
 		return err
 	}
 
-	ds, err = ddb.db.SetHead(ctx, ds, r)
+	ds, err = ddb.db.SetHead(ctx, ds, addr)
 
 	return err
 }

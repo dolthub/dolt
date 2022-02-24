@@ -77,7 +77,7 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 	return
 }
 
-// IterAll returns a MapRangeIter that iterates over the entire MutableMap.
+// IterAll returns a MutableMapRangeIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
@@ -87,13 +87,13 @@ func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return mut.IterRange(ctx, rng)
 }
 
-// IterValueRange returns a MapRangeIter that iterates over a Range.
+// IterValueRange returns a MutableMapRangeIter that iterates over a Range.
 func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	proIter, err := mut.prolly.iterFromRange(ctx, rng)
 	if err != nil {
-		return MapRangeIter{}, err
+		return MutableMapRangeIter{}, err
 	}
 	memIter := mut.overlay.iterFromRange(rng)
 
-	return NewMapRangeIter(memIter, proIter, rng), nil
+	return NewMutableMapRangeIter(memIter, proIter, rng), nil
 }

@@ -683,7 +683,6 @@ SQL
 }
 
 @test "auto_increment: alter table add constraint for different database" {
-    skip "add constraint for different database fix in progress"
     dolt sql  <<SQL
 CREATE DATABASE public;
 CREATE TABLE public.test (pk integer NOT NULL, c1 integer, c2 integer);

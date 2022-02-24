@@ -792,6 +792,9 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 		}
 
 		isLess, err := key.Less(vrw.Format(), tupleKey)
+		if err != nil {
+			return 0, err
+		}
 		if !isLess {
 			eq := tupleKey.v.Equals(key.v)
 			if eq {

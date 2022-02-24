@@ -133,7 +133,9 @@ func encFloat(f float64) []byte {
 }
 
 func encStr(s string) []byte {
-	return []byte(s)
+	buf := make([]byte, len(s)+1)
+	writeString(buf, s)
+	return buf
 }
 
 func TestCodecRoundTrip(t *testing.T) {
