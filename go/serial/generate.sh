@@ -10,6 +10,7 @@ flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespac
   database.fbs \
   prolly.fbs \
   schema.fbs \
+  storeroot.fbs \
   table.fbs
 
 # prefix files with copyright header
@@ -19,6 +20,8 @@ do
   cat "copyright.txt" "tmp.go" >> $FILE
   rm "tmp.go"
 done
+
+cp fileidentifiers.go $GEN_DIR
 
 # format and remove unused imports
 goimports -w $GEN_DIR

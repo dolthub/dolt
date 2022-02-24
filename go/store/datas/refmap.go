@@ -1,6 +1,7 @@
 package datas
 
 import (
+	"bytes"
 	"sort"
 
 	"github.com/google/flatbuffers/go"
@@ -49,7 +50,7 @@ func (rm *refmap) delete(key string) {
 	rm.entries = entries
 }
 
-func (rm refmap) flatbuffer() []byte {
+func (rm refmap) storeroot_flatbuffer() []byte {
 	sort.Slice(rm.entries, func(i, j int) bool {
 		return rm.entries[i].name < rm.entries[j].name
 	})
@@ -81,12 +82,25 @@ func (rm refmap) flatbuffer() []byte {
 	serial.RefMapAddRefArray(builder, refarrayoff)
 	serial.RefMapAddTreeCount(builder, uint64(len(rm.entries)))
 	serial.RefMapAddTreeLevel(builder, 0)
-	builder.Finish(serial.RefMapEnd(builder))
+	refmap := serial.RefMapEnd(builder)
+
+	serial.StoreRootStart(builder)
+	serial.StoreRootAddRefs(builder, refmap)
+	builder.FinishWithFileIdentifier(serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
+
 	return builder.FinishedBytes()
 }
 
-func parse_refmap(bs []byte) refmap {
-	rm := serial.GetRootAsRefMap(bs, 0)
+func parse_storeroot(bs []byte) refmap {
+	if !bytes.Equal([]byte(serial.StoreRootFileID), bs[4:8]) {
+		panic("expected store root file id, got: " + string(bs[4:8]))
+	}
+
+	sr := serial.GetRootAsStoreRoot(bs, 0)
+	rm := sr.Refs(nil)
+	if rm == nil {
+		panic("refmap of storeroot was missing")
+	}
 	if rm.TreeLevel() != 0 {
 		panic("unsupported multi-level refmap")
 	}

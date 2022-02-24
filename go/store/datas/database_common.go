@@ -100,7 +100,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return refmap{}, errors.New("root hash not found in database")
 	}
 
-	return parse_refmap(chunk.Data()), nil
+	return parse_storeroot(chunk.Data()), nil
 }
 
 func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
@@ -845,7 +845,7 @@ func (db *database) update(ctx context.Context,
 				return err
 			}
 
-			data := datasets.flatbuffer()
+			data := datasets.storeroot_flatbuffer()
 			chunk := chunks.NewChunk(data)
 			err = db.chunkStore().Put(ctx, chunk)
 			if err != nil {
