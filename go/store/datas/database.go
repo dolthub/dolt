@@ -38,8 +38,6 @@ type DatasetsMap interface {
 	Len() uint64
 
 	IterAll(ctx context.Context, cb func(id string, addr hash.Hash) error) error
-
-	toNomsMap() (types.Map, bool)
 }
 
 // Database provides versioned storage for noms values. While Values can be

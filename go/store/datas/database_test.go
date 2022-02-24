@@ -270,7 +270,7 @@ func (m nomsDatasetsMap) toNomsMap() (types.Map, bool) {
 }
 
 func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
-	m, ok := dsm.toNomsMap()
+	m, ok := dsm.(nomsDatasetsMap).toNomsMap()
 	require.True(t, ok)
 	return m
 }
