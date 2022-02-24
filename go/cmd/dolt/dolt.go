@@ -16,6 +16,9 @@ package main
 
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
+	"math/rand"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -274,6 +277,8 @@ func runMain() int {
 		}
 	}
 
+	seedGlobalRand()
+
 	restoreIO := cli.InitIO()
 	defer restoreIO()
 
@@ -348,6 +353,15 @@ func runMain() int {
 	}
 
 	return res
+}
+
+func seedGlobalRand() {
+	bs := make([]byte, 8)
+	_, err := crand.Read(bs)
+	if err != nil {
+		panic("failed to initial rand " + err.Error())
+	}
+	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
 }
 
 // These subcommands cannot be performed if a migration is needed
