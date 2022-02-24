@@ -122,9 +122,12 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 			b.WriteRune(',')
 		}
 		col := tableSch.GetAllCols().GetAtIndex(i)
-		str, err := interfaceValueAsSqlString(ctx, col.TypeInfo, val)
-		if err != nil {
-			return "", err
+		str := "NULL"
+		if val != nil {
+			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
+			if err != nil {
+				return "", err
+			}
 		}
 
 		b.WriteString(str)
