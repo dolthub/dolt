@@ -381,6 +381,20 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		}
 
 		return datasets.Edit().Set(key, ref).Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		curr := rm.lookup(ds.ID())
+		if curr != (hash.Hash{}) {
+			currSt, err := db.ReadValue(ctx, curr)
+			if err != nil {
+				return refmap{}, err
+			}
+			currType := currSt.(types.Struct).Name()
+			if currType != headType {
+				return refmap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
+			}
+		}
+		rm.set(ds.ID(), ref.TargetHash())
+		return rm, nil
 	})
 }
 
@@ -491,6 +505,18 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), newCommitValueRef).Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		curr := rm.lookup(datasetID)
+		if curr != datasetCurrentAddr {
+			return refmap{}, ErrMergeNeeded
+		}
+		if curr != (hash.Hash{}) {
+			if curr == newCommitValueRef.TargetHash() {
+				return refmap{}, ErrAlreadyCommitted
+			}
+		}
+		rm.set(datasetID, newCommitValueRef.TargetHash())
+		return rm, nil
 	})
 }
 
@@ -550,6 +576,13 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		curr := rm.lookup(datasetID)
+		if curr != (hash.Hash{}) {
+			fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
+		}
+		rm.set(datasetID, ref.TargetHash())
+		return rm, nil
 	})
 }
 
@@ -599,6 +632,13 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		curr := rm.lookup(datasetID)
+		if curr != currHash {
+			return refmap{}, ErrOptimisticLockFailed
+		}
+		rm.set(datasetID, wsValRef.TargetHash())
+		return rm, nil
 	})
 }
 
@@ -664,6 +704,15 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
+	var currDSHash hash.Hash
+	currDSRef, ok, err := commitDS.MaybeHeadRef()
+	if err != nil {
+		return Dataset{}, Dataset{}, err
+	}
+	if ok {
+		currDSHash = currDSRef.TargetHash()
+	}
+
 	err = db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		success, err := assertDatasetHash(ctx, datasets, workingSetDS.ID(), prevWsHash)
 		if err != nil {
@@ -695,6 +744,18 @@ func (db *database) CommitWithWorkingSet(
 			Set(types.String(workingSetDS.ID()), wsValRef).
 			Set(types.String(commitDS.ID()), commitValRef).
 			Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		currWS := rm.lookup(workingSetDS.ID())
+		if currWS != prevWsHash {
+			return refmap{}, ErrOptimisticLockFailed
+		}
+		currDS := rm.lookup(commitDS.ID())
+		if currDS != currDSHash {
+			return refmap{}, ErrMergeNeeded
+		}
+		rm.set(commitDS.ID(), commitValRef.TargetHash())
+		rm.set(workingSetDS.ID(), wsValRef.TargetHash())
+		return rm, nil
 	})
 
 	if err != nil {
@@ -728,7 +789,9 @@ func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 	return db.doHeadUpdate(ctx, ds, func(ds Dataset) error { return db.doDelete(ctx, ds.ID()) })
 }
 
-func (db *database) update(ctx context.Context, edit func(context.Context, types.Map) (types.Map, error)) error {
+func (db *database) update(ctx context.Context,
+	edit func(context.Context, types.Map) (types.Map, error),
+	editFB func(context.Context, refmap) (refmap, error)) error {
 	var (
 		err      error
 		root     hash.Hash
@@ -760,6 +823,7 @@ func (db *database) update(ctx context.Context, edit func(context.Context, types
 
 func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 	var first types.Value
+	var firstHash hash.Hash
 
 	datasetID := types.String(datasetIDstr)
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
@@ -777,6 +841,16 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 			return types.Map{}, ErrMergeNeeded
 		}
 		return datasets.Edit().Remove(datasetID).Map(ctx)
+	}, func(ctx context.Context, rm refmap) (refmap, error) {
+		curr := rm.lookup(datasetIDstr)
+		if curr != (hash.Hash{}) && firstHash == (hash.Hash{}) {
+			firstHash = curr
+		}
+		if curr != firstHash {
+			return refmap{}, ErrMergeNeeded
+		}
+		rm.delete(datasetIDstr)
+		return rm, nil
 	})
 }
 

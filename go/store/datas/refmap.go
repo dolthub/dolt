@@ -37,6 +37,18 @@ func (rm *refmap) set(key string, addr hash.Hash) {
 	rm.entries = append(rm.entries, rmentry{ key, addr })
 }
 
+func (rm *refmap) delete(key string) {
+	entries := make([]rmentry, len(rm.entries) - 1)
+	j := 0
+	for i := range rm.entries {
+		if rm.entries[i].name != key {
+			entries[j] = rm.entries[i]
+			j++
+		}
+	}
+	rm.entries = entries
+}
+
 func (rm refmap) flatbuffer() []byte {
 	sort.Slice(rm.entries, func(i, j int) bool {
 		return rm.entries[i].name < rm.entries[j].name
