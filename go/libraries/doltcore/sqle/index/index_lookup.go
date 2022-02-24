@@ -245,7 +245,10 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
-	// bound comparisons do not properly handle nulls
+	// Only boundCase_isNull matches NULL values,
+	// otherwise we terminate the range scan.
+	// This is checked early to bypass unpredictable
+	// null type comparisons.
 	if val.Kind() == types.NullKind {
 		switch {
 		case cb.boundsCase == boundsCase_isNull:
@@ -315,6 +318,7 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 			return false, true, err
 		}
 	case boundsCase_isNull:
+		// an isNull scan skips non-nulls, but does not terminate
 		return false, false, nil
 	default:
 		return false, false, fmt.Errorf("unknown bounds")
