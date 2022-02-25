@@ -362,24 +362,40 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
-		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
-		if err != nil {
-			return err
-		}
-		if len(referencingRows) == 0 {
-			continue
+
+		// make dictionary of primary key tags
+		pkTags := make(map[uint64]bool)
+		for _, tag := range idxSch.GetPKCols().Tags {
+			pkTags[tag] = true
 		}
 
+		// Detect if there are changes, and if those changes impact a primary key column
+		changedPkTags := false
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
 			oldVal, oldOk := dOldRowTaggedVals[colTag]
 			newVal, newOk := dNewRow.GetColVal(colTag)
 			if (oldOk != newOk) || (oldOk && newOk && !oldVal.Equals(newVal)) {
 				valueChanged = true
-				break
+				_, ok := pkTags[colTag]
+				if ok {
+					changedPkTags = ok
+					break // Stop here; conditions are already both true
+				}
 			}
 		}
-		if !valueChanged {
+
+		// Skip this foreign key, since there are no changes or changes don't impact primary key
+		if !valueChanged  || !changedPkTags {
+			continue
+		}
+
+		// TODO: maybe don't load all referenced rows into memory
+		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		if err != nil {
+			return err
+		}
+		if len(referencingRows) == 0 {
 			continue
 		}
 
