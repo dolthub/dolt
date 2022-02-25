@@ -208,6 +208,7 @@ const (
 	boundsCase_greater_infinity
 	boundsCase_greater_lessEquals
 	boundsCase_greater_less
+	boundsCase_isNull
 )
 
 // columnBounds are used to compare a given value in the noms row iterator.
@@ -244,6 +245,15 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+	// Only boundCase_isNull matches NULL values,
+	// otherwise we terminate the range scan.
+	// This is checked early to bypass unpredictable
+	// null type comparisons.
+	if val.Kind() == types.NullKind {
+		isNullCase := cb.boundsCase == boundsCase_isNull
+		return isNullCase, !isNullCase, nil
+	}
+
 	switch cb.boundsCase {
 	case boundsCase_infinity_infinity:
 		return true, false, nil
@@ -303,6 +313,9 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 		if err != nil || !ok {
 			return false, true, err
 		}
+	case boundsCase_isNull:
+		// an isNull scan skips non-nulls, but does not terminate
+		return false, false, nil
 	default:
 		return false, false, fmt.Errorf("unknown bounds")
 	}

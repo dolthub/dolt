@@ -843,14 +843,6 @@ SQL
     [[ "${lines[1]}" = "1" ]] || false
     [[ "${lines[2]}" = "1" ]] || false
     [ "${#lines[@]}" -eq 3 ]
-
-    run dolt sql -q "describe select c0 from keyless where c1 = 1" -r csv
-    [ $status -eq 0 ]
-    [[ "${lines[0]}" = "plan" ]] || false
-    [[ "${lines[1]}" =~ "Project(keyless.c0)" ]] || false
-    [[ "${lines[2]}" =~ "Filter(keyless.c1 = 1)" ]] || false
-    [[ "${lines[3]}" =~ "Projected table access on [c0 c1]" ]] || false
-    [[ "${lines[4]}" =~ "IndexedTableAccess(keyless on [keyless.c1])" ]] || false
 }
 
 @test "keyless: secondary index insert" {
