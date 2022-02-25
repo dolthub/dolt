@@ -114,16 +114,6 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 	return nil
 }
 
-//func (cur *nodeCursor) currentSubtreeSz() uint64 {
-//	if cur.isLeaf() {
-//		return uint64(1)
-//	}
-//	if cur.subtrees == nil {
-//		cur.subtrees = cur.nd.getSubtreeCounts()
-//	}
-//	return cur.subtrees[cur.idx]
-//}
-
 // AddPair adds a val.Tuple pair to the treeChunker.
 func (tc *treeChunker) AddPair(ctx context.Context, key, value val.Tuple) error {
 	_, err := tc.append(ctx, nodeItem(key), nodeItem(value), 1)
@@ -407,7 +397,7 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 
 	mt := tc.builder.firstChildRef()
 	for {
-		child, err := fetchChildNode(ctx, tc.ns, mt)
+		child, err := fetchChild(ctx, tc.ns, mt)
 		if err != nil {
 			return Node{}, err
 		}

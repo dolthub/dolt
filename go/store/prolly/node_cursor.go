@@ -51,7 +51,7 @@ type searchFn func(item nodeItem, nd Node) (idx int)
 func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	for !cur.isLeaf() {
-		nd, err = fetchChildNode(ctx, nrw, cur.currentRef())
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -67,7 +67,7 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	cur.skipToNodeEnd()
 
 	for !cur.isLeaf() {
-		nd, err = fetchChildNode(ctx, nrw, cur.currentRef())
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return nil, err
 		}
@@ -102,7 +102,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		nd, err = fetchChildNode(ctx, nrw, cur.currentRef())
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -126,7 +126,7 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		cur.nd, err = fetchChildNode(ctx, nrw, cur.currentRef())
+		cur.nd, err = fetchChild(ctx, nrw, cur.currentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -221,7 +221,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 		// stay in bounds for internal nodes
 		cur.parent.keepInBounds()
 
-		cur.nd, err = fetchChildNode(ctx, cur.nrw, cur.parent.currentRef())
+		cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 		if err != nil {
 			return err
 		}
@@ -346,7 +346,7 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 // It's called whenever the cursor advances/retreats to a different chunk.
 func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 	assertTrue(cur.parent != nil)
-	cur.nd, err = fetchChildNode(ctx, cur.nrw, cur.parent.currentRef())
+	cur.nd, err = fetchChild(ctx, cur.nrw, cur.parent.currentRef())
 	cur.idx = -1 // caller must set
 	return err
 }
@@ -398,19 +398,13 @@ func compareCursors(left, right *nodeCursor) (diff int) {
 	return
 }
 
-func fetchChildNode(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
+func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
 	// todo(andy) handle nil Node, dangling ref
 	return ns.Read(ctx, ref)
 }
 
 func assertTrue(b bool) {
 	if !b {
-		panic("assertion failed")
-	}
-}
-
-func assertFalse(b bool) {
-	if b {
 		panic("assertion failed")
 	}
 }
