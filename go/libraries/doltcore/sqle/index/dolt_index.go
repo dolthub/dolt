@@ -266,14 +266,12 @@ RangeLoop:
 
 		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
 		// number of checks that are called per-row. Always leave one check to skip NULLs.
-		i := len(rangeCheck) - 1
-		for i > 0 && len(rangeCheck) > 1 {
+		for i := len(rangeCheck) - 1; i > 0 && len(rangeCheck) > 1; i-- {
 			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
 				rangeCheck = rangeCheck[:i]
 			} else {
 				break
 			}
-			i--
 		}
 
 		readRanges = append(readRanges, &noms.ReadRange{

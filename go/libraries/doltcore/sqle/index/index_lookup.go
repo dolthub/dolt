@@ -250,12 +250,8 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 	// This is checked early to bypass unpredictable
 	// null type comparisons.
 	if val.Kind() == types.NullKind {
-		switch {
-		case cb.boundsCase == boundsCase_isNull:
-			return true, false, nil
-		default:
-			return false, true, nil
-		}
+		isNullCase := cb.boundsCase == boundsCase_isNull
+		return isNullCase, !isNullCase, nil
 	}
 
 	switch cb.boundsCase {
