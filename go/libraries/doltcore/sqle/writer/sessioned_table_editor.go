@@ -386,7 +386,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		}
 
 		// Skip this foreign key, since there are no changes or changes don't impact primary key
-		if !valueChanged  || !changedPkTags {
+		if !valueChanged || !changedPkTags {
 			continue
 		}
 
