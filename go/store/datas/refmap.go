@@ -56,7 +56,7 @@ func (rm refmap) storeroot_flatbuffer() []byte {
 	})
 	builder := flatbuffers.NewBuilder(1024)
 	nameoffs := make([]flatbuffers.UOffsetT, len(rm.entries))
-	for i := range rm.entries {
+	for i := len(nameoffs) - 1; i >= 0; i-- {
 		nameoffs[i] = builder.CreateString(rm.entries[i].name)
 	}
 	serial.RefMapStartNamesVector(builder, len(nameoffs))
