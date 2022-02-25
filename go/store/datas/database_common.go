@@ -393,7 +393,31 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	err = db.doCommit(ctx, ds.ID(), v.(types.Struct))
+	newRef, err := types.NewRef(v, db.Format())
+	if err != nil {
+		return err
+	}
+
+	newValueRef, err := types.ToRefOfValue(newRef, db.Format())
+	if err != nil {
+		return err
+	}
+
+	var currentHeadAddr hash.Hash
+	if ref, ok, err := ds.MaybeHeadRef(); err != nil {
+		return err
+	} else if ok {
+		currentHeadAddr = ref.TargetHash()
+		ancestorRef, found, err := FindCommonAncestor(ctx, ref, newRef, db, db)
+		if err != nil {
+			return err
+		}
+		if !found || mergeNeeded(ref, ancestorRef, newRef) {
+			return ErrMergeNeeded
+		}
+	}
+
+	err = db.doCommit(ctx, ds.ID(), currentHeadAddr, newValueRef)
 	if err == ErrAlreadyCommitted {
 		return nil
 	}
@@ -401,17 +425,32 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
+	var currentAddr hash.Hash
+	if currRef, ok, err := ds.MaybeHeadRef(); err != nil {
+		return Dataset{}, err
+	} else if ok {
+		currentAddr = currRef.TargetHash()
+	}
+	st, err := buildNewCommit(ctx, ds, v, opts)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	commitRef, err := db.WriteValue(ctx, st)
+	if err != nil {
+		return Dataset{}, err
+	}
+
+	newCommitValueRef, err := types.ToRefOfValue(commitRef, db.Format())
+	if err != nil {
+		return Dataset{}, err
+	}
+
 	return db.doHeadUpdate(
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			st, err := buildNewCommit(ctx, ds, v, opts)
-
-			if err != nil {
-				return err
-			}
-
-			return db.doCommit(ctx, ds.ID(), st)
+			return db.doCommit(ctx, ds.ID(), currentAddr, newCommitValueRef)
 		},
 	)
 }
@@ -421,28 +460,7 @@ func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (D
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }
 
-// doCommit manages concurrent access the single logical piece of mutable state: the current Root. doCommit is
-// optimistic in that it is attempting to update head making the assumption that currentRootHash is the hash of the
-// current head. The call to Commit below will return an 'ErrOptimisticLockFailed' error if that assumption fails (e.g.
-// because of a race with another writer) and the entire algorithm must be tried again. This method will also fail and
-// return an 'ErrMergeNeeded' error if the |commit| is not a descendent of the current dataset head
-func (db *database) doCommit(ctx context.Context, datasetID string, commit types.Struct) error {
-	if is, err := IsCommit(commit); err != nil {
-		return err
-	} else if !is {
-		return fmt.Errorf("Can't commit a non-Commit struct to dataset %s", datasetID)
-	}
-
-	commitRef, err := db.WriteValue(ctx, commit)
-	if err != nil {
-		return err
-	}
-
-	ref, err := types.ToRefOfValue(commitRef, db.Format())
-	if err != nil {
-		return err
-	}
-
+func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValueRef types.Ref) error {
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		curr, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
 		if err != nil {
@@ -450,22 +468,17 @@ func (db *database) doCommit(ctx context.Context, datasetID string, commit types
 		}
 		if hasHead {
 			currRef := curr.(types.Ref)
-			if currRef.TargetHash() == commitRef.TargetHash() {
+			if currRef.TargetHash() != datasetCurrentAddr {
+				return types.Map{}, ErrMergeNeeded
+			}
+			if currRef.TargetHash() == newCommitValueRef.TargetHash() {
 				return types.Map{}, ErrAlreadyCommitted
 			}
-			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currRef, db, db)
-			if err != nil {
-				return types.Map{}, err
-			}
-			if !found {
-				return types.Map{}, ErrMergeNeeded
-			}
-			if mergeNeeded(currRef, ancestorRef, commitRef) {
-				return types.Map{}, ErrMergeNeeded
-			}
+		} else if datasetCurrentAddr != (hash.Hash{}) {
+			return types.Map{}, ErrMergeNeeded
 		}
 
-		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+		return datasets.Edit().Set(types.String(datasetID), newCommitValueRef).Map(ctx)
 	})
 }
 
@@ -864,6 +877,26 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 			parents, err = le.List(ctx)
 			if err != nil {
 				return types.Struct{}, err
+			}
+		}
+	} else {
+		curr, ok, err := ds.MaybeHeadRef()
+		if err != nil {
+			return types.Struct{}, err
+		}
+		if ok {
+			var found bool
+			err := parents.IterAll(ctx, func(v types.Value, _ uint64) error {
+				if v.(types.Ref).TargetHash() == curr.TargetHash() {
+					found = true
+				}
+				return nil
+			})
+			if err != nil {
+				return types.Struct{}, err
+			}
+			if !found {
+				return types.Struct{}, ErrMergeNeeded
 			}
 		}
 	}
