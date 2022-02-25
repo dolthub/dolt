@@ -390,7 +390,6 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			continue
 		}
 
-		// TODO: maybe don't load all referenced rows into memory
 		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
