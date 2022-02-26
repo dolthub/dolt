@@ -369,7 +369,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			pkTags[tag] = true
 		}
 
-		// Detect if there are changes, and if those changes impact a primary key columns
+		// Detect if there are changes
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
 			oldVal, oldOk := dOldRowTaggedVals[colTag]
@@ -382,9 +382,12 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 		// Skip this foreign key, since there are no changes or changes don't impact primary key
 		if !valueChanged {
-			continue
+		//	continue
 		}
 
+		// TODO: something about using a cursor and checking indexes instead
+
+		// Don't load all referencing rows, just loop over each row using a cursor (which might just be a fancy index)
 		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
 			return err
