@@ -369,24 +369,19 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			pkTags[tag] = true
 		}
 
-		// Detect if there are changes, and if those changes impact a primary key column
-		changedPkTags := false
+		// Detect if there are changes, and if those changes impact a primary key columns
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
 			oldVal, oldOk := dOldRowTaggedVals[colTag]
 			newVal, newOk := dNewRow.GetColVal(colTag)
 			if (oldOk != newOk) || (oldOk && newOk && !oldVal.Equals(newVal)) {
 				valueChanged = true
-				_, ok := pkTags[colTag]
-				if ok {
-					changedPkTags = ok
-					break // Stop here; conditions are already both true
-				}
+				break
 			}
 		}
 
 		// Skip this foreign key, since there are no changes or changes don't impact primary key
-		if !valueChanged || !changedPkTags {
+		if !valueChanged {
 			continue
 		}
 
