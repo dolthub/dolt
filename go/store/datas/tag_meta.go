@@ -108,7 +108,7 @@ func TagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 	}, nil
 }
 
-func (tm *TagMeta) ToNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
+func (tm *TagMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
 		tagMetaNameKey:      types.String(tm.Name),
 		tagMetaEmailKey:     types.String(tm.Email),

@@ -25,7 +25,7 @@ import (
 
 func TestTagMetaToAndFromNomsStruct(t *testing.T) {
 	tm := NewTagMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
-	cmSt, err := tm.ToNomsStruct(types.Format_Default)
+	cmSt, err := tm.toNomsStruct(types.Format_Default)
 	assert.NoError(t, err)
 	result, err := TagMetaFromNomsSt(cmSt)
 

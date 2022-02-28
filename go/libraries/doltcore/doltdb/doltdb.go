@@ -1035,13 +1035,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 		return err
 	}
 
-	st, err := meta.ToNomsStruct(ddb.vrw.Format())
-
-	if err != nil {
-		return err
-	}
-
-	tag := datas.TagOptions{Meta: st}
+	tag := datas.TagOptions{Meta: meta}
 
 	ds, err = ddb.db.Tag(ctx, ds, commitAddr, tag)
 

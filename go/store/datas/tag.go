@@ -40,7 +40,7 @@ var valueTagType = nomdl.MustParseType(`Struct Tag {
 type TagOptions struct {
 	// Meta is a Struct that describes arbitrary metadata about this Tag,
 	// e.g. a timestamp or descriptive text.
-	Meta types.Struct
+	Meta *TagMeta
 }
 
 // NewTag creates a new tag object.
@@ -54,8 +54,18 @@ type TagOptions struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewTag(_ context.Context, commitRef types.Ref, meta types.Struct) (types.Struct, error) {
-	return tagTemplate.NewStruct(meta.Format(), []types.Value{meta, commitRef})
+func NewTag(_ context.Context, commitRef types.Ref, meta *TagMeta) (types.Struct, error) {
+	var metaV types.Struct
+	if meta != nil {
+		var err error
+		metaV, err = meta.toNomsStruct(commitRef.Format())
+		if err != nil {
+			return types.Struct{}, err
+		}
+	} else {
+		metaV = types.EmptyStruct(commitRef.Format())
+	}
+	return tagTemplate.NewStruct(metaV.Format(), []types.Value{metaV, commitRef})
 }
 
 func IsTag(v types.Value) (bool, error) {
