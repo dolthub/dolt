@@ -452,7 +452,6 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
 		}
 
-
 		// TODO: asdasdasd
 
 		// Don't load all referencing rows, just loop over each row using a cursor (which might just be a fancy index)

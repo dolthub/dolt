@@ -214,7 +214,6 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 	}
 }
 
-
 // GetIndexedRowKVP returns a matching row key and value for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
 func GetIndexedRowKVP(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([2]types.Tuple, error) {
@@ -373,7 +372,6 @@ func indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple, lookupTa
 
 	return types.NewTuple(nbf, resVals...)
 }
-
 
 // GetIndexedRow returns a matching row for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
