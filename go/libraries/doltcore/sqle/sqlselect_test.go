@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -1548,14 +1549,14 @@ func (tcc *testCommitClock) Now() time.Time {
 }
 
 func installTestCommitClock() func() {
-	oldNowFunc := doltdb.CommitNowFunc
-	oldCommitLoc := doltdb.CommitLoc
+	oldNowFunc := datas.CommitNowFunc
+	oldCommitLoc := datas.CommitLoc
 	tcc := &testCommitClock{}
-	doltdb.CommitNowFunc = tcc.Now
-	doltdb.CommitLoc = time.UTC
+	datas.CommitNowFunc = tcc.Now
+	datas.CommitLoc = time.UTC
 	return func() {
-		doltdb.CommitNowFunc = oldNowFunc
-		doltdb.CommitLoc = oldCommitLoc
+		datas.CommitNowFunc = oldNowFunc
+		datas.CommitLoc = oldCommitLoc
 	}
 }
 

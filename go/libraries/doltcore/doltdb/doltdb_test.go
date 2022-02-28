@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/test"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -294,7 +295,7 @@ func TestLDNoms(t *testing.T) {
 		valHash, err = ddb.WriteRootValue(context.Background(), root)
 		assert.NoError(t, err)
 
-		meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
+		meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 		if err != nil {
 			t.Error("Failed to commit")
 		}

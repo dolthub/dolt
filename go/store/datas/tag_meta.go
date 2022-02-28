@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package datas
 
 import (
 	"fmt"
@@ -66,7 +66,7 @@ func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	return &TagMeta{n, e, ms, d, userMS}
 }
 
-func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
+func TagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 	e, err := getRequiredFromSt(st, tagMetaEmailKey)
 
 	if err != nil {
@@ -108,7 +108,7 @@ func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 	}, nil
 }
 
-func (tm *TagMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
+func (tm *TagMeta) ToNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
 		tagMetaNameKey:      types.String(tm.Name),
 		tagMetaEmailKey:     types.String(tm.Email),

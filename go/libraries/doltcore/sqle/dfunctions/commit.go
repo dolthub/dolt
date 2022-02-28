@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const CommitFuncName = "commit"
@@ -103,7 +104,7 @@ func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return nil, err
 	}
 
-	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
+	meta, err := datas.NewCommitMeta(name, email, commitMessage)
 	if err != nil {
 		return nil, err
 	}

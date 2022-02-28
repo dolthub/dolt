@@ -27,7 +27,7 @@ type Tag struct {
 	Name   string
 	vrw    types.ValueReadWriter
 	tagSt  types.Struct
-	Meta   *TagMeta
+	Meta   *datas.TagMeta
 	Commit *Commit
 }
 
@@ -42,7 +42,7 @@ func NewTag(ctx context.Context, name string, vrw types.ValueReadWriter, tagSt t
 		return nil, fmt.Errorf("tag struct does not have field %s", datas.TagMetaField)
 	}
 
-	meta, err := tagMetaFromNomsSt(metaSt.(types.Struct))
+	meta, err := datas.TagMetaFromNomsSt(metaSt.(types.Struct))
 
 	if err != nil {
 		return nil, err
