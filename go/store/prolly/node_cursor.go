@@ -398,6 +398,11 @@ func compareCursors(left, right *nodeCursor) (diff int) {
 	return
 }
 
+func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
+	// todo(andy) handle nil Node, dangling ref
+	return ns.Read(ctx, ref)
+}
+
 func assertTrue(b bool) {
 	if !b {
 		panic("assertion failed")

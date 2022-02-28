@@ -110,7 +110,6 @@ func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 			}
 			assert.Equal(t, io.EOF, err)
 			assert.Equal(t, test.expCount, actCount)
-			//fmt.Printf("a: %d \t z: %d cnt: %d", a, z, cnt)
 		}
 	}
 }

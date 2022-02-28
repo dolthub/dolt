@@ -17,7 +17,6 @@ package durable
 import (
 	"context"
 	"fmt"
-	"math"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -188,12 +187,12 @@ func (i prollyIndex) HashOf() (hash.Hash, error) {
 
 // Count implements Index.
 func (i prollyIndex) Count() uint64 {
-	return math.MaxUint64 // 🙃
+	return uint64(i.index.Count())
 }
 
 // Empty implements Index.
 func (i prollyIndex) Empty() bool {
-	return i.index.Empty()
+	return i.index.Count() == 0
 }
 
 // Format implements Index.

@@ -38,6 +38,8 @@ table TupleMap {
   // - leaf nodes: contains refs for heap values
   //   iff table has ref'd types (eg TEXT)
   ref_array:[ubyte];
+  // array of uvarint encoded subtree counts
+  ref_cardinalities:[ubyte];
 
   // tuple format for |key_tuples|
   key_format:TupleFormat;

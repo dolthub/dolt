@@ -64,7 +64,7 @@ func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 
 	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
-		_, err := chunker.Append(ctx, item[0], item[1])
+		err = chunker.AddPair(ctx, val.Tuple(item[0]), val.Tuple(item[1]))
 		assert.NoError(t, err)
 	}
 	nd, err := chunker.Done(ctx)
