@@ -308,6 +308,7 @@ func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
 
 // StatementFinished implements TableEditor.
 func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	// TODO: Nasty fucking bug. Why doesn;t this implement this
 	return nil
 }
 

@@ -49,7 +49,7 @@ SQL
 
   cat <<SQL > check-constraint-sch.sql
 CREATE TABLE persons (
-    ID int NOT NULL,
+    ID int PRIMARY KEY,
     LastName varchar(255) NOT NULL,
     FirstName varchar(255),
     Age int CHECK (Age>=18)
