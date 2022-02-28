@@ -97,9 +97,6 @@ func (nb *nodeBuilder) firstChildRef() hash.Hash {
 	return hash.New(nb.values[0])
 }
 
-// writeNewNode creates a Node from the keys items in |sc.currentPair|,
-// clears the keys items, then returns the new Node and a metaValue that
-// points to it. The Node is always eagerly written.
 func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	var (
 		keyTups, keyOffs fb.UOffsetT
@@ -107,7 +104,7 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := measureNodeSize(nb.keys, nb.values)
+	keySz, valSz, bufSz := measureNodeSize(nb.keys, nb.values, nb.subtrees)
 	b := getMapBuilder(pool, bufSz)
 
 	// serialize keys and offsets
@@ -116,7 +113,7 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	keyOffs = b.EndVector(writeItemOffsets(b, nb.keys, keySz))
 
 	if nb.level == 0 {
-		// serialize ref tuples for leaf nodes
+		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, nb.values, valSz)
 		serial.TupleMapStartValueOffsetsVector(b, len(nb.values)-1)
 		valOffs = b.EndVector(writeItemOffsets(b, nb.values, valSz))
@@ -171,14 +168,14 @@ func readSubtreeCounts(n int, buf []byte) (sc subtreeCounts) {
 	return
 }
 
-func writeSubtreeCounts(sc subtreeCounts) (buf []byte) {
-	buf = make([]byte, len(sc)*binary.MaxVarintLen64)
+func writeSubtreeCounts(sc subtreeCounts) []byte {
+	buf := make([]byte, len(sc)*binary.MaxVarintLen64)
 	pos := 0
 	for _, count := range sc {
 		n := binary.PutUvarint(buf[pos:], count)
 		pos += n
 	}
-	return buf
+	return buf[:pos]
 }
 
 func newNodeBuilder(level int) *nodeBuilder {
@@ -198,11 +195,12 @@ func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 
 // measureNodeSize returns the exact size of the tuple vectors for keys and values,
 // and an estimate of the overall size of the final flatbuffer.
-func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
+func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
 		valSz += len(values[i])
 	}
+	refCntSz := len(subtrees) * binary.MaxVarintLen64
 
 	// constraints enforced upstream
 	if keySz > int(maxVectorOffset) {
@@ -213,6 +211,7 @@ func measureNodeSize(keys, values []nodeItem) (keySz, valSz, bufSz int) {
 	}
 
 	bufSz += keySz + valSz               // tuples
+	bufSz += refCntSz                    // subtree counts
 	bufSz += len(keys)*2 + len(values)*2 // offsets
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
