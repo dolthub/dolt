@@ -214,6 +214,62 @@ func ContainsIndexedKey(ctx context.Context, te TableEditor, key types.Tuple, in
 	}
 }
 
+
+// GetIndexedRowKVP returns a matching row key and value for the given key on the index. The key is assumed to be in the format
+// expected of the index, similar to searching on the index map itself.
+func GetIndexedRowKVP(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([2]types.Tuple, error) {
+	tbl, err := te.Table(ctx)
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+
+	idxMap, err := tbl.GetNomsIndexRowData(ctx, indexName)
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+
+	// TODO: not sure if this needs to be the same indexIter; if so split into two methods and pass variables in
+	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
+	)
+
+	rowData, err := tbl.GetNomsRowData(ctx)
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+
+	lookupTags := make(map[uint64]int)
+	for i, tag := range te.Schema().GetPKCols().Tags {
+		lookupTags[tag] = i
+	}
+
+	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
+	if len(lookupTags) == 0 {
+		lookupTags[schema.KeylessRowIdTag] = 0
+	}
+
+	k, err := indexIter.ReadKey(ctx)
+	// TODO: special case for EOF?
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+
+	pkTupleVal, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+
+	fieldsVal, ok, err := rowData.MaybeGetTuple(ctx, pkTupleVal)
+	if err != nil {
+		return [2]types.Tuple{}, err
+	}
+	if !ok {
+		return [2]types.Tuple{}, nil
+	}
+
+	return [2]types.Tuple{pkTupleVal, fieldsVal}, nil
+}
+
 // GetIndexedRowKVPs returns all matching row keys and values for the given key on the index. The key is assumed to be in the format
 // expected of the index, similar to searching on the index map itself.
 func GetIndexedRowKVPs(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) ([][2]types.Tuple, error) {
@@ -316,6 +372,23 @@ func indexKeyToTableKey(nbf *types.NomsBinFormat, indexKey types.Tuple, lookupTa
 	}
 
 	return types.NewTuple(nbf, resVals...)
+}
+
+
+// GetIndexedRow returns a matching row for the given key on the index. The key is assumed to be in the format
+// expected of the index, similar to searching on the index map itself.
+func GetIndexedRow(ctx context.Context, te TableEditor, key types.Tuple, indexName string, idxSch schema.Schema) (row.Row, error) {
+	rowKVP, err := GetIndexedRowKVP(ctx, te, key, indexName, idxSch)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := row.FromNoms(te.Schema(), rowKVP[0], rowKVP[1])
+	if err != nil {
+		return nil, err
+	}
+
+	return row, nil
 }
 
 // GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format

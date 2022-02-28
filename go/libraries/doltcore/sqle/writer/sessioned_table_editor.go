@@ -17,6 +17,7 @@ package writer
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -387,13 +388,12 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 
 		// TODO: something about using a cursor and checking indexes instead
 
-		// Don't load all referencing rows, just loop over each row using a cursor (which might just be a fancy index)
-		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		referencingRow, err := editor.GetIndexedRow(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
 		if err != nil {
+			if err == io.EOF {
+				continue
+			}
 			return err
-		}
-		if len(referencingRows) == 0 {
-			continue
 		}
 
 		switch foreignKey.OnUpdate {
@@ -416,37 +416,34 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 					}
 				}
 			}
-			for _, rowToUpdate := range referencingRows {
-				newRow := rowToUpdate
-				for i := range foreignKey.ReferencedTableColumns {
-					incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i])
-					newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.Schema())
-					if err != nil {
-						return err
-					}
-				}
-				err = referencingSte.updateRow(ctx, rowToUpdate, newRow, false, nil)
+			newRow := referencingRow
+			for i := range foreignKey.ReferencedTableColumns {
+				incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i])
+				newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.Schema())
 				if err != nil {
 					return err
 				}
+			}
+			err = referencingSte.updateRow(ctx, referencingRow, newRow, false, nil)
+			if err != nil {
+				return err
 			}
 		case doltdb.ForeignKeyReferenceOption_SetNull:
 			if foreignKey.IsSelfReferential() {
 				return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: SET NULL updates always violate self referential foreign keys",
 					foreignKey.TableName, foreignKey.Name)
 			}
-			for _, oldRow := range referencingRows {
-				newRow := oldRow
-				for _, colTag := range foreignKey.TableColumns {
-					newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
-					if err != nil {
-						return err
-					}
-				}
-				err = referencingSte.updateRow(ctx, oldRow, newRow, false, nil)
+
+			newRow := referencingRow
+			for _, colTag := range foreignKey.TableColumns {
+				newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
 				if err != nil {
 					return err
 				}
+			}
+			err = referencingSte.updateRow(ctx, referencingRow, newRow, false, nil)
+			if err != nil {
+				return err
 			}
 		case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
 			indexKeyStr, _ := formatKey(ctx, indexKey)
@@ -454,6 +451,77 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 		default:
 			return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
 		}
+
+
+		// TODO: asdasdasd
+
+		// Don't load all referencing rows, just loop over each row using a cursor (which might just be a fancy index)
+		//referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		//if err != nil {
+		//	return err
+		//}
+		//if len(referencingRows) == 0 {
+		//	continue
+		//}
+		//
+		//switch foreignKey.OnUpdate {
+		//case doltdb.ForeignKeyReferenceOption_Cascade:
+		//	if foreignKey.IsSelfReferential() {
+		//		return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: cascading updates always violate self referential foreign keys",
+		//			foreignKey.TableName, foreignKey.Name)
+		//	}
+		//	// NULL handling is usually done higher, so if a new value is NULL then we need to error
+		//	for i := range foreignKey.ReferencedTableColumns {
+		//		if incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i]); types.IsNull(incomingVal) {
+		//			col, ok := referencingSte.tableEditor.Schema().GetAllCols().GetByTag(foreignKey.TableColumns[i])
+		//			if !ok {
+		//				return fmt.Errorf("column with tag `%d` not found on `%s` from foreign key `%s`",
+		//					foreignKey.TableColumns[i], foreignKey.TableName, foreignKey.Name)
+		//			}
+		//			if !col.IsNullable() {
+		//				return fmt.Errorf("column name `%s`.`%s` is non-nullable but attempted to set a value of NULL from foreign key `%s`",
+		//					foreignKey.TableName, col.Name, foreignKey.Name)
+		//			}
+		//		}
+		//	}
+		//	for _, rowToUpdate := range referencingRows {
+		//		newRow := rowToUpdate
+		//		for i := range foreignKey.ReferencedTableColumns {
+		//			incomingVal, _ := dNewRow.GetColVal(foreignKey.ReferencedTableColumns[i])
+		//			newRow, err = newRow.SetColVal(foreignKey.TableColumns[i], incomingVal, referencingSte.tableEditor.Schema())
+		//			if err != nil {
+		//				return err
+		//			}
+		//		}
+		//		err = referencingSte.updateRow(ctx, rowToUpdate, newRow, false, nil)
+		//		if err != nil {
+		//			return err
+		//		}
+		//	}
+		//case doltdb.ForeignKeyReferenceOption_SetNull:
+		//	if foreignKey.IsSelfReferential() {
+		//		return fmt.Errorf("foreign key constraint violation on `%s`.`%s`: SET NULL updates always violate self referential foreign keys",
+		//			foreignKey.TableName, foreignKey.Name)
+		//	}
+		//	for _, oldRow := range referencingRows {
+		//		newRow := oldRow
+		//		for _, colTag := range foreignKey.TableColumns {
+		//			newRow, err = newRow.SetColVal(colTag, types.NullValue, referencingSte.tableEditor.Schema())
+		//			if err != nil {
+		//				return err
+		//			}
+		//		}
+		//		err = referencingSte.updateRow(ctx, oldRow, newRow, false, nil)
+		//		if err != nil {
+		//			return err
+		//		}
+		//	}
+		//case doltdb.ForeignKeyReferenceOption_DefaultAction, doltdb.ForeignKeyReferenceOption_NoAction, doltdb.ForeignKeyReferenceOption_Restrict:
+		//	indexKeyStr, _ := formatKey(ctx, indexKey)
+		//	return sql.ErrForeignKeyParentViolation.New(foreignKey.Name, foreignKey.TableName, foreignKey.ReferencedTableName, indexKeyStr)
+		//default:
+		//	return fmt.Errorf("unknown ON UPDATE reference option on `%s`: `%s`", foreignKey.Name, foreignKey.OnUpdate.String())
+		//}
 	}
 
 	return nil
