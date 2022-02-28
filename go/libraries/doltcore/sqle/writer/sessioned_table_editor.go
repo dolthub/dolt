@@ -363,13 +363,7 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
 
-		// make dictionary of primary key tags
-		pkTags := make(map[uint64]bool)
-		for _, tag := range idxSch.GetPKCols().Tags {
-			pkTags[tag] = true
-		}
-
-		// Detect if there are changes, and if those changes impact a primary key columns
+		// Detect if there are changes
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
 			oldVal, oldOk := dOldRowTaggedVals[colTag]
