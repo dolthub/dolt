@@ -1,17 +1,28 @@
 name: Test Bats Windows
 
 on:
-  pull_request:
-    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Email address to receive bats failure notification'
+        required: true
+        default: ''
+  repository_dispatch:
+    types: [ bats-windows ]
 
 jobs:
   get-files:
-    name: Get File list
+    name: Get file list
     runs-on: ubuntu-18.04
     outputs:
       files: ${{ steps.get_file_list.outputs.files }}
     steps:
       - uses: actions/checkout@v2
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+      - uses: actions/checkout@v2
+        if: ${{ github.event_name == 'workflow_dispatch' }}
       - name: Get file list
         id: get_file_list
         run: |
@@ -91,6 +102,11 @@ jobs:
         with:
           python-version: ^3.6
       - uses: actions/checkout@v2
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        with:
+          ref: ${{ github.event.client_payload.ref }}
+      - uses: actions/checkout@v2
+        if: ${{ github.event_name == 'workflow_dispatch' }}
       - uses: actions/setup-node@v1
         with:
           node-version: ^12
@@ -134,3 +150,31 @@ jobs:
         env:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"
+
+  report-bats-failure:
+    name: Report Bats Windows Failure via Email
+    needs: test-per-file
+    runs-on: ubuntu-18.04
+    if: always() && (needs.test-per-file.result == 'failure')
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.head_ref }}
+          toAddresses: '["${{ github.event.inputs.email }}"]'
+      - name: Send Email
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.event.client_payload.ref }}
+          toAddresses: '["${{ github.event.client_payload.actor_email }}"]'

@@ -3,6 +3,9 @@ name: Check Compatibility
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 jobs:
   test:
