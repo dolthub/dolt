@@ -190,6 +190,10 @@ func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 	return nil
 }
 
+func (jsonw *JSONWriter) WriteSqlBatchedRow(ctx context.Context, row sql.Row) error {
+	return nil
+}
+
 // Close should flush all writes, release resources being held
 func (jsonw *JSONWriter) Close(ctx context.Context) error {
 	if jsonw.closer != nil {

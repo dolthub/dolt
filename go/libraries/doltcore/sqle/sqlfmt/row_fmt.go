@@ -139,6 +139,79 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 	return b.String(), nil
 }
 
+func SqlRowAsBatchInsertStmtStart(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
+	b.WriteString("INSERT INTO ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ")
+
+	b.WriteString("(")
+	seenOne := false
+	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		b.WriteString(QuoteIdentifier(col.Name))
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(")")
+	b.WriteString(" VALUES (")
+
+	seenOne = false
+	for i, val := range r {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		col := tableSch.GetAllCols().GetAtIndex(i)
+		str := "NULL"
+		if val != nil {
+			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		b.WriteString(str)
+		seenOne = true
+	}
+	b.WriteString(")")
+
+	return b.String(), nil
+}
+
+func SqlRowAsBatchInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
+	var err error
+
+	b.WriteString(", (")
+	seenOne := false
+	for i, val := range r {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		col := tableSch.GetAllCols().GetAtIndex(i)
+		str := "NULL"
+		if val != nil {
+			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
+			if err != nil {
+				return "", err
+			}
+		}
+
+		b.WriteString(str)
+		seenOne = true
+	}
+	b.WriteString(")")
+
+	return b.String(), nil
+}
+
 func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	b.WriteString("DELETE FROM ")

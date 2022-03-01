@@ -41,6 +41,7 @@ type SqlExportWriter struct {
 	wr              io.WriteCloser
 	root            *doltdb.RootValue
 	writtenFirstRow bool
+	writtenFirstInsert bool
 	editOpts        editor.Options
 }
 
@@ -88,6 +89,34 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	return iohelp.WriteLine(w.wr, stmt)
+}
+
+func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) error {
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
+		return err
+	}
+
+	// Previous write was last insert
+	if w.writtenFirstInsert && r == nil {
+		return iohelp.WriteLine(w.wr, ";")
+	}
+
+	// Append insert values wrapped in parentheses
+	var stmt string
+	var err error
+	if !w.writtenFirstInsert {
+		// Write first insert statement
+		stmt, err = sqlfmt.SqlRowAsBatchInsertStmtStart(ctx, r, w.tableName, w.sch)
+		w.writtenFirstInsert = true
+	} else {
+		// Append insert value
+		stmt, err = sqlfmt.SqlRowAsBatchInsertStmt(ctx, r, w.tableName, w.sch)
+		if err != nil {
+			return err
+		}
+	}
+
+	return iohelp.WriteNoNewLine(w.wr, stmt)
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {

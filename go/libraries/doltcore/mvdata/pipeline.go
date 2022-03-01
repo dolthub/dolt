@@ -96,3 +96,59 @@ func (e *DataMoverPipeline) Execute() error {
 
 	return e.g.Wait()
 }
+
+func (e *DataMoverPipeline) ExecuteBatched() error {
+	// TODO: should I still use go routines?
+	parsedRowChan := make(chan sql.Row)
+
+	e.g.Go(func() (err error) {
+		defer func() {
+			close(parsedRowChan)
+			if cerr := e.rd.Close(e.ctx); cerr != nil {
+				err = cerr
+			}
+		}()
+
+		for {
+			row, err := e.rd.ReadSqlRow(e.ctx)
+			if err == io.EOF {
+				parsedRowChan <- nil
+				return nil
+			}
+
+			if err != nil {
+				return err
+			}
+
+			select {
+			case <-e.ctx.Done():
+				return e.ctx.Err()
+			case parsedRowChan <- row:
+			}
+		}
+	})
+
+	e.g.Go(func() (err error) {
+		defer func() {
+			if cerr := e.wr.Close(e.ctx); cerr != nil {
+				err = cerr
+			}
+		}()
+
+		for r := range parsedRowChan {
+			select {
+			case <-e.ctx.Done():
+				return e.ctx.Err()
+			default:
+				err := e.wr.WriteSqlBatchedRow(e.ctx, r)
+				if err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	return e.g.Wait()
+}
