@@ -658,7 +658,7 @@ DELIM
     dolt sql -q "alter table t add constraint cx CHECK (pk < 10)"
     dolt sql -q "Insert into t values (1),(2),(3),(4),(5),(6),(7),(8),(9) "
 
-     cat <<DELIM > file.csv
+    cat <<DELIM > file.csv
 pk
 1
 2
@@ -674,7 +674,4 @@ DELIM
     [[ "$output" =~ "Rows Processed: 6, Additions: 0, Modifications: 0, Had No Effect: 6" ]] || false
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "[10000]" ]] || false
-
-    # Run again to get correct Had No Effect amount
-    run dolt table import -u test `batshelper 1pk5col-ints.csv`
 }
