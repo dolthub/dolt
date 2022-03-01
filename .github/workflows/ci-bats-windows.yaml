@@ -169,7 +169,7 @@ jobs:
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
-          version: ${{ github.head_ref }}
+          version: ${{ github.ref }}
           template: 'BatsWindowsFailureTemplate'
           toAddresses: '["${{ github.event.inputs.email }}"]'
       - name: Send Email
