@@ -1467,6 +1467,5 @@ databases:
     cd ..
     start_sql_server_with_args --user dolt -ltrace --no-auto-commit
 
-    run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
-    [ "$status" -eq 0 ]
+    expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
 }
