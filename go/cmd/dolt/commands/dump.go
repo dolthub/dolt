@@ -90,7 +90,6 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 
-
 	return ap
 }
 
