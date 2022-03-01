@@ -29,6 +29,10 @@ inputs:
     description: 'json string list of reply to addresses'
     required: false
     default: "[]"
+  workflowURL:
+    description: 'url of the workflow run'
+    default: ''
+    required: false
 runs:
   using: 'node12'
   main: 'dist/index.js'
