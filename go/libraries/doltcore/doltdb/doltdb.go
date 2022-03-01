@@ -1021,12 +1021,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 		return err
 	}
 
-	_, hasHead, err := ds.MaybeHeadRef()
-
-	if err != nil {
-		return err
-	}
-	if hasHead {
+	if ds.HasHead() {
 		return fmt.Errorf("dataset already exists for tag %s", tagRef.String())
 	}
 
