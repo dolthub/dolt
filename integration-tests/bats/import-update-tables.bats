@@ -209,7 +209,6 @@ CREATE TABLE employees (
 );
 SQL
     run dolt table import -u employees `batshelper employees-tbl-schema-unordered.json`
-    echo "$output"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
@@ -502,7 +501,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from test"
@@ -522,7 +521,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from test"
@@ -623,7 +622,7 @@ DELIM
 
     run dolt table import -u keyless data.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from keyless order by c0, c1 DESC"
@@ -652,4 +651,30 @@ DELIM
     ! [[ "$output" =~ "[4,little,doe,1]" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+}
+
+@test "import-update-tables: large amounts of no effect rows" {
+    dolt sql -q "create table t(pk int primary key)"
+    dolt sql -q "alter table t add constraint cx CHECK (pk < 10)"
+    dolt sql -q "Insert into t values (1),(2),(3),(4),(5),(6),(7),(8),(9) "
+
+     cat <<DELIM > file.csv
+pk
+1
+2
+3
+4
+5
+6
+10000
+DELIM
+
+    run dolt table import -u --continue t file.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 6, Additions: 0, Modifications: 0, Had No Effect: 6" ]] || false
+    [[ "$output" =~ "The following rows were skipped:" ]] || false
+    [[ "$output" =~ "[10000]" ]] || false
+
+    # Run again to get correct Had No Effect amount
+    run dolt table import -u test `batshelper 1pk5col-ints.csv`
 }

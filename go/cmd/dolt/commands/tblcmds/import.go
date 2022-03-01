@@ -17,7 +17,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"golang.org/x/text/message"
 	"io"
 	"os"
 	"strconv"
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/message"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"

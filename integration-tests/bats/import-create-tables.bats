@@ -698,7 +698,7 @@ DELIM
 
     run dolt table import -s schema.sql -c keyless data.csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
     run dolt sql -r csv -q "select * from keyless"
