@@ -150,3 +150,31 @@ jobs:
         env:
           IS_WINDOWS: true
           WINDOWS_BASE_DIR: "/d/a"
+
+  report-bats-failure:
+    name: Report Bats Windows Failure via Email
+    needs: test-per-file
+    runs-on: ubuntu-18.04
+    if: always() && (needs.test-per-file.result == 'failure')
+    steps:
+      - uses: actions/checkout@v2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Send Email
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.head_ref }}
+          toAddresses: '["${{ github.event.inputs.email }}"]'
+      - name: Send Email
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        uses: ./.github/actions/ses-email-action
+        with:
+          region: us-west-2
+          version: ${{ github.event.client_payload.ref }}
+          toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
