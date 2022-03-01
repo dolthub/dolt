@@ -651,6 +651,9 @@ DELIM
     ! [[ "$output" =~ "[4,little,doe,1]" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+
+    run dolt sql -r csv -q "select * from persons"
+    [[ "$output" =~ "1,jon,doe,20" ]] || false
 }
 
 @test "import-update-tables: large amounts of no effect rows" {
@@ -674,4 +677,12 @@ DELIM
     [[ "$output" =~ "Rows Processed: 6, Additions: 0, Modifications: 0, Had No Effect: 6" ]] || false
     [[ "$output" =~ "The following rows were skipped:" ]] || false
     [[ "$output" =~ "[10000]" ]] || false
+
+    run dolt sql -r csv -q "select * from t"
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "4" ]] || false
+    [[ "$output" =~ "5" ]] || false
+    [[ "$output" =~ "6" ]] || false
 }
