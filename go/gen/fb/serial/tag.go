@@ -109,16 +109,16 @@ func (rcv *Tag) MutateTimestampMillis(n uint64) bool {
 	return rcv._tab.MutateUint64Slot(12, n)
 }
 
-func (rcv *Tag) UserTimestampMillis() uint64 {
+func (rcv *Tag) UserTimestampMillis() int64 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
-		return rcv._tab.GetUint64(o + rcv._tab.Pos)
+		return rcv._tab.GetInt64(o + rcv._tab.Pos)
 	}
 	return 0
 }
 
-func (rcv *Tag) MutateUserTimestampMillis(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(14, n)
+func (rcv *Tag) MutateUserTimestampMillis(n int64) bool {
+	return rcv._tab.MutateInt64Slot(14, n)
 }
 
 func TagStart(builder *flatbuffers.Builder) {
@@ -142,8 +142,8 @@ func TagAddDesc(builder *flatbuffers.Builder, desc flatbuffers.UOffsetT) {
 func TagAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis uint64) {
 	builder.PrependUint64Slot(4, timestampMillis, 0)
 }
-func TagAddUserTimestampMillis(builder *flatbuffers.Builder, userTimestampMillis uint64) {
-	builder.PrependUint64Slot(5, userTimestampMillis, 0)
+func TagAddUserTimestampMillis(builder *flatbuffers.Builder, userTimestampMillis int64) {
+	builder.PrependInt64Slot(5, userTimestampMillis, 0)
 }
 func TagEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -19,7 +19,7 @@ table Tag {
   email:string (required);
   desc:string (required);
   timestamp_millis:uint64;
-  user_timestamp_millis:uint64;
+  user_timestamp_millis:int64;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

@@ -563,43 +563,18 @@ func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, o
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			commitSt, err := db.ReadValue(ctx, commitAddr)
+			addr, tagRef, err := newTag(ctx, db, commitAddr, opts.Meta)
 			if err != nil {
 				return err
 			}
-			ref, err := types.NewRef(commitSt, db.Format())
-			if err != nil {
-				return err
-			}
-			st, err := newTag(ctx, ref, opts.Meta)
-			if err != nil {
-				return err
-			}
-
-			return db.doTag(ctx, ds.ID(), st)
+			return db.doTag(ctx, ds.ID(), addr, tagRef)
 		},
 	)
 }
 
 // doTag manages concurrent access the single logical piece of mutable state: the current Root. It uses
 // the same optimistic writing algorithm as doCommit (see above).
-func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struct) error {
-	err := db.validateTag(ctx, tag)
-
-	if err != nil {
-		return err
-	}
-
-	tagRef, err := db.WriteValue(ctx, tag)
-	if err != nil {
-		return err
-	}
-
-	ref, err := types.ToRefOfValue(tagRef, db.Format())
-	if err != nil {
-		return err
-	}
-
+func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Hash, tagRef types.Ref) error {
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		_, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
 		if err != nil {
@@ -609,13 +584,13 @@ func (db *database) doTag(ctx context.Context, datasetID string, tag types.Struc
 			return types.Map{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
 		}
 
-		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
+		return datasets.Edit().Set(types.String(datasetID), tagRef).Map(ctx)
 	}, func(ctx context.Context, rm refmap) (refmap, error) {
 		curr := rm.lookup(datasetID)
 		if curr != (hash.Hash{}) {
 			fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
 		}
-		rm.set(datasetID, ref.TargetHash())
+		rm.set(datasetID, tagAddr)
 		return rm, nil
 	})
 }

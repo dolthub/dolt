@@ -28,23 +28,28 @@ import (
 func TestNewTag(t *testing.T) {
 	assert := assert.New(t)
 
+	ctx := context.Background()
+
 	assertTypeEquals := func(e, a *types.Type) {
 		t.Helper()
-		assert.True(a.Equals(e), "Actual: %s\nExpected %s", mustString(a.Describe(context.Background())), mustString(e.Describe(context.Background())))
+		assert.True(a.Equals(e), "Actual: %s\nExpected %s", mustString(a.Describe(ctx)), mustString(e.Describe(ctx)))
 	}
 
 	storage := &chunks.TestStorage{}
 	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
-	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
+	parents := mustList(types.NewList(ctx, db))
+	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(ctx, db, parents))
+	commit, err := newCommit(ctx, types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
 	require.NoError(t, err)
 
-	cmRef, err := types.NewRef(commit, types.Format_7_18)
+	cmRef, err := db.WriteValue(ctx, commit)
 	require.NoError(t, err)
-	tag, err := newTag(context.Background(), cmRef, nil)
+
+	_, tagRef, err := newTag(ctx, db, cmRef.TargetHash(), nil)
+	require.NoError(t, err)
+	tag, err := tagRef.TargetValue(ctx, db)
 	require.NoError(t, err)
 
 	ct, err := makeCommitStructType(
