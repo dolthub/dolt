@@ -545,17 +545,17 @@ func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Com
 		return err
 	}
 
-	return ddb.SetHead(ctx, ref, stRef)
+	return ddb.SetHead(ctx, ref, stRef.TargetHash())
 }
 
-func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, stRef types.Ref) error {
+func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash) error {
 	ds, err := ddb.db.GetDataset(ctx, ref.String())
 
 	if err != nil {
 		return err
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, stRef.TargetHash())
+	_, err = ddb.db.SetHead(ctx, ds, addr)
 	return err
 }
 

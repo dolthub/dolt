@@ -144,18 +144,19 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 	var err error
 
 	rf, err := tag.GetStRef()
+	if err != nil {
+		return err
+	}
+
+	addr := rf.TargetHash()
+
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, pullerEventCh)
 
 	if err != nil {
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, pullerEventCh)
-
-	if err != nil {
-		return err
-	}
-
-	return destDB.SetHead(ctx, destRef, rf)
+	return destDB.SetHead(ctx, destRef, addr)
 }
 
 func deleteRemoteBranch(ctx context.Context, toDelete, remoteRef ref.DoltRef, localDB, remoteDB *doltdb.DoltDB, remote env.Remote) error {
@@ -326,7 +327,7 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return true, err
 		}
 
-		err = destDB.SetHead(ctx, tag.GetDoltRef(), stRef)
+		err = destDB.SetHead(ctx, tag.GetDoltRef(), tagHash)
 
 		return false, err
 	})

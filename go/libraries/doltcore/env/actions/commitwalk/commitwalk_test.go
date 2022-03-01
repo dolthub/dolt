@@ -236,7 +236,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		err = nil
 	}
 	require.NoError(t, err)
-	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref)
+	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref.TargetHash())
 	require.NoError(t, err)
 	return forkEnv
 }
