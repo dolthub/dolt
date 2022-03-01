@@ -170,6 +170,7 @@ jobs:
         with:
           region: us-west-2
           version: ${{ github.head_ref }}
+          template: 'BatsWindowsFailureTemplate'
           toAddresses: '["${{ github.event.inputs.email }}"]'
       - name: Send Email
         if: ${{ github.event_name == 'repository_dispatch' }}
@@ -177,4 +178,5 @@ jobs:
         with:
           region: us-west-2
           version: ${{ github.event.client_payload.ref }}
+          template: 'BatsWindowsFailureTemplate'
           toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
