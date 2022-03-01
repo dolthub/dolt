@@ -1,6 +1,10 @@
 name: Test MySQL Client integrations
 
-on: [pull_request]
+on:
+  pull_request:
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 jobs:
   mysql_client_integrations_job:
