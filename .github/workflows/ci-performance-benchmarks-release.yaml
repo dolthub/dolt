@@ -65,7 +65,7 @@ jobs:
         run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
         env:
           FROM_SERVER: 'mysql'
-          FROM_VERSION: '8.0.22'
+          FROM_VERSION: '8.0.28'
           TO_SERVER: 'dolt'
           TO_VERSION: ${{ needs.set-version-actor.outputs.version }}
           MODE: 'release'

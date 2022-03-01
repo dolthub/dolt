@@ -58,8 +58,7 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	}
 
 	for i := 0; i < len(tups); i += 2 {
-		_, err = ch.Append(ctx, nodeItem(tups[i]), nodeItem(tups[i+1]))
-		if err != nil {
+		if err = ch.AddPair(ctx, tups[i], tups[i+1]); err != nil {
 			return Map{}, err
 		}
 	}
@@ -96,11 +95,10 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
-// todo(andy): support this?
-//// Count returns the number of key-value pairs in the Map.
-//func (m Map) Count() uint64 {
-//	return m.root.cumulativeCount() / 2
-//}
+// Count returns the number of key-value pairs in the Map.
+func (m Map) Count() int {
+	return m.root.treeCount()
+}
 
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
@@ -115,10 +113,6 @@ func (m Map) Format() *types.NomsBinFormat {
 // Descriptors returns the TupleDesc's from this Map.
 func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
-}
-
-func (m Map) Empty() bool {
-	return m.root.empty()
 }
 
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
