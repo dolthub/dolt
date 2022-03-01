@@ -308,6 +308,12 @@ func (kte *keylessTableEditor) StatementStarted(ctx context.Context) {}
 
 // StatementFinished implements TableEditor.
 func (kte *keylessTableEditor) StatementFinished(ctx context.Context, errored bool) error {
+	// If there was an error, clear all deltas
+	if errored {
+		for k := range kte.acc.deltas {
+			delete(kte.acc.deltas, k)
+		}
+	}
 	return nil
 }
 
