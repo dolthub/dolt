@@ -100,6 +100,13 @@ teardown() {
     [[ "$output" =~ $regex ]] || false
 }
 
+@test "no-repo: dolt version does not need write permissions" {
+    chmod 111 .
+    run dolt version
+    skip "dolt version needs write perms"
+    [ "$status" -eq 0 ]
+    chmod 755 .
+}
 
 # Tests for dolt commands outside of a dolt repository
 NOT_VALID_REPO_ERROR="The current directory is not a valid dolt repository."
