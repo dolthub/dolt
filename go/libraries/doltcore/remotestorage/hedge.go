@@ -149,6 +149,25 @@ func (ms *MinStrategy) Observe(sz, n int, d time.Duration, err error) {
 	}
 }
 
+func NewFixedStrategy(duration time.Duration) *FixedStrategy {
+	return &FixedStrategy{d: duration}
+}
+
+// FixedStrategy always returns a fixed duration that is |d|
+type FixedStrategy struct {
+	d time.Duration
+}
+
+// Duration implements |Strategy|.
+func (ts *FixedStrategy) Duration(sz int) time.Duration {
+	return ts.d
+}
+
+// Observe implements |Strategy|.
+func (ts *FixedStrategy) Observe(sz, n int, d time.Duration, err error) {
+
+}
+
 var MaxHedgesPerRequest = 1
 
 // Do runs |w| to completion, potentially spawning concurrent hedge runs of it.
