@@ -73,16 +73,3 @@ table CommitMeta {
   timestamp:Timestamp (required);
   user_timestamp:Timestamp (required);
 }
-
-table Tag {
-  commit:Ref (required);
-  meta:TagMeta (required);
-}
-
-table TagMeta {
-  name:string (required);
-  email:string (required);
-  desc:string (required);
-  timestamp:Timestamp (required);
-  user_timestamp:Timestamp (required);
-}

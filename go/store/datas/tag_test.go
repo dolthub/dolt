@@ -44,7 +44,7 @@ func TestNewTag(t *testing.T) {
 
 	cmRef, err := types.NewRef(commit, types.Format_7_18)
 	require.NoError(t, err)
-	tag, err := NewTag(context.Background(), cmRef, nil)
+	tag, err := newTag(context.Background(), cmRef, nil)
 	require.NoError(t, err)
 
 	ct, err := makeCommitStructType(

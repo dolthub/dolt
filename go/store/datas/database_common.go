@@ -571,7 +571,7 @@ func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, o
 			if err != nil {
 				return err
 			}
-			st, err := NewTag(ctx, ref, opts.Meta)
+			st, err := newTag(ctx, ref, opts.Meta)
 			if err != nil {
 				return err
 			}

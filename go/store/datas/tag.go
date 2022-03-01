@@ -43,7 +43,7 @@ type TagOptions struct {
 	Meta *TagMeta
 }
 
-// NewTag creates a new tag object.
+// newTag creates a new tag object.
 //
 // A tag has the following type:
 //
@@ -54,7 +54,7 @@ type TagOptions struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func NewTag(_ context.Context, commitRef types.Ref, meta *TagMeta) (types.Struct, error) {
+func newTag(_ context.Context, commitRef types.Ref, meta *TagMeta) (types.Struct, error) {
 	var metaV types.Struct
 	if meta != nil {
 		var err error

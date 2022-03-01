@@ -12,9 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package serial
+table Tag {
+  // 20-byte hash of the commit.
+  commit_addr:[byte] (required);
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp_millis:uint64;
+  user_timestamp_millis:uint64;
+}
 
-// KEEP THESE IN SYNC WITH .fbs FILES!
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DTAG";
 
-const StoreRootFileID = "STRT"
-const TagFileID = "DTAG"
+root_type Tag;

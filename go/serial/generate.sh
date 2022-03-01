@@ -11,6 +11,7 @@ flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespac
   prolly.fbs \
   schema.fbs \
   storeroot.fbs \
+  tag.fbs \
   table.fbs
 
 # prefix files with copyright header

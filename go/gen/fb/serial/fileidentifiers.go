@@ -17,3 +17,4 @@ package serial
 // KEEP THESE IN SYNC WITH .fbs FILES!
 
 const StoreRootFileID = "STRT"
+const TagFileID = "DTAG"
