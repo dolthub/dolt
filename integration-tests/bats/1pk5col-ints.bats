@@ -34,7 +34,7 @@ teardown() {
     [ "${lines[0]}" = "diff --dolt a/test b/test" ]
     [ "${lines[1]}" = "added table" ]
     run dolt status
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 7 ]
     [[ "$output" =~ "Untracked files" ]]
     [[ "$output" =~ new[[:space:]]table:[[:space:]]+test ]] || false
 }
