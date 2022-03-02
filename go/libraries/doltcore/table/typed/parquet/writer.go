@@ -161,10 +161,6 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	return nil
 }
 
-func (pwr *ParquetWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) error {
-	return nil
-}
-
 // Close should flush all writes, release resources being held
 func (pwr *ParquetWriter) Close(ctx context.Context) error {
 	// WriteStop writes footer, stops writing and flushes

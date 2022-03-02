@@ -118,10 +118,6 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	return csvw.write(colValStrs)
 }
 
-func (csvw *CSVWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) error {
-	return nil
-}
-
 // Close should flush all writes, release resources being held
 func (csvw *CSVWriter) Close(ctx context.Context) error {
 	if csvw.wr != nil {
