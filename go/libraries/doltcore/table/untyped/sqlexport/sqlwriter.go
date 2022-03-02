@@ -43,7 +43,6 @@ type SqlExportWriter struct {
 	wr                 io.WriteCloser
 	root               *doltdb.RootValue
 	writtenFirstRow    bool
-	writtenFirstInsert bool
 	numInserts         int
 	editOpts           editor.Options
 }
@@ -100,17 +99,15 @@ func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) err
 	}
 
 	// Previous write was last insert
-	if w.writtenFirstInsert && r == nil {
+	if w.numInserts > 0 && r == nil {
 		return iohelp.WriteLine(w.wr, ";")
 	}
 
 	// TODO: can remove w.writtenFirstInsert using this variable
 	// Reached max number of inserts on one line
 	if w.numInserts == maxBatchInserts {
+		// Reset count
 		w.numInserts = 0
-
-		// Start new line
-		w.writtenFirstInsert = false
 
 		// End line
 		err := iohelp.WriteLine(w.wr, ";")
@@ -122,10 +119,9 @@ func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) err
 	// Append insert values wrapped in parentheses
 	var stmt string
 	var err error
-	if !w.writtenFirstInsert {
+	if w.numInserts == 0 {
 		// Write first insert statement
 		stmt, err = sqlfmt.SqlRowAsBatchInsertStmtStart(ctx, r, w.tableName, w.sch)
-		w.writtenFirstInsert = true
 	} else {
 		// Append insert value
 		stmt, err = sqlfmt.SqlRowAsBatchInsertStmt(ctx, r, w.tableName, w.sch)
