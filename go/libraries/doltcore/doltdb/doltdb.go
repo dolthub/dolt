@@ -421,17 +421,15 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 		return nil, ErrWorkingSetNotFound
 	}
 
-	wsSt, hasHead := ds.MaybeHead()
-
-	if !hasHead {
+	if !ds.HasHead() {
 		return nil, ErrWorkingSetNotFound
 	}
 
-	if wsSt.Name() != datas.WorkingSetName {
+	if !ds.IsWorkingSet() {
 		return nil, fmt.Errorf("workingSetRef head is not a workingSetRef")
 	}
 
-	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, wsSt)
+	return NewWorkingSet(ctx, workingSetRef.GetPath(), ddb.vrw, ds)
 }
 
 // TODO: convenience method to resolve the head commit of a branch.
@@ -1032,7 +1030,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 	workingSetRef ref.WorkingSetRef,
 	workingSet *WorkingSet,
 	prevHash hash.Hash,
-	meta *WorkingSetMeta,
+	meta *datas.WorkingSetMeta,
 ) error {
 	ds, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1046,13 +1044,8 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		return err
 	}
 
-	metaSt, err := meta.toNomsStruct(types.Format_Default)
-	if err != nil {
-		return err
-	}
-
 	_, err = ddb.db.UpdateWorkingSet(ctx, ds, datas.WorkingSetSpec{
-		Meta:        datas.WorkingSetMeta{Meta: metaSt},
+		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,
@@ -1070,7 +1063,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 	headRef ref.DoltRef, workingSetRef ref.WorkingSetRef,
 	commit *PendingCommit, workingSet *WorkingSet,
 	prevHash hash.Hash,
-	meta *WorkingSetMeta,
+	meta *datas.WorkingSetMeta,
 ) (*Commit, error) {
 	wsDs, err := ddb.db.GetDataset(ctx, workingSetRef.String())
 	if err != nil {
@@ -1087,14 +1080,8 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	var metaSt types.Struct
-	metaSt, err = meta.toNomsStruct(ddb.vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-
 	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
-		Meta:        datas.WorkingSetMeta{Meta: metaSt},
+		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
 		MergeState:  mergeStateRef,

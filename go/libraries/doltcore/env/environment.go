@@ -767,13 +767,13 @@ func (dEnv *DoltEnv) AbortMerge(ctx context.Context) error {
 	return dEnv.DoltDB.UpdateWorkingSet(ctx, ws.Ref(), ws.AbortMerge(), h, dEnv.workingSetMeta())
 }
 
-func (dEnv *DoltEnv) workingSetMeta() *doltdb.WorkingSetMeta {
+func (dEnv *DoltEnv) workingSetMeta() *datas.WorkingSetMeta {
 	return dEnv.NewWorkingSetMeta("updated from dolt environment")
 }
 
-func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *doltdb.WorkingSetMeta {
-	return &doltdb.WorkingSetMeta{
-		User:        dEnv.Config.GetStringOrDefault(UserNameKey, ""),
+func (dEnv *DoltEnv) NewWorkingSetMeta(message string) *datas.WorkingSetMeta {
+	return &datas.WorkingSetMeta{
+		Name:        dEnv.Config.GetStringOrDefault(UserNameKey, ""),
 		Email:       dEnv.Config.GetStringOrDefault(UserEmailKey, ""),
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: message,

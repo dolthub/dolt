@@ -611,7 +611,7 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := NewWorkingSet(ctx, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
+			workspace, err := newWorkingSet(ctx, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
 			if err != nil {
 				return err
 			}
@@ -689,7 +689,7 @@ func (db *database) CommitWithWorkingSet(
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-	workingSet, err := NewWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
+	workingSet, err := newWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}

@@ -26,10 +26,10 @@ import (
 	"fmt"
 	"regexp"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 // DatasetRe is a regexp that matches a legal Dataset name anywhere within the
@@ -40,10 +40,18 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 // entirely legal Dataset name.
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
+type WorkingSetHead struct {
+	Meta           *WorkingSetMeta
+	WorkingAddr    hash.Hash
+	StagedAddr     *hash.Hash
+	MergeStateAddr *hash.Hash
+}
+
 type dsHead interface {
 	TypeName() string
 	Addr() hash.Hash
 	HeadTag() (*TagMeta, hash.Hash, error)
+	HeadWorkingSet() (*WorkingSetHead, error)
 }
 
 type nomsHead struct {
@@ -79,13 +87,17 @@ func (h serialTagHead) Addr() hash.Hash {
 func (h serialTagHead) HeadTag() (*TagMeta, hash.Hash, error) {
 	addr := hash.New(h.msg.CommitAddrBytes())
 	meta := &TagMeta{
-		Name: string(h.msg.Name()),
-		Email: string(h.msg.Email()),
-		Timestamp: h.msg.TimestampMillis(),
-		Description: string(h.msg.Desc()),
+		Name:          string(h.msg.Name()),
+		Email:         string(h.msg.Email()),
+		Timestamp:     h.msg.TimestampMillis(),
+		Description:   string(h.msg.Desc()),
 		UserTimestamp: h.msg.UserTimestampMillis(),
 	}
 	return meta, addr, nil
+}
+
+func (h serialTagHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	return nil, errors.New("HeadWorkingSet called on tag")
 }
 
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
@@ -188,6 +200,10 @@ func (ds Dataset) IsTag() bool {
 	return ds.head != nil && ds.head.TypeName() == TagName
 }
 
+func (ds Dataset) IsWorkingSet() bool {
+	return ds.head != nil && ds.head.TypeName() == WorkingSetName
+}
+
 func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
 	if ds.head == nil {
 		return nil, hash.Hash{}, errors.New("no head value for HeadTag call")
@@ -196,6 +212,16 @@ func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
 		return nil, hash.Hash{}, errors.New("HeadTag call on non-tag head")
 	}
 	return ds.head.HeadTag()
+}
+
+func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
+	if ds.head == nil {
+		return nil, errors.New("no head value for HeadWorkingSet call")
+	}
+	if !ds.IsWorkingSet() {
+		return nil, errors.New("HeadWorkingSet call on non-working set head")
+	}
+	return ds.head.HeadWorkingSet()
 }
 
 func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
@@ -221,6 +247,47 @@ func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
 	commitaddr := commitRef.(types.Ref).TargetHash()
 
 	return meta, commitaddr, nil
+}
+
+func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	st := h.st
+
+	var ret WorkingSetHead
+
+	meta, err := WorkingSetMetaFromWorkingSetSt(st)
+	if err != nil {
+		return nil, err
+	}
+	ret.Meta = meta
+
+	workingRootRef, ok, err := st.MaybeGet(WorkingRootRefField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("workingset struct does not have field %s", WorkingRootRefField)
+	}
+	ret.WorkingAddr = workingRootRef.(types.Ref).TargetHash()
+
+	stagedRootRef, ok, err := st.MaybeGet(StagedRootRefField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ret.StagedAddr = new(hash.Hash)
+		*ret.StagedAddr = stagedRootRef.(types.Ref).TargetHash()
+	}
+
+	mergeStateRef, ok, err := st.MaybeGet(MergeStateField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ret.MergeStateAddr = new(hash.Hash)
+		*ret.MergeStateAddr = mergeStateRef.(types.Ref).TargetHash()
+	}
+
+	return &ret, nil
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

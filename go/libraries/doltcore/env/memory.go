@@ -182,8 +182,8 @@ func (m MemoryRepoState) WorkingSet(ctx context.Context) (*doltdb.WorkingSet, er
 	return workingSet, nil
 }
 
-func (m MemoryRepoState) workingSetMeta() *doltdb.WorkingSetMeta {
-	return &doltdb.WorkingSetMeta{
+func (m MemoryRepoState) workingSetMeta() *datas.WorkingSetMeta {
+	return &datas.WorkingSetMeta{
 		Timestamp:   uint64(time.Now().Unix()),
 		Description: "updated from dolt environment",
 	}
