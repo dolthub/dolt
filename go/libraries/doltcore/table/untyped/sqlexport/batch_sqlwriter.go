@@ -16,12 +16,12 @@ package sqlexport
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -31,9 +31,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+const maxBatchInserts = 10
+
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
-type SqlExportWriter struct {
+type BatchSqlExportWriter struct {
 	tableName          string
 	sch                schema.Schema
 	parentSchs         map[string]schema.Schema
@@ -45,8 +47,8 @@ type SqlExportWriter struct {
 	editOpts           editor.Options
 }
 
-// OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
+// OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
+func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*BatchSqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
@@ -60,7 +62,7 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 
 	foreignKeys, _ := fkc.KeysForTable(tableName)
 
-	return &SqlExportWriter{
+	return &BatchSqlExportWriter{
 		tableName:   tableName,
 		sch:         sch,
 		parentSchs:  allSchemas,
@@ -72,12 +74,12 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 }
 
 // GetSchema returns the schema of this TableWriter.
-func (w *SqlExportWriter) GetSchema() schema.Schema {
+func (w *BatchSqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
 // WriteRow will write a row to a table
-func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
+func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
@@ -91,7 +93,56 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	return iohelp.WriteLine(w.wr, stmt)
 }
 
-func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+func (w *BatchSqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) error {
+	if err := w.maybeWriteDropCreate(ctx); err != nil {
+		return err
+	}
+
+	// Previous write was last insert
+	if w.numInserts > 0 && r == nil {
+		return iohelp.WriteLine(w.wr, ";")
+	}
+
+	// TODO: can remove w.writtenFirstInsert using this variable
+	// Reached max number of inserts on one line
+	if w.numInserts == maxBatchInserts {
+		// Reset count
+		w.numInserts = 0
+
+		// End line
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Append insert values wrapped in parentheses
+	var stmt string
+	var err error
+	if w.numInserts == 0 {
+		// Write first insert statement
+		stmt, err = sqlfmt.SqlRowAsBatchInsertStmtStart(ctx, r, w.tableName, w.sch)
+	} else {
+		// Append insert value
+		stmt, err = sqlfmt.SqlRowAsBatchInsertStmt(ctx, r, w.tableName, w.sch)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Write it
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt)
+	if err != nil {
+		return nil
+	}
+
+	// Increase count of inserts written on this line
+	w.numInserts++
+
+	return err
+}
+
+func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
@@ -104,7 +155,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	return iohelp.WriteLine(w.wr, stmt)
 }
 
-func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
+func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
@@ -124,7 +175,7 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 }
 
 // Close should flush all writes, release resources being held
-func (w *SqlExportWriter) Close(ctx context.Context) error {
+func (w *BatchSqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err

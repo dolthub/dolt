@@ -41,5 +41,4 @@ type TableWriteCloser interface {
 type SqlTableWriter interface {
 	TableWriteCloser
 	WriteSqlRow(ctx context.Context, r sql.Row) error
-	WriteSqlBatchedRow(ctx context.Context, r sql.Row) error
 }

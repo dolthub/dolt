@@ -140,7 +140,7 @@ func (e *DataMoverPipeline) ExecuteBatched() error {
 			case <-e.ctx.Done():
 				return e.ctx.Err()
 			default:
-				err := e.wr.WriteSqlBatchedRow(e.ctx, r)
+				err := e.wr.WriteSqlRow(e.ctx, r)
 				if err != nil {
 					return err
 				}
