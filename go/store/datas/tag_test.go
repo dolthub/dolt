@@ -39,6 +39,10 @@ func TestNewTag(t *testing.T) {
 	db := NewDatabase(storage.NewView()).(*database)
 	defer db.Close()
 
+	if db.Format() == types.Format_DOLT_1 {
+		t.Skip()
+	}
+
 	parents := mustList(types.NewList(ctx, db))
 	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(ctx, db, parents))
 	commit, err := newCommit(ctx, types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))

@@ -18,3 +18,10 @@ package serial
 
 const StoreRootFileID = "STRT"
 const TagFileID = "DTAG"
+
+func GetFileID(bs []byte) string {
+	if len(bs) < 8 {
+		return ""
+	}
+	return string(bs[4:8])
+}

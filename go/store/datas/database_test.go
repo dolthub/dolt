@@ -265,17 +265,17 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.Equal(uint64(2), datasets2.Len())
 }
 
-func (m nomsDatasetsMap) toNomsMap() (types.Map, bool) {
-	return m.m, true
-}
-
 func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
-	m, ok := dsm.(nomsDatasetsMap).toNomsMap()
+	m, ok := dsm.(nomsDatasetsMap)
 	require.True(t, ok)
-	return m
+	return m.m
 }
 
 func (suite *DatabaseSuite) TestDatasetsMapType() {
+	if suite.db.Format() == types.Format_DOLT_1 {
+		suite.T().Skip()
+	}
+
 	dsID1, dsID2 := "ds1", "ds2"
 
 	datasets, err := suite.db.Datasets(context.Background())

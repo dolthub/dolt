@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 // DatasetRe is a regexp that matches a legal Dataset name anywhere within the
@@ -58,6 +59,35 @@ func (h nomsHead) Addr() hash.Hash {
 	return h.addr
 }
 
+type serialTagHead struct {
+	msg  *serial.Tag
+	addr hash.Hash
+}
+
+func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
+	return serialTagHead{serial.GetRootAsTag(bs, 0), addr}
+}
+
+func (h serialTagHead) TypeName() string {
+	return TagName
+}
+
+func (h serialTagHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialTagHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	addr := hash.New(h.msg.CommitAddrBytes())
+	meta := &TagMeta{
+		Name: string(h.msg.Name()),
+		Email: string(h.msg.Email()),
+		Timestamp: h.msg.TimestampMillis(),
+		Description: string(h.msg.Desc()),
+		UserTimestamp: h.msg.UserTimestampMillis(),
+	}
+	return meta, addr, nil
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
@@ -70,6 +100,11 @@ func newHead(db *database, c chunks.Chunk) (dsHead, error) {
 	if c.IsEmpty() {
 		return nil, nil
 	}
+
+	if serial.GetFileID(c.Data()) == serial.TagFileID {
+		return newSerialTagHead(c.Data(), c.Hash()), nil
+	}
+
 	head, err := types.DecodeValue(c, db)
 	if err != nil {
 		return nil, err
@@ -150,7 +185,7 @@ func (ds Dataset) MaybeHeadAddr() (hash.Hash, bool) {
 }
 
 func (ds Dataset) IsTag() bool {
-	return ds.head == nil && ds.head.TypeName() == TagName
+	return ds.head != nil && ds.head.TypeName() == TagName
 }
 
 func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {

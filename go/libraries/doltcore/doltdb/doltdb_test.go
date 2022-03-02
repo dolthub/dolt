@@ -101,7 +101,7 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 	ed := m.Edit()
 
 	for i, val := range vals {
-		r, err := row.New(types.Format_Default, sch, val)
+		r, err := row.New(vrw.Format(), sch, val)
 		require.NoError(t, err)
 		rows[i] = r
 		ed = ed.Set(r.NomsMapKey(sch), r.NomsMapValue(sch))

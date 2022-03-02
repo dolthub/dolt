@@ -14,7 +14,7 @@
 
 table Tag {
   // 20-byte hash of the commit.
-  commit_addr:[byte] (required);
+  commit_addr:[ubyte] (required);
   name:string (required);
   email:string (required);
   desc:string (required);
