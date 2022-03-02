@@ -40,6 +40,7 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.FilteredTable = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
+	ctx               *sql.Context
 	name              string
 	ddb               *doltdb.DoltDB
 	ss                *schema.SuperSchema
@@ -49,9 +50,11 @@ type CommitDiffTable struct {
 	fromCommitFilter  *expression.Equals
 	toCommitFilter    *expression.Equals
 	requiredFilterErr error
+	targetSchema      *schema.Schema
 }
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
+	// TODO: Does this need to be case insensitive?
 	tblName, ok, err := root.ResolveTableName(ctx, tblName)
 	if err != nil {
 		return nil, err
@@ -59,6 +62,15 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	if !ok {
 		return nil, sql.ErrTableNotFound.New(doltdb.DoltCommitDiffTablePrefix + tblName)
 	}
+
+	// We need toCommitFilter and fromCommitFilter in order to determine what
+	// schema we should return. But... those aren't available until the
+	// HandledFilters method is called.
+	//
+	// Could we return a "close" schema initially until the filters are set,
+	// and then return a different schema?
+	// But then the expected schema won't match with the returned columns and
+	// we'll have problems.
 
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 	ss, err := calcSuperDuperSchema(ctx, ddb, root, tblName)
@@ -101,12 +113,14 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	})
 
 	return &CommitDiffTable{
-		name:        tblName,
-		ddb:         ddb,
-		workingRoot: root,
-		ss:          ss,
-		joiner:      j,
-		sqlSch:      sqlSch,
+		ctx:          ctx,
+		name:         tblName,
+		ddb:          ddb,
+		workingRoot:  root,
+		ss:           ss,
+		joiner:       j,
+		sqlSch:       sqlSch,
+		targetSchema: &sch,
 	}, nil
 }
 
@@ -177,6 +191,7 @@ func (dt *CommitDiffTable) Schema() sql.Schema {
 	return dt.sqlSch.Schema
 }
 
+// TODO: Why does this need to use a mutex? Where is the concurrent access coming from?
 type SliceOfPartitionsItr struct {
 	partitions []sql.Partition
 	i          int
@@ -217,37 +232,38 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneFromCommit)
 	}
 
-	toRoot, toName, toDate, err := dt.rootValForFilter(ctx, dt.toCommitFilter)
-
+	// TODO: Copy and pasted into earlier codepath
+	toRoot, toName, toDate, err := rootValForFilter(ctx, dt.toCommitFilter, dt.workingRoot, dt.ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromName, fromDate, err := dt.rootValForFilter(ctx, dt.fromCommitFilter)
-
+	fromRoot, fromName, fromDate, err := rootValForFilter(ctx, dt.fromCommitFilter, dt.workingRoot, dt.ddb)
 	if err != nil {
 		return nil, err
 	}
 
 	toTable, _, err := toRoot.GetTable(ctx, dt.name)
-
 	if err != nil {
 		return nil, err
 	}
 
 	fromTable, _, err := fromRoot.GetTable(ctx, dt.name)
+	if err != nil {
+		return nil, err
+	}
 
-	dp := diffPartition{
-		to:       toTable,
-		from:     fromTable,
-		toName:   toName,
-		fromName: fromName,
-		toDate:   toDate,
-		fromDate: fromDate,
+	dp := DiffPartition{
+		to:        toTable,
+		from:      fromTable,
+		toName:    toName,
+		fromName:  fromName,
+		toDate:    toDate,
+		fromDate:  fromDate,
+		targetSch: dt.targetSchema,
 	}
 
 	isDiffable, err := dp.isDiffablePartition(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +276,7 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
 }
 
-func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals) (*doltdb.RootValue, string, *types.Timestamp, error) {
+func rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals, workingRoot *doltdb.RootValue, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
 	gf, nonGF := eqFilter.Left(), eqFilter.Right()
 	if _, ok := gf.(*expression.GetField); !ok {
 		nonGF, gf = eqFilter.Left(), eqFilter.Right()
@@ -281,7 +297,7 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
 	if strings.ToLower(hashStr) == "working" {
-		root = dt.workingRoot
+		root = workingRoot
 	} else {
 		cs, err := doltdb.NewCommitSpec(hashStr)
 
@@ -289,7 +305,7 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 			return nil, "", nil, err
 		}
 
-		cm, err := dt.ddb.Resolve(ctx, cs, nil)
+		cm, err := ddb.Resolve(ctx, cs, nil)
 
 		if err != nil {
 			return nil, "", nil, err
@@ -348,7 +364,112 @@ func (dt *CommitDiffTable) HandledFilters(filters []sql.Expression) []sql.Expres
 		}
 	}
 
+	err := dt.updateSchemaFromFilters()
+	if err != nil {
+		panic(err)
+	}
+
 	return commitFilters
+}
+
+func (dt *CommitDiffTable) updateSchemaFromFilters() error {
+	toRoot, _, _, err := rootValForFilter(dt.ctx, dt.toCommitFilter, dt.workingRoot, dt.ddb)
+	if err != nil {
+		return err
+	}
+
+	fromRoot, _, _, err := rootValForFilter(dt.ctx, dt.fromCommitFilter, dt.workingRoot, dt.ddb)
+	if err != nil {
+		return err
+	}
+
+	toTable, _, err := toRoot.GetTable(dt.ctx, dt.name)
+	if err != nil {
+		return err
+	}
+
+	fromTable, _, err := fromRoot.GetTable(dt.ctx, dt.name)
+	if err != nil {
+		return err
+	}
+
+	var fromSchema, toSchema schema.Schema
+
+	if fromTable != nil && toTable != nil {
+		fromSchema, err = fromTable.GetSchema(dt.ctx)
+		if err != nil {
+			return err
+		}
+
+		toSchema, err = toTable.GetSchema(dt.ctx)
+		if err != nil {
+			return err
+		}
+	} else if toTable != nil {
+		toSchema, err = toTable.GetSchema(dt.ctx)
+		if err != nil {
+			return err
+		}
+		// TODO: Do we still need this copy?
+		fromSchema = schema.MustSchemaFromCols(toSchema.GetAllCols())
+	} else if fromTable != nil {
+		fromSchema, err = fromTable.GetSchema(dt.ctx)
+		if err != nil {
+			return err
+		}
+		// TODO: Do we still need this copy?
+		toSchema = schema.MustSchemaFromCols(fromSchema.GetAllCols())
+	} else {
+		panic("No from or to tables valid")
+	}
+
+	// Now that we have the filters set... we can access the to/from tables and
+	// set the exact schema we want...
+
+	toColCollection := toSchema.GetAllCols()
+	toColCollection = toColCollection.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	toSchema = schema.MustSchemaFromCols(toColCollection)
+
+	fromColCollection := fromSchema.GetAllCols()
+	fromColCollection = fromColCollection.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	fromSchema = schema.MustSchemaFromCols(fromColCollection)
+
+	j, err := rowconv.NewJoiner(
+		[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
+		map[string]rowconv.ColNamingFunc{
+			diff.To:   toNamer,
+			diff.From: fromNamer,
+		})
+	if err != nil {
+		return err
+	}
+
+	diffTblName := doltdb.DoltCommitDiffTablePrefix + dt.name
+
+	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
+	if err != nil {
+		return err
+	}
+
+	// TDOO: Copied from
+	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
+		Name:     diffTypeColName,
+		Type:     sql.Text,
+		Nullable: false,
+		Source:   diffTblName,
+	})
+
+	dt.joiner = j
+	dt.sqlSch = sqlSch
+
+	// TODO: Do we need to set the targetSchema?
+	//dt.targetSchema = ??? // Union of toSchema and fromSchema???
+
+	return nil
 }
 
 // Filters returns the list of filters that are applied to this table.
@@ -366,9 +487,10 @@ func (dt *CommitDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expressio
 }
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	dp := part.(diffPartition)
-	// TODO: commit_diff_table reuses diffPartition from diff_table and we've switched diff_table over
+	dp := part.(DiffPartition)
+	// TODO: commit_diff_table reuses DiffPartition from diff_table and we've switched diff_table over
 	//       to a new format. After we switch commit_diff_table over to the same new format, we can
 	//       remove this getLegacyRowIter method.
-	return dp.getLegacyRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
+	//return dp.getLegacyRowIter(ctx, dt.ddb, dt.ss, dt.joiner)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
 }

@@ -294,6 +294,18 @@ func (p DoltDatabaseProvider) Function(ctx *sql.Context, name string) (sql.Funct
 	return fn, nil
 }
 
+func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.TableFunction, error) {
+	if strings.ToLower(name) == "dolt_diff" {
+		// TODO: Clean up...
+		dtf := &DiffTableFunction{}
+		dtf = dtf.WithContext(ctx)
+
+		return dtf, nil
+	}
+
+	return nil, sql.ErrTableFunctionNotFound.New(name)
+}
+
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote. If the target branch is not a replication
 // head, the new branch will not be continuously fetched.
