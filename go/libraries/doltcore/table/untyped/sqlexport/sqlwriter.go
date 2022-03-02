@@ -41,7 +41,6 @@ type SqlExportWriter struct {
 	wr              io.WriteCloser
 	root            *doltdb.RootValue
 	writtenFirstRow bool
-	numInserts      int
 	editOpts        editor.Options
 }
 

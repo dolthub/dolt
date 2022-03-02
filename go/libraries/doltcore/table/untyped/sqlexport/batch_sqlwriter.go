@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
-const maxBatchInserts = 10
+const maxBatchInserts = 10000
 
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
