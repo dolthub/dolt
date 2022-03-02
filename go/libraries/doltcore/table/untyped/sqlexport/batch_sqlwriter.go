@@ -16,12 +16,12 @@ package sqlexport
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"io"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -36,15 +36,15 @@ const maxBatchInserts = 10
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
 type BatchSqlExportWriter struct {
-	tableName          string
-	sch                schema.Schema
-	parentSchs         map[string]schema.Schema
-	foreignKeys        []doltdb.ForeignKey
-	wr                 io.WriteCloser
-	root               *doltdb.RootValue
-	writtenFirstRow    bool
-	numInserts         int
-	editOpts           editor.Options
+	tableName       string
+	sch             schema.Schema
+	parentSchs      map[string]schema.Schema
+	foreignKeys     []doltdb.ForeignKey
+	wr              io.WriteCloser
+	root            *doltdb.RootValue
+	writtenFirstRow bool
+	numInserts      int
+	editOpts        editor.Options
 }
 
 // OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
