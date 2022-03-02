@@ -31,6 +31,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+const maxBatchInserts = 10
+
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
 type SqlExportWriter struct {
@@ -42,6 +44,7 @@ type SqlExportWriter struct {
 	root               *doltdb.RootValue
 	writtenFirstRow    bool
 	writtenFirstInsert bool
+	numInserts         int
 	editOpts           editor.Options
 }
 
@@ -101,6 +104,21 @@ func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) err
 		return iohelp.WriteLine(w.wr, ";")
 	}
 
+	// TODO: can remove w.writtenFirstInsert using this variable
+	// Reached max number of inserts on one line
+	if w.numInserts == maxBatchInserts {
+		w.numInserts = 0
+
+		// Start new line
+		w.writtenFirstInsert = false
+
+		// End line
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
+	}
+
 	// Append insert values wrapped in parentheses
 	var stmt string
 	var err error
@@ -116,7 +134,16 @@ func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) err
 		}
 	}
 
-	return iohelp.WriteWithoutNewLine(w.wr, stmt)
+	// Write it
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt)
+	if err != nil {
+		return nil
+	}
+
+	// Increase count of inserts written on this line
+	w.numInserts++
+
+	return err
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
