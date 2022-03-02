@@ -143,12 +143,10 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
 	var err error
 
-	rf, err := tag.GetStRef()
+	addr, err := tag.GetAddr()
 	if err != nil {
 		return err
 	}
-
-	addr := rf.TargetHash()
 
 	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, pullerEventCh)
 
@@ -264,13 +262,12 @@ func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltd
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
 func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
-	stRef, err := srcDBTag.GetStRef()
-
+	addr, err := srcDBTag.GetAddr()
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, stRef.TargetHash(), progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, pullerEventCh)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -283,18 +280,16 @@ func Clone(ctx context.Context, srcDB, destDB *doltdb.DoltDB, eventCh chan<- pul
 // todo: potentially too expensive to iterate over all srcDB tags
 func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, progStarter ProgStarter, progStopper ProgStopper) error {
 	err := IterResolvedTags(ctx, srcDB, func(tag *doltdb.Tag) (stop bool, err error) {
-		stRef, err := tag.GetStRef()
+		tagHash, err := tag.GetAddr()
 		if err != nil {
 			return true, err
 		}
 
-		tagHash := stRef.TargetHash()
-
-		tv, err := destDB.ValueReadWriter().ReadValue(ctx, tagHash)
+		has, err := destDB.Has(ctx, tagHash)
 		if err != nil {
 			return true, err
 		}
-		if tv != nil {
+		if has {
 			// tag is already fetched
 			return false, nil
 		}
@@ -304,11 +299,11 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 			return true, err
 		}
 
-		cv, err := destDB.ValueReadWriter().ReadValue(ctx, cmHash)
+		has, err = destDB.Has(ctx, cmHash)
 		if err != nil {
 			return true, err
 		}
-		if cv == nil {
+		if !has {
 			// neither tag nor commit has been fetched
 			return false, nil
 		}

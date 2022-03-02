@@ -260,7 +260,7 @@ func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Has
 }
 
 type nomsDatasetsMap struct {
-	m  types.Map
+	m types.Map
 }
 
 func (m nomsDatasetsMap) Len() uint64 {
@@ -318,31 +318,42 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap DatasetsMap) (Dataset, error) {
 	if ndsmap, ok := dsmap.(nomsDatasetsMap); ok {
 		datasets := ndsmap.m
-		var head types.Value
+		var headChunk chunks.Chunk
 		if r, ok, err := datasets.MaybeGet(ctx, types.String(datasetID)); err != nil {
 			return Dataset{}, err
 		} else if ok {
-			head, err = r.(types.Ref).TargetValue(ctx, db)
+			headChunk, err = db.chunkStore().Get(ctx, r.(types.Ref).TargetHash())
 			if err != nil {
 				return Dataset{}, err
 			}
 		}
-
-		return newDataset(db, datasetID, head)
+		return newDataset(db, datasetID, headChunk)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
-		var head types.Value
+		var headChunk chunks.Chunk
 		var err error
 		curr := rmdsmap.rm.lookup(datasetID)
 		if !curr.IsEmpty() {
-			head, err = db.ReadValue(ctx, curr)
+			headChunk, err = db.chunkStore().Get(ctx, curr)
 			if err != nil {
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, head)
+		return newDataset(db, datasetID, headChunk)
 	} else {
 		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
 	}
+}
+
+func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error) {
+	err := db.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	headChunk, err := db.chunkStore().Get(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	return newHead(db, headChunk)
 }
 
 func (db *database) Close() error {
@@ -354,19 +365,14 @@ func (db *database) SetHead(ctx context.Context, ds Dataset, newHeadAddr hash.Ha
 }
 
 func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) error {
-	newV, err := db.ReadValue(ctx, addr)
+	newHead, err := db.readHead(ctx, addr)
 	if err != nil {
 		return err
 	}
-	if newV == nil {
-		return fmt.Errorf("SetHead failed: target hash %v is not in chunk store", addr)
-	}
-	newSt, ok := newV.(types.Struct)
-	if !ok {
-		return fmt.Errorf("Unrecognized dataset value for addr: %v", addr)
-	}
 
-	headType := newSt.Name()
+	newSt := newHead.(nomsHead).st
+
+	headType := newHead.TypeName()
 	switch headType {
 	case CommitName:
 		var iscommit bool
@@ -378,7 +384,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			err = fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case TagName:
-		err = db.validateTag(ctx, newSt)
+		err = db.validateTag(ctx, newHead.(nomsHead).st)
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
 	}
@@ -418,11 +424,11 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 	}, func(ctx context.Context, rm refmap) (refmap, error) {
 		curr := rm.lookup(ds.ID())
 		if curr != (hash.Hash{}) {
-			currSt, err := db.ReadValue(ctx, curr)
+			currHead, err := db.readHead(ctx, curr)
 			if err != nil {
 				return refmap{}, err
 			}
-			currType := currSt.(types.Struct).Name()
+			currType := currHead.TypeName()
 			if currType != headType {
 				return refmap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
 			}
@@ -437,14 +443,19 @@ func (db *database) FastForward(ctx context.Context, ds Dataset, newHeadAddr has
 }
 
 func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr hash.Hash) error {
-	v, err := db.ReadValue(ctx, newHeadAddr)
+	newHead, err := db.readHead(ctx, newHeadAddr)
 	if err != nil {
 		return err
 	}
-	if v == nil {
+	if newHead == nil {
 		return fmt.Errorf("FastForward: new head address %v not found", newHeadAddr)
 	}
+	if newHead.TypeName() != CommitName {
+		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
+	}
 
+	var v types.Value
+	v = newHead.(nomsHead).st
 	iscommit, err := IsCommit(v)
 	if err != nil {
 		return err
@@ -903,15 +914,20 @@ func (db *database) tryCommitChunks(ctx context.Context, newRootHash hash.Hash, 
 }
 
 func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types.Struct, error) {
-	v, err := db.ReadValue(ctx, r.TargetHash())
-
+	rHead, err := db.readHead(ctx, r.TargetHash())
 	if err != nil {
 		return types.Struct{}, err
 	}
-
-	if v == nil {
+	if rHead == nil {
+		panic("wat")
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
+	if rHead.TypeName() != CommitName {
+		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
+	}
+
+	var v types.Value
+	v = rHead.(nomsHead).st
 
 	is, err := IsCommit(v)
 

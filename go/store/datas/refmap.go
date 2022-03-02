@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/flatbuffers/go"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type rmentry struct {
@@ -35,11 +35,11 @@ func (rm *refmap) set(key string, addr hash.Hash) {
 			return
 		}
 	}
-	rm.entries = append(rm.entries, rmentry{ key, addr })
+	rm.entries = append(rm.entries, rmentry{key, addr})
 }
 
 func (rm *refmap) delete(key string) {
-	entries := make([]rmentry, len(rm.entries) - 1)
+	entries := make([]rmentry, len(rm.entries)-1)
 	j := 0
 	for i := range rm.entries {
 		if rm.entries[i].name != key {
@@ -115,7 +115,7 @@ func parse_storeroot(bs []byte) refmap {
 	refs := rm.RefArrayBytes()
 	for i := 0; i < rm.NamesLength(); i++ {
 		entries[i].name = string(rm.Names(i))
-		off := i*hashsz
+		off := i * hashsz
 		copy(entries[i].addr[:], refs[off:off+hashsz])
 	}
 	return refmap{entries}

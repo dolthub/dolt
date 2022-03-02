@@ -22,9 +22,12 @@
 package datas
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 
-	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -36,45 +39,71 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 // entirely legal Dataset name.
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
+type dsHead interface {
+	TypeName() string
+	Addr() hash.Hash
+	HeadTag() (*TagMeta, hash.Hash, error)
+}
+
+type nomsHead struct {
+	st   types.Struct
+	addr hash.Hash
+}
+
+func (h nomsHead) TypeName() string {
+	return h.st.Name()
+}
+
+func (h nomsHead) Addr() hash.Hash {
+	return h.addr
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
 	db   *database
 	id   string
-	head types.Value
+	head dsHead
 }
 
-func newDataset(db *database, id string, head types.Value) (Dataset, error) {
-	check := head == nil
+func newHead(db *database, c chunks.Chunk) (dsHead, error) {
+	if c.IsEmpty() {
+		return nil, nil
+	}
+	head, err := types.DecodeValue(c, db)
+	if err != nil {
+		return nil, err
+	}
+	matched := false
 
-	var err error
-	if !check {
-		check, err = IsCommit(head)
-
+	matched, err = IsCommit(head)
+	if err != nil {
+		return nil, err
+	}
+	if !matched {
+		matched, err = IsTag(head)
 		if err != nil {
-			return Dataset{}, err
+			return nil, err
 		}
 	}
-
-	if !check {
-		check, err = IsTag(head)
-
+	if !matched {
+		matched, err = IsWorkingSet(head)
 		if err != nil {
-			return Dataset{}, err
+			return nil, err
 		}
 	}
-
-	if !check {
-		check, err = IsWorkingSet(head)
-
-		if err != nil {
-			return Dataset{}, err
-		}
+	if !matched {
+		return nil, fmt.Errorf("database: fetched head at %v by it was not a commit, tag or working set.", c.Hash())
 	}
+	return nomsHead{head.(types.Struct), c.Hash()}, nil
+}
 
-	// precondition checks
-	d.PanicIfFalse(check)
-	return Dataset{db, id, head}, nil
+func newDataset(db *database, id string, headChunk chunks.Chunk) (Dataset, error) {
+	h, err := newHead(db, headChunk)
+	if err != nil {
+		return Dataset{}, err
+	}
+	return Dataset{db, id, h}, nil
 }
 
 // Database returns the Database object in which this Dataset is stored.
@@ -95,23 +124,68 @@ func (ds Dataset) MaybeHead() (types.Struct, bool) {
 	if ds.head == nil {
 		return types.Struct{}, false
 	}
-	return ds.head.(types.Struct), true
+	return ds.head.(nomsHead).st, true
 }
 
 // MaybeHeadRef returns the Ref of the current Head Commit of this Dataset,
 // which contains the current root of the Dataset's value tree, if available.
 // If not, it returns an empty Ref and 'false'.
 func (ds Dataset) MaybeHeadRef() (types.Ref, bool, error) {
-	if ds.head == nil {
+	st, ok := ds.MaybeHead()
+	if !ok {
 		return types.Ref{}, false, nil
 	}
-	ref, err := types.NewRef(ds.head, ds.db.Format())
-
+	ref, err := types.NewRef(st, ds.db.Format())
 	if err != nil {
 		return types.Ref{}, false, err
 	}
-
 	return ref, true, nil
+}
+
+func (ds Dataset) MaybeHeadAddr() (hash.Hash, bool) {
+	if ds.head == nil {
+		return hash.Hash{}, false
+	}
+	return ds.head.Addr(), true
+}
+
+func (ds Dataset) IsTag() bool {
+	return ds.head == nil && ds.head.TypeName() == TagName
+}
+
+func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
+	if ds.head == nil {
+		return nil, hash.Hash{}, errors.New("no head value for HeadTag call")
+	}
+	if !ds.IsTag() {
+		return nil, hash.Hash{}, errors.New("HeadTag call on non-tag head")
+	}
+	return ds.head.HeadTag()
+}
+
+func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	metast, ok, err := h.st.MaybeGet(TagMetaField)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if !ok {
+		return nil, hash.Hash{}, errors.New("no meta field in tag struct head")
+	}
+	meta, err := TagMetaFromNomsSt(metast.(types.Struct))
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	commitRef, ok, err := h.st.MaybeGet(TagCommitRefField)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if !ok {
+		return nil, hash.Hash{}, errors.New("tag struct does not have field commit field")
+	}
+	commitaddr := commitRef.(types.Ref).TargetHash()
+
+	return meta, commitaddr, nil
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

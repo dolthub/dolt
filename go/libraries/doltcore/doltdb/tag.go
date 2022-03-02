@@ -16,66 +16,47 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type Tag struct {
 	Name   string
 	vrw    types.ValueReadWriter
-	tagSt  types.Struct
+	addr   hash.Hash
 	Meta   *datas.TagMeta
 	Commit *Commit
 }
 
 // NewTag creates a new Tag object.
-func NewTag(ctx context.Context, name string, vrw types.ValueReadWriter, tagSt types.Struct) (*Tag, error) {
-	metaSt, ok, err := tagSt.MaybeGet(datas.TagMetaField)
-
+func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueReadWriter) (*Tag, error) {
+	meta, commitAddr, err := ds.HeadTag()
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, fmt.Errorf("tag struct does not have field %s", datas.TagMetaField)
-	}
-
-	meta, err := datas.TagMetaFromNomsSt(metaSt.(types.Struct))
-
+	commitSt, err := vrw.ReadValue(ctx, commitAddr)
 	if err != nil {
 		return nil, err
 	}
-
-	commitRef, ok, err := tagSt.MaybeGet(datas.TagCommitRefField)
-
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("tag struct does not have field %s", datas.TagCommitRefField)
-	}
-
-	commitSt, err := commitRef.(types.Ref).TargetValue(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-
 	commit := NewCommit(vrw, commitSt.(types.Struct))
+
+	addr, _ := ds.MaybeHeadAddr()
 
 	return &Tag{
 		Name:   name,
 		vrw:    vrw,
-		tagSt:  tagSt,
+		addr:   addr,
 		Meta:   meta,
 		Commit: commit,
 	}, nil
 }
 
 // GetStRef returns a Noms Ref for this Tag's Noms tag Struct.
-func (t *Tag) GetStRef() (types.Ref, error) {
-	return types.NewRef(t.tagSt, t.vrw.Format())
+func (t *Tag) GetAddr() (hash.Hash, error) {
+	return t.addr, nil
 }
 
 // GetDoltRef returns a DoltRef for this Tag.

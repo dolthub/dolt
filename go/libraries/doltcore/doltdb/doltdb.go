@@ -115,6 +115,10 @@ func (ddb *DoltDB) CommitRoot(ctx context.Context, last, current hash.Hash) (boo
 	return datas.ChunkStoreFromDatabase(ddb.db).Commit(ctx, last, current)
 }
 
+func (ddb *DoltDB) Has(ctx context.Context, h hash.Hash) (bool, error) {
+	return datas.ChunkStoreFromDatabase(ddb.db).Has(ctx, h)
+}
+
 func (ddb *DoltDB) CSMetricsSummary() string {
 	return datas.GetCSStatSummaryForDB(ddb.db)
 }
@@ -199,18 +203,12 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	headRef, ok, err := firstCommit.MaybeHeadRef()
-
-	if err != nil {
-		return err
-	}
-
+	headAddr, ok := firstCommit.MaybeHeadAddr()
 	if !ok {
 		return errors.New("commit without head")
 	}
 
-	_, err = ddb.db.SetHead(ctx, ds, headRef.TargetHash())
-
+	_, err = ddb.db.SetHead(ctx, ds, headAddr)
 	return err
 }
 
@@ -225,32 +223,25 @@ func getCommitStForRefStr(ctx context.Context, db datas.Database, vrw types.Valu
 		return types.Struct{}, err
 	}
 
-	dsHead, hasHead := ds.MaybeHead()
-
-	if !hasHead {
+	if !ds.HasHead() {
 		return types.Struct{}, ErrBranchNotFound
 	}
 
-	if dsHead.Name() == datas.CommitName {
-		return dsHead, nil
+	if ds.IsTag() {
+		_, commitaddr, err := ds.HeadTag()
+		if err != nil {
+			return types.Struct{}, err
+		}
+		commitSt, err := vrw.ReadValue(ctx, commitaddr)
+		if err != nil {
+			return types.Struct{}, err
+		}
+		return commitSt.(types.Struct), nil
 	}
 
-	if dsHead.Name() == datas.TagName {
-		commitRef, ok, err := dsHead.MaybeGet(datas.TagCommitRefField)
-		if err != nil {
-			return types.Struct{}, err
-		}
-		if !ok {
-			err = fmt.Errorf("tag struct does not have field %s", datas.TagCommitRefField)
-			return types.Struct{}, err
-		}
-
-		commitSt, err := commitRef.(types.Ref).TargetValue(ctx, vrw)
-		if err != nil {
-			return types.Struct{}, err
-		}
-
-		return commitSt.(types.Struct), nil
+	dsHead, _ := ds.MaybeHead()
+	if dsHead.Name() == datas.CommitName {
+		return dsHead, nil
 	}
 
 	err = fmt.Errorf("dataset head is neither commit nor tag")
@@ -407,22 +398,19 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
 func (ddb *DoltDB) ResolveTag(ctx context.Context, tagRef ref.TagRef) (*Tag, error) {
 	ds, err := ddb.db.GetDataset(ctx, tagRef.String())
-
 	if err != nil {
 		return nil, ErrTagNotFound
 	}
 
-	tagSt, hasHead := ds.MaybeHead()
-
-	if !hasHead {
+	if !ds.HasHead() {
 		return nil, ErrTagNotFound
 	}
 
-	if tagSt.Name() != datas.TagName {
+	if !ds.IsTag() {
 		return nil, fmt.Errorf("tagRef head is not a tag")
 	}
 
-	return NewTag(ctx, tagRef.GetPath(), ddb.vrw, tagSt)
+	return NewTag(ctx, tagRef.GetPath(), ds, ddb.vrw)
 }
 
 // ResolveWorkingSet takes a WorkingSetRef and returns the corresponding WorkingSet object.

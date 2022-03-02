@@ -19,11 +19,11 @@ import (
 
 	"github.com/google/flatbuffers/go"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
 const (
