@@ -113,28 +113,16 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 	}
 
 	b.WriteString(")")
+	b.WriteString(" VALUES ")
 
-	b.WriteString(" VALUES (")
-	seenOne = false
-
-	for i, val := range r {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		col := tableSch.GetAllCols().GetAtIndex(i)
-		str := "NULL"
-		if val != nil {
-			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
-			if err != nil {
-				return "", err
-			}
-		}
-
-		b.WriteString(str)
-		seenOne = true
+	// Write single insert
+	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	if err != nil {
+		return "", err
 	}
+	b.WriteString(str)
 
-	b.WriteString(");")
+	b.WriteString(";")
 
 	return b.String(), nil
 }
@@ -161,35 +149,39 @@ func SqlRowAsBatchInsertStmtStart(ctx context.Context, r sql.Row, tableName stri
 	}
 
 	b.WriteString(")")
-	b.WriteString(" VALUES (")
+	b.WriteString(" VALUES ")
 
-	seenOne = false
-	for i, val := range r {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		col := tableSch.GetAllCols().GetAtIndex(i)
-		str := "NULL"
-		if val != nil {
-			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
-			if err != nil {
-				return "", err
-			}
-		}
-
-		b.WriteString(str)
-		seenOne = true
+	// Write single insert
+	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	if err != nil {
+		return "", err
 	}
-	b.WriteString(")")
+	b.WriteString(str)
 
 	return b.String(), nil
 }
 
 func SqlRowAsBatchInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
+
+	// Write leading comma
+	b.WriteString(", ")
+
+	// Write single insert
+	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	if err != nil {
+		return "", err
+	}
+	b.WriteString(str)
+
+	return b.String(), nil
+}
+
+func SqlRowAsSingleInsert(ctx context.Context, r sql.Row, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
 	var err error
 
-	b.WriteString(", (")
+	b.WriteString("(")
 	seenOne := false
 	for i, val := range r {
 		if seenOne {
