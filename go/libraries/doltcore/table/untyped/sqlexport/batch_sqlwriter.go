@@ -93,7 +93,7 @@ func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	return iohelp.WriteLine(w.wr, stmt)
 }
 
-func (w *BatchSqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) error {
+func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
@@ -103,7 +103,6 @@ func (w *BatchSqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row
 		return iohelp.WriteLine(w.wr, ";")
 	}
 
-	// TODO: can remove w.writtenFirstInsert using this variable
 	// Reached max number of inserts on one line
 	if w.numInserts == maxBatchInserts {
 		// Reset count
@@ -140,19 +139,6 @@ func (w *BatchSqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row
 	w.numInserts++
 
 	return err
-}
-
-func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	if err := w.maybeWriteDropCreate(ctx); err != nil {
-		return err
-	}
-
-	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
-	if err != nil {
-		return err
-	}
-
-	return iohelp.WriteLine(w.wr, stmt)
 }
 
 func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {

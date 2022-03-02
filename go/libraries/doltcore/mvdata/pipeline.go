@@ -98,7 +98,6 @@ func (e *DataMoverPipeline) Execute() error {
 }
 
 func (e *DataMoverPipeline) ExecuteBatched() error {
-	// TODO: should I still use go routines?
 	parsedRowChan := make(chan sql.Row)
 
 	e.g.Go(func() (err error) {
