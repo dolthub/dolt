@@ -208,7 +208,7 @@ func TestCreateRdWr(t *testing.T) {
 			t.Fatal("Unexpected error opening file for writer.", wrErr)
 		}
 
-		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, root, fakeSchema, opts, writer)
+		wr, wErr := loc.NewCreatingWriter(context.Background(), mvOpts, false, root, fakeSchema, opts, writer)
 		if wErr != nil {
 			t.Fatal("Unexpected error creating writer.", wErr)
 		}
