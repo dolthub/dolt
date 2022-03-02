@@ -116,7 +116,7 @@ func (w *SqlExportWriter) WriteSqlBatchedRow(ctx context.Context, r sql.Row) err
 		}
 	}
 
-	return iohelp.WriteNoNewLine(w.wr, stmt)
+	return iohelp.WriteWithoutNewLine(w.wr, stmt)
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
