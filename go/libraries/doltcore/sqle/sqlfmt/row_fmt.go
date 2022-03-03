@@ -116,7 +116,7 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 	b.WriteString(" VALUES ")
 
 	// Write single insert
-	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	str, err := SqlRowAsTupleString(ctx, r, tableSch)
 	if err != nil {
 		return "", err
 	}
@@ -152,7 +152,7 @@ func SqlRowAsBatchInsertStmtStart(ctx context.Context, r sql.Row, tableName stri
 	b.WriteString(" VALUES ")
 
 	// Write single insert
-	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	str, err := SqlRowAsTupleString(ctx, r, tableSch)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +168,7 @@ func SqlRowAsBatchInsertStmt(ctx context.Context, r sql.Row, tableName string, t
 	b.WriteString(", ")
 
 	// Write single insert
-	str, err := SqlRowAsSingleInsert(ctx, r, tableSch)
+	str, err := SqlRowAsTupleString(ctx, r, tableSch)
 	if err != nil {
 		return "", err
 	}
@@ -177,7 +177,8 @@ func SqlRowAsBatchInsertStmt(ctx context.Context, r sql.Row, tableName string, t
 	return b.String(), nil
 }
 
-func SqlRowAsSingleInsert(ctx context.Context, r sql.Row, tableSch schema.Schema) (string, error) {
+// SqlRowAsTupleString converts a row into it's tuple string representation for SQL insert statements.
+func SqlRowAsTupleString(ctx context.Context, r sql.Row, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	var err error
 
