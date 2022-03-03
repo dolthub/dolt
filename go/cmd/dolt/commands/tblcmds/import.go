@@ -103,6 +103,10 @@ type importOptions struct {
 	ignoreSkippedRows bool
 }
 
+func (m importOptions) IsBatched() bool {
+	return false
+}
+
 func (m importOptions) WritesToTable() bool {
 	return true
 }

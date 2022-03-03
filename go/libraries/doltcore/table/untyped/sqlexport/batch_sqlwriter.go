@@ -118,7 +118,7 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 	// Append insert values as tuples
 	if w.numInserts == 0 {
 		// Get insert prefix string
-		prefix, err := sqlfmt.InsertStatementPrefix(ctx, w.tableName, w.sch)
+		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
 		if err != nil {
 			return nil
 		}

@@ -93,7 +93,7 @@ type DataLocation interface {
 
 	// NewCreatingWriter will create a TableWriteCloser for a DataLocation that will create a new table, or overwrite
 	// an existing table.
-	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, batched bool, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlTableWriter, error)
+	NewCreatingWriter(ctx context.Context, mvOpts DataMoverOptions, root *doltdb.RootValue, outSch schema.Schema, opts editor.Options, wr io.WriteCloser) (table.SqlTableWriter, error)
 }
 
 // NewDataLocation creates a DataLocation object from a path and a format string.  If the path is the name of a table

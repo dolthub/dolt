@@ -190,6 +190,10 @@ type tableOptions struct {
 	batched   bool
 }
 
+func (m tableOptions) IsBatched() bool {
+	return m.batched
+}
+
 func (m tableOptions) WritesToTable() bool {
 	return false
 }
@@ -252,7 +256,7 @@ func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOption
 		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
 	}
 
-	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, tblOpts.batched, root, outSch, opts, writer)
+	wr, err := tblOpts.dest.NewCreatingWriter(ctx, tblOpts, root, outSch, opts, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Could not create table writer for %s", tblOpts.tableName).AddCause(err).Build()
 	}

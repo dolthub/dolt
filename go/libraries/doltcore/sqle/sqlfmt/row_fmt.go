@@ -91,7 +91,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
-func InsertStatementPrefix(ctx context.Context, tableName string, tableSch schema.Schema) (string, error) {
+func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
 	b.WriteString("INSERT INTO ")

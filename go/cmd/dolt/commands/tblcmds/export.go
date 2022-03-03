@@ -65,6 +65,10 @@ func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValu
 	return false, nil
 }
 
+func (m exportOptions) IsBatched() bool {
+	return false
+}
+
 func (m exportOptions) WritesToTable() bool {
 	return false
 }
@@ -238,7 +242,7 @@ func getTableWriter(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltE
 		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
 	}
 
-	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, false, root, rdSchema, editor.Options{Deaf: dEnv.DbEaFactory()}, writer)
+	wr, err := exOpts.dest.NewCreatingWriter(ctx, exOpts, root, rdSchema, editor.Options{Deaf: dEnv.DbEaFactory()}, writer)
 	if err != nil {
 		return nil, errhand.BuildDError("Error opening writer for %s.", exOpts.DestName()).AddCause(err).Build()
 	}
