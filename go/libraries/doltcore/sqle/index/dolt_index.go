@@ -258,12 +258,15 @@ RangeLoop:
 				}
 				cb.upperbound = val
 			}
+			if rangeColumnExpr.Type() == sql.RangeType_Null {
+				cb.boundsCase = boundsCase_isNull
+			}
 			rangeCheck[i] = cb
 		}
 
 		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
-		// number of checks that are called per-row.
-		for i := len(rangeCheck) - 1; i >= 0; i-- {
+		// number of checks that are called per-row. Always leave one check to skip NULLs.
+		for i := len(rangeCheck) - 1; i > 0 && len(rangeCheck) > 1; i-- {
 			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
 				rangeCheck = rangeCheck[:i]
 			} else {

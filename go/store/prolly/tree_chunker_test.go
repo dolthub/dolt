@@ -35,6 +35,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.True(t, root.level() > 0)
 	//assert.Equal(t, uint64(1000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 1000)
+	assert.Equal(t, root.treeCount()*2, 1000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 10_000)
@@ -43,6 +44,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.True(t, root.level() > 0)
 	//assert.Equal(t, uint64(10_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 10_000)
+	assert.Equal(t, root.treeCount()*2, 10_000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 100_000)
@@ -51,6 +53,7 @@ func roundTripTreeItems(t *testing.T) {
 	assert.True(t, root.level() > 0)
 	//assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 100_000)
+	assert.Equal(t, root.treeCount()*2, 100_000)
 	validateTreeItems(t, ns, root, items)
 }
 

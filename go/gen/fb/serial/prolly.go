@@ -227,19 +227,41 @@ func (rcv *TupleMap) MutateRefArray(j int, n byte) bool {
 	return false
 }
 
-func (rcv *TupleMap) KeyFormat() TupleFormat {
+func (rcv *TupleMap) RefCardinalities(j int) byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
-		return TupleFormat(rcv._tab.GetByte(o + rcv._tab.Pos))
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
 	}
 	return 0
 }
 
-func (rcv *TupleMap) MutateKeyFormat(n TupleFormat) bool {
-	return rcv._tab.MutateByteSlot(14, byte(n))
+func (rcv *TupleMap) RefCardinalitiesLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
 }
 
-func (rcv *TupleMap) ValueFormat() TupleFormat {
+func (rcv *TupleMap) RefCardinalitiesBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *TupleMap) MutateRefCardinalities(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *TupleMap) KeyFormat() TupleFormat {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return TupleFormat(rcv._tab.GetByte(o + rcv._tab.Pos))
@@ -247,12 +269,24 @@ func (rcv *TupleMap) ValueFormat() TupleFormat {
 	return 0
 }
 
-func (rcv *TupleMap) MutateValueFormat(n TupleFormat) bool {
+func (rcv *TupleMap) MutateKeyFormat(n TupleFormat) bool {
 	return rcv._tab.MutateByteSlot(16, byte(n))
 }
 
-func (rcv *TupleMap) TreeCount() uint64 {
+func (rcv *TupleMap) ValueFormat() TupleFormat {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return TupleFormat(rcv._tab.GetByte(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *TupleMap) MutateValueFormat(n TupleFormat) bool {
+	return rcv._tab.MutateByteSlot(18, byte(n))
+}
+
+func (rcv *TupleMap) TreeCount() uint64 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -260,11 +294,11 @@ func (rcv *TupleMap) TreeCount() uint64 {
 }
 
 func (rcv *TupleMap) MutateTreeCount(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(18, n)
+	return rcv._tab.MutateUint64Slot(20, n)
 }
 
 func (rcv *TupleMap) TreeLevel() byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
@@ -272,11 +306,11 @@ func (rcv *TupleMap) TreeLevel() byte {
 }
 
 func (rcv *TupleMap) MutateTreeLevel(n byte) bool {
-	return rcv._tab.MutateByteSlot(20, n)
+	return rcv._tab.MutateByteSlot(22, n)
 }
 
 func TupleMapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(9)
+	builder.StartObject(10)
 }
 func TupleMapAddKeyTuples(builder *flatbuffers.Builder, keyTuples flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(keyTuples), 0)
@@ -308,17 +342,23 @@ func TupleMapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOff
 func TupleMapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
+func TupleMapAddRefCardinalities(builder *flatbuffers.Builder, refCardinalities flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(refCardinalities), 0)
+}
+func TupleMapStartRefCardinalitiesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
 func TupleMapAddKeyFormat(builder *flatbuffers.Builder, keyFormat TupleFormat) {
-	builder.PrependByteSlot(5, byte(keyFormat), 0)
+	builder.PrependByteSlot(6, byte(keyFormat), 0)
 }
 func TupleMapAddValueFormat(builder *flatbuffers.Builder, valueFormat TupleFormat) {
-	builder.PrependByteSlot(6, byte(valueFormat), 0)
+	builder.PrependByteSlot(7, byte(valueFormat), 0)
 }
 func TupleMapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
-	builder.PrependUint64Slot(7, treeCount, 0)
+	builder.PrependUint64Slot(8, treeCount, 0)
 }
 func TupleMapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
-	builder.PrependByteSlot(8, treeLevel, 0)
+	builder.PrependByteSlot(9, treeLevel, 0)
 }
 func TupleMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

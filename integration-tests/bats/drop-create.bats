@@ -345,7 +345,6 @@ SQL
 }
 
 @test "drop-create: drop table from different database" {
-    skip "fix not merged yet"
     dolt sql  <<SQL
 create table test (currentId int primary key, currentText text);
 insert into test values (1, 'text1'), (2, 'text2');

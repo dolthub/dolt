@@ -3,6 +3,9 @@ name: Test Bats Unix
 on:
   pull_request:
     branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 jobs:
   test:

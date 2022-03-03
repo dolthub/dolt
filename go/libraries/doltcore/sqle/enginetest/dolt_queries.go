@@ -963,35 +963,38 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 	{
 		Name: "basic case with three tables",
 		SetUpScript: []string{
-			"create table x (a int primary key, b int, c int)",
-			"create table y (a int primary key, b int, c int)",
-			"insert into x values (1, 2, 3), (2, 3, 4)",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
+			"create table x (a int primary key, b int, c int);",
+			"create table y (a int primary key, b int, c int);",
+			"insert into x values (1, 2, 3), (2, 3, 4);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
 
-			"create table z (a int primary key, b int, c int)",
-			"insert into z values (100, 101, 102)",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
+			"create table z (a int primary key, b int, c int);",
+			"insert into z values (100, 101, 102);",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'));",
 
-			"insert into y values (-1, -2, -3), (-2, -3, -4)",
-			"insert into z values (101, 102, 103)",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+			"insert into y values (-1, -2, -3), (-2, -3, -4);",
+			"insert into z values (101, 102, 103);",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'));",
+
+			"alter table y add column d int;",
+			"set @Commit4 = (select DOLT_COMMIT('-am', 'Modify schema of table y'));",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{5}},
+				Expected: []sql.Row{{6}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z", true, true}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y"}, {"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y", false, true}, {"z", false, true}},
 			},
 		},
 	},
@@ -1008,24 +1011,32 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'Creating tables z'))",
 
 			"rename table x to x1",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1'))",
+			"insert into x1 values (1000, 1001, 1002);",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Renaming table x to x1 and inserting data'))",
+
+			"rename table x1 to x2",
+			"set @Commit4 = (select DOLT_COMMIT('-am', 'Renaming table x1 to x2'))",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{4}},
+				Expected: []sql.Row{{5}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z", true, true}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"x1"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"x1", true, true}},
+			},
+			{
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit4)",
+				Expected: []sql.Row{{"x2", true, false}},
 			},
 		},
 	},
@@ -1038,20 +1049,27 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'))",
 
 			"drop table x",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping table x'))",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'Dropping non-empty table x'))",
+
+			"drop table y",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Dropping empty table y'))",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"x"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"x", true, true}},
+			},
+			{
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y", true, false}},
 			},
 		},
 	},
@@ -1066,7 +1084,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 			"set @Commit2 = (select DOLT_COMMIT('--allow-empty', '-m', 'Empty!'))",
 
 			"insert into y values (-1, -2, -3), (-2, -3, -4)",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into table y'))",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
@@ -1074,16 +1092,16 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y", false, true}},
 			},
 		},
 	},
@@ -1111,16 +1129,16 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{5}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z", true, true}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
-				Expected: []sql.Row{{"y"}, {"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
+				Expected: []sql.Row{{"y", false, true}, {"z", false, true}},
 			},
 		},
 	},
@@ -1150,15 +1168,15 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
-				Expected: []sql.Row{{"x"}, {"y"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit1)",
+				Expected: []sql.Row{{"x", true, true}, {"y", true, false}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
-				Expected: []sql.Row{{"z"}},
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit2)",
+				Expected: []sql.Row{{"z", true, true}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name, schema_change, data_change from DOLT_DIFF where commit_hash in (@Commit3)",
 				Expected: []sql.Row{},
 			},
 		},

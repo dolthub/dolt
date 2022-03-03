@@ -36,14 +36,14 @@ type InRangeCheck interface {
 // InRangeCheckAlways will always return that the given tuple is valid and not to be skipped.
 type InRangeCheckAlways struct{}
 
-func (InRangeCheckAlways) Check(_ context.Context, _ types.Tuple) (valid bool, skip bool, err error) {
+func (InRangeCheckAlways) Check(context.Context, types.Tuple) (valid bool, skip bool, err error) {
 	return true, false, nil
 }
 
 // InRangeCheckNever will always return that the given tuple is not valid.
 type InRangeCheckNever struct{}
 
-func (InRangeCheckNever) Check(_ context.Context, _ types.Tuple) (valid bool, skip bool, err error) {
+func (InRangeCheckNever) Check(context.Context, types.Tuple) (valid bool, skip bool, err error) {
 	return false, false, nil
 }
 

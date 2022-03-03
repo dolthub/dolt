@@ -1526,9 +1526,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	root, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc ON child (parent_value);")
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "CREATE INDEX abc_idx ON child_idx (parent_value);")
-	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "duplicate")
-	}
+	require.NoError(t, err)
 	root, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);")
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
@@ -1544,7 +1542,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.Equal(t, "abc", fkChild.TableIndex)
 	fkChildIdx, ok := fkc.GetByNameCaseInsensitive("fk_child_idx")
 	require.True(t, ok)
-	require.Equal(t, "parent_value", fkChildIdx.TableIndex)
+	require.Equal(t, "abc_idx", fkChildIdx.TableIndex)
 	fkChildUnq, ok := fkc.GetByNameCaseInsensitive("fk_child_unq")
 	require.True(t, ok)
 	require.Equal(t, "abc_unq", fkChildUnq.TableIndex)
