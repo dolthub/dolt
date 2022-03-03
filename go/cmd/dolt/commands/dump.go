@@ -229,12 +229,7 @@ func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, fi
 	}
 
 	pipeline := mvdata.NewDataMoverPipeline(ctx, rd, wr)
-
-	if tblOpts.batched {
-		err = pipeline.ExecuteBatched()
-	} else {
-		err = pipeline.Execute()
-	}
+	err = pipeline.Execute()
 
 	if err != nil {
 		return errhand.BuildDError("Error with dumping %s.", tblOpts.SrcName()).AddCause(err).Build()

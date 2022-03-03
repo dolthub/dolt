@@ -116,6 +116,7 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 	}
 
 	// Append insert values as tuples
+	var stmt string
 	if w.numInserts == 0 {
 		// Get insert prefix string
 		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
@@ -127,16 +128,18 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 		if err != nil {
 			return nil
 		}
+	} else {
+		stmt = ", "
 	}
 
 	// Get insert tuple string
-	stmt, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
+	tuple, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
 	if err != nil {
 		return err
 	}
 
 	// Write insert tuple
-	err = iohelp.WriteWithoutNewLine(w.wr, stmt)
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt + tuple)
 	if err != nil {
 		return nil
 	}

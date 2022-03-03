@@ -91,6 +91,7 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
+// InsertStatementPrefix returns the first part of an SQL insert query for a given table
 func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 
@@ -118,27 +119,13 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 
 func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
-	b.WriteString("INSERT INTO ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ")
 
-	b.WriteString("(")
-	seenOne := false
-	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		b.WriteString(QuoteIdentifier(col.Name))
-		seenOne = true
-		return false, nil
-	})
-
+	// Write insert prefix
+	prefix, err := InsertStatementPrefix(tableName, tableSch)
 	if err != nil {
 		return "", err
 	}
-
-	b.WriteString(")")
-	b.WriteString(" VALUES ")
+	b.WriteString(prefix)
 
 	// Write single insert
 	str, err := SqlRowAsTupleString(ctx, r, tableSch)
@@ -148,7 +135,6 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 	b.WriteString(str)
 
 	b.WriteString(";")
-
 	return b.String(), nil
 }
 

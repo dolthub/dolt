@@ -94,6 +94,9 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -f doltdump.sql ]
 
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+
     dolt checkout new_branch
     dolt sql < doltdump.sql
     dolt add .
