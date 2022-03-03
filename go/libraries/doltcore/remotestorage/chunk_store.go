@@ -1080,7 +1080,7 @@ func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fe
 		Work: func(ctx context.Context, n int) (interface{}, error) {
 			return rangeDownloadWithRetries(ctx, stats, fetcher, offset, length, n, urlStrF)
 		},
-		Size: int(length),
+		Size: int64(length),
 	})
 	if err != nil {
 		return nil, err

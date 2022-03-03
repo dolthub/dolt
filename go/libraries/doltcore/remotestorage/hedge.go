@@ -36,15 +36,18 @@ type Work struct {
 
 	// Size is an integer representation of the size of the work.
 	// Potentially used by |Strategy|, not used by |Hedger|.
-	Size int
+	Size int64
 }
 
 // Hedger can |Do| |Work|, potentially invoking |Work| more than once
-// concurrently if it is taking longer than |Strategy| estimated it would.
+// concurrently if it is taking longer than |Strategy| estimated it would. If
+// given a |fixedNextTryDuration|, Hedger will always invoke |Work| if not
+// completed after |fixedNextTryDuration| time.
 type Hedger struct {
-	sema  *semaphore.Weighted
-	strat Strategy
-	after afterFunc
+	sema                 *semaphore.Weighted
+	strat                Strategy
+	fixedNextTryDuration *time.Duration
+	after                afterFunc
 }
 
 type afterFunc func(time.Duration) <-chan time.Time
@@ -56,6 +59,19 @@ func NewHedger(maxOutstanding int64, strat Strategy) *Hedger {
 	return &Hedger{
 		semaphore.NewWeighted(maxOutstanding),
 		strat,
+		nil,
+		time.After,
+	}
+}
+
+// NewFixedHedger returns a new Hedger. It will hedge a request if it fails to
+// complete in |nextTryDuration| time. |maxOutstanding| behaves in the same way
+// as NewHedger.
+func NewFixedHedger(maxOutstanding int64, nextTryDuration time.Duration) *Hedger {
+	return &Hedger{
+		semaphore.NewWeighted(maxOutstanding),
+		&noopStrategy{},
+		&nextTryDuration,
 		time.After,
 	}
 }
@@ -65,13 +81,13 @@ func NewHedger(maxOutstanding int64, strat Strategy) *Hedger {
 type Strategy interface {
 	// Duration returns the expected |time.Duration| of a piece of Work
 	// with |Size| |sz|.
-	Duration(sz int) time.Duration
+	Duration(sz int64) time.Duration
 	// Observe is called by |Hedger| when work is completed. |sz| is the
 	// |Size| of the work. |n| is the nth hedge which completed first, with
 	// 1 being the unhedged request. |d| is the duration the |Work|
 	// function took for the request that completed. |err| is any |error|
 	// returned from |Work|.
-	Observe(sz, n int, d time.Duration, err error)
+	Observe(sz int64, n int, d time.Duration, err error)
 }
 
 // NewPercentileStrategy returns an initialized |PercentileStrategy| |Hedger|.
@@ -96,14 +112,14 @@ type PercentileStrategy struct {
 }
 
 // Duration implements |Strategy|.
-func (ps *PercentileStrategy) Duration(sz int) time.Duration {
+func (ps *PercentileStrategy) Duration(sz int64) time.Duration {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return time.Duration(ps.histogram.ValueAtQuantile(ps.Percentile)) * time.Millisecond
 }
 
 // Observe implements |Strategy|.
-func (ps *PercentileStrategy) Observe(sz, n int, d time.Duration, err error) {
+func (ps *PercentileStrategy) Observe(sz int64, n int, d time.Duration, err error) {
 	if err == nil {
 		ps.mu.Lock()
 		defer ps.mu.Unlock()
@@ -131,7 +147,7 @@ type MinStrategy struct {
 }
 
 // Duration implements |Strategy|.
-func (ms *MinStrategy) Duration(sz int) time.Duration {
+func (ms *MinStrategy) Duration(sz int64) time.Duration {
 	if ms.underlying == nil {
 		return ms.Min
 	}
@@ -143,11 +159,18 @@ func (ms *MinStrategy) Duration(sz int) time.Duration {
 }
 
 // Observe implements |Strategy|.
-func (ms *MinStrategy) Observe(sz, n int, d time.Duration, err error) {
+func (ms *MinStrategy) Observe(sz int64, n int, d time.Duration, err error) {
 	if ms.underlying != nil {
 		ms.underlying.Observe(sz, n, d, err)
 	}
 }
+
+type noopStrategy struct{}
+
+func (no *noopStrategy) Duration(sz int64) time.Duration {
+	panic("unimplemented")
+}
+func (no *noopStrategy) Observe(sz int64, n int, d time.Duration, err error) {}
 
 var MaxHedgesPerRequest = 1
 
@@ -192,7 +215,12 @@ func (h *Hedger) Do(ctx context.Context, w Work) (interface{}, error) {
 	}
 	try()
 	for {
-		nextTry := h.strat.Duration(w.Size) * (1 << len(cancels))
+		var nextTry time.Duration
+		if d := h.fixedNextTryDuration; d != nil {
+			nextTry = *d
+		} else {
+			nextTry = h.strat.Duration(w.Size) * (1 << len(cancels))
+		}
 		select {
 		case r := <-ch:
 			for _, c := range cancels {

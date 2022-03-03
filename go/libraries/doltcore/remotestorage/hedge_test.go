@@ -221,3 +221,39 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 	<-resCh
 	<-resCh
 }
+
+func TestFixedHedgerHedgesAtFixedInterval(t *testing.T) {
+	before := MaxHedgesPerRequest
+	defer func() {
+		MaxHedgesPerRequest = before
+	}()
+
+	fixedInterval := 10 * time.Millisecond
+	h := NewFixedHedger(1, fixedInterval)
+
+	MaxHedgesPerRequest = 1
+	cnt := int32(0)
+	wg := newSloppyWG(7)
+
+	h.after = func(d time.Duration) <-chan time.Time {
+		assert.Equal(t, fixedInterval, d)
+		wg.Done()
+		return time.After(d)
+	}
+
+	_, err := h.Do(context.Background(), Work{
+		Work: func(ctx context.Context, n int) (interface{}, error) {
+			cur := atomic.AddInt32(&cnt, 1)
+			if cur == 1 {
+				<-ctx.Done()
+				return 1, nil
+			} else if cur == 2 {
+				wg.Wait()
+				return 2, nil
+			} else {
+				panic("should not hedge more than MaxHedgesPerRequest")
+			}
+		},
+	})
+	assert.NoError(t, err)
+}
