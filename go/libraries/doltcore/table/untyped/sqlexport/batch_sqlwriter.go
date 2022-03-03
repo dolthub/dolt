@@ -84,13 +84,56 @@ func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 		return err
 	}
 
-	stmt, err := sqlfmt.RowAsInsertStmt(r, w.tableName, w.sch)
+	// Previous write was last insert
+	if w.numInserts > 0 && r == nil {
+		return iohelp.WriteLine(w.wr, ";")
+	}
 
+	// Reached max number of inserts on one line
+	if w.numInserts == batchSize {
+		// Reset count
+		w.numInserts = 0
+
+		// End line
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Append insert values as tuples
+	var stmt string
+	if w.numInserts == 0 {
+		// Get insert prefix string
+		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
+		if err != nil {
+			return nil
+		}
+		// Write prefix
+		err = iohelp.WriteWithoutNewLine(w.wr, prefix)
+		if err != nil {
+			return nil
+		}
+	} else {
+		stmt = ", "
+	}
+
+	// Get insert tuple string
+	tuple, err := sqlfmt.RowAsTupleString(ctx, r, w.sch)
 	if err != nil {
 		return err
 	}
 
-	return iohelp.WriteLine(w.wr, stmt)
+	// Write insert tuple
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt + tuple)
+	if err != nil {
+		return nil
+	}
+
+	// Increase count of inserts written on this line
+	w.numInserts++
+
+	return err
 }
 
 func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
