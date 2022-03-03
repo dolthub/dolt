@@ -91,6 +91,31 @@ func RowAsInsertStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	return b.String(), nil
 }
 
+func InsertStatementPrefix(ctx context.Context, tableName string, tableSch schema.Schema) (string, error) {
+	var b strings.Builder
+
+	b.WriteString("INSERT INTO ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" (")
+
+	seenOne := false
+	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if seenOne {
+			b.WriteRune(',')
+		}
+		b.WriteString(QuoteIdentifier(col.Name))
+		seenOne = true
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(") VALUES ")
+	return b.String(), nil
+}
+
 func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 	b.WriteString("INSERT INTO ")
@@ -123,56 +148,6 @@ func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableS
 	b.WriteString(str)
 
 	b.WriteString(";")
-
-	return b.String(), nil
-}
-
-func SqlRowAsBatchInsertStmtStart(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-	b.WriteString("INSERT INTO ")
-	b.WriteString(QuoteIdentifier(tableName))
-	b.WriteString(" ")
-
-	b.WriteString("(")
-	seenOne := false
-	err := tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if seenOne {
-			b.WriteRune(',')
-		}
-		b.WriteString(QuoteIdentifier(col.Name))
-		seenOne = true
-		return false, nil
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	b.WriteString(")")
-	b.WriteString(" VALUES ")
-
-	// Write single insert
-	str, err := SqlRowAsTupleString(ctx, r, tableSch)
-	if err != nil {
-		return "", err
-	}
-	b.WriteString(str)
-
-	return b.String(), nil
-}
-
-func SqlRowAsBatchInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
-	var b strings.Builder
-
-	// Write leading comma
-	b.WriteString(", ")
-
-	// Write single insert
-	str, err := SqlRowAsTupleString(ctx, r, tableSch)
-	if err != nil {
-		return "", err
-	}
-	b.WriteString(str)
 
 	return b.String(), nil
 }

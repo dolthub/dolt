@@ -115,21 +115,27 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 		}
 	}
 
-	// Append insert values wrapped in parentheses
-	var stmt string
-	var err error
+	// Append insert values as tuples
 	if w.numInserts == 0 {
-		// Write first insert statement
-		stmt, err = sqlfmt.SqlRowAsBatchInsertStmtStart(ctx, r, w.tableName, w.sch)
-	} else {
-		// Append insert value
-		stmt, err = sqlfmt.SqlRowAsBatchInsertStmt(ctx, r, w.tableName, w.sch)
+		// Get insert prefix string
+		prefix, err := sqlfmt.InsertStatementPrefix(ctx, w.tableName, w.sch)
+		if err != nil {
+			return nil
+		}
+		// Write prefix
+		err = iohelp.WriteWithoutNewLine(w.wr, prefix)
+		if err != nil {
+			return nil
+		}
 	}
+
+	// Get insert tuple string
+	stmt, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
 	if err != nil {
 		return err
 	}
 
-	// Write it
+	// Write insert tuple
 	err = iohelp.WriteWithoutNewLine(w.wr, stmt)
 	if err != nil {
 		return nil
