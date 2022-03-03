@@ -125,7 +125,7 @@ func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	// Write insert tuple
-	err = iohelp.WriteWithoutNewLine(w.wr, stmt + tuple)
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt+tuple)
 	if err != nil {
 		return nil
 	}
