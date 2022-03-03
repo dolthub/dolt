@@ -100,6 +100,47 @@ func (h serialTagHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	return nil, errors.New("HeadWorkingSet called on tag")
 }
 
+type serialWorkingSetHead struct {
+	msg  *serial.WorkingSet
+	addr hash.Hash
+}
+
+func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
+	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, 0), addr}
+}
+
+func (h serialWorkingSetHead) TypeName() string {
+	return WorkingSetName
+}
+
+func (h serialWorkingSetHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialWorkingSetHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	return nil, hash.Hash{}, errors.New("HeadTag called on working set")
+}
+
+func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	var ret WorkingSetHead
+	ret.Meta = &WorkingSetMeta{
+		Name:        string(h.msg.Name()),
+		Email:       string(h.msg.Email()),
+		Timestamp:   h.msg.TimestampMillis(),
+		Description: string(h.msg.Desc()),
+	}
+	ret.WorkingAddr = hash.New(h.msg.WorkingRootAddrBytes())
+	if h.msg.StagedRootAddrLength() != 0 {
+		ret.StagedAddr = new(hash.Hash)
+		*ret.StagedAddr = hash.New(h.msg.StagedRootAddrBytes())
+	}
+	if h.msg.MergeStateAddrLength() != 0 {
+		ret.MergeStateAddr = new(hash.Hash)
+		*ret.MergeStateAddr = hash.New(h.msg.MergeStateAddrBytes())
+	}
+	return &ret, nil
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
@@ -115,6 +156,9 @@ func newHead(db *database, c chunks.Chunk) (dsHead, error) {
 
 	if serial.GetFileID(c.Data()) == serial.TagFileID {
 		return newSerialTagHead(c.Data(), c.Hash()), nil
+	}
+	if serial.GetFileID(c.Data()) == serial.WorkingSetFileID {
+		return newSerialWorkingSetHead(c.Data(), c.Hash()), nil
 	}
 
 	head, err := types.DecodeValue(c, db)

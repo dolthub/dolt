@@ -36,27 +36,9 @@ table DatabaseRoot {
   foreign_keys:[ForeignKey] (required);
 }
 
-table WorkingSet {
-  // todo(andy): should |name| be included?
-  name:string (required);
-  working_root:Ref (required);
-  staged_root:Ref (required);
-  merge_state:MergeState;
-  meta:WorkingSetMeta (required);
-}
-
 table MergeState {
   pre_merge_root:Ref (required);
   candidate_merge_commit:Ref (required);
-}
-
-table WorkingSetMeta {
-  name:string (required);
-  email:string (required);
-  // todo(andy): is description required?
-  desc:string;
-  timestamp:Timestamp (required);
-  user_timestamp:Timestamp (required);
 }
 
 table Commit {

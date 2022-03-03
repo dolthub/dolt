@@ -17,6 +17,11 @@ package datas
 import (
 	"context"
 
+	"github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -46,10 +51,10 @@ const (
 const workingSetMetaVersion = "1.0"
 
 type WorkingSetMeta struct {
-	Name string
-	Email string
+	Name        string
+	Email       string
 	Description string
-	Timestamp uint64
+	Timestamp   uint64
 }
 
 func (m *WorkingSetMeta) toNomsStruct(format *types.NomsBinFormat) (types.Struct, error) {
@@ -94,10 +99,27 @@ type WorkingSetSpec struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func newWorkingSet(_ context.Context, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (types.Struct, error) {
+func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (hash.Hash, types.Ref, error) {
+	if db.Format() == types.Format_DOLT_1 {
+		stagedAddr := stagedRef.TargetHash()
+		var mergeStateAddr *hash.Hash
+		if mergeStateRef != nil {
+			mergeStateAddr = new(hash.Hash)
+			*mergeStateAddr = mergeStateRef.TargetHash()
+		}
+		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeStateAddr, meta)
+
+		chunk := chunks.NewChunk(data)
+		err := db.chunkStore().Put(ctx, chunk)
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+		return chunk.Hash(), types.Ref{}, nil
+	}
+
 	metaSt, err := meta.toNomsStruct(workingRef.Format())
 	if err != nil {
-		return types.Struct{}, err
+		return hash.Hash{}, types.Ref{}, err
 	}
 
 	fields := make(types.StructData)
@@ -109,7 +131,59 @@ func newWorkingSet(_ context.Context, meta *WorkingSetMeta, workingRef, stagedRe
 		fields[MergeStateField] = mergeStateRef
 	}
 
-	return types.NewStruct(workingRef.Format(), WorkingSetName, fields)
+	st, err := types.NewStruct(workingRef.Format(), WorkingSetName, fields)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	wsRef, err := db.WriteValue(ctx, st)
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	ref, err := types.ToRefOfValue(wsRef, db.Format())
+	if err != nil {
+		return hash.Hash{}, types.Ref{}, err
+	}
+
+	return ref.TargetHash(), ref, nil
+}
+
+func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, meta *WorkingSetMeta) []byte {
+	builder := flatbuffers.NewBuilder(1024)
+	workingoff := builder.CreateByteVector(working[:])
+	var stagedOff, mergeStateOff flatbuffers.UOffsetT
+	if staged != nil {
+		stagedOff = builder.CreateByteVector((*staged)[:])
+	}
+	if mergeState != nil {
+		mergeStateOff = builder.CreateByteVector((*mergeState)[:])
+	}
+
+	var nameOff, emailOff, descOff flatbuffers.UOffsetT
+	if meta != nil {
+		nameOff = builder.CreateString(meta.Name)
+		emailOff = builder.CreateString(meta.Email)
+		descOff = builder.CreateString(meta.Description)
+	}
+
+	serial.WorkingSetStart(builder)
+	serial.WorkingSetAddWorkingRootAddr(builder, workingoff)
+	if stagedOff != 0 {
+		serial.WorkingSetAddStagedRootAddr(builder, stagedOff)
+	}
+	if mergeStateOff != 0 {
+		serial.WorkingSetAddMergeStateAddr(builder, mergeStateOff)
+	}
+	if meta != nil {
+		serial.WorkingSetAddName(builder, nameOff)
+		serial.WorkingSetAddEmail(builder, emailOff)
+		serial.WorkingSetAddDesc(builder, descOff)
+		serial.WorkingSetAddTimestampMillis(builder, meta.Timestamp)
+	}
+	builder.FinishWithFileIdentifier(serial.WorkingSetEnd(builder), []byte(serial.WorkingSetFileID))
+	return builder.FinishedBytes()
+
 }
 
 func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {

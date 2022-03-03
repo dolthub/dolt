@@ -18,6 +18,7 @@ package serial
 
 const StoreRootFileID = "STRT"
 const TagFileID = "DTAG"
+const WorkingSetFileID = "WRST"
 
 func GetFileID(bs []byte) string {
 	if len(bs) < 8 {

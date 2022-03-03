@@ -50,6 +50,7 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 	if version == "" {
 		version = constants.Format718String
 	}
+	version = "__DOLT_1__"
 
 	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
 }

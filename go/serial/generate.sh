@@ -12,7 +12,8 @@ flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespac
   schema.fbs \
   storeroot.fbs \
   tag.fbs \
-  table.fbs
+  table.fbs \
+  workingset.fbs
 
 # prefix files with copyright header
 for FILE in $GEN_DIR/*.go;

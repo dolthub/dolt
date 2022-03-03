@@ -611,12 +611,11 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			workspace, err := newWorkingSet(ctx, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
+			addr, ref, err := newWorkingSet(ctx, db, workingSet.Meta, workingSet.WorkingRoot, workingSet.StagedRoot, workingSet.MergeState)
 			if err != nil {
 				return err
 			}
-
-			return db.doUpdateWorkingSet(ctx, ds.ID(), workspace, prevHash)
+			return db.doUpdateWorkingSet(ctx, ds.ID(), addr, ref, prevHash)
 		},
 	)
 }
@@ -626,22 +625,7 @@ func (db *database) UpdateWorkingSet(ctx context.Context, ds Dataset, workingSet
 // compare-and-set for the current target hash of the datasets entry, and will
 // return an error if the application is working with a stale value for the
 // workingset.
-func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, workingSet types.Struct, currHash hash.Hash) error {
-	err := db.validateWorkingSet(workingSet)
-	if err != nil {
-		return err
-	}
-
-	workingSetRef, err := db.WriteValue(ctx, workingSet)
-	if err != nil {
-		return err
-	}
-
-	wsValRef, err := types.ToRefOfValue(workingSetRef, db.Format())
-	if err != nil {
-		return err
-	}
-
+func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, addr hash.Hash, ref types.Ref, currHash hash.Hash) error {
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		success, err := assertDatasetHash(ctx, datasets, datasetID, currHash)
 		if err != nil {
@@ -651,13 +635,13 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, wo
 			return types.Map{}, ErrOptimisticLockFailed
 		}
 
-		return datasets.Edit().Set(types.String(datasetID), wsValRef).Map(ctx)
+		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
 	}, func(ctx context.Context, rm refmap) (refmap, error) {
 		curr := rm.lookup(datasetID)
 		if curr != currHash {
 			return refmap{}, ErrOptimisticLockFailed
 		}
-		rm.set(datasetID, wsValRef.TargetHash())
+		rm.set(datasetID, addr)
 		return rm, nil
 	})
 }
@@ -689,22 +673,7 @@ func (db *database) CommitWithWorkingSet(
 	val types.Value, workingSetSpec WorkingSetSpec,
 	prevWsHash hash.Hash, opts CommitOptions,
 ) (Dataset, Dataset, error) {
-	workingSet, err := newWorkingSet(ctx, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	err = db.validateWorkingSet(workingSet)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	workingSetRef, err := db.WriteValue(ctx, workingSet)
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-
-	wsValRef, err := types.ToRefOfValue(workingSetRef, db.Format())
+	wsAddr, wsValRef, err := newWorkingSet(ctx, db, workingSetSpec.Meta, workingSetSpec.WorkingRoot, workingSetSpec.StagedRoot, workingSetSpec.MergeState)
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -774,7 +743,7 @@ func (db *database) CommitWithWorkingSet(
 			return refmap{}, ErrMergeNeeded
 		}
 		rm.set(commitDS.ID(), commitValRef.TargetHash())
-		rm.set(workingSetDS.ID(), wsValRef.TargetHash())
+		rm.set(workingSetDS.ID(), wsAddr)
 		return rm, nil
 	})
 

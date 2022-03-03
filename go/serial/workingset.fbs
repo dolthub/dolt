@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package serial
+table WorkingSet {
+  // 20-byte hashes of root values.
+  working_root_addr:[ubyte] (required);
+  staged_root_addr:[ubyte];
+  // 20-byte hash of the merge state.
+  merge_state_addr:[ubyte];
 
-// KEEP THESE IN SYNC WITH .fbs FILES!
-
-const StoreRootFileID = "STRT"
-const TagFileID = "DTAG"
-const WorkingSetFileID = "WRST"
-
-func GetFileID(bs []byte) string {
-	if len(bs) < 8 {
-		return ""
-	}
-	return string(bs[4:8])
+  // Meta
+  name:string (required);
+  email:string (required);
+  desc:string (required);
+  timestamp_millis:uint64;
 }
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "WRST";
+
+root_type WorkingSet;
