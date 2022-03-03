@@ -124,9 +124,9 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 	} else {
 		// Append insert value
 		stmt, err = sqlfmt.SqlRowAsBatchInsertStmt(ctx, r, w.tableName, w.sch)
-		if err != nil {
-			return err
-		}
+	}
+	if err != nil {
+		return err
 	}
 
 	// Write it
