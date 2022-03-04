@@ -77,7 +77,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 	var fileErr error
 	{
 		if rangeStr == "" {
-			logger("going to write entire file")
+			logger("going to read entire file")
 			r, readSize, fileErr = getFileReader(path)
 		} else {
 			offset, length, err := offsetAndLenFromRange(rangeStr)
@@ -85,7 +85,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 				logger(err.Error())
 				return http.StatusBadRequest
 			}
-			logger(fmt.Sprintf("going to write bytes at offset %d, length %d", offset, length))
+			logger(fmt.Sprintf("going to read file at offset %d, length %d", offset, length))
 			readSize = length
 			r, fileErr = getFileReaderAt(path, offset, length)
 		}
@@ -108,7 +108,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 		return http.StatusInternalServerError
 	}
 
-	logger(fmt.Sprintf("opened file at path %s, going to write %d bytes", path, readSize))
+	logger(fmt.Sprintf("opened file at path %s, going to read %d bytes", path, readSize))
 
 	n, err := io.Copy(respWr, r)
 	if err != nil {
