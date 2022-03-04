@@ -90,14 +90,6 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 			r, fileErr = getFileReaderAt(path, offset, length)
 		}
 	}
-	defer func() {
-		err := r.Close()
-		if err != nil {
-			err = fmt.Errorf("failed to close file at path %s: %w", path, err)
-			logger(err.Error())
-		}
-	}()
-
 	if fileErr != nil {
 		logger(fileErr.Error())
 		if errors.Is(fileErr, os.ErrNotExist) {
@@ -107,6 +99,13 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 		}
 		return http.StatusInternalServerError
 	}
+	defer func() {
+		err := r.Close()
+		if err != nil {
+			err = fmt.Errorf("failed to close file at path %s: %w", path, err)
+			logger(err.Error())
+		}
+	}()
 
 	logger(fmt.Sprintf("opened file at path %s, going to read %d bytes", path, readSize))
 
