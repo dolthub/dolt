@@ -122,7 +122,7 @@ func readTableFile(logger func(string), org, repo, fileId string, respWr http.Re
 
 	logger(fmt.Sprintf("wrote %d bytes", n))
 
-	return -1
+	return http.StatusOK
 }
 
 func writeTableFile(logger func(string), org, repo, fileId string, request *http.Request) int {
