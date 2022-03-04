@@ -90,6 +90,25 @@ func MustSchemaFromCols(typedColColl *ColCollection) Schema {
 	return sch
 }
 
+// RemoveDuplicateNotNullColumnConstraints removes any duplicate NOT NULL column constraints from schemas.
+func RemoveDuplicateNotNullColumnConstraints(allCols *ColCollection) {
+	for i, col := range allCols.cols {
+		var newColConstraints []ColConstraint
+		seenNotNull := false
+		for _, cc := range col.Constraints {
+			if cc.GetConstraintType() == NotNullConstraintType {
+				if !seenNotNull {
+					newColConstraints = append(newColConstraints, cc)
+					seenNotNull = true
+				}
+			} else {
+				newColConstraints = append(newColConstraints, cc)
+			}
+		}
+		allCols.cols[i].Constraints = newColConstraints
+	}
+}
+
 // ValidateForInsert returns an error if the given schema cannot be written to the dolt database.
 func ValidateForInsert(allCols *ColCollection) error {
 	var seenPkCol bool
