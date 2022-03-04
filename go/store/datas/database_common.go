@@ -26,8 +26,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -92,15 +92,12 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return refmap{}, nil
 	}
 
-	chunk, err := db.chunkStore().Get(ctx, rootHash)
+	val, err := db.ReadValue(ctx, rootHash)
 	if err != nil {
 		return refmap{}, err
 	}
-	if chunk.IsEmpty() {
-		return refmap{}, errors.New("root hash not found in database")
-	}
 
-	return parse_storeroot(chunk.Data()), nil
+	return parse_storeroot([]byte(val.(types.SerialMessage))), nil
 }
 
 func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
@@ -283,7 +280,7 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	if db.Format() == types.Format_DOLT_1 {
+	if db.Format() == types.Format_DOLT_DEV {
 		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
 		if err != nil {
 			return nil, err
@@ -318,27 +315,29 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap DatasetsMap) (Dataset, error) {
 	if ndsmap, ok := dsmap.(nomsDatasetsMap); ok {
 		datasets := ndsmap.m
-		var headChunk chunks.Chunk
+		var headAddr hash.Hash
+		var head types.Value
 		if r, ok, err := datasets.MaybeGet(ctx, types.String(datasetID)); err != nil {
 			return Dataset{}, err
 		} else if ok {
-			headChunk, err = db.chunkStore().Get(ctx, r.(types.Ref).TargetHash())
+			headAddr = r.(types.Ref).TargetHash()
+			head, err = r.(types.Ref).TargetValue(ctx, db)
 			if err != nil {
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, headChunk)
+		return newDataset(db, datasetID, head, headAddr)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
-		var headChunk chunks.Chunk
 		var err error
 		curr := rmdsmap.rm.lookup(datasetID)
+		var head types.Value
 		if !curr.IsEmpty() {
-			headChunk, err = db.chunkStore().Get(ctx, curr)
+			head, err = db.ReadValue(ctx, curr)
 			if err != nil {
 				return Dataset{}, err
 			}
 		}
-		return newDataset(db, datasetID, headChunk)
+		return newDataset(db, datasetID, head, curr)
 	} else {
 		return Dataset{}, errors.New("unimplemented or unsupported DatasetsMap type")
 	}
@@ -349,11 +348,11 @@ func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error
 	if err != nil {
 		return nil, err
 	}
-	headChunk, err := db.chunkStore().Get(ctx, addr)
+	head, err := db.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	return newHead(db, headChunk)
+	return newHead(db, head, addr)
 }
 
 func (db *database) Close() error {
@@ -789,7 +788,7 @@ func (db *database) update(ctx context.Context,
 
 		var newRootHash hash.Hash
 
-		if db.Format() == types.Format_DOLT_1 {
+		if db.Format() == types.Format_DOLT_DEV {
 			datasets, err := db.loadDatasetsRefmap(ctx, root)
 			if err != nil {
 				return err
@@ -801,13 +800,12 @@ func (db *database) update(ctx context.Context,
 			}
 
 			data := datasets.storeroot_flatbuffer()
-			chunk := chunks.NewChunk(data)
-			err = db.chunkStore().Put(ctx, chunk)
+			r, err := db.WriteValue(ctx, types.SerialMessage(data))
 			if err != nil {
 				return err
 			}
 
-			newRootHash = chunk.Hash()
+			newRootHash = r.TargetHash()
 		} else {
 			datasets, err = db.loadDatasetsNomsMap(ctx, root)
 			if err != nil {

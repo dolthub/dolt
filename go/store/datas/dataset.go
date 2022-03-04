@@ -27,7 +27,6 @@ import (
 	"regexp"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -149,25 +148,22 @@ type Dataset struct {
 	head dsHead
 }
 
-func newHead(db *database, c chunks.Chunk) (dsHead, error) {
-	if c.IsEmpty() {
+func newHead(db *database, head types.Value, addr hash.Hash) (dsHead, error) {
+	if head == nil {
 		return nil, nil
 	}
 
-	if serial.GetFileID(c.Data()) == serial.TagFileID {
-		return newSerialTagHead(c.Data(), c.Hash()), nil
-	}
-	if serial.GetFileID(c.Data()) == serial.WorkingSetFileID {
-		return newSerialWorkingSetHead(c.Data(), c.Hash()), nil
+	if sm, ok := head.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) == serial.TagFileID {
+			return newSerialTagHead(data, addr), nil
+		}
+		if serial.GetFileID(data) == serial.WorkingSetFileID {
+			return newSerialWorkingSetHead(data, addr), nil
+		}
 	}
 
-	head, err := types.DecodeValue(c, db)
-	if err != nil {
-		return nil, err
-	}
-	matched := false
-
-	matched, err = IsCommit(head)
+	matched, err := IsCommit(head)
 	if err != nil {
 		return nil, err
 	}
@@ -184,13 +180,14 @@ func newHead(db *database, c chunks.Chunk) (dsHead, error) {
 		}
 	}
 	if !matched {
-		return nil, fmt.Errorf("database: fetched head at %v by it was not a commit, tag or working set.", c.Hash())
+		return nil, fmt.Errorf("database: fetched head at %v by it was not a commit, tag or working set.", addr)
 	}
-	return nomsHead{head.(types.Struct), c.Hash()}, nil
+
+	return nomsHead{head.(types.Struct), addr}, nil
 }
 
-func newDataset(db *database, id string, headChunk chunks.Chunk) (Dataset, error) {
-	h, err := newHead(db, headChunk)
+func newDataset(db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
+	h, err := newHead(db, head, addr)
 	if err != nil {
 		return Dataset{}, err
 	}

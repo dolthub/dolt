@@ -136,7 +136,7 @@ func TestNewCommit(t *testing.T) {
 	}
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
@@ -255,7 +255,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	metaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
@@ -405,7 +405,7 @@ func TestCommitParentsClosure(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 
 	type expected struct {
 		height int
@@ -539,7 +539,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 
 	// Build commit DAG
 	//
@@ -599,11 +599,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert.NoError(db.Close())
 
 	storage = &chunks.TestStorage{}
-	db = NewDatabase(storage.NewView()).(*database)
+	db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	rstorage := &chunks.TestStorage{}
-	rdb := NewDatabase(rstorage.NewView()).(*database)
+	rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
 	defer rdb.Close()
 
 	// Rerun the tests when using two difference Databases for left and
@@ -661,7 +661,7 @@ func TestFindCommonAncestor(t *testing.T) {
 
 func TestNewCommitRegressionTest(t *testing.T) {
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))

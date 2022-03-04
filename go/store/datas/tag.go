@@ -20,7 +20,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
@@ -52,7 +51,7 @@ type TagOptions struct {
 // persists it, and returns its addr. Also returns a types.Ref to the tag, if
 // the format for |db| is noms.
 func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMeta) (hash.Hash, types.Ref, error) {
-	if db.Format() != types.Format_DOLT_1 {
+	if db.Format() != types.Format_DOLT_DEV {
 		commitSt, err := db.ReadValue(ctx, commitAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
@@ -95,13 +94,17 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 		return ref.TargetHash(), ref, nil
 	} else {
 		data := tag_flatbuffer(commitAddr, meta)
-
-		chunk := chunks.NewChunk(data)
-		err := db.chunkStore().Put(ctx, chunk)
+		r, err := db.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
-		return chunk.Hash(), types.Ref{}, nil
+
+		ref, err := types.ToRefOfValue(r, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		return ref.TargetHash(), ref, nil
 	}
 }
 

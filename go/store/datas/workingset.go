@@ -20,7 +20,6 @@ import (
 	"github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -100,7 +99,7 @@ type WorkingSetSpec struct {
 // ```
 // where M is a struct type and R is a ref type.
 func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (hash.Hash, types.Ref, error) {
-	if db.Format() == types.Format_DOLT_1 {
+	if db.Format() == types.Format_DOLT_DEV {
 		stagedAddr := stagedRef.TargetHash()
 		var mergeStateAddr *hash.Hash
 		if mergeStateRef != nil {
@@ -109,12 +108,17 @@ func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, work
 		}
 		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeStateAddr, meta)
 
-		chunk := chunks.NewChunk(data)
-		err := db.chunkStore().Put(ctx, chunk)
+		r, err := db.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
-		return chunk.Hash(), types.Ref{}, nil
+
+		ref, err := types.ToRefOfValue(r, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		return ref.TargetHash(), ref, nil
 	}
 
 	metaSt, err := meta.toNomsStruct(workingRef.Format())

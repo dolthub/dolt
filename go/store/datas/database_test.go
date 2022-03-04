@@ -45,7 +45,7 @@ func TestRemoteDatabase(t *testing.T) {
 
 func TestValidateRef(t *testing.T) {
 	st := &chunks.TestStorage{}
-	db := NewDatabase(st.NewView()).(*database)
+	db := NewDatabase(st.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 	b := types.Bool(true)
 	r, err := db.WriteValue(context.Background(), b)
@@ -53,7 +53,7 @@ func TestValidateRef(t *testing.T) {
 
 	_, err = db.validateRefAsCommit(context.Background(), r)
 	assert.Error(t, err)
-	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18)))
+	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_Default)))
 }
 
 type DatabaseSuite struct {
@@ -70,7 +70,7 @@ type LocalDatabaseSuite struct {
 func (suite *LocalDatabaseSuite) SetupTest() {
 	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = NewDatabase
-	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
+	suite.db = suite.makeDb(suite.storage.NewViewWithDefaultFormat()).(*database)
 }
 
 type RemoteDatabaseSuite struct {
@@ -82,7 +82,7 @@ func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
 		return NewDatabase(cs)
 	}
-	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
+	suite.db = suite.makeDb(suite.storage.NewViewWithDefaultFormat()).(*database)
 }
 
 func (suite *DatabaseSuite) TearDownTest() {
@@ -92,7 +92,7 @@ func (suite *DatabaseSuite) TearDownTest() {
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	ds, err := suite.db.GetDataset(context.Background(), "foo")
 	suite.NoError(err)
-	r, err := types.NewRef(types.Bool(true), types.Format_7_18)
+	r, err := types.NewRef(types.Bool(true), types.Format_Default)
 	suite.NoError(err)
 	suite.Panics(func() { CommitValue(context.Background(), suite.db, ds, r) })
 }
@@ -121,7 +121,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	suite.NoError(err)
 
 	s = mustHeadValue(ds1).(types.Set)
-	ref, err := types.NewRef(types.Float(1000), types.Format_7_18)
+	ref, err := types.NewRef(types.Float(1000), types.Format_Default)
 	suite.NoError(err)
 	se, err = s.Edit().Insert(ref)
 	suite.NoError(err)
@@ -145,7 +145,7 @@ func (suite *DatabaseSuite) TestRebase() {
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(b))
 
-	interloper := suite.makeDb(suite.storage.NewView())
+	interloper := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
@@ -172,7 +172,7 @@ func (suite *DatabaseSuite) TestRebase() {
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	id1, id2 := "testdataset", "othertestdataset"
 
-	db1 := suite.makeDb(suite.storage.NewView())
+	db1 := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer db1.Close()
 	ds1, err := db1.GetDataset(context.Background(), id1)
 	suite.NoError(err)
@@ -180,7 +180,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	ds1, err = CommitValue(context.Background(), db1, ds1, ds1HeadVal)
 	suite.NoError(err)
 
-	db2 := suite.makeDb(suite.storage.NewView())
+	db2 := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer db2.Close()
 	ds2, err := db2.GetDataset(context.Background(), id2)
 	suite.NoError(err)
@@ -258,7 +258,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 
 	// Get a fresh database, and verify that both datasets are present
-	newDB := suite.makeDb(suite.storage.NewView())
+	newDB := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer newDB.Close()
 	datasets2, err := newDB.Datasets(context.Background())
 	suite.NoError(err)
@@ -272,7 +272,7 @@ func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
 }
 
 func (suite *DatabaseSuite) TestDatasetsMapType() {
-	if suite.db.Format() == types.Format_DOLT_1 {
+	if suite.db.Format() == types.Format_DOLT_DEV {
 		suite.T().Skip()
 	}
 
@@ -392,7 +392,7 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.False(present, "Dataset %s should not be present", datasetID1)
 
 	// Get a fresh database, and verify that only ds2 is present
-	newDB := suite.makeDb(suite.storage.NewView())
+	newDB := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer newDB.Close()
 	datasets, err = newDB.Datasets(context.Background())
 	suite.NoError(err)
@@ -418,7 +418,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	interloperCS := suite.storage.NewView()
+	interloperCS := suite.storage.NewViewWithDefaultFormat()
 	interloper := suite.makeDb(interloperCS)
 	defer interloper.Close()
 
@@ -470,7 +470,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	interloper := suite.makeDb(suite.storage.NewView())
+	interloper := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
@@ -644,7 +644,7 @@ func (suite *DatabaseSuite) TestMetaOption() {
 	ds, err := suite.db.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 
-	m, err := types.NewStruct(types.Format_7_18, "M", types.StructData{
+	m, err := types.NewStruct(types.Format_Default, "M", types.StructData{
 		"author": types.String("arv"),
 	})
 
