@@ -598,7 +598,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 	}, func(ctx context.Context, rm refmap) (refmap, error) {
 		curr := rm.lookup(datasetID)
 		if curr != (hash.Hash{}) {
-			fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
+			return refmap{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
 		}
 		rm.set(datasetID, tagAddr)
 		return rm, nil
@@ -886,7 +886,6 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 		return types.Struct{}, err
 	}
 	if rHead == nil {
-		panic("wat")
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
 	if rHead.TypeName() != CommitName {
