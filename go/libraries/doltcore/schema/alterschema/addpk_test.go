@@ -16,6 +16,7 @@ package alterschema_test
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -45,6 +46,51 @@ var setupAdd = []testCommand{
 }
 
 func TestAddPk(t *testing.T) {
+	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
+		dEnv := dtestutils.CreateTestEnv()
+		ctx := context.Background()
+
+		for _, c := range setupAdd {
+			c.exec(t, ctx, dEnv)
+		}
+
+		table, err := getTable(ctx, dEnv, "test")
+		assert.NoError(t, err)
+
+		exitCode := commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test DROP PRIMARY KEY"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		exitCode = commands.SqlCmd{}.Exec(ctx, "sql", []string{"-q", "ALTER TABLE test ADD PRIMARY KEY(id)"}, dEnv)
+		require.Equal(t, 0, exitCode)
+
+		// Count number of NOT NULL constraints per column
+		sch, err := table.GetSchema(ctx)
+		for _, col := range sch.GetAllCols().GetColumns() {
+			count := 0
+			for _, cc := range col.Constraints {
+				if cc.GetConstraintType() == schema.NotNullConstraintType {
+					count++
+				}
+			}
+			require.Less(t, count, 2)
+		}
+	})
+
 	t.Run("Add primary key to table with index", func(t *testing.T) {
 		dEnv := dtestutils.CreateTestEnv()
 		ctx := context.Background()

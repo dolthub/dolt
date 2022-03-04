@@ -199,7 +199,7 @@ SQL
     dolt checkout main
     run dolt sql -q "SELECT $head_variable"
     [ $status -eq 0 ]
-    [[ "$output" =~ $head_hash ]] || false    
+    [[ "$output" =~ $head_hash ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
@@ -328,11 +328,11 @@ SQL
 
     run dolt status
     [ $status -eq 0 ]
-    [[ $output =~ "working tree clean" ]] || false    
-    
+    [[ $output =~ "working tree clean" ]] || false
+
     run dolt merge --abort
     [ $status -eq 1 ]
-    [[ $output =~ "no merge to abort" ]] || false    
+    [[ $output =~ "no merge to abort" ]] || false
 
     # make sure a clean SQL session doesn't have any merge going
     run dolt sql -q "SELECT DOLT_MERGE('--abort');"
@@ -350,7 +350,7 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "pk1,c1,c2" ]] || false
     [[ ! "$output" =~ "0,0,0" ]] || false
-    [[ "$output" =~ "0,1,1" ]] || false    
+    [[ "$output" =~ "0,1,1" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE detects conflicts, returns them in dolt_conflicts table" {
@@ -380,7 +380,7 @@ SQL
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "working tree clean" ]] || false    
+    [[ "$output" =~ "working tree clean" ]] || false
     [[ ! "$output" =~ "You have unmerged tables" ]] || false
     [[ ! "$output" =~ ([[:space:]]*both modified:[[:space:]]*one_pk) ]] || false
 
@@ -739,6 +739,27 @@ SHOW WARNINGS;
 SQL
    [ $status -eq 0 ]
    [[ "$output" =~ "current fast forward from a to b. a is ahead of b already" ]] || false
+}
+
+@test "sql-merge: adding and dropping primary keys any number of times not produce schema merge conflicts" {
+    dolt commit -am "commit all changes"
+    dolt sql -q "create table test_null (i int)"
+    dolt commit -am "initial"
+
+    dolt checkout -b b1
+    dolt sql -q "alter table test_null add primary key(i)"
+    dolt sql -q "alter table test_null drop primary key"
+    dolt sql -q "alter table test_null add primary key(i)"
+    dolt sql -q "alter table test_null drop primary key"
+    dolt sql -q "alter table test_null add primary key(i)"
+    dolt commit -am "b1 primary key changes"
+
+    dolt checkout main
+    dolt sql -q "alter table test_null add primary key(i)"
+    dolt commit -am "main primary key changes"
+
+    run dolt merge b1
+    [ $status -eq 0 ]
 }
 
 get_head_commit() {
