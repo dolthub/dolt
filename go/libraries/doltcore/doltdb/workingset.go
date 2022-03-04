@@ -103,7 +103,7 @@ type WorkingSet struct {
 // TODO: remove this, require working and staged
 func EmptyWorkingSet(wsRef ref.WorkingSetRef) *WorkingSet {
 	return &WorkingSet{
-		Name:   wsRef.GetPath(),
+		Name: wsRef.GetPath(),
 	}
 }
 
@@ -226,7 +226,6 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		mergeState:  mergeState,
 	}, nil
 }
-
 
 // HashOf returns the hash of the workingset struct, which is not the same as the hash of the root value stored in the
 // working set. This value is used for optimistic locking when updating a working set for a head ref.
