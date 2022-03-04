@@ -38,8 +38,6 @@ func main() {
 	httpHostParam := flag.String("http-host", "localhost", "host url that this command will assume.")
 	flag.Parse()
 
-	log.SetOutput(os.Stdout)
-
 	if dirParam != nil && len(*dirParam) > 0 {
 		err := os.Chdir(*dirParam)
 
