@@ -273,7 +273,7 @@ func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
 	if !ok {
 		return nil, hash.Hash{}, errors.New("no meta field in tag struct head")
 	}
-	meta, err := TagMetaFromNomsSt(metast.(types.Struct))
+	meta, err := tagMetaFromNomsSt(metast.(types.Struct))
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -295,7 +295,7 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 
 	var ret WorkingSetHead
 
-	meta, err := WorkingSetMetaFromWorkingSetSt(st)
+	meta, err := workingSetMetaFromWorkingSetSt(st)
 	if err != nil {
 		return nil, err
 	}

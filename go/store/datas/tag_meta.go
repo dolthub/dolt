@@ -66,7 +66,7 @@ func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	return &TagMeta{n, e, ms, d, userMS}
 }
 
-func TagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
+func tagMetaFromNomsSt(st types.Struct) (*TagMeta, error) {
 	e, err := getRequiredFromSt(st, tagMetaEmailKey)
 
 	if err != nil {

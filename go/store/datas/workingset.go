@@ -66,7 +66,7 @@ func (m *WorkingSetMeta) toNomsStruct(format *types.NomsBinFormat) (types.Struct
 	return types.NewStruct(format, WorkingSetMetaName, fields)
 }
 
-func WorkingSetMetaFromWorkingSetSt(workingSetSt types.Struct) (*WorkingSetMeta, error) {
+func workingSetMetaFromWorkingSetSt(workingSetSt types.Struct) (*WorkingSetMeta, error) {
 	metaV, ok, err := workingSetSt.MaybeGet(WorkingSetMetaNameField)
 	if err != nil || !ok {
 		return nil, err

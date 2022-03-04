@@ -27,7 +27,7 @@ func TestTagMetaToAndFromNomsStruct(t *testing.T) {
 	tm := NewTagMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
 	cmSt, err := tm.toNomsStruct(types.Format_Default)
 	assert.NoError(t, err)
-	result, err := TagMetaFromNomsSt(cmSt)
+	result, err := tagMetaFromNomsSt(cmSt)
 
 	if err != nil {
 		t.Fatal("Failed to convert from types.Struct to CommitMeta")
