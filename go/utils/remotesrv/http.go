@@ -227,6 +227,11 @@ func openFile(path string) (*os.File, int64, error) {
 	return f, info.Size(), nil
 }
 
+type closerReaderWrapper struct {
+	io.Reader
+	io.Closer
+}
+
 func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, error) {
 	f, fSize, err := openFile(path)
 	if err != nil {
@@ -242,5 +247,6 @@ func getFileReaderAt(path string, offset int64, length int64) (io.ReadCloser, er
 		return nil, fmt.Errorf("failed to seek file at path %s to offset %d: %w", path, offset, err)
 	}
 
-	return io.LimitReader(f, length).(io.ReadCloser), nil
+	r := closerReaderWrapper{io.LimitReader(f, length), f}
+	return r, nil
 }
