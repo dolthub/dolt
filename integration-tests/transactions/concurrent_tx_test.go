@@ -16,6 +16,7 @@ package transactions
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -35,8 +36,11 @@ var defaultConfig = ServerConfig{
 }
 
 func TestConcurrentTransactions(t *testing.T) {
+	sequential := &sync.Mutex{}
 	for _, test := range txTests {
 		t.Run(test.name, func(t *testing.T) {
+			sequential.Lock()
+			defer sequential.Unlock()
 			testConcurrentTx(t, test)
 		})
 	}
@@ -48,10 +52,10 @@ type ConcurrentTxTest struct {
 }
 
 type concurrentQuery struct {
-	conn     string
-	write    string
-	query    selector
-	expected []testRow
+	conn      string
+	query     string
+	assertion selector
+	expected  []testRow
 }
 
 type selector func(s *dbr.Session) *dbr.SelectStmt
@@ -71,8 +75,8 @@ var txTests = []ConcurrentTxTest{
 		queries: []concurrentQuery{
 			{
 				conn: one,
-				query: func(s *dbr.Session) *dbr.SelectStmt {
-					return s.Select("*").From("data")
+				assertion: func(s *dbr.Session) *dbr.SelectStmt {
+					return s.Select("*").From("tx.data")
 				},
 				expected: []testRow{
 					{1, 1},
@@ -82,10 +86,72 @@ var txTests = []ConcurrentTxTest{
 			},
 		},
 	},
+	{
+		name: "concurrent transactions",
+		queries: []concurrentQuery{
+			{
+				conn:  one,
+				query: "BEGIN;",
+			},
+			{
+				conn:  two,
+				query: "BEGIN;",
+			},
+			{
+				conn: two,
+				assertion: func(s *dbr.Session) *dbr.SelectStmt {
+					return s.Select("*").From("tx.data")
+				},
+				expected: []testRow{
+					{1, 1}, {2, 2}, {3, 3},
+				},
+			},
+			{
+				conn:  one,
+				query: "INSERT INTO tx.data VALUES (4,4)",
+			},
+			{
+				conn: two,
+				assertion: func(s *dbr.Session) *dbr.SelectStmt {
+					return s.Select("*").From("tx.data")
+				},
+				expected: []testRow{
+					{1, 1}, {2, 2}, {3, 3},
+				},
+			},
+			{
+				conn:  one,
+				query: "COMMIT",
+			},
+			{
+				conn: two,
+				assertion: func(s *dbr.Session) *dbr.SelectStmt {
+					return s.Select("*").From("tx.data")
+				},
+				expected: []testRow{
+					{1, 1}, {2, 2}, {3, 3},
+				},
+			},
+			{
+				conn:  two,
+				query: "COMMIT",
+			},
+			{
+				conn: two,
+				assertion: func(s *dbr.Session) *dbr.SelectStmt {
+					return s.Select("*").From("tx.data")
+				},
+				expected: []testRow{
+					{1, 1}, {2, 2}, {3, 3}, {4, 4},
+				},
+			},
+		},
+	},
 }
 
 func setupCommon(sess *dbr.Session) (err error) {
 	queries := []string{
+		"DROP DATABASE IF EXISTS tx;",
 		"CREATE DATABASE IF NOT EXISTS tx;",
 		"USE tx;",
 		"CREATE TABLE data (pk int primary key, c0 int);",
@@ -110,13 +176,17 @@ func testConcurrentTx(t *testing.T, test ConcurrentTxTest) {
 
 	for _, q := range test.queries {
 		conn := conns[q.conn]
-		if q.write != "" {
-			_, err = conn.Query(q.write)
+		if q.query != "" {
+			_, err = conn.Exec(q.query)
 			require.NoError(t, err)
 		}
 
+		if q.assertion == nil {
+			continue
+		}
+
 		var actual []testRow
-		_, err = q.query(conn).Load(&actual)
+		_, err = q.assertion(conn).Load(&actual)
 		require.NoError(t, err)
 		assert.Equal(t, q.expected, actual)
 	}
