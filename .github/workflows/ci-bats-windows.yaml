@@ -169,12 +169,16 @@ jobs:
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
-          version: ${{ github.head_ref }}
+          version: ${{ github.ref }}
+          template: 'BatsWindowsFailureTemplate'
           toAddresses: '["${{ github.event.inputs.email }}"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       - name: Send Email
         if: ${{ github.event_name == 'repository_dispatch' }}
         uses: ./.github/actions/ses-email-action
         with:
           region: us-west-2
           version: ${{ github.event.client_payload.ref }}
+          template: 'BatsWindowsFailureTemplate'
           toAddresses: '["${{ github.event.client_payload.actor_email }}"]'
+          workflowURL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
