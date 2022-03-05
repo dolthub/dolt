@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/gosuri/uilive"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
@@ -139,6 +140,66 @@ func PrintErrf(format string, a ...interface{}) {
 	}
 
 	fmt.Fprintf(CliErr, format, a...)
+}
+
+// EphemeralPrinter is tool than you can use to print temporary line(s) to the
+// console. Each time Display is called, the output is reset, and you can begin
+// writing anew. If you need to display multiple temporary lines, call Newline,
+// before writing each line.
+type EphemeralPrinter struct {
+	outW io.Writer
+	w    *uilive.Writer
+}
+
+// StartEphemeralPrinter creates a new EphemeralPrinter and starts it. You
+// should defer Stop after calling this.
+func StartEphemeralPrinter() *EphemeralPrinter {
+	w := uilive.New()
+	w.Out = CliOut
+	e := &EphemeralPrinter{w, w}
+	e.start()
+	return e
+}
+
+// Printf formats and prints a string to the printer. You should not add
+// newlines in this string. If you need to display multiple lines, use Newline.
+func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
+	_, _ = fmt.Fprintf(e.outW, format, a...)
+}
+
+// Display clears the previous output and displays the new text.
+func (e *EphemeralPrinter) Display() {
+	if outputIsClosed() {
+		return
+	}
+	_, _ = e.w.Write([]byte("\n"))
+	_ = e.w.Flush()
+	e.outW = e.w
+}
+
+// Newline allows EphemeralPrinter to Display multiple lines. You can print the
+// first line with Printf, call Newline, and then print a second line with
+// Printf again.
+func (e *EphemeralPrinter) Newline() {
+	if outputIsClosed() {
+		return
+	}
+
+	_, _ = e.w.Write([]byte("\n"))
+	e.outW = e.w.Newline()
+}
+
+func (e *EphemeralPrinter) start() {
+	e.w.Start()
+}
+
+// Stop stops the ephemeral printer. It must be called after using StartEphemeralPrinter
+func (e *EphemeralPrinter) Stop() {
+	e.w.Stop()
 }
 
 func DeleteAndPrint(prevMsgLen int, msg string) int {

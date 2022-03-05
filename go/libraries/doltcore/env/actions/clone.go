@@ -23,9 +23,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/dustin/go-humanize"
-	"github.com/gosuri/uilive"
-
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -36,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dustin/go-humanize"
 )
 
 var ErrRepositoryExists = errors.New("data repository already exists")
@@ -102,10 +101,11 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		tableFiles        = make(map[string]*nbs.TableFile)
 	)
 
-	writer := uilive.New()
-	writer.Start()
-	fmt.Fprintf(writer, "Retrieving remote information.\n")
-	writer.Stop()
+	p := cli.StartEphemeralPrinter()
+	defer p.Stop()
+
+	p.Printf("Retrieving remote information.")
+	p.Display()
 
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
@@ -137,18 +137,17 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			}
 		}
 
-		// Starting and stopping for each event seems to be less jumpy
-		writer.Start()
-		fmt.Fprintf(writer, "%s of %s chunks complete. %s chunks being downloaded currently.\n",
+		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.",
 			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			fmt.Fprintf(writer.Newline(), "Downloading file: %s (%s chunks) - %.2f%% downloaded, %s, \n",
+			p.Newline()
+			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s",
 				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
 		}
-		writer.Stop()
+		p.Display()
 	}
 }
 
