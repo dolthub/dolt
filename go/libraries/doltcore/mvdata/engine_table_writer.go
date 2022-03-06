@@ -93,12 +93,9 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return nil, err
 	}
 
-	var doltCreateTableSchema sql.PrimaryKeySchema
-	if options.Operation == CreateOp {
-		doltCreateTableSchema, err = sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
-		if err != nil {
-			return nil, err
-		}
+	doltCreateTableSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
+	if err != nil {
+		return nil, err
 	}
 
 	doltRowOperationSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, rowOperationSchema)
@@ -183,11 +180,11 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 		}
 
 		// If the length of the row does not match the schema then we have an update operation.
-		if len(row) != len(s.rowOperationSchema.Schema) {
+		if len(row) != len(s.tableSchema.Schema) {
 			oldRow := row[:len(row)/2]
 			newRow := row[len(row)/2:]
 
-			if ok, err := oldRow.Equals(newRow, s.rowOperationSchema.Schema); err == nil {
+			if ok, err := oldRow.Equals(newRow, s.tableSchema.Schema); err == nil {
 				if ok {
 					s.stats.SameVal++
 				} else {
@@ -208,11 +205,11 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 	if err != nil {
 		return err
 	}
+
 	defer func() {
-		if err != nil {
-			iter.Close(s.sqlCtx) // save the error that should be propagated.
-		} else {
-			err = iter.Close(s.sqlCtx)
+		rerr := iter.Close(s.sqlCtx)
+		if err == nil {
+			err = rerr
 		}
 	}()
 
