@@ -172,7 +172,7 @@ func DoltProceduresGetDetails(ctx *sql.Context, tbl *WritableDoltTable, name str
 		return sql.StoredProcedureDetails{}, false, err
 	}
 
-	rowIter, err := index.RowIterForIndexLookup(ctx, indexLookup, nil)
+	rowIter, err := index.RowIterForIndexLookup(ctx, indexLookup, tbl.sqlSch, nil)
 	if err != nil {
 		return sql.StoredProcedureDetails{}, false, err
 	}

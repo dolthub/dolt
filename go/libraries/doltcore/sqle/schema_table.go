@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -200,26 +202,41 @@ func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, err
 		return 0, err
 	}
 
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	idx := int64(1)
-	if rows.Len() > 0 {
-		keyTpl, _, err := rows.Last(ctx)
+	if rows.Empty() {
+		return 1, nil
+	}
+
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		p := durable.ProllyMapFromIndex(rows)
+		key, _, err := p.Last(ctx)
 		if err != nil {
 			return 0, err
 		}
-		if keyTpl != nil {
-			key, err := keyTpl.(types.Tuple).Get(1)
-			if err != nil {
-				return 0, err
-			}
-			idx = int64(key.(types.Int)) + 1
+		kd, _ := p.Descriptors()
+
+		i, _ := kd.GetInt64(0, key)
+		return i + 1, nil
+	} else {
+		m := durable.NomsMapFromIndex(rows)
+		keyTpl, _, err := m.Last(ctx)
+		if err != nil {
+			return 0, err
 		}
+		if keyTpl == nil {
+			return 1, nil
+		}
+
+		key, err := keyTpl.(types.Tuple).Get(1)
+		if err != nil {
+			return 0, err
+		}
+		return int64(key.(types.Int)) + 1, nil
 	}
-	return idx, nil
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
@@ -245,7 +262,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		return nil, false, err
 	}
 
-	iter, err := index.RowIterForIndexLookup(ctx, lookup, nil)
+	iter, err := index.RowIterForIndexLookup(ctx, lookup, tbl.sqlSch, nil)
 	if err != nil {
 		return nil, false, err
 	}
@@ -271,7 +288,57 @@ type schemaFragment struct {
 	fragment string
 }
 
-func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType string) ([]schemaFragment, error) {
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
+	indexes, err := tbl.GetIndexes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var fragNameIndex sql.Index
+	for _, index := range indexes {
+		if index.ID() == doltdb.SchemasTablesIndexName {
+			fragNameIndex = index
+			break
+		}
+	}
+	if fragNameIndex == nil {
+		return nil, noSchemaIndexDefined
+	}
+
+	exprs := fragNameIndex.Expressions()
+	lookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, exprs[0], fragType).Build(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	iter, err := index.RowIterForIndexLookup(ctx, lookup, tbl.sqlSch, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if cerr := iter.Close(ctx); cerr != nil {
+			err = cerr
+		}
+	}()
+
+	var frags []schemaFragment
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		frags = append(frags, schemaFragment{
+			name:     sqlRow[1].(string),
+			fragment: sqlRow[2].(string),
+		})
+	}
+	return frags, nil
+}
+
+func getSchemaFragmentsOfType2(ctx *sql.Context, tbl *doltdb.Table, fragmentType string) ([]schemaFragment, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err

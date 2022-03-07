@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 	"sort"
 	"strings"
@@ -1056,7 +1057,10 @@ func TestDoltIndexBetween(t *testing.T) {
 			indexLookup, err := sqlIndex.Build(ctx)
 			require.NoError(t, err)
 
-			indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, nil)
+			pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
+			require.NoError(t, err)
+
+			indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, pkSch, nil)
 			require.NoError(t, err)
 
 			var readRows []sql.Row
@@ -1275,7 +1279,7 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, idx
 	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
 
-	indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, nil)
+	indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, t nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row

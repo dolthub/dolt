@@ -36,26 +36,35 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	doltIdx := idx.(DoltIndex)
 
 	if types.IsFormat_DOLT_1(rp.rows.Format()) {
-		covers := indexCoversCols(doltIdx, columns)
-		if covers {
-			return newProllyCoveringIndexIter(ctx, doltIdx, rp.prollyRange, pkSch)
-		} else {
-			return newProllyIndexIter(ctx, doltIdx, rp.prollyRange, columns)
-		}
+		return RowIterForProllyRange(ctx, doltIdx, rp.prollyRange, pkSch, columns)
 	}
 
 	ranges := []*noms.ReadRange{rp.nomsRange}
-	return RowIterForRanges(ctx, doltIdx, ranges, rp.rows, columns)
+	return RowIterForNomsRanges(ctx, doltIdx, ranges, rp.rows, columns)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
-	return RowIterForRanges(ctx, idx, lookup.nomsRanges, lookup.IndexRowData(), columns)
+	if types.IsFormat_DOLT_1(idx.Format()) {
+		// todo(andy)
+		return RowIterForProllyRange(ctx, idx, lookup.prollyRanges[0], pkSch, columns)
+	} else {
+		return RowIterForNomsRanges(ctx, idx, lookup.nomsRanges, lookup.IndexRowData(), columns)
+	}
 }
 
-func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
+	covers := indexCoversCols(idx, columns)
+	if covers {
+		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch)
+	} else {
+		return newProllyIndexIter(ctx, idx, ranges)
+	}
+}
+
+func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
 	m := durable.NomsMapFromIndex(rowData)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
