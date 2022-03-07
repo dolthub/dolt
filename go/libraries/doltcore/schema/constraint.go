@@ -92,47 +92,9 @@ func IndexOfConstraint(constraints []ColConstraint, constraintType string) int {
 
 // ColConstraintsAreEqual validates two ColConstraint slices are identical.
 func ColConstraintsAreEqual(a, b []ColConstraint) bool {
-	// TODO: do something with maps to avoid all duplicate constraint issues, and order issues too
-
-	// Remove all duplicate NOT NULL constraints from a
-	var aa []ColConstraint
-	seenNotNull := false
-	for _, cc := range a {
-		// Only allow one NotNullConstraint through
-		if cc.GetConstraintType() == NotNullConstraintType {
-			if !seenNotNull {
-				aa = append(aa, cc)
-				seenNotNull = true
-			}
-		} else {
-			aa = append(aa, cc)
-		}
-	}
-
-	// Remove all duplicate NOT NULL constraints from b
-	var bb []ColConstraint
-	seenNotNull = false
-	for _, cc := range b {
-		// Only allow one NotNullConstraint through
-		if cc.GetConstraintType() == NotNullConstraintType {
-			if !seenNotNull {
-				bb = append(bb, cc)
-				seenNotNull = true
-			}
-		} else {
-			bb = append(bb, cc)
-		}
-	}
-
-	if len(aa) != len(bb) {
-		return false
-	} else if len(aa) == 0 {
-		return true
-	}
-
 	// kinda shitty.  Probably shouldn't require order to be identical
-	for i := 0; i < len(aa); i++ {
-		ca, cb := aa[i], bb[i]
+	for i := 0; i < len(a); i++ {
+		ca, cb := a[i], b[i]
 
 		if ca.GetConstraintType() != cb.GetConstraintType() {
 			return false
