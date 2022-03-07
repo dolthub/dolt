@@ -148,7 +148,7 @@ type Dataset struct {
 	head dsHead
 }
 
-func newHead(db *database, head types.Value, addr hash.Hash) (dsHead, error) {
+func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 	if head == nil {
 		return nil, nil
 	}
@@ -187,7 +187,7 @@ func newHead(db *database, head types.Value, addr hash.Hash) (dsHead, error) {
 }
 
 func newDataset(db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
-	h, err := newHead(db, head, addr)
+	h, err := newHead(head, addr)
 	if err != nil {
 		return Dataset{}, err
 	}

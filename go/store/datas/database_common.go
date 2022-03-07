@@ -344,15 +344,11 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 }
 
 func (db *database) readHead(ctx context.Context, addr hash.Hash) (dsHead, error) {
-	err := db.Flush(ctx)
-	if err != nil {
-		return nil, err
-	}
 	head, err := db.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	return newHead(db, head, addr)
+	return newHead(head, addr)
 }
 
 func (db *database) Close() error {
