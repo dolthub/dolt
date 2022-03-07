@@ -130,6 +130,12 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
+	// TODO: might be a more efficient way using pointers?
+	mergedChks, err := mergeChecks(ourSch.Checks(), theirSch.Checks())
+	for _, chk := range mergedChks.AllChecks() {
+		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
+	}
+
 	return sch, sc, nil
 }
 
@@ -573,4 +579,35 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 	}
 
 	return pruned, nil
+}
+
+func mergeChecks(ourChks, theirChks schema.CheckCollection) (schema.CheckCollection, error) {
+	checkNames := make(map[string]bool) // prevent duplicate checks
+	var result schema.CheckCollection
+	// TODO: do i even care about ancestor checks?
+	for _, chk := range ourChks.AllChecks() {
+		// Avoid duplicate checks based off name
+		if _, ok := checkNames[chk.Name()]; ok {
+			continue
+		}
+		checkNames[chk.Name()] = true
+
+		_, err := result.AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, chk := range theirChks.AllChecks() {
+		// Avoid duplicate checks based off name
+		if _, ok := checkNames[chk.Name()]; ok {
+			continue
+		}
+		checkNames[chk.Name()] = true
+
+		_, err := result.AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
+		if err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
 }
