@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,9 +31,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+const batchSize = 10000
+
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
-type SqlExportWriter struct {
+type BatchSqlExportWriter struct {
 	tableName       string
 	sch             schema.Schema
 	parentSchs      map[string]schema.Schema
@@ -41,11 +43,12 @@ type SqlExportWriter struct {
 	wr              io.WriteCloser
 	root            *doltdb.RootValue
 	writtenFirstRow bool
+	numInserts      int
 	editOpts        editor.Options
 }
 
-// OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
+// OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
+func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*BatchSqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
@@ -59,7 +62,7 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 
 	foreignKeys, _ := fkc.KeysForTable(tableName)
 
-	return &SqlExportWriter{
+	return &BatchSqlExportWriter{
 		tableName:   tableName,
 		sch:         sch,
 		parentSchs:  allSchemas,
@@ -71,43 +74,121 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 }
 
 // GetSchema returns the schema of this TableWriter.
-func (w *SqlExportWriter) GetSchema() schema.Schema {
+func (w *BatchSqlExportWriter) GetSchema() schema.Schema {
 	return w.sch
 }
 
 // WriteRow will write a row to a table
-func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
+func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
 
-	stmt, err := sqlfmt.RowAsInsertStmt(r, w.tableName, w.sch)
+	// Previous write was last insert
+	if w.numInserts > 0 && r == nil {
+		return iohelp.WriteLine(w.wr, ";")
+	}
 
+	// Reached max number of inserts on one line
+	if w.numInserts == batchSize {
+		// Reset count
+		w.numInserts = 0
+
+		// End line
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Append insert values as tuples
+	var stmt string
+	if w.numInserts == 0 {
+		// Get insert prefix string
+		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
+		if err != nil {
+			return nil
+		}
+		// Write prefix
+		err = iohelp.WriteWithoutNewLine(w.wr, prefix)
+		if err != nil {
+			return nil
+		}
+	} else {
+		stmt = ", "
+	}
+
+	// Get insert tuple string
+	tuple, err := sqlfmt.RowAsTupleString(ctx, r, w.sch)
 	if err != nil {
 		return err
 	}
 
-	return iohelp.WriteLine(w.wr, stmt)
-}
-
-func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	if r == nil {
+	// Write insert tuple
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt+tuple)
+	if err != nil {
 		return nil
 	}
 
+	// Increase count of inserts written on this line
+	w.numInserts++
+
+	return err
+}
+
+func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
 
-	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
+	// Reached max number of inserts on one line
+	if w.numInserts == batchSize {
+		// Reset count
+		w.numInserts = 0
+
+		// End line
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
+	}
+
+	// Append insert values as tuples
+	var stmt string
+	if w.numInserts == 0 {
+		// Get insert prefix string
+		prefix, err := sqlfmt.InsertStatementPrefix(w.tableName, w.sch)
+		if err != nil {
+			return nil
+		}
+		// Write prefix
+		err = iohelp.WriteWithoutNewLine(w.wr, prefix)
+		if err != nil {
+			return nil
+		}
+	} else {
+		stmt = ", "
+	}
+
+	// Get insert tuple string
+	tuple, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
 	if err != nil {
 		return err
 	}
 
-	return iohelp.WriteLine(w.wr, stmt)
+	// Write insert tuple
+	err = iohelp.WriteWithoutNewLine(w.wr, stmt+tuple)
+	if err != nil {
+		return nil
+	}
+
+	// Increase count of inserts written on this line
+	w.numInserts++
+
+	return err
 }
 
-func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
+func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
@@ -127,10 +208,18 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 }
 
 // Close should flush all writes, release resources being held
-func (w *SqlExportWriter) Close(ctx context.Context) error {
+func (w *BatchSqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
+	}
+
+	// if wrote at least 1 insert, write the semicolon
+	if w.numInserts > 0 {
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
 	}
 
 	if w.wr != nil {
