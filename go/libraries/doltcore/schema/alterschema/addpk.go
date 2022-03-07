@@ -52,7 +52,7 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 	for ord, col := range sch.GetAllCols().GetColumns() {
 		if i, ok := pkColOrdering[col.Name]; ok {
 			pkOrdinals[i] = ord
-			// Can't assign IsPartOfPK true, before checking if IsNullable, since it'll always be false
+			// Only add NOT NULL constraint iff it doesn't exist
 			if col.IsNullable() {
 				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
 			}

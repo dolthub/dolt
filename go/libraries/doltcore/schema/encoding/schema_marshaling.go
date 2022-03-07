@@ -58,10 +58,16 @@ type encodedColumn struct {
 }
 
 func encodeAllColConstraints(constraints []schema.ColConstraint) []encodedConstraint {
-	nomsConstraints := make([]encodedConstraint, len(constraints))
-
-	for i, c := range constraints {
-		nomsConstraints[i] = encodeColConstraint(c)
+	var nomsConstraints []encodedConstraint
+	seenNotNull := false
+	for _, c := range constraints {
+		if c.GetConstraintType() == schema.NotNullConstraintType {
+			if seenNotNull {
+				continue
+			}
+			seenNotNull = true
+		}
+		nomsConstraints = append(nomsConstraints, encodeColConstraint(c))
 	}
 
 	return nomsConstraints
@@ -72,11 +78,18 @@ func decodeAllColConstraint(encConstraints []encodedConstraint) []schema.ColCons
 		return nil
 	}
 
-	constraints := make([]schema.ColConstraint, len(encConstraints))
-
-	for i, nc := range encConstraints {
+	var constraints []schema.ColConstraint
+	seenNotNull := false
+	for _, nc := range encConstraints {
 		c := nc.decodeColConstraint()
-		constraints[i] = c
+		// Prevent duplicate NOT NULL constraints
+		if c.GetConstraintType() == schema.NotNullConstraintType {
+			if seenNotNull {
+				continue
+			}
+			seenNotNull = true
+		}
+		constraints = append(constraints, c)
 	}
 
 	return constraints
@@ -316,10 +329,12 @@ func (sd schemaData) addChecksIndexesAndPkOrderingToSchema(sch schema.Schema) er
 func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
 	// Anyone calling this is going to serialize this to disk, so it's our last line of defense against defective schemas.
 	// Business logic should catch errors before this point, but this is a failsafe.
+	err := schema.ValidateColumnConstraints(sch.GetAllCols())
+	if err != nil {
+		return nil, err
+	}
 
-	schema.RemoveDuplicateNotNullColumnConstraints(sch.GetAllCols())
-
-	err := schema.ValidateForInsert(sch.GetAllCols())
+	err = schema.ValidateForInsert(sch.GetAllCols())
 	if err != nil {
 		return nil, err
 	}
