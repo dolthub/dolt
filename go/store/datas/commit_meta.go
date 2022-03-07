@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package datas
 
 import (
 	"errors"
@@ -97,7 +97,7 @@ func getRequiredFromSt(st types.Struct, k string) (types.Value, error) {
 	return nil, errors.New("Missing required field \"" + k + "\".")
 }
 
-func commitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
+func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	e, err := getRequiredFromSt(st, commitMetaEmailKey)
 
 	if err != nil {
@@ -139,7 +139,7 @@ func commitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}, nil
 }
 
-func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
+func (cm *CommitMeta) ToNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),

@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -171,6 +171,14 @@ func (r *refWalker) skipOrderedKey(nbf *NomsBinFormat) error {
 	return nil
 }
 
+func (r *refWalker) walkSerialMessage(nbf *NomsBinFormat, cb RefCallback) error {
+	sm, err := SerialMessage{}.readFrom(nbf, &(r.typedBinaryNomsReader.binaryNomsReader))
+	if err != nil {
+		return err
+	}
+	return sm.WalkRefs(nbf, cb)
+}
+
 func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 	k := r.PeekKind()
 	switch k {
@@ -190,6 +198,9 @@ func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {
 		return r.walkStruct(nbf, cb)
 	case TupleKind:
 		return r.walkTuple(nbf, cb)
+	case SerialMessageKind:
+		r.skipKind()
+		return r.walkSerialMessage(nbf, cb)
 	case TypeKind:
 		r.skipKind()
 		return r.skipType()

@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var commitDocs = cli.CommandDocumentationContent{
@@ -119,7 +120,7 @@ func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string,
 		}
 	}
 
-	t := doltdb.CommitNowFunc()
+	t := datas.CommitNowFunc()
 	if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 		var err error
 		t, err = cli.ParseDate(commitTimeStr)
@@ -178,7 +179,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return 0
 	}
 
-	if err == doltdb.ErrNameNotConfigured {
+	if err == datas.ErrNameNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserNameKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add name to config: dolt config [--global|--local] --add %[1]s \"FIRST LAST\"", env.UserNameKey)
@@ -186,7 +187,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == doltdb.ErrEmailNotConfigured {
+	if err == datas.ErrEmailNotConfigured {
 		bdr := errhand.BuildDError("Could not determine %s.", env.UserEmailKey)
 		bdr.AddDetails("Log into DoltHub: dolt login")
 		bdr.AddDetails("OR add email to config: dolt config [--global|--local] --add %[1]s \"EMAIL_ADDRESS\"", env.UserEmailKey)
@@ -194,7 +195,7 @@ func handleCommitErr(ctx context.Context, dEnv *env.DoltEnv, err error, usage cl
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}
 
-	if err == doltdb.ErrEmptyCommitMessage {
+	if err == datas.ErrEmptyCommitMessage {
 		bdr := errhand.BuildDError("Aborting commit due to empty commit message.")
 		return HandleVErrAndExitCode(bdr.Build(), usage)
 	}

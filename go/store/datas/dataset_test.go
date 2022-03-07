@@ -43,7 +43,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "othertestdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView()).(*database)
+	store := NewDatabase(stg.NewViewWithDefaultFormat()).(*database)
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)
@@ -78,7 +78,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
+	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_Default)), mustRef(types.NewRef(mustHead(ds2), types.Format_Default)))
 	assert.NoError(err)
 	d := types.String("d")
 	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{ParentsList: mergeParents})
@@ -94,7 +94,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -129,7 +129,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	a := types.String("a")
@@ -171,7 +171,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 func TestIdValidation(t *testing.T) {
 	assert := assert.New(t)
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 
 	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
 	for _, id := range invalidDatasetNames {
@@ -186,7 +186,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "otherdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)

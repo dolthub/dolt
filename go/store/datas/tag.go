@@ -17,6 +17,10 @@ package datas
 import (
 	"context"
 
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -40,22 +44,90 @@ var valueTagType = nomdl.MustParseType(`Struct Tag {
 type TagOptions struct {
 	// Meta is a Struct that describes arbitrary metadata about this Tag,
 	// e.g. a timestamp or descriptive text.
-	Meta types.Struct
+	Meta *TagMeta
 }
 
-// NewTag creates a new tag object.
-//
-// A tag has the following type:
-//
-// ```
-// struct Tag {
-//   meta: M,
-//   commitRef: T,
-// }
-// ```
-// where M is a struct type and R is a ref type.
-func NewTag(_ context.Context, commitRef types.Ref, meta types.Struct) (types.Struct, error) {
-	return tagTemplate.NewStruct(meta.Format(), []types.Value{meta, commitRef})
+// newTag serializes a tag pointing to |commitAddr| with the given |meta|,
+// persists it, and returns its addr. Also returns a types.Ref to the tag, if
+// the format for |db| is noms.
+func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMeta) (hash.Hash, types.Ref, error) {
+	if db.Format() != types.Format_DOLT_DEV {
+		commitSt, err := db.ReadValue(ctx, commitAddr)
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+		commitRef, err := types.NewRef(commitSt, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		var metaV types.Struct
+		if meta != nil {
+			var err error
+			metaV, err = meta.toNomsStruct(commitRef.Format())
+			if err != nil {
+				return hash.Hash{}, types.Ref{}, err
+			}
+		} else {
+			metaV = types.EmptyStruct(commitRef.Format())
+		}
+		tagSt, err := tagTemplate.NewStruct(metaV.Format(), []types.Value{metaV, commitRef})
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		err = db.validateTag(ctx, tagSt)
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		tagRef, err := db.WriteValue(ctx, tagSt)
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		ref, err := types.ToRefOfValue(tagRef, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		return ref.TargetHash(), ref, nil
+	} else {
+		data := tag_flatbuffer(commitAddr, meta)
+		r, err := db.WriteValue(ctx, types.SerialMessage(data))
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		ref, err := types.ToRefOfValue(r, db.Format())
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		return ref.TargetHash(), ref, nil
+	}
+}
+
+func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) []byte {
+	builder := flatbuffers.NewBuilder(1024)
+	addroff := builder.CreateByteVector(commitAddr[:])
+	var nameOff, emailOff, descOff flatbuffers.UOffsetT
+	if meta != nil {
+		nameOff = builder.CreateString(meta.Name)
+		emailOff = builder.CreateString(meta.Email)
+		descOff = builder.CreateString(meta.Description)
+	}
+	serial.TagStart(builder)
+	serial.TagAddCommitAddr(builder, addroff)
+	if meta != nil {
+		serial.TagAddName(builder, nameOff)
+		serial.TagAddEmail(builder, emailOff)
+		serial.TagAddDesc(builder, descOff)
+		serial.TagAddTimestampMillis(builder, meta.Timestamp)
+		serial.TagAddUserTimestampMillis(builder, meta.UserTimestamp)
+	}
+	builder.FinishWithFileIdentifier(serial.TagEnd(builder), []byte(serial.TagFileID))
+	return builder.FinishedBytes()
 }
 
 func IsTag(v types.Value) (bool, error) {

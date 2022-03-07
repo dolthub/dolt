@@ -138,7 +138,7 @@ func CreateIndex(
 
 func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index, opts editor.Options) (durable.Index, error) {
 	switch tbl.Format() {
-	case types.Format_LD_1:
+	case types.Format_LD_1, types.Format_DOLT_DEV:
 		m, err := editor.RebuildIndex(ctx, tbl, idx.Name(), opts)
 		if err != nil {
 			return nil, err

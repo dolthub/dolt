@@ -102,7 +102,7 @@ func (c *Commit) HashOf() (hash.Hash, error) {
 }
 
 // GetCommitMeta gets the metadata associated with the commit
-func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
+func (c *Commit) GetCommitMeta() (*datas.CommitMeta, error) {
 	metaVal, found, err := c.commitSt.MaybeGet(metaField)
 
 	if err != nil {
@@ -115,7 +115,7 @@ func (c *Commit) GetCommitMeta() (*CommitMeta, error) {
 
 	if metaVal != nil {
 		if metaSt, ok := metaVal.(types.Struct); ok {
-			cm, err := commitMetaFromNomsSt(metaSt)
+			cm, err := datas.CommitMetaFromNomsSt(metaSt)
 
 			if err == nil {
 				return cm, nil
@@ -330,7 +330,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	roots Roots,
 	headRef ref.DoltRef,
 	parentCommits []*Commit,
-	cm *CommitMeta,
+	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
 	val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
@@ -371,7 +371,7 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	st, err := cm.toNomsStruct(ddb.vrw.Format())
+	st, err := cm.ToNomsStruct(ddb.vrw.Format())
 	if err != nil {
 		return nil, err
 	}

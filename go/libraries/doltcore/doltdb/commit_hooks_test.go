@@ -118,7 +118,7 @@ func TestPushOnWriteHook(t *testing.T) {
 	valHash, err := ddb.WriteRootValue(context.Background(), root)
 	assert.NoError(t, err)
 
-	meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
+	meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 	if err != nil {
 		t.Error("Failed to commit")
 	}
@@ -255,7 +255,7 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			valHash, err := ddb.WriteRootValue(context.Background(), root)
 			assert.NoError(t, err)
 
-			meta, err = NewCommitMeta(committerName, committerEmail, "Sample data")
+			meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 			if err != nil {
 				t.Error("Failed to create CommitMeta")
 			}

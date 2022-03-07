@@ -77,6 +77,17 @@ func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueR
 				continue
 			}
 
+			if sm, ok := v.(SerialMessage); ok {
+				err := sm.WalkRefs(nbf, func(r Ref) error {
+					refs[r.TargetHash()] = false
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+				continue
+			}
+
 			err := v.WalkValues(ctx, func(sv Value) error {
 				values = append(values, valueRec{sv, true})
 
