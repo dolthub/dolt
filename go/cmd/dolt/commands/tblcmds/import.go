@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/text/message"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -422,7 +423,8 @@ var displayStrLen int
 func importStatsCB(stats types.AppliedEditStats) {
 	noEffect := stats.NonExistentDeletes + stats.SameVal
 	total := noEffect + stats.Modifications + stats.Additions
-	displayStr := fmt.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
+	p := message.NewPrinter(message.MatchLanguage("en")) // adds commas
+	displayStr := p.Sprintf("Rows Processed: %d, Additions: %d, Modifications: %d, Had No Effect: %d", total, stats.Additions, stats.Modifications, noEffect)
 	displayStrLen = cli.DeleteAndPrint(displayStrLen, displayStr)
 }
 

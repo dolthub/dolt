@@ -31,7 +31,7 @@ import (
 )
 
 type DoltIndex interface {
-	sql.Index
+	sql.FilteredIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	TableData() durable.Index
@@ -287,6 +287,10 @@ RangeLoop:
 		nomsRanges: readRanges,
 		sqlRanges:  ranges,
 	}, nil
+}
+
+func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
+	return filters
 }
 
 // Database implement sql.Index

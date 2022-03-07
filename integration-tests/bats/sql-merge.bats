@@ -762,6 +762,26 @@ SQL
     [ $status -eq 0 ]
 }
 
+@test "sql-merge: identical schema changes with data changes merges correctly" {
+    dolt sql -q "create table t (i int primary key)"
+    dolt commit -am "initial commit"
+    dolt branch b1
+    dolt branch b2
+    dolt checkout b1
+    dolt sql -q "alter table t add column j int"
+    dolt sql -q "insert into t values (1, 1)"
+    dolt commit -am "changes to b1"
+    dolt checkout b2
+    dolt sql -q "alter table t add column j int"
+    dolt sql -q "insert into t values (2, 2)"
+    dolt commit -am "changes to b2"
+    dolt checkout main
+    run dolt merge b1
+    [ $status -eq 0 ]
+    run dolt merge b2
+    [ $status -eq 0 ]
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
