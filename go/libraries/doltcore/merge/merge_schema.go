@@ -583,27 +583,14 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 
 func mergeChecks(ourChks, theirChks schema.CheckCollection) (schema.CheckCollection, error) {
 	checkNames := make(map[string]bool) // prevent duplicate checks
-	var result schema.CheckCollection
-	// TODO: do i even care about ancestor checks?
-	for _, chk := range ourChks.AllChecks() {
-		// Avoid duplicate checks based off name
-		if _, ok := checkNames[chk.Name()]; ok {
-			continue
-		}
-		checkNames[chk.Name()] = true
-
-		_, err := result.AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
-		if err != nil {
-			return nil, err
-		}
-	}
+	// TODO: do ancestor checks matter?
+	result := ourChks
 	for _, chk := range theirChks.AllChecks() {
 		// Avoid duplicate checks based off name
 		if _, ok := checkNames[chk.Name()]; ok {
 			continue
 		}
 		checkNames[chk.Name()] = true
-
 		_, err := result.AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 		if err != nil {
 			return nil, err
