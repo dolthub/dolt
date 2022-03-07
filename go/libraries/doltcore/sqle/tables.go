@@ -484,6 +484,11 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
+	sch, err := table.GetSchema(ctx)
+	if err != nil {
+		return 0, err
+	}
+
 	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return 0, err
@@ -495,13 +500,20 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 		return 0, err
 	}
 
-	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, nil, nil)
+	idxSet, err := table.GetIndexSet(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	newTable, err = editor.RebuildAllIndexes(ctx, newTable, t.opts)
+	for _, idx := range sch.Indexes().AllIndexes() {
+		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	// truncate table resets auto-increment value
+	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, idxSet, nil)
 	if err != nil {
 		return 0, err
 	}
