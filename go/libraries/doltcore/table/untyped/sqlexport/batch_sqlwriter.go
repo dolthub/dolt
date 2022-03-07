@@ -141,11 +141,6 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 		return err
 	}
 
-	// Previous write was last insert
-	if w.numInserts > 0 && r == nil {
-		return iohelp.WriteLine(w.wr, ";")
-	}
-
 	// Reached max number of inserts on one line
 	if w.numInserts == batchSize {
 		// Reset count
@@ -217,6 +212,14 @@ func (w *BatchSqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
+	}
+
+	// if wrote at least 1 insert, write the semicolon
+	if w.numInserts > 0 {
+		err := iohelp.WriteLine(w.wr, ";")
+		if err != nil {
+			return err
+		}
 	}
 
 	if w.wr != nil {

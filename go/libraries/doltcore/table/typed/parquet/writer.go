@@ -131,9 +131,6 @@ func (pwr *ParquetWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	if r == nil {
-		return nil
-	}
 	colValStrs := make([]*string, pwr.sch.GetAllCols().Size())
 
 	for i, val := range r {

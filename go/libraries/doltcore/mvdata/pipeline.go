@@ -57,7 +57,6 @@ func (e *DataMoverPipeline) Execute() error {
 		for {
 			row, err := e.rd.ReadSqlRow(e.ctx)
 			if err == io.EOF {
-				parsedRowChan <- nil
 				return nil
 			}
 

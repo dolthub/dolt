@@ -124,9 +124,6 @@ func (jsonw *JSONWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
-	if row == nil {
-		return nil
-	}
 	allCols := jsonw.sch.GetAllCols()
 	colValMap := make(map[string]interface{}, allCols.Size())
 	if err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {

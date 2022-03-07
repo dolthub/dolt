@@ -105,9 +105,6 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
-	if r == nil {
-		return nil
-	}
 	colValStrs := make([]*string, csvw.sch.GetAllCols().Size())
 	for i, val := range r {
 		if val == nil {
