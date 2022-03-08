@@ -18,13 +18,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TODO: we need tests for manual DOLT_COMMIT as well, but that's difficult with the way that functions are resolved
