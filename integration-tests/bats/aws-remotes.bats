@@ -73,3 +73,18 @@ skip_if_no_aws_tests() {
     dolt fetch origin
     dolt push origin :another-branch
 }
+
+@test "aws-remotes: can push to new remote which is a subdirectory" {
+    skip_if_no_aws_tests
+    random_repo=`openssl rand -hex 32`
+    dolt remote add origin 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/subdirectory_syntax_works/'"$random_repo"
+    dolt sql -q 'create table a_test_table (id int primary key)'
+    dolt sql -q 'insert into a_test_table values (1), (2), (47)'
+    dolt add .
+    dolt commit -m 'creating a test table'
+    dolt push origin main:main
+    dolt fetch origin
+    dolt push origin main:another-branch
+    dolt fetch origin
+    dolt push origin :another-branch
+}
