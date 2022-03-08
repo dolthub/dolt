@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -193,5 +194,21 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 	if err != nil {
 		return nil, err
 	}
-	return newRowIterator(ctx, t, columns, doltTablePartition{rowData: data, end: NoUpperBound})
+
+	p := doltTablePartition{
+		end:     NoUpperBound,
+		rowData: data,
+	}
+
+	if types.IsFormat_DOLT_1(data.Format()) {
+		m := durable.ProllyMapFromIndex(data)
+		kd, _ := m.Descriptors()
+		p.rowRange = prolly.Range{
+			Start:   prolly.RangeCut{Unbound: true},
+			Stop:    prolly.RangeCut{Unbound: true},
+			KeyDesc: kd,
+		}
+	}
+
+	return newRowIterator(ctx, t, columns, p)
 }
