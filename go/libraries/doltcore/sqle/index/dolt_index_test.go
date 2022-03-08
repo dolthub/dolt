@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"io"
 	"sort"
 	"strings"
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
@@ -1254,7 +1254,7 @@ func requireUnorderedRowsEqual(t *testing.T, rows1, rows2 []sql.Row) {
 	require.Equal(t, rows1, rows2)
 }
 
-func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, idx sql.Index, cmp indexComp) {
+func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, idx index.DoltIndex, cmp indexComp) {
 	ctx := NewTestSQLCtx(context.Background())
 	exprs := idx.Expressions()
 	builder := sql.NewIndexBuilder(sql.NewEmptyContext(), idx)
@@ -1279,7 +1279,10 @@ func testDoltIndex(t *testing.T, keys []interface{}, expectedRows []sql.Row, idx
 	indexLookup, err := builder.Build(ctx)
 	require.NoError(t, err)
 
-	indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, t nil)
+	pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
+	require.NoError(t, err)
+
+	indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, pkSch, nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row
