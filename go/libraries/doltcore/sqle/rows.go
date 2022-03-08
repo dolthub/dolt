@@ -184,10 +184,14 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 // returned rows always have the schema of the table, regardless of the value
 // of |columns|.  Providing a column name which does not appear in the schema
 // is not an error, but no corresponding column will appear in the results.
-func TableToRowIter(ctx context.Context, table *doltdb.Table, columns []string) (sql.RowIter, error) {
-	data, err := table.GetRowData(ctx)
+func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string) (sql.RowIter, error) {
+	t, err := table.doltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newRowIterator(ctx, table, columns, doltTablePartition{rowData: data, end: NoUpperBound})
+	data, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return newRowIterator(ctx, t, columns, doltTablePartition{rowData: data, end: NoUpperBound})
 }

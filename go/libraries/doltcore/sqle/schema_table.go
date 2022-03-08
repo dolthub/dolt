@@ -33,6 +33,11 @@ import (
 var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
 var noSchemaIndexDefined = fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
 
+const (
+	viewFragment    = "view"
+	triggerFragment = "trigger"
+)
+
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
 	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
@@ -288,36 +293,10 @@ type schemaFragment struct {
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
-	indexes, err := tbl.GetIndexes(ctx)
+	iter, err := TableToRowIter(ctx, tbl, nil)
 	if err != nil {
 		return nil, err
 	}
-	var fragNameIndex sql.Index
-	for _, index := range indexes {
-		if index.ID() == doltdb.SchemasTablesIndexName {
-			fragNameIndex = index
-			break
-		}
-	}
-	if fragNameIndex == nil {
-		return nil, noSchemaIndexDefined
-	}
-
-	exprs := fragNameIndex.Expressions()
-	lookup, err := sql.NewIndexBuilder(ctx, fragNameIndex).Equals(ctx, exprs[0], fragType).Build(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	iter, err := index.RowIterForIndexLookup(ctx, lookup, tbl.sqlSch, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if cerr := iter.Close(ctx); cerr != nil {
-			err = cerr
-		}
-	}()
 
 	var frags []schemaFragment
 	for {
@@ -329,6 +308,9 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			return nil, err
 		}
 
+		if sqlRow[0] != fragType {
+			continue
+		}
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),

@@ -923,12 +923,15 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 		return view, true, nil
 	}
 
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return "", false, err
 	}
+	if !ok {
+		return "", false, nil
+	}
 
-	fragments, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	fragments, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
 	if err != nil {
 		return "", false, err
 	}
@@ -944,12 +947,15 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 
 // GetView implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, nil
+	}
 
-	frags, err := getSchemaFragmentsOfType(ctx, tbl, "view")
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), viewFragment)
 	if err != nil {
 		return nil, err
 	}
@@ -984,11 +990,15 @@ func (db Database) DropView(ctx *sql.Context, name string) error {
 
 // GetTriggers implements sql.TriggerDatabase.
 func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error) {
-	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
+	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
 		return nil, err
 	}
-	frags, err := getSchemaFragmentsOfType(ctx, tbl, "trigger")
+	if !ok {
+		return nil, nil
+	}
+
+	frags, err := getSchemaFragmentsOfType(ctx, tbl.(*WritableDoltTable), triggerFragment)
 	if err != nil {
 		return nil, err
 	}
