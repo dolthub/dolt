@@ -864,6 +864,10 @@ var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil
+	}
+
 	root, err := t.getRoot(ctx)
 
 	if err != nil {
@@ -928,6 +932,10 @@ func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
 
 // DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil
+	}
+
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
@@ -1050,6 +1058,10 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 
 // ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil
+	}
+
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
@@ -1859,6 +1871,10 @@ func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string)
 }
 
 func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.IndexColumn) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil
+	}
+
 	table, err := t.doltTable(ctx)
 	if err != nil {
 		return err
@@ -1889,6 +1905,10 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 }
 
 func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil
+	}
+
 	// Ensure that no auto increment requirements exist on this table
 	if t.autoIncCol.AutoIncrement {
 		return sql.ErrWrongAutoKey.New()

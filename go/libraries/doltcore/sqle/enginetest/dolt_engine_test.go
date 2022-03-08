@@ -376,6 +376,9 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)

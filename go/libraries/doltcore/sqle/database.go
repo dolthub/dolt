@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -38,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var ErrInvalidTableName = errors.NewKind("Invalid table name %s. Table names must match the regular expression " + doltdb.TableNameRegexStr)
@@ -1027,70 +1025,7 @@ func (db Database) DropTrigger(ctx *sql.Context, name string) error {
 
 // GetStoredProcedures implements sql.StoredProcedureDatabase.
 func (db Database) GetStoredProcedures(ctx *sql.Context) ([]sql.StoredProcedureDetails, error) {
-	missingValue := errors.NewKind("missing `%s` value for procedure row: (%s)")
-
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	table, ok, err := root.GetTable(ctx, doltdb.ProceduresTableName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-
-	rowData, err := table.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var spds []sql.StoredProcedureDetails
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		taggedVals, err := dRow.TaggedValues()
-		if err != nil {
-			return true, err
-		}
-
-		name, ok := dRow.GetColVal(schema.DoltProceduresNameTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableNameCol, taggedVals)
-		}
-		createStmt, ok := dRow.GetColVal(schema.DoltProceduresCreateStmtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableCreateStmtCol, taggedVals)
-		}
-		createdAt, ok := dRow.GetColVal(schema.DoltProceduresCreatedAtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableCreatedAtCol, taggedVals)
-		}
-		modifiedAt, ok := dRow.GetColVal(schema.DoltProceduresModifiedAtTag)
-		if !ok {
-			return true, missingValue.New(doltdb.ProceduresTableModifiedAtCol, taggedVals)
-		}
-		spds = append(spds, sql.StoredProcedureDetails{
-			Name:            string(name.(types.String)),
-			CreateStatement: string(createStmt.(types.String)),
-			CreatedAt:       time.Time(createdAt.(types.Timestamp)),
-			ModifiedAt:      time.Time(modifiedAt.(types.Timestamp)),
-		})
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return spds, nil
+	return DoltProceduresGetAll(ctx, db)
 }
 
 // SaveStoredProcedure implements sql.StoredProcedureDatabase.
