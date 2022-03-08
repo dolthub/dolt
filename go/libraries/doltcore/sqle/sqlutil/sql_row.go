@@ -176,8 +176,6 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		numCols = len(r)
 	}
 
-	// values for the pk tuple are in schema order
-	pkIdx := 0
 	for i := 0; i < numCols; i++ {
 		schCol := allCols.GetAtIndex(i)
 		val := r[i]
@@ -193,17 +191,22 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 		}
 
 		tagToVal[tag] = nomsVal
-
-		if schCol.IsPartOfPK {
-			pkVals[pkIdx] = types.Uint(tag)
-			pkVals[pkIdx+1] = nomsVal
-			pkIdx += 2
-		}
 	}
 
-	// no nulls in keys
-	if pkIdx != len(pkVals) {
-		return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+	pkOrds := doltSchema.GetPkOrdinals()
+
+	for i, pkCol := range pkCols.GetColumns() {
+		ord := pkOrds[i]
+		val := r[ord]
+		if val == nil {
+			return types.Tuple{}, nil, errors.New("not all pk columns have a value")
+		}
+		pkVals[i*2] = types.Uint(pkCol.Tag)
+		nomsVal, err := pkCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
+		if err != nil {
+			return types.Tuple{}, nil, err
+		}
+		pkVals[i*2+1] = nomsVal
 	}
 
 	nbf := vrw.Format()
