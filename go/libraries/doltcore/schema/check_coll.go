@@ -106,9 +106,9 @@ func NewCheckCollection() CheckCollection {
 }
 
 func NewCheck(name, expression string, enforced bool) check {
-	return check {
-		name: name,
+	return check{
+		name:       name,
 		expression: expression,
-		enforced: enforced,
+		enforced:   enforced,
 	}
 }
