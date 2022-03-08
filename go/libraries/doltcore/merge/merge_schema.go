@@ -613,7 +613,7 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 	}
 
 	// Make map of ancestor checks for fast lookup
-	ancChkMap := make (map[string]schema.Check)
+	ancChkMap := make(map[string]schema.Check)
 	for _, chk := range ancChks.AllChecks() {
 		ancChkMap[chk.Name()] = chk
 	}
@@ -715,8 +715,8 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		theirChk, ok := theirNewChksMap[ourChk.Name()]
 		if ok && ourChk != theirChk {
 			conflicts = append(conflicts, ChkConflict{
-				Kind: NameCollision,
-				Ours: ourChk,
+				Kind:   NameCollision,
+				Ours:   ourChk,
 				Theirs: theirChk,
 			})
 		}
@@ -752,7 +752,6 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	}
 
 	// TODO: check that all checks reference columns that actually exist in new merged schema
-
 
 	return result, conflicts, nil
 }
