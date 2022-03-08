@@ -63,7 +63,7 @@ func encodeAllColConstraints(constraints []schema.ColConstraint) []encodedConstr
 	for _, c := range constraints {
 		if c.GetConstraintType() == schema.NotNullConstraintType {
 			if seenNotNull {
-				//continue
+				continue
 			}
 			seenNotNull = true
 		}
