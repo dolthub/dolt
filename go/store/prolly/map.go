@@ -151,6 +151,19 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return
 }
 
+func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
+	cur, err := newCursorAtEnd(ctx, m.ns, m.root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if cur.valid() {
+		key = val.Tuple(cur.currentKey())
+		value = val.Tuple(cur.currentValue())
+	}
+	return
+}
+
 // IterAll returns a MutableMapRangeIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
