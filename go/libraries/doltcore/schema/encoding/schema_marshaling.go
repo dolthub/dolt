@@ -58,16 +58,9 @@ type encodedColumn struct {
 }
 
 func encodeAllColConstraints(constraints []schema.ColConstraint) []encodedConstraint {
-	var nomsConstraints []encodedConstraint
-	seenNotNull := false
-	for _, c := range constraints {
-		if c.GetConstraintType() == schema.NotNullConstraintType {
-			if seenNotNull {
-				continue
-			}
-			seenNotNull = true
-		}
-		nomsConstraints = append(nomsConstraints, encodeColConstraint(c))
+	nomsConstraints := make([]encodedConstraint, len(constraints))
+	for i, c := range constraints {
+		nomsConstraints[i] = encodeColConstraint(c)
 	}
 
 	return nomsConstraints
