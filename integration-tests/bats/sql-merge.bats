@@ -772,14 +772,14 @@ SQL
     dolt sql -q "alter table t add check (i > 0)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` > 0)" ]]
+    [[ "$output" =~ "(\`i\` > 0)" ]] || false
     dolt commit -am "changes to b1"
 
     dolt checkout b2
     dolt sql -q "alter table t add check (i < 10)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` < 10)" ]]
+    [[ "$output" =~ "(\`i\` < 10)" ]] || false
     dolt commit -am "changes to b2"
 
     dolt checkout main
@@ -790,8 +790,8 @@ SQL
 
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` > 0)" ]]
-    [[ "$output" =~ "(\`i\` < 10)" ]]
+    [[ "$output" =~ "(\`i\` > 0)" ]] || false
+    [[ "$output" =~ "(\`i\` < 10)" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
@@ -805,14 +805,14 @@ SQL
     dolt sql -q "alter table t add check (i > 0)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` > 0)" ]]
+    [[ "$output" =~ "(\`i\` > 0)" ]] || false
     dolt commit -am "changes to b1"
 
     dolt checkout b2
     dolt sql -q "alter table t modify i int not null"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "\`i\` int NOT NULL" ]]
+    [[ "$output" =~ "\`i\` int NOT NULL" ]] || false
     dolt commit -am "changes to b2"
 
     dolt checkout main
@@ -823,8 +823,8 @@ SQL
 
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "\`i\` int NOT NULL" ]]
-    [[ "$output" =~ "(\`i\` > 0)" ]]
+    [[ "$output" =~ "\`i\` int NOT NULL" ]] || false
+    [[ "$output" =~ "(\`i\` > 0)" ]] || false
 }
 
 @test "sql-merge: check constraint with name collision" {
@@ -838,14 +838,14 @@ SQL
     dolt sql -q "alter table t add constraint c check (i > 0)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]]
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]] || false
     dolt commit -am "changes to b1"
 
     dolt checkout b2
     dolt sql -q "alter table t add constraint c check (i < 10)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
-    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]]
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]] || false
     dolt commit -am "changes to b2"
 
     dolt checkout main
@@ -853,8 +853,37 @@ SQL
     [ $status -eq 0 ]
     run dolt merge b2
     [ $status -eq 1 ]
-    [[ "$output" =~ "different check definitions for our check c and their check c" ]]
-    [[ "$output" =~ "two checks with the name 'c'" ]]
+    [[ "$output" =~ "different check definitions for our check c and their check c" ]] || false
+    [[ "$output" =~ "two checks with the name 'c'" ]] || false
+}
+
+@test "sql-merge: check constraint for deleted column in another table" {
+    dolt sql -q "create table t (i int primary key, j int)"
+    dolt commit -am "initial commit"
+
+    dolt branch b1
+    dolt branch b2
+
+    dolt checkout b1
+    dolt sql -q "alter table t add constraint c check (j > 0)"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))" ]] || false
+    dolt commit -am "changes to b1"
+
+    dolt checkout b2
+    dolt sql -q "alter table t drop column j"
+    dolt commit -am "changes to b2"
+
+    dolt checkout main
+    run dolt merge b1
+    [ $status -eq 0 ]
+    run dolt merge b2
+    [ $status -eq 0 ]
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    skip "the constraint should be gone along with the column, but the merge currently keeps both"
+    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))") ]] || false
 }
 
 get_head_commit() {
