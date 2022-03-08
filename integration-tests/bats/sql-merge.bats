@@ -827,6 +827,36 @@ SQL
     [[ "$output" =~ "(\`i\` > 0)" ]]
 }
 
+@test "sql-merge: check constraint with name collision" {
+    dolt sql -q "create table t (i int)"
+    dolt commit -am "initial commit"
+
+    dolt branch b1
+    dolt branch b2
+
+    dolt checkout b1
+    dolt sql -q "alter table t add constraint c check (i > 0)"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` > 0))" ]]
+    dolt commit -am "changes to b1"
+
+    dolt checkout b2
+    dolt sql -q "alter table t add constraint c check (i < 10)"
+    run dolt sql -q "show create table t"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "CONSTRAINT \`c\` CHECK ((\`i\` < 10))" ]]
+    dolt commit -am "changes to b2"
+
+    dolt checkout main
+    run dolt merge b1
+    [ $status -eq 0 ]
+    run dolt merge b2
+    [ $status -eq 1 ]
+    [[ "$output" =~ "different check definitions for our check c and their check c" ]]
+    [[ "$output" =~ "two checks with the name 'c'" ]]
+}
+
 get_head_commit() {
     dolt log -n 1 | grep -m 1 commit | cut -c 13-44
 }
