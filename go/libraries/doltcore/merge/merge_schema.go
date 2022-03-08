@@ -84,6 +84,21 @@ type FKConflict struct {
 	Ours, Theirs doltdb.ForeignKey
 }
 
+type ChkConflict struct {
+	Kind         conflictKind
+	Ours, Theirs schema.Check
+}
+
+func (c ChkConflict) String() string {
+	switch c.Kind {
+	case NameCollision:
+		return fmt.Sprintf("two checks with the name '%s'", c.Ours.Name)
+	case TagCollision:
+		return fmt.Sprintf("different check defitinion for out column %s and their column %s", c.Ours.Name(), c.Theirs.Name())
+	}
+	return ""
+}
+
 var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
 
 // SchemaMerge performs a three-way merge of ourSch, theirSch, and ancSch.
@@ -130,9 +145,17 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
-	// TODO: might be a more efficient way using pointers?
-	mergedChks, err := mergeChecks(ourSch.Checks(), theirSch.Checks())
-	for _, chk := range mergedChks.AllChecks() {
+	// Merge checks
+	mergedChks, conflicts, err := mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
+	if err != nil {
+		return nil, EmptySchConflicts, err
+	}
+	if len(conflicts) > 0 {
+		return nil, sc, nil
+	}
+
+	// Add all merged checks to merged schema
+	for _, chk := range mergedChks {
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
 
@@ -581,20 +604,155 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 	return pruned, nil
 }
 
-func mergeChecks(ourChks, theirChks schema.CheckCollection) (schema.CheckCollection, error) {
-	checkNames := make(map[string]bool) // prevent duplicate checks
-	// TODO: do ancestor checks matter?
-	result := ourChks
+// checksInCommon finds all the common checks between ourChks and theirChks, and detects varying conflicts
+func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict) {
+	// Make map of their checks for fast lookup
+	theirChkMap := make(map[string]schema.Check)
 	for _, chk := range theirChks.AllChecks() {
-		// Avoid duplicate checks based off name
-		if _, ok := checkNames[chk.Name()]; ok {
+		theirChkMap[chk.Name()] = chk
+	}
+
+	// Make map of ancestor checks for fast lookup
+	ancChkMap := make (map[string]schema.Check)
+	for _, chk := range ancChks.AllChecks() {
+		ancChkMap[chk.Name()] = chk
+	}
+
+	// Iterate over our checks
+	var common []schema.Check
+	var conflicts []ChkConflict
+	for _, ourChk := range ourChks.AllChecks() {
+		// Check if ours and theirs both have a check by this name
+		theirChk, ok := theirChkMap[ourChk.Name()]
+		if !ok {
 			continue
 		}
-		checkNames[chk.Name()] = true
-		_, err := result.AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
-		if err != nil {
-			return nil, err
+
+		// Ensure check is defined the same
+		if ourChk == theirChk { // TODO: I hope this is Deep Equals
+			common = append(common, ourChk)
+			continue
+		}
+
+		// Check if ancestor also has this check
+		ancChk, ok := ancChkMap[ourChk.Name()]
+		if !ok {
+			// Check was added on our and their branch with different definitions
+			conflicts = append(conflicts, ChkConflict{
+				Kind:   TagCollision,
+				Ours:   ourChk,
+				Theirs: theirChk,
+			})
+			continue
+		}
+
+		// TODO: How are NameCollisions possible? Don't Checks all have unique names?
+		// Check modified on our branch?
+		if ancChk == theirChk {
+			conflicts = append(conflicts, ChkConflict{
+				Kind:   NameCollision,
+				Ours:   ourChk,
+				Theirs: theirChk,
+			})
+			continue
+		}
+
+		// Check modified on their branch?
+		if ancChk == ourChk {
+			conflicts = append(conflicts, ChkConflict{
+				Kind:   NameCollision,
+				Ours:   ourChk,
+				Theirs: theirChk,
+			})
+			continue
+		}
+
+		// Check modified on both
+		conflicts = append(conflicts, ChkConflict{
+			Kind:   TagCollision,
+			Ours:   ourChk,
+			Theirs: theirChk,
+		})
+	}
+
+	return common, conflicts
+}
+
+// chkCollectionSetDifference returns the set difference left - right.
+func chkCollectionSetDifference(left, right schema.CheckCollection) []schema.Check {
+	// Make map of right check for fast look up
+	rChkMap := make(map[string]bool) // TODO: should it be map[schema.Check]bool instead?
+	for _, chk := range right.AllChecks() {
+		rChkMap[chk.Name()] = true
+	}
+
+	// Add everything except what's in right
+	var result []schema.Check
+	for _, chk := range left.AllChecks() {
+		if _, ok := rChkMap[chk.Name()]; ok {
+			continue
+		}
+		result = append(result, chk)
+	}
+	return result
+}
+
+// mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
+func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
+	common, conflicts := checksInCommon(ourChks, theirChks, ancChks)
+
+	ourNewChks := chkCollectionSetDifference(ourChks, ancChks)
+	theirNewChks := chkCollectionSetDifference(theirChks, ancChks)
+
+	// Create map for fast lookup
+	theirNewChksMap := make(map[string]schema.Check)
+	for _, chk := range theirNewChks {
+		theirNewChksMap[chk.Name()] = chk
+	}
+
+	// Check for name conflicts between checks added on each branch since the ancestor
+	for _, ourChk := range ourNewChks {
+		theirChk, ok := theirNewChksMap[ourChk.Name()]
+		if ok && ourChk != theirChk {
+			conflicts = append(conflicts, ChkConflict{
+				Kind: NameCollision,
+				Ours: ourChk,
+				Theirs: theirChk,
+			})
 		}
 	}
-	return result, nil
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
+	// Create map to track names
+	var result []schema.Check
+	allNames := make(map[string]bool)
+
+	// Combine all checks into collection
+	for _, chk := range common {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			result = append(result, chk)
+		}
+	}
+	for _, chk := range ourNewChks {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			result = append(result, chk)
+		}
+	}
+	for _, chk := range theirNewChks {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			result = append(result, chk)
+		}
+	}
+
+	// TODO: check that all checks reference columns that actually exist in new merged schema
+
+
+	return result, conflicts, nil
 }
