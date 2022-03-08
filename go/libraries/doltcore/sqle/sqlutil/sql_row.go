@@ -194,7 +194,6 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 	}
 
 	pkOrds := doltSchema.GetPkOrdinals()
-
 	for i, pkCol := range pkCols.GetColumns() {
 		ord := pkOrds[i]
 		val := r[ord]
@@ -202,11 +201,7 @@ func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter,
 			return types.Tuple{}, nil, errors.New("not all pk columns have a value")
 		}
 		pkVals[i*2] = types.Uint(pkCol.Tag)
-		nomsVal, err := pkCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, val)
-		if err != nil {
-			return types.Tuple{}, nil, err
-		}
-		pkVals[i*2+1] = nomsVal
+		pkVals[i*2+1] = tagToVal[pkCol.Tag]
 	}
 
 	nbf := vrw.Format()
