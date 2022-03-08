@@ -35,12 +35,13 @@ type SchemaConflict struct {
 	TableName    string
 	ColConflicts []ColConflict
 	IdxConflicts []IdxConflict
+	ChkConflicts []ChkConflict
 }
 
 var EmptySchConflicts = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
-	return len(sc.ColConflicts) + len(sc.IdxConflicts)
+	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
 }
 
 func (sc SchemaConflict) AsError() error {
@@ -50,6 +51,9 @@ func (sc SchemaConflict) AsError() error {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
 	for _, c := range sc.IdxConflicts {
+		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
+	}
+	for _, c := range sc.ChkConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
 	return fmt.Errorf(b.String())
@@ -92,9 +96,9 @@ type ChkConflict struct {
 func (c ChkConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two checks with the name '%s'", c.Ours.Name)
+		return fmt.Sprintf("two checks with the name '%s'", c.Ours.Name())
 	case TagCollision:
-		return fmt.Sprintf("different check defitinion for out column %s and their column %s", c.Ours.Name(), c.Theirs.Name())
+		return fmt.Sprintf("different check definitions for our check %s and their check %s", c.Ours.Name(), c.Theirs.Name())
 	}
 	return ""
 }
@@ -146,11 +150,12 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 	})
 
 	// Merge checks
-	mergedChks, conflicts, err := mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
+	var mergedChks []schema.Check
+	mergedChks, sc.ChkConflicts, err = mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
 	if err != nil {
 		return nil, EmptySchConflicts, err
 	}
-	if len(conflicts) > 0 {
+	if len(sc.ChkConflicts) > 0 {
 		return nil, sc, nil
 	}
 
