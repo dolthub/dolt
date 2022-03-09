@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
@@ -88,10 +89,31 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
-	// TODO: ensure that there are no dangling checks
 	// Copy over all checks from the old schema
 	for _, check := range sch.Checks().AllChecks() {
-		_, err := newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
+		// TODO: turn this into a helper method
+		// Ignore checks that reference colName
+		checkDef := sql.CheckDefinition{
+			Name: check.Name(),
+			CheckExpression: check.Expression(),
+			Enforced: check.Enforced(),
+		}
+		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &checkDef)
+		if err != nil {
+			return nil, err
+		}
+		skip := false
+		for _, col := range colNames {
+			if col == colName {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		_, err = newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
 		if err != nil {
 			return nil, err
 		}
