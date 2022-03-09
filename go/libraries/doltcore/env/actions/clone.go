@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -286,7 +287,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return ErrEmailNotFound
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc())
 	if err != nil {
 		return ErrFailedToInitRepo
 	}

@@ -60,6 +60,8 @@ const (
 	LinestringKind
 	PolygonKind
 
+	SerialMessageKind
+
 	UnknownKind NomsKind = 255
 )
 
@@ -89,6 +91,7 @@ func init() {
 	KindToType[PointKind] = Point{}
 	KindToType[LinestringKind] = Linestring{}
 	KindToType[PolygonKind] = Polygon{}
+	KindToType[SerialMessageKind] = SerialMessage{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -115,37 +118,39 @@ func init() {
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LinestringKind] = true
 	SupportedKinds[PolygonKind] = true
+	SupportedKinds[SerialMessageKind] = true
 }
 
 var KindToTypeSlice []Value
 
 var KindToString = map[NomsKind]string{
-	UnknownKind:    "unknown",
-	BlobKind:       "Blob",
-	BoolKind:       "Bool",
-	CycleKind:      "Cycle",
-	ListKind:       "List",
-	MapKind:        "Map",
-	FloatKind:      "Float",
-	RefKind:        "Ref",
-	SetKind:        "Set",
-	StructKind:     "Struct",
-	StringKind:     "String",
-	TypeKind:       "Type",
-	UnionKind:      "Union",
-	ValueKind:      "Value",
-	UUIDKind:       "UUID",
-	IntKind:        "Int",
-	UintKind:       "Uint",
-	NullKind:       "Null",
-	TupleKind:      "Tuple",
-	InlineBlobKind: "InlineBlob",
-	TimestampKind:  "Timestamp",
-	DecimalKind:    "Decimal",
-	JSONKind:       "JSON",
-	PointKind:      "Point",
-	LinestringKind: "Linestring",
-	PolygonKind:    "Polygon",
+	UnknownKind:       "unknown",
+	BlobKind:          "Blob",
+	BoolKind:          "Bool",
+	CycleKind:         "Cycle",
+	ListKind:          "List",
+	MapKind:           "Map",
+	FloatKind:         "Float",
+	RefKind:           "Ref",
+	SetKind:           "Set",
+	StructKind:        "Struct",
+	StringKind:        "String",
+	TypeKind:          "Type",
+	UnionKind:         "Union",
+	ValueKind:         "Value",
+	UUIDKind:          "UUID",
+	IntKind:           "Int",
+	UintKind:          "Uint",
+	NullKind:          "Null",
+	TupleKind:         "Tuple",
+	InlineBlobKind:    "InlineBlob",
+	TimestampKind:     "Timestamp",
+	DecimalKind:       "Decimal",
+	JSONKind:          "JSON",
+	PointKind:         "Point",
+	LinestringKind:    "Linestring",
+	PolygonKind:       "Polygon",
+	SerialMessageKind: "SerialMessage",
 }
 
 // String returns the name of the kind.

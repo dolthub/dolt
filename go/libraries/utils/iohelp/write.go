@@ -68,6 +68,11 @@ func WriteLine(w io.Writer, line string) error {
 	return WriteAll(w, []byte(line), newLineBuf)
 }
 
+// WriteWithoutNewLine will write the given string to an io.Writer followed by nothing.
+func WriteWithoutNewLine(w io.Writer, line string) error {
+	return WriteAll(w, []byte(line), []byte{})
+}
+
 // WriteLines will write the given strings to an io.Writer, each followed by a newline.
 func WriteLines(w io.Writer, lines ...string) error {
 	for _, line := range lines {

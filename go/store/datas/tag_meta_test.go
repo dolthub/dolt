@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2020 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package datas
 
 import (
 	"reflect"
@@ -23,17 +23,17 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
-	cm, _ := NewCommitMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
-	cmSt, err := cm.toNomsStruct(types.Format_Default)
+func TestTagMetaToAndFromNomsStruct(t *testing.T) {
+	tm := NewTagMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
+	cmSt, err := tm.toNomsStruct(types.Format_Default)
 	assert.NoError(t, err)
-	result, err := commitMetaFromNomsSt(cmSt)
+	result, err := tagMetaFromNomsSt(cmSt)
 
 	if err != nil {
 		t.Fatal("Failed to convert from types.Struct to CommitMeta")
-	} else if !reflect.DeepEqual(cm, result) {
+	} else if !reflect.DeepEqual(tm, result) {
 		t.Error("CommitMeta was not converted without error.")
 	}
 
-	t.Log(cm.String())
+	t.Log(tm.String())
 }

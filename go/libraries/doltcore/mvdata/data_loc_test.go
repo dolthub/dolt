@@ -160,6 +160,10 @@ func TestExists(t *testing.T) {
 
 type testDataMoverOptions struct{}
 
+func (t testDataMoverOptions) IsBatched() bool {
+	return false
+}
+
 func (t testDataMoverOptions) WritesToTable() bool {
 	return true
 }

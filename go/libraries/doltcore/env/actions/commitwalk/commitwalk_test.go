@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -200,7 +201,7 @@ func assertEqualHashes(t *testing.T, lc, rc *doltdb.Commit) {
 }
 
 func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash, parents ...*doltdb.Commit) *doltdb.Commit {
-	cm, err := doltdb.NewCommitMeta("Bill Billerson", "bill@billerson.com", "A New Commit.")
+	cm, err := datas.NewCommitMeta("Bill Billerson", "bill@billerson.com", "A New Commit.")
 	require.NoError(t, err)
 	pcs := make([]*doltdb.CommitSpec, 0, len(parents))
 	for _, parent := range parents {
@@ -235,7 +236,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 		err = nil
 	}
 	require.NoError(t, err)
-	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref)
+	err = forkEnv.DoltDB.SetHead(context.Background(), ref.NewBranchRef(bn), stref.TargetHash())
 	require.NoError(t, err)
 	return forkEnv
 }

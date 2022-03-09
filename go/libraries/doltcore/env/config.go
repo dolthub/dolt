@@ -20,10 +20,10 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 const (
@@ -206,7 +206,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	name, err := cfg.GetString(UserNameKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrNameNotConfigured
+		return "", "", datas.ErrNameNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}
@@ -214,7 +214,7 @@ func GetNameAndEmail(cfg config.ReadableConfig) (string, string, error) {
 	email, err := cfg.GetString(UserEmailKey)
 
 	if err == config.ErrConfigParamNotFound {
-		return "", "", doltdb.ErrEmailNotConfigured
+		return "", "", datas.ErrEmailNotConfigured
 	} else if err != nil {
 		return "", "", err
 	}

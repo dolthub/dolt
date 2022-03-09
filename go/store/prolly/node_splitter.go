@@ -58,7 +58,7 @@ func newDefaultNodeSplitter(salt byte) nodeSplitter {
 }
 
 // dynamicNodeSplitter is a nodeSplitter designed to constrain the chunk size
-// distribution by reducing the liklihood of forming very large or very small chunks.
+// distribution by reducing the likelihood of forming very large or very small chunks.
 // As the size of the current chunk grows, dynamicNodeSplitter changes the target
 // pattern to make it easier to match. The result is a chunk size distribution
 // that is closer to a binomial distribution, rather than geometric.

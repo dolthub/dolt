@@ -65,6 +65,10 @@ func (m exportOptions) checkOverwrite(ctx context.Context, root *doltdb.RootValu
 	return false, nil
 }
 
+func (m exportOptions) IsBatched() bool {
+	return false
+}
+
 func (m exportOptions) WritesToTable() bool {
 	return false
 }
