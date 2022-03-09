@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/go-mysql-server"
+	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -91,25 +91,10 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 
 	// Copy over all checks from the old schema
 	for _, check := range sch.Checks().AllChecks() {
-		// TODO: turn this into a helper method
 		// Ignore checks that reference colName
-		checkDef := sql.CheckDefinition{
-			Name: check.Name(),
-			CheckExpression: check.Expression(),
-			Enforced: check.Enforced(),
-		}
-		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &checkDef)
-		if err != nil {
+		if ok, err := isCheckReferenced(colName, check); err != nil {
 			return nil, err
-		}
-		skip := false
-		for _, col := range colNames {
-			if col == colName {
-				skip = true
-				break
-			}
-		}
-		if skip {
+		} else if ok {
 			continue
 		}
 
@@ -129,4 +114,23 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	}
 
 	return tbl.UpdateSchema(ctx, newSch)
+}
+
+// isCheckReferenced determines if a colName is referenced by check
+func isCheckReferenced(colName string, check schema.Check) (bool, error){
+	checkDef := sql.CheckDefinition{
+		Name: check.Name(),
+		CheckExpression: check.Expression(),
+		Enforced: check.Enforced(),
+	}
+	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &checkDef)
+	if err != nil {
+		return false, err
+	}
+	for _, col := range colNames {
+		if col == colName {
+			return true, nil
+		}
+	}
+	return false, nil
 }

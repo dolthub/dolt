@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
 	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -161,6 +163,13 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 
 	// Add all merged checks to merged schema
 	for _, chk := range mergedChks {
+		// Skip checks that reference columns that no longer exist
+		if ok, err := isCheckReferenced(sch, chk); err != nil {
+			return nil, sc, err
+		} else if !ok {
+			continue
+		}
+
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
 
@@ -634,7 +643,7 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 		}
 
 		// Ensure check is defined the same
-		if ourChk == theirChk { // TODO: I hope this is Deep Equals
+		if ourChk == theirChk {
 			common = append(common, ourChk)
 			continue
 		}
@@ -651,7 +660,6 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 			continue
 		}
 
-		// TODO: How are NameCollisions possible? Don't Checks all have unique names?
 		// Check modified on our branch?
 		if ancChk == theirChk {
 			conflicts = append(conflicts, ChkConflict{
@@ -756,7 +764,27 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		}
 	}
 
-	// TODO: check that all checks reference columns that actually exist in new merged schema
-
 	return result, conflicts, nil
+}
+
+// isCheckReferenced determine if columns referenced in check are in schema
+func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
+	chkDef := sql.CheckDefinition {
+		Name: chk.Name(),
+		CheckExpression: chk.Expression(),
+		Enforced: chk.Enforced(),
+	}
+	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+	if err != nil {
+		return false, err
+	}
+
+	for _, col := range colNames {
+		_, ok := sch.GetAllCols().GetByName(col)
+		if !ok {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
