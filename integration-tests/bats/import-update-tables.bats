@@ -717,7 +717,7 @@ DELIM
     [[ "$output" =~ "6" ]] || false
 }
 
-@test "import supports tables with dashes in the name" {
+@test "import-update-tables: import supports tables with dashes in the name" {
     cat <<DELIM > file.csv
 pk, c1
 0,0
