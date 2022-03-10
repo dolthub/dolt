@@ -37,3 +37,4 @@ expect {
   timeout { exit 1; }
   failed { exit 1; }
 }
+expect eof
