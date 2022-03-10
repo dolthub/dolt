@@ -1,6 +1,6 @@
 #!/usr/bin/expect
 
-set timeout 3
+set timeout 10
 spawn dolt sql
 expect {
   "doltsql> " { send "use `doltsql/test`;\r"; }
