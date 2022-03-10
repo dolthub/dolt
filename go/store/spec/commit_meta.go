@@ -34,8 +34,8 @@ import (
 const CommitMetaDateFormat = time.RFC3339
 
 var (
-	commitMetaDate            string
-	commitMetaMessage         string
+	commitMetaDate    string
+	commitMetaMessage string
 )
 
 // RegisterCommitMetaFlags registers command line flags used for creating commit meta structs.
@@ -62,7 +62,7 @@ func CommitMetaFromFlags(ctx context.Context) (*datas.CommitMeta, error) {
 
 	return &datas.CommitMeta{
 		UserTimestamp: usertime.UnixMilli(),
-		Timestamp: uint64(t.UnixMilli()),
-		Description: commitMetaMessage,
+		Timestamp:     uint64(t.UnixMilli()),
+		Description:   commitMetaMessage,
 	}, nil
 }
