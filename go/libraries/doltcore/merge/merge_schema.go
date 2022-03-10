@@ -151,6 +151,8 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
+	// TODO: any overlapping checks are a conflict
+	// TODO: adding a check in one branch and deleting reference column in another branch is also a conflict
 	// Merge checks
 	var mergedChks []schema.Check
 	mergedChks, sc.ChkConflicts, err = mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
@@ -161,14 +163,23 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return nil, sc, nil
 	}
 
-	// Add all merged checks to merged schema
+	// If there any checks that reference columns that no longer exist (have been deleted by other branch)
 	for _, chk := range mergedChks {
-		// Skip checks that reference columns that no longer exist
 		if ok, err := isCheckReferenced(sch, chk); err != nil {
 			return nil, sc, err
 		} else if !ok {
-			continue
+			// Append to conflicts
+			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
+				Kind:   TagCollision, // TODO: new kind of collision?
+				Ours:   chk,
+				Theirs: chk,
+			})
 		}
+	}
+
+	// Add all merged checks to merged schema
+	for _, chk := range mergedChks {
+
 
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
@@ -740,31 +751,92 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		return nil, conflicts, nil
 	}
 
+	// Create a map from each column referenced by each of their checks to the checks themselves
+	theirNewChkColsMap := make(map[string]map[schema.Check]bool) // TODO: maybe it should just be map[string][]schema.Check
+	for _, chk := range theirNewChks {
+		// Extract columns referenced by check
+		chkDef := sql.CheckDefinition {
+			Name: chk.Name(),
+			CheckExpression: chk.Expression(),
+			Enforced: chk.Enforced(),
+		}
+		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Put each check into each column that is referenced
+		for _, col := range colNames {
+			if _, ok := theirNewChkColsMap[col]; !ok {
+				theirNewChkColsMap[col] = make(map[schema.Check]bool)
+			}
+			theirNewChkColsMap[col][chk] = true
+		}
+	}
+
+	// Check for overlapping columns between our new Checks and their new Checks
+	for _, ourChk := range ourNewChks {
+		// Extract columns referenced by check
+		chkDef := sql.CheckDefinition {
+			Name: ourChk.Name(),
+			CheckExpression: ourChk.Expression(),
+			Enforced: ourChk.Enforced(),
+		}
+		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Check that all overlapping checks on columns are the same check
+		for _, col := range colNames {
+			// Check if this column is referenced in their new checks
+			if _, ok := theirNewChkColsMap[col]; ok {
+				// If the two checks that reference this column are not the same, add conflict
+				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
+					for k := range theirNewChkColsMap[col] {
+						conflicts = append(conflicts, ChkConflict{
+							Kind:   TagCollision, // TODO: different kind of collision
+							Ours:   ourChk,
+							Theirs: k,
+						})
+					}
+					// Finding one column collision is enough
+					break
+				}
+			}
+		}
+	}
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
 	// Create map to track names
-	var result []schema.Check
+	var allChecks []schema.Check
 	allNames := make(map[string]bool)
 
-	// Combine all checks into collection
+	// Combine all checks into one collection
 	for _, chk := range common {
 		if _, ok := allNames[chk.Name()]; !ok {
 			allNames[chk.Name()] = true
-			result = append(result, chk)
+			allChecks = append(allChecks, chk)
 		}
 	}
 	for _, chk := range ourNewChks {
 		if _, ok := allNames[chk.Name()]; !ok {
 			allNames[chk.Name()] = true
-			result = append(result, chk)
+			allChecks = append(allChecks, chk)
 		}
 	}
 	for _, chk := range theirNewChks {
 		if _, ok := allNames[chk.Name()]; !ok {
 			allNames[chk.Name()] = true
-			result = append(result, chk)
+			allChecks = append(allChecks, chk)
 		}
 	}
 
-	return result, conflicts, nil
+	return allChecks, conflicts, nil
 }
 
 // isCheckReferenced determine if columns referenced in check are in schema
