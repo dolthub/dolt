@@ -807,12 +807,8 @@ SQL
     run dolt merge b1
     [ $status -eq 0 ]
     run dolt merge b2
-    [ $status -eq 0 ]
-
-    run dolt sql -q "show create table t"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` > 0)" ]] || false
-    [[ "$output" =~ "(\`i\` < 10)" ]] || false
+    [ $status -eq 1 ]
+    [[ "$output" =~ "different check definitions" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
@@ -900,11 +896,8 @@ SQL
     run dolt merge b1
     [ $status -eq 0 ]
     run dolt merge b2
-    [ $status -eq 0 ]
-    run dolt sql -q "show create table t"
-    [ $status -eq 0 ]
-    skip "the constraint should be gone along with the column, but the merge currently keeps both"
-    [[ !("$output" =~ "CONSTRAINT \`c\` CHECK ((\`j\` > 0))") ]] || false
+    [ $status -eq 1 ]
+    [[ "$output" =~ "different check definitions for our check c and their check c" ]] || false
 }
 
 get_head_commit() {
