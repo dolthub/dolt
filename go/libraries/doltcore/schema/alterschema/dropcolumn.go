@@ -18,10 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
@@ -117,11 +119,11 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 }
 
 // isCheckReferenced determines if a colName is referenced by check
-func isCheckReferenced(colName string, check schema.Check) (bool, error){
+func isCheckReferenced(colName string, check schema.Check) (bool, error) {
 	checkDef := sql.CheckDefinition{
-		Name: check.Name(),
+		Name:            check.Name(),
 		CheckExpression: check.Expression(),
-		Enforced: check.Enforced(),
+		Enforced:        check.Enforced(),
 	}
 	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &checkDef)
 	if err != nil {

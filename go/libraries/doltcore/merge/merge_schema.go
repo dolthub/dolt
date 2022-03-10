@@ -18,9 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -179,7 +180,6 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 
 	// Add all merged checks to merged schema
 	for _, chk := range mergedChks {
-
 
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
@@ -755,10 +755,10 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	theirNewChkColsMap := make(map[string]map[schema.Check]bool) // TODO: maybe it should just be map[string][]schema.Check
 	for _, chk := range theirNewChks {
 		// Extract columns referenced by check
-		chkDef := sql.CheckDefinition {
-			Name: chk.Name(),
+		chkDef := sql.CheckDefinition{
+			Name:            chk.Name(),
 			CheckExpression: chk.Expression(),
-			Enforced: chk.Enforced(),
+			Enforced:        chk.Enforced(),
 		}
 		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
 		if err != nil {
@@ -777,10 +777,10 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	// Check for overlapping columns between our new Checks and their new Checks
 	for _, ourChk := range ourNewChks {
 		// Extract columns referenced by check
-		chkDef := sql.CheckDefinition {
-			Name: ourChk.Name(),
+		chkDef := sql.CheckDefinition{
+			Name:            ourChk.Name(),
 			CheckExpression: ourChk.Expression(),
-			Enforced: ourChk.Enforced(),
+			Enforced:        ourChk.Enforced(),
 		}
 		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
 		if err != nil {
@@ -841,10 +841,10 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 
 // isCheckReferenced determine if columns referenced in check are in schema
 func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
-	chkDef := sql.CheckDefinition {
-		Name: chk.Name(),
+	chkDef := sql.CheckDefinition{
+		Name:            chk.Name(),
 		CheckExpression: chk.Expression(),
-		Enforced: chk.Enforced(),
+		Enforced:        chk.Enforced(),
 	}
 	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
 	if err != nil {
