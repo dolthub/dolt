@@ -381,8 +381,8 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 	joiner, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
 		map[string]rowconv.ColNamingFunc{
-			diff.To:   toNamer,
-			diff.From: fromNamer,
+			diff.To:   diff.ToNamer,
+			diff.From: diff.FromNamer,
 		})
 	if err != nil {
 		return nil

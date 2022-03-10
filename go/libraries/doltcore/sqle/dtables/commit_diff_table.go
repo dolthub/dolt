@@ -93,8 +93,8 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	j, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
 		map[string]rowconv.ColNamingFunc{
-			diff.To:   toNamer,
-			diff.From: fromNamer,
+			diff.To:   diff.ToNamer,
+			diff.From: diff.FromNamer,
 		})
 	if err != nil {
 		return nil, err
@@ -442,8 +442,8 @@ func (dt *CommitDiffTable) updateSchemaFromFilters() error {
 	j, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
 		map[string]rowconv.ColNamingFunc{
-			diff.To:   toNamer,
-			diff.From: fromNamer,
+			diff.To:   diff.ToNamer,
+			diff.From: diff.FromNamer,
 		})
 	if err != nil {
 		return err
