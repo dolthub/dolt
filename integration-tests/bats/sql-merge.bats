@@ -808,7 +808,7 @@ SQL
     [ $status -eq 0 ]
     run dolt merge b2
     [ $status -eq 1 ]
-    [[ "$output" =~ "different check definitions" ]] || false
+    [[ "$output" =~ "both reference the same column(s)" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {
