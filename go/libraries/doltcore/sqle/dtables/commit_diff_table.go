@@ -254,13 +254,14 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	}
 
 	dp := DiffPartition{
-		to:        toTable,
-		from:      fromTable,
-		toName:    toName,
-		fromName:  fromName,
-		toDate:    toDate,
-		fromDate:  fromDate,
-		targetSch: dt.targetSchema,
+		to:       toTable,
+		from:     fromTable,
+		toName:   toName,
+		fromName: fromName,
+		toDate:   toDate,
+		fromDate: fromDate,
+		toSch:    dt.targetSchema,
+		fromSch:  dt.targetSchema,
 	}
 
 	isDiffable, err := dp.isDiffablePartition(ctx)

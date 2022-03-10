@@ -1036,6 +1036,285 @@ var DiffTableTests = []enginetest.ScriptTest{
 	},
 }
 
+var diffTableFunctionTests = []enginetest.ScriptTest{
+	// TODO: Add tests for:
+	//       - primary key changes
+	//       - table delete and recreate
+	//       - error case tests for invalid commits
+	//          - fromCommit is not an ancestor of toCommit
+	//          - non-ref test
+	//       - branch/ref support
+	//       - multiple table functions used together in same select statement ?
+	//       - nested functions in arguments
+	//       - working set changes
+	//       - Should diff from @Commit0 to @Commit1 work?
+	//
+	// TODO: In the future:
+	//       - datetime support ?
+	//       - table function with an alias
+	//
+
+	{
+		Name:        "undefined table function",
+		Query:       "SELECT * from does_not_exist('t', 'from', 'to');",
+		ExpectedErr: sql.ErrTableFunctionNotFound,
+	},
+	// TODO: This one blows up with a panic about schema not being initailized.
+	//       Need to fix this to return the right error.
+	//{
+	//	Name:        "undefined table",
+	//	Query:       "SELECT * from dolt_diff('doesnotexist', 'from', 'to');",
+	//	ExpectedErr: sql.ErrTableNotFound,
+	//},
+	{
+		Name: "basic case",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
+
+			"create table t2 (pk int primary key, c1 text, c2 text);",
+			"insert into t2 values(100, 'hundred', 'hundert');",
+			"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
+
+			"insert into t values(2, 'two', 'three'), (3, 'three', 'four');",
+			"update t set c1='uno', c2='dos' where pk=1;",
+			"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_diff('t', @Commit2, @Commit3);",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Expected: []sql.Row{
+					{1, "uno", "dos", 1, "one", "two", "modified"},
+					{2, "two", "three", nil, nil, nil, "added"},
+					{3, "three", "four", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('t', @Commit1, @Commit4);",
+				Expected: []sql.Row{
+					{1, "uno", "dos", 1, "one", "two", "modified"},
+					{2, "two", "three", nil, nil, nil, "added"},
+					{3, "three", "four", nil, nil, nil, "added"},
+					{1, "one", "two", nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop and recreate column with same type",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"alter table t drop column c2;",
+			"set @Commit3 = dolt_commit('-am', 'dropping column c2');",
+
+			"alter table t add column c2 text;",
+			"insert into t values (3, 'three', 'four');",
+			"update t set c2='foo' where pk=1;",
+			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Expected: []sql.Row{
+					{1, "one", "two", nil, nil, nil, "added"},
+					{2, "two", "three", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Expected: []sql.Row{
+					{1, "one", 1, "one", "two", "modified"},
+					{2, "two", 2, "two", "three", "modified"},
+				},
+			},
+			{
+				Query:       "SELECT to_c2 from dolt_diff('t', @Commit2, @Commit3);",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Expected: []sql.Row{
+					{1, "one", "foo", 1, "one", "modified"},
+					// This row doesn't show up as changed because adding a column doesn't touch the row data.
+					//{2, "two", nil, 2, "two", "modified"},
+					{3, "three", "four", nil, nil, "added"},
+				},
+			},
+			{
+				Query:       "SELECT from_c2 from dolt_diff('t', @Commit3, @Commit4);",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit4);",
+				Expected: []sql.Row{
+					{1, "one", "foo", 1, "one", nil, "modified"},
+					{3, "three", "four", nil, nil, nil, "added"},
+					{1, "one", nil, 1, "one", "two", "modified"},
+					{2, "two", nil, 2, "two", "three", "modified"},
+					{1, "one", "two", nil, nil, nil, "added"},
+					{2, "two", "three", nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "rename columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 text, c2 int);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', -1), (2, 'two', -2);",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"alter table t rename column c2 to c3;",
+			"set @Commit3 = dolt_commit('-am', 'renaming column c2 to c3');",
+
+			"insert into t values (3, 'three', -3);",
+			"update t set c3=1 where pk=1;",
+			"set @Commit4 = dolt_commit('-am', 'inserting and updating data');",
+
+			"alter table t rename column c3 to c2;",
+			"insert into t values (4, 'four', -4);",
+			"set @Commit5 = dolt_commit('-am', 'renaming column c3 to c2, and inserting data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Expected: []sql.Row{
+					{1, "one", -1, nil, nil, nil, "added"},
+					{2, "two", -2, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query:       "SELECT to_c2 from dolt_diff('t', @Commit2, @Commit3);",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query:    "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c3, from_pk, from_c1, from_c3, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Expected: []sql.Row{
+					{3, "three", -3, nil, nil, nil, "added"},
+					{1, "one", 1, 1, "one", -1, "modified"},
+				},
+			},
+			{
+				Query:       "SELECT from_c2 from dolt_diff('t', @Commit4, @Commit5);",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query:       "SELECT to_c3 from dolt_diff('t', @Commit4, @Commit5);",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c3, diff_type from dolt_diff('t', @Commit4, @Commit5);",
+				Expected: []sql.Row{
+					{4, "four", -4, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
+				Expected: []sql.Row{
+					{4, "four", -4, nil, nil, nil, "added"},
+					{1, "one", 1, 1, "one", -1, "modified"},
+					{3, "three", -3, nil, nil, nil, "added"},
+					{1, "one", -1, nil, nil, nil, "added"},
+					{2, "two", -2, nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "drop and rename columns with different types",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'asdf'), (2, 'two', '2');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+
+			"alter table t drop column c2;",
+			"set @Commit3 = dolt_commit('-am', 'dropping column c2');",
+
+			"insert into t values (3, 'three');",
+			"update t set c1='fdsa' where pk=1;",
+			"set @Commit4 = dolt_commit('-am', 'inserting and updating data');",
+
+			"alter table t add column c2 int;",
+			"insert into t values (4, 'four', -4);",
+			"set @Commit5 = dolt_commit('-am', 'adding column c2, and inserting data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Expected: []sql.Row{
+					{1, "one", "asdf", nil, nil, nil, "added"},
+					{2, "two", "2", nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit2, @Commit3);",
+				Expected: []sql.Row{
+					{1, "one", 1, "one", "asdf", "modified"},
+					{2, "two", 2, "two", "2", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type from dolt_diff('t', @Commit3, @Commit4);",
+				Expected: []sql.Row{
+					{3, "three", nil, nil, "added"},
+					{1, "fdsa", 1, "one", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', @Commit4, @Commit5);",
+				Expected: []sql.Row{
+					{4, "four", -4, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
+				Expected: []sql.Row{
+					{4, "four", -4, nil, nil, nil, "added"},
+					{1, "fdsa", nil, 1, "one", nil, "modified"},
+					{3, "three", nil, nil, nil, nil, "added"},
+					{1, "one", nil, 1, "one", "asdf", "modified"},
+					{2, "two", nil, 2, "two", "2", "modified"},
+					{1, "one", nil, nil, nil, nil, "added"},
+					{2, "two", 2, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query:                           "SELECT * from dolt_diff('t', @Commit1, @Commit5);",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "unable to coerce value from field '[c2]'",
+				SkipResultsCheck:                true,
+			},
+		},
+	},
+}
+
 var UnscopedDiffTableTests = []enginetest.ScriptTest{
 	// There's a bug in queries with where clauses that compare column equality with a
 	// variable. These UnscopedDiffTableTests use "commit_hash in (@Commit1)" to work around that bug.

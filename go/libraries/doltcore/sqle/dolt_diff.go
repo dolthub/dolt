@@ -38,15 +38,16 @@ var _ sql.TableFunction = (*DiffTableFunction)(nil)
 type DiffTableFunction struct {
 	ctx            *sql.Context
 	tableNameExpr  sql.Expression
-	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
+	fromCommitExpr sql.Expression
 	tableName      string
 	toCommitVal    interface{}
 	fromCommitVal  interface{}
 	database       sql.Database
-	sch            schema.Schema
-	sqlSch         sql.Schema
+	sch            schema.Schema // TODO: Audit
+	sqlSch         sql.Schema    // TODO: Audit
 	joiner         *rowconv.Joiner
+	toSch          schema.Schema
 	fromSch        schema.Schema
 }
 
@@ -262,9 +263,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 		return nil, err
 	}
 
-	// TODO: There's an issue with target schema...
-	//       just pass in from side for now to get things working again...
-	diffPartitions := dtables.NewDiffPartitions(dtf.tableName, *commitItr, *cmHashToTblInfo, sf, dtf.fromSch)
+	diffPartitions := dtables.NewDiffPartitions(dtf.tableName, *commitItr, *cmHashToTblInfo, sf, dtf.toSch, dtf.fromSch)
 
 	return NewDiffTableFunctionRowIter(diffPartitions, ddb, dtf.joiner), nil
 }
@@ -377,6 +376,7 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 		toSchema.GetAllCols().Append(
 			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
 			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
+	dtf.toSch = toSchema
 
 	joiner, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
@@ -394,7 +394,12 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 		sch.GetAllCols().Append(
 			schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)))
 
-	sqlSchema, err := sqlutil.FromDoltSchema(dtf.tableName, sch)
+	// TODO: sql.Columns include a Source that indicates the table it came from, but we don't have a real table
+	//       when the column comes from a table function, so we omit the table name when we create these columns.
+	//       This allows column projections to work correctly with table functions, but we should test that this
+	//       works in more complex scenarios (e.g. projections with multiple table functions in the same statement)
+	//       and make sure we don't need to create a unique identifier for each use of this table function.
+	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
 		// TODO: return err instead
 		panic(err)

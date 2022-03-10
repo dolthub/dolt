@@ -186,7 +186,8 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 		cmItr:           cmItr,
 		cmHashToTblInfo: cmHashToTblInfo,
 		selectFunc:      sf,
-		targetSch:       dt.targetSch,
+		toSch:           dt.targetSch,
+		fromSch:         dt.targetSch,
 	}, nil
 }
 
@@ -356,15 +357,16 @@ func NewTblInfoAtCommit(name string, date *types.Timestamp, tbl *doltdb.Table, t
 	}
 }
 
-// data partitioned into pairs of table states which get compared
+// DiffPartition data partitioned into pairs of table states which get compared
 type DiffPartition struct {
-	to        *doltdb.Table
-	from      *doltdb.Table
-	toName    string
-	fromName  string
-	toDate    *types.Timestamp
-	fromDate  *types.Timestamp
-	targetSch *schema.Schema
+	to       *doltdb.Table
+	from     *doltdb.Table
+	toName   string
+	fromName string
+	toDate   *types.Timestamp
+	fromDate *types.Timestamp
+	toSch    *schema.Schema
+	fromSch  *schema.Schema
 }
 
 func (dp DiffPartition) Key() []byte {
@@ -384,13 +386,13 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 		return nil, err
 	}
 
-	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.targetSch, fromSch)
+	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.fromSch, fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.targetSch, toSch)
+	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.toSch, toSch)
 
 	if err != nil {
 		return nil, err
@@ -503,29 +505,31 @@ type DiffPartitions struct {
 	cmItr           doltdb.CommitItr
 	cmHashToTblInfo map[hash.Hash]TblInfoAtCommit
 	selectFunc      partitionSelectFunc
-	targetSch       schema.Schema
+	toSch           schema.Schema
+	fromSch         schema.Schema
 }
 
-func NewDiffPartitions(tblName string, cmItr doltdb.CommitItr, cmHashToTblInfo map[hash.Hash]TblInfoAtCommit, selectFunc partitionSelectFunc, targetSch schema.Schema) *DiffPartitions {
+func NewDiffPartitions(tblName string, cmItr doltdb.CommitItr, cmHashToTblInfo map[hash.Hash]TblInfoAtCommit, selectFunc partitionSelectFunc, toSch, fromSch schema.Schema) *DiffPartitions {
 	return &DiffPartitions{
-		tblName,
-		cmItr,
-		cmHashToTblInfo,
-		selectFunc,
-		targetSch,
+		tblName:         tblName,
+		cmItr:           cmItr,
+		cmHashToTblInfo: cmHashToTblInfo,
+		selectFunc:      selectFunc,
+		toSch:           toSch,
+		fromSch:         fromSch,
 	}
 }
 
-// called in a commit iteration loop. Adds partitions when it finds a commit and it's parent that have different values
-// for the hash of the table being looked at.
-func (dp *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
-	tblHash, _, err := root.GetTableHash(ctx, dp.tblName)
+// processCommit called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
+// different values for the hash of the table being looked at.
+func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
+	tblHash, _, err := root.GetTableHash(ctx, dps.tblName)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toInfoForCommit := dp.cmHashToTblInfo[cmHash]
+	toInfoForCommit := dps.cmHashToTblInfo[cmHash]
 	cmHashStr := cmHash.String()
 	meta, err := cm.GetCommitMeta()
 
@@ -537,8 +541,8 @@ func (dp *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *
 
 	var nextPartition *DiffPartition
 	if tblHash != toInfoForCommit.tblHash {
-		partition := DiffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts, &dp.targetSch}
-		selected, err := dp.selectFunc(ctx, partition)
+		partition := DiffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts, &dps.toSch, &dps.fromSch}
+		selected, err := dps.selectFunc(ctx, partition)
 
 		if err != nil {
 			return nil, err
@@ -557,15 +561,15 @@ func (dp *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *
 	}
 
 	for _, h := range parentHashes {
-		dp.cmHashToTblInfo[h] = newInfo
+		dps.cmHashToTblInfo[h] = newInfo
 	}
 
 	return nextPartition, nil
 }
 
-func (dp *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
+func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	for {
-		cmHash, cm, err := dp.cmItr.Next(ctx)
+		cmHash, cm, err := dps.cmItr.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -576,13 +580,13 @@ func (dp *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 			return nil, err
 		}
 
-		tbl, _, _, err := root.GetTableInsensitive(ctx, dp.tblName)
+		tbl, _, _, err := root.GetTableInsensitive(ctx, dps.tblName)
 
 		if err != nil {
 			return nil, err
 		}
 
-		next, err := dp.processCommit(ctx, cmHash, cm, root, tbl)
+		next, err := dps.processCommit(ctx, cmHash, cm, root, tbl)
 
 		if err != nil {
 			return nil, err
@@ -605,7 +609,7 @@ func (dp *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 	}
 }
 
-func (dp *DiffPartitions) Close(*sql.Context) error {
+func (dps *DiffPartitions) Close(*sql.Context) error {
 	return nil
 }
 
