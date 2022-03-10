@@ -139,7 +139,7 @@ func CommitMetaFromNomsSt(st types.Struct) (*CommitMeta, error) {
 	}, nil
 }
 
-func (cm *CommitMeta) ToNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
+func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) {
 	metadata := types.StructData{
 		commitMetaNameKey:      types.String(cm.Name),
 		commitMetaEmailKey:     types.String(cm.Email),

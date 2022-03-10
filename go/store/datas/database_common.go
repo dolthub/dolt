@@ -951,22 +951,11 @@ func (db *database) validateWorkingSet(t types.Struct) error {
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
-	parents := opts.ParentsList
-	if parents == types.EmptyList || parents.Len() == 0 {
-		var err error
-		parents, err = types.NewList(ctx, ds.db)
-		if err != nil {
-			return types.Struct{}, err
-		}
-
+	if opts.Parents == nil || len(opts.Parents) == 0 {
 		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
 			return types.Struct{}, err
 		} else if ok {
-			le := parents.Edit().Append(headRef)
-			parents, err = le.List(ctx)
-			if err != nil {
-				return types.Struct{}, err
-			}
+			opts.Parents = []hash.Hash{headRef.TargetHash()}
 		}
 	} else {
 		curr, ok, err := ds.MaybeHeadRef()
@@ -974,15 +963,12 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 			return types.Struct{}, err
 		}
 		if ok {
-			var found bool
-			err := parents.IterAll(ctx, func(v types.Value, _ uint64) error {
-				if v.(types.Ref).TargetHash() == curr.TargetHash() {
+			found := false
+			for _, h := range opts.Parents {
+				if h == curr.TargetHash() {
 					found = true
+					break
 				}
-				return nil
-			})
-			if err != nil {
-				return types.Struct{}, err
 			}
 			if !found {
 				return types.Struct{}, ErrMergeNeeded
@@ -990,17 +976,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		}
 	}
 
-	meta := opts.Meta
-	if meta.IsZeroValue() {
-		meta = types.EmptyStruct(ds.db.Format())
-	}
-
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, ds.db, parents)
-	if err != nil {
-		return types.Struct{}, err
-	}
-
-	return newCommit(ctx, v, parents, parentsClosure, includeParentsClosure, meta)
+	return newCommitForValue(ctx, ds.db, v, opts)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

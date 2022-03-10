@@ -102,7 +102,7 @@ func runCommit(ctx context.Context, args []string) int {
 		}
 	}
 
-	meta, err := spec.CreateCommitMetaStruct(ctx, db, vrw, "", "", nil, nil)
+	meta, err := spec.CommitMetaFromFlags(ctx)
 	util.CheckErrorNoUsage(err)
 
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})

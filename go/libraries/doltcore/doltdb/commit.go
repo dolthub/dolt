@@ -347,14 +347,9 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	parents, err := types.NewList(ctx, ddb.vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	parentEditor := parents.Edit()
+	var parents []hash.Hash
 	if hasHead {
-		parentEditor = parentEditor.Append(nomsHeadRef)
+		parents = append(parents, nomsHeadRef.TargetHash())
 	}
 
 	for _, pc := range parentCommits {
@@ -362,21 +357,10 @@ func (ddb *DoltDB) NewPendingCommit(
 		if err != nil {
 			return nil, err
 		}
-
-		parentEditor = parentEditor.Append(rf)
+		parents = append(parents, rf.TargetHash())
 	}
 
-	parents, err = parentEditor.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := cm.ToNomsStruct(ddb.vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 	return &PendingCommit{
 		Roots:         roots,
 		Val:           val,

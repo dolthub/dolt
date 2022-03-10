@@ -101,7 +101,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	meta, ok, err := commit.MaybeGet(datas.CommitMetaField)
 	s.NoError(err)
 	s.True(ok)
-	d, ok, err := meta.(types.Struct).MaybeGet("date")
+	d, ok, err := meta.(types.Struct).MaybeGet("timestamp")
 	s.NoError(err)
 	s.True(ok)
 	s.NotEmpty(d)
@@ -134,7 +134,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	s.NoError(err)
 	s.True(ok)
 	meta := metaVal.(types.Struct)
-	d, ok, err := meta.MaybeGet("date")
+	d, ok, err := meta.MaybeGet("timestamp")
 	s.NoError(err)
 	s.True(ok)
 	s.NotEmpty(d)
@@ -219,16 +219,16 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	metaNew := metaNewVal.(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
-	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
-	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
-	msgVal, ok, err := metaNew.MaybeGet("message")
+	s.False(structFieldEqual(metaOld, metaNew, "timestamp"), "date didn't change")
+	s.False(structFieldEqual(metaOld, metaNew, "desc"), "message didn't change")
+	msgVal, ok, err := metaNew.MaybeGet("desc")
 	s.NoError(err)
 	s.True(ok)
-	s.True(msgVal.Equals(types.String("foo")), "message wasn't set")
+	s.True(msgVal.Equals(types.String("foo")), "desc wasn't set")
 
 	metaOld = metaNew
 
-	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=message=bar", "--date=" + spec.CommitMetaDateFormat[:20], dsName + ".value", sp.String()})
+	stdoutString, stderrString = s.MustRun(main, []string{"commit", "--allow-dupe=1", "--message=bar", "--date=" + spec.CommitMetaDateFormat[:20], dsName + ".value", sp.String()})
 	s.Empty(stderrString)
 	s.Contains(stdoutString, "New head #")
 
@@ -243,10 +243,10 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadata() {
 	metaNew = metaNewVal.(types.Struct)
 
 	s.False(metaOld.Equals(metaNew), "meta didn't change")
-	s.False(structFieldEqual(metaOld, metaNew, "date"), "date didn't change")
-	s.False(structFieldEqual(metaOld, metaNew, "message"), "message didn't change")
+	s.False(structFieldEqual(metaOld, metaNew, "timestamp"), "date didn't change")
+	s.False(structFieldEqual(metaOld, metaNew, "desc"), "message didn't change")
 
-	msgVal, ok, err = metaNew.MaybeGet("message")
+	msgVal, ok, err = metaNew.MaybeGet("desc")
 	s.NoError(err)
 	s.True(ok)
 	s.True(msgVal.Equals(types.String("bar")), "message wasn't set")
@@ -267,23 +267,5 @@ func (s *nomsCommitTestSuite) TestNomsCommitMetadataBadDateFormat() {
 
 	s.Panics(func() {
 		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--date=a", "#" + ref.TargetHash().String(), sp.String()})
-	})
-}
-
-func (s *nomsCommitTestSuite) TestNomsCommitInvalidMetadataPaths() {
-	sp, ref := s.setupDataset("commitTestMetadataPaths", true)
-	defer sp.Close()
-
-	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta-p=#beef", "#" + ref.TargetHash().String(), sp.String()})
-	})
-}
-
-func (s *nomsCommitTestSuite) TestNomsCommitInvalidMetadataFieldName() {
-	sp, ref := s.setupDataset("commitTestMetadataFields", true)
-	defer sp.Close()
-
-	s.Panics(func() {
-		s.MustRun(main, []string{"commit", "--allow-dupe=1", "--meta=_foo=bar", "#" + ref.TargetHash().String(), sp.String()})
 	})
 }
