@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -1036,18 +1037,14 @@ var DiffTableTests = []enginetest.ScriptTest{
 	},
 }
 
-var diffTableFunctionTests = []enginetest.ScriptTest{
+var DiffTableFunctionTests = []enginetest.ScriptTest{
 	// TODO: Add tests for:
 	//       - primary key changes
 	//       - table delete and recreate
-	//       - error case tests for invalid commits
-	//          - fromCommit is not an ancestor of toCommit
-	//          - non-ref test
 	//       - branch/ref support
-	//       - multiple table functions used together in same select statement ?
-	//       - nested functions in arguments
+	//       - multiple table functions used together in same select statement
 	//       - working set changes
-	//       - Should diff from @Commit0 to @Commit1 work?
+	//       - Should diff from @Commit0 to @Commit1 work ?
 	//
 	// TODO: In the future:
 	//       - datetime support ?
@@ -1055,17 +1052,68 @@ var diffTableFunctionTests = []enginetest.ScriptTest{
 	//
 
 	{
+		// TODO: This isn't specific to dolt_diff table function, so it should
+		//       be moved elsewhere.
 		Name:        "undefined table function",
 		Query:       "SELECT * from does_not_exist('t', 'from', 'to');",
 		ExpectedErr: sql.ErrTableFunctionNotFound,
 	},
-	// TODO: This one blows up with a panic about schema not being initailized.
-	//       Need to fix this to return the right error.
-	//{
-	//	Name:        "undefined table",
-	//	Query:       "SELECT * from dolt_diff('doesnotexist', 'from', 'to');",
-	//	ExpectedErr: sql.ErrTableNotFound,
-	//},
+	{
+		Name: "invalid arguments",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
+			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:       "SELECT * from dolt_diff('t');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', @Commit1);",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', @Commit1, @Commit2, 'extra');",
+				ExpectedErr: sql.ErrInvalidArgumentNumber,
+			},
+			{
+				Query:       "SELECT * from dolt_diff(null, null, null);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff(123, @Commit1, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', 123, @Commit2);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', @Commit1, 123);",
+				ExpectedErr: sql.ErrInvalidArgumentDetails,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('doesnotexist', @Commit1, @Commit2);",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:          "SELECT * from dolt_diff('t', concat('fake', substring(@Commit1, '5')), @Commit2);",
+				ExpectedErrStr: "could not find a value for this hash",
+			},
+			{
+				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', @Commit2, @Commit1);",
+				ExpectedErr: sqle.ErrInvalidCommitAncestry,
+			},
+		},
+	},
 	{
 		Name: "basic case",
 		SetUpScript: []string{

@@ -514,10 +514,10 @@ func TestUnscopedDoltDiffSystemTable(t *testing.T) {
 	}
 }
 
-func TestDiffTableFunctions(t *testing.T) {
+func TestDiffTableFunction(t *testing.T) {
 	harness := newDoltHarness(t)
 
-	for _, test := range diffTableFunctionTests {
+	for _, test := range DiffTableFunctionTests {
 		databases := harness.NewDatabases("mydb")
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {

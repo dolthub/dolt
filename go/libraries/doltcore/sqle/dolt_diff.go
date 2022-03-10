@@ -14,10 +14,12 @@
 
 package sqle
 
+// TODO: Rename to dolt_diff_table_function.go ?
+
 import (
 	"context"
-	"errors"
 	"fmt"
+	"gopkg.in/src-d/go-errors.v1"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -32,9 +34,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+var ErrInvalidCommitAncestry = errors.NewKind("commit %s is not an ancestor of commit %s")
+
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 
-// TODO: Audit these fields and see if we really need all of them
 type DiffTableFunction struct {
 	ctx            *sql.Context
 	tableNameExpr  sql.Expression
@@ -44,8 +47,7 @@ type DiffTableFunction struct {
 	toCommitVal    interface{}
 	fromCommitVal  interface{}
 	database       sql.Database
-	sch            schema.Schema // TODO: Audit
-	sqlSch         sql.Schema    // TODO: Audit
+	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
 	toSch          schema.Schema
 	fromSch        schema.Schema
@@ -62,50 +64,43 @@ func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, err
 }
 
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
-	return []sql.Expression{dtf.tableNameExpr, dtf.fromCommitExpr, dtf.toCommitExpr}
+	expressions := make([]sql.Expression, 0, 3)
+
+	if dtf.tableNameExpr != nil {
+		expressions = append(expressions, dtf.tableNameExpr)
+	}
+
+	if dtf.fromCommitExpr != nil {
+		expressions = append(expressions, dtf.fromCommitExpr)
+	}
+
+	if dtf.toCommitExpr != nil {
+		expressions = append(expressions, dtf.toCommitExpr)
+	}
+
+	return expressions
 }
 
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) != 3 {
-		return nil, errors.New("invalid number of expressions passed to function dolt_diff. " +
-			"expected 3, but received " + string(len(expression)))
-	}
-
-	if !sql.IsText(expression[0].Type()) {
-		// TODO: Error handling
-		panic("invalid argument passed to function")
-	}
-
-	t := expression[1].Type()
-	if !sql.IsText(t) {
-		// TODO: Error handling
-		panic("invalid argument passed to function")
-	}
-
-	if !sql.IsText(expression[2].Type()) {
-		// TODO: Error handling
-		panic("invalid argument passed to function")
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.TableFunctionName(), 3, len(expression))
 	}
 
 	dtf.tableNameExpr = expression[0]
 	dtf.fromCommitExpr = expression[1]
 	dtf.toCommitExpr = expression[2]
 
+	// TODO: Do we need this if we have to call it again later in RowIter?
+	err := dtf.evaluateArguments()
+	if err != nil {
+		return nil, err
+	}
+
 	return dtf, nil
 }
 
 func (dtf *DiffTableFunction) Children() []sql.Node {
 	return []sql.Node{}
-}
-
-// TODO: Copied from diff_table
-func toNamer(name string) string {
-	return diff.To + "_" + name
-}
-
-// TODO: Copied from diff_table
-func fromNamer(name string) string {
-	return diff.From + "_" + name
 }
 
 // loadCommits loads the toCommit and fromCommit arguments as doltdb.Commit structures.
@@ -128,11 +123,6 @@ func (dtf *DiffTableFunction) loadCommits() (*doltdb.Commit, *doltdb.Commit, err
 		return nil, nil, err
 	}
 
-	//fromCommitHash, err := fromCommit.HashOf()
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-
 	fromCommit, err := ddb.Resolve(dtf.ctx, fromCommitSpec, nil)
 	if err != nil {
 		return nil, nil, err
@@ -143,7 +133,43 @@ func (dtf *DiffTableFunction) loadCommits() (*doltdb.Commit, *doltdb.Commit, err
 		return nil, nil, err
 	}
 
+	// Make sure fromCommit is an ancestor of toCommit
+	err = dtf.validateCommitAncestry(fromCommit, toCommit)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return fromCommit, toCommit, nil
+}
+
+// validateCommitAncestry validates that the specified fromCommit is an ancestor of toCommit, otherwise
+// returns an error.
+func (dtf *DiffTableFunction) validateCommitAncestry(fromCommit, toCommit *doltdb.Commit) error {
+	ancestor, err := doltdb.GetCommitAncestor(dtf.ctx, fromCommit, toCommit)
+	if err != nil {
+		return err
+	}
+
+	ancestorHash, err := ancestor.HashOf()
+	if err != nil {
+		return err
+	}
+
+	fromCommitHash, err := fromCommit.HashOf()
+	if err != nil {
+		return err
+	}
+
+	if ancestorHash != fromCommitHash {
+		toCommitHash, err := toCommit.HashOf()
+		if err != nil {
+			return err
+		}
+
+		return ErrInvalidCommitAncestry.New(fromCommitHash, toCommitHash)
+	}
+
+	return nil
 }
 
 func (dtf *DiffTableFunction) newCommitItrForCommitRange(fromCommit, toCommit *doltdb.Commit) (*doltdb.CommitItr, error) {
@@ -227,13 +253,8 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 		return nil, err
 	}
 
-	err = dtf.validateArguments()
-	if err != nil {
-		return nil, err
-	}
-
 	if dtf.joiner == nil {
-		panic("schema and joiner haven't been intialized!")
+		panic("schema and joiner haven't been initialized")
 	}
 
 	sqledb, ok := dtf.database.(Database)
@@ -282,6 +303,23 @@ func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.Pr
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
 func (dtf *DiffTableFunction) evaluateArguments() error {
+	if !dtf.Resolved() {
+		return nil
+	}
+
+	if !sql.IsText(dtf.tableNameExpr.Type()) {
+		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.tableNameExpr.String())
+	}
+
+	// TODO: should time.Time also be supported?
+	if !sql.IsText(dtf.fromCommitExpr.Type()) {
+		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.fromCommitExpr.String())
+	}
+
+	if !sql.IsText(dtf.toCommitExpr.Type()) {
+		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.toCommitExpr.String())
+	}
+
 	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
 	if err != nil {
 		return err
@@ -295,34 +333,27 @@ func (dtf *DiffTableFunction) evaluateArguments() error {
 
 	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return nil
+		return err
 	}
 	dtf.fromCommitVal = fromCommitVal
 
 	toCommitVal, err := dtf.toCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return nil
+		return err
 	}
 	dtf.toCommitVal = toCommitVal
 
-	return nil
-}
-
-func (dtf *DiffTableFunction) validateArguments() error {
-
-	// TODO: Validate arguments
-	//       - is tableName a valid table?
-	//       - is fromCommit a valid commit? (or ref?)
-	//       - is toCommit a valid commit? (or ref?)
-	//       - is fromCommit an ancestor of toCommit?
-
-	return nil
-}
-
-func (dtf *DiffTableFunction) generateSchema() sql.Schema {
-	err := dtf.evaluateArguments()
+	dtf.sqlSch, err = dtf.generateSchema()
 	if err != nil {
-		panic(fmt.Sprintf("unable to generate schema: %v", err))
+		return err
+	}
+
+	return nil
+}
+
+func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
+	if !dtf.Resolved() {
+		return nil, nil
 	}
 
 	sqledb, ok := dtf.database.(Database)
@@ -332,38 +363,38 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 
 	fromRoot, err := sqledb.RootAsOf(dtf.ctx, dtf.fromCommitVal)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	fromTable, ok, err := fromRoot.GetTable(dtf.ctx, dtf.tableName)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	if !ok {
-		panic("unable to load from table!")
+		return nil, sql.ErrTableNotFound.New(dtf.tableName)
 	}
 
 	toRoot, err := sqledb.RootAsOf(dtf.ctx, dtf.toCommitVal)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	toTable, ok, err := toRoot.GetTable(dtf.ctx, dtf.tableName)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	if !ok {
-		panic("unable to load to table!")
+		return nil, sql.ErrTableNotFound.New(dtf.tableName)
 	}
 
 	fromSchema, err := fromTable.GetSchema(dtf.ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	toSchema, err := toTable.GetSchema(dtf.ctx)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	fromSchema = schema.MustSchemaFromCols(
@@ -385,7 +416,7 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 			diff.From: diff.FromNamer,
 		})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
 	sch := joiner.GetSchema()
@@ -401,14 +432,12 @@ func (dtf *DiffTableFunction) generateSchema() sql.Schema {
 	//       and make sure we don't need to create a unique identifier for each use of this table function.
 	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
-		// TODO: return err instead
-		panic(err)
+		return nil, err
 	}
 
-	dtf.sch = sch
 	dtf.joiner = joiner
 
-	return sqlSchema.Schema
+	return sqlSchema.Schema, nil
 }
 
 // Schema implements the Node interface
@@ -418,7 +447,7 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 	}
 
 	if dtf.sqlSch == nil {
-		dtf.sqlSch = dtf.generateSchema()
+		panic("schema hasn't been generated yet")
 	}
 
 	return dtf.sqlSch
@@ -426,7 +455,21 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 
 // Resolved implements the Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
-	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
+	resolved := true
+
+	if dtf.tableNameExpr != nil {
+		resolved = resolved && dtf.tableNameExpr.Resolved()
+	}
+
+	if dtf.fromCommitExpr != nil {
+		resolved = resolved && dtf.fromCommitExpr.Resolved()
+	}
+
+	if dtf.toCommitExpr != nil {
+		resolved = resolved && dtf.toCommitExpr.Resolved()
+	}
+
+	return resolved
 }
 
 // String implements the Stringer interface
