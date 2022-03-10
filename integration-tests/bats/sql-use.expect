@@ -4,36 +4,22 @@ set timeout 2
 spawn dolt sql
 expect {
   "doltsql> " { send "use `doltsql/test`;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
 expect {
   "doltsql/test> " { send "show tables;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
 expect {
   "doltsql/test> " { send "use information_schema;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
 expect {
   "information_schema> " { send "show tables;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
 expect {
-  "information_schema> " { send "CREATE DATABASE mydb ;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
+  "information_schema" { send "CREATE DATABASE mydb ;\r"; }
 }
 expect {
   "information_schema> " { send "use mydb ;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
 expect {
   "mydb> " { send "show tables ;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
 }
