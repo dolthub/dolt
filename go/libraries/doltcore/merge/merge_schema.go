@@ -32,6 +32,7 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
+	ColumnCollision
 )
 
 type SchemaConflict struct {
@@ -102,6 +103,8 @@ func (c ChkConflict) String() string {
 		return fmt.Sprintf("two checks with the name '%s'", c.Ours.Name())
 	case TagCollision:
 		return fmt.Sprintf("different check definitions for our check %s and their check %s", c.Ours.Name(), c.Theirs.Name())
+	case ColumnCollision:
+		return fmt.Sprintf("our check %s and their check %s both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
 	}
 	return ""
 }
@@ -795,7 +798,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
 					for k := range theirNewChkColsMap[col] {
 						conflicts = append(conflicts, ChkConflict{
-							Kind:   TagCollision, // TODO: different kind of collision
+							Kind:   ColumnCollision,
 							Ours:   ourChk,
 							Theirs: k,
 						})
