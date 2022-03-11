@@ -16,7 +16,7 @@ teardown() {
     teardown_common
 }
 
-@test "localbs-remotes: push, pull, and clone localbs remote" {
+@test "remotes-localbs: push, pull, and clone localbs remote" {
     # seed with some data
     dolt sql <<SQL
 CREATE TABLE test (
@@ -59,7 +59,7 @@ SQL
     [[ "$output" = "$main_state1" ]] || false
 }
 
-@test "localbs-remotes: clone, fetch, and push from multiple localbs system remotes" {
+@test "remotes-localbs: clone, fetch, and push from multiple localbs system remotes" {
     # seed with some data
     dolt sql <<SQL
 CREATE TABLE test (
@@ -106,7 +106,7 @@ SQL
     [[ "$output" =~ "remotes/something/main" ]] || false
 }
 
-@test "localbs-remotes: fetch displays and updates branch list" {
+@test "remotes-localbs: fetch displays and updates branch list" {
     # create a new branch
     run dolt checkout -b tester
     [ "$status" -eq 0 ]
@@ -153,7 +153,7 @@ SQL
     [[ "$output" =~ "remotes/origin/main" ]] || false
 }
 
-@test "localbs-remotes: clone from a directory that is not a dolt repo" {
+@test "remotes-localbs: clone from a directory that is not a dolt repo" {
     mkdir remotedir
     touch remotedir/some-junk
 
