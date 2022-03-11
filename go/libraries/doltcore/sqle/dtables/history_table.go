@@ -52,17 +52,17 @@ var _ sql.FilteredTable = (*HistoryTable)(nil)
 type HistoryTable struct {
 	name                  string
 	ddb                   *doltdb.DoltDB
-	ss                    *schema.SuperSchema
-	sqlSch                sql.PrimaryKeySchema
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
 	readerCreateFuncCache *ThreadSafeCRFuncCache
+	sqlSch                sql.PrimaryKeySchema
+	targetSch             schema.Schema
 }
 
 // NewHistoryTable creates a history table
 func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -70,26 +70,23 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
 	}
 
-	ss, err := calcSuperSchema(ctx, root, tblName)
+	currentSch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false))
-
-	sch, err := ss.GenerateSchema()
-	if err != nil {
-		return nil, err
-	}
+	colCollection := currentSch.GetAllCols().Append(
+		schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false),
+		schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false),
+		schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false),
+	)
+	sch := schema.MustSchemaFromCols(colCollection)
 
 	if sch.GetAllCols().Size() <= 3 {
 		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
 	}
 
-	tableName := doltdb.DoltHistoryTablePrefix + tblName
-	sqlSch, err := sqlutil.FromDoltSchema(tableName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltHistoryTablePrefix+tblName, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -98,10 +95,10 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 	return &HistoryTable{
 		name:                  tblName,
 		ddb:                   ddb,
-		ss:                    ss,
 		sqlSch:                sqlSch,
 		cmItr:                 cmItr,
 		readerCreateFuncCache: NewThreadSafeCRFuncCache(),
+		targetSch:             sch,
 	}, nil
 }
 
@@ -245,7 +242,7 @@ func (ht *HistoryTable) String() string {
 	return doltdb.DoltHistoryTablePrefix + ht.name
 }
 
-// Schema returns the schema for the history table, which will be the super set of the schemas from the history
+// Schema returns the schema for the history table
 func (ht *HistoryTable) Schema() sql.Schema {
 	return ht.sqlSch.Schema
 }
@@ -259,7 +256,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.ss, ht.rowFilters, ht.readerCreateFuncCache)
+	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.targetSch, ht.rowFilters, ht.readerCreateFuncCache)
 }
 
 // commitPartition is a single commit
@@ -295,11 +292,11 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 }
 
 type rowItrForTableAtCommit struct {
-	rd             table.TableReadCloser
-	sch            schema.Schema
-	toSuperSchConv *rowconv.RowConverter
-	extraVals      map[uint64]types.Value
-	empty          bool
+	rd           table.TableReadCloser
+	sch          schema.Schema
+	rowConverter *rowconv.RowConverter
+	extraVals    map[uint64]types.Value
+	empty        bool
 }
 
 func newRowItrForTableAtCommit(
@@ -307,27 +304,23 @@ func newRowItrForTableAtCommit(
 	h hash.Hash,
 	cm *doltdb.Commit,
 	tblName string,
-	ss *schema.SuperSchema,
+	sch schema.Schema,
 	filters []sql.Expression,
 	readerCreateFuncCache *ThreadSafeCRFuncCache) (*rowItrForTableAtCommit, error) {
 	root, err := cm.GetRootValue()
-
 	if err != nil {
 		return nil, err
 	}
 
 	tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
-
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return &rowItrForTableAtCommit{empty: true}, nil
 	}
 
 	m, err := tbl.GetNomsRowData(ctx)
-
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +335,7 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	toSuperSchConv, err := rowConvForSchema(ctx, tbl.ValueReadWriter(), ss, tblSch)
-
+	rowConverter, err := rowConvForSchema(ctx, tbl.ValueReadWriter(), sch, tblSch)
 	if err != nil {
 		return nil, err
 	}
@@ -352,41 +344,32 @@ func newRowItrForTableAtCommit(
 	//       with the unified indexing path that all other tables use. This logic existed before there was a
 	//       reasonable way to apply multiple filter conditions to an indexed table scan.
 	createReaderFunc, err := readerCreateFuncCache.GetOrCreate(schHash, tbl.Format(), tblSch, filters)
-
 	if err != nil {
 		return nil, err
 	}
 
 	rd, err := createReaderFunc(ctx, m)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch, err := ss.GenerateSchema()
-
 	if err != nil {
 		return nil, err
 	}
 
 	hashCol, hashOK := sch.GetAllCols().GetByName(CommitHashCol)
 	dateCol, dateOK := sch.GetAllCols().GetByName(CommitDateCol)
-	committerCol, commiterOK := sch.GetAllCols().GetByName(CommitterCol)
+	committerCol, committerOK := sch.GetAllCols().GetByName(CommitterCol)
 
-	if !hashOK || !dateOK || !commiterOK {
-		panic("Bug: History table super schema should always have commit_hash")
+	if !hashOK || !dateOK || !committerOK {
+		panic("Bug: History table schema should always have commit_hash")
 	}
 
 	meta, err := cm.GetCommitMeta()
-
 	if err != nil {
 		return nil, err
 	}
 
 	return &rowItrForTableAtCommit{
-		rd:             rd,
-		sch:            sch,
-		toSuperSchConv: toSuperSchConv,
+		rd:           rd,
+		sch:          sch,
+		rowConverter: rowConverter,
 		extraVals: map[uint64]types.Value{
 			hashCol.Tag:      types.String(h.String()),
 			dateCol.Tag:      types.Timestamp(meta.Time()),
@@ -409,7 +392,7 @@ func (tblItr *rowItrForTableAtCommit) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	r, err = tblItr.toSuperSchConv.Convert(r)
+	r, err = tblItr.rowConverter.Convert(r)
 
 	if err != nil {
 		return nil, err
@@ -435,35 +418,13 @@ func (tblItr *rowItrForTableAtCommit) Close(ctx *sql.Context) error {
 	return nil
 }
 
-func calcSuperSchema(ctx context.Context, wr *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	ss, found, err := wr.GetSuperSchema(ctx, tblName)
-
-	if err != nil {
-		return nil, err
-	} else if !found {
-		return nil, doltdb.ErrTableNotFound
-	}
-
-	return ss, nil
-}
-
-// rowConvForSchema creates a RowConverter for transforming rows with the given schema to this super schema.
-func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, ss *schema.SuperSchema, sch schema.Schema) (*rowconv.RowConverter, error) {
+// rowConvForSchema creates a RowConverter for transforming rows with the given schema to the target schema.
+func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, targetSch schema.Schema, sch schema.Schema) (*rowconv.RowConverter, error) {
 	if schema.SchemasAreEqual(sch, schema.EmptySchema) {
 		return rowconv.IdentityConverter, nil
 	}
 
-	inNameToOutName, err := ss.NameMapForSchema(sch)
-	if err != nil {
-		return nil, err
-	}
-
-	ssch, err := ss.GenerateSchema()
-	if err != nil {
-		return nil, err
-	}
-
-	fm, err := rowconv.NameMapping(sch, ssch, inNameToOutName)
+	fm, err := rowconv.TagMappingWithNameFallback(sch, targetSch)
 	if err != nil {
 		return nil, err
 	}

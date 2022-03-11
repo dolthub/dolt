@@ -223,7 +223,7 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneFromCommit)
 	}
 
-	// TODO: Copy and pasted into earlier codepath
+	// TODO: Move rootValFilter back into a method of CommitDiffTable
 	toRoot, toName, toDate, err := rootValForFilter(ctx, dt.toCommitFilter, dt.workingRoot, dt.ddb)
 	if err != nil {
 		return nil, err

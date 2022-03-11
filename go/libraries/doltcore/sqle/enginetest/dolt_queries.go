@@ -96,97 +96,168 @@ var DoltScripts = []enginetest.ScriptTest{
 }
 
 var HistorySystemTableScriptTests = []enginetest.ScriptTest{
-	{
-		Name: "keyless table: filtering results",
-		SetUpScript: []string{
-			"create table foo1 (n int, abcd text);",
-			"insert into foo1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"select dolt_commit('-am', 'inserting into foo1');",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
-			{
-				Query:    "select n, abcd FROM DOLT_HISTORY_foo1 where n=1;",
-				Expected: []sql.Row{{1, "Eins"}},
-			},
-		},
-	},
-
-	// TODO: What are all the different aspects we need to test?
-	//       - Primary key tables and keyless tables
+	// TODO: Remaining test cases:
 	//       - Branch behavior? Docs say it's based on branch commit, but
 	//                          SuperSchema looks across all branches, right?
-	//       - Deleting table?
-	//       - Renaming table
-	//       - Changing table primary key
-	//       - Adding columns to a table
-	//       - Removing columns from a table
-	//       - As Of support
-	//       - Commits in other tables show commit in history table (even though table data didn't change)
-	//
-	// TODO: What's the semantic difference between using AsOf and using the history table?
-	//       Select * from t as of <COMMIT>
-	//       Select * from dolt_history_t where commit_hash=<COMMIT>
-	//       Do customers really need the history table?
-	//
-	// TODO: Should dolt_commit_diff_$table system table be a sql function instead?
-	//        MySQL doesn't support table-valued functions – only single-value functions
+	//                          And the example in the docs seems inconsistent with doc text?
 	{
-		Name: "???",
+		Name: "empty table",
 		SetUpScript: []string{
-			"set @Commit0 = (select HASHOF('HEAD'));",
-
-			"create table t (pk int primary key, c1 int, c2 text);",
-			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-
-			"update t set c1=3, c2='4' where pk=1;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'updating table t, pk=1'));",
-
-			"update t set c1=4, c2='5' where pk in (1, 4);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'updating table t'));",
+			"create table t (n int, c text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{6}},
-			},
-			{
-				Query:    "select pk, c1, c2 from dolt_history_t where commit_hash in (@Commit1);",
-				Expected: []sql.Row{{1, 2, "3"}, {4, 5, "6"}},
-			},
-			{
-				Query:    "select pk, c1, c2 from dolt_history_t where commit_hash in (@Commit2);",
-				Expected: []sql.Row{{1, 3, "4"}, {4, 5, "6"}},
-			},
-			{
-				Query:    "select pk, c1, c2 from dolt_history_t where commit_hash in (@Commit3);",
-				Expected: []sql.Row{{1, 4, "5"}, {4, 4, "5"}},
-			},
-			{
-				Query:    "select pk, c1, c2 from dolt_history_t as of @Commit1;",
-				Expected: []sql.Row{{1, 4, "5"}, {4, 4, "5"}},
+				Query:    "select count(*) from DOLT_HISTORY_t;",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
 	{
-		Name: "???2",
+		Name: "keyless table",
 		SetUpScript: []string{
-			"set @Commit0 = (select HASHOF('HEAD'));",
+			"create table foo1 (n int, de text);",
+			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
 
+			"update foo1 set de='Eins' where n=1;",
+			"set @Commit2 = dolt_commit('-am', 'updating data in foo1');",
+
+			"insert into foo1 values (4, 'Vier');",
+			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from DOLT_HISTORY_foO1;",
+				Expected: []sql.Row{{10}},
+			},
+			{
+				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit1;",
+				Expected: []sql.Row{{1, "Ein"}, {2, "Zwei"}, {3, "Drei"}},
+			},
+			{
+				Query:    "select n, de from dolt_history_Foo1 where commit_hash=@Commit2;",
+				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}},
+			},
+			{
+				Query:    "select n, de from dolt_history_foo1 where commit_hash=@Commit3;",
+				Expected: []sql.Row{{1, "Eins"}, {2, "Zwei"}, {3, "Drei"}, {4, "Vier"}},
+			},
+		},
+	},
+	{
+		Name: "primary key table: basic cases",
+		SetUpScript: []string{
+			"create table foo1 (n int primary key, de text);",
+			"insert into foo1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
+
+			"alter table foo1 add column fr text;",
+			"insert into foo1 values (4, 'Vier', 'Quatre');",
+			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in foo1');",
+
+			"update foo1 set fr='Un' where n=1;",
+			"set @Commit3 = dolt_commit('-am', 'updating data in foo1');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from Dolt_History_Foo1;",
+				Expected: []sql.Row{{11}},
+			},
+			{
+				Query:    "select n, de, fr from dolt_history_FOO1 where commit_hash = @Commit1;",
+				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
+			},
+			{
+				Query:    "select n, de, fr from dolt_history_foo1 where commit_hash = @Commit2;",
+				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+			},
+			{
+				Query:    "select n, de, fr from dolt_history_foo1 where commit_hash = @Commit3;",
+				Expected: []sql.Row{{1, "Eins", "Un"}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+			},
+		},
+	},
+	{
+		Name: "primary key table: non-pk schema changes",
+		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 text);",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
 
-			"update t set c1=3, c2='4' where pk=1;",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'updating table t, pk=1'));",
+			"alter table t drop column c2;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c2');",
 
-			"update t set c1=4, c2='5' where pk in (1, 4);",
-			"set @Commit3 = (select DOLT_COMMIT('-am', 'updating table t'));",
+			"alter table t rename column c1 to c2;",
+			"set @Commit3 = DOLT_COMMIT('-am', 'renaming c1 to c2');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
 				Expected: []sql.Row{{6}},
+			},
+			{
+				Query:       "select c1 from dolt_history_t;",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1;",
+				Expected: []sql.Row{{1, 2}, {4, 5}},
+			},
+			{
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2;",
+				Expected: []sql.Row{{1, 2}, {4, 5}},
+			},
+			{
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit3;",
+				Expected: []sql.Row{{1, 2}, {4, 5}},
+			},
+		},
+	},
+	{
+		Name: "primary key table: rename table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 text);",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+
+			"alter table t rename to t2;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'renaming table to t2');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:       "select count(*) from dolt_history_t;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "select count(*) from dolt_history_T2;",
+				Expected: []sql.Row{{2}},
+			},
+			{
+				Query:    "select pk, c1, c2 from dolt_history_t2 where commit_hash != @Commit1;",
+				Expected: []sql.Row{{1, 2, "3"}, {4, 5, "6"}},
+			},
+		},
+	},
+	{
+		Name: "primary key table: delete and recreate table",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 text);",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+
+			"drop table t;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'dropping table t');",
+
+			"create table t (pk2 int primary key, c12 int, c22 text);",
+			"set @Commit3 = DOLT_COMMIT('-am', 'recreating table t');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				// TODO: This is still returning the data from the old table t
+				//       that was deleted.
+				Query:    "select count(*) from dolt_history_t;",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
