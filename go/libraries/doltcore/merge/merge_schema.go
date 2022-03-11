@@ -33,6 +33,7 @@ const (
 	TagCollision conflictKind = iota
 	NameCollision
 	ColumnCollision
+	InvalidCheckCollision
 )
 
 type SchemaConflict struct {
@@ -100,11 +101,11 @@ type ChkConflict struct {
 func (c ChkConflict) String() string {
 	switch c.Kind {
 	case NameCollision:
-		return fmt.Sprintf("two checks with the name '%s'", c.Ours.Name())
-	case TagCollision:
-		return fmt.Sprintf("different check definitions for our check %s and their check %s", c.Ours.Name(), c.Theirs.Name())
+		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.Ours.Name())
 	case ColumnCollision:
-		return fmt.Sprintf("our check %s and their check %s both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
+		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
+	case InvalidCheckCollision:
+		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
 	}
 	return ""
 }
@@ -155,8 +156,6 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return false, nil
 	})
 
-	// TODO: any overlapping checks are a conflict
-	// TODO: adding a check in one branch and deleting reference column in another branch is also a conflict
 	// Merge checks
 	var mergedChks []schema.Check
 	mergedChks, sc.ChkConflicts, err = mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
@@ -167,16 +166,16 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		return nil, sc, nil
 	}
 
-	// If there any checks that reference columns that no longer exist (have been deleted by other branch)
+	// Look for invalid CHECKs
 	for _, chk := range mergedChks {
+		// CONFLICT: a CHECK now references a column that no longer exists in schema
 		if ok, err := isCheckReferenced(sch, chk); err != nil {
 			return nil, sc, err
 		} else if !ok {
 			// Append to conflicts
 			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
-				Kind:   TagCollision, // TODO: new kind of collision?
+				Kind:   InvalidCheckCollision, // TODO: new kind of collision?
 				Ours:   chk,
-				Theirs: chk,
 			})
 		}
 	}
