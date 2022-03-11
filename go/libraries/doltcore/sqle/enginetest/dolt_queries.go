@@ -95,7 +95,7 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 }
 
-var DoltHistoryScriptTests = []enginetest.ScriptTest{
+var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 	{
 		Name: "keyless table: filtering results",
 		SetUpScript: []string{
@@ -646,7 +646,7 @@ var DoltMerge = []enginetest.ScriptTest{
 	},
 }
 
-var DiffTableTests = []enginetest.ScriptTest{
+var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
@@ -1037,7 +1037,7 @@ var DiffTableTests = []enginetest.ScriptTest{
 	},
 }
 
-var DiffTableFunctionTests = []enginetest.ScriptTest{
+var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	// TODO: Add tests for:
 	//       - primary key changes
 	//       - table delete and recreate
@@ -1363,9 +1363,9 @@ var DiffTableFunctionTests = []enginetest.ScriptTest{
 	},
 }
 
-var UnscopedDiffTableTests = []enginetest.ScriptTest{
+var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 	// There's a bug in queries with where clauses that compare column equality with a
-	// variable. These UnscopedDiffTableTests use "commit_hash in (@Commit1)" to work around that bug.
+	// variable. These UnscopedDiffSystemTableScriptTests use "commit_hash in (@Commit1)" to work around that bug.
 	// https://github.com/dolthub/go-mysql-server/issues/790
 	{
 		Name: "basic case with three tables",
@@ -1572,7 +1572,7 @@ var UnscopedDiffTableTests = []enginetest.ScriptTest{
 	},
 }
 
-var CommitDiffTests = []enginetest.ScriptTest{
+var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
