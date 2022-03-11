@@ -409,7 +409,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 
 	if u.Scheme != "" {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
-			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, fs)
+			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
 
 			if err != nil {
 				return "", "", err
@@ -438,7 +438,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 	return dbfactory.HTTPSScheme, "https://" + path.Join(hostName, u.Path), nil
 }
 
-func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
+func getAbsFileRemoteUrl(urlStr string, scheme string, fs filesys2.Filesys) (string, error) {
 	var err error
 	urlStr = filepath.Clean(urlStr)
 	urlStr, err = fs.Abs(urlStr)
@@ -459,7 +459,7 @@ func getAbsFileRemoteUrl(urlStr string, fs filesys2.Filesys) (string, error) {
 	if !strings.HasPrefix(urlStr, "/") {
 		urlStr = "/" + urlStr
 	}
-	return dbfactory.FileScheme + "://" + urlStr, nil
+	return scheme + "://" + urlStr, nil
 }
 
 // GetDefaultBranch returns the default branch from among the branches given, returning
