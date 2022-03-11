@@ -275,7 +275,7 @@ func TestHedgerContextCancelObeyed(t *testing.T) {
 	<-resCh
 }
 
-func TestFixedHedgerHedgesAtFixedInterval(t *testing.T) {
+func TestHedgerObeysStrategy(t *testing.T) {
 	before := MaxHedgesPerRequest
 	defer func() {
 		MaxHedgesPerRequest = before
