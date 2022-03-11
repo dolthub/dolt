@@ -50,13 +50,10 @@ var DownloadHedger *Hedger
 func init() {
 	// TODO: This does not necessarily respond well to changes in network
 	// conditions during the program's runtime.
-	DownloadHedger = NewHedger(
-		8,
-		NewMinStrategy(
-			1*time.Second,
-			NewPercentileStrategy(0, 1*time.Hour, 95.0),
-		),
-	)
+	e := NewPercentileEstimator(0, 1*time.Hour, 95.0)
+	s := NewMinHedgeStrategy(1*time.Second,
+		NewExponentialHedgeStrategy(NewEstimateStrategy(e)))
+	DownloadHedger = NewHedger(8, s, e)
 }
 
 var ErrUploadFailed = errors.New("upload failed")
@@ -1077,10 +1074,10 @@ type urlFactoryFunc func(error) (string, error)
 
 func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			return rangeDownloadWithRetries(ctx, stats, fetcher, offset, length, n, urlStrF)
 		},
-		Size: int(length),
+		Size: length,
 	})
 	if err != nil {
 		return nil, err
