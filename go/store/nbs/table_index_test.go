@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -181,4 +182,83 @@ func TestResolveFewHash(t *testing.T) {
 			assert.Less(t, 0, len(res))
 		}
 	}
+}
+
+func TestAmbiguousShortHash(t *testing.T) {
+	// create chunks
+	chunks := []fakeChunk{
+		{address: addrFromPrefix("abcdef"), data: fakeData},
+		{address: addrFromPrefix("abcxyz"), data: fakeData},
+		{address: addrFromPrefix("abcd123"), data: fakeData},
+	}
+
+	// build table index
+	td, _, err := buildFakeChunkTable(chunks)
+	idx, err := parseTableIndexByCopy(td)
+	require.NoError(t, err)
+
+	tests := []struct {
+		pre string
+		sz  int
+	}{
+		{pre: "a", sz: 3},
+		{pre: "b", sz: 0},
+		{pre: "z", sz: 0},
+		{pre: "ab", sz: 3},
+		{pre: "abc", sz: 3},
+		{pre: "abcd", sz: 2},
+		{pre: "abcx", sz: 1},
+		{pre: "abcxde", sz: 1},
+		{pre: "abcxd1", sz: 1},
+		{pre: "abcdef", sz: 1},
+		{pre: "abcxyz", sz: 1},
+		{pre: "abcd123", sz: 1},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("Expect %d results for prefix %s", test.sz, test.pre)
+		t.Run(name, func(t *testing.T) {
+			res, err := idx.ResolveShortHash(test.pre)
+			require.NoError(t, err)
+			assert.Len(t, res, test.sz)
+		})
+	}
+}
+
+// fakeChunk is chunk with a faked address
+type fakeChunk struct {
+	address addr
+	data    []byte
+}
+
+var fakeData = []byte("supercalifragilisticexpialidocious")
+
+func addrFromPrefix(prefix string) (a addr) {
+	// create a full length addr from a prefix
+	copy(a[:], []byte(prefix))
+	return
+}
+
+func buildFakeChunkTable(chunks []fakeChunk) ([]byte, addr, error) {
+	totalData := uint64(0)
+	for _, chunk := range chunks {
+		totalData += uint64(len(chunk.data))
+	}
+	capacity := maxTableSize(uint64(len(chunks)), totalData)
+
+	buff := make([]byte, capacity)
+
+	tw := newTableWriter(buff, nil)
+
+	for _, chunk := range chunks {
+		tw.addChunk(chunk.address, chunk.data)
+	}
+
+	length, blockHash, err := tw.finish()
+
+	if err != nil {
+		return nil, addr{}, err
+	}
+
+	return buff[:length], blockHash, nil
 }
