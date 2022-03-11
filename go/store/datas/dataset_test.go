@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -36,6 +37,12 @@ func mustGetValue(v types.Value, found bool, err error) types.Value {
 	d.PanicIfError(err)
 	d.PanicIfFalse(found)
 	return v
+}
+
+func mustHeadAddr(ds Dataset) hash.Hash {
+	h, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return h
 }
 
 func TestExplicitBranchUsingDatasets(t *testing.T) {
@@ -59,7 +66,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{ParentsList: mustList(types.NewList(context.Background(), store, mustHeadRef(ds1)))})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(a))
 
@@ -78,14 +85,12 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_Default)), mustRef(types.NewRef(mustHead(ds2), types.Format_Default)))
-	assert.NoError(err)
 	d := types.String("d")
-	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{ParentsList: mergeParents})
+	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(d))
 
-	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{ParentsList: mergeParents})
+	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(d))
 }

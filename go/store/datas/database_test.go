@@ -336,11 +336,8 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 	d.PanicIfError(derr)
 }
 
-func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
-	pList, err := types.NewList(context.Background(), vrw, parents...)
-	d.PanicIfError(err)
-
-	return CommitOptions{ParentsList: pList}
+func newOpts(vrw types.ValueReadWriter, parent types.Ref) CommitOptions {
+	return CommitOptions{Parents: []hash.Hash{parent.TargetHash()}}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -644,13 +641,8 @@ func (suite *DatabaseSuite) TestMetaOption() {
 	ds, err := suite.db.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 
-	m, err := types.NewStruct(types.Format_Default, "M", types.StructData{
-		"author": types.String("arv"),
-	})
-
-	suite.NoError(err)
-	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: m})
+	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
 	suite.NoError(err)
 	c := mustHead(ds)
-	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("author")))
+	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("name")))
 }

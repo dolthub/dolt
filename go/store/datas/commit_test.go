@@ -274,6 +274,18 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert.False(IsCommit(noMetaCommit))
 }
 
+func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Struct) []hash.Hash {
+	ret := make([]hash.Hash, len(commits))
+	for i, c := range commits {
+		r, err := types.NewRef(c, vrw.Format())
+		if err != nil {
+			panic(err)
+		}
+		ret[i] = r.TargetHash()
+	}
+	return ret
+}
+
 // Convert list of Struct's to List<Ref>
 func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, error) {
 	l, err := types.NewList(context.Background(), vrw)
@@ -345,7 +357,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, types.Ref) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
-	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{ParentsList: mustList(toRefList(db, parents...))})
+	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
 	assert.NoError(t, err)
 	return mustHead(ds), mustHeadRef(ds)
 }

@@ -105,20 +105,51 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 }
 
 func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
-	if opts.ParentsList == types.EmptyList || opts.ParentsList.Len() == 0 {
+	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return types.Struct{}, errors.New("cannot create commit without parents")
 	}
 
-	if opts.Meta.IsZeroValue() {
-		opts.Meta = types.EmptyStruct(vrw.Format())
-	}
+	return newCommitForValue(ctx, vrw, v, opts)
+}
 
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, opts.ParentsList)
+func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
+	var metaSt types.Struct
+	var err error
+	if opts.Meta == nil {
+		metaSt = types.EmptyStruct(vrw.Format())
+	} else {
+		metaSt, err = opts.Meta.toNomsStruct(vrw.Format())
+	}
 	if err != nil {
 		return types.Struct{}, err
 	}
 
-	return newCommit(ctx, v, opts.ParentsList, parentsClosure, includeParentsClosure, opts.Meta)
+	refs := make([]types.Value, len(opts.Parents))
+	for i, h := range opts.Parents {
+		commitSt, err := vrw.ReadValue(ctx, h)
+		if err != nil {
+			return types.Struct{}, err
+		}
+		if commitSt == nil {
+			panic("parent not found " + h.String())
+		}
+		ref, err := types.NewRef(commitSt, vrw.Format())
+		if err != nil {
+			return types.Struct{}, err
+		}
+		refs[i] = ref
+	}
+	parentsList, err := types.NewList(ctx, vrw, refs...)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, parentsList)
+	if err != nil {
+		return types.Struct{}, err
+	}
+
+	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
 }
 
 func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {

@@ -171,18 +171,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 	cm, _ := datas.NewCommitMetaWithUserTS(name, email, "Initialize data repository", t)
 
-	parents, err := types.NewList(ctx, ddb.vrw)
-	if err != nil {
-		return err
-	}
-
-	meta, err := cm.ToNomsStruct(ddb.vrw.Format())
-
-	if err != nil {
-		return err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: meta}
+	commitOpts := datas.CommitOptions{Meta: cm}
 
 	cb := ref.NewInternalRef(creationBranch)
 	ds, err = ddb.db.GetDataset(ctx, cb.String())
@@ -577,47 +566,26 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	l, err := types.NewList(ctx, ddb.vrw)
-
-	if err != nil {
-		return nil, err
-	}
-
-	parentEditor := l.Edit()
-
+	var parents []hash.Hash
 	headRef, hasHead, err := ds.MaybeHeadRef()
-
 	if err != nil {
 		return nil, err
 	}
 
 	if hasHead {
-		parentEditor = parentEditor.Append(headRef)
+		parents = append(parents, headRef.TargetHash())
 	}
 
 	for _, cm := range parentCommits {
 		rf, err := types.NewRef(cm.commitSt, ddb.vrw.Format())
-
 		if err != nil {
 			return nil, err
 		}
 
-		parentEditor = parentEditor.Append(rf)
+		parents = append(parents, rf.TargetHash())
 	}
 
-	parents, err := parentEditor.List(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := cm.ToNomsStruct(ddb.vrw.Format())
-
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 	ds, err = ddb.db.GetDataset(ctx, dref.String())
 
 	if err != nil {
@@ -650,33 +618,16 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
-	l, err := types.NewList(ctx, ddb.vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	parentEditor := l.Edit()
-
+	var parents []hash.Hash
 	for _, cm := range parentCommits {
 		rf, err := types.NewRef(cm.commitSt, ddb.vrw.Format())
 		if err != nil {
 			return nil, err
 		}
-
-		parentEditor = parentEditor.Append(rf)
+		parents = append(parents, rf.TargetHash())
 	}
 
-	parents, err := parentEditor.List(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	st, err := cm.ToNomsStruct(ddb.vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-
-	commitOpts := datas.CommitOptions{ParentsList: parents, Meta: st}
+	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
 	commitSt, err = datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
 	if err != nil {
 		return nil, err
