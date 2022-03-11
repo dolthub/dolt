@@ -15,7 +15,6 @@
 package dsess
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -795,50 +794,21 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	if isHead, dbName := IsHeadKey(key); isHead {
-		err := sess.setHeadSessionVar(ctx, value, dbName)
-		if err != nil {
-			return err
-		}
-
-		dbState, _, err := sess.LookupDbState(ctx, dbName)
-		if err != nil {
-			return err
-		}
-
-		dbState.detachedHead = true
-		return nil
-	}
-
-	if isHeadRef, dbName := IsHeadRefKey(key); isHeadRef {
-		valStr, isStr := value.(string)
-		if !isStr {
+	if ok, dbName, suffix := IsVersionKey(key); ok {
+		valStr, ok := value.(string)
+		if !ok {
 			return doltdb.ErrInvalidBranchOrHash
 		}
 
-		headRef, err := ref.Parse(valStr)
+		wsRef, err := sess.resolveVersionKey(ctx, dbName, suffix, valStr)
 		if err != nil {
 			return err
 		}
 
-		wsRef, err := ref.WorkingSetRefForHead(headRef)
-		if err != nil {
+		if err = sess.SwitchWorkingSet(ctx, dbName, wsRef); err != nil {
 			return err
 		}
-
-		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
-		if err != nil {
-			return err
-		}
-
-		return sess.Session.SetSessionVariable(ctx, key, headRef.String())
 	}
-
-	if isWorking, dbName := IsWorkingKey(key); isWorking {
-		return sess.setWorkingSessionVar(ctx, value, dbName)
-	}
-
-	// TODO: allow setting staged directly via var? seems like no
 
 	if strings.ToLower(key) == "foreign_key_checks" {
 		return sess.setForeignKeyChecksSessionVar(ctx, key, value)
@@ -875,76 +845,53 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
-func (sess *Session) setWorkingSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
-	valStr, isStr := value.(string) // valStr represents a root val hash
-	if !isStr || !hash.IsValid(valStr) {
-		return doltdb.ErrInvalidHash
-	}
-
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
+func (sess *Session) resolveVersionKey(ctx *sql.Context, dbName, suffix, value string) (ws ref.WorkingSetRef, err error) {
+	ddb, ok := sess.GetDoltDB(ctx, dbName)
 	if !ok {
 		return sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	root, err := dbState.dbData.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
-	if errors.Is(doltdb.ErrNoRootValAtHash, err) {
-		return nil
-	} else if err != nil {
-		return err
+	switch suffix {
+	case WorkingKeySuffix:
+		// look for a working set with this hash
+		return doltdb.ResolveWorkingSetFromHash(ctx, ddb, hash.Parse(value))
+
+	case HeadRefKeySuffix:
+		// find the working set for the given branch
+		headRef, err := ref.Parse(value)
+		if err != nil {
+			return ws, err
+		}
+		return ref.WorkingSetRefForHead(headRef)
+
+	case HeadKeySuffix:
+		// resolve a commit
+		cs, err := doltdb.NewCommitSpec(value)
+		if err != nil {
+			return ws, err
+		}
+
+		cwb, err := sess.CWBHeadRef(ctx, dbName)
+		if err != nil {
+			return ws, err
+		}
+
+		cm, err := ddb.Resolve(ctx, cs, cwb)
+		if err != nil {
+			return ws, err
+		}
+
+		// look for a branch corresponding to the commit
+		headRef, err := doltdb.ResolveBranchFromHeadCommit(ctx, ddb, cm)
+		if err != nil {
+			return ws, nil
+		}
+		// look for a working set for the given branch
+		return ref.WorkingSetRefForHead(headRef)
+
+	default:
+		return ws, fmt.Errorf("could not resolve version key %s", suffix)
 	}
-
-	return sess.SetRoot(ctx, dbName, root)
-}
-
-func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	valStr, isStr := value.(string)
-	if !isStr || !hash.IsValid(valStr) {
-		return doltdb.ErrInvalidHash
-	}
-
-	cs, err := doltdb.NewCommitSpec(valStr)
-	if err != nil {
-		return err
-	}
-
-	cm, err := dbState.dbData.Ddb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return err
-	}
-
-	dbState.headCommit = cm
-
-	root, err := cm.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	dbState.headRoot = root
-
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), value)
-	if err != nil {
-		return err
-	}
-
-	// TODO: preserve working set changes?
-	return sess.SetRoot(ctx, dbName, root)
-}
-
-// SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
-// the working and head session variable may be updated at different times.
-func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error {
-	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
 // HasDB returns true if |sess| is tracking state for this database.

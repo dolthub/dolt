@@ -91,6 +91,14 @@ func (m MergeState) PreMergeWorkingRoot() *RootValue {
 	return m.preMergeWorking
 }
 
+func ResolveWorkingSetFromHash(ctx context.Context, ddb *DoltDB, h hash.Hash) (ref.WorkingSetRef, error) {
+	return ref.WorkingSetRef{}, nil
+}
+
+func ResolveBranchFromHeadCommit(ctx context.Context, ddb *DoltDB, cm *Commit) (ref.BranchRef, error) {
+	return ref.BranchRef{}, nil
+}
+
 type WorkingSet struct {
 	Name        string
 	meta        *datas.WorkingSetMeta

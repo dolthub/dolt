@@ -49,7 +49,7 @@ type DatabaseSessionState struct {
 	WorkingSet            *doltdb.WorkingSet
 	dbData                env.DbData
 	WriteSession          writer.WriteSession
-	detachedHead          bool
+	detachedHead          bool // todo(andy): remove
 	readOnly              bool
 	dirty                 bool
 	readReplica           *env.Remote

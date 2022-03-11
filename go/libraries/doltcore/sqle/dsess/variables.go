@@ -159,3 +159,16 @@ func IsWorkingKey(key string) (bool, string) {
 
 	return false, ""
 }
+
+func IsVersionKey(key string) (ok bool, prefix, suffix string) {
+	if ok, prefix = IsHeadKey(key); ok {
+		return ok, prefix, HeadKeySuffix
+	}
+	if ok, prefix = IsHeadRefKey(key); ok {
+		return ok, prefix, HeadRefKeySuffix
+	}
+	if ok, prefix = IsWorkingKey(key); ok {
+		return ok, prefix, WorkingKeySuffix
+	}
+	return
+}
