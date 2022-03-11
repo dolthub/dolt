@@ -267,7 +267,7 @@ func (s *SqlEngineTableWriter) TableSchema() sql.PrimaryKeySchema {
 // forceDropTableIfNeeded drop the given table in case the -f parameter is passed.
 func (s *SqlEngineTableWriter) forceDropTableIfNeeded() error {
 	if s.force {
-		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS %s", s.tableName))
+		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("DROP TABLE IF EXISTS `%s`", s.tableName))
 		return err
 	}
 
@@ -280,7 +280,7 @@ func (s *SqlEngineTableWriter) createOrEmptyTableIfNeeded() error {
 	case CreateOp:
 		return s.createTable()
 	case ReplaceOp:
-		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("TRUNCATE TABLE %s", s.tableName))
+		_, _, err := s.se.Query(s.sqlCtx, fmt.Sprintf("TRUNCATE TABLE `%s`", s.tableName))
 		return err
 	default:
 		return nil
