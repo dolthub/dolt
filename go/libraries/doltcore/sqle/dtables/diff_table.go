@@ -605,7 +605,7 @@ func (dps *DiffPartitions) Close(*sql.Context) error {
 	return nil
 }
 
-// rowConvForSchema creates a RowConverter for transforming rows with the given schema to this super schema.
+// rowConvForSchema creates a RowConverter for transforming rows with the given schema a target schema.
 func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, targetSch, srcSch schema.Schema) (*rowconv.RowConverter, error) {
 	if schema.SchemasAreEqual(srcSch, schema.EmptySchema) {
 		return rowconv.IdentityConverter, nil
