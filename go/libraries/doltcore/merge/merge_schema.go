@@ -632,7 +632,7 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 	return pruned, nil
 }
 
-// checksInCommon finds all the common checks between ourChks and theirChks, and detects varying conflicts
+// checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts
 func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict) {
 	// Make map of their checks for fast lookup
 	theirChkMap := make(map[string]schema.Check)
@@ -650,53 +650,46 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 	var common []schema.Check
 	var conflicts []ChkConflict
 	for _, ourChk := range ourChks.AllChecks() {
-		// Check if ours and theirs both have a check by this name
+		// See if ours and theirs both have a CHECK by this name
 		theirChk, ok := theirChkMap[ourChk.Name()]
+		// Ours and theirs do have this CHECK in common, will be dealt with in chkCollectionSetDifference
 		if !ok {
 			continue
 		}
 
-		// Ensure check is defined the same
+		// NO CONFLICT: our and their check are defined exactly the same
 		if ourChk == theirChk {
 			common = append(common, ourChk)
 			continue
 		}
 
-		// Check if ancestor also has this check
+		// See if ancestor also has this check
 		ancChk, ok := ancChkMap[ourChk.Name()]
+		// CONFLICT: our and their CHECK have the same name, but different definitions
 		if !ok {
-			// Check was added on our and their branch with different definitions
 			conflicts = append(conflicts, ChkConflict{
-				Kind:   TagCollision,
+				Kind:   NameCollision,
 				Ours:   ourChk,
 				Theirs: theirChk,
 			})
 			continue
 		}
 
-		// Check modified on our branch?
+		// NO CONFLICT: CHECK was modified in our branch, so update check definition with ours
 		if ancChk == theirChk {
-			conflicts = append(conflicts, ChkConflict{
-				Kind:   NameCollision,
-				Ours:   ourChk,
-				Theirs: theirChk,
-			})
+			common = append(common, ourChk)
 			continue
 		}
 
-		// Check modified on their branch?
+		// NO CONFLICT: CHECK was modified in their branch, so update check definition with theirs
 		if ancChk == ourChk {
-			conflicts = append(conflicts, ChkConflict{
-				Kind:   NameCollision,
-				Ours:   ourChk,
-				Theirs: theirChk,
-			})
+			common = append(common, ourChk)
 			continue
 		}
 
-		// Check modified on both
+		// CONFLICT: CHECK was modified on both
 		conflicts = append(conflicts, ChkConflict{
-			Kind:   TagCollision,
+			Kind:   NameCollision,
 			Ours:   ourChk,
 			Theirs: theirChk,
 		})
@@ -708,7 +701,7 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 // chkCollectionSetDifference returns the set difference left - right.
 func chkCollectionSetDifference(left, right schema.CheckCollection) []schema.Check {
 	// Make map of right check for fast look up
-	rChkMap := make(map[string]bool) // TODO: should it be map[schema.Check]bool instead?
+	rChkMap := make(map[string]bool)
 	for _, chk := range right.AllChecks() {
 		rChkMap[chk.Name()] = true
 	}
@@ -737,9 +730,10 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		theirNewChksMap[chk.Name()] = chk
 	}
 
-	// Check for name conflicts between checks added on each branch since the ancestor
+	// Compare CHECKs with the same name
 	for _, ourChk := range ourNewChks {
 		theirChk, ok := theirNewChksMap[ourChk.Name()]
+		// CONFLICT: our and their CHECK have the same name, but different definitions
 		if ok && ourChk != theirChk {
 			conflicts = append(conflicts, ChkConflict{
 				Kind:   NameCollision,
@@ -754,10 +748,10 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		return nil, conflicts, nil
 	}
 
-	// Create a map from each column referenced by each of their checks to the checks themselves
-	theirNewChkColsMap := make(map[string]map[schema.Check]bool) // TODO: maybe it should just be map[string][]schema.Check
+	// Create a map from each column to any CHECKs that reference that column
+	theirNewChkColsMap := make(map[string]map[schema.Check]bool)
 	for _, chk := range theirNewChks {
-		// Extract columns referenced by check
+		// Extract columns referenced by CHECK
 		chkDef := sql.CheckDefinition{
 			Name:            chk.Name(),
 			CheckExpression: chk.Expression(),
@@ -768,7 +762,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			return nil, nil, err
 		}
 
-		// Put each check into each column that is referenced
+		// Mark that col as referenced by CHECK
 		for _, col := range colNames {
 			if _, ok := theirNewChkColsMap[col]; !ok {
 				theirNewChkColsMap[col] = make(map[schema.Check]bool)
@@ -777,9 +771,9 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 		}
 	}
 
-	// Check for overlapping columns between our new Checks and their new Checks
+	// Look for overlapping columns between our new CHECKs and their new CHECKs
 	for _, ourChk := range ourNewChks {
-		// Extract columns referenced by check
+		// Extract columns referenced by CHECK
 		chkDef := sql.CheckDefinition{
 			Name:            ourChk.Name(),
 			CheckExpression: ourChk.Expression(),
@@ -790,11 +784,11 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			return nil, nil, err
 		}
 
-		// Check that all overlapping checks on columns are the same check
+		// TODO: redundant
 		for _, col := range colNames {
-			// Check if this column is referenced in their new checks
+			// See if this column is referenced in their new CHECKs
 			if _, ok := theirNewChkColsMap[col]; ok {
-				// If the two checks that reference this column are not the same, add conflict
+				// CONFLICT: our and their CHECK reference the same column and are not the same CHECK
 				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
 					for k := range theirNewChkColsMap[col] {
 						conflicts = append(conflicts, ChkConflict{
