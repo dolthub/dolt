@@ -1364,9 +1364,6 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 }
 
 var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
-	// There's a bug in queries with where clauses that compare column equality with a
-	// variable. These UnscopedDiffSystemTableScriptTests use "commit_hash in (@Commit1)" to work around that bug.
-	// https://github.com/dolthub/go-mysql-server/issues/790
 	{
 		Name: "basic case with three tables",
 		SetUpScript: []string{
@@ -1389,15 +1386,15 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{5}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{{"z"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit3",
 				Expected: []sql.Row{{"y"}, {"z"}},
 			},
 		},
@@ -1423,15 +1420,15 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{4}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{{"z"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit3",
 				Expected: []sql.Row{{"x1"}},
 			},
 		},
@@ -1453,11 +1450,11 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{{"x"}},
 			},
 		},
@@ -1481,15 +1478,15 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit3",
 				Expected: []sql.Row{{"y"}},
 			},
 		},
@@ -1518,15 +1515,15 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{5}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{{"z"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit3",
 				Expected: []sql.Row{{"y"}, {"z"}},
 			},
 		},
@@ -1557,15 +1554,15 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit1)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit1",
 				Expected: []sql.Row{{"x"}, {"y"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit2)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit2",
 				Expected: []sql.Row{{"z"}},
 			},
 			{
-				Query:    "select table_name from DOLT_DIFF where commit_hash in (@Commit3)",
+				Query:    "select table_name from DOLT_DIFF where commit_hash = @Commit3",
 				Expected: []sql.Row{},
 			},
 		},
