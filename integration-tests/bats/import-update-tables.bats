@@ -719,7 +719,7 @@ DELIM
 
 @test "import-update-tables: import supports tables with dashes in the name" {
     cat <<DELIM > file.csv
-pk, c1
+pk,c1
 0,0
 DELIM
 
@@ -727,7 +727,11 @@ DELIM
     [ $status -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
 
-    skip "This fails right now with syntax error at position 20 near 'this'"
     run dolt table import -u this-is-a-table file.csv
     [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM \`this-is-a-table\`"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk,c1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
 }

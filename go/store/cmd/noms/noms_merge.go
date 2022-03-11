@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/merge"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/status"
@@ -114,12 +115,7 @@ func runMerge(ctx context.Context, args []string) int {
 		return 1
 	}
 
-	p, err := types.NewList(ctx, vrw, leftHeadRef, rightHeadRef)
-	d.PanicIfError(err)
-
-	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{
-		ParentsList: p,
-	})
+	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{Parents: []hash.Hash{leftHeadRef.TargetHash(), rightHeadRef.TargetHash()}})
 	d.PanicIfError(err)
 
 	status.Printf("Done")
