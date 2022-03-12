@@ -207,20 +207,20 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 
 func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
+		filters[i], _ = expression.TransformUpNoCopy(filters[i], func(e sql.Expression) (sql.Expression, bool, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
-				return e, nil
+				return e, false, nil
 			}
 			switch gf.Name() {
 			case CommitHashCol:
-				return gf.WithIndex(0), nil
+				return gf.WithIndex(0), true, nil
 			case CommitterCol:
-				return gf.WithIndex(1), nil
+				return gf.WithIndex(1), true, nil
 			case CommitDateCol:
-				return gf.WithIndex(2), nil
+				return gf.WithIndex(2), true, nil
 			default:
-				return gf, nil
+				return gf, false, nil
 			}
 		})
 	}

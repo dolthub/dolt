@@ -230,6 +230,9 @@ func Serve(
 		return mySQLServer.Close()
 	})
 
+	//p := profile.Start()
+	//defer p.Stop()
+
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)

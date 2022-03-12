@@ -40,7 +40,7 @@ require (
 	github.com/mitchellh/mapstructure v1.3.2 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/pkg/errors v0.9.1
-	github.com/pkg/profile v1.5.0
+	github.com/pkg/profile v1.6.0
 	github.com/rivo/uniseg v0.1.0
 	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/shopspring/decimal v1.2.0
