@@ -782,32 +782,26 @@ SQL
     [ $status -eq 0 ]
 }
 
-@test "sql-merge: merging preserved check constraints" {
+# what happens when the data conflicts with new check?
+@test "sql-merge: non-ff merge carries over check constraints" {
     dolt sql -q "create table t (i int)"
     dolt commit -am "initial commit"
 
-    dolt branch b1
-    dolt branch b2
+    dolt checkout -b other
+    dolt sql -q "insert into table t values (1)"
+    dolt commit -am "changes to other"
 
-    dolt checkout b1
-    dolt sql -q "alter table t add check (i > 0)"
-    run dolt sql -q "show create table t"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "(\`i\` > 0)" ]] || false
-    dolt commit -am "changes to b1"
-
-    dolt checkout b2
+    dolt checkout main
     dolt sql -q "alter table t add check (i < 10)"
     run dolt sql -q "show create table t"
     [ $status -eq 0 ]
     [[ "$output" =~ "(\`i\` < 10)" ]] || false
-    dolt commit -am "changes to b2"
+    dolt commit -am "changes to main"
 
-    dolt checkout main
-    run dolt merge b1
+    run dolt merge other
     [ $status -eq 0 ]
-    run dolt merge b2
-    [ $status -eq 1 ]
+
+    # TODO: verify that both data and conflict are there
     [[ "$output" =~ "both reference the same column(s)" ]] || false
 }
 
