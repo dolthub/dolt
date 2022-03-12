@@ -836,6 +836,23 @@ func (ddb *DoltDB) GetRefsOfType(ctx context.Context, refTypeFilter map[ref.RefT
 	return refs, err
 }
 
+func (ddb *DoltDB) VisitWorkingSets(ctx context.Context, visit func(r ref.WorkingSetRef, addr hash.Hash) error) error {
+	dss, err := ddb.db.Datasets(ctx)
+	if err != nil {
+		return err
+	}
+
+	return dss.IterAll(ctx, func(key string, addr hash.Hash) (err error) {
+		if ref.IsWorkingSet(key) {
+			wsr := ref.NewWorkingSetRef(key)
+			if err = visit(wsr, addr); err != nil {
+				return err
+			}
+		}
+		return
+	})
+}
+
 // NewBranchAtCommit creates a new branch with HEAD at the commit given. Branch names must pass IsValidUserBranchName.
 func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef, commit *Commit) error {
 	if !IsValidBranchRef(branchRef) {
