@@ -174,15 +174,14 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		} else if !ok {
 			// Append to conflicts
 			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
-				Kind:   InvalidCheckCollision, // TODO: new kind of collision?
+				Kind:   InvalidCheckCollision,
 				Ours:   chk,
 			})
 		}
 	}
 
-	// Add all merged checks to merged schema
+	// Add all merged CHECKs to merged schema
 	for _, chk := range mergedChks {
-
 		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
 	}
 
