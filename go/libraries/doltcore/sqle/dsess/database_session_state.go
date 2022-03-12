@@ -25,15 +25,14 @@ import (
 )
 
 type InitialDbState struct {
-	Db           sql.Database
-	HeadCommit   *doltdb.Commit
-	DetachedHead bool
-	ReadOnly     bool
-	WorkingSet   *doltdb.WorkingSet
-	DbData       env.DbData
-	ReadReplica  *env.Remote
-	Remotes      map[string]env.Remote
-	Branches     map[string]env.BranchConfig
+	Db          sql.Database
+	HeadCommit  *doltdb.Commit
+	ReadOnly    bool
+	WorkingSet  *doltdb.WorkingSet
+	DbData      env.DbData
+	ReadReplica *env.Remote
+	Remotes     map[string]env.Remote
+	Branches    map[string]env.BranchConfig
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
@@ -49,7 +48,6 @@ type DatabaseSessionState struct {
 	WorkingSet            *doltdb.WorkingSet
 	dbData                env.DbData
 	WriteSession          writer.WriteSession
-	detachedHead          bool // todo(andy): remove
 	readOnly              bool
 	dirty                 bool
 	readReplica           *env.Remote

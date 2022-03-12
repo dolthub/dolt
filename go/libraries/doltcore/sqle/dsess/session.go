@@ -179,7 +179,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return nil, err
 	}
 
-	if sessionState.readOnly && sessionState.detachedHead {
+	if sessionState.readOnly {
 		return DisabledTransaction{}, nil
 	}
 
@@ -622,7 +622,7 @@ func (sess *Session) SetWorkingSet(
 	}
 	sessionState.WorkingSet = ws
 
-	if headRoot == nil && !sessionState.detachedHead {
+	if headRoot == nil {
 		cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
 		if err != nil {
 			return err
@@ -945,7 +945,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
+	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	nbf := sessionState.dbData.Ddb.Format()
