@@ -44,6 +44,7 @@ func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 }
 
 // Eval implements the Expression interface.
+// todo(andy): merge with DOLT_MERGE()
 func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 

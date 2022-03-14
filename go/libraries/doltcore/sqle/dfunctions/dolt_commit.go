@@ -41,12 +41,16 @@ func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 }
 
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	return makeDoltCommit(ctx, row, d.Children())
+}
+
+func makeDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
 	ap := cli.CreateCommitArgParser()
 
 	// Get the args for DOLT_COMMIT.
-	args, err := getDoltArgs(ctx, row, d.Children())
+	args, err := getDoltArgs(ctx, row, exprs)
 	if err != nil {
 		return nil, err
 	}
