@@ -50,7 +50,7 @@ const (
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return doDoltCommit(ctx, row, d.Children())
+	return doDoltMerge(ctx, row, d.Children())
 }
 
 func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
