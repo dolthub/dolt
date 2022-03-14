@@ -19,6 +19,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -161,11 +162,16 @@ func StartEphemeralPrinter() *EphemeralPrinter {
 	return e
 }
 
-// Printf formats and prints a string to the printer. You should not add
-// newlines in this string. If you need to display multiple lines, use Newline.
+// Printf formats and prints a string to the printer. Printf will panic if
+// |format| contains the newline character. If you need to display multiple
+// lines, use Newline.
 func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 	if outputIsClosed() {
 		return
+	}
+
+	if strings.ContainsRune(format, '\n') {
+		panic("EphemeralPrinter Printf was passed a newline, this will break line clearing functionality!")
 	}
 
 	_, _ = fmt.Fprintf(e.outW, format, a...)
@@ -188,7 +194,6 @@ func (e *EphemeralPrinter) Newline() {
 	if outputIsClosed() {
 		return
 	}
-
 	_, _ = e.w.Write([]byte("\n"))
 	e.outW = e.w.Newline()
 }
@@ -199,6 +204,8 @@ func (e *EphemeralPrinter) start() {
 
 // Stop stops the ephemeral printer. It must be called after using StartEphemeralPrinter
 func (e *EphemeralPrinter) Stop() {
+	// Writing null character here to clear the output
+	_, _ = e.w.Write([]byte("\x00"))
 	e.w.Stop()
 }
 
