@@ -34,7 +34,7 @@ func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 
 // Eval implements the Expression interface.
 func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return makeDoltCommit(ctx, row, cf.Children())
+	return doDoltCommit(ctx, row, cf.Children())
 }
 
 // String implements the Stringer interface.

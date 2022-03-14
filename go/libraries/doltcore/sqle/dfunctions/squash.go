@@ -15,13 +15,16 @@
 package dfunctions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const SquashFuncName = "squash"
@@ -119,4 +122,51 @@ func (s SquashFunc) WithChildren(children ...sql.Expression) (sql.Expression, er
 	}
 
 	return NewSquashFunc(children[0]), nil
+}
+
+func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
+	paramStr, ok := val.(string)
+
+	if !ok {
+		return nil, hash.Hash{}, errors.New("branch name is not a string")
+	}
+
+	branchRef, err := getBranchInsensitive(ctx, paramStr, ddb)
+
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	cm, err := ddb.ResolveCommitRef(ctx, branchRef)
+
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	cmh, err := cm.HashOf()
+
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	return cm, cmh, nil
+}
+
+func getHead(ctx *sql.Context, sess *dsess.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
+	head, err := sess.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
+	hh, err := head.HashOf()
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
+	headRoot, err := head.GetRootValue()
+	if err != nil {
+		return nil, hash.Hash{}, nil, err
+	}
+
+	return head, hh, headRoot, nil
 }

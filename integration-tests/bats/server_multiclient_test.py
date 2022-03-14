@@ -35,7 +35,7 @@ def commit_and_update_branch(dc, commit_message, expected_hashes, branch_name):
         expected_hash += "hash = %s" % eh
     expected_hash += ")"
 
-    query_str = 'UPDATE dolt_branches SET hash = Commit("-m", "%s") WHERE name = "%s" AND %s' % (commit_message, branch_name, expected_hash)
+    query_str = 'UPDATE dolt_branches SET hash = Commit("-am", "%s") WHERE name = "%s" AND %s' % (commit_message, branch_name, expected_hash)
     _, row_count = query(dc, query_str)
 
     if row_count != 1:

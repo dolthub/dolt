@@ -303,7 +303,7 @@ teardown() {
     INSERT INTO one_pk (pk) VALUES (0);
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
+    SET @@repo1_head=commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
@@ -347,7 +347,7 @@ teardown() {
     INSERT INTO one_pk (pk) VALUES (0);
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message');
+    SET @@repo1_head=commit('-am', 'test commit message');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # validate new branch was created
@@ -372,12 +372,12 @@ teardown() {
     multi_query repo1 0 "
     SET @@repo1_head=hashof('main');
     UPDATE one_pk SET c1=10 WHERE pk=2;
-    SET @@repo1_head=commit('-m', 'Change c 1 to 10');
+    SET @@repo1_head=commit('-am', 'Change c 1 to 10');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4);
-    SET @@repo1_head=commit('-m', 'add 4');
+    SET @@repo1_head=commit('-am', 'add 4');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     multi_query repo1 0 "
@@ -421,10 +421,10 @@ teardown() {
     INSERT INTO one_pk (pk) VALUES (0);
     INSERT INTO one_pk (pk,c1) VALUES (1,1);
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message');
+    SET @@repo1_head=commit('-am', 'test commit message');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);
     INSERT INTO one_pk (pk,c1,c2) VALUES (4,4,4),(5,5,5);
-    SET @@repo1_head=commit('-m', 'second commit');
+    SET @@repo1_head=commit('-am', 'second commit');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);
     "
 
@@ -437,7 +437,7 @@ teardown() {
     # Squash the test_branch into main even though it is a fast-forward merge.
     multi_query repo1 0 "
     SET @@repo1_working = squash('test_branch');
-    SET @@repo1_head = COMMIT('-m', 'cm1');
+    SET @@repo1_head = COMMIT('-am', 'cm1');
     UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';"
 
     # Validate tables and data on main
@@ -451,14 +451,14 @@ teardown() {
     multi_query repo1 0 "
     SET @@repo1_head=hashof('main');
     UPDATE one_pk SET c1=10 WHERE pk=2;
-    SET @@repo1_head=commit('-m', 'Change c 1 to 10');
+    SET @@repo1_head=commit('-am', 'Change c 1 to 10');
     UPDATE dolt_branches SET hash = @@repo1_head WHERE name= 'main';
 
     SET @@repo1_head=hashof('test_branch');
     INSERT INTO one_pk (pk,c1,c2) VALUES (6,6,6);
-    SET @@repo1_head=commit('-m', 'add 6');
+    SET @@repo1_head=commit('-am', 'add 6');
     INSERT INTO one_pk (pk,c1,c2) VALUES (7,7,7);
-    SET @@repo1_head=commit('-m', 'add 7');
+    SET @@repo1_head=commit('-am', 'add 7');
     INSERT INTO dolt_branches (name,hash) VALUES ('test_branch', @@repo1_head);"
 
     # Validate that running a squash operation without updating the working variable itself alone does not
@@ -871,7 +871,7 @@ SQL
         PRIMARY KEY (pk)
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-m', 'test commit message', '--author', 'John Doe <john@example.com>');
+    SET @@repo1_head=commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     dolt add .
