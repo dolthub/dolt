@@ -174,8 +174,8 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		} else if !ok {
 			// Append to conflicts
 			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
-				Kind:   InvalidCheckCollision,
-				Ours:   chk,
+				Kind: InvalidCheckCollision,
+				Ours: chk,
 			})
 		}
 	}
