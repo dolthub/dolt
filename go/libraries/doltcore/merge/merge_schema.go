@@ -761,7 +761,6 @@ func chkCollectionModified(anc, child []schema.Check) []schema.Check {
 	return result
 }
 
-
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
 func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
 	// Handles modifications
@@ -863,7 +862,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	for _, chk := range deletedInOursButModifiedInTheirs {
 		conflicts = append(conflicts, ChkConflict{
 			Kind:   DeletedCheckCollision,
-			Theirs:   chk,
+			Theirs: chk,
 		})
 	}
 
@@ -873,8 +872,8 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	deletedInTheirsButModifiedInOurs := chkCollectionSetIntersection(ourModifiedChks, theirDeletedChks)
 	for _, chk := range deletedInTheirsButModifiedInOurs {
 		conflicts = append(conflicts, ChkConflict{
-			Kind:   DeletedCheckCollision,
-			Ours:   chk,
+			Kind: DeletedCheckCollision,
+			Ours: chk,
 		})
 	}
 
