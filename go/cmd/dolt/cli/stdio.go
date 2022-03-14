@@ -22,11 +22,11 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/gosuri/uilive"
-
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/gosuri/uilive"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 var outputClosed uint64
