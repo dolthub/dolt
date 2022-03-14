@@ -242,6 +242,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 		}
 		p.Display()
 	}
+	p.Display()
 }
 
 func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
