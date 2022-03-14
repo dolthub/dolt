@@ -235,9 +235,9 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 			p.Printf("Files Written: %d", filesTransfered)
 		} else {
 			if len(uploadRate) > 0 {
-				p.Printf("Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", tableFilesClosed, filesTransfered, uploadRate)
+				p.Printf("Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s\n", tableFilesClosed, filesTransfered, uploadRate)
 			} else {
-				p.Printf("Files Created: %d, Files Uploaded: %d", tableFilesClosed, filesTransfered)
+				p.Printf("Files Created: %d, Files Uploaded: %d\n", tableFilesClosed, filesTransfered)
 			}
 		}
 		p.Display()
@@ -272,11 +272,12 @@ func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
 		if done || deltaTime > halfSec {
 			last = nowUnix
 			if latest.KnownCount > 0 {
-				p.Printf("Counted chunks: %d, Buffered chunks: %d)", latest.KnownCount, latest.DoneCount)
+				p.Printf("Counted chunks: %d, Buffered chunks: %d)\n", latest.KnownCount, latest.DoneCount)
 				p.Display()
 			}
 		}
 	}
+	p.Display()
 }
 
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.

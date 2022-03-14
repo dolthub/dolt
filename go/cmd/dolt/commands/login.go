@@ -174,7 +174,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 	defer p.Stop()
 	linePrinter := func() func(line string) {
 		return func(line string) {
-			p.Printf(line)
+			p.Printf(line + "\n")
 			p.Display()
 		}
 	}()

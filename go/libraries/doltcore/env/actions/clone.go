@@ -105,7 +105,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 	p := cli.StartEphemeralPrinter()
 	defer p.Stop()
 
-	p.Printf("Retrieving remote information.")
+	p.Printf("Retrieving remote information.\n")
 	p.Display()
 
 	for tblFEvt := range eventCh {
@@ -138,18 +138,18 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			}
 		}
 
-		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.",
+		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
 			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			p.Newline()
-			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s",
+			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s\n",
 				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
 		}
 		p.Display()
 	}
+	p.Display()
 }
 
 func sortedKeys(m map[string]iohelp.ReadStats) []string {

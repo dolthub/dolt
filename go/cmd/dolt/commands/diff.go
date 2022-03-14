@@ -971,7 +971,7 @@ func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.Ve
 		acc.OldSize += p.OldSize
 
 		if count%10000 == 0 {
-			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
+			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
 			eP.Display()
 		}
 

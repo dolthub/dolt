@@ -145,11 +145,12 @@ func PrintErrf(format string, a ...interface{}) {
 
 // EphemeralPrinter is tool than you can use to print temporary line(s) to the
 // console. Each time Display is called, the output is reset, and you can begin
-// writing anew. If you need to display multiple temporary lines, call Newline,
-// before writing each line.
+// writing anew.
 type EphemeralPrinter struct {
-	outW io.Writer
-	w    *uilive.Writer
+	outW         io.Writer
+	w            *uilive.Writer
+	wrote        bool
+	wroteNewline bool
 }
 
 // StartEphemeralPrinter creates a new EphemeralPrinter and starts it. You
@@ -157,24 +158,31 @@ type EphemeralPrinter struct {
 func StartEphemeralPrinter() *EphemeralPrinter {
 	w := uilive.New()
 	w.Out = CliOut
-	e := &EphemeralPrinter{w, w}
+	e := &EphemeralPrinter{outW: w, w: w}
 	e.start()
 	return e
 }
 
-// Printf formats and prints a string to the printer. Printf will panic if
-// |format| contains the newline character. If you need to display multiple
-// lines, use Newline.
+// Printf formats and prints a string to the printer. If no newline character is
+// provided, one will be added to ensure that the output can be cleared in the
+// future. You can print multiple lines.
 func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 	if outputIsClosed() {
 		return
 	}
 
-	if strings.ContainsRune(format, '\n') {
-		panic("EphemeralPrinter Printf was passed a newline, this will break line clearing functionality!")
-	}
+	str := fmt.Sprintf(format, a...)
+	lines := strings.Split(str, "\n")
+	for i, line := range lines {
+		if i != 0 {
+			_, _ = e.outW.Write([]byte("\n"))
+			e.wroteNewline = true
+		}
 
-	_, _ = fmt.Fprintf(e.outW, format, a...)
+		e.wrote = true
+		_, _ = e.outW.Write([]byte(line))
+		e.outW = e.w.Newline()
+	}
 }
 
 // Display clears the previous output and displays the new text.
@@ -182,20 +190,19 @@ func (e *EphemeralPrinter) Display() {
 	if outputIsClosed() {
 		return
 	}
-	_, _ = e.w.Write([]byte("\n"))
+	if !e.wrote {
+		// If nothing was written, write the null character in order to clear
+		// the display.
+		_, _ = e.w.Write([]byte("\x00"))
+	} else if !e.wroteNewline {
+		// If no newline was written, add it. This will ensure that the output
+		// is cleared properly.
+		_, _ = e.w.Write([]byte("\n"))
+	}
 	_ = e.w.Flush()
 	e.outW = e.w
-}
-
-// Newline allows EphemeralPrinter to Display multiple lines. You can print the
-// first line with Printf, call Newline, and then print a second line with
-// Printf again.
-func (e *EphemeralPrinter) Newline() {
-	if outputIsClosed() {
-		return
-	}
-	_, _ = e.w.Write([]byte("\n"))
-	e.outW = e.w.Newline()
+	e.wrote = false
+	e.wroteNewline = false
 }
 
 func (e *EphemeralPrinter) start() {
@@ -204,8 +211,6 @@ func (e *EphemeralPrinter) start() {
 
 // Stop stops the ephemeral printer. It must be called after using StartEphemeralPrinter
 func (e *EphemeralPrinter) Stop() {
-	// Writing null character here to clear the output
-	_, _ = e.w.Write([]byte("\x00"))
 	e.w.Stop()
 }
 
