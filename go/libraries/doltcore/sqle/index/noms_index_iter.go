@@ -16,6 +16,7 @@ package index
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"io"
 	"sync"
 
@@ -227,7 +228,7 @@ func (i *indexLookupRowIterAdapter) processKey(ctx context.Context, indexKey typ
 
 type coveringIndexRowIterAdapter struct {
 	idx       DoltIndex
-	keyIter   nomsKeyIter
+	rr        *noms.NomsRangeReader
 	conv      *KVToSqlRowConverter
 	ctx       *sql.Context
 	pkCols    *schema.ColCollection
@@ -235,17 +236,19 @@ type coveringIndexRowIterAdapter struct {
 	nbf       *types.NomsBinFormat
 }
 
-func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nomsKeyIter, resultCols []string) *coveringIndexRowIterAdapter {
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *noms.NomsRangeReader, resultCols []string) *coveringIndexRowIterAdapter {
 	idxCols := idx.IndexSchema().GetPKCols()
 	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
 	cols := sch.GetAllCols().GetColumns()
 	tagToSqlColIdx := make(map[uint64]int)
+	isPrimaryKeyIdx := idx.ID() == "PRIMARY"
 
 	resultColSet := set.NewCaseInsensitiveStrSet(resultCols)
 	for i, col := range cols {
 		_, partOfIdxKey := idxCols.GetByNameCaseInsensitive(col.Name)
-		if partOfIdxKey && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
+		// Either this is a primary key index or the key is a part of the index and this part of the result column set.
+		if (partOfIdxKey || isPrimaryKeyIdx) && (len(resultCols) == 0 || resultColSet.Contains(col.Name)) {
 			tagToSqlColIdx[col.Tag] = i
 		}
 	}
@@ -260,7 +263,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 
 	return &coveringIndexRowIterAdapter{
 		idx:       idx,
-		keyIter:   keyIter,
+		rr:        keyIter,
 		conv:      NewKVToSqlRowConverter(idx.Format(), tagToSqlColIdx, cols, len(cols)),
 		ctx:       ctx,
 		pkCols:    sch.GetPKCols(),
@@ -271,13 +274,13 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter nom
 
 // Next returns the next row from the iterator.
 func (ci *coveringIndexRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
-	key, err := ci.keyIter.ReadKey(ctx)
+	key, value, err := ci.rr.ReadKV(ctx)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return ci.conv.ConvertKVTuplesToSqlRow(key, types.Tuple{})
+	return ci.conv.ConvertKVTuplesToSqlRow(key, value)
 }
 
 func (ci *coveringIndexRowIterAdapter) Close(*sql.Context) error {
