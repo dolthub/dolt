@@ -517,11 +517,9 @@ SQL
     cd test-repo
     run dolt fetch
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [ "${lines[0]}" != "" ]
-    [ "${lines[1]}" != "" ]
-    [ "${lines[2]}" != "" ]
-    [ "${lines[3]}" != "" ]
+    # The number of $lines and $output printed is non-deterministic
+    # due to EphemeralPrinter. We can't test for their length here.
+    [ "$output" != "" ]
 
     run dolt fetch
     [ "$status" -eq 0 ]

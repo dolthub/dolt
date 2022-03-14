@@ -235,9 +235,9 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 			p.Printf("Files Written: %d", filesTransfered)
 		} else {
 			if len(uploadRate) > 0 {
-				p.Printf("Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s\n", tableFilesClosed, filesTransfered, uploadRate)
+				p.Printf("Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", tableFilesClosed, filesTransfered, uploadRate)
 			} else {
-				p.Printf("Files Created: %d, Files Uploaded: %d\n", tableFilesClosed, filesTransfered)
+				p.Printf("Files Created: %d, Files Uploaded: %d", tableFilesClosed, filesTransfered)
 			}
 		}
 		p.Display()
