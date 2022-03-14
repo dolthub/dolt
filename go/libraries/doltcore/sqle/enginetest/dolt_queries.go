@@ -1120,11 +1120,9 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	// TODO: In the future:
 	//       - datetime support ?
 	//       - table function with an alias
-	//
-
 	{
 		// TODO: This isn't specific to dolt_diff table function, so it should
-		//       be moved elsewhere.
+		//       be moved elsewhere (probably GMS)
 		Name:        "undefined table function",
 		Query:       "SELECT * from does_not_exist('t', 'from', 'to');",
 		ExpectedErr: sql.ErrTableFunctionNotFound,
@@ -1641,13 +1639,50 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 }
 
 var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
+	// TODO: Remaining test cases:
+	//       - working set changes
+
 	{
-		Name: "base case: added rows",
+		Name: "error handling",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t;",
+				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'to_commit'",
+			},
+			{
+				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t where to_commit=@Commit1;",
+				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'from_commit'",
+			},
+			{
+				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t where from_commit=@Commit1;",
+				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'to_commit'",
+			},
+		},
+	},
+	{
+		Name: "base case: insert, update, delete",
 		SetUpScript: []string{
 			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int);",
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+
+			"update t set c2=0 where pk=1",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
+
+			"update t set c2=-1 where pk=1",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'modifying row'));",
+
+			"update t set c2=-2 where pk=1",
+			"set @Commit4 = (select DOLT_COMMIT('-am', 'modifying row'));",
+
+			"delete from t where pk=1",
+			"set @Commit5 = (select DOLT_COMMIT('-am', 'modifying row'));",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
@@ -1657,48 +1692,33 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
-		},
-	},
-	{
-		Name: "base case: modified rows",
-		SetUpScript: []string{
-			"set @Commit0 = HASHOF('HEAD');",
-			"create table t (pk int primary key, c1 int, c2 int);",
-			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-
-			"update t set c2=0 where pk=1",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
 					{1, 2, 0, 1, 2, 3, "modified"},
 				},
 			},
-		},
-	},
-	{
-		Name: "base case: deleted row",
-		SetUpScript: []string{
-			"set @Commit0 = HASHOF('HEAD');",
-			"create table t (pk int primary key, c1 int, c2 int);",
-			"insert into t values (1, 2, 3), (4, 5, 6);",
-			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-
-			"delete from t where pk=1",
-			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit4 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{nil, nil, nil, 1, 2, 3, "removed"},
+					{1, 2, -2, 1, 2, 3, "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit4 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, 2, -2, "removed"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit5 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
 				},
 			},
 		},
 	},
+
 	//{
 	//	// In this case, we do not expect to see the old/dropped table included in the dolt_diff_table output
 	//	Name: "table drop and recreate with overlapping schema",
@@ -1730,7 +1750,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 	//},
 	{
 		// When a column is dropped we should see the column's value set to null in that commit
-		Name: "column drop",
+		Name: "schema modification: column drop",
 		SetUpScript: []string{
 			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c1 int, c2 int);",
@@ -1759,7 +1779,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 	},
 	{
 		// When a column is dropped and recreated with the same type, we expect it to be included in dolt_diff output
-		Name: "column drop and recreate with same type",
+		Name: "schema modification: column drop, recreate with same type",
 		SetUpScript: []string{
 			"set @Commit0 = HASHOF('HEAD');",
 			"create table t (pk int primary key, c int);",
@@ -1796,222 +1816,166 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			},
 		},
 	},
-	//{
-	//	// When a column is dropped and then another column with the same type is renamed to that name, we expect it to be included in dolt_diff output
-	//	Name: "column drop, then rename column with same type to same name",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c1 int, c2 int);",
-	//		"insert into t values (1, 2, 3), (4, 5, 6);",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"alter table t drop column c1;",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c1'));",
-	//
-	//		"alter table t rename column c2 to c1;",
-	//		"insert into t values (100, 101);",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-	//			Expected: []sql.Row{{5}},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, 3, nil, nil, "added"},
-	//				{4, 6, nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, 3, 1, 3, "modified"},
-	//				{4, 6, 4, 6, "modified"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{100, 101, nil, nil, "added"},
-	//			},
-	//		},
-	//	},
-	//},
-	//{
-	//	// When a column is dropped and recreated with a different type, we expect only the new column
-	//	// to be included in dolt_diff output, with previous values coerced (with any warnings reported) to the new type
-	//	Name: "column drop and recreate with different type that can be coerced (int -> string)",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c int);",
-	//		"insert into t values (1, 2), (3, 4);",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"alter table t drop column c;",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
-	//
-	//		"alter table t add column c text;",
-	//		"insert into t values (100, '101');",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-	//			Expected: []sql.Row{{5}},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, "2", nil, nil, "added"},
-	//				{3, "4", nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, nil, 1, "2", "modified"},
-	//				{3, nil, 3, "4", "modified"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{100, "101", nil, nil, "added"},
-	//			},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "column drop and recreate with different type that can NOT be coerced (string -> int)",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c text);",
-	//		"insert into t values (1, 'two'), (3, 'four');",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"alter table t drop column c;",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
-	//
-	//		"alter table t add column c int;",
-	//		"insert into t values (100, 101);",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-	//			Expected: []sql.Row{{5}},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, nil, nil, nil, "added"},
-	//				{3, nil, nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, nil, 1, nil, "modified"},
-	//				{3, nil, 3, nil, "modified"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{100, 101, nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query:                           "select * from dolt_diff_t;",
-	//			ExpectedWarning:                 1105,
-	//			ExpectedWarningsCount:           4,
-	//			ExpectedWarningMessageSubstring: "unable to coerce value from field",
-	//			SkipResultsCheck:                true,
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "multiple column renames",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c1 int);",
-	//		"insert into t values (1, 2);",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"alter table t rename column c1 to c2;",
-	//		"insert into t values (3, 4);",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'renaming c1 to c2'));",
-	//
-	//		"alter table t drop column c2;",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 'dropping column c2'));",
-	//
-	//		"alter table t add column c2 int;",
-	//		"insert into t values (100, '101');",
-	//		"set @Commit4 = (select DOLT_COMMIT('-am', 'recreating column c2'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
-	//			Expected: []sql.Row{{5}},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, nil, nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{3, 4, nil, nil, "added"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{1, nil, 1, 2, "modified"},
-	//				{3, nil, 3, 4, "modified"},
-	//			},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c2, from_pk, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit4 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{100, 101, nil, nil, "added"},
-	//			},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "primary key change",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c1 int);",
-	//		"insert into t values (1, 2), (3, 4);",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"alter table t drop primary key;",
-	//		"insert into t values (5, 6);",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping primary key'));",
-	//
-	//		"alter table t add primary key (c1);",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 'adding primary key'));",
-	//
-	//		"insert into t values (7, 8);",
-	//		"set @Commit4 = (select DOLT_COMMIT('-am', 'adding more data'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:                           "select * from dolt_diff_t;",
-	//			ExpectedWarning:                 1105,
-	//			ExpectedWarningsCount:           1,
-	//			ExpectedWarningMessageSubstring: "cannot render full diff between commits",
-	//			SkipResultsCheck:                true,
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;;",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t where to_commit=@Commit4;",
-	//			Expected: []sql.Row{{7, 8, nil, nil, "added"}},
-	//		},
-	//	},
-	//},
+	{
+		// When a column is dropped and another column with the same type is renamed to that name, we expect it to be included in dolt_diff output
+		Name: "schema modification: column drop, rename column with same type to same name",
+		SetUpScript: []string{
+			"set @Commit0 = HASHOF('HEAD');",
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+
+			"alter table t drop column c1;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c1');",
+
+			"alter table t rename column c2 to c1;",
+			"insert into t values (100, 101);",
+			"set @Commit3 = DOLT_COMMIT('-am', 'inserting into t');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, 3, nil, nil, "added"},
+					{4, 6, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, 3, 1, 3, "modified"},
+					{4, 6, 4, 6, "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{100, 101, nil, nil, "added"},
+				},
+			},
+		},
+	},
+
+	{
+		// When a column is dropped and recreated with a different type, we expect only the new column
+		// to be included in dolt_commit_diff output, with previous values coerced (with any warnings reported) to the new type
+		Name: "schema modification: column drop, recreate with different type that can be coerced (int -> string)",
+		SetUpScript: []string{
+			"set @Commit0 = HASHOF('HEAD');",
+			"create table t (pk int primary key, c int);",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+
+			"alter table t drop column c;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c');",
+
+			"alter table t add column c text;",
+			"insert into t values (100, '101');",
+			"set @Commit3 = DOLT_COMMIT('-am', 're-adding column c');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, "2", nil, nil, "added"},
+					{3, "4", nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, nil, 1, "2", "modified"},
+					{3, nil, 3, "4", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{100, "101", nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "schema modification: column drop, recreate with different type that can't be coerced (string -> int)",
+		SetUpScript: []string{
+			"set @Commit0 = HASHOF('HEAD');",
+			"create table t (pk int primary key, c text);",
+			"insert into t values (1, 'two'), (3, 'four');",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
+
+			"alter table t drop column c;",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
+
+			"alter table t add column c int;",
+			"insert into t values (100, 101);",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, nil, nil, nil, "added"},
+					{3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{1, nil, 1, nil, "modified"},
+					{3, nil, 3, nil, "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
+				Expected: []sql.Row{
+					{100, 101, nil, nil, "added"},
+				},
+			},
+			{
+				Query:                           "select * from dolt_commit_diff_t where to_commit=@Commit3 and from_commit=@Commit1;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           2,
+				ExpectedWarningMessageSubstring: "unable to coerce value from field",
+				SkipResultsCheck:                true,
+			},
+		},
+	},
+	{
+		Name: "schema modification: primary key change",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int);",
+			"insert into t values (1, 2), (3, 4);",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+
+			"alter table t drop primary key;",
+			"insert into t values (5, 6);",
+			"set @Commit2 = DOLT_COMMIT('-am', 'dropping primary key');",
+
+			"alter table t add primary key (c1);",
+			"set @Commit3 = DOLT_COMMIT('-am', 'adding primary key');",
+
+			"insert into t values (7, 8);",
+			"set @Commit4 = DOLT_COMMIT('-am', 'adding more data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:                           "select * from dolt_commit_diff_t where from_commit=@Commit1 and to_commit=@Commit4;",
+				ExpectedWarning:                 1105,
+				ExpectedWarningsCount:           1,
+				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
+				SkipResultsCheck:                true,
+			},
+			{
+				// TODO: HandledFilters doesn't get invoked when the uppercase table
+				//       name is used in the system table name.
+				Query:    "SELECT count(to_pk) FROM DOLT_commit_DIFF_t where from_commit=@Commit1 and to_commit=@Commit4;",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",
+				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
+			},
+		},
+	},
 }

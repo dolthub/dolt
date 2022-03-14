@@ -15,7 +15,6 @@
 package dtables
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -40,10 +39,8 @@ var _ sql.Table = (*CommitDiffTable)(nil)
 var _ sql.FilteredTable = (*CommitDiffTable)(nil)
 
 type CommitDiffTable struct {
-	ctx               *sql.Context
 	name              string
 	ddb               *doltdb.DoltDB
-	ss                *schema.SuperSchema
 	joiner            *rowconv.Joiner
 	sqlSch            sql.PrimaryKeySchema
 	workingRoot       *doltdb.RootValue
@@ -54,9 +51,9 @@ type CommitDiffTable struct {
 }
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
-	// TODO: Does this need to be case insensitive? Looks like that is a bug.
-	//       Add tests for table name casing to confirm
-	tblName, ok, err := root.ResolveTableName(ctx, tblName)
+	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
+
+	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -64,19 +61,14 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		return nil, sql.ErrTableNotFound.New(doltdb.DoltCommitDiffTablePrefix + tblName)
 	}
 
-	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
-	ss, err := calcSuperDuperSchema(ctx, ddb, root, tblName)
+	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_ = ss.AddColumn(schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false))
-	_ = ss.AddColumn(schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-
-	sch, err := ss.GenerateSchema()
-	if err != nil {
-		return nil, err
-	}
+	sch = schema.MustSchemaFromCols(sch.GetAllCols().Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
 
 	if sch.GetAllCols().Size() <= 1 {
 		return nil, sql.ErrTableNotFound.New(diffTblName)
@@ -105,70 +97,13 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	})
 
 	return &CommitDiffTable{
-		ctx:          ctx, // TODO: Do we still need to pass this?
 		name:         tblName,
 		ddb:          ddb,
 		workingRoot:  root,
-		ss:           ss,
 		joiner:       j,
 		sqlSch:       sqlSch,
 		targetSchema: &sch,
 	}, nil
-}
-
-func calcSuperDuperSchema(ctx context.Context, ddb *doltdb.DoltDB, working *doltdb.RootValue, tblName string) (*schema.SuperSchema, error) {
-	refs, err := ddb.GetBranches(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var superSchemas []*schema.SuperSchema
-	ss, found, err := working.GetSuperSchema(ctx, tblName)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if found {
-		superSchemas = append(superSchemas, ss)
-	}
-
-	for _, ref := range refs {
-		cm, err := ddb.ResolveCommitRef(ctx, ref)
-
-		if err != nil {
-			return nil, err
-		}
-
-		cmRoot, err := cm.GetRootValue()
-
-		if err != nil {
-			return nil, err
-		}
-
-		ss, found, err = cmRoot.GetSuperSchema(ctx, tblName)
-
-		if err != nil {
-			return nil, err
-		}
-
-		if found {
-			superSchemas = append(superSchemas, ss)
-		}
-	}
-
-	if len(superSchemas) == 0 {
-		return nil, sql.ErrTableNotFound.New(tblName)
-	}
-
-	superDuperSchema, err := schema.SuperSchemaUnion(superSchemas...)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return superDuperSchema, nil
 }
 
 func (dt *CommitDiffTable) Name() string {
@@ -223,13 +158,12 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneFromCommit)
 	}
 
-	// TODO: Move rootValFilter back into a method of CommitDiffTable
-	toRoot, toName, toDate, err := rootValForFilter(ctx, dt.toCommitFilter, dt.workingRoot, dt.ddb)
+	toRoot, toName, toDate, err := dt.rootValForFilter(ctx, dt.toCommitFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromName, fromDate, err := rootValForFilter(ctx, dt.fromCommitFilter, dt.workingRoot, dt.ddb)
+	fromRoot, fromName, fromDate, err := dt.rootValForFilter(ctx, dt.fromCommitFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +202,7 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 	return NewSliceOfPartitionsItr([]sql.Partition{dp}), nil
 }
 
-func rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals, workingRoot *doltdb.RootValue, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
+func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals) (*doltdb.RootValue, string, *types.Timestamp, error) {
 	gf, nonGF := eqFilter.Left(), eqFilter.Right()
 	if _, ok := gf.(*expression.GetField); !ok {
 		nonGF, gf = eqFilter.Left(), eqFilter.Right()
@@ -289,7 +223,7 @@ func rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals, workingRoot
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
 	if strings.ToLower(hashStr) == "working" {
-		root = workingRoot
+		root = dt.workingRoot
 	} else {
 		cs, err := doltdb.NewCommitSpec(hashStr)
 
@@ -297,7 +231,7 @@ func rootValForFilter(ctx *sql.Context, eqFilter *expression.Equals, workingRoot
 			return nil, "", nil, err
 		}
 
-		cm, err := ddb.Resolve(ctx, cs, nil)
+		cm, err := dt.ddb.Resolve(ctx, cs, nil)
 
 		if err != nil {
 			return nil, "", nil, err
@@ -369,7 +303,7 @@ func (dt *CommitDiffTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (dt *CommitDiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
+func (dt *CommitDiffTable) WithFilters(_ *sql.Context, _ []sql.Expression) sql.Table {
 	return dt
 }
 
