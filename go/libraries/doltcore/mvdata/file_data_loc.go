@@ -189,7 +189,11 @@ func (dl FileDataLocation) NewCreatingWriter(ctx context.Context, mvOpts DataMov
 	case JsonFile:
 		return json.NewJSONWriter(wr, outSch)
 	case SqlFile:
-		return sqlexport.OpenSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), outSch, opts)
+		if mvOpts.IsBatched() {
+			return sqlexport.OpenBatchedSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), outSch, opts)
+		} else {
+			return sqlexport.OpenSQLExportWriter(ctx, wr, root, mvOpts.SrcName(), outSch, opts)
+		}
 	case ParquetFile:
 		return parquet.NewParquetWriter(outSch, mvOpts.DestName())
 	}

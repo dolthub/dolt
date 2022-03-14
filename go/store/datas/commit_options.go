@@ -22,16 +22,15 @@
 package datas
 
 import (
-	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // CommitOptions is used to pass options into Commit.
 type CommitOptions struct {
-	// ParentsList, if provided is the parent commits of the commit we are
-	// creating.
-	ParentsList types.List
+	// Parents, if provided, is the parent commits of the commit we are
+	// creating. If it is empty, the existing dataset head will be the only
+	// parent.
+	Parents []hash.Hash
 
-	// Meta is a Struct that describes arbitrary metadata about this Commit,
-	// e.g. a timestamp or descriptive text.
-	Meta types.Struct
+	Meta *CommitMeta
 }

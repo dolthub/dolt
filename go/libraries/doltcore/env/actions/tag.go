@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 type TagProps struct {
@@ -63,7 +64,7 @@ func CreateTagOnDB(ctx context.Context, ddb *doltdb.DoltDB, tagName, startPoint 
 		return err
 	}
 
-	meta := doltdb.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
+	meta := datas.NewTagMeta(props.TaggerName, props.TaggerEmail, props.Description)
 
 	return ddb.NewTagAtCommit(ctx, tagRef, cm, meta)
 }

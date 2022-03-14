@@ -38,10 +38,15 @@ func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *type
 
 	// Modify the schema to convert the primary key cols into non primary key cols
 	newCollection := schema.MapColCollection(sch.GetAllCols(), func(col schema.Column) schema.Column {
+		// If it was part of primary key
 		if col.IsPartOfPK {
-			col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+			// No longer part of primary key
+			col.IsPartOfPK = false
+			// Removing PK does not remove NOT NULL constraint, so add it back if it's somehow gone
+			if col.IsNullable() {
+				col.Constraints = append(col.Constraints, schema.NotNullConstraint{})
+			}
 		}
-		col.IsPartOfPK = false
 		return col
 	})
 

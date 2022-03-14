@@ -256,6 +256,19 @@ func TestValueAsSqlString(t *testing.T) {
 			ti:   typeinfo.StringDefaultType,
 			exp:  "'\\0\\'\\\"\\b\\n\\r\\t\\Z\\\\'",
 		},
+		// using only string and int types as an example, but includes all types
+		{
+			name: "NULL value for typeinfo.string types",
+			val:  nil,
+			ti:   typeinfo.StringDefaultType,
+			exp:  "NULL",
+		},
+		{
+			name: "NULL value for typeinfo.int types",
+			val:  nil,
+			ti:   typeinfo.Int64Type,
+			exp:  "NULL",
+		},
 	}
 
 	for _, test := range tests {

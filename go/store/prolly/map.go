@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -57,8 +58,7 @@ func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.Tu
 	}
 
 	for i := 0; i < len(tups); i += 2 {
-		_, err = ch.Append(ctx, nodeItem(tups[i]), nodeItem(tups[i+1]))
-		if err != nil {
+		if err = ch.AddPair(ctx, tups[i], tups[i+1]); err != nil {
 			return Map{}, err
 		}
 	}
@@ -95,11 +95,10 @@ func (m Map) Mutate() MutableMap {
 	return newMutableMap(m)
 }
 
-// todo(andy): support this?
-//// Count returns the number of key-value pairs in the Map.
-//func (m Map) Count() uint64 {
-//	return m.root.cumulativeCount() / 2
-//}
+// Count returns the number of key-value pairs in the Map.
+func (m Map) Count() int {
+	return m.root.treeCount()
+}
 
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
@@ -114,10 +113,6 @@ func (m Map) Format() *types.NomsBinFormat {
 // Descriptors returns the TupleDesc's from this Map.
 func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
-}
-
-func (m Map) Empty() bool {
-	return m.root.empty()
 }
 
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
@@ -156,7 +151,20 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 	return
 }
 
-// IterAll returns a MapRangeIter that iterates over the entire Map.
+func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
+	cur, err := newCursorAtEnd(ctx, m.ns, m.root)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if cur.valid() {
+		key = val.Tuple(cur.currentKey())
+		value = val.Tuple(cur.currentValue())
+	}
+	return
+}
+
+// IterAll returns a MutableMapRangeIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{
 		Start:   RangeCut{Unbound: true},
@@ -166,14 +174,9 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterRange(ctx, rng)
 }
 
-// IterRange returns a MapRangeIter that iterates over a Range.
+// IterRange returns a MutableMapRangeIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	iter, err := m.iterFromRange(ctx, rng)
-	if err != nil {
-		return MapRangeIter{}, err
-	}
-
-	return NewMapRangeIter(nil, iter, rng), nil
+	return m.iterFromRange(ctx, rng)
 }
 
 func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {
@@ -216,7 +219,7 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 func (m Map) rangeStartSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		return sort.Search(nd.nodeCount(), func(i int) bool {
+		return sort.Search(int(nd.count), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
 
@@ -234,7 +237,7 @@ func (m Map) rangeStartSearchFn(rng Range) searchFn {
 func (m Map) rangeStopSearchFn(rng Range) searchFn {
 	// todo(andy): inline sort.Search()
 	return func(query nodeItem, nd Node) int {
-		return sort.Search(nd.nodeCount(), func(i int) bool {
+		return sort.Search(int(nd.count), func(i int) bool {
 			q := val.Tuple(query)
 			t := val.Tuple(nd.getKey(i))
 
@@ -252,7 +255,7 @@ func (m Map) rangeStopSearchFn(rng Range) searchFn {
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query nodeItem, nd Node) int {
-	n := nd.nodeCount()
+	n := int(nd.count)
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
 	i, j := 0, n
@@ -291,12 +294,33 @@ type prollyRangeIter struct {
 }
 
 var _ rangeIter = &prollyRangeIter{}
+var _ MapRangeIter = &prollyRangeIter{}
+
+func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+	if it.curr == nil {
+		return nil, nil, io.EOF
+	}
+
+	key = it.curr.nd.keys.GetSlice(it.curr.idx)
+	value = it.curr.nd.values.GetSlice(it.curr.idx)
+
+	_, err = it.curr.advance(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if it.curr.compare(it.stop) >= 0 {
+		// past the end of the range
+		it.curr = nil
+	}
+
+	return
+}
 
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.valid() {
-		key = val.Tuple(it.curr.currentKey())
-		value = val.Tuple(it.curr.currentValue())
+		key = it.curr.nd.keys.GetSlice(it.curr.idx)
+		value = it.curr.nd.values.GetSlice(it.curr.idx)
 	}
 	return
 }

@@ -362,14 +362,8 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 			idxSch = referencingSte.tableEditor.Schema().Indexes().GetByName(foreignKey.TableIndex).Schema()
 			ste.indexSchemaCache[cacheKey] = idxSch
 		}
-		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
-		if err != nil {
-			return err
-		}
-		if len(referencingRows) == 0 {
-			continue
-		}
 
+		// Detect if there are changes
 		valueChanged := false
 		for _, colTag := range foreignKey.ReferencedTableColumns {
 			oldVal, oldOk := dOldRowTaggedVals[colTag]
@@ -379,7 +373,18 @@ func (ste *sessionedTableEditor) handleReferencingRowsOnUpdate(ctx context.Conte
 				break
 			}
 		}
+
+		// Skip this foreign key, since there are no changes
 		if !valueChanged {
+			continue
+		}
+
+		// TODO: handle each row one at a time, rather than loading them all into memory
+		referencingRows, err := editor.GetIndexedRows(ctx, referencingSte.tableEditor, indexKey, foreignKey.TableIndex, idxSch)
+		if err != nil {
+			return err
+		}
+		if len(referencingRows) == 0 {
 			continue
 		}
 

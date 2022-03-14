@@ -91,6 +91,10 @@ func (w *SqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 }
 
 func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
+	if r == nil {
+		return nil
+	}
+
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}

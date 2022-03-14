@@ -45,14 +45,15 @@ func TestRemoteDatabase(t *testing.T) {
 
 func TestValidateRef(t *testing.T) {
 	st := &chunks.TestStorage{}
-	db := NewDatabase(st.NewView()).(*database)
+	db := NewDatabase(st.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 	b := types.Bool(true)
 	r, err := db.WriteValue(context.Background(), b)
 	assert.NoError(t, err)
 
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), r) })
-	assert.Panics(t, func() { db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_7_18))) })
+	_, err = db.validateRefAsCommit(context.Background(), r)
+	assert.Error(t, err)
+	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_Default)))
 }
 
 type DatabaseSuite struct {
@@ -69,7 +70,7 @@ type LocalDatabaseSuite struct {
 func (suite *LocalDatabaseSuite) SetupTest() {
 	suite.storage = &chunks.TestStorage{}
 	suite.makeDb = NewDatabase
-	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
+	suite.db = suite.makeDb(suite.storage.NewViewWithDefaultFormat()).(*database)
 }
 
 type RemoteDatabaseSuite struct {
@@ -81,7 +82,7 @@ func (suite *RemoteDatabaseSuite) SetupTest() {
 	suite.makeDb = func(cs chunks.ChunkStore) Database {
 		return NewDatabase(cs)
 	}
-	suite.db = suite.makeDb(suite.storage.NewView()).(*database)
+	suite.db = suite.makeDb(suite.storage.NewViewWithDefaultFormat()).(*database)
 }
 
 func (suite *DatabaseSuite) TearDownTest() {
@@ -91,7 +92,7 @@ func (suite *DatabaseSuite) TearDownTest() {
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	ds, err := suite.db.GetDataset(context.Background(), "foo")
 	suite.NoError(err)
-	r, err := types.NewRef(types.Bool(true), types.Format_7_18)
+	r, err := types.NewRef(types.Bool(true), types.Format_Default)
 	suite.NoError(err)
 	suite.Panics(func() { CommitValue(context.Background(), suite.db, ds, r) })
 }
@@ -120,7 +121,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	suite.NoError(err)
 
 	s = mustHeadValue(ds1).(types.Set)
-	ref, err := types.NewRef(types.Float(1000), types.Format_7_18)
+	ref, err := types.NewRef(types.Float(1000), types.Format_Default)
 	suite.NoError(err)
 	se, err = s.Edit().Insert(ref)
 	suite.NoError(err)
@@ -144,7 +145,7 @@ func (suite *DatabaseSuite) TestRebase() {
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds1).Equals(b))
 
-	interloper := suite.makeDb(suite.storage.NewView())
+	interloper := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
@@ -171,7 +172,7 @@ func (suite *DatabaseSuite) TestRebase() {
 func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	id1, id2 := "testdataset", "othertestdataset"
 
-	db1 := suite.makeDb(suite.storage.NewView())
+	db1 := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer db1.Close()
 	ds1, err := db1.GetDataset(context.Background(), id1)
 	suite.NoError(err)
@@ -179,7 +180,7 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 	ds1, err = CommitValue(context.Background(), db1, ds1, ds1HeadVal)
 	suite.NoError(err)
 
-	db2 := suite.makeDb(suite.storage.NewView())
+	db2 := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer db2.Close()
 	ds2, err := db2.GetDataset(context.Background(), id2)
 	suite.NoError(err)
@@ -257,7 +258,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 
 	// Get a fresh database, and verify that both datasets are present
-	newDB := suite.makeDb(suite.storage.NewView())
+	newDB := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer newDB.Close()
 	datasets2, err := newDB.Datasets(context.Background())
 	suite.NoError(err)
@@ -265,12 +266,16 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 }
 
 func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
-	m, ok := dsm.toNomsMap()
+	m, ok := dsm.(nomsDatasetsMap)
 	require.True(t, ok)
-	return m
+	return m.m
 }
 
 func (suite *DatabaseSuite) TestDatasetsMapType() {
+	if suite.db.Format() == types.Format_DOLT_DEV {
+		suite.T().Skip()
+	}
+
 	dsID1, dsID2 := "ds1", "ds2"
 
 	datasets, err := suite.db.Datasets(context.Background())
@@ -331,11 +336,8 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 	d.PanicIfError(derr)
 }
 
-func newOpts(vrw types.ValueReadWriter, parents ...types.Value) CommitOptions {
-	pList, err := types.NewList(context.Background(), vrw, parents...)
-	d.PanicIfError(err)
-
-	return CommitOptions{ParentsList: pList}
+func newOpts(vrw types.ValueReadWriter, parent types.Ref) CommitOptions {
+	return CommitOptions{Parents: []hash.Hash{parent.TargetHash()}}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -387,7 +389,7 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.False(present, "Dataset %s should not be present", datasetID1)
 
 	// Get a fresh database, and verify that only ds2 is present
-	newDB := suite.makeDb(suite.storage.NewView())
+	newDB := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer newDB.Close()
 	datasets, err = newDB.Datasets(context.Background())
 	suite.NoError(err)
@@ -413,7 +415,7 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	interloperCS := suite.storage.NewView()
+	interloperCS := suite.storage.NewViewWithDefaultFormat()
 	interloper := suite.makeDb(interloperCS)
 	defer interloper.Close()
 
@@ -465,7 +467,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
-	interloper := suite.makeDb(suite.storage.NewView())
+	interloper := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
 	defer interloper.Close()
 
 	// Concurrent change, to move root out from under my feet:
@@ -517,11 +519,11 @@ func (suite *DatabaseSuite) TestSetHead() {
 	suite.True(mustHeadValue(ds).Equals(b))
 	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
 
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
-	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 }
@@ -549,16 +551,16 @@ func (suite *DatabaseSuite) TestFastForward() {
 	cCommitRef := mustHeadRef(ds) // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
-	_, err = suite.db.FastForward(context.Background(), ds, aCommitRef)
+	_, err = suite.db.FastForward(context.Background(), ds, aCommitRef.TargetHash())
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef)
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
-	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef)
+	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef.TargetHash())
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }
@@ -639,13 +641,8 @@ func (suite *DatabaseSuite) TestMetaOption() {
 	ds, err := suite.db.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 
-	m, err := types.NewStruct(types.Format_7_18, "M", types.StructData{
-		"author": types.String("arv"),
-	})
-
-	suite.NoError(err)
-	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: m})
+	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
 	suite.NoError(err)
 	c := mustHead(ds)
-	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("author")))
+	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("name")))
 }

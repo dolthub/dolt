@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package doltdb
+package datas
 
 import (
 	"reflect"
@@ -27,7 +27,7 @@ func TestCommitMetaToAndFromNomsStruct(t *testing.T) {
 	cm, _ := NewCommitMeta("Bill Billerson", "bigbillieb@fake.horse", "This is a test commit")
 	cmSt, err := cm.toNomsStruct(types.Format_Default)
 	assert.NoError(t, err)
-	result, err := commitMetaFromNomsSt(cmSt)
+	result, err := CommitMetaFromNomsSt(cmSt)
 
 	if err != nil {
 		t.Fatal("Failed to convert from types.Struct to CommitMeta")

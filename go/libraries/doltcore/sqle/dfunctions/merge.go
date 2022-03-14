@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -140,7 +141,7 @@ func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	}
 
 	commitMessage := fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
-	meta, err := doltdb.NewCommitMeta(name, email, commitMessage)
+	meta, err := datas.NewCommitMeta(name, email, commitMessage)
 	if err != nil {
 		return nil, err
 	}

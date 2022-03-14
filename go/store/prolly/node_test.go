@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"encoding/binary"
+	"math"
 	"math/rand"
 	"testing"
 	"unsafe"
@@ -28,15 +29,15 @@ import (
 )
 
 func TestRoundTripInts(t *testing.T) {
-	keys, values := ascendingIntPairs(t, 10)
-	require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+	keys, values := ascendingIntTuples(t, 10)
+	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
 
-	nd := newLeafNode(keys, values)
+	nd := newTupleLeafNode(keys, values)
 	assert.True(t, nd.leafNode())
-	assert.Equal(t, len(keys), nd.nodeCount())
+	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
-		assert.Equal(t, keys[i], nd.getKey(i))
-		assert.Equal(t, values[i], nd.getValue(i))
+		assert.Equal(t, keys[i], val.Tuple(nd.getKey(i)))
+		assert.Equal(t, values[i], val.Tuple(nd.getValue(i)))
 	}
 }
 
@@ -47,7 +48,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.leafNode())
-		assert.Equal(t, len(keys), nd.nodeCount())
+		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.getKey(i))
 			assert.Equal(t, values[i], nd.getValue(i))
@@ -77,11 +78,48 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 168, int(sz))
+	assert.Equal(t, 136, int(sz))
+}
+
+func TestCountArray(t *testing.T) {
+	for k := 0; k < 100; k++ {
+		n := testRand.Intn(45) + 5
+
+		counts := make(subtreeCounts, n)
+		sum := uint64(0)
+		for i := range counts {
+			c := testRand.Uint64() % math.MaxUint32
+			counts[i] = c
+			sum += c
+		}
+		assert.Equal(t, sum, counts.sum())
+
+		// round trip the array
+		buf := writeSubtreeCounts(counts)
+		counts = readSubtreeCounts(n, buf)
+		assert.Equal(t, sum, counts.sum())
+	}
 }
 
 func newLeafNode(keys, values []nodeItem) Node {
-	return buildMapNode(sharedPool, 0, keys, values)
+	b := &nodeBuilder{
+		keys:   keys,
+		values: values,
+		level:  0,
+	}
+	return b.build(sharedPool)
+}
+
+func newTupleLeafNode(keys, values []val.Tuple) Node {
+	ks := make([]nodeItem, len(keys))
+	for i := range ks {
+		ks[i] = nodeItem(keys[i])
+	}
+	vs := make([]nodeItem, len(values))
+	for i := range vs {
+		vs[i] = nodeItem(values[i])
+	}
+	return newLeafNode(ks, vs)
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
@@ -102,17 +140,27 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
-func ascendingIntPairs(t *testing.T, count int) (keys, values []nodeItem) {
-	items := make([]nodeItem, count*2)
-	for i := range items {
-		items[i] = make(nodeItem, 4)
-		binary.LittleEndian.PutUint32(items[i], uint32(i))
+func ascendingIntTuples(t *testing.T, count int) (keys, values []val.Tuple) {
+	desc := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+	bld := val.NewTupleBuilder(desc)
+
+	tups := make([]val.Tuple, count*2)
+	for i := range tups {
+		bld.PutUint32(0, uint32(i))
+		tups[i] = bld.Build(sharedPool)
 	}
-	keys, values = items[:count], items[count:]
+	keys, values = tups[:count], tups[count:]
 	return
 }
 
 func sumSize(items []nodeItem) (sz uint64) {
+	for _, item := range items {
+		sz += uint64(len(item))
+	}
+	return
+}
+
+func sumTupleSize(items []val.Tuple) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}

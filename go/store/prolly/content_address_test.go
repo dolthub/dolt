@@ -18,32 +18,36 @@ import (
 	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var expected = hash.Hash{
-	0xa2, 0x81, 0x3b, 0xf, 0xdb,
-	0x2f, 0x27, 0x1d, 0x60, 0x86,
-	0x22, 0x97, 0x0, 0x86, 0x9b,
-	0x6e, 0x55, 0xb2, 0xec, 0x5c,
+	0x0, 0x26, 0x55, 0xec, 0x3,
+	0x30, 0x52, 0xed, 0xdc, 0x9a,
+	0xdd, 0xe, 0x76, 0x4f, 0x3f,
+	0x79, 0xe0, 0xdc, 0xfd, 0x41,
 }
 
 func TestContentAddress(t *testing.T) {
-	keys, values := ascendingIntPairs(t, 12345)
+	keys, values := ascendingIntTuples(t, 12345)
 	m := makeTree(t, keys, values)
+	require.NotNil(t, m)
 	require.Equal(t, expected, m.hashOf())
+	assert.Equal(t, 12345, m.treeCount())
 }
 
-func makeTree(t *testing.T, keys, values []nodeItem) Node {
+func makeTree(t *testing.T, keys, values []val.Tuple) Node {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
 	for i := range keys {
-		_, err := chunker.Append(ctx, keys[i], values[i])
+		err := chunker.AddPair(ctx, keys[i], values[i])
 		require.NoError(t, err)
 	}
 

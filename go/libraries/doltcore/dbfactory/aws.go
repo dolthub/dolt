@@ -152,9 +152,7 @@ func validatePath(path string) (string, error) {
 		pathLen--
 	}
 
-	// Should probably have regex validation of a valid database name here once we decide what valid database names look
-	// like.
-	if len(path) == 0 || strings.Index(path, "/") != -1 {
+	if len(path) == 0 {
 		return "", errors.New("invalid database name")
 	}
 

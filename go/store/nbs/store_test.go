@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/libraries/utils/test"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -94,8 +95,9 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		expected, ok := fileToData[fileID]
 		require.True(t, ok)
 
-		rd, err := src.Open(context.Background())
+		rd, contentLength, err := src.Open(context.Background())
 		require.NoError(t, err)
+		require.Equal(t, len(expected), int(contentLength))
 
 		data, err := io.ReadAll(rd)
 		require.NoError(t, err)
@@ -524,6 +526,33 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert.Equal(upstream.NumAppendixSpecs(), newUpstream.NumAppendixSpecs())
 	assert.Equal(upstream.GetAppendixTableSpecInfo(0), newUpstream.GetTableSpecInfo(0))
 	assert.Equal(newUpstream.GetTableSpecInfo(0), newUpstream.GetAppendixTableSpecInfo(0))
+}
+
+func TestNBSOverwriteManifest(t *testing.T) {
+	assert := assert.New(t)
+	ctx := context.Background()
+
+	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		err := store.Close()
+		require.NoError(t, err, "failed to close store")
+	}()
+
+	// Generate a random root hash
+	newRoot := hash.New(test.RandomData(20))
+	// Create new table files and appendices
+	newTableFiles, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
+	newAppendices, _ := persistTableFileSources(t, p, rand.Intn(4)+1)
+
+	err := OverwriteStoreManifest(ctx, store, newRoot, newTableFiles, newAppendices)
+	require.NoError(t, err)
+
+	// Verify that the persisted contents are correct
+	_, newContents, err := fm.ParseIfExists(ctx, stats, nil)
+	require.NoError(t, err)
+	assert.Equal(len(newTableFiles)+len(newAppendices), newContents.NumTableSpecs())
+	assert.Equal(len(newAppendices), newContents.NumAppendixSpecs())
+	assert.Equal(newRoot, newContents.GetRoot())
 }
 
 func TestGuessPrefixOrdinal(t *testing.T) {

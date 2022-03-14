@@ -49,7 +49,7 @@ type prollyIndexIter struct {
 var _ sql.RowIter = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
-func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, projection []string) (prollyIndexIter, error) {
+func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {

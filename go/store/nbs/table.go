@@ -263,6 +263,8 @@ type chunkSource interface {
 
 	// opens a Reader to the first byte of the chunkData segment of this table.
 	reader(context.Context) (io.Reader, error)
+	// size returns the total size of the chunkSource: chunks, index, and footer
+	size() (uint64, error)
 	index() (tableIndex, error)
 
 	// Clone returns a |chunkSource| with the same contents as the
@@ -283,8 +285,9 @@ type TableFile interface {
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
-	// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-	Open(ctx context.Context) (io.ReadCloser, error)
+	// Open returns an io.ReadCloser which can be used to read the bytes of a table file. The total length of the
+	// table file in bytes can be optionally returned.
+	Open(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // Describes what is possible to do with TableFiles in a TableFileStore.

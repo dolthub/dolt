@@ -27,6 +27,7 @@ import (
 
 func TestWriteReadResultsCsv(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "TestWriteResultsCsv")
+	require.NoError(t, err)
 	err = os.MkdirAll(tmpDir, os.ModePerm)
 	require.NoError(t, err)
 

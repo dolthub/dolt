@@ -61,7 +61,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
-	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM %s", tableName))
+	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
 	}

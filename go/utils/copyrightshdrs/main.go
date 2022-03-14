@@ -247,7 +247,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/spec/absolute_path.go", NomsPath: "go/spec/absolute_path.go", HadCopyrightNotice: true},
 	{Path: "store/spec/absolute_path_test.go", NomsPath: "go/spec/absolute_path_test.go", HadCopyrightNotice: true},
 	{Path: "store/spec/commit_meta.go", NomsPath: "go/spec/commit_meta.go", HadCopyrightNotice: true},
-	{Path: "store/spec/commit_meta_test.go", NomsPath: "go/spec/commit_meta_test.go", HadCopyrightNotice: true},
 	{Path: "store/spec/spec.go", NomsPath: "go/spec/spec.go", HadCopyrightNotice: true},
 	{Path: "store/spec/spec_test.go", NomsPath: "go/spec/spec_test.go", HadCopyrightNotice: true},
 	{Path: "store/spec/util.go", NomsPath: "go/spec/util.go", HadCopyrightNotice: true},

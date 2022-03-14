@@ -169,7 +169,7 @@ func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads()
 
 	l := buildListOfHeight(2, suite.sourceVRW)
-	sourceRef := suite.commitToSource(l, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	sourceRef := suite.commitToSource(l, nil)
 	pt := startProgressTracker()
 
 	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
@@ -205,15 +205,15 @@ func (suite *PullSuite) TestPullEverything() {
 //                         \ -1-> L0
 func (suite *PullSuite) TestPullMultiGeneration() {
 	sinkL := buildListOfHeight(2, suite.sinkVRW)
-	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
+	suite.commitToSink(sinkL, nil)
 	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(2, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	sourceRef := suite.commitToSource(srcL, nil)
 	srcL = buildListOfHeight(4, suite.sourceVRW)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
 	srcL = buildListOfHeight(5, suite.sourceVRW)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
 
 	pt := startProgressTracker()
 
@@ -255,17 +255,17 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sinkVRW)
-	sinkRef := suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
+	sinkRef := suite.commitToSink(sinkL, nil)
 	srcL := buildListOfHeight(3, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	sourceRef := suite.commitToSource(srcL, nil)
 
 	var err error
 	sinkL, err = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
 	suite.NoError(err)
-	sinkRef = suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW, sinkRef)))
+	sinkRef = suite.commitToSink(sinkL, []hash.Hash{sinkRef.TargetHash()})
 	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.sourceVRW)).List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
 	preReads := suite.sinkCS.Reads()
 
 	pt := startProgressTracker()
@@ -302,11 +302,11 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 //                                         \ -1-> L0
 func (suite *PullSuite) TestPullUpdates() {
 	sinkL := buildListOfHeight(4, suite.sinkVRW)
-	suite.commitToSink(sinkL, mustList(types.NewList(context.Background(), suite.sinkVRW)))
+	suite.commitToSink(sinkL, nil)
 	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(4, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW)))
+	sourceRef := suite.commitToSource(srcL, nil)
 	L3 := mustValue(mustValue(srcL.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
 	L2 := mustValue(mustValue(L3.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
 	L2Ed := L2.Edit().Append(mustRef(suite.sourceVRW.WriteValue(context.Background(), types.String("oy!"))))
@@ -318,7 +318,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	srcLEd := srcL.Edit().Set(1, mustRef(suite.sourceVRW.WriteValue(context.Background(), L3)))
 	srcL, err = srcLEd.List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, mustList(types.NewList(context.Background(), suite.sourceVRW, sourceRef)))
+	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
 
 	pt := startProgressTracker()
 
@@ -336,20 +336,20 @@ func (suite *PullSuite) TestPullUpdates() {
 	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
 }
 
-func (suite *PullSuite) commitToSource(v types.Value, p types.List) types.Ref {
+func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) types.Ref {
 	db := datas.NewTypesDatabase(suite.sourceVRW.(*types.ValueStore))
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{ParentsList: p})
+	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
 	suite.NoError(err)
 	return mustHeadRef(ds)
 }
 
-func (suite *PullSuite) commitToSink(v types.Value, p types.List) types.Ref {
+func (suite *PullSuite) commitToSink(v types.Value, p []hash.Hash) types.Ref {
 	db := datas.NewTypesDatabase(suite.sinkVRW.(*types.ValueStore))
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{ParentsList: p})
+	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
 	suite.NoError(err)
 	return mustHeadRef(ds)
 }
@@ -385,8 +385,8 @@ func (ttf *TestFailingTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
+func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
+	return io.NopCloser(bytes.NewReader([]byte{0x00})), 1, errors.New("this is a test error")
 }
 
 type TestTableFile struct {
@@ -403,8 +403,8 @@ func (ttf *TestTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	return io.NopCloser(bytes.NewReader(ttf.data)), nil
+func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
+	return io.NopCloser(bytes.NewReader(ttf.data)), uint64(len(ttf.data)), nil
 }
 
 type TestTableFileWriter struct {

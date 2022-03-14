@@ -29,17 +29,6 @@ table Ref {
   hash:[byte];
 }
 
-// StoreRoot is the top-level chunk in the store,
-// containing references to all named Refs.
-table StoreRoot {
-  // map from ref name to ref hash
-  // with map root node inlined
-  refs:RefMap (required);
-
-  // creation time
-  time:Timestamp (required);
-}
-
 // DatabaseRoot is the top-level chunk for a Database.
 table DatabaseRoot {
   // map from table name to table ref
@@ -47,27 +36,9 @@ table DatabaseRoot {
   foreign_keys:[ForeignKey] (required);
 }
 
-table WorkingSet {
-  // todo(andy): should |name| be included?
-  name:string (required);
-  working_root:Ref (required);
-  staged_root:Ref (required);
-  merge_state:MergeState;
-  meta:WorkingSetMeta (required);
-}
-
 table MergeState {
   pre_merge_root:Ref (required);
   candidate_merge_commit:Ref (required);
-}
-
-table WorkingSetMeta {
-  name:string (required);
-  email:string (required);
-  // todo(andy): is description required?
-  desc:string;
-  timestamp:Timestamp (required);
-  user_timestamp:Timestamp (required);
 }
 
 table Commit {
@@ -78,19 +49,6 @@ table Commit {
 }
 
 table CommitMeta {
-  name:string (required);
-  email:string (required);
-  desc:string (required);
-  timestamp:Timestamp (required);
-  user_timestamp:Timestamp (required);
-}
-
-table Tag {
-  commit:Ref (required);
-  meta:TagMeta (required);
-}
-
-table TagMeta {
   name:string (required);
   email:string (required);
   desc:string (required);

@@ -74,7 +74,7 @@ func BenchmarkDolt(ctx context.Context, tppcConfig *TpccBenchmarkConfig, serverC
 	time.Sleep(5 * time.Second)
 
 	// GetTests and Benchmarks
-	tests := getTests(tppcConfig, serverConfig.Server)
+	tests := getTests(tppcConfig)
 	results := make(sysbench_runner.Results, 0)
 
 	for _, test := range tests {
@@ -145,12 +145,12 @@ func getDoltServer(ctx context.Context, config *sysbench_runner.ServerConfig, te
 }
 
 // getTests creates a set of tests that the server needs to be executed on.
-func getTests(config *TpccBenchmarkConfig, serverType sysbench_runner.ServerType) []*TpccTest {
+func getTests(config *TpccBenchmarkConfig) []*TpccTest {
 	tests := make([]*TpccTest, 0)
 	for _, sf := range config.ScaleFactors {
 		params := NewDefaultTpccParams()
 		params.ScaleFactor = sf
-		test := NewTpccTest(fmt.Sprintf("tpcc-%s-scale-factor-%d", serverType, sf), params)
+		test := NewTpccTest(fmt.Sprintf("tpcc-scale-factor-%d", sf), params)
 		tests = append(tests, test)
 	}
 
@@ -166,6 +166,10 @@ func benchmark(ctx context.Context, test *TpccTest, serverConfig *sysbench_runne
 	err := prepare.Run()
 	if err != nil {
 		return nil, err
+	}
+
+	if run.Stdout != nil {
+		run.Stdout = nil
 	}
 
 	out, err := run.Output()

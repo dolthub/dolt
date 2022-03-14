@@ -439,3 +439,38 @@ SQL
     [[ "$output" =~ "$row1" ]] || false
     [[ "$output" =~ "$row2" ]] || false
 }
+
+@test "export-tables: table export to sql with null values in different sql types" {
+    dolt sql <<SQL
+CREATE TABLE s (stringVal VARCHAR(6));
+INSERT INTO s VALUES ('value'), (null);
+CREATE TABLE i (intVal integer);
+INSERT INTO s VALUES (2), (null);
+SQL
+
+    run dolt sql -q "SELECT * FROM s"
+    string_output=$output
+
+    run dolt table export s s.sql
+    [ $status -eq 0 ]
+
+    dolt table rm s
+    run dolt sql < s.sql
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM s"
+    [ "$output" = "$string_output" ]
+
+    run dolt sql -q "SELECT * FROM i"
+    int_output=$output
+
+    run dolt table export i i.sql
+    [ $status -eq 0 ]
+
+    dolt table rm i
+    run dolt sql < i.sql
+    [ $status -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM i"
+    [ "$output" = "$int_output" ]
+}

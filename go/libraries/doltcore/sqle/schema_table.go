@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
@@ -31,6 +32,11 @@ import (
 
 var errDoltSchemasTableFormat = fmt.Errorf("`%s` schema in unexpected format", doltdb.SchemasTableName)
 var noSchemaIndexDefined = fmt.Errorf("could not find index `%s` on system table `%s`", doltdb.SchemasTablesIndexName, doltdb.SchemasTableName)
+
+const (
+	viewFragment    = "view"
+	triggerFragment = "trigger"
+)
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
@@ -200,26 +206,41 @@ func nextSchemasTableIndex(ctx *sql.Context, root *doltdb.RootValue) (int64, err
 		return 0, err
 	}
 
-	rows, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return 0, err
 	}
 
-	idx := int64(1)
-	if rows.Len() > 0 {
-		keyTpl, _, err := rows.Last(ctx)
+	if rows.Empty() {
+		return 1, nil
+	}
+
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		p := durable.ProllyMapFromIndex(rows)
+		key, _, err := p.Last(ctx)
 		if err != nil {
 			return 0, err
 		}
-		if keyTpl != nil {
-			key, err := keyTpl.(types.Tuple).Get(1)
-			if err != nil {
-				return 0, err
-			}
-			idx = int64(key.(types.Int)) + 1
+		kd, _ := p.Descriptors()
+
+		i, _ := kd.GetInt64(0, key)
+		return i + 1, nil
+	} else {
+		m := durable.NomsMapFromIndex(rows)
+		keyTpl, _, err := m.Last(ctx)
+		if err != nil {
+			return 0, err
 		}
+		if keyTpl == nil {
+			return 1, nil
+		}
+
+		key, err := keyTpl.(types.Tuple).Get(1)
+		if err != nil {
+			return 0, err
+		}
+		return int64(key.(types.Int)) + 1, nil
 	}
-	return idx, nil
 }
 
 // fragFromSchemasTable returns the row with the given schema fragment if it exists.
@@ -245,7 +266,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		return nil, false, err
 	}
 
-	iter, err := index.RowIterForIndexLookup(ctx, lookup, nil)
+	iter, err := index.RowIterForIndexLookup(ctx, lookup, tbl.sqlSch, nil)
 	if err != nil {
 		return nil, false, err
 	}
@@ -271,57 +292,29 @@ type schemaFragment struct {
 	fragment string
 }
 
-func getSchemaFragmentsOfType(ctx *sql.Context, tbl *doltdb.Table, fragmentType string) ([]schemaFragment, error) {
-	sch, err := tbl.GetSchema(ctx)
+func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
+	iter, err := TableToRowIter(ctx, tbl, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	typeCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesTypeCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	nameCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesNameCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-	fragCol, ok := sch.GetAllCols().GetByName(doltdb.SchemasTablesFragmentCol)
-	if !ok {
-		return nil, errDoltSchemasTableFormat
-	}
-
-	rowData, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var fragments []schemaFragment
-	err = rowData.Iter(ctx, func(key, val types.Value) (stop bool, err error) {
-		dRow, err := row.FromNoms(sch, key.(types.Tuple), val.(types.Tuple))
+	var frags []schemaFragment
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			return true, err
+			return nil, err
 		}
-		if typeColVal, ok := dRow.GetColVal(typeCol.Tag); ok && typeColVal.Equals(types.String(fragmentType)) {
-			name, ok := dRow.GetColVal(nameCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesNameCol, taggedVals)
-			}
-			def, ok := dRow.GetColVal(fragCol.Tag)
-			if !ok {
-				taggedVals, _ := dRow.TaggedValues()
-				return true, fmt.Errorf("missing `%s` value for view row: (%s)", doltdb.SchemasTablesFragmentCol, taggedVals)
-			}
-			fragments = append(fragments, schemaFragment{
-				name:     string(name.(types.String)),
-				fragment: string(def.(types.String)),
-			})
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
-	}
 
-	return fragments, nil
+		if sqlRow[0] != fragType {
+			continue
+		}
+		frags = append(frags, schemaFragment{
+			name:     sqlRow[1].(string),
+			fragment: sqlRow[2].(string),
+		})
+	}
+	return frags, nil
 }

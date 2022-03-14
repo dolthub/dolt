@@ -39,6 +39,7 @@ type schemaImpl struct {
 }
 
 var ErrInvalidPkOrdinals = errors.New("incorrect number of primary key ordinals")
+var ErrMultipleNotNullConstraints = errors.New("multiple not null constraints on same column")
 
 // SchemaFromCols creates a Schema from a collection of columns
 func SchemaFromCols(allCols *ColCollection) (Schema, error) {
@@ -88,6 +89,22 @@ func MustSchemaFromCols(typedColColl *ColCollection) Schema {
 		panic(err)
 	}
 	return sch
+}
+
+// ValidateColumnConstraints removes any duplicate NOT NULL column constraints from schemas.
+func ValidateColumnConstraints(allCols *ColCollection) error {
+	for _, col := range allCols.cols {
+		seenNotNull := false
+		for _, cc := range col.Constraints {
+			if cc.GetConstraintType() == NotNullConstraintType {
+				if seenNotNull {
+					return ErrMultipleNotNullConstraints
+				}
+				seenNotNull = true
+			}
+		}
+	}
+	return nil
 }
 
 // ValidateForInsert returns an error if the given schema cannot be written to the dolt database.

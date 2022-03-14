@@ -136,12 +136,12 @@ func TestNewCommit(t *testing.T) {
 	}
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
 	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
-	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
+	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
 	assert.NoError(err)
@@ -160,9 +160,9 @@ func TestNewCommit(t *testing.T) {
 	assert.NoError(err)
 
 	// Committing another Float
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, types.Format_7_18))))
+	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, db.Format()))))
 	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
-	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(types.Format_7_18))
+	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
 	assert.NoError(err)
@@ -179,9 +179,9 @@ func TestNewCommit(t *testing.T) {
 	assert.NoError(err)
 
 	// Now commit a String
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
+	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
 	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
-	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(types.Format_7_18))
+	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
 	assert.NoError(err)
@@ -198,14 +198,14 @@ func TestNewCommit(t *testing.T) {
 	assert.NoError(err)
 
 	// Now commit a String with MetaInfo
-	meta, err := types.NewStruct(types.Format_7_18, "Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
+	meta, err := types.NewStruct(db.Format(), "Meta", types.StructData{"date": types.String("some date"), "number": types.Float(9)})
 	assert.NoError(err)
 	metaType := nomdl.MustParseType(`Struct Meta {
                 date: String,
                 number: Float,
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
-	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, types.Format_7_18))))
+	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
 	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
 	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, meta)
 	assert.NoError(err)
@@ -228,8 +228,8 @@ func TestNewCommit(t *testing.T) {
 
 	// Merge-commit with different parent types
 	parents = mustList(types.NewList(context.Background(), db,
-		mustRef(types.NewRef(commit2, types.Format_7_18)),
-		mustRef(types.NewRef(commit3, types.Format_7_18))))
+		mustRef(types.NewRef(commit2, db.Format())),
+		mustRef(types.NewRef(commit3, db.Format()))))
 	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
 	commit5, err := newCommit(
 		context.Background(),
@@ -237,7 +237,7 @@ func TestNewCommit(t *testing.T) {
 		parents,
 		parentsClosure,
 		true,
-		types.EmptyStruct(types.Format_7_18))
+		types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at5, err := types.TypeOf(commit5)
 	assert.NoError(err)
@@ -255,23 +255,35 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
-	metaCommit, err := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
+	metaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": mustSet(types.NewSet(context.Background(), db)),
-		"meta":    types.EmptyStruct(types.Format_7_18),
+		"meta":    types.EmptyStruct(db.Format()),
 	})
 	assert.NoError(err)
 	assert.True(IsCommit(metaCommit))
 
-	noMetaCommit, err := types.NewStruct(types.Format_7_18, "Commit", types.StructData{
+	noMetaCommit, err := types.NewStruct(db.Format(), "Commit", types.StructData{
 		"value":   types.Float(9),
 		"parents": mustSet(types.NewSet(context.Background(), db)),
 	})
 	assert.NoError(err)
 	assert.False(IsCommit(noMetaCommit))
+}
+
+func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Struct) []hash.Hash {
+	ret := make([]hash.Hash, len(commits))
+	for i, c := range commits {
+		r, err := types.NewRef(c, vrw.Format())
+		if err != nil {
+			panic(err)
+		}
+		ret[i] = r.TargetHash()
+	}
+	return ret
 }
 
 // Convert list of Struct's to List<Ref>
@@ -283,7 +295,7 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 
 	le := l.Edit()
 	for _, p := range commits {
-		le = le.Append(mustRef(types.NewRef(p, types.Format_7_18)))
+		le = le.Append(mustRef(types.NewRef(p, vrw.Format())))
 	}
 	return le.List(context.Background())
 }
@@ -317,7 +329,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 	for name, method := range methods {
 		tn := fmt.Sprintf("find common ancestor using %s", name)
 		t.Run(tn, func(t *testing.T) {
-			found, ok, err := method(context.Background(), mustRef(types.NewRef(a, types.Format_7_18)), mustRef(types.NewRef(b, types.Format_7_18)), ldb, rdb)
+			found, ok, err := method(context.Background(), mustRef(types.NewRef(a, ldb.Format())), mustRef(types.NewRef(b, rdb.Format())), ldb, rdb)
 			assert.NoError(err)
 
 			if assert.True(ok) {
@@ -345,7 +357,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, types.Ref) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
-	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{ParentsList: mustList(toRefList(db, parents...))})
+	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
 	assert.NoError(t, err)
 	return mustHead(ds), mustHeadRef(ds)
 }
@@ -405,7 +417,7 @@ func TestCommitParentsClosure(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 
 	type expected struct {
 		height int
@@ -539,7 +551,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert := assert.New(t)
 
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 
 	// Build commit DAG
 	//
@@ -578,7 +590,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
 
 	// No common ancestor
-	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, types.Format_7_18)), mustRef(types.NewRef(a6, types.Format_7_18)), db, db)
+	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, db.Format())), mustRef(types.NewRef(a6, db.Format())), db, db)
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
@@ -599,11 +611,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	assert.NoError(db.Close())
 
 	storage = &chunks.TestStorage{}
-	db = NewDatabase(storage.NewView()).(*database)
+	db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	rstorage := &chunks.TestStorage{}
-	rdb := NewDatabase(rstorage.NewView()).(*database)
+	rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
 	defer rdb.Close()
 
 	// Rerun the tests when using two difference Databases for left and
@@ -655,30 +667,30 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
 
-	_, _, err = FindCommonAncestor(context.Background(), mustRef(types.NewRef(a9, types.Format_7_18)), mustRef(types.NewRef(ra9, types.Format_7_18)), rdb, db)
+	_, _, err = FindCommonAncestor(context.Background(), mustRef(types.NewRef(a9, db.Format())), mustRef(types.NewRef(ra9, db.Format())), rdb, db)
 	assert.Error(err)
 }
 
 func TestNewCommitRegressionTest(t *testing.T) {
 	storage := &chunks.TestStorage{}
-	db := NewDatabase(storage.NewView()).(*database)
+	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
 	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
-	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
+	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(t, err)
-	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(types.Format_7_18))
+	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(t, err)
 	_, err = db.WriteValue(context.Background(), c1)
 	assert.NoError(t, err)
 	_, err = db.WriteValue(context.Background(), cx)
 	assert.NoError(t, err)
 	value := types.String("two")
-	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, types.Format_7_18)))
+	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, db.Format())))
 	assert.NoError(t, err)
 	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
-	meta, err := types.NewStruct(types.Format_7_18, "", types.StructData{
+	meta, err := types.NewStruct(db.Format(), "", types.StructData{
 		"basis": cx,
 	})
 	assert.NoError(t, err)

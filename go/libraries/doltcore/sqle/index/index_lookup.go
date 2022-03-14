@@ -36,26 +36,35 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	doltIdx := idx.(DoltIndex)
 
 	if types.IsFormat_DOLT_1(rp.rows.Format()) {
-		covers := indexCoversCols(doltIdx, columns)
-		if covers {
-			return newProllyCoveringIndexIter(ctx, doltIdx, rp.prollyRange, pkSch)
-		} else {
-			return newProllyIndexIter(ctx, doltIdx, rp.prollyRange, columns)
-		}
+		return RowIterForProllyRange(ctx, doltIdx, rp.prollyRange, pkSch, columns)
 	}
 
 	ranges := []*noms.ReadRange{rp.nomsRange}
-	return RowIterForRanges(ctx, doltIdx, ranges, rp.rows, columns)
+	return RowIterForNomsRanges(ctx, doltIdx, ranges, rp.rows, columns)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, columns []string) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
-	return RowIterForRanges(ctx, idx, lookup.nomsRanges, lookup.IndexRowData(), columns)
+	if types.IsFormat_DOLT_1(idx.Format()) {
+		// todo(andy)
+		return RowIterForProllyRange(ctx, idx, lookup.prollyRanges[0], pkSch, columns)
+	} else {
+		return RowIterForNomsRanges(ctx, idx, lookup.nomsRanges, lookup.IndexRowData(), columns)
+	}
 }
 
-func RowIterForRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
+	covers := indexCoversCols(idx, columns)
+	if covers {
+		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch)
+	} else {
+		return newProllyIndexIter(ctx, idx, ranges)
+	}
+}
+
+func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, rowData durable.Index, columns []string) (sql.RowIter, error) {
 	m := durable.NomsMapFromIndex(rowData)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
@@ -208,6 +217,7 @@ const (
 	boundsCase_greater_infinity
 	boundsCase_greater_lessEquals
 	boundsCase_greater_less
+	boundsCase_isNull
 )
 
 // columnBounds are used to compare a given value in the noms row iterator.
@@ -244,6 +254,15 @@ func (il *doltIndexLookup) Ranges() sql.RangeCollection {
 // Between returns whether the given types.Value is between the bounds. In addition, this returns if the value is outside
 // the bounds and above the upperbound.
 func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, val types.Value) (ok bool, over bool, err error) {
+	// Only boundCase_isNull matches NULL values,
+	// otherwise we terminate the range scan.
+	// This is checked early to bypass unpredictable
+	// null type comparisons.
+	if val.Kind() == types.NullKind {
+		isNullCase := cb.boundsCase == boundsCase_isNull
+		return isNullCase, !isNullCase, nil
+	}
+
 	switch cb.boundsCase {
 	case boundsCase_infinity_infinity:
 		return true, false, nil
@@ -303,6 +322,9 @@ func (cb columnBounds) Between(ctx context.Context, nbf *types.NomsBinFormat, va
 		if err != nil || !ok {
 			return false, true, err
 		}
+	case boundsCase_isNull:
+		// an isNull scan skips non-nulls, but does not terminate
+		return false, false, nil
 	default:
 		return false, false, fmt.Errorf("unknown bounds")
 	}

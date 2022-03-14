@@ -345,13 +345,12 @@ SQL
 }
 
 @test "drop-create: drop table from different database" {
-    skip "fix not merged yet"
     dolt sql  <<SQL
 create table test (currentId int primary key, currentText text);
 insert into test values (1, 'text1'), (2, 'text2');
 create schema common;
 create table common.test (commonId integer, commonText text);
-insert into test values (999, 'common database text1');
+insert into common.test values (999, 'common database text1');
 SQL
 
     run dolt sql -q "select * from test"

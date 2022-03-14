@@ -31,7 +31,7 @@ import (
 )
 
 type DoltIndex interface {
-	sql.Index
+	sql.FilteredIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	TableData() durable.Index
@@ -258,12 +258,15 @@ RangeLoop:
 				}
 				cb.upperbound = val
 			}
+			if rangeColumnExpr.Type() == sql.RangeType_Null {
+				cb.boundsCase = boundsCase_isNull
+			}
 			rangeCheck[i] = cb
 		}
 
 		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
-		// number of checks that are called per-row.
-		for i := len(rangeCheck) - 1; i >= 0; i-- {
+		// number of checks that are called per-row. Always leave one check to skip NULLs.
+		for i := len(rangeCheck) - 1; i > 0 && len(rangeCheck) > 1; i-- {
 			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
 				rangeCheck = rangeCheck[:i]
 			} else {
@@ -284,6 +287,15 @@ RangeLoop:
 		nomsRanges: readRanges,
 		sqlRanges:  ranges,
 	}, nil
+}
+
+func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
+	if types.IsFormat_DOLT_1(di.vrw.Format()) {
+		// todo(andy): handle first column filters
+		return nil
+	} else {
+		return filters
+	}
 }
 
 // Database implement sql.Index
@@ -416,54 +428,50 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	}
 
 	start := prolly.RangeCut{Inclusive: true}
-	startFields := sql.Row{}
+	startRow := sql.Row{}
 	for _, sc := range lower {
-		if !isBindingCut(sc) {
+		if !sql.RangeCutIsBinding(sc) {
 			start = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break
 		}
 		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
-		startFields = append(startFields, sql.GetRangeCutKey(sc))
+		startRow = append(startRow, sql.GetRangeCutKey(sc))
 	}
-
 	if !start.Unbound {
-		startFields, err = normalizeRangeKey(sqlRange, startFields)
+		startRow, err = normalizeRangeKey(sqlRange, startRow)
 		if err != nil {
 			return prolly.Range{}, err
 		}
 
-		start.Key, err = tupleFromKeys(startFields, tb)
+		start.Key, err = tupleFromKeys(startRow, tb)
 		if err != nil {
 			return prolly.Range{}, err
 		}
 	}
 
 	stop := prolly.RangeCut{Inclusive: true}
-	stopFields := sql.Row{}
+	stopRow := sql.Row{}
 	for _, sc := range upper {
-		if !isBindingCut(sc) {
+		if !sql.RangeCutIsBinding(sc) {
 			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break
 		}
 		stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
-		stopFields = append(stopFields, sql.GetRangeCutKey(sc))
+		stopRow = append(stopRow, sql.GetRangeCutKey(sc))
 	}
 	if !stop.Unbound {
-		stopFields, err = normalizeRangeKey(sqlRange, stopFields)
+		stopRow, err = normalizeRangeKey(sqlRange, stopRow)
 		if err != nil {
 			return prolly.Range{}, err
 		}
 
-		stop.Key, err = tupleFromKeys(stopFields, tb)
+		stop.Key, err = tupleFromKeys(stopRow, tb)
 		if err != nil {
 			return prolly.Range{}, err
 		}
 	}
 
-	// Range queries can be made over a prefix subset of the
-	// index's columns. In this case, |prolly.Range.KeyDesc|
-	// must describe the same subset of index columns.
-	rngDesc := val.TupleDescriptorPrefix(tb.Desc, len(sqlRange))
+	rngDesc := tupleDescriptorForRange(tb.Desc, sqlRange, startRow, stopRow)
 
 	return prolly.Range{
 		Start:   start,
@@ -472,14 +480,15 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	}, nil
 }
 
-func isBindingCut(cut sql.RangeCut) bool {
-	return cut != sql.BelowAll{} && cut != sql.AboveAll{}
-}
-
 func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
+	var err error
 	for i, v := range keys {
-		PutField(tb, i, v)
+		if err = PutField(tb, i, v); err != nil {
+			return nil, err
+		}
 	}
+
+	// ranges can be defined using null values even if the index is non-null
 	return tb.BuildPermissive(sharePool), nil
 }
 
@@ -493,4 +502,26 @@ func normalizeRangeKey(rng sql.Range, key sql.Row) (sql.Row, error) {
 		}
 	}
 	return key, nil
+}
+
+// tupleDescriptorForRange constructs a tuple descriptor suitable for range queries.
+// Range queries can be made over a prefix subset of the index's columns, so we need
+// a tuple descriptor that is aware of that subset.
+// We also need to account for range keys containing nulls and disable tuple access
+// methods that assume non-null tuples.
+func tupleDescriptorForRange(desc val.TupleDesc, rng sql.Range, start, stop sql.Row) val.TupleDesc {
+	rngDesc := val.TupleDescriptorPrefix(desc, len(rng))
+
+	for i := range start {
+		if start[i] == nil {
+			return rngDesc.WithoutFixedAccess()
+		}
+	}
+	for i := range stop {
+		if stop[i] == nil {
+			return rngDesc.WithoutFixedAccess()
+		}
+	}
+
+	return rngDesc
 }

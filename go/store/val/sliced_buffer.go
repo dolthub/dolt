@@ -19,30 +19,21 @@ type SlicedBuffer struct {
 	Offs offsets
 }
 
-func slicedTupleBuffer(tup Tuple) SlicedBuffer {
-	mask := tup.mask()
-	offStop := tup.size() - numFieldsSize - mask.size()
-	bufStop := offStop - offsetsSize(mask.count())
-
-	return SlicedBuffer{
-		Buf:  tup[:bufStop],
-		Offs: offsets(tup[bufStop:offStop]),
-	}
-}
-
 // GetSlice returns the ith slice of |sb.Buf|.
 func (sb SlicedBuffer) GetSlice(i int) []byte {
-	start := sb.Offs.getOffset(i)
-	stop := ByteSize(len(sb.Buf))
-	if !sb.isLastIndex(i) {
-		stop = sb.Offs.getOffset(i + 1)
+	start := uint16(0)
+	if i > 0 {
+		pos := (i - 1) * 2
+		start = readUint16(sb.Offs[pos : pos+2])
 	}
-	return sb.Buf[start:stop]
-}
 
-// isLastIndex returns true if |i| is the last index in |sl|.
-func (sb SlicedBuffer) isLastIndex(i int) bool {
-	return len(sb.Offs) == i*2
+	stop := uint16(len(sb.Buf))
+	if i*2 < len(sb.Offs) {
+		pos := i * 2
+		stop = readUint16(sb.Offs[pos : pos+2])
+	}
+
+	return sb.Buf[start:stop]
 }
 
 type offsets []byte
@@ -56,21 +47,11 @@ func offsetsSize(count int) ByteSize {
 	return ByteSize((count - 1) * 2)
 }
 
-// getOffset gets the byte position of the _start_ of element |i|.
-func (os offsets) getOffset(i int) ByteSize {
-	if i == 0 {
-		return 0
-	}
-	start := (i - 1) * 2
-	off := readUint16(os[start : start+2])
-	return ByteSize(off)
-}
-
-// putOffset writes offset |pos| at index |i|.
-func (os offsets) putOffset(i int, off ByteSize) {
+// writeOffset writes offset |pos| at index |i|.
+func writeOffset(i int, off ByteSize, arr offsets) {
 	if i == 0 {
 		return
 	}
 	start := (i - 1) * 2
-	writeUint16(os[start:start+2], uint16(off))
+	writeUint16(arr[start:start+2], uint16(off))
 }

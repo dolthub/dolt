@@ -1,6 +1,11 @@
 name: Test Sysbench Runner Utility Works
 
-on: [pull_request]
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
 
 jobs:
   mysql_client_integrations_job:

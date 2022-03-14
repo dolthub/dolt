@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -42,7 +43,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 	drw := dbData.Drw
 
 	if props.Message == "" {
-		return nil, doltdb.ErrEmptyCommitMessage
+		return nil, datas.ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
@@ -117,7 +118,7 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 		return nil, err
 	}
 
-	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +156,7 @@ func GetCommitStaged(
 	drw := dbData.Drw
 
 	if props.Message == "" {
-		return nil, doltdb.ErrEmptyCommitMessage
+		return nil, datas.ErrEmptyCommitMessage
 	}
 
 	staged, notStaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
@@ -220,7 +221,7 @@ func GetCommitStaged(
 		return nil, err
 	}
 
-	meta, err := doltdb.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
+	meta, err := datas.NewCommitMetaWithUserTS(props.Name, props.Email, props.Message, props.Date)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +247,7 @@ func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.C
 	}
 
 	var sortErr error
-	var metaI, metaJ *doltdb.CommitMeta
+	var metaI, metaJ *datas.CommitMeta
 	sort.Slice(uniqueCommits, func(i, j int) bool {
 		if sortErr != nil {
 			return false

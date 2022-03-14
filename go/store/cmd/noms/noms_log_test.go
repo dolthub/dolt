@@ -30,6 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -111,23 +112,11 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	p, err := types.NewList(context.Background(), vrw, mustHeadRef(parentDs))
-
-	if err != nil {
-		return datas.Dataset{}, err
-	}
-
-	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{ParentsList: p})
+	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadRef(parentDs).TargetHash()}})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	p, err := types.NewList(context.Background(), vrw, mustHeadRef(ds1), mustHeadRef(ds2))
-
-	if err != nil {
-		return datas.Dataset{}, err
-	}
-
-	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{ParentsList: p})
+	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadRef(ds1).TargetHash(), mustHeadRef(ds2).TargetHash()}})
 }
 
 func mustHead(ds datas.Dataset) types.Struct {
@@ -209,17 +198,11 @@ func (s *nomsLogTestSuite) TestEmptyCommit() {
 	defer sp.Close()
 
 	db := sp.GetDatabase(context.Background())
-	vrw := sp.GetVRW(context.Background())
 	ds, err := db.GetDataset(context.Background(), "ds1")
 
 	s.NoError(err)
 
-	meta, err := types.NewStruct(vrw.Format(), "Meta", map[string]types.Value{
-		"longNameForTest": types.String("Yoo"),
-		"test2":           types.String("Hoo"),
-	})
-	s.NoError(err)
-	ds, err = db.Commit(context.Background(), ds, types.String("1"), datas.CommitOptions{Meta: meta})
+	ds, err = db.Commit(context.Background(), ds, types.String("1"), datas.CommitOptions{Meta: &datas.CommitMeta{Name: "Yoo Hoo"}})
 	s.NoError(err)
 
 	ds, err = db.Commit(context.Background(), ds, types.String("2"), datas.CommitOptions{})
@@ -312,7 +295,7 @@ const (
 	truncRes3  = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
 	diffTrunc3 = "* p1442asfqnhgv1ebg6rijhl3kb9n4vt3\n| Parent: 4tq9si4tk8n0pead7hovehcbuued45sa\n* 4tq9si4tk8n0pead7hovehcbuued45sa\n| Parent: None\n"
 
-	metaRes1 = "p7jmuh67vhfccnqk1bilnlovnms1m67o\nParent: f8gjiv5974ojir9tnrl2k393o4s1tf0r\n-   \"1\"\n+   \"2\"\n\nf8gjiv5974ojir9tnrl2k393o4s1tf0r\nParent:          None\nLongNameForTest: \"Yoo\"\nTest2:           \"Hoo\"\n\n"
+	metaRes1 = "kko50q7oj9a7sbbfhli5ejl7rbaq0it8\nParent: k8d1ap7m1tjqiulsr7g7pctmia4bmht8\n-   \"1\"\n+   \"2\"\n\nk8d1ap7m1tjqiulsr7g7pctmia4bmht8\nParent:         None\nDesc:           \"\"\nEmail:          \"\"\nMetaversion:    \"1.0\"\nName:           \"Yoo Hoo\"\nTimestamp:      0\nUser_timestamp: 0\n\n"
 	metaRes2 = "p7jmuh67vhfccnqk1bilnlovnms1m67o (Parent: f8gjiv5974ojir9tnrl2k393o4s1tf0r)\nf8gjiv5974ojir9tnrl2k393o4s1tf0r (Parent: None)\n"
 
 	pathValue = "oki4cv7vkh743rccese3r3omf6l6mao4\nParent: lca4vejkm0iqsk7ok5322pt61u4otn6q\n2\n\nlca4vejkm0iqsk7ok5322pt61u4otn6q\nParent: u42pi8ukgkvpoi6n7d46cklske41oguf\n1\n\nu42pi8ukgkvpoi6n7d46cklske41oguf\nParent: hgmlqmsnrb3sp9jqc6mas8kusa1trrs2\n0\n\nhgmlqmsnrb3sp9jqc6mas8kusa1trrs2\nParent: hffiuecdpoq622tamm3nvungeca99ohl\n<nil>\nhffiuecdpoq622tamm3nvungeca99ohl\nParent: None\n<nil>\n"

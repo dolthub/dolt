@@ -580,10 +580,6 @@ SQL
     dolt sql -q "insert into c values (1,1), (2,2)"
     dolt sql -q "alter table t drop primary key"
 
-    run dolt sql -q "explain select * from c where val = 2"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Filter" ]] || false
-
     run dolt sql -q "select * from c where val = 2" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ "2,2" ]] || false

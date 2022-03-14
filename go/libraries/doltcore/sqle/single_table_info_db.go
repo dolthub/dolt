@@ -85,7 +85,11 @@ func (db *SingleTableInfoDatabase) Partitions(*sql.Context) (sql.PartitionIter, 
 
 // PartitionRows implements sql.Table.
 func (db *SingleTableInfoDatabase) PartitionRows(*sql.Context, sql.Partition) (sql.RowIter, error) {
-	return nil, fmt.Errorf("cannot get parition rows of a single table information database")
+	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
+}
+
+func (db *SingleTableInfoDatabase) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
+	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
 }
 
 // GetForeignKeys implements sql.ForeignKeyTable.

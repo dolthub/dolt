@@ -50,13 +50,10 @@ var DownloadHedger *Hedger
 func init() {
 	// TODO: This does not necessarily respond well to changes in network
 	// conditions during the program's runtime.
-	DownloadHedger = NewHedger(
-		8,
-		NewMinStrategy(
-			1*time.Second,
-			NewPercentileStrategy(0, 1*time.Hour, 95.0),
-		),
-	)
+	e := NewPercentileEstimator(0, 1*time.Hour, 95.0)
+	s := NewMinHedgeStrategy(1*time.Second,
+		NewExponentialHedgeStrategy(NewEstimateStrategy(e)))
+	DownloadHedger = NewHedger(8, s, e)
 }
 
 var ErrUploadFailed = errors.New("upload failed")
@@ -1077,10 +1074,10 @@ type urlFactoryFunc func(error) (string, error)
 
 func hedgedRangeDownloadWithRetries(ctx context.Context, stats StatsRecorder, fetcher HTTPFetcher, offset, length uint64, urlStrF urlFactoryFunc) ([]byte, error) {
 	res, err := DownloadHedger.Do(ctx, Work{
-		Work: func(ctx context.Context, n int) (interface{}, error) {
+		Run: func(ctx context.Context, n int) (interface{}, error) {
 			return rangeDownloadWithRetries(ctx, stats, fetcher, offset, length, n, urlStrF)
 		},
-		Size: int(length),
+		Size: length,
 	})
 	if err != nil {
 		return nil, err
@@ -1334,7 +1331,7 @@ func sanitizeSignedUrl(url string) string {
 }
 
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 	if drtf.info.RefreshAfter != nil && drtf.info.RefreshAfter.AsTime().After(time.Now()) {
 		resp, err := drtf.dcs.csClient.RefreshTableFileUrl(ctx, drtf.info.RefreshRequest)
 		if err == nil {
@@ -1345,20 +1342,20 @@ func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, error)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, drtf.info.Url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	resp, err := drtf.dcs.httpFetcher.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if resp.StatusCode/100 != 2 {
 		defer resp.Body.Close()
 		body := make([]byte, 4096)
 		n, _ := io.ReadFull(resp.Body, body)
-		return nil, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
+		return nil, 0, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
 	}
 
-	return resp.Body, nil
+	return resp.Body, uint64(resp.ContentLength), nil
 }

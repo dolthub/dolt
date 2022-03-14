@@ -61,7 +61,7 @@ const (
 // The DOLT_BLAME system view is a view on the DOLT_DIFF system table that shows the latest commit
 // for each primary key in the specified table.
 func NewBlameView(ctx *sql.Context, tableName string, root *doltdb.RootValue) (string, error) {
-	ss, ok, err := root.GetSuperSchema(ctx, tableName)
+	table, _, ok, err := root.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return "", err
 	}
@@ -69,10 +69,11 @@ func NewBlameView(ctx *sql.Context, tableName string, root *doltdb.RootValue) (s
 		return "", doltdb.ErrTableNotFound
 	}
 
-	sch, err := ss.GenerateSchema()
+	sch, err := table.GetSchema(ctx)
 	if err != nil {
-		return "", err
+		return "", nil
 	}
+
 	blameViewExpression, err := createDoltBlameViewExpression(tableName, sch.GetPKCols().GetColumns())
 	if err != nil {
 		return "", err
