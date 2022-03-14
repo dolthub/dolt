@@ -979,9 +979,8 @@ SQL
     dolt commit -am "changes to main"
 
     run dolt merge other
-    skip "currently, no conflict...modified constraint is kept"
     [ $status -eq 1 ]
-    [[ "$output" =~ "our check 'c1' and their check 'c0' both reference the same column(s)" ]] || false
+    [[ "$output" =~ "check 'c' was deleted in theirs but modified in ours" ]] || false
 }
 
 @test "sql-merge: merging with not null and check constraints preserves both constraints" {

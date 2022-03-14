@@ -34,6 +34,7 @@ const (
 	NameCollision
 	ColumnCollision
 	InvalidCheckCollision
+	DeletedCheckCollision
 )
 
 type SchemaConflict struct {
@@ -106,6 +107,12 @@ func (c ChkConflict) String() string {
 		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
 	case InvalidCheckCollision:
 		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
+	case DeletedCheckCollision:
+		if c.Theirs == nil {
+			return fmt.Sprintf("check '%s' was deleted in theirs but modified in ours", c.Ours.Name())
+		} else {
+			return fmt.Sprintf("check '%s' was deleted in ours but modified in theirs", c.Theirs.Name())
+		}
 	}
 	return ""
 }
@@ -631,26 +638,26 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 }
 
 // checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts
-func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict) {
+func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check, []ChkConflict) {
 	// Make map of their checks for fast lookup
 	theirChkMap := make(map[string]schema.Check)
-	for _, chk := range theirChks.AllChecks() {
+	for _, chk := range theirChks {
 		theirChkMap[chk.Name()] = chk
 	}
 
 	// Make map of ancestor checks for fast lookup
 	ancChkMap := make(map[string]schema.Check)
-	for _, chk := range ancChks.AllChecks() {
+	for _, chk := range ancChks {
 		ancChkMap[chk.Name()] = chk
 	}
 
 	// Iterate over our checks
 	var common []schema.Check
 	var conflicts []ChkConflict
-	for _, ourChk := range ourChks.AllChecks() {
+	for _, ourChk := range ourChks {
 		// See if ours and theirs both have a CHECK by this name
 		theirChk, ok := theirChkMap[ourChk.Name()]
-		// Ours and theirs do have this CHECK in common, will be dealt with in chkCollectionSetDifference
+		// Ours and theirs do have this CHECK in common, will be dealt with elsewhere
 		if !ok {
 			continue
 		}
@@ -673,13 +680,13 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 			continue
 		}
 
-		// NO CONFLICT: CHECK was modified in our branch, so update check definition with ours
+		// NO CONFLICT: CHECK was only modified in our branch, so update check definition with ours
 		if ancChk == theirChk {
 			common = append(common, ourChk)
 			continue
 		}
 
-		// NO CONFLICT: CHECK was modified in their branch, so update check definition with theirs
+		// NO CONFLICT: CHECK was only modified in their branch, so update check definition with theirs
 		if ancChk == ourChk {
 			common = append(common, ourChk)
 			continue
@@ -697,16 +704,16 @@ func checksInCommon(ourChks, theirChks, ancChks schema.CheckCollection) ([]schem
 }
 
 // chkCollectionSetDifference returns the set difference left - right.
-func chkCollectionSetDifference(left, right schema.CheckCollection) []schema.Check {
+func chkCollectionSetDifference(left, right []schema.Check) []schema.Check {
 	// Make map of right check for fast look up
 	rChkMap := make(map[string]bool)
-	for _, chk := range right.AllChecks() {
+	for _, chk := range right {
 		rChkMap[chk.Name()] = true
 	}
 
 	// Add everything except what's in right
 	var result []schema.Check
-	for _, chk := range left.AllChecks() {
+	for _, chk := range left {
 		if _, ok := rChkMap[chk.Name()]; ok {
 			continue
 		}
@@ -715,14 +722,54 @@ func chkCollectionSetDifference(left, right schema.CheckCollection) []schema.Che
 	return result
 }
 
+// chkCollectionSetIntersection returns the set union of left and right.
+func chkCollectionSetIntersection(left, right []schema.Check) []schema.Check {
+	// Make map of right check for fast look up
+	rChkMap := make(map[string]bool)
+	for _, chk := range right {
+		rChkMap[chk.Name()] = true
+	}
+
+	// Add everything from left that is also in right
+	var result []schema.Check
+	for _, chk := range left {
+		if _, ok := rChkMap[chk.Name()]; !ok {
+			continue
+		}
+		result = append(result, chk)
+	}
+	return result
+}
+
+// chkCollectionModified finds all checks that have been modified from ancestor to child
+func chkCollectionModified(anc, child []schema.Check) []schema.Check {
+	// Make map of ancestor for fast look up
+	ancChkMap := make(map[string]schema.Check)
+	for _, chk := range anc {
+		ancChkMap[chk.Name()] = chk
+	}
+
+	// Add everything with same name, but different definition
+	var result []schema.Check
+	for _, childChk := range child {
+		if ancChk, ok := ancChkMap[childChk.Name()]; ok {
+			if ancChk != childChk {
+				result = append(result, childChk)
+			}
+		}
+	}
+	return result
+}
+
+
 // mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
 func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
-	common, conflicts := checksInCommon(ourChks, theirChks, ancChks)
+	// Handles modifications
+	common, conflicts := checksInCommon(ourChks.AllChecks(), theirChks.AllChecks(), ancChks.AllChecks())
 
-	ourNewChks := chkCollectionSetDifference(ourChks, ancChks)
-	theirNewChks := chkCollectionSetDifference(theirChks, ancChks)
-
-	// TODO: might need to look for deleted checks too, depending on how we want to deal with conflicts
+	// Get all new checks
+	ourNewChks := chkCollectionSetDifference(ourChks.AllChecks(), ancChks.AllChecks())
+	theirNewChks := chkCollectionSetDifference(theirChks.AllChecks(), ancChks.AllChecks())
 
 	// Create map for fast lookup
 	theirNewChksMap := make(map[string]schema.Check)
@@ -802,6 +849,33 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 				}
 			}
 		}
+	}
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
+	// CONFLICT: deleted constraint in ours that is modified in theirs
+	ourDeletedChks := chkCollectionSetDifference(ancChks.AllChecks(), ourChks.AllChecks())
+	theirModifiedChks := chkCollectionModified(ancChks.AllChecks(), theirChks.AllChecks())
+	deletedInOursButModifiedInTheirs := chkCollectionSetIntersection(theirModifiedChks, ourDeletedChks)
+	for _, chk := range deletedInOursButModifiedInTheirs {
+		conflicts = append(conflicts, ChkConflict{
+			Kind:   DeletedCheckCollision,
+			Theirs:   chk,
+		})
+	}
+
+	// CONFLICT: deleted constraint in theirs that is modified in ours
+	theirDeletedChks := chkCollectionSetDifference(ancChks.AllChecks(), theirChks.AllChecks())
+	ourModifiedChks := chkCollectionModified(ancChks.AllChecks(), ourChks.AllChecks())
+	deletedInTheirsButModifiedInOurs := chkCollectionSetIntersection(ourModifiedChks, theirDeletedChks)
+	for _, chk := range deletedInTheirsButModifiedInOurs {
+		conflicts = append(conflicts, ChkConflict{
+			Kind:   DeletedCheckCollision,
+			Ours:   chk,
+		})
 	}
 
 	// There are conflicts, don't merge
