@@ -226,7 +226,7 @@ func (i *indexLookupRowIterAdapter) processKey(ctx context.Context, indexKey typ
 	return sqlRow, nil
 }
 
-type coveringIndexRowIterAdapter struct {
+type CoveringIndexRowIterAdapter struct {
 	idx       DoltIndex
 	rr        *noms.NomsRangeReader
 	conv      *KVToSqlRowConverter
@@ -236,7 +236,7 @@ type coveringIndexRowIterAdapter struct {
 	nbf       *types.NomsBinFormat
 }
 
-func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *noms.NomsRangeReader, resultCols []string) *coveringIndexRowIterAdapter {
+func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *noms.NomsRangeReader, resultCols []string) *CoveringIndexRowIterAdapter {
 	idxCols := idx.IndexSchema().GetPKCols()
 	tblPKCols := idx.Schema().GetPKCols()
 	sch := idx.Schema()
@@ -261,7 +261,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 		}
 	}
 
-	return &coveringIndexRowIterAdapter{
+	return &CoveringIndexRowIterAdapter{
 		idx:       idx,
 		rr:        keyIter,
 		conv:      NewKVToSqlRowConverter(idx.Format(), tagToSqlColIdx, cols, len(cols)),
@@ -273,7 +273,7 @@ func NewCoveringIndexRowIterAdapter(ctx *sql.Context, idx DoltIndex, keyIter *no
 }
 
 // Next returns the next row from the iterator.
-func (ci *coveringIndexRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
+func (ci *CoveringIndexRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
 	key, value, err := ci.rr.ReadKV(ctx)
 
 	if err != nil {
@@ -283,6 +283,6 @@ func (ci *coveringIndexRowIterAdapter) Next(ctx *sql.Context) (sql.Row, error) {
 	return ci.conv.ConvertKVTuplesToSqlRow(key, value)
 }
 
-func (ci *coveringIndexRowIterAdapter) Close(*sql.Context) error {
+func (ci *CoveringIndexRowIterAdapter) Close(*sql.Context) error {
 	return nil
 }
