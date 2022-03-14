@@ -16,7 +16,6 @@ package nbs
 
 import (
 	"context"
-	"errors"
 	"io"
 	"time"
 
@@ -103,7 +102,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 		defer func() {
 			unlockErr := indexCache.unlockEntry(name)
 
-			if err != nil {
+			if err == nil {
 				err = unlockErr
 			}
 		}()
@@ -122,14 +121,16 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
 		size := int64(indexSize(chunkCount) + footerSize)
 		key := name.String()
-		buff, _, err := blobstore.GetBytes(ctx, bs, key, blobstore.NewBlobRange(-size, 0))
-
+		rc, _, err := bs.Get(ctx, key, blobstore.NewBlobRange(-size, 0))
 		if err != nil {
 			return nil, nil, err
 		}
+		defer rc.Close()
 
-		if size != int64(len(buff)) {
-			return nil, nil, errors.New("failed to read all data")
+		buff := make([]byte, size)
+		_, err = io.ReadFull(rc, buff)
+		if err != nil {
+			return nil, nil, err
 		}
 
 		return buff, &bsTableReaderAt{key, bs}, nil
