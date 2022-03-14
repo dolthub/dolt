@@ -722,6 +722,8 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 	ourNewChks := chkCollectionSetDifference(ourChks, ancChks)
 	theirNewChks := chkCollectionSetDifference(theirChks, ancChks)
 
+	// TODO: might need to look for deleted checks too, depending on how we want to deal with conflicts
+
 	// Create map for fast lookup
 	theirNewChksMap := make(map[string]schema.Check)
 	for _, chk := range theirNewChks {
@@ -782,7 +784,7 @@ func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.C
 			return nil, nil, err
 		}
 
-		// TODO: redundant
+		// TODO: redundant for checks that are defined exactly the same
 		for _, col := range colNames {
 			// See if this column is referenced in their new CHECKs
 			if _, ok := theirNewChkColsMap[col]; ok {
