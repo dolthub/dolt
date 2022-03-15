@@ -97,9 +97,7 @@ var DoltScripts = []enginetest.ScriptTest{
 
 var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 	// TODO: Remaining test cases:
-	//       - Branch behavior? Docs say it's based on branch commit, but
-	//                          SuperSchema looks across all branches, right?
-	//                          And the example in the docs seems inconsistent with doc text?
+	//       - ???
 	{
 		Name: "empty table",
 		SetUpScript: []string{

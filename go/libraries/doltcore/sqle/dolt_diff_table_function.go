@@ -14,8 +14,6 @@
 
 package sqle
 
-// TODO: Rename to dolt_diff_table_function.go ?
-
 import (
 	"context"
 	"fmt"
@@ -90,7 +88,6 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	dtf.fromCommitExpr = expression[1]
 	dtf.toCommitExpr = expression[2]
 
-	// TODO: Do we need this if we have to call it again later in RowIter?
 	err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
@@ -232,8 +229,7 @@ func (dtf *DiffTableFunction) initializeCommitHashToTableMap(commitItr *doltdb.C
 		return nil, err
 	}
 	if !ok {
-		// TODO:
-		panic("unable to find table")
+		return nil, sql.ErrTableNotFound.New(dtf.tableName)
 	}
 
 	wrTblHash, _, err := toRoot.GetTableHash(dtf.ctx, exactName)
@@ -273,7 +269,6 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 		return nil, err
 	}
 
-	// TODO: Do we need this if the filters are nil?
 	sf, err := dtables.SelectFuncForFilters(ddb.Format(), nil)
 	if err != nil {
 		return nil, err
@@ -311,7 +306,6 @@ func (dtf *DiffTableFunction) evaluateArguments() error {
 		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.tableNameExpr.String())
 	}
 
-	// TODO: should time.Time also be supported?
 	if !sql.IsText(dtf.fromCommitExpr.Type()) {
 		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.fromCommitExpr.String())
 	}
@@ -326,8 +320,7 @@ func (dtf *DiffTableFunction) evaluateArguments() error {
 	}
 	tableName, ok := tableNameVal.(string)
 	if !ok {
-		// TODO: error handling
-		panic("unable to convert tablename to string")
+		return ErrInvalidTableName.New(dtf.tableNameExpr.String())
 	}
 	dtf.tableName = tableName
 
@@ -429,7 +422,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 	//       when the column comes from a table function, so we omit the table name when we create these columns.
 	//       This allows column projections to work correctly with table functions, but we should test that this
 	//       works in more complex scenarios (e.g. projections with multiple table functions in the same statement)
-	//       and make sure we don't need to create a unique identifier for each use of this table function.
+	//       and see if we need to create a unique identifier for each use of this table function.
 	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
 		return nil, err
