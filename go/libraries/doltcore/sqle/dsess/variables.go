@@ -92,6 +92,8 @@ func defineSystemVariables(name string) {
 				Type:              sql.NewSystemStringType(HeadRefKey(name)),
 				Default:           "",
 			},
+			// The following variable are Dynamic, but read-only. Their values
+			// can only be updates by the system, not by users.
 			{
 				Name:              HeadKey(name),
 				Scope:             sql.SystemVariableScope_Session,
@@ -160,7 +162,7 @@ func IsWorkingKey(key string) (bool, string) {
 	return false, ""
 }
 
-func IsVersionKey(key string) bool {
+func IsReadOnlyVersionKey(key string) bool {
 	return strings.HasSuffix(key, HeadKeySuffix) ||
 		strings.HasSuffix(key, HeadRefKeySuffix) ||
 		strings.HasSuffix(key, WorkingKeySuffix)

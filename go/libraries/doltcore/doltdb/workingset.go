@@ -91,61 +91,6 @@ func (m MergeState) PreMergeWorkingRoot() *RootValue {
 	return m.preMergeWorking
 }
 
-// ResolveWorkingSetFromHash attempts to find a unique working set whose hash is |h|.
-func ResolveWorkingSetFromHash(ctx context.Context, ddb *DoltDB, h hash.Hash) (ref.WorkingSetRef, error) {
-	var werks []ref.WorkingSetRef
-	err := ddb.VisitWorkingSets(ctx, func(r ref.WorkingSetRef, addr hash.Hash) error {
-		if h == addr {
-			werks = append(werks, r)
-		}
-		return nil
-	})
-	if err != nil {
-		return ref.WorkingSetRef{}, err
-	}
-
-	if len(werks) < 1 {
-		err = fmt.Errorf("could not resolve working set from root hash (%s)", h.String())
-		return ref.WorkingSetRef{}, err
-	}
-	if len(werks) > 1 {
-		err = fmt.Errorf("root hash (%s) corresponds to multiple working sets (%v)", h.String(), werks)
-		return ref.WorkingSetRef{}, err
-	}
-
-	return werks[0], nil
-}
-
-// ResolveBranchFromHeadCommit attempts to find a unique branch whose HEAD is |cm|.
-func ResolveBranchFromHeadCommit(ctx context.Context, ddb *DoltDB, cm *Commit) (ref.BranchRef, error) {
-	h, err := cm.HashOf()
-	if err != nil {
-		return ref.EmptyBranchRef, err
-	}
-
-	var branches []ref.BranchRef
-	err = ddb.VisitRefsOfType(ctx, branchRefFilter, func(r ref.DoltRef, addr hash.Hash) error {
-		if h == addr {
-			branches = append(branches, r.(ref.BranchRef))
-		}
-		return nil
-	})
-	if err != nil {
-		return ref.EmptyBranchRef, err
-	}
-
-	if len(branches) < 1 {
-		err = fmt.Errorf("could not resolve branch head from commit (%s)", h.String())
-		return ref.EmptyBranchRef, err
-	}
-	if len(branches) > 1 {
-		err = fmt.Errorf("head commit (%s) corresponds to multiple branches (%v)", h.String(), branches)
-		return ref.EmptyBranchRef, err
-	}
-
-	return branches[0], nil
-}
-
 type WorkingSet struct {
 	Name        string
 	meta        *datas.WorkingSetMeta
