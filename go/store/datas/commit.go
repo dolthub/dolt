@@ -152,7 +152,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
 }
 
-func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
 	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
@@ -192,14 +192,14 @@ func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 //
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
-// implementation delegates to FindCommonAncestorUsingParentsList.
+// implementation delegates to findCommonAncestorUsingParentsList.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
 	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
 	if pi1 == nil {
-		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
 
 	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
@@ -207,7 +207,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		return types.Ref{}, false, err
 	}
 	if pi2 == nil {
-		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
 
 	for {

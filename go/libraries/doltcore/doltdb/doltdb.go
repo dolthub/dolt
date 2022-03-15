@@ -567,13 +567,12 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 
 	var parents []hash.Hash
-	headRef, hasHead, err := ds.MaybeHeadRef()
+	headAddr, hasHead := ds.MaybeHeadAddr()
 	if err != nil {
 		return nil, err
 	}
-
 	if hasHead {
-		parents = append(parents, headRef.TargetHash())
+		parents = append(parents, headAddr)
 	}
 
 	for _, cm := range parentCommits {

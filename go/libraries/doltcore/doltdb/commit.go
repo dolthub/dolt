@@ -342,14 +342,10 @@ func (ddb *DoltDB) NewPendingCommit(
 		return nil, err
 	}
 
-	nomsHeadRef, hasHead, err := ds.MaybeHeadRef()
-	if err != nil {
-		return nil, err
-	}
-
+	nomsHeadAddr, hasHead := ds.MaybeHeadAddr()
 	var parents []hash.Hash
 	if hasHead {
-		parents = append(parents, nomsHeadRef.TargetHash())
+		parents = append(parents, nomsHeadAddr)
 	}
 
 	for _, pc := range parentCommits {

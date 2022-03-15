@@ -237,6 +237,17 @@ func (ds Dataset) MaybeHeadAddr() (hash.Hash, bool) {
 	return ds.head.Addr(), true
 }
 
+func (ds Dataset) MaybeHeight() (uint64, bool, error) {
+	r, ok, err := ds.MaybeHeadRef()
+	if err != nil {
+		return 0, false, err
+	}
+	if !ok {
+		return 0, false, nil
+	}
+	return r.Height(), true, nil
+}
+
 func (ds Dataset) IsTag() bool {
 	return ds.head != nil && ds.head.TypeName() == TagName
 }
