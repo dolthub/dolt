@@ -381,7 +381,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
-	root, err := db.RootAsOf(ctx, asOf)
+	root, err := db.rootAsOf(ctx, asOf)
 
 	if err != nil {
 		return nil, false, err
@@ -409,9 +409,9 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-// RootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
+// rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
 // expression before the first commit.
-func (db Database) RootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
+func (db Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
 	switch x := asOf.(type) {
 	case string:
 		return db.getRootForCommitRef(ctx, x)
@@ -485,7 +485,7 @@ func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*dol
 
 // GetTableNamesAsOf implements sql.VersionedDatabase
 func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
-	root, err := db.RootAsOf(ctx, time)
+	root, err := db.rootAsOf(ctx, time)
 	if err != nil {
 		return nil, err
 	} else if root == nil {

@@ -1121,13 +1121,6 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	//       - datetime support ?
 	//       - table function with an alias
 	{
-		// TODO: This isn't specific to dolt_diff table function, so it should
-		//       be moved elsewhere (probably GMS)
-		Name:        "undefined table function",
-		Query:       "SELECT * from does_not_exist('t', 'from', 'to');",
-		ExpectedErr: sql.ErrTableFunctionNotFound,
-	},
-	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 text, c2 text);",

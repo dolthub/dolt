@@ -295,8 +295,9 @@ func (p DoltDatabaseProvider) Function(ctx *sql.Context, name string) (sql.Funct
 }
 
 func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.TableFunction, error) {
+	// currently, only one table function is supported, if we extend this, we should clean this up
+	// and store table functions in a map, similar to regular functions.
 	if strings.ToLower(name) == "dolt_diff" {
-		// TODO: Clean up...
 		dtf := &DiffTableFunction{}
 		dtf = dtf.WithContext(ctx)
 

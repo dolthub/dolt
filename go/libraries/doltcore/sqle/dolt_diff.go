@@ -222,7 +222,7 @@ func (dtf *DiffTableFunction) initializeCommitHashToTableMap(commitItr *doltdb.C
 		return nil, err
 	}
 
-	toRoot, err := sqledb.RootAsOf(dtf.ctx, dtf.toCommitVal)
+	toRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.toCommitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
 	}
 
-	fromRoot, err := sqledb.RootAsOf(dtf.ctx, dtf.fromCommitVal)
+	fromRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.fromCommitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +374,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 		return nil, sql.ErrTableNotFound.New(dtf.tableName)
 	}
 
-	toRoot, err := sqledb.RootAsOf(dtf.ctx, dtf.toCommitVal)
+	toRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.toCommitVal)
 	if err != nil {
 		return nil, err
 	}
