@@ -75,12 +75,11 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 		return nil, err
 	}
 
-	colCollection := currentSch.GetAllCols().Append(
+	sch := schema.MustSchemaFromCols(currentSch.GetAllCols().Append(
 		schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false),
 		schema.NewColumn(CommitterCol, schema.HistoryCommitterTag, types.StringKind, false),
 		schema.NewColumn(CommitDateCol, schema.HistoryCommitDateTag, types.TimestampKind, false),
-	)
-	sch := schema.MustSchemaFromCols(colCollection)
+	))
 
 	if sch.GetAllCols().Size() <= 3 {
 		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)

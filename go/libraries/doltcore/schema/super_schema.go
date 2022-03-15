@@ -229,8 +229,6 @@ func (ss *SuperSchema) GenerateSchema() (Schema, error) {
 // NameMapForSchema creates a field name mapping needed to construct a rowconv.RowConverter
 // sch columns are mapped by tag to the corresponding SuperSchema columns
 func (ss *SuperSchema) NameMapForSchema(sch Schema) (map[string]string, error) {
-	// TODO: Only used by history_table.go::rowConvForSchema
-
 	inNameToOutName := make(map[string]string)
 	uniqNames := ss.nameColumns()
 	allCols := sch.GetAllCols()
