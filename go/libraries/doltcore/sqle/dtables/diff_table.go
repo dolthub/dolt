@@ -201,7 +201,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (dt *DiffTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
+func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
 	if dt.partitionFilters == nil {
 		dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
 	}
@@ -349,6 +349,8 @@ func NewTblInfoAtCommit(name string, date *types.Timestamp, tbl *doltdb.Table, t
 	}
 }
 
+var _ sql.Partition = (*DiffPartition)(nil)
+
 // DiffPartition data partitioned into pairs of table states which get compared
 type DiffPartition struct {
 	to       *doltdb.Table
@@ -359,6 +361,19 @@ type DiffPartition struct {
 	fromDate *types.Timestamp
 	toSch    *schema.Schema
 	fromSch  *schema.Schema
+}
+
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch *schema.Schema) *DiffPartition {
+	return &DiffPartition{
+		to:       to,
+		from:     from,
+		toName:   toName,
+		fromName: fromName,
+		toDate:   toDate,
+		fromDate: fromDate,
+		toSch:    toSch,
+		fromSch:  fromSch,
+	}
 }
 
 func (dp DiffPartition) Key() []byte {
@@ -491,7 +506,7 @@ func SelectFuncForFilters(nbf *types.NomsBinFormat, filters []sql.Expression) (p
 
 var _ sql.PartitionIter = &DiffPartitions{}
 
-// collection of partitions. Implements PartitionItr
+// DiffPartitions a collection of partitions. Implements PartitionItr
 type DiffPartitions struct {
 	tblName         string
 	cmItr           doltdb.CommitItr
