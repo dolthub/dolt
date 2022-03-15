@@ -16,6 +16,8 @@ package sqle
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"math/rand"
 	"strconv"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -88,6 +91,9 @@ var _ sql.TemporaryTable = &TempTable{}
 var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}
 var _ sql.IndexedTable = &TempTable{}
+var _ sql.IndexAlterableTable = &TempTable{}
+var _ sql.ForeignKeyAlterableTable = &TempTable{}
+var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
 var _ sql.StatisticsTable = &TempTable{}
@@ -157,36 +163,106 @@ func (t *TempTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	return t
 }
 
-func (t *TempTable) Inserter(ctx *sql.Context) sql.RowInserter {
-	return TempTableWriter{
-		ed:  t.ed,
-		sch: t.sch,
-		vrw: t.table.ValueReadWriter(),
+func (t *TempTable) CreateIndex(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn, comment string) error {
+	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
 	}
+	cols := make([]string, len(columns))
+	for i, c := range columns {
+		cols[i] = c.Name
+	}
+
+	ret, err := creation.CreateIndex(
+		ctx,
+		t.table,
+		indexName,
+		cols,
+		constraint == sql.IndexConstraint_Unique,
+		true,
+		comment,
+		t.opts,
+	)
+	if err != nil {
+		return err
+	}
+
+	t.table = ret.NewTable
+	return nil
+}
+
+func (t *TempTable) DropIndex(ctx *sql.Context, indexName string) error {
+	_, err := t.sch.Indexes().RemoveIndex(indexName)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+	newTable, err = newTable.DeleteIndexRowData(ctx, indexName)
+	if err != nil {
+		return err
+	}
+	t.table = newTable
+
+	return nil
+}
+
+func (t *TempTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexName string) error {
+	_, err := t.sch.Indexes().RenameIndex(fromIndexName, toIndexName)
+	if err != nil {
+		return err
+	}
+
+	newTable, err := t.table.UpdateSchema(ctx, t.sch)
+	if err != nil {
+		return err
+	}
+	newTable, err = newTable.RenameIndexRowData(ctx, fromIndexName, toIndexName)
+	if err != nil {
+		return err
+	}
+	t.table = newTable
+
+	return nil
+}
+
+func (t *TempTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	return nil, nil
+}
+
+func (t *TempTable) CreateForeignKey(
+	ctx *sql.Context,
+	fkName string,
+	columns []string,
+	referencedTable string,
+	referencedColumns []string,
+	onUpdate, onDelete sql.ForeignKeyReferenceOption,
+) error {
+	return errors.New("temporary tables do not support foreign keys")
+}
+func (t *TempTable) DropForeignKey(
+	ctx *sql.Context,
+	fkName string,
+) error {
+	return errors.New("temporary tables do not support foreign keys")
+}
+
+func (t *TempTable) Inserter(ctx *sql.Context) sql.RowInserter {
+	return t
 }
 
 func (t *TempTable) Deleter(ctx *sql.Context) sql.RowDeleter {
-	return TempTableWriter{
-		ed:  t.ed,
-		sch: t.sch,
-		vrw: t.table.ValueReadWriter(),
-	}
+	return t
 }
 
 func (t *TempTable) Replacer(ctx *sql.Context) sql.RowReplacer {
-	return TempTableWriter{
-		ed:  t.ed,
-		sch: t.sch,
-		vrw: t.table.ValueReadWriter(),
-	}
+	return t
 }
 
 func (t *TempTable) Updater(ctx *sql.Context) sql.RowUpdater {
-	return TempTableWriter{
-		ed:  t.ed,
-		sch: t.sch,
-		vrw: t.table.ValueReadWriter(),
-	}
+	return t
 }
 
 func (t *TempTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
@@ -227,76 +303,87 @@ func (t *TempTable) DropCheck(ctx *sql.Context, chName string) error {
 	return err
 }
 
-type TempTableWriter struct {
-	ed  editor.TableEditor
-	sch schema.Schema
-	vrw types.ValueReadWriter
-}
-
-func (wr TempTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(wr.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, wr.vrw, sqlRow, wr.sch)
+func (t *TempTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	vrw := t.table.ValueReadWriter()
+	if !schema.IsKeyless(t.sch) {
+		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, vrw, sqlRow, t.sch)
 		if err != nil {
 			return err
 		}
-		return wr.ed.InsertKeyVal(ctx, k, v, tagToVal, wr.duplicateKeyErrFunc)
+		return t.ed.InsertKeyVal(ctx, k, v, tagToVal, t.duplicateKeyErrFunc)
 	}
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, wr.vrw, sqlRow, wr.sch)
+	dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, sqlRow, t.sch)
 	if err != nil {
 		return err
 	}
-	return wr.ed.InsertRow(ctx, dRow, wr.duplicateKeyErrFunc)
+	return t.ed.InsertRow(ctx, dRow, t.duplicateKeyErrFunc)
 }
 
-func (wr TempTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, wr.vrw, oldRow, wr.sch)
+func (t *TempTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
+	vrw := t.table.ValueReadWriter()
+	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, oldRow, t.sch)
 	if err != nil {
 		return err
 	}
-	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, wr.vrw, newRow, wr.sch)
+	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, newRow, t.sch)
 	if err != nil {
 		return err
 	}
 
-	return wr.ed.UpdateRow(ctx, dOldRow, dNewRow, wr.duplicateKeyErrFunc)
+	return t.ed.UpdateRow(ctx, dOldRow, dNewRow, t.duplicateKeyErrFunc)
 }
 
-func (wr TempTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(wr.sch) {
-		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, wr.vrw, sqlRow, wr.sch)
+func (t *TempTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+	vrw := t.table.ValueReadWriter()
+	if !schema.IsKeyless(t.sch) {
+		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, vrw, sqlRow, t.sch)
 		if err != nil {
 			return err
 		}
-
-		return wr.ed.DeleteByKey(ctx, k, tagToVal)
+		return t.ed.DeleteByKey(ctx, k, tagToVal)
 	} else {
-		dRow, err := sqlutil.SqlRowToDoltRow(ctx, wr.vrw, sqlRow, wr.sch)
+		dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, sqlRow, t.sch)
 		if err != nil {
 			return err
 		}
-		return wr.ed.DeleteRow(ctx, dRow)
+		return t.ed.DeleteRow(ctx, dRow)
 	}
 }
 
-func (wr TempTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
+func (t *TempTable) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
 	// todo: improve error msg
 	return sql.NewUniqueKeyErr(keyString, isPk, nil)
 }
 
-func (wr TempTableWriter) StatementBegin(ctx *sql.Context) {
+func (t *TempTable) StatementBegin(ctx *sql.Context) {
 	return
 }
 
-func (wr TempTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+func (t *TempTable) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+	t.lookup = nil
 	return nil
 }
 
-func (wr TempTableWriter) StatementComplete(ctx *sql.Context) error {
+func (t *TempTable) StatementComplete(ctx *sql.Context) error {
+	t.lookup = nil
 	return nil
 }
 
-func (wr TempTableWriter) Close(ctx *sql.Context) error {
-	return wr.ed.Close(ctx)
+func (t *TempTable) Close(ctx *sql.Context) error {
+	tbl, err := t.ed.Table(ctx)
+	if err != nil {
+		return err
+	}
+	t.table = tbl
+
+	if err = t.ed.Close(ctx); err != nil {
+		return err
+	}
+
+	t.lookup = nil
+	t.ed, err = editor.NewTableEditor(ctx, tbl, t.sch, t.tableName, t.opts)
+
+	return err
 }
 
 func temporaryDoltSchema(ctx context.Context, pkSch sql.PrimaryKeySchema) (sch schema.Schema, err error) {
