@@ -956,6 +956,8 @@ func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.Ve
 	acc := diff.DiffSummaryProgress{}
 	var count int64
 	var pos int
+	eP := cli.StartEphemeralPrinter()
+	defer eP.Stop()
 	for p := range ch {
 		if ae.IsSet() {
 			break
@@ -969,8 +971,8 @@ func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.Ve
 		acc.OldSize += p.OldSize
 
 		if count%10000 == 0 {
-			statusStr := fmt.Sprintf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
-			pos = cli.DeleteAndPrint(pos, statusStr)
+			eP.Printf("prev size: %d, new size: %d, adds: %d, deletes: %d, modifications: %d\n", acc.OldSize, acc.NewSize, acc.Adds, acc.Removes, acc.Changes)
+			eP.Display()
 		}
 
 		count++
