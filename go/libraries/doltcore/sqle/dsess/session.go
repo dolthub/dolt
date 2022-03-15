@@ -61,6 +61,7 @@ type Session struct {
 	email     string
 	dbStates  map[string]*DatabaseSessionState
 	provider  RevisionDatabaseProvider
+	tmpTables []sql.Table
 }
 
 var _ sql.Session = &Session{}
@@ -959,10 +960,31 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	return nil
 }
 
+func (sess *Session) AddTemporaryTable(ctx *sql.Context, tbl sql.Table) {
+	sess.tmpTables = append(sess.tmpTables, tbl)
+}
+
+func (sess *Session) DropTemporaryTable(ctx *sql.Context, name string) {
+	for i, tbl := range sess.tmpTables {
+		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+			sess.tmpTables = append(sess.tmpTables[:i], sess.tmpTables[i+1:]...)
+			break
+		}
+	}
+}
+
+func (sess *Session) GetTemporaryTable(ctx *sql.Context, name string) (sql.Table, bool) {
+	for _, tbl := range sess.tmpTables {
+		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+			return tbl, true
+		}
+	}
+	return nil, false
+}
+
 // GetAllTemporaryTables returns all temp tables for this session.
 func (sess *Session) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
-	// todo(andy)
-	return nil, nil
+	return sess.tmpTables, nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named

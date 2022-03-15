@@ -265,7 +265,10 @@ func (db Database) DbData() env.DbData {
 func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Table, bool, error) {
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
-	// todo(andy): temp tables
+	ds := dsess.DSessFromSess(ctx.Session)
+	if tbl, ok := ds.GetTemporaryTable(ctx, tblName); ok {
+		return tbl, ok, nil
+	}
 
 	root, err := db.GetRoot(ctx)
 
@@ -616,7 +619,11 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		allowDroppingFKReferenced = true
 	}
 
-	// todo(andy): temp tables
+	ds := dsess.DSessFromSess(ctx.Session)
+	if _, ok := ds.GetTemporaryTable(ctx, tableName); ok {
+		ds.DropTemporaryTable(ctx, tableName)
+		return nil
+	}
 
 	root, err := db.GetRoot(ctx)
 	if err != nil {
@@ -738,7 +745,7 @@ func (db Database) createDoltTable(ctx *sql.Context, tableName string, root *dol
 }
 
 // CreateTemporaryTable creates a table that only exists the length of a session.
-func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
+func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSch sql.PrimaryKeySchema) error {
 	if doltdb.HasDoltPrefix(tableName) {
 		return ErrReservedTableName.New(tableName)
 	}
@@ -747,25 +754,14 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, sch 
 		return ErrInvalidTableName.New(tableName)
 	}
 
-	return db.createTempSQLTable(ctx, tableName, sch)
-}
+	tmp, err := NewTempTable(ctx, db.ddb, pkSch, tableName, db.name, db.editOpts)
+	if err != nil {
+		return err
+	}
 
-func (db Database) createTempSQLTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
+	ds := dsess.DSessFromSess(ctx.Session)
+	ds.AddTemporaryTable(ctx, tmp)
 	return nil
-
-	// todo(andy)
-	//if exists, err := root.HasTable(ctx, tableName); err != nil {
-	//	return err
-	//} else if exists {
-	//	return sql.ErrTableAlreadyExists.New(tableName)
-	//}
-	//
-	//doltSch, err := sqlutil.ToDoltSchema(ctx, tempTableRootValue, tableName, sch, nil)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//return db.createTempDoltTable(ctx, tableName, tempTableRootValue, doltSch, sess)
 }
 
 // RenameTable implements sql.TableRenamer
@@ -864,7 +860,7 @@ func (db Database) GetView(ctx *sql.Context, viewName string) (string, bool, err
 	return "", false, nil
 }
 
-// GetView implements sql.ViewDatabase
+// AllViews implements sql.ViewDatabase
 func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 	tbl, ok, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
 	if err != nil {
