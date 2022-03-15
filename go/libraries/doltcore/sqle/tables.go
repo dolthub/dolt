@@ -254,7 +254,7 @@ func (t *DoltTable) sqlSchema() sql.PrimaryKeySchema {
 	return sqlSch
 }
 
-// Returns the partitions for this table.
+// Partitions returns the partitions for this table.
 func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	table, err := t.doltTable(ctx)
 	if err != nil {
