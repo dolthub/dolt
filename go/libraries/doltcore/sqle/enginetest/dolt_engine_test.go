@@ -489,7 +489,9 @@ func TestSingleTransactionScript(t *testing.T) {
 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 }
 
-func TestSystemTableQueries(t *testing.T) {
+func TestBrokenSystemTableQueries(t *testing.T) {
+	t.Skip()
+
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }
 
