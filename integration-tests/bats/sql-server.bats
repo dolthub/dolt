@@ -286,7 +286,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
     multi_query repo1 1 "
-        SET @@repo1_head = reset('hard');
+        SELECT DOLT_RESET('--hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     run dolt status
@@ -298,7 +298,7 @@ SQL
 
     multi_query repo1 1 "
         INSERT INTO test VALUES (8,8);
-        SET @@repo1_head = reset('hard');
+        SELECT DOLT_RESET('--hard');
         REPLACE INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     run dolt status
@@ -629,7 +629,7 @@ SQL
 
     # make some changes to main and commit to branch test_branch
     multi_query repo1 1 "
-    SET @@repo1_head=hashof('main');
+    SET @@repo1_head_ref='main';
     CREATE TABLE one_pk (
         pk BIGINT NOT NULL,
         c1 BIGINT,
@@ -637,7 +637,7 @@ SQL
         PRIMARY KEY (pk)
     );
     INSERT INTO one_pk (pk,c1,c2) VALUES (2,2,2),(3,3,3);
-    SET @@repo1_head=commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
+    SELECT commit('-am', 'test commit message', '--author', 'John Doe <john@example.com>');
     INSERT INTO dolt_branches (name,hash) VALUES ('main', @@repo1_head);"
 
     dolt add .

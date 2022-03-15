@@ -164,6 +164,6 @@ func IsWorkingKey(key string) (bool, string) {
 
 func IsReadOnlyVersionKey(key string) bool {
 	return strings.HasSuffix(key, HeadKeySuffix) ||
-		strings.HasSuffix(key, HeadRefKeySuffix) ||
+		strings.HasSuffix(key, StagedKeySuffix) ||
 		strings.HasSuffix(key, WorkingKeySuffix)
 }
