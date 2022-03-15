@@ -292,10 +292,16 @@ func FilterColCollection(cc *ColCollection, cb func(col Column) bool) *ColCollec
 }
 
 func ColCollUnion(colColls ...*ColCollection) (*ColCollection, error) {
+	var allTags = make(map[uint64]bool)
 	var allCols []Column
 	for _, sch := range colColls {
 		err := sch.Iter(func(tag uint64, col Column) (stop bool, err error) {
+			// skip if already seen
+			if _, ok := allTags[tag]; ok {
+				return false, nil
+			}
 			allCols = append(allCols, col)
+			allTags[tag] = true
 			return false, nil
 		})
 

@@ -24,8 +24,8 @@ import (
 	"sync"
 
 	"github.com/dustin/go-humanize"
-	"github.com/gosuri/uilive"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/strhelp"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
@@ -102,10 +103,11 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		tableFiles        = make(map[string]*nbs.TableFile)
 	)
 
-	writer := uilive.New()
-	writer.Start()
-	fmt.Fprintf(writer, "Retrieving remote information.\n")
-	writer.Stop()
+	p := cli.StartEphemeralPrinter()
+	defer p.Stop()
+
+	p.Printf("Retrieving remote information.\n")
+	p.Display()
 
 	for tblFEvt := range eventCh {
 		switch tblFEvt.EventType {
@@ -137,19 +139,18 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 			}
 		}
 
-		// Starting and stopping for each event seems to be less jumpy
-		writer.Start()
-		fmt.Fprintf(writer, "%s of %s chunks complete. %s chunks being downloaded currently.\n",
+		p.Printf("%s of %s chunks complete. %s chunks being downloaded currently.\n",
 			strhelp.CommaIfy(chunksDownloaded), strhelp.CommaIfy(chunks), strhelp.CommaIfy(chunksDownloading))
 		for _, fileId := range sortedKeys(currStats) {
 			s := currStats[fileId]
 			bps := float64(s.Read) / s.Elapsed.Seconds()
 			rate := humanize.Bytes(uint64(bps)) + "/s"
-			fmt.Fprintf(writer.Newline(), "Downloading file: %s (%s chunks) - %.2f%% downloaded, %s, \n",
+			p.Printf("Downloading file: %s (%s chunks) - %.2f%% downloaded, %s\n",
 				fileId, strhelp.CommaIfy(int64((*tableFiles[fileId]).NumChunks())), s.Percent*100, rate)
 		}
-		writer.Stop()
+		p.Display()
 	}
+	p.Display()
 }
 
 func sortedKeys(m map[string]iohelp.ReadStats) []string {
@@ -286,7 +287,7 @@ func InitEmptyClonedRepo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return ErrEmailNotFound
 	}
 
-	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, doltdb.CommitNowFunc())
+	err := dEnv.InitDBWithTime(ctx, types.Format_Default, name, email, initBranch, datas.CommitNowFunc())
 	if err != nil {
 		return ErrFailedToInitRepo
 	}

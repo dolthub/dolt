@@ -1,0 +1,8 @@
+{
+  "Template": {
+    "TemplateName": "BatsWindowsFailureTemplate",
+    "SubjectPart": "Bats on Windows failed for ref: {{version}}",
+    "HtmlPart": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"UTF-8\">\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n  <title>Bats on Windows Failed</title>\n</head><body>Bats on Windows failed for ref: {{version}}\n <a href={{workflowURL}}>{{workflowURL}}</a></body></html>",
+    "TextPart": "Bats on Windows failed for ref {{version}}\r\n"
+  }
+}

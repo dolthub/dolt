@@ -35,7 +35,7 @@ func NewTupleDescriptor(types ...Type) TupleDesc {
 	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
 
-// NewTupleDescriptor returns a TupleDesc from a slice of Types.
+// NewTupleDescriptorWithComparator returns a TupleDesc from a slice of Types.
 func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td TupleDesc) {
 	if len(types) > MaxTupleFields {
 		panic("tuple field maxIdx exceeds maximum")
@@ -117,7 +117,7 @@ func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	return tup.GetField(i)
 }
 
-// Compare returns the Comaparison of |left| and |right|.
+// Compare returns the Comparison of |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	return td.cmp.Compare(left, right, td)
 }
@@ -287,7 +287,7 @@ func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
 	return
 }
 
-// GetInt16 reads an int16 from the ith field of the Tuple.
+// GetYear reads an int16 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, YearEnc)
@@ -334,7 +334,7 @@ func (td TupleDesc) GetJSON(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-// GetBytes reads a []byte from the ith field of the Tuple.
+// GetGeometry reads a []byte from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 	td.expectEncoding(i, GeometryEnc)

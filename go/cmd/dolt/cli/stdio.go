@@ -19,12 +19,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
-
-	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 
 	"github.com/fatih/color"
 	"github.com/google/uuid"
+	"github.com/gosuri/uilive"
+
+	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
 var outputClosed uint64
@@ -139,6 +141,77 @@ func PrintErrf(format string, a ...interface{}) {
 	}
 
 	fmt.Fprintf(CliErr, format, a...)
+}
+
+// EphemeralPrinter is tool than you can use to print temporary line(s) to the
+// console. Each time Display is called, the output is reset, and you can begin
+// writing anew.
+type EphemeralPrinter struct {
+	outW         io.Writer
+	w            *uilive.Writer
+	wrote        bool
+	wroteNewline bool
+}
+
+// StartEphemeralPrinter creates a new EphemeralPrinter and starts it. You
+// should defer Stop after calling this.
+func StartEphemeralPrinter() *EphemeralPrinter {
+	w := uilive.New()
+	w.Out = CliOut
+	e := &EphemeralPrinter{outW: w, w: w}
+	e.start()
+	return e
+}
+
+// Printf formats and prints a string to the printer. If no newline character is
+// provided, one will be added to ensure that the output can be cleared in the
+// future. You can print multiple lines.
+func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
+	if outputIsClosed() {
+		return
+	}
+
+	str := fmt.Sprintf(format, a...)
+	lines := strings.Split(str, "\n")
+	for i, line := range lines {
+		if i != 0 {
+			_, _ = e.outW.Write([]byte("\n"))
+			e.wroteNewline = true
+		}
+
+		e.wrote = true
+		_, _ = e.outW.Write([]byte(line))
+		e.outW = e.w.Newline()
+	}
+}
+
+// Display clears the previous output and displays the new text.
+func (e *EphemeralPrinter) Display() {
+	if outputIsClosed() {
+		return
+	}
+	if !e.wrote {
+		// If nothing was written, write the null character in order to clear
+		// the display.
+		_, _ = e.w.Write([]byte("\x00"))
+	} else if !e.wroteNewline {
+		// If no newline was written, add it. This will ensure that the output
+		// is cleared properly.
+		_, _ = e.w.Write([]byte("\n"))
+	}
+	_ = e.w.Flush()
+	e.outW = e.w
+	e.wrote = false
+	e.wroteNewline = false
+}
+
+func (e *EphemeralPrinter) start() {
+	e.w.Start()
+}
+
+// Stop stops the ephemeral printer. It must be called after using StartEphemeralPrinter
+func (e *EphemeralPrinter) Stop() {
+	e.w.Stop()
 }
 
 func DeleteAndPrint(prevMsgLen int, msg string) int {

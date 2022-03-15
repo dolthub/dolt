@@ -31,7 +31,7 @@ import (
 )
 
 type DoltIndex interface {
-	sql.Index
+	sql.FilteredIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	TableData() durable.Index
@@ -258,12 +258,15 @@ RangeLoop:
 				}
 				cb.upperbound = val
 			}
+			if rangeColumnExpr.Type() == sql.RangeType_Null {
+				cb.boundsCase = boundsCase_isNull
+			}
 			rangeCheck[i] = cb
 		}
 
 		// If the suffix checks will always succeed (both bounds are infinity) then they can be removed to reduce the
-		// number of checks that are called per-row.
-		for i := len(rangeCheck) - 1; i >= 0; i-- {
+		// number of checks that are called per-row. Always leave one check to skip NULLs.
+		for i := len(rangeCheck) - 1; i > 0 && len(rangeCheck) > 1; i-- {
 			if rangeCheck[i].boundsCase == boundsCase_infinity_infinity {
 				rangeCheck = rangeCheck[:i]
 			} else {
@@ -284,6 +287,15 @@ RangeLoop:
 		nomsRanges: readRanges,
 		sqlRanges:  ranges,
 	}, nil
+}
+
+func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
+	if types.IsFormat_DOLT_1(di.vrw.Format()) {
+		// todo(andy): handle first column filters
+		return nil
+	} else {
+		return filters
+	}
 }
 
 // Database implement sql.Index
@@ -418,14 +430,13 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	start := prolly.RangeCut{Inclusive: true}
 	startRow := sql.Row{}
 	for _, sc := range lower {
-		if !isBindingCut(sc) {
+		if !sql.RangeCutIsBinding(sc) {
 			start = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break
 		}
 		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
 		startRow = append(startRow, sql.GetRangeCutKey(sc))
 	}
-
 	if !start.Unbound {
 		startRow, err = normalizeRangeKey(sqlRange, startRow)
 		if err != nil {
@@ -441,7 +452,7 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	stop := prolly.RangeCut{Inclusive: true}
 	stopRow := sql.Row{}
 	for _, sc := range upper {
-		if !isBindingCut(sc) {
+		if !sql.RangeCutIsBinding(sc) {
 			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break
 		}
@@ -467,10 +478,6 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 		Stop:    stop,
 		KeyDesc: rngDesc,
 	}, nil
-}
-
-func isBindingCut(cut sql.RangeCut) bool {
-	return cut != sql.BelowAll{} && cut != sql.AboveAll{}
 }
 
 func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {

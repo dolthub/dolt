@@ -22,9 +22,12 @@
 package datas
 
 import (
+	"errors"
+	"fmt"
 	"regexp"
 
-	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -36,45 +39,159 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 // entirely legal Dataset name.
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
+type WorkingSetHead struct {
+	Meta           *WorkingSetMeta
+	WorkingAddr    hash.Hash
+	StagedAddr     *hash.Hash
+	MergeStateAddr *hash.Hash
+}
+
+type dsHead interface {
+	TypeName() string
+	Addr() hash.Hash
+	HeadTag() (*TagMeta, hash.Hash, error)
+	HeadWorkingSet() (*WorkingSetHead, error)
+}
+
+type nomsHead struct {
+	st   types.Struct
+	addr hash.Hash
+}
+
+func (h nomsHead) TypeName() string {
+	return h.st.Name()
+}
+
+func (h nomsHead) Addr() hash.Hash {
+	return h.addr
+}
+
+type serialTagHead struct {
+	msg  *serial.Tag
+	addr hash.Hash
+}
+
+func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
+	return serialTagHead{serial.GetRootAsTag(bs, 0), addr}
+}
+
+func (h serialTagHead) TypeName() string {
+	return TagName
+}
+
+func (h serialTagHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialTagHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	addr := hash.New(h.msg.CommitAddrBytes())
+	meta := &TagMeta{
+		Name:          string(h.msg.Name()),
+		Email:         string(h.msg.Email()),
+		Timestamp:     h.msg.TimestampMillis(),
+		Description:   string(h.msg.Desc()),
+		UserTimestamp: h.msg.UserTimestampMillis(),
+	}
+	return meta, addr, nil
+}
+
+func (h serialTagHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	return nil, errors.New("HeadWorkingSet called on tag")
+}
+
+type serialWorkingSetHead struct {
+	msg  *serial.WorkingSet
+	addr hash.Hash
+}
+
+func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
+	return serialWorkingSetHead{serial.GetRootAsWorkingSet(bs, 0), addr}
+}
+
+func (h serialWorkingSetHead) TypeName() string {
+	return WorkingSetName
+}
+
+func (h serialWorkingSetHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialWorkingSetHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	return nil, hash.Hash{}, errors.New("HeadTag called on working set")
+}
+
+func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	var ret WorkingSetHead
+	ret.Meta = &WorkingSetMeta{
+		Name:        string(h.msg.Name()),
+		Email:       string(h.msg.Email()),
+		Timestamp:   h.msg.TimestampMillis(),
+		Description: string(h.msg.Desc()),
+	}
+	ret.WorkingAddr = hash.New(h.msg.WorkingRootAddrBytes())
+	if h.msg.StagedRootAddrLength() != 0 {
+		ret.StagedAddr = new(hash.Hash)
+		*ret.StagedAddr = hash.New(h.msg.StagedRootAddrBytes())
+	}
+	if h.msg.MergeStateAddrLength() != 0 {
+		ret.MergeStateAddr = new(hash.Hash)
+		*ret.MergeStateAddr = hash.New(h.msg.MergeStateAddrBytes())
+	}
+	return &ret, nil
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
 	db   *database
 	id   string
-	head types.Value
+	head dsHead
 }
 
-func newDataset(db *database, id string, head types.Value) (Dataset, error) {
-	check := head == nil
+func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
+	if head == nil {
+		return nil, nil
+	}
 
-	var err error
-	if !check {
-		check, err = IsCommit(head)
-
-		if err != nil {
-			return Dataset{}, err
+	if sm, ok := head.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) == serial.TagFileID {
+			return newSerialTagHead(data, addr), nil
+		}
+		if serial.GetFileID(data) == serial.WorkingSetFileID {
+			return newSerialWorkingSetHead(data, addr), nil
 		}
 	}
 
-	if !check {
-		check, err = IsTag(head)
-
+	matched, err := IsCommit(head)
+	if err != nil {
+		return nil, err
+	}
+	if !matched {
+		matched, err = IsTag(head)
 		if err != nil {
-			return Dataset{}, err
+			return nil, err
 		}
 	}
-
-	if !check {
-		check, err = IsWorkingSet(head)
-
+	if !matched {
+		matched, err = IsWorkingSet(head)
 		if err != nil {
-			return Dataset{}, err
+			return nil, err
 		}
 	}
+	if !matched {
+		return nil, fmt.Errorf("database: fetched head at %v by it was not a commit, tag or working set.", addr)
+	}
 
-	// precondition checks
-	d.PanicIfFalse(check)
-	return Dataset{db, id, head}, nil
+	return nomsHead{head.(types.Struct), addr}, nil
+}
+
+func newDataset(db *database, id string, head types.Value, addr hash.Hash) (Dataset, error) {
+	h, err := newHead(head, addr)
+	if err != nil {
+		return Dataset{}, err
+	}
+	return Dataset{db, id, h}, nil
 }
 
 // Database returns the Database object in which this Dataset is stored.
@@ -95,23 +212,123 @@ func (ds Dataset) MaybeHead() (types.Struct, bool) {
 	if ds.head == nil {
 		return types.Struct{}, false
 	}
-	return ds.head.(types.Struct), true
+	return ds.head.(nomsHead).st, true
 }
 
 // MaybeHeadRef returns the Ref of the current Head Commit of this Dataset,
 // which contains the current root of the Dataset's value tree, if available.
 // If not, it returns an empty Ref and 'false'.
 func (ds Dataset) MaybeHeadRef() (types.Ref, bool, error) {
-	if ds.head == nil {
+	st, ok := ds.MaybeHead()
+	if !ok {
 		return types.Ref{}, false, nil
 	}
-	ref, err := types.NewRef(ds.head, ds.db.Format())
-
+	ref, err := types.NewRef(st, ds.db.Format())
 	if err != nil {
 		return types.Ref{}, false, err
 	}
-
 	return ref, true, nil
+}
+
+func (ds Dataset) MaybeHeadAddr() (hash.Hash, bool) {
+	if ds.head == nil {
+		return hash.Hash{}, false
+	}
+	return ds.head.Addr(), true
+}
+
+func (ds Dataset) IsTag() bool {
+	return ds.head != nil && ds.head.TypeName() == TagName
+}
+
+func (ds Dataset) IsWorkingSet() bool {
+	return ds.head != nil && ds.head.TypeName() == WorkingSetName
+}
+
+func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
+	if ds.head == nil {
+		return nil, hash.Hash{}, errors.New("no head value for HeadTag call")
+	}
+	if !ds.IsTag() {
+		return nil, hash.Hash{}, errors.New("HeadTag call on non-tag head")
+	}
+	return ds.head.HeadTag()
+}
+
+func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
+	if ds.head == nil {
+		return nil, errors.New("no head value for HeadWorkingSet call")
+	}
+	if !ds.IsWorkingSet() {
+		return nil, errors.New("HeadWorkingSet call on non-working set head")
+	}
+	return ds.head.HeadWorkingSet()
+}
+
+func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	metast, ok, err := h.st.MaybeGet(TagMetaField)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if !ok {
+		return nil, hash.Hash{}, errors.New("no meta field in tag struct head")
+	}
+	meta, err := tagMetaFromNomsSt(metast.(types.Struct))
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+
+	commitRef, ok, err := h.st.MaybeGet(TagCommitRefField)
+	if err != nil {
+		return nil, hash.Hash{}, err
+	}
+	if !ok {
+		return nil, hash.Hash{}, errors.New("tag struct does not have field commit field")
+	}
+	commitaddr := commitRef.(types.Ref).TargetHash()
+
+	return meta, commitaddr, nil
+}
+
+func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	st := h.st
+
+	var ret WorkingSetHead
+
+	meta, err := workingSetMetaFromWorkingSetSt(st)
+	if err != nil {
+		return nil, err
+	}
+	ret.Meta = meta
+
+	workingRootRef, ok, err := st.MaybeGet(WorkingRootRefField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("workingset struct does not have field %s", WorkingRootRefField)
+	}
+	ret.WorkingAddr = workingRootRef.(types.Ref).TargetHash()
+
+	stagedRootRef, ok, err := st.MaybeGet(StagedRootRefField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ret.StagedAddr = new(hash.Hash)
+		*ret.StagedAddr = stagedRootRef.(types.Ref).TargetHash()
+	}
+
+	mergeStateRef, ok, err := st.MaybeGet(MergeStateField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		ret.MergeStateAddr = new(hash.Hash)
+		*ret.MergeStateAddr = mergeStateRef.(types.Ref).TargetHash()
+	}
+
+	return &ret, nil
 }
 
 // HasHead() returns 'true' if this dataset has a Head Commit, false otherwise.

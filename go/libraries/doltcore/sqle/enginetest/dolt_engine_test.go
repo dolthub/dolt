@@ -376,6 +376,9 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -506,8 +509,6 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
 		t.Run(test.Name, func(t *testing.T) {
 			enginetest.TestScriptWithEngine(t, engine, harness, test)
 		})
@@ -554,6 +555,10 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 
 func TestAddDropPks(t *testing.T) {
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
+}
+
+func TestNullRanges(t *testing.T) {
+	enginetest.TestNullRanges(t, newDoltHarness(t))
 }
 
 func TestPersist(t *testing.T) {

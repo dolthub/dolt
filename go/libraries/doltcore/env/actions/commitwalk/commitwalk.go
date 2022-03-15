@@ -20,13 +20,14 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type c struct {
 	ddb       *doltdb.DoltDB
 	commit    *doltdb.Commit
-	meta      *doltdb.CommitMeta
+	meta      *datas.CommitMeta
 	hash      hash.Hash
 	height    uint64
 	invisible bool

@@ -1,39 +1,41 @@
 #!/usr/bin/expect
 
-set timeout 2
+set timeout 1000
 spawn dolt sql
+
 expect {
   "doltsql> " { send "use `doltsql/test`;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
 expect {
   "doltsql/test> " { send "show tables;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
 expect {
   "doltsql/test> " { send "use information_schema;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
 expect {
   "information_schema> " { send "show tables;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
 expect {
   "information_schema> " { send "CREATE DATABASE mydb ;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
 expect {
   "information_schema> " { send "use mydb ;\r"; }
   timeout { exit 1; }
-  failed { exit 1; }
 }
+
+# TODO: The failed keyword seems to be triggering the connection_control_failed_login_attempts info_schema table. Not clear why the output
+# of this table is comming all the way down to this command.
 expect {
-  "mydb> " { send "show tables ;\r"; }
-  timeout { exit 1; }
-  failed { exit 1; }
+  "mydb> " { send "exit ;\r"; }
+   timeout { exit 1; }
 }

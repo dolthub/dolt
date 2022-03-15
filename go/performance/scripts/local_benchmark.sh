@@ -16,6 +16,13 @@ do
         --new-nbf) export DOLT_FORMAT_FEATURE_FLAG=true
             ;;
 
+        --new-new) export DOLT_FORMAT_FEATURE_FLAG=true &&
+            export ENABLE_ROW_ITER_2=true
+            ;;
+
+        --no-exchange) export SINGLE_THREAD_FEATURE_FLAG=true
+            ;;
+
         # benchmark with pprof profiling
         --pprof) PPROF=1
             ;;
@@ -105,7 +112,13 @@ sysbench \
   --mysql-host="0.0.0.0" \
   --mysql-user="user" \
   --mysql-password="pass" \
+  --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
+
+unset DOLT_FORMAT_FEATURE_FLAG
+unset ENABLE_ROW_ITER_2
+unset SINGLE_THREAD_FEATURE_FLAG
+unset GOMAXPROCS
 
 echo "benchmark $SYSBENCH_TEST complete at $WORKING_DIR"
 echo "DOLT_FORMAT_FEATURE_FLAG='$DOLT_FORMAT_FEATURE_FLAG'"

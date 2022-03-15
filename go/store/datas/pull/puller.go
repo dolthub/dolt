@@ -337,6 +337,11 @@ func (p *Puller) Pull(ctx context.Context) error {
 
 	if !ae.IsSet() && p.wr.Size() > 0 {
 		// p.wr may be nil in the error case
+		if p.wr != nil {
+			p.addEvent(NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
+				CurrentFileSize: int64(p.wr.ContentLength()),
+			}))
+		}
 		completedTables <- FilledWriters{p.wr}
 	}
 

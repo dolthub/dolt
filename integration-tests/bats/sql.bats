@@ -1030,12 +1030,6 @@ SQL
     [[ "$output" =~ "one_pk" ]] || false
 }
 
-@test "sql: explain simple query with where clause" {
-    run dolt sql -q "explain select * from one_pk where pk=0"
-    [ $status -eq 0 ]
-    [[ "$output" =~ "Filter" ]] || false
-}
-
 @test "sql: explain simple join" {
     run dolt sql -q "explain select op.pk,pk1,pk2 from one_pk,two_pk join one_pk as op on op.pk=pk1"
     [ $status -eq 0 ]

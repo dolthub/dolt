@@ -35,7 +35,7 @@ teardown() {
     teardown_common
 }
 
-@test "sql-server-remotes: sql-push --set-remote within session" {
+@test "remotes-sql-server: sql-push --set-remote within session" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -53,7 +53,7 @@ teardown() {
     server_query repo1 1 "select dolt_push() as p" "p\n1"
 }
 
-@test "sql-server-remotes: push on sql-session commit" {
+@test "remotes-sql-server: push on sql-session commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -73,7 +73,7 @@ teardown() {
     [[ "${lines[3]}" =~ "2" ]]
 }
 
-@test "sql-server-remotes: async push on sql-session commit" {
+@test "remotes-sql-server: async push on sql-session commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -97,7 +97,7 @@ teardown() {
     [[ "${lines[3]}" =~ "2" ]]
 }
 
-@test "sql-server-remotes: pull new commits on read" {
+@test "remotes-sql-server: pull new commits on read" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -112,7 +112,7 @@ teardown() {
     server_query repo2 1 "show tables" "Table\ntest"
 }
 
-@test "sql-server-remotes: pull remote not found error" {
+@test "remotes-sql-server: pull remote not found error" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -125,7 +125,7 @@ teardown() {
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server-remotes: quiet pull warnings" {
+@test "remotes-sql-server: quiet pull warnings" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -137,7 +137,7 @@ teardown() {
     run server_query repo1 1 "show tables" "Table\n"
 }
 
-@test "sql-server-remotes: push remote not found error" {
+@test "remotes-sql-server: push remote not found error" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -149,7 +149,7 @@ teardown() {
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server-remotes: quiet push warnings" {
+@test "remotes-sql-server: quiet push warnings" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -160,7 +160,7 @@ teardown() {
     server_query repo1 1 "show tables" "Table\ntest"
 }
 
-@test "sql-server-remotes: pull multiple heads" {
+@test "remotes-sql-server: pull multiple heads" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -177,7 +177,7 @@ teardown() {
     server_query repo2 1 "select name from dolt_branches order by name" "name\nmain\nnew_feature"
 }
 
-@test "sql-server-remotes: pull all heads" {
+@test "remotes-sql-server: pull all heads" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -192,7 +192,7 @@ teardown() {
     server_query repo2 1 "show tables" "Table\ntest"
 }
 
-@test "sql-server-remotes: pull invalid head" {
+@test "remotes-sql-server: pull invalid head" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     skip "query retry prevents error checking"
 
@@ -207,7 +207,7 @@ teardown() {
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server-remotes: pull multiple heads, one invalid" {
+@test "remotes-sql-server: pull multiple heads, one invalid" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     skip "query retry prevents error checking"
 
@@ -222,7 +222,7 @@ teardown() {
     [[ "$output" =~ "remote not found: 'unknown'" ]] || false
 }
 
-@test "sql-server-remotes: quiet pull all heads warnings" {
+@test "remotes-sql-server: quiet pull all heads warnings" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -238,7 +238,7 @@ teardown() {
     server_query repo2 1 "show tables" "Table\n"
 }
 
-@test "sql-server-remotes: connect to missing branch pulls remote" {
+@test "remotes-sql-server: connect to missing branch pulls remote" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1

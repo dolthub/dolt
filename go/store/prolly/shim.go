@@ -29,7 +29,7 @@ import (
 
 func NewEmptyMap(sch schema.Schema) Map {
 	return Map{
-		root:    emptyNode,
+		root:    newNodeBuilder(0).build(sharedPool),
 		keyDesc: KeyDescriptorFromSchema(sch),
 		valDesc: ValueDescriptorFromSchema(sch),
 	}
@@ -37,7 +37,7 @@ func NewEmptyMap(sch schema.Schema) Map {
 
 // PartitionKeysFromMap naively divides the map by its top-level keys.
 func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
-	keys = make([]val.Tuple, m.root.nodeCount())
+	keys = make([]val.Tuple, m.root.count)
 	for i := range keys {
 		keys[i] = val.Tuple(m.root.getKey(i))
 	}

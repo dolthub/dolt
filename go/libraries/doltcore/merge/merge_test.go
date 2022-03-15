@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -381,7 +382,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeHash, err := ddb.WriteRootValue(context.Background(), mergeRoot)
 	require.NoError(t, err)
 
-	meta, err := doltdb.NewCommitMeta(name, email, "fake")
+	meta, err := datas.NewCommitMeta(name, email, "fake")
 	require.NoError(t, err)
 	initialCommit, err := ddb.Commit(context.Background(), mainHash, ref.NewBranchRef(env.DefaultInitBranch), meta)
 	require.NoError(t, err)

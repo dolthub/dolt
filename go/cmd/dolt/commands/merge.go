@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -115,7 +116,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 
 		commitSpecStr := apr.Arg(0)
 
-		t := doltdb.CommitNowFunc()
+		t := datas.CommitNowFunc()
 		if commitTimeStr, ok := apr.GetValue(cli.DateParam); ok {
 			var err error
 			t, err = cli.ParseDate(commitTimeStr)

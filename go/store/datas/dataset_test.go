@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -38,12 +39,18 @@ func mustGetValue(v types.Value, found bool, err error) types.Value {
 	return v
 }
 
+func mustHeadAddr(ds Dataset) hash.Hash {
+	h, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return h
+}
+
 func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	id2 := "othertestdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView()).(*database)
+	store := NewDatabase(stg.NewViewWithDefaultFormat()).(*database)
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)
@@ -59,7 +66,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	//        \ds2
 	ds2, err := store.GetDataset(context.Background(), id2)
 	assert.NoError(err)
-	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{ParentsList: mustList(types.NewList(context.Background(), store, mustHeadRef(ds1)))})
+	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(a))
 
@@ -78,14 +85,12 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
-	mergeParents, err := types.NewList(context.Background(), store, mustRef(types.NewRef(mustHead(ds1), types.Format_7_18)), mustRef(types.NewRef(mustHead(ds2), types.Format_7_18)))
-	assert.NoError(err)
 	d := types.String("d")
-	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{ParentsList: mergeParents})
+	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds2).MaybeGet(ValueField)).Equals(d))
 
-	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{ParentsList: mergeParents})
+	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
 	assert.True(mustGetValue(mustHead(ds1).MaybeGet(ValueField)).Equals(d))
 }
@@ -94,7 +99,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -129,7 +134,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert := assert.New(t)
 	id1 := "testdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	a := types.String("a")
@@ -171,7 +176,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 func TestIdValidation(t *testing.T) {
 	assert := assert.New(t)
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 
 	invalidDatasetNames := []string{" ", "", "a ", " a", "$", "#", ":", "\n", "💩"}
 	for _, id := range invalidDatasetNames {
@@ -186,7 +191,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	id1 := "testdataset"
 	id2 := "otherdataset"
 	stg := &chunks.MemoryStorage{}
-	store := NewDatabase(stg.NewView())
+	store := NewDatabase(stg.NewViewWithDefaultFormat())
 	defer store.Close()
 
 	ds1, err := store.GetDataset(context.Background(), id1)

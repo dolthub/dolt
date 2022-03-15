@@ -843,14 +843,6 @@ SQL
     [[ "${lines[1]}" = "1" ]] || false
     [[ "${lines[2]}" = "1" ]] || false
     [ "${#lines[@]}" -eq 3 ]
-
-    run dolt sql -q "describe select c0 from keyless where c1 = 1" -r csv
-    [ $status -eq 0 ]
-    [[ "${lines[0]}" = "plan" ]] || false
-    [[ "${lines[1]}" =~ "Project(keyless.c0)" ]] || false
-    [[ "${lines[2]}" =~ "Filter(keyless.c1 = 1)" ]] || false
-    [[ "${lines[3]}" =~ "Projected table access on [c0 c1]" ]] || false
-    [[ "${lines[4]}" =~ "IndexedTableAccess(keyless on [keyless.c1])" ]] || false
 }
 
 @test "keyless: secondary index insert" {
@@ -935,4 +927,60 @@ SQL
     [[ "${lines[0]}" = "c0" ]] || false
     [[ "${lines[1]}" = "3" ]] || false
     [ "${#lines[@]}" -eq 2 ]
+}
+
+@test "keyless: check constraint violation rolls back" {
+    dolt sql -q "create table test (i int check (i < 10))"
+
+    run dolt sql -q "insert into test values (1)"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "insert into test values (100)"
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "insert into test values (2), (3), (100), (4)"
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
+}
+
+@test "keyless: inserting invalid values are rolled back" {
+    dolt sql -q "create table test (i int check (i < 10))"
+
+    run dolt sql -q "insert into test values (1)"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "insert into test values ('thisisastring')"
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
+
+    run dolt sql -q "insert into test values (2), (3), ('thisisastring'), (4)"
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "select * from test"
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "i" ]] || false
+    [[ "$output" =~ "1" ]] || false
 }

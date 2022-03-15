@@ -62,7 +62,7 @@ func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
-func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+func newCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 	cur.skipToNodeEnd()
 
@@ -75,6 +75,14 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 		parent := cur
 		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
 		cur.skipToNodeEnd()
+	}
+	return
+}
+
+func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
+	cur, err = newCursorAtEnd(ctx, nrw, nd)
+	if err != nil {
+		return nil, err
 	}
 
 	// advance |cur| past the end
@@ -138,11 +146,10 @@ func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeI
 }
 
 func (cur *nodeCursor) valid() bool {
-	if cur.nd.empty() {
-		return false
-	}
-	cnt := cur.nd.nodeCount()
-	return cur.idx >= 0 && cur.idx < cnt
+	return cur.nd.count != 0 &&
+		cur.nd.bytes() != nil &&
+		cur.idx >= 0 &&
+		cur.idx < int(cur.nd.count)
 }
 
 func (cur *nodeCursor) invalidate() {
@@ -166,7 +173,8 @@ func (cur *nodeCursor) firstKey() nodeItem {
 }
 
 func (cur *nodeCursor) lastKey() nodeItem {
-	return cur.nd.getKey(cur.lastKeyIdx())
+	lastKeyIdx := int(cur.nd.count - 1)
+	return cur.nd.getKey(lastKeyIdx)
 }
 
 func (cur *nodeCursor) skipToNodeStart() {
@@ -174,14 +182,16 @@ func (cur *nodeCursor) skipToNodeStart() {
 }
 
 func (cur *nodeCursor) skipToNodeEnd() {
-	cur.idx = cur.lastKeyIdx()
+	lastKeyIdx := int(cur.nd.count - 1)
+	cur.idx = lastKeyIdx
 }
 
 func (cur *nodeCursor) keepInBounds() {
 	if cur.idx < 0 {
 		cur.skipToNodeStart()
 	}
-	if cur.idx > cur.lastKeyIdx() {
+	lastKeyIdx := int(cur.nd.count - 1)
+	if cur.idx > lastKeyIdx {
 		cur.skipToNodeEnd()
 	}
 }
@@ -191,11 +201,8 @@ func (cur *nodeCursor) atNodeStart() bool {
 }
 
 func (cur *nodeCursor) atNodeEnd() bool {
-	return cur.idx == cur.lastKeyIdx()
-}
-
-func (cur *nodeCursor) lastKeyIdx() int {
-	return cur.nd.nodeCount() - 1
+	lastKeyIdx := int(cur.nd.count - 1)
+	return cur.idx == lastKeyIdx
 }
 
 func (cur *nodeCursor) isLeaf() bool {
@@ -203,7 +210,7 @@ func (cur *nodeCursor) isLeaf() bool {
 }
 
 func (cur *nodeCursor) level() uint64 {
-	return uint64(cur.nd.level)
+	return uint64(cur.nd.level())
 }
 
 func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (err error) {
@@ -236,8 +243,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the nextMutation greatest element if it is not present.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
-	count := cur.nd.nodeCount()
-	idx = sort.Search(count, func(i int) bool {
+	idx = sort.Search(int(cur.nd.count), func(i int) bool {
 		return cb(item, cur.nd.getKey(i)) <= 0
 	})
 
@@ -250,19 +256,20 @@ func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	if !ok {
-		cur.idx = cur.nd.nodeCount()
+		cur.idx = int(cur.nd.count)
 	}
 
 	return ok, nil
 }
 
 func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
-	if cur.idx < cur.lastKeyIdx() {
+	lastKeyIdx := int(cur.nd.count - 1)
+	if cur.idx < lastKeyIdx {
 		cur.idx += 1
 		return true, nil
 	}
 
-	if cur.idx == cur.nd.nodeCount() {
+	if cur.idx == int(cur.nd.count) {
 		// |cur| is already out of bounds
 		return false, nil
 	}
@@ -353,14 +360,7 @@ func (cur *nodeCursor) fetchNode(ctx context.Context) (err error) {
 }
 
 func (cur *nodeCursor) compare(other *nodeCursor) int {
-	if cur.parent != nil {
-		p := cur.parent.compare(other.parent)
-		if p != 0 {
-			return p
-		}
-	}
-	assertTrue(cur.nd.nodeCount() == other.nd.nodeCount())
-	return cur.idx - other.idx
+	return compareCursors(cur, other)
 }
 
 func (cur *nodeCursor) clone() *nodeCursor {
@@ -388,6 +388,27 @@ func (cur *nodeCursor) copy(other *nodeCursor) {
 	} else {
 		assertTrue(other.parent == nil)
 	}
+}
+
+func compareCursors(left, right *nodeCursor) (diff int) {
+	diff = 0
+	for {
+		d := left.idx - right.idx
+		if d != 0 {
+			diff = d
+		}
+
+		if left.parent == nil || right.parent == nil {
+			break
+		}
+		left, right = left.parent, right.parent
+	}
+	return
+}
+
+func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
+	// todo(andy) handle nil Node, dangling ref
+	return ns.Read(ctx, ref)
 }
 
 func assertTrue(b bool) {

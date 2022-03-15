@@ -29,6 +29,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -236,8 +237,7 @@ func TestPuller(t *testing.T) {
 	rootMap, err := types.NewMap(ctx, vs)
 	require.NoError(t, err)
 
-	parent, err := types.NewList(ctx, vs)
-	require.NoError(t, err)
+	var parent []hash.Hash
 	states := map[string]types.Ref{}
 	for _, delta := range deltas {
 		for tbl, sets := range delta.sets {
@@ -257,7 +257,7 @@ func TestPuller(t *testing.T) {
 		rootMap, err = me.Map(ctx)
 		require.NoError(t, err)
 
-		commitOpts := datas.CommitOptions{ParentsList: parent}
+		commitOpts := datas.CommitOptions{Parents: parent}
 		ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 		require.NoError(t, err)
 
@@ -265,8 +265,7 @@ func TestPuller(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 
-		parent, err = types.NewList(ctx, vs, r)
-		require.NoError(t, err)
+		parent = []hash.Hash{r.TargetHash()}
 
 		states[delta.name] = r
 	}
@@ -282,7 +281,7 @@ func TestPuller(t *testing.T) {
 	rootMap, err = me.Map(ctx)
 	require.NoError(t, err)
 
-	commitOpts := datas.CommitOptions{ParentsList: parent}
+	commitOpts := datas.CommitOptions{Parents: parent}
 	ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 	require.NoError(t, err)
 

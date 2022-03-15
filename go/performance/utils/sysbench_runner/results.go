@@ -289,6 +289,9 @@ func updateResult(result *Result, key, val string) error {
 		result.SqlTotalQueriesPerSecond = p
 	case ignoredErrors:
 		total, perSecond, err := FromValWithParens(val)
+		if err != nil {
+			return err
+		}
 		t, err := fromStringInt64(total)
 		if err != nil {
 			return err
@@ -301,6 +304,9 @@ func updateResult(result *Result, key, val string) error {
 		result.IgnoredErrorsPerSecond = p
 	case reconnects:
 		total, perSecond, err := FromValWithParens(val)
+		if err != nil {
+			return err
+		}
 		t, err := fromStringInt64(total)
 		if err != nil {
 			return err

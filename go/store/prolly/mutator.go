@@ -55,12 +55,13 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		if cur.valid() {
 			// compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			k, v := getKeyValuePair(cur)
-			if compareKeys(m, newKey, k) == 0 {
-				oldValue = v
+			oldKey := val.Tuple(cur.currentKey())
+			if compareKeys(m, newKey, oldKey) == 0 {
+				oldValue = val.Tuple(cur.currentValue())
 			}
 		}
 
+		// check for no-op mutations
 		if oldValue == nil && newValue == nil {
 			newKey, newValue = edits.nextMutation(ctx)
 			continue // already non-present
@@ -71,24 +72,22 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		}
 
 		// move |chunker| to the nextMutation mutation point
-		err = chunker.advanceTo(ctx, cur)
+		err = chunker.AdvanceTo(ctx, cur)
 		if err != nil {
 			return m, err
 		}
 
-		if oldValue != nil {
-			// delete or update
-			if err = chunker.Skip(ctx); err != nil {
-				return m, err
+		if oldValue == nil {
+			err = chunker.AddPair(ctx, newKey, newValue)
+		} else {
+			if newValue != nil {
+				err = chunker.UpdatePair(ctx, newKey, newValue)
+			} else {
+				err = chunker.DeletePair(ctx, newKey, oldValue)
 			}
-		} // else insert
-
-		if newValue != nil {
-			// update or insert
-			_, err = chunker.Append(ctx, nodeItem(newKey), nodeItem(newValue))
-			if err != nil {
-				return Map{}, err
-			}
+		}
+		if err != nil {
+			return m, err
 		}
 
 		newKey, newValue = edits.nextMutation(ctx)
@@ -100,12 +99,6 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 	}
 
 	return m, nil
-}
-
-func getKeyValuePair(cur *nodeCursor) (key, value val.Tuple) {
-	key = val.Tuple(cur.currentKey())
-	value = val.Tuple(cur.currentValue())
-	return
 }
 
 func compareKeys(m Map, left, right val.Tuple) int {

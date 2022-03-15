@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -184,10 +185,30 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 // returned rows always have the schema of the table, regardless of the value
 // of |columns|.  Providing a column name which does not appear in the schema
 // is not an error, but no corresponding column will appear in the results.
-func TableToRowIter(ctx context.Context, table *doltdb.Table, columns []string) (sql.RowIter, error) {
-	data, err := table.GetRowData(ctx)
+func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string) (sql.RowIter, error) {
+	t, err := table.doltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newRowIterator(ctx, table, columns, doltTablePartition{rowData: data, end: NoUpperBound})
+	data, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	p := doltTablePartition{
+		end:     NoUpperBound,
+		rowData: data,
+	}
+
+	if types.IsFormat_DOLT_1(data.Format()) {
+		m := durable.ProllyMapFromIndex(data)
+		kd, _ := m.Descriptors()
+		p.rowRange = prolly.Range{
+			Start:   prolly.RangeCut{Unbound: true},
+			Stop:    prolly.RangeCut{Unbound: true},
+			KeyDesc: kd,
+		}
+	}
+
+	return newRowIterator(ctx, t, columns, p)
 }

@@ -77,6 +77,36 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
+@test "dump: SQL type (batched) - compare tables in database with tables imported file " {
+    dolt branch new_branch
+
+    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "INSERT INTO new_table VALUES (1);"
+    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
+    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump --batch
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    run cat doltdump.sql
+    [[ "$output" =~ "VALUES (1,'UPS'), (2,'TV'), (3,'Table')" ]] || false
+
+    dolt checkout new_branch
+    dolt sql < doltdump.sql
+    dolt add .
+    dolt commit --allow-empty -m "create tables from doltdump"
+
+    run dolt diff --summary main new_branch
+    [ "$status" -eq 0 ]
+    [[ "$output" = "" ]] || false
+}
+
 @test "dump: SQL type - with Indexes" {
     dolt sql -q "CREATE TABLE new_table(pk int);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"

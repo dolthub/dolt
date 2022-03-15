@@ -460,16 +460,13 @@ func (lvs *ValueStore) Rebase(ctx context.Context) error {
 	return lvs.cs.Rebase(ctx)
 }
 
-// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
-// locality, and attempts to Commit, updating the root to |current| (or keeping
-// it the same as Root()). If the root has moved since this ValueStore was
-// opened, or last Rebased(), it will return false and will have internally
-// rebased. Until Commit() succeeds, no work of the ValueStore will be visible
-// to other readers of the underlying ChunkStore.
-func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+func (lvs *ValueStore) Flush(ctx context.Context) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+	return lvs.flush(ctx, hash.Hash{})
+}
 
+func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 	put := func(h hash.Hash, chunk chunks.Chunk) error {
 		err := lvs.cs.Put(ctx, chunk)
 
@@ -494,13 +491,13 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 			})
 
 			if err != nil {
-				return false, err
+				return err
 			}
 
 			err = put(parent, pending)
 
 			if err != nil {
-				return false, err
+				return err
 			}
 		}
 	}
@@ -509,7 +506,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		err := lvs.cs.Put(ctx, c)
 
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		lvs.bufferedChunkSize -= uint64(len(c.Data()))
@@ -523,7 +520,7 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		root, err := lvs.Root(ctx)
 
 		if err != nil {
-			return false, err
+			return err
 		}
 
 		if (current != hash.Hash{} && current != root) {
@@ -538,12 +535,28 @@ func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (boo
 		PanicIfDangling(ctx, lvs.unresolvedRefs, lvs.cs)
 	}
 
-	success, err := lvs.cs.Commit(ctx, current, last)
+	return nil
+}
 
+// Commit flushes all bufferedChunks into the ChunkStore, with best-effort
+// locality, and attempts to Commit, updating the root to |current| (or keeping
+// it the same as Root()). If the root has moved since this ValueStore was
+// opened, or last Rebased(), it will return false and will have internally
+// rebased. Until Commit() succeeds, no work of the ValueStore will be visible
+// to other readers of the underlying ChunkStore.
+func (lvs *ValueStore) Commit(ctx context.Context, current, last hash.Hash) (bool, error) {
+	lvs.bufferMu.Lock()
+	defer lvs.bufferMu.Unlock()
+
+	err := lvs.flush(ctx, current)
 	if err != nil {
 		return false, err
 	}
 
+	success, err := lvs.cs.Commit(ctx, current, last)
+	if err != nil {
+		return false, err
+	}
 	if !success {
 		return false, nil
 	}
