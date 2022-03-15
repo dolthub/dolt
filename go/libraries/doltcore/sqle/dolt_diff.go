@@ -19,8 +19,10 @@ package sqle
 import (
 	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
+
+	"github.com/dolthub/go-mysql-server/sql"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -30,8 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 var ErrInvalidCommitAncestry = errors.NewKind("commit %s is not an ancestor of commit %s")
