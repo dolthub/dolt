@@ -86,12 +86,11 @@ type DoltTable struct {
 	autoIncCol   schema.Column
 
 	projectedCols []string
-	temporary     bool
 
 	opts editor.Options
 }
 
-func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, isTemporary bool, opts editor.Options) (*DoltTable, error) {
+func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		if col.AutoIncrement {
@@ -114,7 +113,6 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 		sqlSch:        sqlSch,
 		autoIncCol:    autoCol,
 		projectedCols: nil,
-		temporary:     isTemporary,
 		opts:          opts,
 	}, nil
 }
@@ -179,15 +177,6 @@ func (t *DoltTable) doltTable(ctx *sql.Context) (*doltdb.Table, error) {
 // getRoot returns the appropriate root value for this session. The only controlling factor
 // is whether this is a temporary table or not.
 func (t *DoltTable) getRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
-	if t.temporary {
-		root, ok := t.db.GetTemporaryTablesRoot(ctx)
-		if !ok {
-			return nil, fmt.Errorf("error: manipulating temporary table root when it does not exist")
-		}
-
-		return root, nil
-	}
-
 	return t.db.GetRoot(ctx)
 }
 
@@ -282,7 +271,7 @@ func (t *DoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 }
 
 func (t *DoltTable) IsTemporary() bool {
-	return t.temporary
+	return false
 }
 
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
@@ -387,10 +376,6 @@ type doltTableInterface interface {
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
-	if t.temporary {
-		return t.db.SetTemporaryRoot(ctx, newRoot)
-	}
-
 	return t.db.SetRoot(ctx, newRoot)
 }
 
@@ -441,17 +426,12 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		return nil, err
 	}
 
-	if t.temporary {
-		setter := ds.SetTempTableRoot
-		ed, err = state.TempTableWriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
-	} else {
-		setter := ds.SetRoot
-		ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
-	}
+	setter := ds.SetRoot
+	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+
 	if err != nil {
 		return nil, err
 	}
-
 	if batched {
 		t.ed = ed
 	}
@@ -1705,7 +1685,7 @@ func (t *AlterableDoltTable) dropIndex(ctx *sql.Context, indexName string) (*dol
 }
 
 func (t *AlterableDoltTable) updateFromRoot(ctx *sql.Context, root *doltdb.RootValue) error {
-	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName, t.temporary)
+	updatedTableSql, ok, err := t.db.getTable(ctx, root, t.tableName)
 	if err != nil {
 		return err
 	}
