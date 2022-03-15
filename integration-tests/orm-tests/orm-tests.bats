@@ -1,14 +1,4 @@
-
 #!/usr/bin/env bats
-
-# setupDoltRepoWithName allows the user to create a dolt database intiailized iwth a
-#setupDoltRepoWithName() {
-#  mdkir $1 && cd $1
-#  dolt init
-#  dolt sql-server --host 0.0.0.0 --port=$PORT --user=$USER --loglevel=trace &
-#  SERVER_PID=$!
-#  REPO_DIR=$(pwd)
-#}
 
 setup() {
   REPO_NAME="dolt_repo_$$"

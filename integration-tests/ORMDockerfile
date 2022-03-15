@@ -1,8 +1,5 @@
 FROM ubuntu:18.04
 
-# install python3
-
-
 # install peewee
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update -y && \
