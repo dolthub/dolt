@@ -56,12 +56,12 @@ var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
-	batchMode batchMode
-	username  string
-	email     string
-	dbStates  map[string]*DatabaseSessionState
-	provider  RevisionDatabaseProvider
-	tmpTables []sql.Table
+	batchMode  batchMode
+	username   string
+	email      string
+	dbStates   map[string]*DatabaseSessionState
+	provider   RevisionDatabaseProvider
+	tempTables map[string][]sql.Table
 }
 
 var _ sql.Session = &Session{}
@@ -69,11 +69,12 @@ var _ sql.Session = &Session{}
 // DefaultSession creates a Session object with default values
 func DefaultSession() *Session {
 	sess := &Session{
-		Session:  sql.NewBaseSession(),
-		username: "",
-		email:    "",
-		dbStates: make(map[string]*DatabaseSessionState),
-		provider: emptyRevisionDatabaseProvider{},
+		Session:    sql.NewBaseSession(),
+		username:   "",
+		email:      "",
+		dbStates:   make(map[string]*DatabaseSessionState),
+		provider:   emptyRevisionDatabaseProvider{},
+		tempTables: make(map[string][]sql.Table),
 	}
 	return sess
 }
@@ -83,11 +84,12 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	sess := &Session{
-		Session:  sqlSess,
-		username: username,
-		email:    email,
-		dbStates: make(map[string]*DatabaseSessionState),
-		provider: pro,
+		Session:    sqlSess,
+		username:   username,
+		email:      email,
+		dbStates:   make(map[string]*DatabaseSessionState),
+		provider:   pro,
+		tempTables: make(map[string][]sql.Table),
 	}
 
 	for _, db := range dbs {
@@ -960,21 +962,23 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	return nil
 }
 
-func (sess *Session) AddTemporaryTable(ctx *sql.Context, tbl sql.Table) {
-	sess.tmpTables = append(sess.tmpTables, tbl)
+func (sess *Session) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
+	sess.tempTables[db] = append(sess.tempTables[db], tbl)
 }
 
-func (sess *Session) DropTemporaryTable(ctx *sql.Context, name string) {
-	for i, tbl := range sess.tmpTables {
+func (sess *Session) DropTemporaryTable(ctx *sql.Context, db, name string) {
+	tables := sess.tempTables[db]
+	for i, tbl := range sess.tempTables[db] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
-			sess.tmpTables = append(sess.tmpTables[:i], sess.tmpTables[i+1:]...)
+			tables = append(tables[:i], tables[i+1:]...)
 			break
 		}
 	}
+	sess.tempTables[db] = tables
 }
 
-func (sess *Session) GetTemporaryTable(ctx *sql.Context, name string) (sql.Table, bool) {
-	for _, tbl := range sess.tmpTables {
+func (sess *Session) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
+	for _, tbl := range sess.tempTables[db] {
 		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
 			return tbl, true
 		}
@@ -983,8 +987,8 @@ func (sess *Session) GetTemporaryTable(ctx *sql.Context, name string) (sql.Table
 }
 
 // GetAllTemporaryTables returns all temp tables for this session.
-func (sess *Session) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
-	return sess.tmpTables, nil
+func (sess *Session) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
+	return sess.tempTables[db], nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named

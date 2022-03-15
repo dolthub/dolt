@@ -266,7 +266,7 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 	// We start by first checking whether the input table is a temporary table. Temporary tables with name `x` take
 	// priority over persisted tables of name `x`.
 	ds := dsess.DSessFromSess(ctx.Session)
-	if tbl, ok := ds.GetTemporaryTable(ctx, tblName); ok {
+	if tbl, ok := ds.GetTemporaryTable(ctx, db.Name(), tblName); ok {
 		return tbl, ok, nil
 	}
 
@@ -620,8 +620,8 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	if _, ok := ds.GetTemporaryTable(ctx, tableName); ok {
-		ds.DropTemporaryTable(ctx, tableName)
+	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
+		ds.DropTemporaryTable(ctx, db.Name(), tableName)
 		return nil
 	}
 
@@ -760,7 +760,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	}
 
 	ds := dsess.DSessFromSess(ctx.Session)
-	ds.AddTemporaryTable(ctx, tmp)
+	ds.AddTemporaryTable(ctx, db.Name(), tmp)
 	return nil
 }
 
@@ -1043,5 +1043,5 @@ func (db Database) TableEditSession(ctx *sql.Context) (writer.WriteSession, erro
 // GetAllTemporaryTables returns all temporary tables
 func (db Database) GetAllTemporaryTables(ctx *sql.Context) ([]sql.Table, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	return sess.GetAllTemporaryTables(ctx)
+	return sess.GetAllTemporaryTables(ctx, db.Name())
 }
