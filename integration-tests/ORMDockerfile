@@ -15,12 +15,10 @@ RUN apt update -y && \
     apt install -y \
         python3.8 \
         python3-pip \
-        curl \
-        wget \
-        pkg-config \
+        git \
         mysql-client \
         libmysqlclient-dev \
-        bats \ && \
+        bats && \
     update-ca-certificates -f
 
 # install go
@@ -35,6 +33,18 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
     chown -R root:root /usr/local/go && \
     mkdir -p $HOME/go/{bin,src} && \
     go version
+
+# install mysql connector and pymsql
+RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
+
+# install dolt from source
+WORKDIR /root/building
+COPY ./go .
+ENV GOFLAGS="-mod=readonly"
+RUN go build -o /usr/local/bin/dolt ./cmd/dolt
+
+COPY orm-tests /orm-tests
+COPY orm-tests/orm-tests-entrypoint.sh /orm-tests/entrypoint.sh
 
 WORKDIR /orm-tests
 ENTRYPOINT ["/orm-tests/entrypoint.sh"]
