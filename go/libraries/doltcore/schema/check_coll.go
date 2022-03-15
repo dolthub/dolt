@@ -104,3 +104,11 @@ func NewCheckCollection() CheckCollection {
 		checks: make([]check, 0),
 	}
 }
+
+func NewCheck(name, expression string, enforced bool) check {
+	return check{
+		name:       name,
+		expression: expression,
+		enforced:   enforced,
+	}
+}

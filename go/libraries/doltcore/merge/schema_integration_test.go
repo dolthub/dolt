@@ -372,6 +372,77 @@ var mergeSchemaConflictTests = []mergeSchemaConflictTest{
 		},
 	},
 	{
+		name: "check definition collision",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 < 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
+		},
+		expConflict: merge.SchemaConflict{
+			TableName: "test",
+			ChkConflicts: []merge.ChkConflict{
+				{
+					Kind:   merge.TagCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+				},
+				{
+					Kind:   merge.NameCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 0)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 0)", true),
+				},
+			},
+		},
+	},
+	{
+		name: "modified check",
+		setup: []testCommand{
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 0);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+
+			{commands.MergeCmd{}, []string{env.DefaultInitBranch}},
+			{commands.CheckoutCmd{}, []string{env.DefaultInitBranch}},
+			{commands.MergeCmd{}, []string{"other"}},
+
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop constraint chk;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 > 10);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch main"}},
+
+			{commands.CheckoutCmd{}, []string{"other"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test drop constraint chk;"}},
+			{commands.SqlCmd{}, []string{"-q", "alter table test add constraint chk check (c3 < 10);"}},
+			{commands.AddCmd{}, []string{"."}},
+			{commands.CommitCmd{}, []string{"-m", "modified branch other"}},
+		},
+		expConflict: merge.SchemaConflict{
+			TableName: "test",
+			ChkConflicts: []merge.ChkConflict{
+				{
+					Kind:   merge.TagCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+				},
+				{
+					Kind:   merge.NameCollision,
+					Ours:   schema.NewCheck("chk", "(c3 > 10)", true),
+					Theirs: schema.NewCheck("chk", "(c3 < 10)", true),
+				},
+			},
+		},
+	},
+	{
 		name: "primary key conflicts",
 		setup: []testCommand{
 			{commands.CheckoutCmd{}, []string{"other"}},
@@ -556,6 +627,12 @@ func testMergeSchemasWithConflicts(t *testing.T, test mergeSchemaConflictTest) {
 	for i, icc := range actConflicts.ColConflicts {
 		assert.True(t, test.expConflict.ColConflicts[i].Ours.Equals(icc.Ours))
 		assert.True(t, test.expConflict.ColConflicts[i].Theirs.Equals(icc.Theirs))
+	}
+
+	require.Equal(t, len(test.expConflict.ChkConflicts), len(actConflicts.ChkConflicts))
+	for i, icc := range actConflicts.ChkConflicts {
+		assert.True(t, test.expConflict.ChkConflicts[i].Ours == icc.Ours)
+		assert.True(t, test.expConflict.ChkConflicts[i].Theirs == icc.Theirs)
 	}
 }
 

@@ -176,13 +176,14 @@ func (ts *TextSpinner) next() string {
 }
 
 func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, language progLanguage) {
-	var pos int
 	var currentTreeLevel int
 	var percentBuffered float64
 	var tableFilesClosed int
 	var filesTransfered int
 	var ts TextSpinner
 
+	p := cli.StartEphemeralPrinter()
+	defer p.Stop()
 	uploadRate := ""
 
 	for evt := range pullerEventCh {
@@ -229,28 +230,27 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 			continue
 		}
 
-		var msg string
-		msg = fmt.Sprintf("%s Tree Level: %d, Percent Buffered: %.2f%%,", ts.next(), currentTreeLevel, percentBuffered)
-
+		p.Printf("%s Tree Level: %d, Percent Buffered: %.2f%%, ", ts.next(), currentTreeLevel, percentBuffered)
 		if language == downloadLanguage {
-			msg = fmt.Sprintf("%s Files Written: %d", msg, filesTransfered)
+			p.Printf("Files Written: %d", filesTransfered)
 		} else {
 			if len(uploadRate) > 0 {
-				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s", msg, tableFilesClosed, filesTransfered, uploadRate)
+				p.Printf("Files Created: %d, Files Uploaded: %d, Current Upload Speed: %s\n", tableFilesClosed, filesTransfered, uploadRate)
 			} else {
-				msg = fmt.Sprintf("%s Files Created: %d, Files Uploaded: %d", msg, tableFilesClosed, filesTransfered)
+				p.Printf("Files Created: %d, Files Uploaded: %d\n", tableFilesClosed, filesTransfered)
 			}
 		}
-
-		pos = cli.DeleteAndPrint(pos, msg)
+		p.Display()
 	}
+	p.Display()
 }
 
 func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
 	var latest pull.PullProgress
 	last := time.Now().UnixNano() - 1
-	lenPrinted := 0
 	done := false
+	p := cli.StartEphemeralPrinter()
+	defer p.Stop()
 	for !done {
 		if ctx.Err() != nil {
 			return
@@ -273,15 +273,12 @@ func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
 		if done || deltaTime > halfSec {
 			last = nowUnix
 			if latest.KnownCount > 0 {
-				progMsg := fmt.Sprintf("Counted chunks: %d, Buffered chunks: %d)", latest.KnownCount, latest.DoneCount)
-				lenPrinted = cli.DeleteAndPrint(lenPrinted, progMsg)
+				p.Printf("Counted chunks: %d, Buffered chunks: %d)\n", latest.KnownCount, latest.DoneCount)
+				p.Display()
 			}
 		}
 	}
-
-	if lenPrinted > 0 {
-		cli.Println()
-	}
+	p.Display()
 }
 
 // progLanguage is the language to use when displaying progress for a pull from a src db to a sink db.

@@ -20,6 +20,9 @@ import (
 	"fmt"
 	"strings"
 
+	sqle "github.com/dolthub/go-mysql-server"
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
@@ -29,18 +32,22 @@ type conflictKind byte
 const (
 	TagCollision conflictKind = iota
 	NameCollision
+	ColumnCollision
+	InvalidCheckCollision
+	DeletedCheckCollision
 )
 
 type SchemaConflict struct {
 	TableName    string
 	ColConflicts []ColConflict
 	IdxConflicts []IdxConflict
+	ChkConflicts []ChkConflict
 }
 
 var EmptySchConflicts = SchemaConflict{}
 
 func (sc SchemaConflict) Count() int {
-	return len(sc.ColConflicts) + len(sc.IdxConflicts)
+	return len(sc.ColConflicts) + len(sc.IdxConflicts) + len(sc.ChkConflicts)
 }
 
 func (sc SchemaConflict) AsError() error {
@@ -50,6 +57,9 @@ func (sc SchemaConflict) AsError() error {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
 	for _, c := range sc.IdxConflicts {
+		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
+	}
+	for _, c := range sc.ChkConflicts {
 		b.WriteString(fmt.Sprintf("\t%s\n", c.String()))
 	}
 	return fmt.Errorf(b.String())
@@ -82,6 +92,29 @@ func (c IdxConflict) String() string {
 type FKConflict struct {
 	Kind         conflictKind
 	Ours, Theirs doltdb.ForeignKey
+}
+
+type ChkConflict struct {
+	Kind         conflictKind
+	Ours, Theirs schema.Check
+}
+
+func (c ChkConflict) String() string {
+	switch c.Kind {
+	case NameCollision:
+		return fmt.Sprintf("two checks with the name '%s' but different definitions", c.Ours.Name())
+	case ColumnCollision:
+		return fmt.Sprintf("our check '%s' and their check '%s' both reference the same column(s)", c.Ours.Name(), c.Theirs.Name())
+	case InvalidCheckCollision:
+		return fmt.Sprintf("check '%s' references a column that will be deleted after merge", c.Ours.Name())
+	case DeletedCheckCollision:
+		if c.Theirs == nil {
+			return fmt.Sprintf("check '%s' was deleted in theirs but modified in ours", c.Ours.Name())
+		} else {
+			return fmt.Sprintf("check '%s' was deleted in ours but modified in theirs", c.Theirs.Name())
+		}
+	}
+	return ""
 }
 
 var ErrMergeWithDifferentPkSets = errors.New("error: cannot merge two tables with different primary key sets")
@@ -129,6 +162,35 @@ func SchemaMerge(ourSch, theirSch, ancSch schema.Schema, tblName string) (sch sc
 		sch.Indexes().AddIndex(index)
 		return false, nil
 	})
+
+	// Merge checks
+	var mergedChks []schema.Check
+	mergedChks, sc.ChkConflicts, err = mergeChecks(ourSch.Checks(), theirSch.Checks(), ancSch.Checks())
+	if err != nil {
+		return nil, EmptySchConflicts, err
+	}
+	if len(sc.ChkConflicts) > 0 {
+		return nil, sc, nil
+	}
+
+	// Look for invalid CHECKs
+	for _, chk := range mergedChks {
+		// CONFLICT: a CHECK now references a column that no longer exists in schema
+		if ok, err := isCheckReferenced(sch, chk); err != nil {
+			return nil, sc, err
+		} else if !ok {
+			// Append to conflicts
+			sc.ChkConflicts = append(sc.ChkConflicts, ChkConflict{
+				Kind: InvalidCheckCollision,
+				Ours: chk,
+			})
+		}
+	}
+
+	// Add all merged CHECKs to merged schema
+	for _, chk := range mergedChks {
+		sch.Checks().AddCheck(chk.Name(), chk.Expression(), chk.Enforced())
+	}
 
 	return sch, sc, nil
 }
@@ -573,4 +635,298 @@ func pruneInvalidForeignKeys(ctx context.Context, fkColl *doltdb.ForeignKeyColle
 	}
 
 	return pruned, nil
+}
+
+// checksInCommon finds all the common checks between ourChks, theirChks, and ancChks, and detects varying conflicts
+func checksInCommon(ourChks, theirChks, ancChks []schema.Check) ([]schema.Check, []ChkConflict) {
+	// Make map of their checks for fast lookup
+	theirChkMap := make(map[string]schema.Check)
+	for _, chk := range theirChks {
+		theirChkMap[chk.Name()] = chk
+	}
+
+	// Make map of ancestor checks for fast lookup
+	ancChkMap := make(map[string]schema.Check)
+	for _, chk := range ancChks {
+		ancChkMap[chk.Name()] = chk
+	}
+
+	// Iterate over our checks
+	var common []schema.Check
+	var conflicts []ChkConflict
+	for _, ourChk := range ourChks {
+		// See if ours and theirs both have a CHECK by this name
+		theirChk, ok := theirChkMap[ourChk.Name()]
+		// Ours and theirs do have this CHECK in common, will be dealt with elsewhere
+		if !ok {
+			continue
+		}
+
+		// NO CONFLICT: our and their check are defined exactly the same
+		if ourChk == theirChk {
+			common = append(common, ourChk)
+			continue
+		}
+
+		// See if ancestor also has this check
+		ancChk, ok := ancChkMap[ourChk.Name()]
+		// CONFLICT: our and their CHECK have the same name, but different definitions
+		if !ok {
+			conflicts = append(conflicts, ChkConflict{
+				Kind:   NameCollision,
+				Ours:   ourChk,
+				Theirs: theirChk,
+			})
+			continue
+		}
+
+		// NO CONFLICT: CHECK was only modified in our branch, so update check definition with ours
+		if ancChk == theirChk {
+			common = append(common, ourChk)
+			continue
+		}
+
+		// NO CONFLICT: CHECK was only modified in their branch, so update check definition with theirs
+		if ancChk == ourChk {
+			common = append(common, ourChk)
+			continue
+		}
+
+		// CONFLICT: CHECK was modified on both
+		conflicts = append(conflicts, ChkConflict{
+			Kind:   NameCollision,
+			Ours:   ourChk,
+			Theirs: theirChk,
+		})
+	}
+
+	return common, conflicts
+}
+
+// chkCollectionSetDifference returns the set difference left - right.
+func chkCollectionSetDifference(left, right []schema.Check) []schema.Check {
+	// Make map of right check for fast look up
+	rChkMap := make(map[string]bool)
+	for _, chk := range right {
+		rChkMap[chk.Name()] = true
+	}
+
+	// Add everything except what's in right
+	var result []schema.Check
+	for _, chk := range left {
+		if _, ok := rChkMap[chk.Name()]; ok {
+			continue
+		}
+		result = append(result, chk)
+	}
+	return result
+}
+
+// chkCollectionSetIntersection returns the set union of left and right.
+func chkCollectionSetIntersection(left, right []schema.Check) []schema.Check {
+	// Make map of right check for fast look up
+	rChkMap := make(map[string]bool)
+	for _, chk := range right {
+		rChkMap[chk.Name()] = true
+	}
+
+	// Add everything from left that is also in right
+	var result []schema.Check
+	for _, chk := range left {
+		if _, ok := rChkMap[chk.Name()]; !ok {
+			continue
+		}
+		result = append(result, chk)
+	}
+	return result
+}
+
+// chkCollectionModified finds all checks that have been modified from ancestor to child
+func chkCollectionModified(anc, child []schema.Check) []schema.Check {
+	// Make map of ancestor for fast look up
+	ancChkMap := make(map[string]schema.Check)
+	for _, chk := range anc {
+		ancChkMap[chk.Name()] = chk
+	}
+
+	// Add everything with same name, but different definition
+	var result []schema.Check
+	for _, childChk := range child {
+		if ancChk, ok := ancChkMap[childChk.Name()]; ok {
+			if ancChk != childChk {
+				result = append(result, childChk)
+			}
+		}
+	}
+	return result
+}
+
+// mergeChecks attempts to combine ourChks, theirChks, and ancChks into a single collection, or gathers the conflicts
+func mergeChecks(ourChks, theirChks, ancChks schema.CheckCollection) ([]schema.Check, []ChkConflict, error) {
+	// Handles modifications
+	common, conflicts := checksInCommon(ourChks.AllChecks(), theirChks.AllChecks(), ancChks.AllChecks())
+
+	// Get all new checks
+	ourNewChks := chkCollectionSetDifference(ourChks.AllChecks(), ancChks.AllChecks())
+	theirNewChks := chkCollectionSetDifference(theirChks.AllChecks(), ancChks.AllChecks())
+
+	// Create map for fast lookup
+	theirNewChksMap := make(map[string]schema.Check)
+	for _, chk := range theirNewChks {
+		theirNewChksMap[chk.Name()] = chk
+	}
+
+	// Compare CHECKs with the same name
+	for _, ourChk := range ourNewChks {
+		theirChk, ok := theirNewChksMap[ourChk.Name()]
+		// CONFLICT: our and their CHECK have the same name, but different definitions
+		if ok && ourChk != theirChk {
+			conflicts = append(conflicts, ChkConflict{
+				Kind:   NameCollision,
+				Ours:   ourChk,
+				Theirs: theirChk,
+			})
+		}
+	}
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
+	// Create a map from each column to any CHECKs that reference that column
+	theirNewChkColsMap := make(map[string]map[schema.Check]bool)
+	for _, chk := range theirNewChks {
+		// Extract columns referenced by CHECK
+		chkDef := sql.CheckDefinition{
+			Name:            chk.Name(),
+			CheckExpression: chk.Expression(),
+			Enforced:        chk.Enforced(),
+		}
+		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Mark that col as referenced by CHECK
+		for _, col := range colNames {
+			if _, ok := theirNewChkColsMap[col]; !ok {
+				theirNewChkColsMap[col] = make(map[schema.Check]bool)
+			}
+			theirNewChkColsMap[col][chk] = true
+		}
+	}
+
+	// Look for overlapping columns between our new CHECKs and their new CHECKs
+	for _, ourChk := range ourNewChks {
+		// Extract columns referenced by CHECK
+		chkDef := sql.CheckDefinition{
+			Name:            ourChk.Name(),
+			CheckExpression: ourChk.Expression(),
+			Enforced:        ourChk.Enforced(),
+		}
+		colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// TODO: redundant for checks that are defined exactly the same
+		for _, col := range colNames {
+			// See if this column is referenced in their new CHECKs
+			if _, ok := theirNewChkColsMap[col]; ok {
+				// CONFLICT: our and their CHECK reference the same column and are not the same CHECK
+				if _, ok := theirNewChkColsMap[col][ourChk]; !ok {
+					for k := range theirNewChkColsMap[col] {
+						conflicts = append(conflicts, ChkConflict{
+							Kind:   ColumnCollision,
+							Ours:   ourChk,
+							Theirs: k,
+						})
+					}
+					// Finding one column collision is enough
+					break
+				}
+			}
+		}
+	}
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
+	// CONFLICT: deleted constraint in ours that is modified in theirs
+	ourDeletedChks := chkCollectionSetDifference(ancChks.AllChecks(), ourChks.AllChecks())
+	theirModifiedChks := chkCollectionModified(ancChks.AllChecks(), theirChks.AllChecks())
+	deletedInOursButModifiedInTheirs := chkCollectionSetIntersection(theirModifiedChks, ourDeletedChks)
+	for _, chk := range deletedInOursButModifiedInTheirs {
+		conflicts = append(conflicts, ChkConflict{
+			Kind:   DeletedCheckCollision,
+			Theirs: chk,
+		})
+	}
+
+	// CONFLICT: deleted constraint in theirs that is modified in ours
+	theirDeletedChks := chkCollectionSetDifference(ancChks.AllChecks(), theirChks.AllChecks())
+	ourModifiedChks := chkCollectionModified(ancChks.AllChecks(), ourChks.AllChecks())
+	deletedInTheirsButModifiedInOurs := chkCollectionSetIntersection(ourModifiedChks, theirDeletedChks)
+	for _, chk := range deletedInTheirsButModifiedInOurs {
+		conflicts = append(conflicts, ChkConflict{
+			Kind: DeletedCheckCollision,
+			Ours: chk,
+		})
+	}
+
+	// There are conflicts, don't merge
+	if len(conflicts) > 0 {
+		return nil, conflicts, nil
+	}
+
+	// Create map to track names
+	var allChecks []schema.Check
+	allNames := make(map[string]bool)
+
+	// Combine all checks into one collection
+	for _, chk := range common {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			allChecks = append(allChecks, chk)
+		}
+	}
+	for _, chk := range ourNewChks {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			allChecks = append(allChecks, chk)
+		}
+	}
+	for _, chk := range theirNewChks {
+		if _, ok := allNames[chk.Name()]; !ok {
+			allNames[chk.Name()] = true
+			allChecks = append(allChecks, chk)
+		}
+	}
+
+	return allChecks, conflicts, nil
+}
+
+// isCheckReferenced determine if columns referenced in check are in schema
+func isCheckReferenced(sch schema.Schema, chk schema.Check) (bool, error) {
+	chkDef := sql.CheckDefinition{
+		Name:            chk.Name(),
+		CheckExpression: chk.Expression(),
+		Enforced:        chk.Enforced(),
+	}
+	colNames, err := sqle.ColumnsFromCheckDefinition(nil, &chkDef)
+	if err != nil {
+		return false, err
+	}
+
+	for _, col := range colNames {
+		_, ok := sch.GetAllCols().GetByName(col)
+		if !ok {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
