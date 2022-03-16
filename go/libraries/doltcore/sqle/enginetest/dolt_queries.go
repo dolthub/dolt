@@ -1109,12 +1109,6 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	// TODO: Add tests for:
 	//       - primary key changes (?)
 	//       - table delete and recreate
-	//       - branch/ref support (with diffs across branches)
-	//
-	// TODO: In the future:
-	//       - datetime support ?
-	//       - table function with an alias
-	//       - multiple table functions used together in same select statement
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
@@ -1209,6 +1203,53 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 					{1, "uno", "dos", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "diff with branch refs",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+
+			"insert into t values(1, 'one', 'two');",
+			"set @Commit2 = dolt_commit('-am', 'inserting row 1 into t in main');",
+
+			"select dolt_checkout('-b', 'branch1');",
+			"alter table t drop column c2;",
+			"set @Commit3 = dolt_commit('-am', 'dropping column c2 in branch1');",
+
+			"delete from t where pk=1;",
+			"set @Commit4 = dolt_commit('-am', 'deleting row 1 in branch1');",
+
+			"insert into t values (2, 'two');",
+			"set @Commit5 = dolt_commit('-am', 'inserting row 2 in branch1');",
+
+			"select dolt_checkout('main');",
+			"insert into t values (2, 'two', 'three');",
+			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', 'main', 'branch1');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", 2, "two", "three", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, diff_type from dolt_diff('t', 'branch1', 'main');",
+				Expected: []sql.Row{
+					{1, "one", "two", nil, nil, "added"},
+					{2, "two", "three", 2, "two", "modified"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', 'main~', 'branch1');",
+				Expected: []sql.Row{
+					{nil, nil, 1, "one", "two", "removed"},
+					{2, "two", nil, nil, nil, "added"},
 				},
 			},
 		},
@@ -1396,13 +1437,6 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 					{3, "three", nil, nil, nil, nil, "added"},
 					{4, "four", -4, nil, nil, nil, "added"},
 				},
-			},
-			{
-				Query:                           "SELECT * from dolt_diff('t', @Commit1, @Commit5);",
-				ExpectedWarning:                 1105,
-				ExpectedWarningsCount:           1,
-				ExpectedWarningMessageSubstring: "unable to coerce value from field '[c2]'",
-				SkipResultsCheck:                true,
 			},
 		},
 	},
