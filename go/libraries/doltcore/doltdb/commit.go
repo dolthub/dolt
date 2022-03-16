@@ -29,11 +29,11 @@ var errHasNoRootValue = errors.New("no root value")
 
 // Commit contains information on a commit that was written to noms
 type Commit struct {
-	vrw      types.ValueReadWriter
-	meta     *datas.CommitMeta
-	parents  []types.Ref
-	stref    types.Ref
-	root     *RootValue
+	vrw     types.ValueReadWriter
+	meta    *datas.CommitMeta
+	parents []types.Ref
+	stref   types.Ref
+	root    *RootValue
 }
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Value) (*Commit, error) {
