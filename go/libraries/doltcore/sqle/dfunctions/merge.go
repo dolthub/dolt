@@ -15,19 +15,11 @@
 package dfunctions
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 const MergeFuncName = "merge"
@@ -44,185 +36,9 @@ func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 }
 
 // Eval implements the Expression interface.
+// todo(andy): merge with DOLT_MERGE()
 func (cf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	sess := dsess.DSessFromSess(ctx.Session)
-
-	// TODO: Move to a separate MERGE argparser.
-	ap := cli.CreateCommitArgParser()
-	args, err := getDoltArgs(ctx, row, cf.Children())
-
-	if err != nil {
-		return nil, err
-	}
-
-	apr, err := ap.Parse(args)
-	if err != nil {
-		return nil, err
-	}
-
-	// The fist argument should be the branch name.
-	branchName := apr.Arg(0)
-
-	var name, email string
-	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
-		name, email, err = cli.ParseAuthor(authorStr)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		name = sess.Username()
-		email = sess.Email()
-	}
-
-	dbName := sess.GetCurrentDatabase()
-	ddb, ok := sess.GetDoltDB(ctx, dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	roots, ok := sess.GetRoots(ctx, dbName)
-	if !ok {
-		return nil, sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	head, hh, headRoot, err := getHead(ctx, sess, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	err = checkForUncommittedChanges(roots.Working, headRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	cm, cmh, err := getBranchCommit(ctx, branchName, ddb)
-	if err != nil {
-		return nil, err
-	}
-
-	// No need to write a merge commit, if the head can ffw to the commit coming from the branch.
-	canFF, err := head.CanFastForwardTo(ctx, cm)
-	if err != nil {
-		return nil, err
-	}
-
-	if canFF {
-		ancRoot, err := head.GetRootValue()
-		if err != nil {
-			return nil, err
-		}
-		mergedRoot, err := cm.GetRootValue()
-		if err != nil {
-			return nil, err
-		}
-		if cvPossible, err := merge.MayHaveConstraintViolations(ctx, ancRoot, mergedRoot); err != nil {
-			return nil, err
-		} else if !cvPossible {
-			return cmh.String(), nil
-		}
-	}
-
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
-	}
-
-	mergeRoot, _, err := merge.MergeCommits(ctx, head, cm, dbState.EditOpts())
-
-	if err != nil {
-		return nil, err
-	}
-
-	h, err := ddb.WriteRootValue(ctx, mergeRoot)
-	if err != nil {
-		return nil, err
-	}
-
-	commitMessage := fmt.Sprintf("SQL Generated commit merging %s into %s", hh.String(), cmh.String())
-	meta, err := datas.NewCommitMeta(name, email, commitMessage)
-	if err != nil {
-		return nil, err
-	}
-
-	mergeCommit, err := ddb.CommitDanglingWithParentCommits(ctx, h, []*doltdb.Commit{head, cm}, meta)
-	if err != nil {
-		return nil, err
-	}
-
-	h, err = mergeCommit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	return h.String(), nil
-}
-
-func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
-	rh, err := root.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	hrh, err := headRoot.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	if rh != hrh {
-		return ErrUncommittedChanges.New()
-	}
-	return nil
-}
-
-func getBranchCommit(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.Commit, hash.Hash, error) {
-	paramStr, ok := val.(string)
-
-	if !ok {
-		return nil, hash.Hash{}, errors.New("branch name is not a string")
-	}
-
-	branchRef, err := getBranchInsensitive(ctx, paramStr, ddb)
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	cm, err := ddb.ResolveCommitRef(ctx, branchRef)
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	cmh, err := cm.HashOf()
-
-	if err != nil {
-		return nil, hash.Hash{}, err
-	}
-
-	return cm, cmh, nil
-}
-
-func getHead(ctx *sql.Context, sess *dsess.DoltSession, dbName string) (*doltdb.Commit, hash.Hash, *doltdb.RootValue, error) {
-	head, err := sess.GetHeadCommit(ctx, dbName)
-	if err != nil {
-		return nil, hash.Hash{}, nil, err
-	}
-
-	hh, err := head.HashOf()
-	if err != nil {
-		return nil, hash.Hash{}, nil, err
-	}
-
-	headRoot, err := head.GetRootValue()
-	if err != nil {
-		return nil, hash.Hash{}, nil, err
-	}
-
-	return head, hh, headRoot, nil
+	return doDoltMerge(ctx, row, cf.Children())
 }
 
 // String implements the Stringer interface.

@@ -208,20 +208,16 @@ teardown() {
     dolt config --global --add user.email "joshn@doe.com"
 
     dolt init
-    dolt sql -q "
-    CREATE TABLE test (
-       pk int primary key
-    )"
+    dolt sql -q "CREATE TABLE test (pk int primary key)"
 
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
-    [ "$status" -eq 0 ]
+    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
 
     dolt config --global --add user.name "bats tester"
-    run dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
-    [ "$status" -eq 0 ]
+    dolt sql -q "INSERT INTO test VALUES (1);"
+    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
 }
 
 @test "config: DOLT_COMMIT uses default values when user.name or user.email is unset." {

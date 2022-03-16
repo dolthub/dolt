@@ -15,7 +15,6 @@
 package dsess
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -31,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type batchMode int8
@@ -180,7 +178,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return nil, err
 	}
 
-	if sessionState.readOnly && sessionState.detachedHead {
+	if sessionState.readOnly {
 		return DisabledTransaction{}, nil
 	}
 
@@ -623,7 +621,7 @@ func (sess *Session) SetWorkingSet(
 	}
 	sessionState.WorkingSet = ws
 
-	if headRoot == nil && !sessionState.detachedHead {
+	if headRoot == nil {
 		cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
 		if err != nil {
 			return err
@@ -795,56 +793,37 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	if isHead, dbName := IsHeadKey(key); isHead {
-		err := sess.setHeadSessionVar(ctx, value, dbName)
-		if err != nil {
-			return err
-		}
-
-		dbState, _, err := sess.LookupDbState(ctx, dbName)
-		if err != nil {
-			return err
-		}
-
-		dbState.detachedHead = true
-		return nil
-	}
-
-	if isHeadRef, dbName := IsHeadRefKey(key); isHeadRef {
-		valStr, isStr := value.(string)
-		if !isStr {
+	if ok, db := IsHeadRefKey(key); ok {
+		v, ok := value.(string)
+		if !ok {
 			return doltdb.ErrInvalidBranchOrHash
 		}
-
-		headRef, err := ref.Parse(valStr)
-		if err != nil {
+		if err := sess.setHeadRefSessionVar(ctx, db, v); err != nil {
 			return err
 		}
-
-		wsRef, err := ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return err
-		}
-
-		err = sess.SwitchWorkingSet(ctx, dbName, wsRef)
-		if err != nil {
-			return err
-		}
-
-		return sess.Session.SetSessionVariable(ctx, key, headRef.String())
 	}
-
-	if isWorking, dbName := IsWorkingKey(key); isWorking {
-		return sess.setWorkingSessionVar(ctx, value, dbName)
+	if IsReadOnlyVersionKey(key) {
+		return sql.ErrSystemVariableReadOnly.New(key)
 	}
-
-	// TODO: allow setting staged directly via var? seems like no
 
 	if strings.ToLower(key) == "foreign_key_checks" {
 		return sess.setForeignKeyChecksSessionVar(ctx, key, value)
 	}
 
 	return sess.Session.SetSessionVariable(ctx, key, value)
+}
+
+func (sess *Session) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
+	headRef, err := ref.Parse(value)
+	if err != nil {
+		return err
+	}
+
+	ws, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return err
+	}
+	return sess.SwitchWorkingSet(ctx, db, ws)
 }
 
 func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
@@ -875,78 +854,6 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	return sess.Session.SetSessionVariable(ctx, key, value)
 }
 
-func (sess *Session) setWorkingSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
-	valStr, isStr := value.(string) // valStr represents a root val hash
-	if !isStr || !hash.IsValid(valStr) {
-		return doltdb.ErrInvalidHash
-	}
-
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	root, err := dbState.dbData.Ddb.ReadRootValue(ctx, hash.Parse(valStr))
-	if errors.Is(doltdb.ErrNoRootValAtHash, err) {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	return sess.SetRoot(ctx, dbName, root)
-}
-
-func (sess *Session) setHeadSessionVar(ctx *sql.Context, value interface{}, dbName string) error {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrDatabaseNotFound.New(dbName)
-	}
-
-	valStr, isStr := value.(string)
-	if !isStr || !hash.IsValid(valStr) {
-		return doltdb.ErrInvalidHash
-	}
-
-	cs, err := doltdb.NewCommitSpec(valStr)
-	if err != nil {
-		return err
-	}
-
-	cm, err := dbState.dbData.Ddb.Resolve(ctx, cs, nil)
-	if err != nil {
-		return err
-	}
-
-	dbState.headCommit = cm
-
-	root, err := cm.GetRootValue()
-	if err != nil {
-		return err
-	}
-
-	dbState.headRoot = root
-
-	err = sess.Session.SetSessionVariable(ctx, HeadKey(dbName), value)
-	if err != nil {
-		return err
-	}
-
-	// TODO: preserve working set changes?
-	return sess.SetRoot(ctx, dbName, root)
-}
-
-// SetSessionVarDirectly directly updates sess.Session. This is useful in the context of the sql shell where
-// the working and head session variable may be updated at different times.
-func (sess *Session) SetSessionVarDirectly(ctx *sql.Context, key string, value interface{}) error {
-	return sess.Session.SetSessionVariable(ctx, key, value)
-}
-
 // HasDB returns true if |sess| is tracking state for this database.
 func (sess *Session) HasDB(ctx *sql.Context, dbName string) bool {
 	_, ok, err := sess.lookupDbState(ctx, dbName)
@@ -969,7 +876,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
-	sessionState.readOnly, sessionState.detachedHead, sessionState.readReplica = dbState.ReadOnly, dbState.DetachedHead, dbState.ReadReplica
+	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica
 
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	nbf := sessionState.dbData.Ddb.Format()
