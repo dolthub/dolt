@@ -42,26 +42,26 @@ type Commit struct {
 	parents  []types.Ref
 }
 
-func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
-	parents, err := readParents(vrw, commitSt)
+func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
+	parents, err := readParents(ctx, vrw, commitSt)
 	if err != nil {
 		return nil, err
 	}
 	return &Commit{vrw, commitSt, parents}, nil
 }
 
-func readParents(vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
+func readParents(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
 	if l, found, err := commitSt.MaybeGet(parentsListField); err != nil {
 		return nil, err
 	} else if found && l != nil {
 		l := l.(types.List)
 		parents := make([]types.Ref, 0, l.Len())
-		i, err := l.Iterator(context.TODO())
+		i, err := l.Iterator(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for {
-			v, err := i.Next(context.TODO())
+			v, err := i.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -77,12 +77,12 @@ func readParents(vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref,
 	} else if found && s != nil {
 		s := s.(types.Set)
 		parents := make([]types.Ref, 0, s.Len())
-		i, err := s.Iterator(context.TODO())
+		i, err := s.Iterator(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for {
-			v, err := i.Next(context.TODO())
+			v, err := i.Next(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -235,7 +235,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	}
 
 	ancestorSt := targetVal.(types.Struct)
-	return NewCommit(cm1.vrw, ancestorSt)
+	return NewCommit(ctx, cm1.vrw, ancestorSt)
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (types.Ref, error) {
@@ -297,7 +297,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 		return nil, err
 	}
 
-	return NewCommit(c.vrw, ancestorSt)
+	return NewCommit(ctx, c.vrw, ancestorSt)
 }
 
 func (c *Commit) DebugString(ctx context.Context) string {

@@ -41,7 +41,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commit, err := NewCommit(vrw, commitSt.(types.Struct))
+	commit, err := NewCommit(ctx, vrw, commitSt.(types.Struct))
 	if err != nil {
 		return nil, err
 	}

@@ -57,7 +57,7 @@ func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState ty
 		return nil, fmt.Errorf("corrupted MergeState struct")
 	}
 
-	commit, err := NewCommit(vrw, commitSt.(types.Struct))
+	commit, err := NewCommit(ctx, vrw, commitSt.(types.Struct))
 	if err != nil {
 		return nil, err
 	}

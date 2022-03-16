@@ -153,7 +153,7 @@ func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (
 	}
 
 	cmSt := val.(types.Struct)
-	return NewCommit(vrw, cmSt)
+	return NewCommit(ctx, vrw, cmSt)
 }
 
 // CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept
