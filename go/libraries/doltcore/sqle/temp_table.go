@@ -228,44 +228,34 @@ func (t *TempTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexN
 	return nil
 }
 
-func (t *TempTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+func (t *TempTable) GetForeignKeys(*sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	return nil, nil
 }
 
-func (t *TempTable) CreateForeignKey(
-	ctx *sql.Context,
-	fkName string,
-	columns []string,
-	referencedTable string,
-	referencedColumns []string,
-	onUpdate, onDelete sql.ForeignKeyReferenceOption,
-) error {
+func (t *TempTable) CreateForeignKey(*sql.Context, string, []string, string, []string, sql.ForeignKeyReferenceOption, sql.ForeignKeyReferenceOption) error {
 	return plan.ErrTemporaryTablesForeignKeySupport.New()
 }
-func (t *TempTable) DropForeignKey(
-	ctx *sql.Context,
-	fkName string,
-) error {
+func (t *TempTable) DropForeignKey(*sql.Context, string) error {
 	return plan.ErrTemporaryTablesForeignKeySupport.New()
 }
 
-func (t *TempTable) Inserter(ctx *sql.Context) sql.RowInserter {
+func (t *TempTable) Inserter(*sql.Context) sql.RowInserter {
 	return t
 }
 
-func (t *TempTable) Deleter(ctx *sql.Context) sql.RowDeleter {
+func (t *TempTable) Deleter(*sql.Context) sql.RowDeleter {
 	return t
 }
 
-func (t *TempTable) Replacer(ctx *sql.Context) sql.RowReplacer {
+func (t *TempTable) Replacer(*sql.Context) sql.RowReplacer {
 	return t
 }
 
-func (t *TempTable) Updater(ctx *sql.Context) sql.RowUpdater {
+func (t *TempTable) Updater(*sql.Context) sql.RowUpdater {
 	return t
 }
 
-func (t *TempTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
+func (t *TempTable) GetChecks(*sql.Context) ([]sql.CheckDefinition, error) {
 	return checksInSchema(t.sch), nil
 }
 
