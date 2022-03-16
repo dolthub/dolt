@@ -68,7 +68,11 @@ var _ WriteSession = &nomsWriteSession{}
 // table editors are returned.
 func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, opts editor.Options) WriteSession {
 	if types.IsFormat_DOLT_1(nbf) {
-		panic("unimplemented")
+		return &prollyWriteSession{
+			workingSet: ws,
+			tables:     make(map[string]*prollyTableWriter),
+			mut:        &sync.RWMutex{},
+		}
 	}
 
 	return &nomsWriteSession{
