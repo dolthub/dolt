@@ -225,12 +225,14 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 
 	si.pkOrdinals = o
 	newPks := make([]Column, si.pkCols.Size())
+	newPkTags := make([]uint64, si.pkCols.Size())
 	for i, j := range si.pkOrdinals {
-		newPks[i] = si.allCols.GetByIndex(j)
+		pkCol := si.allCols.GetByIndex(j)
+		newPks[i] = pkCol
+		newPkTags[i] = pkCol.Tag
 	}
 	si.pkCols = NewColCollection(newPks...)
-
-	return nil
+	return si.indexCollection.SetPks(newPkTags)
 }
 
 func (si *schemaImpl) String() string {

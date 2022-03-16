@@ -110,11 +110,11 @@ func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName st
 		}
 	}
 
-	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 	err = newSchema.SetPkOrdinals(pkOrdinals)
 	if err != nil {
 		return nil, err
 	}
+	newSchema.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
 
 	// Rebuild all of the indexes now that the primary key has been changed
 	return insertKeyedData(ctx, nbf, table, newSchema, tableName, opts)
