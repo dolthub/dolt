@@ -221,7 +221,8 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 		return err
 	}
 
-	return te.sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	return te.sess.UpdateWorkingSet(ctx, func(ctx context.Context, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+		root := ws.WorkingRoot()
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return nil, err
@@ -232,7 +233,7 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 				root = newRoot
 			}
 		}
-		return root, nil
+		return ws.WithWorkingRoot(root), nil
 	})
 }
 

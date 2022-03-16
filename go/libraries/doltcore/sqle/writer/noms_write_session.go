@@ -34,9 +34,9 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx context.Context, table, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
 
-	// UpdateRoot takes a callback to update this WriteSession's root. WriteSession flushes
+	// UpdateWorkingSet takes a callback to update this WriteSession's root. WriteSession flushes
 	// the pending writes in the session before calling the callback.
-	UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error
+	UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error
 
 	// SetWorkingSet sets the root for the WriteSession.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
@@ -135,10 +135,8 @@ func (s *nomsWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.Working
 	return s.setWorkingSet(ctx, ws)
 }
 
-// UpdateRoot takes in a function meant to update the root (whether that be updating a table's schema, adding a foreign
-// key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
-// (assuming no errors). The nomsWriteSession will update itself in accordance with the newly returned root.
-func (s *nomsWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error {
+// UpdateWorkingSet implements WriteSession.
+func (s *nomsWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
 	s.writeMutex.Lock()
 	defer s.writeMutex.Unlock()
 
@@ -147,12 +145,13 @@ func (s *nomsWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context.C
 		return err
 	}
 
-	mutated, err := cb(ctx, current)
+	mutated, err := cb(ctx, s.workingSet.WithWorkingRoot(current))
 	if err != nil {
 		return err
 	}
+	s.workingSet = mutated
 
-	return s.setWorkingSet(ctx, s.workingSet.WithWorkingRoot(mutated))
+	return s.setWorkingSet(ctx, s.workingSet)
 }
 
 func (s *nomsWriteSession) GetOptions() editor.Options {
