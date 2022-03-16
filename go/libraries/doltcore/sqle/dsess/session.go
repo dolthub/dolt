@@ -162,12 +162,12 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.WriteSession.Flush(ctx)
+	ws, err := dbState.WriteSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	return sess.SetRoot(ctx, dbName, newRoot)
+	return sess.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
 // CommitTransaction commits the in-progress transaction for the database named

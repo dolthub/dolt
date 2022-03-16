@@ -93,25 +93,20 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 }
 
 // Flush implemented WriteSession.
-func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, error) {
+func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	ws, err := s.flush(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return ws.WorkingRoot(), nil
+	return s.flush(ctx)
 }
 
-// SetRoot implemented WriteSession.
+// SetWorkingSet implements WriteSession.
 func (s *prollyWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 	return s.setWorkingSet(ctx, ws)
 }
 
-// UpdateRoot implemented WriteSession.
+// UpdateWorkingSet implements WriteSession.
 func (s *prollyWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()

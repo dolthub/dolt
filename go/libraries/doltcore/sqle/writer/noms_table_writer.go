@@ -207,12 +207,11 @@ func (te *nomsTableWriter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (te *nomsTableWriter) flush(ctx *sql.Context) error {
-	newRoot, err := te.sess.Flush(ctx)
+	ws, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
-
-	return te.setter(ctx, te.dbName, newRoot)
+	return te.setter(ctx, te.dbName, ws.WorkingRoot())
 }
 
 func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {

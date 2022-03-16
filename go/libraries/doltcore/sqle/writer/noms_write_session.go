@@ -42,7 +42,7 @@ type WriteSession interface {
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
 	// Flush flushes the pending writes in the session.
-	Flush(ctx context.Context) (*doltdb.RootValue, error)
+	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
@@ -121,7 +121,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table string, dat
 }
 
 // Flush returns an updated root with all of the changed tables.
-func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, error) {
+func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
 	s.writeMutex.Lock()
 	defer s.writeMutex.Unlock()
 
@@ -145,7 +145,7 @@ func (s *nomsWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx con
 		return err
 	}
 
-	mutated, err := cb(ctx, s.workingSet.WithWorkingRoot(current))
+	mutated, err := cb(ctx, current)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (s *nomsWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.RootValue, error) {
+func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error) {
 	rootMutex := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 	wg.Add(len(s.tables))
@@ -205,7 +205,7 @@ func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.RootValue, error)
 	}
 	s.workingSet = s.workingSet.WithWorkingRoot(newRoot)
 
-	return newRoot, nil
+	return s.workingSet, nil
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
