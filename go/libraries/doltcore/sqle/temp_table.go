@@ -16,12 +16,12 @@ package sqle
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -240,13 +240,13 @@ func (t *TempTable) CreateForeignKey(
 	referencedColumns []string,
 	onUpdate, onDelete sql.ForeignKeyReferenceOption,
 ) error {
-	return errors.New("temporary tables do not support foreign keys")
+	return plan.ErrTemporaryTablesForeignKeySupport.New()
 }
 func (t *TempTable) DropForeignKey(
 	ctx *sql.Context,
 	fkName string,
 ) error {
-	return errors.New("temporary tables do not support foreign keys")
+	return plan.ErrTemporaryTablesForeignKeySupport.New()
 }
 
 func (t *TempTable) Inserter(ctx *sql.Context) sql.RowInserter {
