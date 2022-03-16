@@ -102,11 +102,10 @@ func (s *prollyWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, erro
 }
 
 // SetRoot implemented WriteSession.
-func (s *prollyWriteSession) SetRoot(ctx context.Context, root *doltdb.RootValue) error {
+func (s *prollyWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	return s.setRoot(ctx, root)
+	panic("unimplemented")
 }
 
 // UpdateRoot implemented WriteSession.

@@ -582,7 +582,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.WriteSession.SetRoot(ctx, newRoot)
+	err = sessionState.WriteSession.SetWorkingSet(ctx, sessionState.WorkingSet)
 	if err != nil {
 		return err
 	}
