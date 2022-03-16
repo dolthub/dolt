@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type batchMode int8
@@ -770,20 +769,17 @@ func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Com
 // SetSessionVariable is defined on sql.Session. We intercept it here to interpret the special semantics of the system
 // vars that we define. Otherwise we pass it on to the base implementation.
 func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value interface{}) error {
-	if IsVersionKey(key) {
-		valStr, ok := value.(string)
+	if ok, db := IsHeadRefKey(key); ok {
+		v, ok := value.(string)
 		if !ok {
 			return doltdb.ErrInvalidBranchOrHash
 		}
-
-		wsRef, dbName, err := sess.resolveVersionKey(ctx, key, valStr)
-		if err != nil {
+		if err := sess.setHeadRefSessionVar(ctx, db, v); err != nil {
 			return err
 		}
-
-		if err = sess.SwitchWorkingSet(ctx, dbName, wsRef); err != nil {
-			return err
-		}
+	}
+	if IsReadOnlyVersionKey(key) {
+		return sql.ErrSystemVariableReadOnly.New(key)
 	}
 
 	if strings.ToLower(key) == "foreign_key_checks" {
@@ -791,6 +787,19 @@ func (sess *Session) SetSessionVariable(ctx *sql.Context, key string, value inte
 	}
 
 	return sess.Session.SetSessionVariable(ctx, key, value)
+}
+
+func (sess *Session) setHeadRefSessionVar(ctx *sql.Context, db, value string) error {
+	headRef, err := ref.Parse(value)
+	if err != nil {
+		return err
+	}
+
+	ws, err := ref.WorkingSetRefForHead(headRef)
+	if err != nil {
+		return err
+	}
+	return sess.SwitchWorkingSet(ctx, db, ws)
 }
 
 func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string, value interface{}) error {
@@ -819,84 +828,6 @@ func (sess *Session) setForeignKeyChecksSessionVar(ctx *sql.Context, key string,
 	}
 
 	return sess.Session.SetSessionVariable(ctx, key, value)
-}
-
-func (sess *Session) resolveVersionKey(ctx *sql.Context, key, value string) (ws ref.WorkingSetRef, db string, err error) {
-	var keyType string
-	var ok bool
-
-	if ok, db = IsHeadKey(key); ok {
-		keyType = HeadKeySuffix
-	} else if ok, db = IsHeadRefKey(key); ok {
-		keyType = HeadRefKeySuffix
-	} else if ok, db = IsWorkingKey(key); ok {
-		keyType = WorkingKeySuffix
-	}
-	if !ok {
-		return ws, db, fmt.Errorf("could not resolve version key %s", keyType)
-	}
-
-	ddb, ok := sess.GetDoltDB(ctx, db)
-	if !ok {
-		return ws, db, sql.ErrDatabaseNotFound.New(db)
-	}
-
-	switch keyType {
-	case WorkingKeySuffix:
-		// look for a working set with this hash
-		if !hash.IsValid(value) {
-			return ws, db, doltdb.ErrInvalidHash
-		}
-		ws, err = doltdb.ResolveWorkingSetFromHash(ctx, ddb, hash.Parse(value))
-		if err != nil {
-			return ws, db, err
-		}
-		return ws, db, nil
-
-	case HeadRefKeySuffix:
-		// find the working set for the given branch
-		headRef, err := ref.Parse(value)
-		if err != nil {
-			return ws, db, err
-		}
-		ws, err = ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return ws, db, err
-		}
-		return ws, db, nil
-
-	case HeadKeySuffix:
-		// resolve a commit
-		cs, err := doltdb.NewCommitSpec(value)
-		if err != nil {
-			return ws, db, err
-		}
-
-		cwb, err := sess.CWBHeadRef(ctx, db)
-		if err != nil {
-			return ws, db, err
-		}
-
-		cm, err := ddb.Resolve(ctx, cs, cwb)
-		if err != nil {
-			return ws, db, err
-		}
-
-		// look for a branch corresponding to the commit
-		headRef, err := doltdb.ResolveBranchFromHeadCommit(ctx, ddb, cm)
-		if err != nil {
-			return ws, db, err
-		}
-		// look for a working set for the given branch
-		ws, err = ref.WorkingSetRefForHead(headRef)
-		if err != nil {
-			return ws, db, err
-		}
-		return ws, db, nil
-
-	default:
-		panic(fmt.Errorf("could not resolve version key %s", keyType))
-	}
 }
 
 // HasDB returns true if |sess| is tracking state for this database.

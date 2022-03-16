@@ -213,11 +213,11 @@ teardown() {
     dolt config --global --unset user.name
     dolt config --global --unset user.email
 
-    dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
+    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
 
     dolt config --global --add user.name "bats tester"
     dolt sql -q "INSERT INTO test VALUES (1);"
-    dolt sql -q "SET @@dolt_repo_$$_head = COMMIT('-a', '-m', 'updated stuff')"
+    dolt sql -q "SELECT COMMIT('-a', '-m', 'updated stuff')"
 }
 
 @test "config: DOLT_COMMIT uses default values when user.name or user.email is unset." {

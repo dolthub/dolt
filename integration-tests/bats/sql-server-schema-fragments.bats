@@ -41,11 +41,11 @@ teardown() {
 
     server_query repo1 0 "SELECT * FROM query_values" ""
     server_query repo1 0 "
-    SET @@repo1_head=hashof('values_has_one');
+    SET @@repo1_head_ref = 'values_has_one';
     SELECT * FROM query_values;
-    SET @@repo1_head=hashof('values_has_two');
+    SET @@repo1_head_ref = 'values_has_two';
     SELECT * FROM query_values;
-    SET @@repo1_head=hashof('main');
+    SET @@repo1_head_ref = 'main';
     SELECT * FROM query_values;
     " ";id\n1;;id\n2;;id"
 }
@@ -63,7 +63,7 @@ teardown() {
     start_sql_server repo1
 
     server_query repo1 0 "
-    SET @@repo1_head=hashof('with_view');
+    SET @@repo1_head_ref = 'with_view';
     SELECT * FROM a_view;
     " ";47\n47"
 }
@@ -80,7 +80,7 @@ teardown() {
     start_sql_server repo1
 
     server_query repo1 0 "
-    SET @@repo1_head=hashof('no_view');
+    SET @@repo1_head_ref = 'no_view';
     SELECT * FROM information_schema.views
     " ";"
 }
