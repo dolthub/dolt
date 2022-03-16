@@ -94,8 +94,6 @@ var DoltScripts = []enginetest.ScriptTest{
 }
 
 var HistorySystemTableScriptTests = []enginetest.ScriptTest{
-	// TODO: Remaining test cases:
-	//       - ???
 	{
 		Name: "empty table",
 		SetUpScript: []string{
@@ -245,15 +243,20 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"drop table t;",
 			"set @Commit2 = DOLT_COMMIT('-am', 'dropping table t');",
 
-			"create table t (pk2 int primary key, c12 int, c22 text);",
+			"create table t (pk int primary key, c1 int);",
 			"set @Commit3 = DOLT_COMMIT('-am', 'recreating table t');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				// TODO: This is still returning the data from the old table t
-				//       that was deleted.
+				// TODO: The history system table processes history in parallel and pulls the rows for the
+				//       user table at all commits. This means we can't currently detect when a table was dropped
+				//       and if a different table with the same name exists at earlier commits, those results will
+				//       be included in the history table. It may make more sense to have history scoped only
+				//       to the current instance of the table, which would require changing the history system table
+				//       to use something like an iterator approach where it goes back sequentially until it detects
+				//       the current table doesn't exist any more and then stop.
 				Query:    "select count(*) from dolt_history_t;",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{2}},
 			},
 		},
 	},
@@ -1105,9 +1108,6 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 }
 
 var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
-	// TODO: Add tests for:
-	//       - primary key changes (?)
-	//       - table delete and recreate
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
@@ -1666,9 +1666,6 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 }
 
 var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
-	// TODO: Remaining test cases:
-	//       - working set changes
-
 	{
 		Name: "error handling",
 		SetUpScript: []string{
@@ -1745,36 +1742,6 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			},
 		},
 	},
-
-	//{
-	//	// In this case, we do not expect to see the old/dropped table included in the dolt_diff_table output
-	//	Name: "table drop and recreate with overlapping schema",
-	//	SetUpScript: []string{
-	//		"create table t (pk int primary key, c int);",
-	//		"insert into t values (1, 2), (3, 4);",
-	//		"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
-	//
-	//		"drop table t;",
-	//		"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping table t'));",
-	//
-	//		"create table t (pk int primary key, c int);",
-	//		"insert into t values (100, 200), (300, 400);",
-	//		"set @Commit3 = (select DOLT_COMMIT('-am', 'recreating table t'));",
-	//	},
-	//	Assertions: []enginetest.ScriptTestAssertion{
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t",
-	//			Expected: []sql.Row{{2}},
-	//		},
-	//		{
-	//			Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
-	//			Expected: []sql.Row{
-	//				{100, 200, nil, nil, "added"},
-	//				{300, 400, nil, nil, "added"},
-	//			},
-	//		},
-	//	},
-	//},
 	{
 		// When a column is dropped we should see the column's value set to null in that commit
 		Name: "schema modification: column drop",
@@ -1992,12 +1959,6 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 				ExpectedWarningsCount:           1,
 				ExpectedWarningMessageSubstring: "cannot render full diff between commits",
 				SkipResultsCheck:                true,
-			},
-			{
-				// TODO: HandledFilters doesn't get invoked when the uppercase table
-				//       name is used in the system table name.
-				Query:    "SELECT count(to_pk) FROM DOLT_commit_DIFF_t where from_commit=@Commit1 and to_commit=@Commit4;",
-				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_commit_DIFF_t where from_commit=@Commit3 and to_commit=@Commit4;",

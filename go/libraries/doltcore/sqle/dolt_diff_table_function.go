@@ -202,24 +202,7 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 
 // CheckPrivileges implements the sql.Node interface
 func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	// TODO: We need to check the privileges for the underlying table
-
-	// TODO: Add tests for privileges
-
-	//sqledb, ok := dtf.database.(Database)
-	//if !ok {
-	//	panic("unable to get dolt database")
-	//}
-	//ddb := sqledb.GetDoltDB()
-	//
-	//table, ok, err := sqledb.GetTableInsensitive(ctx, dtf.tableName)
-	//if err != nil {
-	//	return false
-	//}
-	//if !ok {
-	//	return false
-	//}
-
+	// TODO: Implement priv check on underlying table
 	return true
 }
 
