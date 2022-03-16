@@ -264,6 +264,43 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 	return types.Ref{}, false, nil
 }
 
+// GetCommitParents returns |Ref|s to the parents of the commit.
+func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitParents: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitParents: provided value is not a commit.")
+	}
+	var ret []types.Ref
+	ps, ok, err := c.MaybeGet(ParentsListField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		p := ps.(types.List)
+		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
+			ret = append(ret, v.(types.Ref))
+			return nil
+		})
+		return ret, err
+	}
+	ps, ok, err = c.MaybeGet(ParentsField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		p := ps.(types.Set)
+		err = p.IterAll(ctx, func(v types.Value) error {
+			ret = append(ret, v.(types.Ref))
+			return nil
+		})
+		return ret, err
+	}
+	return ret, nil
+}
+
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
@@ -280,41 +317,12 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 			return fmt.Errorf("target not found: %v", r.TargetHash())
 		}
 
-		c, ok := v.(types.Struct)
-		if !ok {
-			return fmt.Errorf("target ref is not struct: %v", v)
-		}
-		if c.Name() != CommitName {
-			return fmt.Errorf("target ref is not commit: %v", v)
-		}
-		ps, ok, err := c.MaybeGet(ParentsListField)
+		parents, err := GetCommitParents(ctx, v)
 		if err != nil {
 			return err
 		}
-		if ok {
-			p := ps.(types.List)
-			err = p.Iter(ctx, func(v types.Value, _ uint64) (stop bool, err error) {
-				heap.Push(q, v)
-				return
-			})
-			if err != nil {
-				return err
-			}
-		} else {
-			ps, ok, err := c.MaybeGet(ParentsField)
-			if err != nil {
-				return err
-			}
-			if ok {
-				p := ps.(types.Set)
-				err = p.Iter(ctx, func(v types.Value) (stop bool, err error) {
-					heap.Push(q, v)
-					return
-				})
-				if err != nil {
-					return err
-				}
-			}
+		for _, r := range parents {
+			heap.Push(q, r)
 		}
 	}
 

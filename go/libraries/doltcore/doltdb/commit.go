@@ -43,57 +43,11 @@ type Commit struct {
 }
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
-	parents, err := readParents(ctx, vrw, commitSt)
+	parents, err := datas.GetCommitParents(ctx, commitSt)
 	if err != nil {
 		return nil, err
 	}
 	return &Commit{vrw, commitSt, parents}, nil
-}
-
-func readParents(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
-	if l, found, err := commitSt.MaybeGet(parentsListField); err != nil {
-		return nil, err
-	} else if found && l != nil {
-		l := l.(types.List)
-		parents := make([]types.Ref, 0, l.Len())
-		i, err := l.Iterator(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			v, err := i.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if v == nil {
-				break
-			}
-			parents = append(parents, v.(types.Ref))
-		}
-		return parents, nil
-	}
-	if s, found, err := commitSt.MaybeGet(parentsField); err != nil {
-		return nil, err
-	} else if found && s != nil {
-		s := s.(types.Set)
-		parents := make([]types.Ref, 0, s.Len())
-		i, err := s.Iterator(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for {
-			v, err := i.Next(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if v == nil {
-				break
-			}
-			parents = append(parents, v.(types.Ref))
-		}
-		return parents, nil
-	}
-	return nil, nil
 }
 
 // HashOf returns the hash of the commit
