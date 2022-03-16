@@ -24,36 +24,45 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	rootValueField   = datas.ValueField
-)
-
 var errCommitHasNoMeta = errors.New("commit has no metadata")
 var errHasNoRootValue = errors.New("no root value")
 
 // Commit contains information on a commit that was written to noms
 type Commit struct {
 	vrw      types.ValueReadWriter
-	commitSt types.Struct
 	meta     *datas.CommitMeta
 	parents  []types.Ref
 	stref    types.Ref
+	root     *RootValue
 }
 
-func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
-	parents, err := datas.GetCommitParents(ctx, commitSt)
+func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Value) (*Commit, error) {
+	parents, err := datas.GetCommitParents(ctx, commitV)
 	if err != nil {
 		return nil, err
 	}
-	meta, err := datas.GetCommitMeta(ctx, commitSt)
+	meta, err := datas.GetCommitMeta(ctx, commitV)
 	if err != nil {
 		meta = nil
 	}
-	stref, err := types.NewRef(commitSt, vrw.Format())
+	cref, err := types.NewRef(commitV, vrw.Format())
 	if err != nil {
 		return nil, err
 	}
-	return &Commit{vrw, commitSt, meta, parents, stref}, nil
+	var root *RootValue
+	rootVal, err := datas.GetCommitValue(ctx, commitV)
+	if err != nil {
+		return nil, err
+	}
+	if rootVal != nil {
+		if rootSt, ok := rootVal.(types.Struct); ok {
+			root, err = newRootValue(vrw, rootSt)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return &Commit{vrw, meta, parents, cref, root}, nil
 }
 
 // HashOf returns the hash of the commit
@@ -94,19 +103,10 @@ func (c *Commit) Height() (uint64, error) {
 
 // GetRootValue gets the RootValue of the commit.
 func (c *Commit) GetRootValue() (*RootValue, error) {
-	rootVal, _, err := c.commitSt.MaybeGet(rootValueField)
-
-	if err != nil {
-		return nil, err
+	if c.root == nil {
+		return nil, errHasNoRootValue
 	}
-
-	if rootVal != nil {
-		if rootSt, ok := rootVal.(types.Struct); ok {
-			return newRootValue(c.vrw, rootSt)
-		}
-	}
-
-	return nil, errHasNoRootValue
+	return c.root, nil
 }
 
 // GetStRef returns a Noms Ref for this Commit's Noms commit Struct.
@@ -120,7 +120,7 @@ func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ctx, c.vrw, v.(types.Struct))
+	return NewCommit(ctx, c.vrw, v)
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")

@@ -450,7 +450,7 @@ func (ddb *DoltDB) FastForward(ctx context.Context, branch ref.DoltRef, commit *
 		return err
 	}
 
-	addr, err := commit.commitSt.Hash(ddb.Format())
+	addr, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
@@ -477,14 +477,12 @@ func (ddb *DoltDB) CanFastForward(ctx context.Context, branch ref.DoltRef, new *
 
 // SetHeadToCommit sets the given ref to point at the given commit. It is used in the course of 'force' updates.
 func (ddb *DoltDB) SetHeadToCommit(ctx context.Context, ref ref.DoltRef, cm *Commit) error {
-
-	stRef, err := types.NewRef(cm.commitSt, ddb.vrw.Format())
-
+	addr, err := cm.HashOf()
 	if err != nil {
 		return err
 	}
 
-	return ddb.SetHead(ctx, ref, stRef.TargetHash())
+	return ddb.SetHead(ctx, ref, addr)
 }
 
 func (ddb *DoltDB) SetHead(ctx context.Context, ref ref.DoltRef, addr hash.Hash) error {
@@ -540,12 +538,11 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 
 	for _, cm := range parentCommits {
-		rf, err := types.NewRef(cm.commitSt, ddb.vrw.Format())
+		addr, err := cm.HashOf()
 		if err != nil {
 			return nil, err
 		}
-
-		parents = append(parents, rf.TargetHash())
+		parents = append(parents, addr)
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
@@ -583,11 +580,11 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 
 	var parents []hash.Hash
 	for _, cm := range parentCommits {
-		rf, err := types.NewRef(cm.commitSt, ddb.vrw.Format())
+		addr, err := cm.HashOf()
 		if err != nil {
 			return nil, err
 		}
-		parents = append(parents, rf.TargetHash())
+		parents = append(parents, addr)
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
@@ -806,7 +803,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 		return err
 	}
 
-	addr, err := commit.commitSt.Hash(ddb.Format())
+	addr, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
@@ -921,7 +918,7 @@ func (ddb *DoltDB) NewTagAtCommit(ctx context.Context, tagRef ref.DoltRef, c *Co
 		return fmt.Errorf("dataset already exists for tag %s", tagRef.String())
 	}
 
-	commitAddr, err := c.commitSt.Hash(ddb.Format())
+	commitAddr, err := c.HashOf()
 	if err != nil {
 		return err
 	}
@@ -1037,7 +1034,7 @@ func (ddb *DoltDB) NewWorkspaceAtCommit(ctx context.Context, workRef ref.DoltRef
 		return err
 	}
 
-	addr, err := c.commitSt.Hash(ddb.Format())
+	addr, err := c.HashOf()
 	if err != nil {
 		return err
 	}

@@ -326,6 +326,18 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	return nil, nil
 }
 
+func GetCommitValue(ctx context.Context, cv types.Value) (types.Value, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+	}
+	v, _, err := c.MaybeGet(ValueField)
+	return v, err
+}
+
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
