@@ -15,7 +15,6 @@
 package doltdb
 
 import (
-	"bytes"
 	"context"
 	"errors"
 
@@ -38,6 +37,7 @@ type Commit struct {
 	commitSt types.Struct
 	meta     *datas.CommitMeta
 	parents  []types.Ref
+	stref    types.Ref
 }
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
@@ -49,12 +49,16 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.St
 	if err != nil {
 		meta = nil
 	}
-	return &Commit{vrw, commitSt, meta, parents}, nil
+	stref, err := types.NewRef(commitSt, vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	return &Commit{vrw, commitSt, meta, parents, stref}, nil
 }
 
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() (hash.Hash, error) {
-	return c.commitSt.Hash(c.vrw.Format())
+	return c.stref.TargetHash(), nil
 }
 
 // GetCommitMeta gets the metadata associated with the commit
@@ -85,37 +89,7 @@ func (c *Commit) NumParents() (int, error) {
 }
 
 func (c *Commit) Height() (uint64, error) {
-	maxHeight, err := maxChunkHeight(c.commitSt, c.vrw.Format())
-	if err != nil {
-		return 0, err
-	}
-	return maxHeight + 1, nil
-}
-
-func maxChunkHeight(v types.Value, nbf *types.NomsBinFormat) (max uint64, err error) {
-	err = v.WalkRefs(nbf, func(r types.Ref) error {
-		if height := r.Height(); height > max {
-			max = height
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return 0, err
-	}
-
-	return max, nil
-}
-
-func (c *Commit) getParent(ctx context.Context, idx int) (*types.Struct, error) {
-	parentRef := c.parents[idx]
-	targVal, err := parentRef.TargetValue(ctx, c.vrw)
-	if err != nil {
-		return nil, err
-	}
-	parentSt := targVal.(types.Struct)
-	return &parentSt, nil
+	return c.stref.Height(), nil
 }
 
 // GetRootValue gets the RootValue of the commit.
@@ -137,20 +111,27 @@ func (c *Commit) GetRootValue() (*RootValue, error) {
 
 // GetStRef returns a Noms Ref for this Commit's Noms commit Struct.
 func (c *Commit) GetStRef() (types.Ref, error) {
-	return types.NewRef(c.commitSt, c.vrw.Format())
+	return c.stref, nil
+}
+
+func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
+	ref := c.parents[idx]
+	v, err := ref.TargetValue(ctx, c.vrw)
+	if err != nil {
+		return nil, err
+	}
+	return NewCommit(ctx, c.vrw, v.(types.Struct))
 }
 
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	ref1, err := types.NewRef(cm1.commitSt, cm1.vrw.Format())
-
+	ref1, err := cm1.GetStRef()
 	if err != nil {
 		return nil, err
 	}
 
-	ref2, err := types.NewRef(cm2.commitSt, cm2.vrw.Format())
-
+	ref2, err := cm2.GetStRef()
 	if err != nil {
 		return nil, err
 	}
@@ -192,12 +173,12 @@ func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(c.commitSt) {
-		if ancestor.commitSt.Equals(new.commitSt) {
+	} else if ancestor.stref.Equals(c.stref) {
+		if ancestor.stref.Equals(new.stref) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(new.commitSt) {
+	} else if ancestor.stref.Equals(new.stref) {
 		return false, ErrIsAhead
 	}
 
@@ -211,12 +192,12 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 		return false, err
 	} else if ancestor == nil {
 		return false, errors.New("cannot perform fast forward merge; commits have no common ancestor")
-	} else if ancestor.commitSt.Equals(new.commitSt) {
-		if ancestor.commitSt.Equals(c.commitSt) {
+	} else if ancestor.stref.Equals(new.stref) {
+		if ancestor.stref.Equals(c.stref) {
 			return true, ErrUpToDate
 		}
 		return true, nil
-	} else if ancestor.commitSt.Equals(c.commitSt) {
+	} else if ancestor.stref.Equals(c.stref) {
 		return false, ErrIsBehind
 	}
 
@@ -224,22 +205,32 @@ func (c *Commit) CanFastReverseTo(ctx context.Context, new *Commit) (bool, error
 }
 
 func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, error) {
-	ancestorSt, err := getAncestor(ctx, c.vrw, c.commitSt, as)
-
-	if err != nil {
-		return nil, err
+	if as == nil || len(as.Instructions) == 0 {
+		return c, nil
 	}
 
-	return NewCommit(ctx, c.vrw, ancestorSt)
-}
+	cur := c
 
-func (c *Commit) DebugString(ctx context.Context) string {
-	var buf bytes.Buffer
-	err := types.WriteEncodedValue(ctx, &buf, c.commitSt)
-	if err != nil {
-		panic(err)
+	instructions := as.Instructions
+	for _, inst := range instructions {
+		n, err := c.NumParents()
+		if err != nil {
+			return nil, err
+		}
+		if inst > n {
+			return nil, ErrInvalidAncestorSpec
+		}
+
+		cur, err = c.GetParent(ctx, inst)
+		if err != nil {
+			return nil, err
+		}
+		if cur == nil {
+			return nil, ErrInvalidAncestorSpec
+		}
 	}
-	return buf.String()
+
+	return cur, nil
 }
 
 // PendingCommit represents a commit that hasn't yet been written to storage. It contains a root value and options to
@@ -282,11 +273,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	}
 
 	for _, pc := range parentCommits {
-		rf, err := types.NewRef(pc.commitSt, ddb.vrw.Format())
-		if err != nil {
-			return nil, err
-		}
-		parents = append(parents, rf.TargetHash())
+		parents = append(parents, pc.stref.TargetHash())
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}

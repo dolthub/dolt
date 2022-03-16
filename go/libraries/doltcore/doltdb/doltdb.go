@@ -260,43 +260,6 @@ func getCommitStForHash(ctx context.Context, vr types.ValueReader, c string) (ty
 	return valSt, nil
 }
 
-func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.Struct, aSpec *AncestorSpec) (types.Struct, error) {
-	if aSpec == nil || len(aSpec.Instructions) == 0 {
-		return commitSt, nil
-	}
-
-	instructions := aSpec.Instructions
-	for _, inst := range instructions {
-		cm, err := NewCommit(ctx, vrw, commitSt)
-		if (err != nil) {
-			return types.Struct{}, err
-		}
-
-		numPars, err := cm.NumParents()
-
-		if err != nil {
-			return types.EmptyStruct(vrw.Format()), err
-		}
-
-		if inst < numPars {
-			commitStPtr, err := cm.getParent(ctx, inst)
-
-			if err != nil {
-				return types.EmptyStruct(vrw.Format()), err
-			}
-
-			if commitStPtr == nil {
-				return types.EmptyStruct(vrw.Format()), ErrInvalidAncestorSpec
-			}
-			commitSt = *commitStPtr
-		} else {
-			return types.EmptyStruct(vrw.Format()), ErrInvalidAncestorSpec
-		}
-	}
-
-	return commitSt, nil
-}
-
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
 // modify the working set. This struct is designed to be passed by value always: functions should take a Roots as a
 // param and return a modified one.
@@ -368,13 +331,11 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
-	commitSt, err = getAncestor(ctx, ddb.vrw, commitSt, cs.aSpec)
-
+	commit, err := NewCommit(ctx, ddb.vrw, commitSt)
 	if err != nil {
 		return nil, err
 	}
-
-	return NewCommit(ctx, ddb.vrw, commitSt)
+	return commit.GetAncestor(ctx, cs.aSpec)
 }
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
@@ -680,11 +641,7 @@ func WriteValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types
 // non-nil in the case that the commit cannot be resolved, there aren't as many ancestors as requested, or the
 // underlying storage cannot be accessed.
 func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx int) (*Commit, error) {
-	parentCommitSt, err := commit.getParent(ctx, parentIdx)
-	if err != nil {
-		return nil, err
-	}
-	return NewCommit(ctx, ddb.ValueReadWriter(), *parentCommitSt)
+	return commit.GetParent(ctx, parentIdx)
 }
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
