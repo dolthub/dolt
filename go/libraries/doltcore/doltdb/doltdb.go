@@ -267,7 +267,10 @@ func getAncestor(ctx context.Context, vrw types.ValueReadWriter, commitSt types.
 
 	instructions := aSpec.Instructions
 	for _, inst := range instructions {
-		cm := NewCommit(vrw, commitSt)
+		cm, err := NewCommit(vrw, commitSt)
+		if (err != nil) {
+			return types.Struct{}, err
+		}
 
 		numPars, err := cm.NumParents()
 
@@ -371,7 +374,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		return nil, err
 	}
 
-	return NewCommit(ddb.vrw, commitSt), nil
+	return NewCommit(ddb.vrw, commitSt)
 }
 
 // ResolveCommitRef takes a DoltRef and returns a Commit, or an error if the commit cannot be found. The ref given must
@@ -381,7 +384,7 @@ func (ddb *DoltDB) ResolveCommitRef(ctx context.Context, ref ref.DoltRef) (*Comm
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ddb.vrw, commitSt), nil
+	return NewCommit(ddb.vrw, commitSt)
 }
 
 // ResolveTag takes a TagRef and returns the corresponding Tag object.
@@ -602,7 +605,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
-	return NewCommit(ddb.vrw, commitSt), nil
+	return NewCommit(ddb.vrw, commitSt)
 }
 
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
@@ -637,7 +640,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		return nil, err
 	}
 
-	return NewCommit(ddb.vrw, commitSt), nil
+	return NewCommit(ddb.vrw, commitSt)
 }
 
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
@@ -681,7 +684,7 @@ func (ddb *DoltDB) ResolveParent(ctx context.Context, commit *Commit, parentIdx 
 	if err != nil {
 		return nil, err
 	}
-	return NewCommit(ddb.ValueReadWriter(), *parentCommitSt), nil
+	return NewCommit(ddb.ValueReadWriter(), *parentCommitSt)
 }
 
 func (ddb *DoltDB) ResolveAllParents(ctx context.Context, commit *Commit) ([]*Commit, error) {
@@ -1046,7 +1049,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
-	return NewCommit(ddb.vrw, commitSt), nil
+	return NewCommit(ddb.vrw, commitSt)
 }
 
 // DeleteWorkingSet deletes the working set given

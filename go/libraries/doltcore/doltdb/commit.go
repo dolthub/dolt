@@ -42,12 +42,12 @@ type Commit struct {
 	parents  []types.Ref
 }
 
-func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) *Commit {
+func NewCommit(vrw types.ValueReadWriter, commitSt types.Struct) (*Commit, error) {
 	parents, err := readParents(vrw, commitSt)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
-	return &Commit{vrw, commitSt, parents}
+	return &Commit{vrw, commitSt, parents}, nil
 }
 
 func readParents(vrw types.ValueReadWriter, commitSt types.Struct) ([]types.Ref, error) {
@@ -235,7 +235,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	}
 
 	ancestorSt := targetVal.(types.Struct)
-	return NewCommit(cm1.vrw, ancestorSt), nil
+	return NewCommit(cm1.vrw, ancestorSt)
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (types.Ref, error) {
@@ -297,7 +297,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 		return nil, err
 	}
 
-	return NewCommit(c.vrw, ancestorSt), nil
+	return NewCommit(c.vrw, ancestorSt)
 }
 
 func (c *Commit) DebugString(ctx context.Context) string {
