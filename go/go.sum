@@ -183,6 +183,8 @@ github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81/go.mod h1:
 github.com/dolthub/vitess v0.0.0-20220315232032-19d17da876ea/go.mod h1:qpZ4j0dval04OgZJ5fyKnlniSFUosTH280pdzUjUJig=
 github.com/dolthub/vitess v0.0.0-20220316161039-72500e2cbc32 h1:5bkksves8SN6Vlr4VWmOjkwJ3xmmOozMNjHx+DleIuA=
 github.com/dolthub/vitess v0.0.0-20220316161039-72500e2cbc32/go.mod h1:qpZ4j0dval04OgZJ5fyKnlniSFUosTH280pdzUjUJig=
+github.com/dolthub/vitess v0.0.0-20220316170129-55d2df462a2e h1:Wu64nuKLTa5mhhEgUGTZerpCIZx0VKRnJ8McrIyP/qs=
+github.com/dolthub/vitess v0.0.0-20220316170129-55d2df462a2e/go.mod h1:qpZ4j0dval04OgZJ5fyKnlniSFUosTH280pdzUjUJig=
 github.com/dustin/go-humanize v0.0.0-20171111073723-bb3d318650d4/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4zYo=
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
