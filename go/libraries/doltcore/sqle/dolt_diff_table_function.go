@@ -51,16 +51,34 @@ type DiffTableFunction struct {
 	fromSch        schema.Schema
 }
 
+// NewInstance implements the TableFunction interface
+func (dtf *DiffTableFunction) NewInstance(ctx *sql.Context, database sql.Database, expressions []sql.Expression) (sql.Node, error) {
+	newInstance := &DiffTableFunction{
+		ctx:      ctx,
+		database: database,
+	}
+
+	node, err := newInstance.WithExpressions(expressions...)
+	if err != nil {
+		return nil, err
+	}
+
+	return node, nil
+}
+
+// Database implements the sql.Databaser interface
 func (dtf *DiffTableFunction) Database() sql.Database {
 	return dtf.database
 }
 
+// WithDatabase implements the sql.Databaser interface
 func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, error) {
 	dtf.database = database
 
 	return dtf, nil
 }
 
+// Expressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 	expressions := make([]sql.Expression, 0, 3)
 
@@ -79,9 +97,10 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 	return expressions
 }
 
+// WithExpressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) != 3 {
-		return nil, sql.ErrInvalidArgumentNumber.New(dtf.TableFunctionName(), 3, len(expression))
+		return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), 3, len(expression))
 	}
 
 	dtf.tableNameExpr = expression[0]
@@ -96,6 +115,7 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	return dtf, nil
 }
 
+// Children implements the sql.Node interface
 func (dtf *DiffTableFunction) Children() []sql.Node {
 	return []sql.Node{}
 }
@@ -243,6 +263,7 @@ func (dtf *DiffTableFunction) initializeCommitHashToTableMap(commitItr *doltdb.C
 	return &cmHashToTblInfo, nil
 }
 
+// RowIter implements the sql.Node interface
 func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
 	err := dtf.evaluateArguments()
 	if err != nil {
@@ -284,6 +305,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 	return NewDiffTableFunctionRowIter(diffPartitions, ddb, dtf.joiner), nil
 }
 
+// WithChildren implements the sql.Node interface
 func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	if len(node) != 0 {
 		panic("unexpected children")
@@ -291,6 +313,7 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 	return dtf, nil
 }
 
+// CheckPrivileges implements the sql.Node interface
 func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
 	return true
 }
@@ -303,15 +326,15 @@ func (dtf *DiffTableFunction) evaluateArguments() error {
 	}
 
 	if !sql.IsText(dtf.tableNameExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.tableNameExpr.String())
+		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
 	}
 
 	if !sql.IsText(dtf.fromCommitExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.fromCommitExpr.String())
+		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
 	}
 
 	if !sql.IsText(dtf.toCommitExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.TableFunctionName(), dtf.toCommitExpr.String())
+		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
 	}
 
 	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
@@ -433,7 +456,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 	return sqlSchema.Schema, nil
 }
 
-// Schema implements the Node interface
+// Schema implements the sql.Node interface
 func (dtf *DiffTableFunction) Schema() sql.Schema {
 	if !dtf.Resolved() {
 		return nil
@@ -446,7 +469,7 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 	return dtf.sqlSch
 }
 
-// Resolved implements the Resolvable interface
+// Resolved implements the sql.Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
 	resolved := true
 
@@ -470,14 +493,9 @@ func (dtf *DiffTableFunction) String() string {
 	return "dolt diff table function"
 }
 
-// TableFunctionName implements the sql.TableFunction interface
-func (dtf *DiffTableFunction) TableFunctionName() string {
+// FunctionName implements the sql.TableFunction interface
+func (dtf *DiffTableFunction) FunctionName() string {
 	return "dolt_diff"
-}
-
-// Description implements the sql.TableFunction interface
-func (dtf *DiffTableFunction) Description() string {
-	return "returns dolt diff data as a relational table"
 }
 
 func (dtf *DiffTableFunction) WithContext(ctx *sql.Context) *DiffTableFunction {
