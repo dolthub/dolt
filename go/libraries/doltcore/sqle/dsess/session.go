@@ -162,12 +162,12 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	newRoot, err := dbState.WriteSession.Flush(ctx)
+	ws, err := dbState.WriteSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
-	return sess.SetRoot(ctx, dbName, newRoot)
+	return sess.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
 // CommitTransaction commits the in-progress transaction for the database named
@@ -582,7 +582,7 @@ func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.WriteSession.SetRoot(ctx, newRoot)
+	err = sessionState.WriteSession.SetWorkingSet(ctx, sessionState.WorkingSet)
 	if err != nil {
 		return err
 	}

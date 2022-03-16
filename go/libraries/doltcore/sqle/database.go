@@ -806,17 +806,11 @@ func (db Database) Flush(ctx *sql.Context) error {
 	}
 	editSession := dbState.WriteSession
 
-	newRoot, err := editSession.Flush(ctx)
+	ws, err := editSession.Flush(ctx)
 	if err != nil {
 		return err
 	}
-
-	err = db.SetRoot(ctx, newRoot)
-	if err != nil {
-		return nil
-	}
-
-	return nil
+	return db.SetRoot(ctx, ws.WorkingRoot())
 }
 
 // GetView implements sql.ViewDatabase
@@ -982,13 +976,13 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return err
 	}
 
-	root, err := ts.Flush(ctx)
+	ws, err := ts.Flush(ctx)
 	if err != nil {
 		return err
 	}
 
 	// If rows exist, then grab the highest id and add 1 to get the new id
-	idx, err := nextSchemasTableIndex(ctx, root)
+	idx, err := nextSchemasTableIndex(ctx, ws.WorkingRoot())
 	if err != nil {
 		return err
 	}

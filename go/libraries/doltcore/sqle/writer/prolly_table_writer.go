@@ -210,12 +210,11 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	newRoot, err := w.sess.Flush(ctx)
+	ws, err := w.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
-
-	return w.setter(ctx, w.dbName, newRoot)
+	return w.setter(ctx, w.dbName, ws.WorkingRoot())
 }
 
 type prollyIndexWriter struct {

@@ -136,10 +136,11 @@ func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
 
 // Table implements TableEditor.
 func (ste *sessionedTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
-	root, err := ste.tableEditSession.Flush(ctx)
+	ws, err := ste.tableEditSession.Flush(ctx)
 	if err != nil {
 		return nil, err
 	}
+	root := ws.WorkingRoot()
 
 	name := ste.tableEditor.Name()
 	tbl, ok, err := root.GetTable(ctx, name)
