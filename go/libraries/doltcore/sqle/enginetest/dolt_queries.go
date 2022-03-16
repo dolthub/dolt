@@ -15,7 +15,6 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -1108,16 +1107,14 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 
 var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	// TODO: Add tests for:
-	//       - primary key changes
+	//       - primary key changes (?)
 	//       - table delete and recreate
-	//       - branch/ref support
-	//       - multiple table functions used together in same select statement
-	//       - working set changes
-	//       - Should diff from @Commit0 to @Commit1 work ?
+	//       - branch/ref support (with diffs across branches)
 	//
 	// TODO: In the future:
 	//       - datetime support ?
 	//       - table function with an alias
+	//       - multiple table functions used together in same select statement
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
@@ -1168,10 +1165,6 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",
 				ExpectedErrStr: "branch not found",
 			},
-			{
-				Query:       "SELECT * from dolt_diff('t', @Commit2, @Commit1);",
-				ExpectedErr: sqle.ErrInvalidCommitAncestry,
-			},
 		},
 	},
 	{
@@ -1213,16 +1206,15 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('t', @Commit1, @Commit4);",
 				Expected: []sql.Row{
-					{1, "uno", "dos", 1, "one", "two", "modified"},
+					{1, "uno", "dos", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
-					{1, "one", "two", nil, nil, nil, "added"},
 				},
 			},
 		},
 	},
 	{
-		Name: "drop and recreate column with same type",
+		Name: "schema modification: drop and recreate column with same type",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 text, c2 text);",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
@@ -1273,18 +1265,15 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit4);",
 				Expected: []sql.Row{
-					{1, "one", "foo", 1, "one", nil, "modified"},
+					{1, "one", "foo", nil, nil, nil, "added"},
+					{2, "two", nil, nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
-					{1, "one", nil, 1, "one", "two", "modified"},
-					{2, "two", nil, 2, "two", "three", "modified"},
-					{1, "one", "two", nil, nil, nil, "added"},
-					{2, "two", "three", nil, nil, nil, "added"},
 				},
 			},
 		},
 	},
 	{
-		Name: "rename columns",
+		Name: "schema modification: rename columns",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 text, c2 int);",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
@@ -1343,17 +1332,16 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
 				Expected: []sql.Row{
-					{4, "four", -4, nil, nil, nil, "added"},
-					{1, "one", 1, 1, "one", -1, "modified"},
-					{3, "three", -3, nil, nil, nil, "added"},
-					{1, "one", -1, nil, nil, nil, "added"},
+					{1, "one", 1, nil, nil, nil, "added"},
 					{2, "two", -2, nil, nil, nil, "added"},
+					{3, "three", -3, nil, nil, nil, "added"},
+					{4, "four", -4, nil, nil, nil, "added"},
 				},
 			},
 		},
 	},
 	{
-		Name: "drop and rename columns with different types",
+		Name: "schema modification: drop and rename columns with different types",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 text, c2 text);",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
@@ -1403,13 +1391,10 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit5);",
 				Expected: []sql.Row{
-					{4, "four", -4, nil, nil, nil, "added"},
-					{1, "fdsa", nil, 1, "one", nil, "modified"},
+					{1, "fdsa", nil, nil, nil, nil, "added"},
+					{2, "two", nil, nil, nil, nil, "added"},
 					{3, "three", nil, nil, nil, nil, "added"},
-					{1, "one", nil, 1, "one", "asdf", "modified"},
-					{2, "two", nil, 2, "two", "2", "modified"},
-					{1, "one", nil, nil, nil, nil, "added"},
-					{2, "two", 2, nil, nil, nil, "added"},
+					{4, "four", -4, nil, nil, nil, "added"},
 				},
 			},
 			{

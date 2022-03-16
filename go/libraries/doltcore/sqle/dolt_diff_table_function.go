@@ -15,9 +15,7 @@
 package sqle
 
 import (
-	"context"
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -26,13 +24,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
-
-var ErrInvalidCommitAncestry = errors.NewKind("commit %s is not an ancestor of commit %s")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 
@@ -120,151 +115,8 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 	return []sql.Node{}
 }
 
-// loadCommits loads the toCommit and fromCommit arguments as doltdb.Commit structures.
-func (dtf *DiffTableFunction) loadCommits() (*doltdb.Commit, *doltdb.Commit, error) {
-	sqledb, ok := dtf.database.(Database)
-	if !ok {
-		panic("unable to get dolt database")
-	}
-	ddb := sqledb.GetDoltDB()
-
-	fromCommitString := fmt.Sprint(dtf.fromCommitVal)
-	fromCommitSpec, err := doltdb.NewCommitSpec(fromCommitString)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	toCommitString := fmt.Sprint(dtf.toCommitVal)
-	toCommitSpec, err := doltdb.NewCommitSpec(toCommitString)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	fromCommit, err := ddb.Resolve(dtf.ctx, fromCommitSpec, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	toCommit, err := ddb.Resolve(dtf.ctx, toCommitSpec, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Make sure fromCommit is an ancestor of toCommit
-	err = dtf.validateCommitAncestry(fromCommit, toCommit)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return fromCommit, toCommit, nil
-}
-
-// validateCommitAncestry validates that the specified fromCommit is an ancestor of toCommit, otherwise
-// returns an error.
-func (dtf *DiffTableFunction) validateCommitAncestry(fromCommit, toCommit *doltdb.Commit) error {
-	ancestor, err := doltdb.GetCommitAncestor(dtf.ctx, fromCommit, toCommit)
-	if err != nil {
-		return err
-	}
-
-	ancestorHash, err := ancestor.HashOf()
-	if err != nil {
-		return err
-	}
-
-	fromCommitHash, err := fromCommit.HashOf()
-	if err != nil {
-		return err
-	}
-
-	if ancestorHash != fromCommitHash {
-		toCommitHash, err := toCommit.HashOf()
-		if err != nil {
-			return err
-		}
-
-		return ErrInvalidCommitAncestry.New(fromCommitHash, toCommitHash)
-	}
-
-	return nil
-}
-
-func (dtf *DiffTableFunction) newCommitItrForCommitRange(fromCommit, toCommit *doltdb.Commit) (*doltdb.CommitItr, error) {
-	fromCommitHash, err := fromCommit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	lastCommitSeen := false
-	myFunc := func(ctx context.Context, h hash.Hash, commit *doltdb.Commit) (filterOut bool, err error) {
-		if lastCommitSeen {
-			return true, nil
-		}
-
-		if h == fromCommitHash {
-			lastCommitSeen = true
-		}
-
-		return false, nil
-	}
-
-	sqledb, ok := dtf.database.(Database)
-	if !ok {
-		panic("unable to get dolt database")
-	}
-	ddb := sqledb.GetDoltDB()
-
-	commitItr := doltdb.CommitItrForRoots(ddb, toCommit)
-	commitItr = doltdb.NewFilteringCommitItr(commitItr, myFunc)
-
-	return &commitItr, nil
-}
-
-// initializeCommitHashToTableMap creates the commit hash to table map needed by DiffPartitions by
-// pulling the first commit from the specified doltdb.CommitItr and populating that commit's
-// entry in the returned map. Without specifying this information, the Diff processor will
-// not be able to process the first commit it sees.
-func (dtf *DiffTableFunction) initializeCommitHashToTableMap(commitItr *doltdb.CommitItr) (*map[hash.Hash]dtables.TblInfoAtCommit, error) {
-	sqledb, ok := dtf.database.(Database)
-	if !ok {
-		panic("unable to get dolt database")
-	}
-
-	firstCmHash, _, err := (*commitItr).Next(dtf.ctx)
-	if err != nil {
-		return nil, err
-	}
-	err = (*commitItr).Reset(dtf.ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	toRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.toCommitVal)
-	if err != nil {
-		return nil, err
-	}
-
-	t, exactName, ok, err := toRoot.GetTableInsensitive(dtf.ctx, dtf.tableName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrTableNotFound.New(dtf.tableName)
-	}
-
-	wrTblHash, _, err := toRoot.GetTableHash(dtf.ctx, exactName)
-	if err != nil {
-		return nil, err
-	}
-
-	cmHashToTblInfo := make(map[hash.Hash]dtables.TblInfoAtCommit)
-	cmHashToTblInfo[firstCmHash] = dtables.NewTblInfoAtCommit("WORKING", nil, t, wrTblHash)
-
-	return &cmHashToTblInfo, nil
-}
-
 // RowIter implements the sql.Node interface
-func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIter, error) {
+func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
 	err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
@@ -280,29 +132,63 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, row sql.Row) (sql.RowIte
 	}
 	ddb := sqledb.GetDoltDB()
 
-	fromCommit, toCommit, err := dtf.loadCommits()
+	toRoot, toName, toDate, err := dtf.loadDetailsForRef(ctx, dtf.toCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	commitItr, err := dtf.newCommitItrForCommitRange(fromCommit, toCommit)
+	toTable, _, err := toRoot.GetTable(ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
 
-	sf, err := dtables.SelectFuncForFilters(ddb.Format(), nil)
+	fromRoot, fromName, fromDate, err := dtf.loadDetailsForRef(ctx, dtf.fromCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	cmHashToTblInfo, err := dtf.initializeCommitHashToTableMap(commitItr)
+	fromTable, _, err := fromRoot.GetTable(ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
 
-	diffPartitions := dtables.NewDiffPartitions(dtf.tableName, *commitItr, *cmHashToTblInfo, sf, dtf.toSch, dtf.fromSch)
+	dp := dtables.NewDiffPartition(toTable, fromTable, toName, fromName, toDate, fromDate, &dtf.toSch, &dtf.fromSch)
 
-	return NewDiffTableFunctionRowIter(diffPartitions, ddb, dtf.joiner), nil
+	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
+}
+
+func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
+	hashStr, ok := val.(string)
+	if !ok {
+		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
+	}
+
+	var root *doltdb.RootValue
+	var commitTime *types.Timestamp
+	cs, err := doltdb.NewCommitSpec(hashStr)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	cm, err := ddb.Resolve(ctx, cs, nil)
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	root, err = cm.GetRootValue()
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	meta, err := cm.GetCommitMeta()
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	t := meta.Time()
+	commitTime = (*types.Timestamp)(&t)
+
+	return root, hashStr, commitTime, nil
 }
 
 // WithChildren implements the sql.Node interface
@@ -498,12 +384,6 @@ func (dtf *DiffTableFunction) FunctionName() string {
 	return "dolt_diff"
 }
 
-func (dtf *DiffTableFunction) WithContext(ctx *sql.Context) *DiffTableFunction {
-	dtf.ctx = ctx
-
-	return dtf
-}
-
 //------------------------------------
 // diffTableFunctionRowIter
 //------------------------------------
@@ -523,6 +403,14 @@ func NewDiffTableFunctionRowIter(partitions *dtables.DiffPartitions, ddb *doltdb
 		diffPartitions: partitions,
 		ddb:            ddb,
 		joiner:         joiner,
+	}
+}
+
+func NewDiffTableFunctionRowIterForSinglePartition(partition sql.Partition, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) *diffTableFunctionRowIter {
+	return &diffTableFunctionRowIter{
+		currentPartition: &partition,
+		ddb:              ddb,
+		joiner:           joiner,
 	}
 }
 
@@ -549,6 +437,11 @@ func (itr *diffTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err == io.EOF {
 			itr.currentPartition = nil
 			itr.currentRowIter = nil
+
+			if itr.diffPartitions == nil {
+				return nil, err
+			}
+
 			continue
 		} else if err != nil {
 			return nil, err
@@ -558,6 +451,6 @@ func (itr *diffTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 }
 
-func (itr *diffTableFunctionRowIter) Close(ctx *sql.Context) error {
+func (itr *diffTableFunctionRowIter) Close(_ *sql.Context) error {
 	return nil
 }

@@ -301,8 +301,6 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 	// and store table functions in a map, similar to regular functions.
 	if strings.ToLower(name) == "dolt_diff" {
 		dtf := &DiffTableFunction{}
-		dtf = dtf.WithContext(ctx)
-
 		return dtf, nil
 	}
 
