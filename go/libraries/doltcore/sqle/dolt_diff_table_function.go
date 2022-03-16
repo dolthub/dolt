@@ -132,7 +132,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	}
 	ddb := sqledb.GetDoltDB()
 
-	toRoot, toName, toDate, err := dtf.loadDetailsForRef(ctx, dtf.toCommitVal, ddb)
+	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, dtf.toCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	fromRoot, fromName, fromDate, err := dtf.loadDetailsForRef(ctx, dtf.fromCommitVal, ddb)
+	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, dtf.fromCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -152,15 +152,16 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	dp := dtables.NewDiffPartition(toTable, fromTable, toName, fromName, toDate, fromDate, &dtf.toSch, &dtf.fromSch)
+	dp := dtables.NewDiffPartition(toTable, fromTable, toHash, fromHash, toDate, fromDate, &dtf.toSch, &dtf.fromSch)
 
 	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
 }
 
-func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, val interface{}, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
-	hashStr, ok := val.(string)
+// loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
+func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, ref interface{}, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
+	hashStr, ok := ref.(string)
 	if !ok {
-		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", val)
+		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", ref)
 	}
 
 	var root *doltdb.RootValue
