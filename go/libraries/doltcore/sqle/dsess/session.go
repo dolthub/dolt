@@ -55,11 +55,12 @@ var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session 
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
-	batchMode batchMode
-	username  string
-	email     string
-	dbStates  map[string]*DatabaseSessionState
-	provider  RevisionDatabaseProvider
+	batchMode  batchMode
+	username   string
+	email      string
+	dbStates   map[string]*DatabaseSessionState
+	provider   RevisionDatabaseProvider
+	tempTables map[string][]sql.Table
 }
 
 var _ sql.Session = &Session{}
@@ -67,11 +68,12 @@ var _ sql.Session = &Session{}
 // DefaultSession creates a Session object with default values
 func DefaultSession() *Session {
 	sess := &Session{
-		Session:  sql.NewBaseSession(),
-		username: "",
-		email:    "",
-		dbStates: make(map[string]*DatabaseSessionState),
-		provider: emptyRevisionDatabaseProvider{},
+		Session:    sql.NewBaseSession(),
+		username:   "",
+		email:      "",
+		dbStates:   make(map[string]*DatabaseSessionState),
+		provider:   emptyRevisionDatabaseProvider{},
+		tempTables: make(map[string][]sql.Table),
 	}
 	return sess
 }
@@ -81,11 +83,12 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	sess := &Session{
-		Session:  sqlSess,
-		username: username,
-		email:    email,
-		dbStates: make(map[string]*DatabaseSessionState),
-		provider: pro,
+		Session:    sqlSess,
+		username:   username,
+		email:      email,
+		dbStates:   make(map[string]*DatabaseSessionState),
+		provider:   pro,
+		tempTables: make(map[string][]sql.Table),
 	}
 
 	for _, db := range dbs {
@@ -750,33 +753,6 @@ func (sess *Session) WorkingSet(ctx *sql.Context, dbName string) (*doltdb.Workin
 	return sessionState.WorkingSet, nil
 }
 
-func (sess *Session) GetTempTableRootValue(ctx *sql.Context, dbName string) (*doltdb.RootValue, bool) {
-	dbState, ok, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return nil, false
-	}
-	if !ok {
-		return nil, false
-	}
-
-	if dbState.TempTableRoot == nil {
-		return nil, false
-	}
-
-	return dbState.TempTableRoot, true
-}
-
-func (sess *Session) SetTempTableRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	dbState.TempTableRoot = newRoot
-
-	err = dbState.TempTableWriteSession.SetRoot(ctx, newRoot)
-	return err
-}
-
 // GetHeadCommit returns the parent commit of the current session.
 func (sess *Session) GetHeadCommit(ctx *sql.Context, dbName string) (*doltdb.Commit, error) {
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
@@ -872,7 +848,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
-	sessionState.tmpTablesDir = dbState.DbData.Rsw.TempTableFilesDir()
+	sessionState.tmpFileDir = dbState.DbData.Rsw.TempTableFilesDir()
 	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
@@ -917,23 +893,33 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	return nil
 }
 
-// CreateTemporaryTablesRoot creates an empty root value and a table edit session for the purposes of storing
-// temporary tables. This should only be used on demand. That is only when a temporary table is created should we
-// create the root map and edit session map.
-func (sess *Session) CreateTemporaryTablesRoot(ctx *sql.Context, dbName string, ddb *doltdb.DoltDB) error {
-	newRoot, err := doltdb.EmptyRootValue(ctx, ddb.ValueReadWriter())
-	if err != nil {
-		return err
-	}
+func (sess *Session) AddTemporaryTable(ctx *sql.Context, db string, tbl sql.Table) {
+	sess.tempTables[db] = append(sess.tempTables[db], tbl)
+}
 
-	dbState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
+func (sess *Session) DropTemporaryTable(ctx *sql.Context, db, name string) {
+	tables := sess.tempTables[db]
+	for i, tbl := range sess.tempTables[db] {
+		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+			tables = append(tables[:i], tables[i+1:]...)
+			break
+		}
 	}
-	nbf := newRoot.VRW().Format()
-	dbState.TempTableWriteSession = writer.NewWriteSession(nbf, newRoot, dbState.WriteSession.GetOptions())
+	sess.tempTables[db] = tables
+}
 
-	return sess.SetTempTableRoot(ctx, dbName, newRoot)
+func (sess *Session) GetTemporaryTable(ctx *sql.Context, db, name string) (sql.Table, bool) {
+	for _, tbl := range sess.tempTables[db] {
+		if strings.ToLower(tbl.Name()) == strings.ToLower(name) {
+			return tbl, true
+		}
+	}
+	return nil, false
+}
+
+// GetAllTemporaryTables returns all temp tables for this session.
+func (sess *Session) GetAllTemporaryTables(ctx *sql.Context, db string) ([]sql.Table, error) {
+	return sess.tempTables[db], nil
 }
 
 // CWBHeadRef returns the branch ref for this session HEAD for the database named
