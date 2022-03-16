@@ -26,9 +26,6 @@ import (
 )
 
 const (
-	metaField        = datas.CommitMetaField
-	parentsField     = datas.ParentsField
-	parentsListField = datas.ParentsListField
 	rootValueField   = datas.ValueField
 )
 
@@ -39,6 +36,7 @@ var errHasNoRootValue = errors.New("no root value")
 type Commit struct {
 	vrw      types.ValueReadWriter
 	commitSt types.Struct
+	meta     *datas.CommitMeta
 	parents  []types.Ref
 }
 
@@ -47,7 +45,11 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitSt types.St
 	if err != nil {
 		return nil, err
 	}
-	return &Commit{vrw, commitSt, parents}, nil
+	meta, err := datas.GetCommitMeta(ctx, commitSt)
+	if err != nil {
+		meta = nil
+	}
+	return &Commit{vrw, commitSt, meta, parents}, nil
 }
 
 // HashOf returns the hash of the commit
@@ -57,33 +59,10 @@ func (c *Commit) HashOf() (hash.Hash, error) {
 
 // GetCommitMeta gets the metadata associated with the commit
 func (c *Commit) GetCommitMeta() (*datas.CommitMeta, error) {
-	metaVal, found, err := c.commitSt.MaybeGet(metaField)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if !found {
+	if c.meta == nil {
 		return nil, errCommitHasNoMeta
 	}
-
-	if metaVal != nil {
-		if metaSt, ok := metaVal.(types.Struct); ok {
-			cm, err := datas.CommitMetaFromNomsSt(metaSt)
-
-			if err == nil {
-				return cm, nil
-			}
-		}
-	}
-
-	h, err := c.HashOf()
-
-	if err != nil {
-		return nil, errCommitHasNoMeta
-	}
-
-	return nil, errors.New(h.String() + " is a commit without the required metadata.")
+	return c.meta, nil
 }
 
 // ParentRefs returns the noms types.Refs for the commits

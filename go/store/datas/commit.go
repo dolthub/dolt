@@ -301,6 +301,31 @@ func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) 
 	return ret, nil
 }
 
+// GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
+// nil| if there is no metadata for the commit.
+func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
+	}
+	metaVal, found, err := c.MaybeGet(CommitMetaField)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	if metaSt, ok := metaVal.(types.Struct); ok {
+		return CommitMetaFromNomsSt(metaSt)
+	} else {
+		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
+	}
+	return nil, nil
+}
+
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
