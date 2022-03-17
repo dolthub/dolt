@@ -205,7 +205,7 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
 
 	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = sess.SetWorkingSet(ctx, dbName, ws)
 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
@@ -356,7 +356,7 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 		return nil, err
 	}
 
-	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet, nil)
+	err = sess.SetWorkingSet(ctx, dbName, mergedWorkingSet)
 	if err != nil {
 		return nil, err
 	}
@@ -556,39 +556,9 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 		// TODO: Return an error here?
 		return nil
 	}
-
-	return sess.setRoot(ctx, dbName, newRoot)
-}
-
-// setRoot is like its exported version, but skips the consistency check
-func (sess *Session) setRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
-	// logrus.Tracef("setting root value %s", newRoot.DebugString(ctx, true))
-
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	h, err := newRoot.HashOf()
-	if err != nil {
-		return err
-	}
-
-	hashStr := h.String()
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), hashStr)
-	if err != nil {
-		return err
-	}
-
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	err = sessionState.WriteSession.SetWorkingSet(ctx, sessionState.WorkingSet)
-	if err != nil {
-		return err
-	}
-
-	sessionState.dirty = true
-	return nil
+	return sess.SetWorkingSet(ctx, dbName, sessionState.WorkingSet)
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
@@ -602,18 +572,12 @@ func (sess *Session) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Root
 	}
 
 	workingSet := sessionState.WorkingSet.WithWorkingRoot(roots.Working).WithStagedRoot(roots.Staged)
-	return sess.SetWorkingSet(ctx, dbName, workingSet, nil)
+	return sess.SetWorkingSet(ctx, dbName, workingSet)
 }
 
-// SetWorkingSet sets the working set for this session.  Unlike setting the working root alone, this method always
-// marks the session dirty.
-// |headRoot| will be set to the working sets's corresponding HEAD if nil
-func (sess *Session) SetWorkingSet(
-	ctx *sql.Context,
-	dbName string,
-	ws *doltdb.WorkingSet,
-	headRoot *doltdb.RootValue,
-) error {
+// SetWorkingSet sets the working set for this session.
+// Unlike setting the working root alone, this method always marks the session dirty.
+func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
 	}
@@ -622,46 +586,44 @@ func (sess *Session) SetWorkingSet(
 	if err != nil {
 		return err
 	}
+	if ws.Ref() != sessionState.WorkingSet.Ref() {
+		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
+	}
 	sessionState.WorkingSet = ws
 
-	if headRoot == nil {
-		cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
-		if err != nil {
-			return err
-		}
-
-		branchRef, err := ws.Ref().ToHeadRef()
-		if err != nil {
-			return err
-		}
-
-		cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
-		if err != nil {
-			return err
-		}
-
-		sessionState.headCommit = cm
-
-		headRoot, err = cm.GetRootValue()
-		if err != nil {
-			return err
-		}
+	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
+	if err != nil {
+		return err
 	}
 
-	if headRoot != nil {
-		sessionState.headRoot = headRoot
+	branchRef, err := ws.Ref().ToHeadRef()
+	if err != nil {
+		return err
 	}
+
+	cm, err := sessionState.dbData.Ddb.Resolve(ctx, cs, branchRef)
+	if err != nil {
+		return err
+	}
+	sessionState.headCommit = cm
+
+	headRoot, err := cm.GetRootValue()
+	if err != nil {
+		return err
+	}
+	sessionState.headRoot = headRoot
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
 	if err != nil {
 		return err
 	}
 
-	// setRoot updates any edit sessions in use
-	err = sess.setRoot(ctx, dbName, ws.WorkingRoot())
+	err = sessionState.WriteSession.SetWorkingSet(ctx, ws)
 	if err != nil {
-		return nil
+		return err
 	}
+
+	sessionState.dirty = true
 
 	return nil
 }
@@ -674,7 +636,8 @@ func (sess *Session) SetWorkingSet(
 func (sess *Session) SwitchWorkingSet(
 	ctx *sql.Context,
 	dbName string,
-	wsRef ref.WorkingSetRef) error {
+	wsRef ref.WorkingSetRef,
+) error {
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -724,11 +687,20 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
-	// setRoot updates any edit sessions in use
-	err = sess.setRoot(ctx, dbName, ws.WorkingRoot())
+	h, err := ws.WorkingRoot().HashOf()
 	if err != nil {
-		return nil
+		return err
 	}
+
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	// make a fresh WriteSession, discard existing WriteSession
+	opts := sessionState.WriteSession.GetOptions()
+	nbf := ws.WorkingRoot().VRW().Format()
+	sessionState.WriteSession = writer.NewWriteSession(nbf, ws, opts)
 
 	// After switching to a new working set, we are by definition clean
 	sessionState.dirty = false
@@ -857,26 +829,24 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	nbf := sessionState.dbData.Ddb.Format()
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.WriteSession = writer.NewWriteSession(nbf, nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
+
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		workingRoot := dbState.WorkingSet.WorkingRoot()
-		// logrus.Tracef("working root intialized to %s", workingRoot.DebugString(ctx, false))
-
-		err := sess.setRoot(ctx, db.Name(), workingRoot)
+		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, editOpts)
+		err := sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet)
 		if err != nil {
 			return err
 		}
+
 	} else {
 		headRoot, err := dbState.HeadCommit.GetRootValue()
 		if err != nil {
 			return err
 		}
-
 		sessionState.headRoot = headRoot
 	}
 

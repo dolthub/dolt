@@ -97,7 +97,7 @@ func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interfa
 			return noConflicts, err
 		}
 
-		err := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		err := sess.SetWorkingSet(ctx, dbName, ws)
 		if err != nil {
 			return noConflicts, err
 		}
@@ -171,7 +171,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 			if err == doltdb.ErrUnresolvedConflicts {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
-				wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+				wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 				if wsErr != nil {
 					return ws, hasConflicts, wsErr
 				}
@@ -199,7 +199,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 	if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrUnresolvedConstraintViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
-		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 		if wsErr != nil {
 			return ws, hasConflicts, wsErr
 		}
@@ -211,7 +211,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflicts, err
 	}
 
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, noConflicts, err
 	}
@@ -273,7 +273,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 	// merges). Hence, we go ahead and commit the working set to the transaction.
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, err
 	}
@@ -311,7 +311,7 @@ func executeNoFFMerge(
 
 	// Save our work so far in the session, as it will be referenced by the commit call below (badly in need of a
 	// refactoring)
-	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = dSess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return nil, err
 	}
