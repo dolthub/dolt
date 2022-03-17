@@ -829,23 +829,24 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	// TODO: figure out how to cast this to dsqle.SqlDatabase without creating import cycles
 	nbf := sessionState.dbData.Ddb.Format()
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
-	sessionState.WriteSession = writer.NewWriteSession(nbf, nil, editOpts)
 
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
+
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
+		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, editOpts)
 		err := sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet)
 		if err != nil {
 			return err
 		}
+
 	} else {
 		headRoot, err := dbState.HeadCommit.GetRootValue()
 		if err != nil {
 			return err
 		}
-
 		sessionState.headRoot = headRoot
 	}
 

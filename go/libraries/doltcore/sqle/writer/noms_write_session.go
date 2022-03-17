@@ -54,11 +54,10 @@ type WriteSession interface {
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.
 type nomsWriteSession struct {
-	opts editor.Options
-
 	workingSet *doltdb.WorkingSet
 	tables     map[string]*sessionedTableEditor
 	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	opts       editor.Options
 }
 
 var _ WriteSession = &nomsWriteSession{}
@@ -76,10 +75,10 @@ func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, opts edito
 	}
 
 	return &nomsWriteSession{
-		opts:       opts,
 		workingSet: ws,
 		tables:     make(map[string]*sessionedTableEditor),
 		writeMutex: &sync.RWMutex{},
+		opts:       opts,
 	}
 }
 
