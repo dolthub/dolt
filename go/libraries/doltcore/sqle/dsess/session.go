@@ -558,7 +558,7 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 	}
 	sessionState.WorkingSet = sessionState.WorkingSet.WithWorkingRoot(newRoot)
 
-	return sess.setWorkingSet(ctx, dbName, sessionState.WorkingSet)
+	return sess.SetWorkingSet(ctx, dbName, sessionState.WorkingSet)
 }
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
@@ -586,6 +586,9 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	if err != nil {
 		return err
 	}
+	if ws.Ref() != sessionState.WorkingSet.Ref() {
+		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
+	}
 	sessionState.WorkingSet = ws
 
 	cs, err := doltdb.NewCommitSpec(ws.Ref().GetPath())
@@ -602,44 +605,15 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	if err != nil {
 		return err
 	}
-
 	sessionState.headCommit = cm
 
 	headRoot, err := cm.GetRootValue()
 	if err != nil {
 		return err
 	}
-	if headRoot != nil {
-		sessionState.headRoot = headRoot
-	}
+	sessionState.headRoot = headRoot
 
 	err = sess.setSessionVarsForDb(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	// setWorkingSet updates any WriteSessions in use
-	return sess.setWorkingSet(ctx, dbName, ws)
-}
-
-// setRoot is like its exported version, but skips the consistency check
-func (sess *Session) setWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
-	// logrus.Tracef("setting root value %s", newRoot.DebugString(ctx, true))
-
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-	if ws.Ref() != sessionState.WorkingSet.Ref() {
-		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
-	}
-
-	h, err := ws.WorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
 	if err != nil {
 		return err
 	}
@@ -649,7 +623,6 @@ func (sess *Session) setWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 		return err
 	}
 
-	sessionState.WorkingSet = ws
 	sessionState.dirty = true
 
 	return nil
@@ -863,7 +836,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		sessionState.Err = dbState.Err
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		err := sess.setWorkingSet(ctx, db.Name(), dbState.WorkingSet)
+		err := sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet)
 		if err != nil {
 			return err
 		}
