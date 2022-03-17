@@ -113,13 +113,10 @@ func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 }
 
 func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
-	var metaSt types.Struct
-	var err error
 	if opts.Meta == nil {
-		metaSt = types.EmptyStruct(vrw.Format())
-	} else {
-		metaSt, err = opts.Meta.toNomsStruct(vrw.Format())
+		opts.Meta = &CommitMeta{}
 	}
+	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
 	if err != nil {
 		return types.Struct{}, err
 	}

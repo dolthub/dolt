@@ -22,6 +22,7 @@
 package datas
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"regexp"
@@ -208,7 +209,7 @@ func (ds Dataset) ID() string {
 // MaybeHead returns the current Head Commit of this Dataset, which contains
 // the current root of the Dataset's value tree, if available. If not, it
 // returns a new Commit and 'false'.
-func (ds Dataset) MaybeHead() (types.Struct, bool) {
+func (ds Dataset) MaybeHead() (types.Value, bool) {
 	if ds.head == nil {
 		return types.Struct{}, false
 	}
@@ -351,7 +352,11 @@ func (ds Dataset) HasHead() bool {
 // available. If not it returns nil and 'false'.
 func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 	if c, ok := ds.MaybeHead(); ok {
-		return c.MaybeGet(ValueField)
+		v, err := GetCommitValue(context.TODO(), c)
+		if err != nil {
+			return nil, false, err
+		}
+		return v, true, nil
 	}
 	return nil, false, nil
 }
