@@ -323,7 +323,6 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	} else {
 		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
 	}
-	return nil, nil
 }
 
 func GetCommitValue(ctx context.Context, cv types.Value) (types.Value, error) {
