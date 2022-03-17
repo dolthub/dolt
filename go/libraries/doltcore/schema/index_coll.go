@@ -62,6 +62,8 @@ type IndexCollection interface {
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
 	RenameIndex(oldName, newName string) (Index, error)
+	//SetPks changes the pks or pk ordinals
+	SetPks([]uint64) error
 }
 
 type IndexProperties struct {
@@ -403,6 +405,14 @@ func (ixc *indexCollectionImpl) tagsExist(tags ...uint64) bool {
 		}
 	}
 	return true
+}
+
+func (ixc *indexCollectionImpl) SetPks(tags []uint64) error {
+	if len(tags) != len(ixc.pks) {
+		return ErrInvalidPkOrdinals
+	}
+	ixc.pks = tags
+	return nil
 }
 
 func combineAllTags(tags []uint64, pks []uint64) []uint64 {
