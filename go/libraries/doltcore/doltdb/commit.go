@@ -33,7 +33,7 @@ type Commit struct {
 	meta    *datas.CommitMeta
 	parents []types.Ref
 	stref   types.Ref
-	root    *RootValue
+	rootV   types.Value
 }
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Value) (*Commit, error) {
@@ -49,20 +49,11 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Val
 	if err != nil {
 		return nil, err
 	}
-	var root *RootValue
 	rootVal, err := datas.GetCommitValue(ctx, commitV)
 	if err != nil {
 		return nil, err
 	}
-	if rootVal != nil {
-		if rootSt, ok := rootVal.(types.Struct); ok {
-			root, err = newRootValue(vrw, rootSt)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return &Commit{vrw, meta, parents, cref, root}, nil
+	return &Commit{vrw, meta, parents, cref, rootVal}, nil
 }
 
 // HashOf returns the hash of the commit
@@ -103,10 +94,11 @@ func (c *Commit) Height() (uint64, error) {
 
 // GetRootValue gets the RootValue of the commit.
 func (c *Commit) GetRootValue() (*RootValue, error) {
-	if c.root == nil {
+	if c.rootV == nil {
 		return nil, errHasNoRootValue
 	}
-	return c.root, nil
+	// TODO: Get rid of this types.Struct assert.
+	return newRootValue(c.vrw, c.rootV.(types.Struct))
 }
 
 // GetStRef returns a Noms Ref for this Commit's Noms commit Struct.
