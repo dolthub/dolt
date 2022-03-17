@@ -34,11 +34,11 @@ type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
 	GetTableWriter(ctx context.Context, table, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
 
-	// UpdateWorkingSet takes a callback to update this WriteSession's WorkingSet.
-	// WriteSession flushes the pending writes in the session before calling the callback.
+	// UpdateWorkingSet takes a callback to update this WriteSession's WorkingSet. The update method cannot change the
+	// WorkingSetRef of the WriteSession. WriteSession flushes the pending writes in the session before calling the update.
 	UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error
 
-	// SetWorkingSet sets the root for the WriteSession.
+	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
 	// Flush flushes the pending writes in the session.
