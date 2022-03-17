@@ -561,40 +561,6 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 	return sess.setWorkingSet(ctx, dbName, sessionState.WorkingSet)
 }
 
-// setRoot is like its exported version, but skips the consistency check
-func (sess *Session) setWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
-	// logrus.Tracef("setting root value %s", newRoot.DebugString(ctx, true))
-
-	sessionState, _, err := sess.LookupDbState(ctx, dbName)
-	if err != nil {
-		return err
-	}
-
-	if ws.Ref() != sessionState.WorkingSet.Ref() {
-		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
-	}
-
-	h, err := ws.WorkingRoot().HashOf()
-	if err != nil {
-		return err
-	}
-
-	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
-	if err != nil {
-		return err
-	}
-
-	err = sessionState.WriteSession.SetWorkingSet(ctx, ws)
-	if err != nil {
-		return err
-	}
-
-	sessionState.WorkingSet = ws
-	sessionState.dirty = true
-
-	return nil
-}
-
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
 // Unlike setting the only the working root, this method always marks the database state dirty.
@@ -609,9 +575,8 @@ func (sess *Session) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Root
 	return sess.SetWorkingSet(ctx, dbName, workingSet)
 }
 
-// SetWorkingSet sets the working set for this session.  Unlike setting the working root alone, this method always
-// marks the session dirty.
-// |headRoot| will be set to the working sets's corresponding HEAD if nil
+// SetWorkingSet sets the working set for this session.
+// Unlike setting the working root alone, this method always marks the session dirty.
 func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
 	if ws == nil {
 		panic("attempted to set a nil working set for the session")
@@ -655,6 +620,39 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 
 	// setWorkingSet updates any WriteSessions in use
 	return sess.setWorkingSet(ctx, dbName, ws)
+}
+
+// setRoot is like its exported version, but skips the consistency check
+func (sess *Session) setWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.WorkingSet) error {
+	// logrus.Tracef("setting root value %s", newRoot.DebugString(ctx, true))
+
+	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+	if ws.Ref() != sessionState.WorkingSet.Ref() {
+		return fmt.Errorf("must switch working sets with SwitchWorkingSet")
+	}
+
+	h, err := ws.WorkingRoot().HashOf()
+	if err != nil {
+		return err
+	}
+
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	err = sessionState.WriteSession.SetWorkingSet(ctx, ws)
+	if err != nil {
+		return err
+	}
+
+	sessionState.WorkingSet = ws
+	sessionState.dirty = true
+
+	return nil
 }
 
 // SwitchWorkingSet switches to a new working set for this session. Unlike SetWorkingSet, this method expresses no
@@ -726,7 +724,7 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
-	// make a fresh WriteSession
+	// make a fresh WriteSession, discard existing WriteSession
 	opts := sessionState.WriteSession.GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
 	sessionState.WriteSession = writer.NewWriteSession(nbf, ws, opts)

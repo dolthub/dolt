@@ -310,6 +310,9 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 	if ws == nil {
 		return fmt.Errorf("cannot set a nomsWriteSession's working set to nil once it has been created")
 	}
+	if s.workingSet != nil && s.workingSet.Ref() != ws.Ref() {
+		return fmt.Errorf("cannot change working set ref using SetWorkingSet")
+	}
 	s.workingSet = ws
 
 	root := ws.WorkingRoot()
