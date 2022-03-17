@@ -34,13 +34,13 @@ import (
 )
 
 const (
-	ParentsField = "parents"
+	parentsField = "parents"
 	// Added in July, 2020. Commits created with versions before this was
 	// added have only a Set of parents. Commits created after this was
 	// added carry a List of parents, because parent order can matter.
 	// `"parents"` is still written as a Set as well, so that commits
 	// created with newer versions of still usable by older versions.
-	ParentsListField = "parents_list"
+	parentsListField = "parents_list"
 	// Added in October, 2021. Stores a Ref<Value(Map<Tuple,List>)>.
 	// The key of the map is a Tuple<Height, InlineBlob(Hash)>, reffable to
 	// a Commit ref. The value of the map is a List of Ref<Value>s pointing
@@ -49,25 +49,25 @@ const (
 	// This structure is a materialized closure of a commit's parents. It
 	// is used for pull/fetch/push commit graph fan-out and for sub-O(n)
 	// FindCommonAncestor calculations.
-	ParentsClosureField = "parents_closure"
-	ValueField          = "value"
-	CommitMetaField     = "meta"
-	CommitName          = "Commit"
+	parentsClosureField = "parents_closure"
+	valueField          = "value"
+	commitMetaField     = "meta"
+	commitName          = "Commit"
 )
 
-var commitTemplateWithParentsClosure = types.MakeStructTemplate(CommitName, []string{
-	CommitMetaField,
-	ParentsField,
-	ParentsClosureField,
-	ParentsListField,
-	ValueField,
+var commitTemplateWithParentsClosure = types.MakeStructTemplate(commitName, []string{
+	commitMetaField,
+	parentsField,
+	parentsClosureField,
+	parentsListField,
+	valueField,
 })
 
-var commitTemplateWithoutParentsClosure = types.MakeStructTemplate(CommitName, []string{
-	CommitMetaField,
-	ParentsField,
-	ParentsListField,
-	ValueField,
+var commitTemplateWithoutParentsClosure = types.MakeStructTemplate(commitName, []string{
+	commitMetaField,
+	parentsField,
+	parentsListField,
+	valueField,
 })
 
 var valueCommitType = nomdl.MustParseType(`Struct Commit {
@@ -267,11 +267,11 @@ func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) 
 	if !ok {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	if c.Name() != CommitName {
+	if c.Name() != commitName {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
 	var ret []types.Ref
-	ps, ok, err := c.MaybeGet(ParentsListField)
+	ps, ok, err := c.MaybeGet(parentsListField)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +283,7 @@ func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) 
 		})
 		return ret, err
 	}
-	ps, ok, err = c.MaybeGet(ParentsField)
+	ps, ok, err = c.MaybeGet(parentsField)
 	if err != nil {
 		return nil, err
 	}
@@ -305,10 +305,10 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	if !ok {
 		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 	}
-	if c.Name() != CommitName {
+	if c.Name() != commitName {
 		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
 	}
-	metaVal, found, err := c.MaybeGet(CommitMetaField)
+	metaVal, found, err := c.MaybeGet(commitMetaField)
 	if err != nil {
 		return nil, err
 	}
@@ -327,10 +327,10 @@ func GetCommitValue(ctx context.Context, cv types.Value) (types.Value, error) {
 	if !ok {
 		return nil, errors.New("GetCommitValue: provided value is not a commit.")
 	}
-	if c.Name() != CommitName {
+	if c.Name() != commitName {
 		return nil, errors.New("GetCommitValue: provided value is not a commit.")
 	}
-	v, _, err := c.MaybeGet(ValueField)
+	v, _, err := c.MaybeGet(valueField)
 	return v, err
 }
 
@@ -382,44 +382,44 @@ func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
 
 func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type, includeParentsClosure bool) (*types.Type, error) {
 	if includeParentsClosure {
-		return types.MakeStructType(CommitName,
+		return types.MakeStructType(commitName,
 			types.StructField{
-				Name: CommitMetaField,
+				Name: commitMetaField,
 				Type: metaType,
 			},
 			types.StructField{
-				Name: ParentsField,
+				Name: parentsField,
 				Type: parentsType,
 			},
 			types.StructField{
-				Name: ParentsListField,
+				Name: parentsListField,
 				Type: parentsListType,
 			},
 			types.StructField{
-				Name: ParentsClosureField,
+				Name: parentsClosureField,
 				Type: parentsClosureType,
 			},
 			types.StructField{
-				Name: ValueField,
+				Name: valueField,
 				Type: valueType,
 			},
 		)
 	} else {
-		return types.MakeStructType(CommitName,
+		return types.MakeStructType(commitName,
 			types.StructField{
-				Name: CommitMetaField,
+				Name: commitMetaField,
 				Type: metaType,
 			},
 			types.StructField{
-				Name: ParentsField,
+				Name: parentsField,
 				Type: parentsType,
 			},
 			types.StructField{
-				Name: ParentsListField,
+				Name: parentsListField,
 				Type: parentsListType,
 			},
 			types.StructField{
-				Name: ValueField,
+				Name: valueField,
 				Type: valueType,
 			},
 		)
@@ -527,11 +527,11 @@ func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueR
 	if !ok {
 		return nil, fmt.Errorf("target ref is not struct: %v", sv)
 	}
-	if s.Name() != CommitName {
+	if s.Name() != commitName {
 		return nil, fmt.Errorf("target ref is not commit: %v", sv)
 	}
 
-	fv, ok, err := s.MaybeGet(ParentsClosureField)
+	fv, ok, err := s.MaybeGet(parentsClosureField)
 	if err != nil {
 		return nil, err
 	}

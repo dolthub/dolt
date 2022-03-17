@@ -364,7 +364,7 @@ func assertClosureMapValue(t *testing.T, vrw types.ValueReadWriter, v types.Valu
 	if !assert.True(t, ok) {
 		return false
 	}
-	plv, ok, err := s.MaybeGet(ParentsListField)
+	plv, ok, err := s.MaybeGet(parentsListField)
 	if !assert.NoError(t, err) {
 		return false
 	}
@@ -422,7 +422,7 @@ func TestCommitParentsClosure(t *testing.T) {
 		if !assert.True(ok) {
 			return
 		}
-		v, ok, err := s.MaybeGet(ParentsClosureField)
+		v, ok, err := s.MaybeGet(parentsClosureField)
 		if !assert.NoError(err) {
 			return
 		}
@@ -700,10 +700,10 @@ func TestNewCommitRegressionTest(t *testing.T) {
 
 func TestPersistedCommitConsts(t *testing.T) {
 	// changing constants that are persisted requires a migration strategy
-	assert.Equal(t, "parents", ParentsField)
-	assert.Equal(t, "parents_list", ParentsListField)
-	assert.Equal(t, "parents_closure", ParentsClosureField)
-	assert.Equal(t, "value", ValueField)
-	assert.Equal(t, "meta", CommitMetaField)
-	assert.Equal(t, "Commit", CommitName)
+	assert.Equal(t, "parents", parentsField)
+	assert.Equal(t, "parents_list", parentsListField)
+	assert.Equal(t, "parents_closure", parentsClosureField)
+	assert.Equal(t, "value", valueField)
+	assert.Equal(t, "meta", commitMetaField)
+	assert.Equal(t, "Commit", commitName)
 }

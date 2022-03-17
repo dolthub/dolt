@@ -41,8 +41,6 @@ func init() {
 const (
 	creationBranch = "create"
 
-	CommitStructName = datas.CommitName
-
 	defaultChunksPerTF = 256 * 1024
 )
 

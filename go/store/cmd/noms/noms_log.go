@@ -170,21 +170,6 @@ func runLog(ctx context.Context, args []string) int {
 // Prints the information for one commit in the log, including ascii graph on left side of commits if
 // -graph arg is true.
 func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer, vr types.ValueReader, tz *time.Location) (err error) {
-	maxMetaFieldNameLength := func(commit types.Struct) int {
-		maxLen := 0
-		if m, ok, err := commit.MaybeGet(datas.CommitMetaField); err != nil {
-			panic(err)
-		} else if ok {
-			meta := m.(types.Struct)
-			t, err := types.TypeOf(meta)
-			d.PanicIfError(err)
-			t.Desc.(types.StructDesc).IterFields(func(name string, t *types.Type, optional bool) {
-				maxLen = max(maxLen, len(name))
-			})
-		}
-		return maxLen
-	}
-
 	h, err := node.commit.Hash(vr.Format())
 	d.PanicIfError(err)
 	hashStr := h.String()
@@ -192,14 +177,12 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 		hashStr = ansi.Color("commit "+hashStr, "red+h")
 	}
 
-	maxFieldNameLen := maxMetaFieldNameLength(node.commit)
+	maxFieldNameLen := len("User_timestamp")
 
 	parentLabel := "Parent"
 	parentValue := "None"
-	pFld, ok, err := node.commit.MaybeGet(datas.ParentsField)
+	parents, err := datas.GetCommitParents(context.Background(), node.commit)
 	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
-	parents := commitRefsFromSet(ctx, pFld.(types.Set))
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
 		for i, p := range parents {
@@ -293,56 +276,31 @@ func genGraph(node LogNode, lineno int) string {
 }
 
 func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabelLen int, w io.Writer, tz *time.Location) (int, error) {
-	if m, ok, err := node.commit.MaybeGet(datas.CommitMetaField); err != nil {
+	meta, err := datas.GetCommitMeta(ctx, node.commit)
+	if err != nil {
 		panic(err)
-	} else if ok {
-		genPrefix := func(w *writers.PrefixWriter) []byte {
-			return []byte(genGraph(node, int(w.NumLines)))
-		}
-		meta := m.(types.Struct)
-		mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
-		pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-
-		t, err := types.TypeOf(meta)
-		d.PanicIfError(err)
-		t.Desc.(types.StructDesc).IterFields(func(fieldName string, t *types.Type, optional bool) {
-			if err != nil {
-				return
-			}
-
-			v, ok, err := meta.MaybeGet(fieldName)
-			d.PanicIfError(err)
-			d.PanicIfFalse(ok)
-
-			fmt.Fprintf(pw, "%-*s", maxLabelLen+2, strings.Title(fieldName)+":")
-
-			vt, err := types.TypeOf(v)
-			d.PanicIfError(err)
-
-			// Encode dates as formatted string if this is a top-level meta
-			// field of type datetime.DateTimeType
-			if vt.Equals(datetime.DateTimeType) {
-				var dt datetime.DateTime
-				err = dt.UnmarshalNoms(ctx, node.commit.Format(), v)
-
-				if err != nil {
-					return
-				}
-
-				fmt.Fprintln(pw, dt.In(tz).Format(time.RFC3339))
-			} else {
-				err = types.WriteEncodedValue(ctx, pw, v)
-
-				if err != nil {
-					return
-				}
-			}
-			fmt.Fprintln(pw)
-		})
-
-		return int(pw.NumLines), err
 	}
-	return lineno, nil
+	if meta == nil {
+		return lineno, nil
+	}
+	genPrefix := func(w *writers.PrefixWriter) []byte {
+		return []byte(genGraph(node, int(w.NumLines)))
+	}
+	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
+	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
+
+
+	writeField := func(fieldName string, val string) {
+		fmt.Fprintf(pw, "%-*s%s", maxLabelLen+2, strings.Title(fieldName)+":", val)
+		fmt.Fprintln(pw)
+	}
+	writeField("Desc", fmt.Sprintf(`"%s"`, meta.Description))
+	writeField("Email", fmt.Sprintf(`"%s"`, meta.Email))
+	writeField("Name", fmt.Sprintf(`"%s"`, meta.Name))
+	writeField("Timestamp", fmt.Sprintf(`%d`, meta.Timestamp))
+	writeField("User_timestamp", fmt.Sprintf(`%d`, meta.UserTimestamp))
+
+	return int(pw.NumLines), err
 }
 
 func writeCommitLines(ctx context.Context, node LogNode, path types.Path, maxLines, lineno int, w io.Writer, vr types.ValueReader) (lineCnt int, err error) {
@@ -381,24 +339,18 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types
 	}
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
-	pVal, ok, err := node.commit.MaybeGet(datas.ParentsField)
 
+	parents, err := datas.GetCommitParents(ctx, node.commit)
 	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
 
-	parents := pVal.(types.Set)
-
-	var parent types.Value
-	if parents.Len() > 0 {
-		parent, err = parents.First(ctx)
-		d.PanicIfError(err)
-	}
-	if parent == nil {
+	if len(parents) == 0 {
 		_, err = fmt.Fprint(pw, "\n")
 		return 1, err
 	}
 
-	val, err := parent.(types.Ref).TargetValue(ctx, vr)
+	parent := parents[0]
+
+	val, err := parent.TargetValue(ctx, vr)
 	parentCommit := val.(types.Struct)
 	d.PanicIfError(err)
 
