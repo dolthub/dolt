@@ -209,7 +209,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 		if err != nil {
 			return nil, err
 		}
-		if inst > n {
+		if inst >= n {
 			return nil, ErrInvalidAncestorSpec
 		}
 
