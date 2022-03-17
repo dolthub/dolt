@@ -289,7 +289,6 @@ func writeMetaLines(ctx context.Context, node LogNode, maxLines, lineno, maxLabe
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 
-
 	writeField := func(fieldName string, val string) {
 		fmt.Fprintf(pw, "%-*s%s", maxLabelLen+2, strings.Title(fieldName)+":", val)
 		fmt.Fprintln(pw)
