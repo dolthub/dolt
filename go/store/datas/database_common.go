@@ -933,7 +933,7 @@ func (db *database) validateWorkingSet(t types.Struct) error {
 	return nil
 }
 
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
+func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Value, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {

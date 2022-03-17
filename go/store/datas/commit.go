@@ -104,7 +104,7 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
+func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return types.Struct{}, errors.New("cannot create commit without parents")
 	}
@@ -112,7 +112,7 @@ func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommitForValue(ctx, vrw, v, opts)
 }
 
-func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Struct, error) {
+func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
 	var metaSt types.Struct
 	var err error
 	if opts.Meta == nil {

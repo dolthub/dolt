@@ -569,7 +569,6 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
 // such as rebase. You must create a ref to a dangling commit for it to be reachable
 func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash hash.Hash, parentCommits []*Commit, cm *datas.CommitMeta) (*Commit, error) {
-	var commitSt types.Struct
 	val, err := ddb.vrw.ReadValue(ctx, valHash)
 	if err != nil {
 		return nil, err
@@ -588,7 +587,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	commitSt, err = datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
+	commitSt, err := datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
 	if err != nil {
 		return nil, err
 	}
