@@ -512,8 +512,7 @@ const (
 `
 
 	allMergedHeader = `All conflicts and constraint violations fixed but you are still merging.
-  (use "dolt commit" to conclude merge)
-`
+  (use "dolt commit" to conclude merge)`
 
 	mergedTableHeader = `Unmerged paths:`
 	mergedTableHelp   = `  (use "dolt add <file>..." to mark resolution)`

@@ -152,7 +152,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
 }
 
-func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
 	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
@@ -192,14 +192,14 @@ func FindCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 //
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
-// implementation delegates to FindCommonAncestorUsingParentsList.
+// implementation delegates to findCommonAncestorUsingParentsList.
 func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
 	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
 		return types.Ref{}, false, err
 	}
 	if pi1 == nil {
-		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
 
 	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
@@ -207,7 +207,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		return types.Ref{}, false, err
 	}
 	if pi2 == nil {
-		return FindCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
+		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
 	}
 
 	for {
@@ -264,6 +264,79 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 	return types.Ref{}, false, nil
 }
 
+// GetCommitParents returns |Ref|s to the parents of the commit.
+func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitParents: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitParents: provided value is not a commit.")
+	}
+	var ret []types.Ref
+	ps, ok, err := c.MaybeGet(ParentsListField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		p := ps.(types.List)
+		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
+			ret = append(ret, v.(types.Ref))
+			return nil
+		})
+		return ret, err
+	}
+	ps, ok, err = c.MaybeGet(ParentsField)
+	if err != nil {
+		return nil, err
+	}
+	if ok {
+		p := ps.(types.Set)
+		err = p.IterAll(ctx, func(v types.Value) error {
+			ret = append(ret, v.(types.Ref))
+			return nil
+		})
+		return ret, err
+	}
+	return ret, nil
+}
+
+// GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
+// nil| if there is no metadata for the commit.
+func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
+	}
+	metaVal, found, err := c.MaybeGet(CommitMetaField)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, nil
+	}
+	if metaSt, ok := metaVal.(types.Struct); ok {
+		return CommitMetaFromNomsSt(metaSt)
+	} else {
+		return nil, errors.New("GetCommitMeta: Commit had metadata field but it was not a Struct.")
+	}
+}
+
+func GetCommitValue(ctx context.Context, cv types.Value) (types.Value, error) {
+	c, ok := cv.(types.Struct)
+	if !ok {
+		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+	}
+	if c.Name() != CommitName {
+		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+	}
+	v, _, err := c.MaybeGet(ValueField)
+	return v, err
+}
+
 func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
 	for _, r := range refs {
@@ -280,41 +353,12 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 			return fmt.Errorf("target not found: %v", r.TargetHash())
 		}
 
-		c, ok := v.(types.Struct)
-		if !ok {
-			return fmt.Errorf("target ref is not struct: %v", v)
-		}
-		if c.Name() != CommitName {
-			return fmt.Errorf("target ref is not commit: %v", v)
-		}
-		ps, ok, err := c.MaybeGet(ParentsListField)
+		parents, err := GetCommitParents(ctx, v)
 		if err != nil {
 			return err
 		}
-		if ok {
-			p := ps.(types.List)
-			err = p.Iter(ctx, func(v types.Value, _ uint64) (stop bool, err error) {
-				heap.Push(q, v)
-				return
-			})
-			if err != nil {
-				return err
-			}
-		} else {
-			ps, ok, err := c.MaybeGet(ParentsField)
-			if err != nil {
-				return err
-			}
-			if ok {
-				p := ps.(types.Set)
-				err = p.Iter(ctx, func(v types.Value) (stop bool, err error) {
-					heap.Push(q, v)
-					return
-				})
-				if err != nil {
-					return err
-				}
-			}
+		for _, r := range parents {
+			heap.Push(q, r)
 		}
 	}
 

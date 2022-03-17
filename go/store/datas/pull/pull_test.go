@@ -169,17 +169,17 @@ func (suite *PullSuite) TestPullEverything() {
 	expectedReads := suite.sinkCS.Reads()
 
 	l := buildListOfHeight(2, suite.sourceVRW)
-	sourceRef := suite.commitToSource(l, nil)
+	sourceAddr := suite.commitToSource(l, nil)
 	pt := startProgressTracker()
 
 	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())).(types.Struct)
+	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr)).(types.Struct)
 	suite.NotNil(v)
 	suite.True(l.Equals(mustGetValue(v.MaybeGet(datas.ValueField))))
 }
@@ -209,23 +209,23 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(2, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, nil)
+	sourceAddr := suite.commitToSource(srcL, nil)
 	srcL = buildListOfHeight(4, suite.sourceVRW)
-	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
+	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})
 	srcL = buildListOfHeight(5, suite.sourceVRW)
-	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
+	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})
 
 	pt := startProgressTracker()
 
 	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
@@ -255,30 +255,30 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 //                                     \ -1-> L0
 func (suite *PullSuite) TestPullDivergentHistory() {
 	sinkL := buildListOfHeight(3, suite.sinkVRW)
-	sinkRef := suite.commitToSink(sinkL, nil)
+	sinkAddr := suite.commitToSink(sinkL, nil)
 	srcL := buildListOfHeight(3, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, nil)
+	sourceAddr := suite.commitToSource(srcL, nil)
 
 	var err error
 	sinkL, err = sinkL.Edit().Append(types.String("oy!")).List(context.Background())
 	suite.NoError(err)
-	sinkRef = suite.commitToSink(sinkL, []hash.Hash{sinkRef.TargetHash()})
+	sinkAddr = suite.commitToSink(sinkL, []hash.Hash{sinkAddr})
 	srcL, err = srcL.Edit().Set(1, buildListOfHeight(5, suite.sourceVRW)).List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
+	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})
 	preReads := suite.sinkCS.Reads()
 
 	pt := startProgressTracker()
 
 	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
@@ -306,7 +306,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	expectedReads := suite.sinkCS.Reads()
 
 	srcL := buildListOfHeight(4, suite.sourceVRW)
-	sourceRef := suite.commitToSource(srcL, nil)
+	sourceAddr := suite.commitToSource(srcL, nil)
 	L3 := mustValue(mustValue(srcL.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
 	L2 := mustValue(mustValue(L3.Get(context.Background(), 1)).(types.Ref).TargetValue(context.Background(), suite.sourceVRW)).(types.List)
 	L2Ed := L2.Edit().Append(mustRef(suite.sourceVRW.WriteValue(context.Background(), types.String("oy!"))))
@@ -318,40 +318,40 @@ func (suite *PullSuite) TestPullUpdates() {
 	srcLEd := srcL.Edit().Set(1, mustRef(suite.sourceVRW.WriteValue(context.Background(), L3)))
 	srcL, err = srcLEd.List(context.Background())
 	suite.NoError(err)
-	sourceRef = suite.commitToSource(srcL, []hash.Hash{sourceRef.TargetHash()})
+	sourceAddr = suite.commitToSource(srcL, []hash.Hash{sourceAddr})
 
 	pt := startProgressTracker()
 
 	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceRef.TargetHash(), pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
-	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceRef.TargetHash())
+	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
 	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
 }
 
-func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) types.Ref {
+func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
 	db := datas.NewTypesDatabase(suite.sourceVRW.(*types.ValueStore))
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
 	suite.NoError(err)
-	return mustHeadRef(ds)
+	return mustHeadAddr(ds)
 }
 
-func (suite *PullSuite) commitToSink(v types.Value, p []hash.Hash) types.Ref {
+func (suite *PullSuite) commitToSink(v types.Value, p []hash.Hash) hash.Hash {
 	db := datas.NewTypesDatabase(suite.sinkVRW.(*types.ValueStore))
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
 	ds, err = db.Commit(context.Background(), ds, v, datas.CommitOptions{Parents: p})
 	suite.NoError(err)
-	return mustHeadRef(ds)
+	return mustHeadAddr(ds)
 }
 
 func buildListOfHeight(height int, vrw types.ValueReadWriter) types.List {
@@ -596,16 +596,8 @@ func mustRef(ref types.Ref, err error) types.Ref {
 	return ref
 }
 
-func mustHeadRef(ds datas.Dataset) types.Ref {
-	hr, ok, err := ds.MaybeHeadRef()
-
-	if err != nil {
-		panic("error getting head")
-	}
-
-	if !ok {
-		panic("no head")
-	}
-
-	return hr
+func mustHeadAddr(ds datas.Dataset) hash.Hash {
+	addr, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return addr
 }

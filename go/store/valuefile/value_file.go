@@ -92,13 +92,9 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 		return err
 	}
 
-	ref, _, err := ds.MaybeHeadRef()
+	addr, _ := ds.MaybeHeadAddr()
 
-	if err != nil {
-		return err
-	}
-
-	err = write(wr, ref.TargetHash(), store)
+	err = write(wr, addr, store)
 
 	if err != nil {
 		return err

@@ -210,31 +210,31 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	// ds2 matches the Datasets Map in suite.db
 	suiteDS, err := suite.db.GetDataset(context.Background(), datasetID)
 	suite.NoError(err)
-	headRef := mustHeadRef(suiteDS)
-	suite.True(mustHeadRef(ds2).Equals(headRef))
+	headAddr := mustHeadAddr(suiteDS)
+	suite.True(mustHeadAddr(ds2) == headAddr)
 
 	// ds2 has |a| at its head
 	h, ok, err := ds2.MaybeHeadValue()
 	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
-	suite.Equal(uint64(1), mustHeadRef(ds2).Height())
+	suite.Equal(uint64(1), mustHeight(ds2))
 
 	ds = ds2
-	aCommitRef := mustHeadRef(ds) // to be used to test disallowing of non-fastforward commits below
+	aCommitAddr := mustHeadAddr(ds) // to be used to test disallowing of non-fastforward commits below
 
 	// |a| <- |b|
 	b := types.String("b")
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	suite.Equal(uint64(2), mustHeadRef(ds).Height())
+	suite.Equal(uint64(2), mustHeight(ds))
 
 	// |a| <- |b|
 	//   \----|c|
 	// Should be disallowed.
 	c := types.String("c")
-	_, err = suite.db.Commit(context.Background(), ds, c, newOpts(suite.db, aCommitRef))
+	_, err = suite.db.Commit(context.Background(), ds, c, newOpts(suite.db, aCommitAddr))
 	suite.Error(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 
@@ -243,11 +243,11 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
-	suite.Equal(uint64(3), mustHeadRef(ds).Height())
+	suite.Equal(uint64(3), mustHeight(ds))
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
-	_, err = suite.db.Commit(context.Background(), ds, b, newOpts(suite.db, aCommitRef))
+	_, err = suite.db.Commit(context.Background(), ds, b, newOpts(suite.db, aCommitAddr))
 	suite.Error(err)
 	suite.True(mustHeadValue(ds).Equals(d))
 
@@ -336,8 +336,8 @@ func assertMapOfStringToRefOfCommit(ctx context.Context, proposed, datasets type
 	d.PanicIfError(derr)
 }
 
-func newOpts(vrw types.ValueReadWriter, parent types.Ref) CommitOptions {
-	return CommitOptions{Parents: []hash.Hash{parent.TargetHash()}}
+func newOpts(vrw types.ValueReadWriter, parent hash.Hash) CommitOptions {
+	return CommitOptions{Parents: []hash.Hash{parent}}
 }
 
 func (suite *DatabaseSuite) TestDatabaseDuplicateCommit() {
@@ -396,8 +396,7 @@ func (suite *DatabaseSuite) TestDatabaseDelete() {
 	suite.Equal(uint64(1), datasets.Len())
 	newDS, err := newDB.GetDataset(context.Background(), datasetID2)
 	suite.NoError(err)
-	_, present, err = newDS.MaybeHeadRef()
-	suite.NoError(err)
+	present = newDS.HasHead()
 	suite.True(present, "Dataset %s should be present", datasetID2)
 }
 
@@ -496,8 +495,7 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	// Attempted concurrent delete, which should proceed without a problem
 	ds1, err = suite.db.Delete(context.Background(), ds1)
 	suite.NoError(err)
-	_, present, err := ds1.MaybeHeadRef()
-	suite.NoError(err)
+	present := ds1.HasHead()
 	suite.False(present, "Dataset %s should not be present", datasetID)
 }
 
@@ -511,19 +509,19 @@ func (suite *DatabaseSuite) TestSetHead() {
 	a := types.String("a")
 	ds, err = CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
-	aCommitRef := mustHeadRef(ds) // To use in non-FF SetHeadToCommit() below.
+	aCommitAddr := mustHeadAddr(ds) // To use in non-FF SetHeadToCommit() below.
 
 	b := types.String("b")
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	bCommitRef := mustHeadRef(ds) // To use in FF SetHeadToCommit() below.
+	bCommitAddr := mustHeadAddr(ds) // To use in FF SetHeadToCommit() below.
 
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
-	ds, err = suite.db.SetHead(context.Background(), ds, bCommitRef.TargetHash())
+	ds, err = suite.db.SetHead(context.Background(), ds, bCommitAddr)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
 }
@@ -537,7 +535,7 @@ func (suite *DatabaseSuite) TestFastForward() {
 	a := types.String("a")
 	ds, err = CommitValue(context.Background(), suite.db, ds, a)
 	suite.NoError(err)
-	aCommitRef := mustHeadRef(ds) // To use in non-FF cases below.
+	aCommitAddr := mustHeadAddr(ds) // To use in non-FF cases below.
 
 	b := types.String("b")
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
@@ -548,19 +546,19 @@ func (suite *DatabaseSuite) TestFastForward() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, c)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
-	cCommitRef := mustHeadRef(ds) // To use in FastForward() below.
+	cCommitAddr := mustHeadAddr(ds) // To use in FastForward() below.
 
 	// FastForward should disallow this, as |a| is not a descendant of |c|
-	_, err = suite.db.FastForward(context.Background(), ds, aCommitRef.TargetHash())
+	_, err = suite.db.FastForward(context.Background(), ds, aCommitAddr)
 	suite.Error(err)
 
 	// Move Head back to something earlier in the lineage, so we can test FastForward
-	ds, err = suite.db.SetHead(context.Background(), ds, aCommitRef.TargetHash())
+	ds, err = suite.db.SetHead(context.Background(), ds, aCommitAddr)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(a))
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
-	ds, err = suite.db.FastForward(context.Background(), ds, cCommitRef.TargetHash())
+	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }
