@@ -586,6 +586,18 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return dbState.GetRoots().Working, nil
 }
 
+func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db.Name())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("no root value found in session")
+	}
+	return dbState.WorkingSet, nil
+}
+
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
@@ -661,7 +673,10 @@ func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) er
 		return err
 	}
 
-	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
+	ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+	if err != nil {
+		return err
+	}
 	ait.DropTable(tableName)
 
 	return nil
@@ -682,10 +697,11 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
-	root, err := db.GetRoot(ctx)
+	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
 	}
+	root := ws.WorkingRoot()
 
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
@@ -706,6 +722,14 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
 		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	if schema.HasAutoIncrement(doltSch) {
+		ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+		if err != nil {
+			return err
+		}
+		ait.AddTable(tableName)
 	}
 
 	return db.createDoltTable(ctx, tableName, root, doltSch)

@@ -37,7 +37,13 @@ type prollyWriteSession struct {
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(
+	ctx context.Context,
+	table, db string,
+	tracker globalstate.AutoIncrementTracker,
+	setter SessionRootSetter,
+	batched bool,
+) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -76,13 +82,13 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 
 	twr := &prollyTableWriter{
 		tableName: table,
-		dbName:    database,
+		dbName:    db,
 		primary:   pw,
 		secondary: sws,
 		tbl:       t,
 		sch:       sch,
 		aiCol:     autoCol,
-		aiTracker: ait,
+		aiTracker: tracker,
 		sess:      s,
 		setter:    setter,
 		batched:   batched,
