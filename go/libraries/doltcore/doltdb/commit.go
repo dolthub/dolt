@@ -213,7 +213,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 
 	instructions := as.Instructions
 	for _, inst := range instructions {
-		n, err := c.NumParents()
+		n, err := cur.NumParents()
 		if err != nil {
 			return nil, err
 		}
@@ -221,7 +221,7 @@ func (c *Commit) GetAncestor(ctx context.Context, as *AncestorSpec) (*Commit, er
 			return nil, ErrInvalidAncestorSpec
 		}
 
-		cur, err = c.GetParent(ctx, inst)
+		cur, err = cur.GetParent(ctx, inst)
 		if err != nil {
 			return nil, err
 		}
