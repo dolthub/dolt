@@ -674,7 +674,8 @@ func (sess *Session) SetWorkingSet(
 func (sess *Session) SwitchWorkingSet(
 	ctx *sql.Context,
 	dbName string,
-	wsRef ref.WorkingSetRef) error {
+	wsRef ref.WorkingSetRef,
+) error {
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return err
@@ -724,11 +725,20 @@ func (sess *Session) SwitchWorkingSet(
 		return err
 	}
 
-	// setRoot updates any edit sessions in use
-	err = sess.setRoot(ctx, dbName, ws.WorkingRoot())
+	h, err := ws.WorkingRoot().HashOf()
 	if err != nil {
-		return nil
+		return err
 	}
+
+	err = sess.Session.SetSessionVariable(ctx, WorkingKey(dbName), h.String())
+	if err != nil {
+		return err
+	}
+
+	// make a fresh WriteSession
+	opts := sessionState.WriteSession.GetOptions()
+	nbf := ws.WorkingRoot().VRW().Format()
+	sessionState.WriteSession = writer.NewWriteSession(nbf, ws, opts)
 
 	// After switching to a new working set, we are by definition clean
 	sessionState.dirty = false
