@@ -112,7 +112,7 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 
 // Children implements the sql.Node interface
 func (dtf *DiffTableFunction) Children() []sql.Node {
-	return []sql.Node{}
+	return nil
 }
 
 // RowIter implements the sql.Node interface
