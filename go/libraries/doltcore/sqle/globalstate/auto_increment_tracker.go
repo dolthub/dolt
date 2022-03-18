@@ -16,7 +16,6 @@ package globalstate
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sync"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
+// CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
 func CoerceAutoIncrementValue(val interface{}) (seq uint64, err error) {
 	switch typ := val.(type) {
 	case float32:
@@ -40,7 +40,7 @@ func CoerceAutoIncrementValue(val interface{}) (seq uint64, err error) {
 		return 0, err
 	}
 	if val == nil || val == uint64(0) {
-		return 1, nil
+		return 0, nil
 	}
 	return val.(uint64), nil
 }
@@ -82,7 +82,7 @@ func (a AutoIncrementTracker) Current(tableName string) uint64 {
 }
 
 // Next returns the next AUTO_INCREMENT value for |tableName|, considering the provided |insertVal|.
-func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (seq uint64, err error) {
+func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -91,19 +91,22 @@ func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (seq uint6
 		return 0, err
 	}
 
-	var ok bool
-	seq, ok = a.sequences[tbl]
-	if !ok {
-		return 0, fmt.Errorf("missing AUTO_INCREMENT sequence")
+	curr := a.sequences[tbl]
+
+	if given == 0 {
+		// |given| is 0 or NULL
+		a.sequences[tbl]++
+		return curr, nil
 	}
 
-	if given >= seq {
-		seq = given
+	if given >= curr {
 		a.sequences[tbl] = given
+		a.sequences[tbl]++
+		return given, nil
 	}
-	a.sequences[tbl]++
 
-	return
+	// |given| < curr
+	return given, nil
 }
 
 // Set sets the current AUTO_INCREMENT value for |tableName|.

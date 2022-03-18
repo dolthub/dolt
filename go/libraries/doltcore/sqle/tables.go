@@ -411,23 +411,13 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		}
 	}
 
-	ws, err := ds.WorkingSet(ctx, t.db.name)
-	if err != nil {
-		return nil, err
-	}
-
-	ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
-	if err != nil {
-		return nil, err
-	}
-
 	state, _, err := ds.LookupDbState(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), setter, batched)
 
 	if err != nil {
 		return nil, err
@@ -1153,7 +1143,6 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			if err != nil {
 				return err
 			}
-
 			if cmp < 0 {
 				initialValue = r[colIdx]
 			}

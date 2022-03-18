@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -700,7 +701,11 @@ func (sess *Session) SwitchWorkingSet(
 	// make a fresh WriteSession, discard existing WriteSession
 	opts := sessionState.WriteSession.GetOptions()
 	nbf := ws.WorkingRoot().VRW().Format()
-	sessionState.WriteSession = writer.NewWriteSession(nbf, ws, opts)
+	tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, ws)
+	if err != nil {
+		return err
+	}
+	sessionState.WriteSession = writer.NewWriteSession(nbf, ws, tracker, opts)
 
 	// After switching to a new working set, we are by definition clean
 	sessionState.dirty = false
@@ -830,15 +835,24 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	nbf := sessionState.dbData.Ddb.Format()
 	editOpts := db.(interface{ EditOptions() editor.Options }).EditOptions()
 
+	stateProvider, ok := db.(globalstate.StateProvider)
+	if !ok {
+		return fmt.Errorf("database does not contain global state store")
+	}
+	sessionState.globalState = stateProvider.GetGlobalState()
+
 	// WorkingSet is nil in the case of a read only, detached head DB
 	if dbState.Err != nil {
 		sessionState.Err = dbState.Err
 
 	} else if dbState.WorkingSet != nil {
 		sessionState.WorkingSet = dbState.WorkingSet
-		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, editOpts)
-		err := sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet)
+		tracker, err := sessionState.globalState.GetAutoIncrementTracker(ctx, sessionState.WorkingSet)
 		if err != nil {
+			return err
+		}
+		sessionState.WriteSession = writer.NewWriteSession(nbf, sessionState.WorkingSet, tracker, editOpts)
+		if err = sess.SetWorkingSet(ctx, db.Name(), dbState.WorkingSet); err != nil {
 			return err
 		}
 

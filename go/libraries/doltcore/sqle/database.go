@@ -87,11 +87,7 @@ type Database struct {
 	rsr  env.RepoStateReader
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
-
-	// todo: needs a major refactor to
-	//   correctly handle persisted sequences
-	//   that must be coordinated across txs
-	gs globalstate.GlobalState
+	gs   globalstate.GlobalState
 
 	editOpts editor.Options
 }
@@ -168,6 +164,7 @@ var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
+var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
@@ -258,6 +255,10 @@ func (db Database) DbData() env.DbData {
 		Rsr: db.rsr,
 		Drw: db.drw,
 	}
+}
+
+func (db Database) GetGlobalState() globalstate.GlobalState {
+	return db.gs
 }
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for

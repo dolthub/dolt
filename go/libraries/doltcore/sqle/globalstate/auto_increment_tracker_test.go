@@ -29,11 +29,11 @@ func TestCoerceAutoIncrementValue(t *testing.T) {
 	}{
 		{
 			val: nil,
-			exp: uint64(1),
+			exp: uint64(0),
 		},
 		{
 			val: int32(0),
-			exp: uint64(1),
+			exp: uint64(0),
 		},
 		{
 			val: int32(1),

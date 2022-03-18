@@ -23,6 +23,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
+type StateProvider interface {
+	GetGlobalState() GlobalState
+}
+
 func NewGlobalStateStore() GlobalState {
 	return GlobalState{
 		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
@@ -35,7 +39,7 @@ type GlobalState struct {
 	mu         *sync.Mutex
 }
 
-func (g *GlobalState) GetAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
+func (g GlobalState) GetAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 

@@ -31,19 +31,14 @@ import (
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
 	tables     map[string]*prollyTableWriter
+	tracker    globalstate.AutoIncrementTracker
 	mut        *sync.RWMutex
 }
 
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(
-	ctx context.Context,
-	table, db string,
-	tracker globalstate.AutoIncrementTracker,
-	setter SessionRootSetter,
-	batched bool,
-) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -88,7 +83,7 @@ func (s *prollyWriteSession) GetTableWriter(
 		tbl:       t,
 		sch:       sch,
 		aiCol:     autoCol,
-		aiTracker: tracker,
+		aiTracker: s.tracker,
 		sess:      s,
 		setter:    setter,
 		batched:   batched,
