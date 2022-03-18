@@ -53,12 +53,12 @@ type CommitDiffTable struct {
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
 	diffTblName := doltdb.DoltCommitDiffTablePrefix + tblName
 
-	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+	table, _, ok, err := root.GetTableInsensitive(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, sql.ErrTableNotFound.New(doltdb.DoltCommitDiffTablePrefix + tblName)
+		return nil, sql.ErrTableNotFound.New(diffTblName)
 	}
 
 	sch, err := table.GetSchema(ctx)
@@ -158,31 +158,37 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 		return nil, fmt.Errorf("error querying table %s: %w", dt.Name(), ErrExactlyOneFromCommit)
 	}
 
-	toRoot, toName, toDate, err := dt.rootValForFilter(ctx, dt.toCommitFilter)
+	toRoot, toHash, toDate, err := dt.rootValForFilter(ctx, dt.toCommitFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromName, fromDate, err := dt.rootValForFilter(ctx, dt.fromCommitFilter)
+	fromRoot, fromHash, fromDate, err := dt.rootValForFilter(ctx, dt.fromCommitFilter)
 	if err != nil {
 		return nil, err
 	}
 
-	toTable, _, err := toRoot.GetTable(ctx, dt.name)
+	toTable, _, ok, err := toRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(dt.name)
+	}
 
-	fromTable, _, err := fromRoot.GetTable(ctx, dt.name)
+	fromTable, _, ok, err := fromRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {
 		return nil, err
+	}
+	if !ok {
+		return nil, sql.ErrTableNotFound.New(dt.name)
 	}
 
 	dp := DiffPartition{
 		to:       toTable,
 		from:     fromTable,
-		toName:   toName,
-		fromName: fromName,
+		toName:   toHash,
+		fromName: fromHash,
 		toDate:   toDate,
 		fromDate: fromDate,
 		toSch:    dt.targetSchema,
