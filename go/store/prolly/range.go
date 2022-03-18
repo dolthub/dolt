@@ -107,6 +107,7 @@ func SortRanges(ranges []Range) {
 	})
 }
 
+// todo(andy): this doesn't consider inclusivity
 func rangesOverlap(left, right Range) bool {
 	if left.Stop.Unbound || right.Start.Unbound {
 		return true
