@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -149,6 +150,14 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			t, err := wr.table(ctx)
 			if err != nil {
 				return err
+			}
+
+			if schema.HasAutoIncrement(wr.sch) {
+				v := s.tracker.Current(name)
+				t, err = t.SetAutoIncrementValue(ctx, v)
+				if err != nil {
+					return err
+				}
 			}
 
 			mu.Lock()
