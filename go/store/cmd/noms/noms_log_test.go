@@ -112,11 +112,11 @@ func addCommitWithValue(ds datas.Dataset, v types.Value) (datas.Dataset, error) 
 }
 
 func addBranchedDataset(vrw types.ValueReadWriter, newDs, parentDs datas.Dataset, v string) (datas.Dataset, error) {
-	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadRef(parentDs).TargetHash()}})
+	return newDs.Database().Commit(context.Background(), newDs, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadAddr(parentDs)}})
 }
 
 func mergeDatasets(vrw types.ValueReadWriter, ds1, ds2 datas.Dataset, v string) (datas.Dataset, error) {
-	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadRef(ds1).TargetHash(), mustHeadRef(ds2).TargetHash()}})
+	return ds1.Database().Commit(context.Background(), ds1, types.String(v), datas.CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 }
 
 func mustHead(ds datas.Dataset) types.Struct {
@@ -128,15 +128,10 @@ func mustHead(ds datas.Dataset) types.Struct {
 	return s
 }
 
-func mustHeadRef(ds datas.Dataset) types.Ref {
-	hr, ok, err := ds.MaybeHeadRef()
-	d.PanicIfError(err)
-
-	if !ok {
-		panic("no head")
-	}
-
-	return hr
+func mustHeadAddr(ds datas.Dataset) hash.Hash {
+	addr, ok := ds.MaybeHeadAddr()
+	d.PanicIfFalse(ok)
+	return addr
 }
 
 func mustHeadValue(ds datas.Dataset) types.Value {

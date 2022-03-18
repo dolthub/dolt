@@ -169,6 +169,9 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 
 	r := mr.GetRemote(fromRemote)
 	srcDB, err := r.GetRemoteDB(ctx, types.Format_Default)
+	if err != nil {
+		mr.Errhand(err)
+	}
 
 	dEnv := env.Load(context.Background(), mr.homeProv, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 	dEnv, err = actions.EnvForClone(ctx, srcDB.Format(), r, cloneDir, dEnv.FS, dEnv.Version, mr.homeProv)
@@ -185,8 +188,12 @@ func (mr *MultiRepoTestSetup) CloneDB(fromRemote, dbName string) {
 	if err != nil {
 		mr.Errhand(err)
 	}
-	os.Chdir(cloneDir)
+	err = os.Chdir(cloneDir)
+	if err != nil {
+		mr.Errhand(err)
+	}
 	defer os.Chdir(wd)
+
 	ddb, err := doltdb.LoadDoltDB(ctx, types.Format_Default, doltdb.LocalDirDoltDB, filesys.LocalFS)
 	if err != nil {
 		mr.Errhand("Failed to initialize environment:" + err.Error())
@@ -236,7 +243,9 @@ func (mr *MultiRepoTestSetup) CommitWithWorkingSet(dbName string) *doltdb.Commit
 
 	t := datas.CommitNowFunc()
 	roots, err := dEnv.Roots(ctx)
-
+	if err != nil {
+		panic("couldn't get roots: " + err.Error())
+	}
 	pendingCommit, err := actions.GetCommitStaged(ctx, roots, ws.MergeActive(), mergeParentCommits, dEnv.DbData(), actions.CommitStagedProps{
 		Message:    "auto commit",
 		Date:       t,
@@ -289,6 +298,9 @@ func (mr *MultiRepoTestSetup) StageAll(dbName string) {
 	}
 
 	roots, err = actions.StageAllTables(ctx, roots, dEnv.Docs)
+	if err != nil {
+		mr.Errhand(fmt.Sprintf("Failed to stage tables: %s", dbName))
+	}
 	err = dEnv.UpdateRoots(ctx, roots)
 	if err != nil {
 		mr.Errhand(fmt.Sprintf("Failed to update roots: %s", dbName))

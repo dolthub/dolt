@@ -45,18 +45,11 @@ func mustHead(ds Dataset) types.Struct {
 	return s
 }
 
-func mustHeadRef(ds Dataset) types.Ref {
-	hr, ok, err := ds.MaybeHeadRef()
-
-	if err != nil {
-		panic("error getting head")
-	}
-
-	if !ok {
-		panic("no head")
-	}
-
-	return hr
+func mustHeight(ds Dataset) uint64 {
+	h, ok, err := ds.MaybeHeight()
+	d.PanicIfError(err)
+	d.PanicIfFalse(ok)
+	return h
 }
 
 func mustHeadValue(ds Dataset) types.Value {
@@ -323,7 +316,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 		"FindCommonAncestor":                 FindCommonAncestor,
 		"SetClosure":                         commonAncWithSetClosure,
 		"LazyClosure":                        commonAncWithLazyClosure,
-		"FindCommonAncestorUsingParentsList": FindCommonAncestorUsingParentsList,
+		"FindCommonAncestorUsingParentsList": findCommonAncestorUsingParentsList,
 	}
 
 	for name, method := range methods {
@@ -354,12 +347,12 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 }
 
 // Add a commit and return it.
-func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, types.Ref) {
+func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, hash.Hash) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
 	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
 	assert.NoError(t, err)
-	return mustHead(ds), mustHeadRef(ds)
+	return mustHead(ds), mustHeadAddr(ds)
 }
 
 func assertClosureMapValue(t *testing.T, vrw types.ValueReadWriter, v types.Value, h hash.Hash) bool {
@@ -493,57 +486,57 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
-	a1, a1r := addCommit(t, db, a, "a1")
-	a2, a2r := addCommit(t, db, a, "a2", a1)
-	a3, a3r := addCommit(t, db, a, "a3", a2)
+	a1, a1a := addCommit(t, db, a, "a1")
+	a2, a2a := addCommit(t, db, a, "a2", a1)
+	a3, a3a := addCommit(t, db, a, "a3", a2)
 
-	b1, b1r := addCommit(t, db, b, "b1", a1)
-	b2, b2r := addCommit(t, db, b, "b2", b1)
-	b3, b3r := addCommit(t, db, b, "b3", b2)
+	b1, b1a := addCommit(t, db, b, "b1", a1)
+	b2, b2a := addCommit(t, db, b, "b2", b1)
+	b3, b3a := addCommit(t, db, b, "b3", b2)
 
-	c1, c1r := addCommit(t, db, c, "c1", a3, b3)
+	c1, c1a := addCommit(t, db, c, "c1", a3, b3)
 
 	d1, _ := addCommit(t, db, d, "d1", c1, b3)
 
 	assertCommitParentsClosure(a1, []expected{})
 	assertCommitParentsClosure(a2, []expected{
-		{1, a1r.TargetHash()},
+		{1, a1a},
 	})
 	assertCommitParentsClosure(a3, []expected{
-		{1, a1r.TargetHash()},
-		{2, a2r.TargetHash()},
+		{1, a1a},
+		{2, a2a},
 	})
 
 	assertCommitParentsClosure(b1, []expected{
-		{1, a1r.TargetHash()},
+		{1, a1a},
 	})
 	assertCommitParentsClosure(b2, []expected{
-		{1, a1r.TargetHash()},
-		{2, b1r.TargetHash()},
+		{1, a1a},
+		{2, b1a},
 	})
 	assertCommitParentsClosure(b3, []expected{
-		{1, a1r.TargetHash()},
-		{2, b1r.TargetHash()},
-		{3, b2r.TargetHash()},
+		{1, a1a},
+		{2, b1a},
+		{3, b2a},
 	})
 
 	assertCommitParentsClosure(c1, []expected{
-		{1, a1r.TargetHash()},
-		{2, a2r.TargetHash()},
-		{2, b1r.TargetHash()},
-		{3, a3r.TargetHash()},
-		{3, b2r.TargetHash()},
-		{4, b3r.TargetHash()},
+		{1, a1a},
+		{2, a2a},
+		{2, b1a},
+		{3, a3a},
+		{3, b2a},
+		{4, b3a},
 	})
 
 	assertCommitParentsClosure(d1, []expected{
-		{1, a1r.TargetHash()},
-		{2, a2r.TargetHash()},
-		{2, b1r.TargetHash()},
-		{3, a3r.TargetHash()},
-		{3, b2r.TargetHash()},
-		{4, b3r.TargetHash()},
-		{5, c1r.TargetHash()},
+		{1, a1a},
+		{2, a2a},
+		{2, b1a},
+		{3, a3a},
+		{3, b2a},
+		{4, b3a},
+		{5, c1a},
 	})
 }
 

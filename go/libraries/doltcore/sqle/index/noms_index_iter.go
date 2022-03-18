@@ -148,10 +148,14 @@ func (i *indexLookupRowIterAdapter) queueRows(ctx context.Context, epoch int) {
 		select {
 		case lookups.toLookupCh <- lookup:
 		case <-ctx.Done():
+			err := ctx.Err()
+			if err == nil {
+				err = io.EOF
+			}
 			i.resultBuf.Push(lookupResult{
 				idx: idx,
 				r:   nil,
-				err: ctx.Err(),
+				err: err,
 			}, epoch)
 
 			return

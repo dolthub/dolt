@@ -138,7 +138,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 				return conflicts, err
 			}
 
-			err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+			err = sess.SetWorkingSet(ctx, dbName, ws)
 			if err != nil {
 				return conflicts, err
 			}

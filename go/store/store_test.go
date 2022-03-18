@@ -77,17 +77,10 @@ func readTupleFromDB(ctx context.Context, t require.TestingT, dsID string) (*typ
 	ds, err := db.GetDataset(ctx, dsID)
 	require.NoError(t, err)
 
-	ref, ok, err := ds.MaybeHeadRef()
+	val, ok, err := ds.MaybeHeadValue()
 	require.NoError(t, err)
 	require.True(t, ok)
 
-	val, err := ref.TargetValue(ctx, vrw)
-	require.NoError(t, err)
-
-	st := val.(types.Struct)
-	val, ok, err = st.MaybeGet("value")
-	require.NoError(t, err)
-	require.True(t, ok)
 	tup := val.(types.Tuple)
 	valSlice, err := tup.AsSlice()
 	require.NoError(t, err)

@@ -9,6 +9,7 @@ on:
 jobs:
   mysql_client_integrations_job:
     runs-on: ubuntu-18.04
+    timeout-minutes: 30
     name: Run tests
     steps:
       - name: Checkout
