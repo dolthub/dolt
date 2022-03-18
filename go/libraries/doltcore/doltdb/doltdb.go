@@ -201,23 +201,23 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 
 func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (types.Value, error) {
 	if !datas.DatasetFullRe.MatchString(ref) {
-		return types.Struct{}, fmt.Errorf("invalid ref format: %s", ref)
+		return nil, fmt.Errorf("invalid ref format: %s", ref)
 	}
 
 	ds, err := db.GetDataset(ctx, ref)
 
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
 	if !ds.HasHead() {
-		return types.Struct{}, ErrBranchNotFound
+		return nil, ErrBranchNotFound
 	}
 
 	if ds.IsTag() {
 		_, commitaddr, err := ds.HeadTag()
 		if err != nil {
-			return types.Struct{}, err
+			return nil, err
 		}
 		return vrw.ReadValue(ctx, commitaddr)
 	}
@@ -230,15 +230,15 @@ func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (t
 	unprefixed := strings.TrimPrefix(c, "#")
 	hash, ok := hash.MaybeParse(unprefixed)
 	if !ok {
-		return types.Struct{}, errors.New("invalid hash: " + c)
+		return nil, errors.New("invalid hash: " + c)
 	}
 
 	val, err := vr.ReadValue(ctx, hash)
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 	if val == nil {
-		return types.Struct{}, ErrHashNotFound
+		return nil, ErrHashNotFound
 	}
 	return val, nil
 }
