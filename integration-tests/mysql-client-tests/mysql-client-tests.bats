@@ -33,6 +33,12 @@ teardown() {
     cd ..
     kill $SERVER_PID
     rm -rf $REPO_NAME
+
+    # Check if postgresql is still running. If so stop it
+    active=$(service postgresql status)
+    if echo "$active" | grep "online"; then
+        service postgresql stop
+    fi
 }
 
 @test "go go-sql-drive/mysql test" {
