@@ -27,7 +27,7 @@ require (
 	github.com/go-openapi/strfmt v0.19.5 // indirect
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/gocraft/dbr/v2 v2.7.2
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/golang/snappy v0.0.1
 	github.com/google/go-cmp v0.5.7
 	github.com/google/uuid v1.2.0

@@ -18,7 +18,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 )
@@ -94,7 +94,7 @@ func (t *Timer) AsClientEventMetric() *eventsapi.ClientEventMetric {
 	}
 
 	delta := t.stop.Sub(t.start)
-	d := ptypes.DurationProto(delta)
+	d := durationpb.New(delta)
 
 	return &eventsapi.ClientEventMetric{
 		MetricId:    t.metricID,
