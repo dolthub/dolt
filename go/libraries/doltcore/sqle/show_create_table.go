@@ -17,13 +17,12 @@ package sqle
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 
 	sqle "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
@@ -35,9 +34,7 @@ func PrepareCreateTableStmt(ctx context.Context, sqlDb sql.Database) (*sql.Conte
 		sql.WithSession(sess),
 		sql.WithTracer(tracing.Tracer(ctx)))
 
-	var cfg config.ReadableConfig = nil
-	b := env.GetDefaultInitBranch(cfg)
-	pro := NewDoltDatabaseProvider(b, nil, sqlDb)
+	pro := NewDoltDatabaseProvider(env.DefaultInitBranch, nil, sqlDb)
 	engine := sqle.NewDefault(pro)
 	sqlCtx.SetCurrentDatabase(sqlDb.Name())
 	return sqlCtx, engine, sess
