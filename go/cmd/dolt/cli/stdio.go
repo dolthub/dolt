@@ -179,11 +179,12 @@ type EphemeralPrinter struct {
 	w            *uilive.Writer
 	wrote        bool
 	wroteNewline bool
+
+	started bool
 }
 
-// StartEphemeralPrinter creates a new EphemeralPrinter and starts it. You
-// should defer Stop after calling this.
-func StartEphemeralPrinter() *EphemeralPrinter {
+// NewEphemeralPrinter creates a new EphemeralPrinter.
+func NewEphemeralPrinter() *EphemeralPrinter {
 	w := uilive.New()
 	if CliOut == colorOutput {
 		w.Out = fdProvider{CliOut, colorFd}
@@ -191,7 +192,6 @@ func StartEphemeralPrinter() *EphemeralPrinter {
 		w.Out = CliOut
 	}
 	e := &EphemeralPrinter{outW: w, w: w}
-	e.start()
 	return e
 }
 
@@ -206,6 +206,10 @@ func (e *EphemeralPrinter) Printf(format string, a ...interface{}) {
 	str := fmt.Sprintf(format, a...)
 	lines := strings.Split(str, "\n")
 	for i, line := range lines {
+		if !e.started {
+			e.started = true
+			e.w.Start()
+		}
 		if i != 0 {
 			_, _ = e.outW.Write([]byte("\n"))
 			e.wroteNewline = true
@@ -231,19 +235,14 @@ func (e *EphemeralPrinter) Display() {
 		// is cleared properly.
 		_, _ = e.w.Write([]byte("\n"))
 	}
-	_ = e.w.Flush()
+	if e.started {
+		e.started = false
+		e.w.Stop()
+	}
+
 	e.outW = e.w
 	e.wrote = false
 	e.wroteNewline = false
-}
-
-func (e *EphemeralPrinter) start() {
-	e.w.Start()
-}
-
-// Stop stops the ephemeral printer. It must be called after using StartEphemeralPrinter
-func (e *EphemeralPrinter) Stop() {
-	e.w.Stop()
 }
 
 func outputIsClosed() bool {

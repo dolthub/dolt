@@ -170,8 +170,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 		cli.Println("Checking remote server looking for key association.")
 	}
 
-	p := cli.StartEphemeralPrinter()
-	defer p.Stop()
+	p := cli.NewEphemeralPrinter()
 	linePrinter := func() func(line string) {
 		return func(line string) {
 			p.Printf(line + "\n")

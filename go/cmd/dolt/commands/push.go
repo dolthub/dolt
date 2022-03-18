@@ -182,8 +182,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh chan pull.PullerEvent, la
 	var filesTransfered int
 	var ts TextSpinner
 
-	p := cli.StartEphemeralPrinter()
-	defer p.Stop()
+	p := cli.NewEphemeralPrinter()
 	uploadRate := ""
 
 	for evt := range pullerEventCh {
@@ -249,8 +248,7 @@ func progFunc(ctx context.Context, progChan chan pull.PullProgress) {
 	var latest pull.PullProgress
 	last := time.Now().UnixNano() - 1
 	done := false
-	p := cli.StartEphemeralPrinter()
-	defer p.Stop()
+	p := cli.NewEphemeralPrinter()
 	for !done {
 		if ctx.Err() != nil {
 			return
