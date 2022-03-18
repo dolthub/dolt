@@ -186,7 +186,7 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	s.NoError(err)
 	src, err = datas.CommitValue(context.Background(), sourceDB, src, types.Float(42))
 	s.NoError(err)
-	rewindRef := mustHeadRef(src).TargetHash()
+	rewindRef := mustHeadAddr(src)
 	src, err = datas.CommitValue(context.Background(), sourceDB, src, types.Float(43))
 	s.NoError(err)
 	sourceDB.Close() // Close Database backing both Datasets
