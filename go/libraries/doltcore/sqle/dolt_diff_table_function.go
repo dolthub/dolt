@@ -202,8 +202,9 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 
 // CheckPrivileges implements the sql.Node interface
 func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
-	// TODO: Implement priv check on underlying table
-	return true
+	// TODO: Add tests for privilege checking
+	return opChecker.UserHasPrivileges(ctx,
+		sql.NewPrivilegedOperation(dtf.database.Name(), dtf.tableName, "", sql.PrivilegeType_Select))
 }
 
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
