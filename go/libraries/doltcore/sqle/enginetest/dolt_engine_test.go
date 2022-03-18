@@ -58,23 +58,51 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "insert into sparse auto_increment table",
+			Name: "Two column index",
 			SetUpScript: []string{
-				"create table auto (pk int primary key auto_increment)",
-				"insert into auto values (10), (20), (30)",
-				"insert into auto values (NULL)",
-				"insert into auto values (40)",
-				"insert into auto values (0)",
+				`CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, INDEX (v1, v2));`,
+				`INSERT INTO test VALUES (0,0,48),(1,0,52),(2,2,4),(3,2,10),(4,3,35),(5,5,36),(6,5,60),(7,6,1),(8,6,51),
+(9,6,60),(10,6,73),(11,9,44),(12,9,97),(13,13,44),(14,14,53),(15,14,57),(16,14,98),(17,16,19),(18,16,53),(19,16,95),
+(20,18,31),(21,19,48),(22,19,75),(23,19,97),(24,24,60),(25,25,14),(26,25,31),(27,27,9),(28,27,24),(29,28,24),(30,28,83),
+(31,31,14),(32,33,39),(33,34,22),(34,34,91),(35,35,89),(36,38,20),(37,38,66),(38,39,55),(39,39,86),(40,40,97),(41,42,0),
+(42,42,82),(43,43,63),(44,44,48),(45,44,67),(46,45,22),(47,45,31),(48,45,63),(49,45,86),(50,46,46),(51,47,5),(52,48,22),
+(53,49,0),(54,50,0),(55,50,14),(56,51,35),(57,54,38),(58,56,0),(59,56,60),(60,57,29),(61,57,49),(62,58,12),(63,58,32),
+(64,59,29),(65,59,45),(66,59,54),(67,60,66),(68,61,3),(69,61,34),(70,63,19),(71,63,69),(72,65,80),(73,65,97),(74,67,95),
+(75,68,11),(76,69,34),(77,72,52),(78,74,81),(79,76,39),(80,78,0),(81,78,90),(82,79,36),(83,80,61),(84,80,88),(85,81,4),
+(86,82,16),(87,83,30),(88,83,74),(89,84,9),(90,84,45),(91,86,56),(92,86,88),(93,87,51),(94,89,3),(95,93,19),(96,93,21),
+(97,93,96),(98,98,0),(99,98,51),(100,98,61);`,
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: "select * from auto order by 1",
+					Query: "SELECT * FROM test WHERE ((v1>39 AND v2>66) OR (v1=99));",
 					Expected: []sql.Row{
-						{10}, {20}, {30}, {31}, {40}, {41},
+						{72, 65, 80}, {49, 45, 86}, {92, 86, 88}, {45, 44, 67}, {73, 65, 97}, {40, 40, 97}, {74, 67, 95}, {78, 74, 81}, {81, 78, 90}, {88, 83, 74}, {84, 80, 88}, {71, 63, 69}, {42, 42, 82}, {97, 93, 96},
+					},
+				},
+				{
+					Query: "SELECT * FROM test WHERE ((v1=45) OR (v1=28));",
+					Expected: []sql.Row{
+						{49, 45, 86}, {47, 45, 31}, {46, 45, 22}, {30, 28, 83}, {29, 28, 24}, {48, 45, 63},
+					},
+				},
+				{
+					Query: "SELECT * FROM test WHERE (((v1=63) OR (v1 BETWEEN 55 AND 82 AND v2 BETWEEN 0 AND 6)) OR (v1=46));",
+					Expected: []sql.Row{
+						{58, 56, 0}, {85, 81, 4}, {50, 46, 46}, {68, 61, 3}, {80, 78, 0}, {70, 63, 19}, {71, 63, 69},
+					},
+				},
+				{
+					Query: "SELECT * FROM test WHERE ((v1>98 AND v2<75) OR (v1=47));",
+					Expected: []sql.Row{
+						{51, 47, 5},
+					},
+				},
+				{
+					Query: "SELECT * FROM test WHERE ((v1 BETWEEN 21 AND 33 AND v2>25) OR (v1<0));",
+					Expected: []sql.Row{
+						{30, 28, 83}, {24, 24, 60}, {26, 25, 31}, {32, 33, 39},
 					},
 				},
 			},
@@ -86,8 +114,8 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
+		//engine.Analyzer.Debug = true
+		//engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
