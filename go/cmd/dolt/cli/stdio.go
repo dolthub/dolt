@@ -29,26 +29,23 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 )
 
+var colorOutput = color.Output
+var colorFd = os.Stdout.Fd()
+var CliOut = colorOutput
+var CliErr = color.Error
+
 var outputClosed uint64
+
+var InStream io.ReadCloser = os.Stdin
+var OutStream io.WriteCloser = os.Stdout
+
+var ExecuteWithStdioRestored func(userFunc func())
 
 func CloseOutput() {
 	if atomic.CompareAndSwapUint64(&outputClosed, 0, 1) {
 		fmt.Fprintln(CliOut)
 	}
 }
-
-func outputIsClosed() bool {
-	isClosed := atomic.LoadUint64(&outputClosed)
-	return isClosed == 1
-}
-
-var CliOut = color.Output
-var CliErr = color.Error
-
-var ExecuteWithStdioRestored func(userFunc func())
-
-var InStream io.ReadCloser = os.Stdin
-var OutStream io.WriteCloser = os.Stdout
 
 func SetIOStreams(inStream io.ReadCloser, outStream io.WriteCloser) {
 	InStream = inStream
@@ -143,6 +140,37 @@ func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
 
+func DeleteAndPrint(prevMsgLen int, msg string) int {
+	if outputIsClosed() {
+		return 0
+	}
+
+	msgLen := len(msg)
+	backspacesAndMsg := make([]byte, prevMsgLen+msgLen, 2*prevMsgLen+msgLen)
+	for i := 0; i < prevMsgLen; i++ {
+		backspacesAndMsg[i] = '\b'
+	}
+
+	for i, c := range []byte(msg) {
+		backspacesAndMsg[i+prevMsgLen] = c
+	}
+
+	diff := prevMsgLen - msgLen
+
+	if diff > 0 {
+		for i := 0; i < diff; i++ {
+			backspacesAndMsg = append(backspacesAndMsg, ' ')
+		}
+
+		for i := 0; i < diff; i++ {
+			backspacesAndMsg = append(backspacesAndMsg, '\b')
+		}
+	}
+
+	Print(string(backspacesAndMsg))
+	return msgLen
+}
+
 // EphemeralPrinter is tool than you can use to print temporary line(s) to the
 // console. Each time Display is called, the output is reset, and you can begin
 // writing anew.
@@ -157,7 +185,11 @@ type EphemeralPrinter struct {
 // should defer Stop after calling this.
 func StartEphemeralPrinter() *EphemeralPrinter {
 	w := uilive.New()
-	w.Out = CliOut
+	if CliOut == colorOutput {
+		w.Out = fdProvider{CliOut, colorFd}
+	} else {
+		w.Out = CliOut
+	}
 	e := &EphemeralPrinter{outW: w, w: w}
 	e.start()
 	return e
@@ -214,33 +246,18 @@ func (e *EphemeralPrinter) Stop() {
 	e.w.Stop()
 }
 
-func DeleteAndPrint(prevMsgLen int, msg string) int {
-	if outputIsClosed() {
-		return 0
-	}
+func outputIsClosed() bool {
+	isClosed := atomic.LoadUint64(&outputClosed)
+	return isClosed == 1
+}
 
-	msgLen := len(msg)
-	backspacesAndMsg := make([]byte, prevMsgLen+msgLen, 2*prevMsgLen+msgLen)
-	for i := 0; i < prevMsgLen; i++ {
-		backspacesAndMsg[i] = '\b'
-	}
+type fdProvider struct {
+	io.Writer
+	fd uintptr
+}
 
-	for i, c := range []byte(msg) {
-		backspacesAndMsg[i+prevMsgLen] = c
-	}
+var _ uilive.FdWriter = fdProvider{}
 
-	diff := prevMsgLen - msgLen
-
-	if diff > 0 {
-		for i := 0; i < diff; i++ {
-			backspacesAndMsg = append(backspacesAndMsg, ' ')
-		}
-
-		for i := 0; i < diff; i++ {
-			backspacesAndMsg = append(backspacesAndMsg, '\b')
-		}
-	}
-
-	Print(string(backspacesAndMsg))
-	return msgLen
+func (p fdProvider) Fd() uintptr {
+	return p.fd
 }
