@@ -106,7 +106,7 @@ RUN service postgresql start
 
 # install mysql_fdw
 WORKDIR /mysql-client-tests/mysql_fdw
-RUN git clone https://github.com/EnterpriseDB/mysql_fdw
+RUN git clone https://github.com/EnterpriseDB/mysql_fdw --branch REL-2_7_0
 WORKDIR /mysql-client-tests/mysql_fdw/mysql_fdw
 RUN make USE_PGXS=1 && \
     make USE_PGXS=1 install
