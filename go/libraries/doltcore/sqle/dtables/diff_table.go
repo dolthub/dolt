@@ -527,7 +527,7 @@ func NewDiffPartitions(tblName string, cmItr doltdb.CommitItr, cmHashToTblInfo m
 	}
 }
 
-// processCommit called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
+// processCommit is called in a commit iteration loop. Adds partitions when it finds a commit and its parent that have
 // different values for the hash of the table being looked at.
 func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm *doltdb.Commit, root *doltdb.RootValue, tbl *doltdb.Table) (*DiffPartition, error) {
 	tblHash, _, err := root.GetTableHash(ctx, dps.tblName)
