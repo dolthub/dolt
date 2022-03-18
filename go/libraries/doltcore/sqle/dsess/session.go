@@ -968,3 +968,8 @@ func (sess *Session) setSessionVarsForDb(ctx *sql.Context, dbName string) error 
 func (sess *Session) NewDoltSession(conf config.ReadWriteConfig) *DoltSession {
 	return &DoltSession{Session: sess, globalsConf: conf, mu: &sync.Mutex{}}
 }
+
+func (sess *Session) WithDatabaseProvider(pro RevisionDatabaseProvider) *Session {
+	sess.provider = pro
+	return sess
+}
