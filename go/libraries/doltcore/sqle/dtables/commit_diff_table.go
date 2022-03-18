@@ -77,8 +77,8 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 	j, err := rowconv.NewJoiner(
 		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
 		map[string]rowconv.ColNamingFunc{
-			diff.To:   diff.ToNamer,
-			diff.From: diff.FromNamer,
+			diff.To:   diff.ToColNamer,
+			diff.From: diff.FromColNamer,
 		})
 	if err != nil {
 		return nil, err

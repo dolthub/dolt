@@ -31,11 +31,11 @@ const (
 	To   = "to"
 )
 
-func ToNamer(name string) string {
+func ToColNamer(name string) string {
 	return To + "_" + name
 }
 
-func FromNamer(name string) string {
+func FromColNamer(name string) string {
 	return From + "_" + name
 }
 
