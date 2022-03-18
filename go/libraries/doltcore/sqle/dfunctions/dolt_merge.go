@@ -32,6 +32,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
+	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
+}
+
 const DoltMergeFuncName = "dolt_merge"
 
 type DoltMergeFunc struct {
@@ -46,6 +50,10 @@ const (
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	return doDoltMerge(ctx, row, d.Children())
+}
+
+func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -55,7 +63,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	ap := cli.CreateMergeArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
+	args, err := getDoltArgs(ctx, row, exprs)
 
 	if err != nil {
 		return noConflicts, err
@@ -89,7 +97,7 @@ func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 			return noConflicts, err
 		}
 
-		err := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		err := sess.SetWorkingSet(ctx, dbName, ws)
 		if err != nil {
 			return noConflicts, err
 		}
@@ -163,7 +171,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 			if err == doltdb.ErrUnresolvedConflicts {
 				// if there are unresolved conflicts, write the resulting working set back to the session and return an
 				// error message
-				wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+				wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 				if wsErr != nil {
 					return ws, hasConflicts, wsErr
 				}
@@ -191,7 +199,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 	if err == doltdb.ErrUnresolvedConflicts || err == doltdb.ErrUnresolvedConstraintViolations {
 		// if there are unresolved conflicts, write the resulting working set back to the session and return an
 		// error message
-		wsErr := sess.SetWorkingSet(ctx, dbName, ws, nil)
+		wsErr := sess.SetWorkingSet(ctx, dbName, ws)
 		if wsErr != nil {
 			return ws, hasConflicts, wsErr
 		}
@@ -203,7 +211,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflicts, err
 	}
 
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, noConflicts, err
 	}
@@ -265,7 +273,7 @@ func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.Wor
 	// merges). Hence, we go ahead and commit the working set to the transaction.
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = sess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return ws, err
 	}
@@ -303,7 +311,7 @@ func executeNoFFMerge(
 
 	// Save our work so far in the session, as it will be referenced by the commit call below (badly in need of a
 	// refactoring)
-	err = dSess.SetWorkingSet(ctx, dbName, ws, nil)
+	err = dSess.SetWorkingSet(ctx, dbName, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -401,6 +409,25 @@ func mergeRootToWorking(
 	return ws, nil
 }
 
+func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
+	rh, err := root.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	hrh, err := headRoot.HashOf()
+
+	if err != nil {
+		return err
+	}
+
+	if rh != hrh {
+		return ErrUncommittedChanges.New()
+	}
+	return nil
+}
+
 func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {
 	for _, stats := range tblToStats {
 		if stats.Operation == merge.TableModified && stats.Conflicts > 0 {
@@ -427,8 +454,4 @@ func (d DoltMergeFunc) Type() sql.Type {
 
 func (d DoltMergeFunc) WithChildren(children ...sql.Expression) (sql.Expression, error) {
 	return NewDoltMergeFunc(children...)
-}
-
-func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
-	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }

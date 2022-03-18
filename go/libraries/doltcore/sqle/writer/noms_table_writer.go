@@ -207,12 +207,11 @@ func (te *nomsTableWriter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (te *nomsTableWriter) flush(ctx *sql.Context) error {
-	newRoot, err := te.sess.Flush(ctx)
+	ws, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
-
-	return te.setter(ctx, te.dbName, newRoot)
+	return te.setter(ctx, te.dbName, ws.WorkingRoot())
 }
 
 func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
@@ -221,7 +220,8 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 		return err
 	}
 
-	return te.sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	return te.sess.UpdateWorkingSet(ctx, func(ctx context.Context, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+		root := ws.WorkingRoot()
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return nil, err
@@ -232,7 +232,7 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 				root = newRoot
 			}
 		}
-		return root, nil
+		return ws.WithWorkingRoot(root), nil
 	})
 }
 

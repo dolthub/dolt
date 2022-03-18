@@ -238,7 +238,7 @@ func TestPuller(t *testing.T) {
 	require.NoError(t, err)
 
 	var parent []hash.Hash
-	states := map[string]types.Ref{}
+	states := map[string]hash.Hash{}
 	for _, delta := range deltas {
 		for tbl, sets := range delta.sets {
 			rootMap, err = addTableValues(ctx, vs, rootMap, tbl, sets...)
@@ -261,13 +261,12 @@ func TestPuller(t *testing.T) {
 		ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 		require.NoError(t, err)
 
-		r, ok, err := ds.MaybeHeadRef()
-		require.NoError(t, err)
+		dsAddr, ok := ds.MaybeHeadAddr()
 		require.True(t, ok)
 
-		parent = []hash.Hash{r.TargetHash()}
+		parent = []hash.Hash{dsAddr}
 
-		states[delta.name] = r
+		states[delta.name] = dsAddr
 	}
 
 	tbl, err := makeABigTable(ctx, vs)
@@ -285,13 +284,12 @@ func TestPuller(t *testing.T) {
 	ds, err = db.Commit(ctx, ds, rootMap, commitOpts)
 	require.NoError(t, err)
 
-	r, ok, err := ds.MaybeHeadRef()
-	require.NoError(t, err)
+	addr, ok := ds.MaybeHeadAddr()
 	require.True(t, ok)
 
-	states["add big table"] = r
+	states["add big table"] = addr
 
-	for k, rootRef := range states {
+	for k, rootAddr := range states {
 		t.Run(k, func(t *testing.T) {
 			eventCh := make(chan PullerEvent, 128)
 			wg := new(sync.WaitGroup)
@@ -323,7 +321,7 @@ func TestPuller(t *testing.T) {
 			require.NoError(t, err)
 			wrf, err := types.WalkRefsForChunkStore(datas.ChunkStoreFromDatabase(db))
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), wrf, rootRef.TargetHash(), eventCh)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), wrf, rootAddr, eventCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
@@ -333,15 +331,14 @@ func TestPuller(t *testing.T) {
 
 			sinkDS, err := sinkdb.GetDataset(ctx, "ds")
 			require.NoError(t, err)
-			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootRef.TargetHash())
+			sinkDS, err = sinkdb.FastForward(ctx, sinkDS, rootAddr)
 			require.NoError(t, err)
 
 			require.NoError(t, err)
-			sinkRootRef, ok, err := sinkDS.MaybeHeadRef()
-			require.NoError(t, err)
+			sinkRootAddr, ok := sinkDS.MaybeHeadAddr()
 			require.True(t, ok)
 
-			eq, err := pullerRefEquality(ctx, rootRef, sinkRootRef, vs, sinkvs)
+			eq, err := pullerAddrEquality(ctx, rootAddr, sinkRootAddr, vs, sinkvs)
 			require.NoError(t, err)
 			assert.True(t, eq)
 
@@ -371,135 +368,21 @@ func makeABigTable(ctx context.Context, vrw types.ValueReadWriter) (types.Map, e
 	return me.Map(ctx)
 }
 
-func pullerRefEquality(ctx context.Context, expectad, actual types.Ref, src, sink types.ValueReadWriter) (bool, error) {
-	expectedVal, err := expectad.TargetValue(ctx, src)
-
-	if err != nil {
-		return false, err
-	}
-
-	actualVal, err := actual.TargetValue(ctx, sink)
-	if err != nil {
-		return false, err
-	}
-
-	exPs, exTbls, err := parentsAndTables(expectedVal.(types.Struct))
-	if err != nil {
-		return false, err
-	}
-
-	actPs, actTbls, err := parentsAndTables(actualVal.(types.Struct))
-	if err != nil {
-		return false, err
-	}
-
-	if !exPs.Equals(actPs) {
+func pullerAddrEquality(ctx context.Context, expected, actual hash.Hash, src, sink types.ValueReadWriter) (bool, error) {
+	if expected != actual {
 		return false, nil
 	}
 
-	err = exTbls.IterAll(ctx, func(key, exVal types.Value) error {
-		actVal, ok, err := actTbls.MaybeGet(ctx, key)
-
-		if err != nil {
-			return err
-		}
-
-		if !ok {
-			return errors.New("Missing table " + string(key.(types.String)))
-		}
-
-		exMapVal, err := exVal.(types.Ref).TargetValue(ctx, src)
-
-		if err != nil {
-			return err
-		}
-
-		actMapVal, err := actVal.(types.Ref).TargetValue(ctx, sink)
-
-		if err != nil {
-			return err
-		}
-
-		return errIfNotEqual(ctx, exMapVal.(types.Map), actMapVal.(types.Map))
-	})
-
+	expectedVal, err := src.ReadValue(ctx, expected)
+	if err != nil {
+		return false, err
+	}
+	actualVal, err := sink.ReadValue(ctx, actual)
 	if err != nil {
 		return false, err
 	}
 
-	return exTbls.Equals(actTbls), nil
-}
-
-var errNotEqual = errors.New("not equal")
-
-func errIfNotEqual(ctx context.Context, ex, act types.Map) error {
-	exItr, err := ex.Iterator(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	actItr, err := act.Iterator(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	for {
-		exK, exV, err := exItr.Next(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		actK, actV, err := actItr.Next(ctx)
-
-		if err != nil {
-			return err
-		}
-
-		if actK == nil && exK == nil {
-			break
-		} else if exK == nil || actK == nil {
-			return errNotEqual
-		}
-
-		if exV == nil && actV == nil {
-			continue
-		} else if exV == nil || actV == nil {
-			return errNotEqual
-		}
-
-		if !exK.Equals(actK) || !exV.Equals(actV) {
-			return errNotEqual
-		}
-	}
-
-	return nil
-}
-
-func parentsAndTables(cm types.Struct) (types.List, types.Map, error) {
-	ps, ok, err := cm.MaybeGet(datas.ParentsListField)
-
-	if err != nil {
-		return types.EmptyList, types.EmptyMap, err
-	}
-
-	if !ok {
-		return types.EmptyList, types.EmptyMap, err
-	}
-
-	tbls, ok, err := cm.MaybeGet("value")
-
-	if err != nil {
-		return types.EmptyList, types.EmptyMap, err
-	}
-
-	if !ok {
-		return types.EmptyList, types.EmptyMap, err
-	}
-
-	return ps.(types.List), tbls.(types.Map), nil
+	return expectedVal.Equals(actualVal), nil
 }
 
 func writeValAndGetRef(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

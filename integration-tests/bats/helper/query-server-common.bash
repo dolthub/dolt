@@ -65,8 +65,6 @@ for i in range(len(queries)):
 
     if expected[i] is not None:
         expected_rows = csv_to_row_maps(expected[i])
-        print('expected:', expected_rows, '\n  actual:', actual_rows)
-
         if expected_rows != actual_rows:
             print('expected:', expected_rows, '\n  actual:', actual_rows)
             sys.exit(1)

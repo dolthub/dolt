@@ -308,7 +308,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
-		"set @@"+dsess.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
+		"SELECT COMMIT('-am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)
