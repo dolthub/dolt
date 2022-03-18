@@ -63,6 +63,7 @@ void test_statement(MYSQL *con, statement *stmt) {
       exit(1);
     }
   }
+  // TODO: Add test for mysql_stmt_store_result when supported
 close:
   if ( mysql_stmt_close(mstmt) ) {
     fprintf(stderr, "failed to close stmt: %s: %s\n", stmt->query, mysql_error(con));
