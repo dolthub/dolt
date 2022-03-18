@@ -168,20 +168,14 @@ func (dt *CommitDiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, erro
 		return nil, err
 	}
 
-	toTable, _, ok, err := toRoot.GetTableInsensitive(ctx, dt.name)
+	toTable, _, _, err := toRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrTableNotFound.New(dt.name)
 	}
 
-	fromTable, _, ok, err := fromRoot.GetTableInsensitive(ctx, dt.name)
+	fromTable, _, _, err := fromRoot.GetTableInsensitive(ctx, dt.name)
 	if err != nil {
 		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrTableNotFound.New(dt.name)
 	}
 
 	dp := DiffPartition{
