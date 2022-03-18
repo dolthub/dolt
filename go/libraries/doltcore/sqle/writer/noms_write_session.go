@@ -204,10 +204,12 @@ func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error
 				return err
 			}
 
-			v := s.tracker.Current(name)
-			tbl, err = tbl.SetAutoIncrementValue(ctx, v)
-			if err != nil {
-				return err
+			if schema.HasAutoIncrement(ed.Schema()) {
+				v := s.tracker.Current(name)
+				tbl, err = tbl.SetAutoIncrementValue(ctx, v)
+				if err != nil {
+					return err
+				}
 			}
 
 			return rootUpdate(name, tbl)

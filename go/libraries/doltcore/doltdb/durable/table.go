@@ -140,7 +140,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 		indexesKey:   indexesRef,
 	}
 
-	if autoIncVal != nil {
+	if schema.HasAutoIncrement(sch) && autoIncVal != nil {
 		sd[autoIncrementKey] = autoIncVal
 	}
 
