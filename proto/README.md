@@ -14,7 +14,7 @@ Dependencies are git submodules in //proto/third_party.
 * You need to run `go build -o ._protoc-gen-go ./cmd/protoc-gen-go` in
   `third_party/protobuf-go`.
 
-* You need to run `go build -o ._protoc-gen-go-grpc ./cmd/protoc-gen-go` in
+* You need to run `go build -o ._protoc-gen-go-grpc .` in
   `third_party/grpc-go/cmd/protoc-gen-go-grpc`.
 
 Dependency tracking and hermeticity here are poor.

@@ -23,7 +23,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	filesys "github.com/dolthub/dolt/go/libraries/utils/filesys"
