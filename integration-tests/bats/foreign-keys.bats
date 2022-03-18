@@ -1921,3 +1921,22 @@ SQL
     run dolt sql -q "SHOW CREATE TABLE public.states"
     [[ $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
 }
+
+@test "foreign-keys: creating a foreign key constraint on a table with an unsupported type works" {
+
+    # https://github.com/dolthub/dolt/issues/3023
+    dolt sql <<SQL
+CREATE TABLE IF NOT EXISTS restaurants (
+    id INT PRIMARY KEY,
+    coordinate POINT
+);
+CREATE TABLE IF NOT EXISTS hours (
+    restaurant_id INT PRIMARY KEY AUTO_INCREMENT,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
+);
+SQL
+
+    run dolt sql -q "show create table hours";
+    [ $status -eq 0 ]
+    [[ $output =~ "FOREIGN KEY (\`restaurant_id\`) REFERENCES \`restaurants\` (\`id\`)" ]] || false
+}
