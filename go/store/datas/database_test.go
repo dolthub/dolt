@@ -641,6 +641,6 @@ func (suite *DatabaseSuite) TestMetaOption() {
 
 	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
 	suite.NoError(err)
-	c := mustHead(ds)
+	c := mustHead(ds).(types.Struct)
 	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("name")))
 }

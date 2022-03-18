@@ -181,7 +181,7 @@ func (suite *PullSuite) TestPullEverything() {
 
 	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr)).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(mustGetValue(v.MaybeGet(datas.ValueField))))
+	suite.True(l.Equals(mustGetCommitValue(v)))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -228,7 +228,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
+	suite.True(srcL.Equals(mustGetCommitValue(v)))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -281,7 +281,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
+	suite.True(srcL.Equals(mustGetCommitValue(v)))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -333,7 +333,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetValue(v.(types.Struct).MaybeGet(datas.ValueField))))
+	suite.True(srcL.Equals(mustGetCommitValue(v)))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
@@ -585,6 +585,12 @@ func mustValue(val types.Value, err error) types.Value {
 	return val
 }
 
+func mustGetCommitValue(c types.Value) types.Value {
+	v, err := datas.GetCommitValue(context.Background(), c)
+	d.PanicIfError(err)
+	d.PanicIfFalse(v != nil)
+	return v
+}
 func mustGetValue(v types.Value, found bool, err error) types.Value {
 	d.PanicIfError(err)
 	d.PanicIfFalse(found)

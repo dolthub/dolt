@@ -36,12 +36,11 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-func mustHead(ds Dataset) types.Struct {
+func mustHead(ds Dataset) types.Value {
 	s, ok := ds.MaybeHead()
 	if !ok {
 		panic("no head")
 	}
-
 	return s
 }
 
@@ -267,7 +266,7 @@ func TestCommitWithoutMetaField(t *testing.T) {
 	assert.False(IsCommit(noMetaCommit))
 }
 
-func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Struct) []hash.Hash {
+func mustCommitToTargetHashes(vrw types.ValueReadWriter, commits ...types.Value) []hash.Hash {
 	ret := make([]hash.Hash, len(commits))
 	for i, c := range commits {
 		r, err := types.NewRef(c, vrw.Format())
@@ -307,7 +306,7 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 ty
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
-func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *database) {
+func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
 	assert := assert.New(t)
 
 	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
@@ -322,17 +321,18 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 	for name, method := range methods {
 		tn := fmt.Sprintf("find common ancestor using %s", name)
 		t.Run(tn, func(t *testing.T) {
-			found, ok, err := method(context.Background(), mustRef(types.NewRef(a, ldb.Format())), mustRef(types.NewRef(b, rdb.Format())), ldb, rdb)
+			ctx := context.Background()
+			found, ok, err := method(ctx, mustRef(types.NewRef(a, ldb.Format())), mustRef(types.NewRef(b, rdb.Format())), ldb, rdb)
 			assert.NoError(err)
 
 			if assert.True(ok) {
 				tv, err := found.TargetValue(context.Background(), ldb)
 				assert.NoError(err)
 				ancestor := tv.(types.Struct)
-				expV, _, _ := expected.MaybeGet(ValueField)
-				aV, _, _ := a.MaybeGet(ValueField)
-				bV, _, _ := b.MaybeGet(ValueField)
-				ancV, _, _ := ancestor.MaybeGet(ValueField)
+				expV, _ := GetCommitValue(ctx, expected)
+				aV, _ := GetCommitValue(ctx, a)
+				bV, _ := GetCommitValue(ctx, b)
+				ancV, _ := GetCommitValue(ctx, ancestor)
 				assert.True(
 					expected.Equals(ancestor),
 					"%s should be common ancestor of %s, %s. Got %s",
@@ -347,7 +347,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Struct, ldb, rdb *d
 }
 
 // Add a commit and return it.
-func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Struct) (types.Struct, hash.Hash) {
+func addCommit(t *testing.T, db *database, datasetID string, val string, parents ...types.Value) (types.Value, hash.Hash) {
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
 	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
@@ -364,7 +364,7 @@ func assertClosureMapValue(t *testing.T, vrw types.ValueReadWriter, v types.Valu
 	if !assert.True(t, ok) {
 		return false
 	}
-	plv, ok, err := s.MaybeGet(ParentsListField)
+	plv, ok, err := s.MaybeGet(parentsListField)
 	if !assert.NoError(t, err) {
 		return false
 	}
@@ -417,8 +417,12 @@ func TestCommitParentsClosure(t *testing.T) {
 		hash   hash.Hash
 	}
 
-	assertCommitParentsClosure := func(s types.Struct, es []expected) {
-		v, ok, err := s.MaybeGet(ParentsClosureField)
+	assertCommitParentsClosure := func(v types.Value, es []expected) {
+		s, ok := v.(types.Struct)
+		if !assert.True(ok) {
+			return
+		}
+		v, ok, err := s.MaybeGet(parentsClosureField)
 		if !assert.NoError(err) {
 			return
 		}
@@ -583,14 +587,15 @@ func TestFindCommonAncestor(t *testing.T) {
 	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
 
 	// No common ancestor
-	found, ok, err := FindCommonAncestor(context.Background(), mustRef(types.NewRef(d2, db.Format())), mustRef(types.NewRef(a6, db.Format())), db, db)
+	ctx := context.Background()
+	found, ok, err := FindCommonAncestor(ctx, mustRef(types.NewRef(d2, db.Format())), mustRef(types.NewRef(a6, db.Format())), db, db)
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
-		d2V, _, _ := d2.MaybeGet(ValueField)
-		a6V, _, _ := a6.MaybeGet(ValueField)
-		fTV, _ := found.TargetValue(context.Background(), db)
-		fV, _, _ := fTV.(types.Struct).MaybeGet(ValueField)
+		d2V, _ := GetCommitValue(ctx, d2)
+		a6V, _ := GetCommitValue(ctx, a6)
+		fTV, _ := found.TargetValue(ctx, db)
+		fV, _ := GetCommitValue(ctx, fTV)
 
 		assert.Fail(
 			"Unexpected common ancestor!",
@@ -695,10 +700,10 @@ func TestNewCommitRegressionTest(t *testing.T) {
 
 func TestPersistedCommitConsts(t *testing.T) {
 	// changing constants that are persisted requires a migration strategy
-	assert.Equal(t, "parents", ParentsField)
-	assert.Equal(t, "parents_list", ParentsListField)
-	assert.Equal(t, "parents_closure", ParentsClosureField)
-	assert.Equal(t, "value", ValueField)
-	assert.Equal(t, "meta", CommitMetaField)
-	assert.Equal(t, "Commit", CommitName)
+	assert.Equal(t, "parents", parentsField)
+	assert.Equal(t, "parents_list", parentsListField)
+	assert.Equal(t, "parents_closure", parentsClosureField)
+	assert.Equal(t, "value", valueField)
+	assert.Equal(t, "meta", commitMetaField)
+	assert.Equal(t, "Commit", commitName)
 }

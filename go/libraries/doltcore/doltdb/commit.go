@@ -140,8 +140,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	ancestorSt := targetVal.(types.Struct)
-	return NewCommit(ctx, cm1.vrw, ancestorSt)
+	return NewCommit(ctx, cm1.vrw, targetVal)
 }
 
 func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (types.Ref, error) {
