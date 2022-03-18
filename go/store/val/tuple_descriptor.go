@@ -60,6 +60,39 @@ func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
 	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
 }
 
+// ValidateCommonPrefix validates that all TupleDesc's in |descriptors| share a common type prefix.
+func ValidateCommonPrefix(descriptors ...TupleDesc) error {
+	if len(descriptors) == 0 {
+		return nil
+	}
+	min := descriptors[0]
+	for _, td := range descriptors {
+		if len(td.Types) < len(min.Types) {
+			min = td
+		}
+	}
+	for _, td := range descriptors {
+		for i := range min.Types {
+			if td.Types[i] != min.Types[i] {
+				return fmt.Errorf(
+					"expected common TupleDesc prefix (%v != %v)",
+					td.Types[i], min.Types[i])
+			}
+		}
+	}
+	return nil
+}
+
+// MinTupleDescriptor returns the smaller of two TupleDescriptors. It is used when
+// comparing index Ranges which can have partial key Tuples and partial TupleDesc.
+func MinTupleDescriptor(left, right TupleDesc) (min TupleDesc) {
+	min = left
+	if len(right.Types) < len(left.Types) {
+		min = right
+	}
+	return
+}
+
 type defaultCompare struct{}
 
 func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {

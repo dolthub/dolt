@@ -17,6 +17,7 @@ package prolly
 import (
 	"context"
 	"io"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -32,10 +33,6 @@ type RangeCut struct {
 type Range struct {
 	Start, Stop RangeCut
 	KeyDesc     val.TupleDesc
-}
-
-type MapRangeIter interface {
-	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
 func (r Range) insideStart(key val.Tuple) bool {
@@ -60,6 +57,75 @@ func (r Range) insideStop(key val.Tuple) bool {
 		return r.Stop.Inclusive
 	}
 	return cmp < 0
+}
+
+// MergeRanges merges overlapping ranges.
+func MergeRanges(ranges ...Range) (merged []Range, err error) {
+	if len(ranges) < 2 {
+		return ranges, nil
+	}
+
+	// validate that ranges share a common prefix
+	dd := make([]val.TupleDesc, len(ranges))
+	for i := range dd {
+		dd[i] = ranges[i].KeyDesc
+	}
+	if err = val.ValidateCommonPrefix(dd...); err != nil {
+		return nil, err
+	}
+
+	// todo(andy): are mergeable ranges always
+	//  adjacent if we sort by range start?
+	SortRanges(ranges)
+
+	var agg = ranges[0]
+	for _, rng := range ranges {
+		if rangesOverlap(agg, rng) {
+			agg = mergeRanges(agg, rng)
+		} else {
+			merged = append(merged, agg)
+			agg = rng
+		}
+	}
+	merged = append(merged, agg)
+
+	return merged, nil
+}
+
+// SortRanges sorts Ranges in ascending order by lower bound.
+func SortRanges(ranges []Range) {
+	sort.Slice(ranges, func(i, j int) bool {
+		l, r := ranges[i], ranges[j]
+		if r.Start.Unbound {
+			return false
+		}
+		if l.Start.Unbound {
+			return true
+		}
+		td := val.MinTupleDescriptor(l.KeyDesc, r.KeyDesc)
+		return td.Compare(l.Start.Key, r.Start.Key) == -1
+	})
+}
+
+func rangesOverlap(left, right Range) bool {
+	if left.Stop.Unbound || right.Start.Unbound {
+		return true
+	}
+	td := val.MinTupleDescriptor(left.KeyDesc, right.KeyDesc)
+	return td.Compare(left.Stop.Key, right.Start.Key) >= 0
+}
+
+func mergeRanges(left, right Range) Range {
+	td := val.MinTupleDescriptor(left.KeyDesc, right.KeyDesc)
+	return Range{
+		Start:   left.Start,
+		Stop:    right.Stop,
+		KeyDesc: td,
+	}
+}
+
+type MapRangeIter interface {
+	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
 func NewMutableMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
