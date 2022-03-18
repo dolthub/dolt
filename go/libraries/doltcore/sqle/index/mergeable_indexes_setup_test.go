@@ -96,7 +96,8 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), db)
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	engine = sqle.NewDefault(pro)

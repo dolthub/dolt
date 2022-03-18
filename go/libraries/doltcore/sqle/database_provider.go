@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -43,9 +42,9 @@ type DoltDatabaseProvider struct {
 	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
-	dataRootDir string
-	fs          filesys.Filesys
-	cfg         config.ReadableConfig
+	defaultBranch string
+	dataRootDir   string
+	fs            filesys.Filesys
 
 	dbFactoryUrl string
 }
@@ -55,10 +54,8 @@ var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-const createDbWC = 1105 // 1105 represents an unknown error.
-
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -70,12 +67,12 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 	}
 
 	return DoltDatabaseProvider{
-		databases:    dbs,
-		functions:    funcs,
-		mu:           &sync.RWMutex{},
-		fs:           fs,
-		cfg:          config,
-		dbFactoryUrl: doltdb.LocalDirDoltDB,
+		databases:     dbs,
+		functions:     funcs,
+		mu:            &sync.RWMutex{},
+		fs:            fs,
+		defaultBranch: defaultBranch,
+		dbFactoryUrl:  doltdb.LocalDirDoltDB,
 	}
 }
 
@@ -167,12 +164,10 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	dsess := dsess.DSessFromSess(ctx.Session)
-	branch := env.GetDefaultInitBranch(p.cfg)
-
 	// TODO: fill in version appropriately
+	dsess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), branch)
+	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}
