@@ -956,8 +956,7 @@ func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.Ve
 	acc := diff.DiffSummaryProgress{}
 	var count int64
 	var pos int
-	eP := cli.StartEphemeralPrinter()
-	defer eP.Stop()
+	eP := cli.NewEphemeralPrinter()
 	for p := range ch {
 		if ae.IsSet() {
 			break
