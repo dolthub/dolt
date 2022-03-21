@@ -133,4 +133,4 @@ replace (
 	github.com/oliveagle/jsonpath => github.com/dolthub/jsonpath v0.0.0-20210609232853-d49537a30474
 )
 
-go 1.17
+go 1.18
