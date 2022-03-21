@@ -334,7 +334,17 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 	return nil
 }
 
-func FetchRemoteBranch(ctx context.Context, tempTablesDir string, rem env.Remote, srcDB, destDB *doltdb.DoltDB, srcRef, destRef ref.DoltRef, progStarter ProgStarter, progStopper ProgStopper) (*doltdb.Commit, error) {
+// FetchRemoteBranch fetches and returns the |Commit| corresponding to the remote ref given. Returns an error if the
+// remote reference doesn't exist or can't be fetched. Blocks until the fetch is complete.
+func FetchRemoteBranch(
+		ctx context.Context,
+		tempTablesDir string,
+		rem env.Remote,
+		srcDB, destDB *doltdb.DoltDB,
+		srcRef ref.DoltRef,
+		progStarter ProgStarter,
+		progStopper ProgStopper,
+) (*doltdb.Commit, error) {
 	evt := events.GetEventFromContext(ctx)
 
 	u, err := earl.Parse(rem.Url)
@@ -387,7 +397,7 @@ func FetchRefSpecs(ctx context.Context, dbData env.DbData, refSpecs []ref.Remote
 
 			if remoteTrackRef != nil {
 				rsSeen = true
-				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, remoteTrackRef, progStarter, progStopper)
+				srcDBCommit, err := FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), remote, srcDB, dbData.Ddb, branchRef, progStarter, progStopper)
 				if err != nil {
 					return err
 				}
