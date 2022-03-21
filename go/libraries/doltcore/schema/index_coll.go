@@ -172,7 +172,7 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 // validateColumnIndexable returns an error if the column given cannot be used in an index
 func validateColumnIndexable(c Column) error {
 	if IsColSpatialType(c) {
-		fmt.Errorf("cannot create an index over spatial type columns")
+		return fmt.Errorf("cannot create an index over spatial type columns")
 	}
 	return nil
 }
