@@ -32,7 +32,7 @@ import (
 
 const (
 	// TableNameRegexStr is the regular expression that valid tables must match.
-	TableNameRegexStr = `^[a-zA-Z]{1}$|^[0-9a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
+	TableNameRegexStr = `^[a-zA-Z]{1}$|^[a-zA-Z_]+[-_0-9a-zA-Z]*[0-9a-zA-Z]+$`
 	// ForeignKeyNameRegexStr is the regular expression that valid foreign keys must match.
 	// From the unquoted identifiers: https://dev.mysql.com/doc/refman/8.0/en/identifiers.html
 	// We also allow the '-' character from quoted identifiers.
@@ -54,7 +54,15 @@ var (
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
-	return tableNameRegex.MatchString(name)
+	// Ignore all leading digits
+	// TODO: could just use strings.TrimLeftFunc with unicode.IsNumber
+	idx := 0
+	for i, c := range name {
+		if !(c >= '0' && c <= '9') {
+			idx = i
+		}
+	}
+	return tableNameRegex.MatchString(name[idx:])
 }
 
 // IsValidForeignKeyName returns true if the name matches the regular expression ForeignKeyNameRegexStr.
