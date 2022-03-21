@@ -259,7 +259,17 @@ teardown() {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     
     cd repo1
+    dolt commit -am "cm"
+    dolt push remote1 main
     head_hash=$(get_head_commit)
+
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    start_sql_server repo2
+
+    server_query repo2 1 "show tables" "Table\ntest"
+    server_query repo2 1 "use \`repo2/$head_hash\`" ""
 }
 
 get_head_commit() {
