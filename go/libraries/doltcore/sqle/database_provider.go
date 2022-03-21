@@ -244,19 +244,24 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	if isBranch(ctx, srcDb.DbData().Ddb, revSpec) {
-		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
+	isBranch, err := isBranch(ctx, srcDb, revSpec)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
+	}
 
-		// fetch the replica head if this is a replicated db
+	if isBranch {
+		// fetch the upstream head if this is a replicated db
 		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
 			// TODO move this out of analysis phase, should only happen at read time
 			err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
 			if err != nil {
 				return nil, dsess.InitialDbState{}, false, err
 			}
+		}
+
+		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
+		if err != nil {
+			return nil, dsess.InitialDbState{}, false, err
 		}
 
 		return db, init, true, nil
@@ -351,19 +356,34 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplic
 	return nil
 }
 
-func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
-	branches, err := ddb.GetBranches(ctx)
-	if err != nil {
-		return false
+// isBranch returns whether a branch with the given name is in scope for the database given
+func isBranch(ctx context.Context, db SqlDatabase, branchName string) (bool, error) {
+	var ddbs []*doltdb.DoltDB
+
+	if rdb, ok := db.(ReadReplicaDatabase); ok {
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format())
+		if err != nil {
+			return false, err
+		}
+		ddbs = append(ddbs, rdb.ddb, remoteDB)
+	} else if ddb, ok := db.(Database); ok {
+		ddbs = append(ddbs, ddb.ddb)
+	} else {
+		return false, fmt.Errorf("unrecognized type of database %T", db)
 	}
 
-	for _, br := range branches {
-		if revSpec == br.GetPath() {
-			return true
+	for _, ddb := range ddbs {
+		branchExists, err := ddb.HasBranch(ctx, branchName)
+		if err != nil {
+			return false, err
+		}
+
+		if branchExists {
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {

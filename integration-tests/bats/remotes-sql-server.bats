@@ -84,7 +84,7 @@ teardown() {
     multi_query repo1 1 "
         SELECT DOLT_COMMIT('-am', 'Step 1');"
 
-    # threads guarenteed to flush after we stop server
+    # threads guaranteed to flush after we stop server
     stop_sql_server
 
     cd ../repo2
