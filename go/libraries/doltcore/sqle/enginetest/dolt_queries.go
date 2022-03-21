@@ -19,6 +19,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -1154,12 +1155,24 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 				ExpectedErr: sql.ErrTableNotFound,
 			},
 			{
-				Query:          "SELECT * from dolt_diff('t', concat('fake', substring(@Commit1, '5')), @Commit2);",
+				Query:          "SELECT * from dolt_diff('t', 'fakefakefakefakefakefakefakefake', @Commit2);",
 				ExpectedErrStr: "could not find a value for this hash",
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",
 				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', @Commit1, concat('fake', '-', 'branch'));",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_diff('t', hashof('main'), @Commit2);",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
+			},
+			{
+				Query:       "SELECT * from dolt_diff(LOWER('T'), hashof('main'), @Commit2);",
+				ExpectedErr: sqle.ErrInvalidNonLiteralArgument,
 			},
 		},
 	},

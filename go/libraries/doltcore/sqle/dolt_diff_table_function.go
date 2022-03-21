@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"gopkg.in/src-d/go-errors.v1"
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -28,6 +29,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
+
+var ErrInvalidNonLiteralArgument = errors.NewKind("Invalid argument to %s: %s – only literal values supported")
 
 var _ sql.TableFunction = (*DiffTableFunction)(nil)
 
@@ -81,6 +84,15 @@ func (dtf *DiffTableFunction) Expressions() []sql.Expression {
 func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql.Node, error) {
 	if len(expression) != 3 {
 		return nil, sql.ErrInvalidArgumentNumber.New(dtf.FunctionName(), 3, len(expression))
+	}
+
+	// TODO: For now, we will only support literal / fully-resolved arguments to the
+	//       DiffTableFunction to avoid issues where the schema is needed in the analyzer
+	//       before the arguments could be resolved.
+	for _, expr := range expression {
+		if !expr.Resolved() {
+			return nil, ErrInvalidNonLiteralArgument.New(dtf.FunctionName(), expr.String())
+		}
 	}
 
 	dtf.tableNameExpr = expression[0]
