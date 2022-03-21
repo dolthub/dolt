@@ -337,13 +337,13 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 // FetchRemoteBranch fetches and returns the |Commit| corresponding to the remote ref given. Returns an error if the
 // remote reference doesn't exist or can't be fetched. Blocks until the fetch is complete.
 func FetchRemoteBranch(
-		ctx context.Context,
-		tempTablesDir string,
-		rem env.Remote,
-		srcDB, destDB *doltdb.DoltDB,
-		srcRef ref.DoltRef,
-		progStarter ProgStarter,
-		progStopper ProgStopper,
+	ctx context.Context,
+	tempTablesDir string,
+	rem env.Remote,
+	srcDB, destDB *doltdb.DoltDB,
+	srcRef ref.DoltRef,
+	progStarter ProgStarter,
+	progStopper ProgStopper,
 ) (*doltdb.Commit, error) {
 	evt := events.GetEventFromContext(ctx)
 
