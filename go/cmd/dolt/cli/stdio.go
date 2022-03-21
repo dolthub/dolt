@@ -140,6 +140,11 @@ func PrintErrf(format string, a ...interface{}) {
 	fmt.Fprintf(CliErr, format, a...)
 }
 
+// DeleteAndPrint prints a new message and deletes the old one given the
+// previous messages length. It returns the length of the printed message that
+// should be passed as prevMsgLen on the next call of DeleteAndPrint.
+//
+// DeleteAndPrint does not work for multiline messages.
 func DeleteAndPrint(prevMsgLen int, msg string) int {
 	if outputIsClosed() {
 		return 0
@@ -186,6 +191,16 @@ type EphemeralPrinter struct {
 // NewEphemeralPrinter creates a new EphemeralPrinter.
 func NewEphemeralPrinter() *EphemeralPrinter {
 	w := uilive.New()
+	// How uilive needs to clear terminal output, depends on what StdOut is
+	// being used. It checks the running terminal by casting the provided writer
+	// to an internal interface that just defines a `Fd() uintptr` function. It
+	// uses the file descriptor returned by fd to check if the writer writes to
+	// a terminal.
+	//
+	// If we use |colorOutput|, the type cast will fail and uilive will fail to
+	// detect the output terminal even though colorOutput always points to
+	// StdOut. We provide the file descriptor by wrapping |colorOutput| in a
+	// struct.
 	if CliOut == colorOutput {
 		w.Out = fdProvider{CliOut, colorFd}
 	} else {
