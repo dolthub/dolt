@@ -116,7 +116,6 @@ func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 
 func NewRangePartitionIter(lookup sql.IndexLookup) sql.PartitionIter {
 	dlu := lookup.(*doltIndexLookup)
-
 	return &rangePartitionIter{
 		nomsRanges:   dlu.nomsRanges,
 		prollyRanges: dlu.prollyRanges,

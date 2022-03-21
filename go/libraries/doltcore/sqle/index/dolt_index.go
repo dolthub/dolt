@@ -183,14 +183,9 @@ func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.
 		}
 	}
 
-	merged, err := prolly.MergeRanges(prs...)
-	if err != nil {
-		return nil, err
-	}
-
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: merged,
+		prollyRanges: prs,
 		sqlRanges:    sqlRanges,
 	}, nil
 }
@@ -435,7 +430,6 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	start := prolly.RangeCut{Inclusive: true}
 	startRow := sql.Row{}
 	for _, sc := range lower {
-		// TODO(andy): refactor to allow incomplete prefixes
 		if !sql.RangeCutIsBinding(sc) {
 			start = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break
@@ -458,7 +452,6 @@ func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prol
 	stop := prolly.RangeCut{Inclusive: true}
 	stopRow := sql.Row{}
 	for _, sc := range upper {
-		// TODO(andy): refactor to allow incomplete prefixes
 		if !sql.RangeCutIsBinding(sc) {
 			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
 			break

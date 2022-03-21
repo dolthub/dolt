@@ -58,8 +58,6 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []enginetest.ScriptTest{
 		{
 			Name: "Two column index",
@@ -77,12 +75,6 @@ func TestSingleScript(t *testing.T) {
 (97,93,96),(98,98,0),(99,98,51),(100,98,61);`,
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
-				{
-					Query: "SELECT * FROM test WHERE ((v1>98 AND v2<75) OR (v1=47));",
-					Expected: []sql.Row{
-						{51, 47, 5},
-					},
-				},
 				{
 					Query: "SELECT * FROM test WHERE ((v1>39 AND v2>66) OR (v1=99));",
 					Expected: []sql.Row{
@@ -102,6 +94,12 @@ func TestSingleScript(t *testing.T) {
 					},
 				},
 				{
+					Query: "SELECT * FROM test WHERE ((v1>98 AND v2<75) OR (v1=47));",
+					Expected: []sql.Row{
+						{51, 47, 5},
+					},
+				},
+				{
 					Query: "SELECT * FROM test WHERE ((v1 BETWEEN 21 AND 33 AND v2>25) OR (v1<0));",
 					Expected: []sql.Row{
 						{30, 28, 83}, {24, 24, 60}, {26, 25, 31}, {32, 33, 39},
@@ -117,7 +115,7 @@ func TestSingleScript(t *testing.T) {
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		//engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
+		//engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
