@@ -84,11 +84,6 @@ func TestCreateTable(t *testing.T) {
 			expectedErr: "Invalid table name",
 		},
 		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
-		},
-		{
 			name:        "Test in use table name",
 			query:       "create table people (id int primary key, age int)",
 			expectedErr: "table with name people already exists",
@@ -1291,11 +1286,6 @@ func TestParseCreateTableStatement(t *testing.T) {
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
 		},
 		{
 			name: "Test types",
