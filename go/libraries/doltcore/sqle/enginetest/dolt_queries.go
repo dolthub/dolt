@@ -191,6 +191,9 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 				Expected: []sql.Row{{6}},
 			},
 			{
+				// TODO: Instead of just spot checking the non-existence of c1, it would be useful to be able to
+				//       assert the full schema of the result set. ScriptTestAssertion doesn't support that currently,
+				//       but the code from QueryTest could be ported over to ScriptTestAssertion.
 				Query:       "select c1 from dolt_history_t;",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
@@ -1197,11 +1200,25 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 				},
 			},
 			{
+				// Table t2 had no changes between Commit3 and Commit4, so results should be empty
+				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('T2', @Commit3, @Commit4);",
+				Expected: []sql.Row{},
+			},
+			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('t', @Commit1, @Commit4);",
 				Expected: []sql.Row{
 					{1, "uno", "dos", nil, nil, nil, "added"},
 					{2, "two", "three", nil, nil, nil, "added"},
 					{3, "three", "four", nil, nil, nil, "added"},
+				},
+			},
+			{
+				// Reverse the to/from commits to see the diff from the other direction
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('T', @Commit4, @Commit1);",
+				Expected: []sql.Row{
+					{nil, nil, nil, 1, "uno", "dos", "removed"},
+					{nil, nil, nil, 2, "two", "three", "removed"},
+					{nil, nil, nil, 3, "three", "four", "removed"},
 				},
 			},
 		},

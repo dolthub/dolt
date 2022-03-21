@@ -34,11 +34,11 @@ var _ sql.TableFunction = (*DiffTableFunction)(nil)
 type DiffTableFunction struct {
 	ctx            *sql.Context
 	tableNameExpr  sql.Expression
-	toCommitExpr   sql.Expression
 	fromCommitExpr sql.Expression
+	toCommitExpr   sql.Expression
 	tableName      string
-	toCommitVal    interface{}
 	fromCommitVal  interface{}
+	toCommitVal    interface{}
 	database       sql.Database
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
@@ -75,21 +75,9 @@ func (dtf *DiffTableFunction) WithDatabase(database sql.Database) (sql.Node, err
 
 // Expressions implements the sql.Expressioner interface
 func (dtf *DiffTableFunction) Expressions() []sql.Expression {
-	expressions := make([]sql.Expression, 0, 3)
-
-	if dtf.tableNameExpr != nil {
-		expressions = append(expressions, dtf.tableNameExpr)
+	return []sql.Expression{
+		dtf.tableNameExpr, dtf.fromCommitExpr, dtf.toCommitExpr,
 	}
-
-	if dtf.fromCommitExpr != nil {
-		expressions = append(expressions, dtf.fromCommitExpr)
-	}
-
-	if dtf.toCommitExpr != nil {
-		expressions = append(expressions, dtf.toCommitExpr)
-	}
-
-	return expressions
 }
 
 // WithExpressions implements the sql.Expressioner interface
@@ -117,6 +105,9 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 
 // RowIter implements the sql.Node interface
 func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+	// TODO: We we add support for joining on table functions, we'll need to evaluate this against the
+	//       specified row. That row is what has the left_table context in a join query.
+	//       This will expand the test cases we need to cover significantly.
 	err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
@@ -137,7 +128,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	toTable, _, err := toRoot.GetTable(ctx, dtf.tableName)
+	toTable, _, _, err := toRoot.GetTableInsensitive(ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +138,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	fromTable, _, err := fromRoot.GetTable(ctx, dtf.tableName)
+	fromTable, _, _, err := fromRoot.GetTableInsensitive(ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +262,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 		return nil, err
 	}
 
-	fromTable, ok, err := fromRoot.GetTable(dtf.ctx, dtf.tableName)
+	fromTable, _, ok, err := fromRoot.GetTableInsensitive(dtf.ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +275,7 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 		return nil, err
 	}
 
-	toTable, ok, err := toRoot.GetTable(dtf.ctx, dtf.tableName)
+	toTable, _, ok, err := toRoot.GetTableInsensitive(dtf.ctx, dtf.tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -332,9 +323,9 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 
 	// TODO: sql.Columns include a Source that indicates the table it came from, but we don't have a real table
 	//       when the column comes from a table function, so we omit the table name when we create these columns.
-	//       This allows column projections to work correctly with table functions, but we should test that this
-	//       works in more complex scenarios (e.g. projections with multiple table functions in the same statement)
-	//       and see if we need to create a unique identifier for each use of this table function.
+	//       This allows column projections to work correctly with table functions, but we will need to add a
+	//       unique id (e.g. hash generated from method arguments) when we add support for aliasing and joining
+	//       table functions in order for the analyzer to determine which table function result a column comes from.
 	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
 	if err != nil {
 		return nil, err
@@ -360,26 +351,15 @@ func (dtf *DiffTableFunction) Schema() sql.Schema {
 
 // Resolved implements the sql.Resolvable interface
 func (dtf *DiffTableFunction) Resolved() bool {
-	resolved := true
-
-	if dtf.tableNameExpr != nil {
-		resolved = resolved && dtf.tableNameExpr.Resolved()
-	}
-
-	if dtf.fromCommitExpr != nil {
-		resolved = resolved && dtf.fromCommitExpr.Resolved()
-	}
-
-	if dtf.toCommitExpr != nil {
-		resolved = resolved && dtf.toCommitExpr.Resolved()
-	}
-
-	return resolved
+	return dtf.tableNameExpr.Resolved() && dtf.fromCommitExpr.Resolved() && dtf.toCommitExpr.Resolved()
 }
 
 // String implements the Stringer interface
 func (dtf *DiffTableFunction) String() string {
-	return "dolt diff table function"
+	return fmt.Sprintf("DOLT_DIFF(%s, %s, %s)",
+		dtf.tableNameExpr.String(),
+		dtf.fromCommitExpr.String(),
+		dtf.toCommitExpr.String())
 }
 
 // FunctionName implements the sql.TableFunction interface
