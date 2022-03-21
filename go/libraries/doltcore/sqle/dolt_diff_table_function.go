@@ -36,9 +36,6 @@ type DiffTableFunction struct {
 	tableNameExpr  sql.Expression
 	fromCommitExpr sql.Expression
 	toCommitExpr   sql.Expression
-	tableName      string
-	fromCommitVal  interface{}
-	toCommitVal    interface{}
 	database       sql.Database
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
@@ -90,7 +87,12 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 	dtf.fromCommitExpr = expression[1]
 	dtf.toCommitExpr = expression[2]
 
-	err := dtf.evaluateArguments()
+	tableName, fromCommitVal, toCommitVal, err := dtf.evaluateArguments()
+	if err != nil {
+		return nil, err
+	}
+
+	dtf.sqlSch, err = dtf.generateSchema(tableName, fromCommitVal, toCommitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -105,10 +107,10 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 
 // RowIter implements the sql.Node interface
 func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
-	// TODO: We we add support for joining on table functions, we'll need to evaluate this against the
+	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	err := dtf.evaluateArguments()
+	tableName, fromCommitVal, toCommitVal, err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
 	}
@@ -123,22 +125,22 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	}
 	ddb := sqledb.GetDoltDB()
 
-	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, dtf.toCommitVal, ddb)
+	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, toCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	toTable, _, _, err := toRoot.GetTableInsensitive(ctx, dtf.tableName)
+	toTable, _, _, err := toRoot.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, dtf.fromCommitVal, ddb)
+	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, fromCommitVal, ddb)
 	if err != nil {
 		return nil, err
 	}
 
-	fromTable, _, _, err := fromRoot.GetTableInsensitive(ctx, dtf.tableName)
+	fromTable, _, _, err := fromRoot.GetTableInsensitive(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -193,61 +195,58 @@ func (dtf *DiffTableFunction) WithChildren(node ...sql.Node) (sql.Node, error) {
 
 // CheckPrivileges implements the sql.Node interface
 func (dtf *DiffTableFunction) CheckPrivileges(ctx *sql.Context, opChecker sql.PrivilegedOperationChecker) bool {
+	tableName, _, _, err := dtf.evaluateArguments()
+	if err != nil {
+		return false
+	}
+
 	// TODO: Add tests for privilege checking
 	return opChecker.UserHasPrivileges(ctx,
-		sql.NewPrivilegedOperation(dtf.database.Name(), dtf.tableName, "", sql.PrivilegeType_Select))
+		sql.NewPrivilegedOperation(dtf.database.Name(), tableName, "", sql.PrivilegeType_Select))
 }
 
 // evaluateArguments evaluates the argument expressions to turn them into values this DiffTableFunction
 // can use. Note that this method only evals the expressions, and doesn't validate the values.
-func (dtf *DiffTableFunction) evaluateArguments() error {
+func (dtf *DiffTableFunction) evaluateArguments() (string, interface{}, interface{}, error) {
 	if !dtf.Resolved() {
-		return nil
+		return "", nil, nil, nil
 	}
 
 	if !sql.IsText(dtf.tableNameExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
+		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.tableNameExpr.String())
 	}
 
 	if !sql.IsText(dtf.fromCommitExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
+		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.fromCommitExpr.String())
 	}
 
 	if !sql.IsText(dtf.toCommitExpr.Type()) {
-		return sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
+		return "", nil, nil, sql.ErrInvalidArgumentDetails.New(dtf.FunctionName(), dtf.toCommitExpr.String())
 	}
 
 	tableNameVal, err := dtf.tableNameExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
 	tableName, ok := tableNameVal.(string)
 	if !ok {
-		return ErrInvalidTableName.New(dtf.tableNameExpr.String())
+		return "", nil, nil, ErrInvalidTableName.New(dtf.tableNameExpr.String())
 	}
-	dtf.tableName = tableName
 
 	fromCommitVal, err := dtf.fromCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
-	dtf.fromCommitVal = fromCommitVal
 
 	toCommitVal, err := dtf.toCommitExpr.Eval(dtf.ctx, nil)
 	if err != nil {
-		return err
-	}
-	dtf.toCommitVal = toCommitVal
-
-	dtf.sqlSch, err = dtf.generateSchema()
-	if err != nil {
-		return err
+		return "", nil, nil, err
 	}
 
-	return nil
+	return tableName, fromCommitVal, toCommitVal, nil
 }
 
-func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
+func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, toCommitVal interface{}) (sql.Schema, error) {
 	if !dtf.Resolved() {
 		return nil, nil
 	}
@@ -257,30 +256,30 @@ func (dtf *DiffTableFunction) generateSchema() (sql.Schema, error) {
 		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
 	}
 
-	fromRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.fromCommitVal)
+	fromRoot, err := sqledb.rootAsOf(dtf.ctx, fromCommitVal)
 	if err != nil {
 		return nil, err
 	}
 
-	fromTable, _, ok, err := fromRoot.GetTableInsensitive(dtf.ctx, dtf.tableName)
+	fromTable, _, ok, err := fromRoot.GetTableInsensitive(dtf.ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, sql.ErrTableNotFound.New(dtf.tableName)
+		return nil, sql.ErrTableNotFound.New(tableName)
 	}
 
-	toRoot, err := sqledb.rootAsOf(dtf.ctx, dtf.toCommitVal)
+	toRoot, err := sqledb.rootAsOf(dtf.ctx, toCommitVal)
 	if err != nil {
 		return nil, err
 	}
 
-	toTable, _, ok, err := toRoot.GetTableInsensitive(dtf.ctx, dtf.tableName)
+	toTable, _, ok, err := toRoot.GetTableInsensitive(dtf.ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, sql.ErrTableNotFound.New(dtf.tableName)
+		return nil, sql.ErrTableNotFound.New(tableName)
 	}
 
 	fromSchema, err := fromTable.GetSchema(dtf.ctx)
