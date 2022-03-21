@@ -84,8 +84,8 @@ teardown() {
     multi_query repo1 1 "
         SELECT DOLT_COMMIT('-am', 'Step 1');"
 
-    # threads guaranteed to flush after we stop server
-    stop_sql_server
+    # wait for the process to exit after we stop it
+    stop_sql_server 1
 
     cd ../repo2
     dolt pull remote1
@@ -255,3 +255,13 @@ teardown() {
     server_query "repo2/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
 
+@test "remotes-sql-server: connect to hash works" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    
+    cd repo1
+    head_hash=$(get_head_commit)
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+}
