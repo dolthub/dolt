@@ -190,8 +190,8 @@ func TestDropPks(t *testing.T) {
 		{
 			name: "no error if both several invalid and one valid backup index",
 			setup: []string{
-				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup1` (id, age), key `bad_backup2` (id), key `backup` (age, id))",
-				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup1` (age, id), key `bad_backup2` (age), key `backup` (id, age, name))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
 			exit:      0,
 			fkIdxName: "backup",
@@ -199,17 +199,17 @@ func TestDropPks(t *testing.T) {
 		{
 			name: "no error if one invalid and several valid backup indexes",
 			setup: []string{
-				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (id, age), key `backup1` (age, id, name), key `backup2` (age, id))",
-				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id), key `backup2` (id, age, name))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
 			exit:      0,
 			fkIdxName: "backup1",
 		},
 		{
-			name: "perfer unique key",
+			name: "prefer unique key",
 			setup: []string{
-				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (id, age), key `backup1` (age, id, name), unique key `backup2` (age, id))",
-				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age) references parent (age))",
+				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id, age, name), unique key `backup2` (id, age))",
+				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
 			exit:      0,
 			fkIdxName: "backup2",
