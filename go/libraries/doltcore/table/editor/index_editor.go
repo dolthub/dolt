@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -287,7 +288,14 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 		return types.EmptyMap, fmt.Errorf("index `%s` does not exist", indexName)
 	}
 
-	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts)
+	tf := tupleFactories.Get().(*types.TupleFactory)
+
+	tmpDir, err := ioutil.TempDir("", "tempif-*")
+	if err != nil {
+		return types.EmptyMap, err
+	}
+	opts.Deaf = NewBulkImportTEAFactory(tbl.Format(), tbl.ValueReadWriter(), tmpDir)
+	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -314,8 +322,15 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 		return nil, err
 	}
 
+	tf := tupleFactories.Get().(*types.TupleFactory)
+
+	tmpDir, err := ioutil.TempDir("", "tempif-*")
+	if err != nil {
+		return nil, err
+	}
+	opts.Deaf = NewBulkImportTEAFactory(t.Format(), t.ValueReadWriter(), tmpDir)
 	for _, index := range sch.Indexes().AllIndexes() {
-		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts)
+		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 		if err != nil {
 			return nil, err
 		}
@@ -329,20 +344,19 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 	return t.SetIndexSet(ctx, indexes)
 }
 
-func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options) (types.Map, error) {
+func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options, tf *types.TupleFactory) (types.Map, error) {
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.EmptyMap, err
 	}
 	indexEditor := NewIndexEditor(ctx, index, emptyIndexMap, sch, opts)
-
 	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
 		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
 		if err != nil {
 			return err
 		}
 
-		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, nil)
+		fullKey, partialKey, keyVal, err := dRow.ReduceToIndexKeys(index, tf)
 		if err != nil {
 			return err
 		}
