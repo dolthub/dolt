@@ -123,7 +123,6 @@ func TestIsValidTableName(t *testing.T) {
 	assert.False(t, IsValidTableName("-"))
 	assert.False(t, IsValidTableName("-a"))
 	assert.False(t, IsValidTableName(""))
-	assert.False(t, IsValidTableName("1a"))
 	assert.False(t, IsValidTableName("a1-"))
 	assert.False(t, IsValidTableName("ab!!c"))
 }
