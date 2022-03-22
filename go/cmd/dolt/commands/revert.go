@@ -115,7 +115,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		commits[i] = commit
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)

@@ -91,8 +91,7 @@ type Database struct {
 	// todo: needs a major refactor to
 	//   correctly handle persisted sequences
 	//   that must be coordinated across txs
-	gs globalstate.GlobalState
-
+	gs       globalstate.GlobalState
 	editOpts editor.Options
 }
 
