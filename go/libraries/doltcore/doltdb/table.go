@@ -60,6 +60,7 @@ func IsValidTableName(name string) bool {
 	for i, c := range name {
 		if !(c >= '0' && c <= '9') {
 			idx = i
+			break
 		}
 	}
 	return tableNameRegex.MatchString(name[idx:])
