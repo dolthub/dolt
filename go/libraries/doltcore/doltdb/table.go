@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -55,15 +57,8 @@ var (
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
 	// Ignore all leading digits
-	// TODO: could just use strings.TrimLeftFunc with unicode.IsNumber
-	idx := 0
-	for i, c := range name {
-		if !(c >= '0' && c <= '9') {
-			idx = i
-			break
-		}
-	}
-	return tableNameRegex.MatchString(name[idx:])
+	name = strings.TrimLeftFunc(name, unicode.IsDigit)
+	return tableNameRegex.MatchString(name)
 }
 
 // IsValidForeignKeyName returns true if the name matches the regular expression ForeignKeyNameRegexStr.
