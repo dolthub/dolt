@@ -115,14 +115,41 @@ func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommitForValue(ctx, vrw, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions) []byte {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []byte {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
+
+        hashsz := 20
+        hashessz := len(opts.Parents) * hashsz
+        builder.Prep(flatbuffers.SizeUOffsetT, hashessz)
+        stop := int(builder.Head())
+        start := stop - hashessz
+	for i := 0; i < len(opts.Parents); i++ {
+                copy(builder.Bytes[start:stop], opts.Parents[i][:])
+                start += hashsz
+        }
+        start = stop - hashessz
+        parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
+
+	// Starts at SerialMessageRefHeight.
+	maxheight := uint64(types.SerialMessageRefHeight)
+	serial.CommitStartParentHeightsVector(builder, len(opts.Parents))
+	for i := len(opts.Parents) - 1; i >= 0; i-- {
+		builder.PrependUint64(heights[i])
+		if heights[i] > maxheight {
+			maxheight = heights[i]
+		}
+	}
+	parentheightsoff := builder.EndVector(len(opts.Parents))
+
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
 	descoff := builder.CreateString(opts.Meta.Description)
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
+	serial.CommitAddHeight(builder, maxheight + 1)
+	serial.CommitAddParentAddrs(builder, parentaddrsoff)
+	serial.CommitAddParentHeights(builder, parentheightsoff)
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
@@ -142,7 +169,15 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		if err != nil {
 			return nil, err
 		}
-		return types.SerialMessage(commit_flatbuffer(r.TargetHash(), opts)), nil
+		heights := make([]uint64, len(opts.Parents))
+		parents, err := vrw.ReadManyValues(ctx, opts.Parents)
+		if err != nil {
+			return nil, err
+		}
+		for i := range heights {
+			heights[i] = serial.GetRootAsCommit([]byte(parents[i].(types.SerialMessage)), 0).Height()
+		}
+		return types.SerialMessage(commit_flatbuffer(r.TargetHash(), opts, heights)), nil
 	}
 
 	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
@@ -291,7 +326,14 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 }
 
 // GetCommitParents returns |Ref|s to the parents of the commit.
-func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) {
+func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]types.Ref, error) {
+	if sm, ok := cv.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) != serial.CommitFileID {
+			return nil, errors.New("GetCommitParents: provided value is not a commit.")
+		}
+		return types.SerialCommitParentRefs(vr.Format(), sm)
+	}
 	c, ok := cv.(types.Struct)
 	if !ok {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
@@ -330,6 +372,20 @@ func GetCommitParents(ctx context.Context, cv types.Value) ([]types.Ref, error) 
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
 // nil| if there is no metadata for the commit.
 func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
+	if sm, ok := cv.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) != serial.CommitFileID {
+			return nil, errors.New("GetCommitMeta: provided value is not a commit.")
+		}
+		cmsg := serial.GetRootAsCommit(data, 0)
+		ret := &CommitMeta{}
+		ret.Name = string(cmsg.Name())
+		ret.Email = string(cmsg.Email())
+		ret.Description = string(cmsg.Description())
+		ret.Timestamp = cmsg.TimestampMillis()
+		ret.UserTimestamp = cmsg.UserTimestampMillis()
+		return ret, nil
+	}
 	c, ok := cv.(types.Struct)
 	if !ok {
 		return nil, errors.New("GetCommitMeta: provided value is not a commit.")
@@ -351,7 +407,17 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	}
 }
 
-func GetCommitValue(ctx context.Context, cv types.Value) (types.Value, error) {
+func GetCommitValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
+	if sm, ok := cv.(types.SerialMessage); ok {
+		data := []byte(sm)
+		if serial.GetFileID(data) != serial.CommitFileID {
+			return nil, errors.New("GetCommitValue: provided value is not a commit.")
+		}
+		cmsg := serial.GetRootAsCommit(data, 0)
+		var roothash hash.Hash
+		copy(roothash[:], cmsg.RootBytes())
+		return vr.ReadValue(ctx, roothash)
+	}
 	c, ok := cv.(types.Struct)
 	if !ok {
 		return nil, errors.New("GetCommitValue: provided value is not a commit.")
@@ -379,7 +445,7 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 			return fmt.Errorf("target not found: %v", r.TargetHash())
 		}
 
-		parents, err := GetCommitParents(ctx, v)
+		parents, err := GetCommitParents(ctx, vr, v)
 		if err != nil {
 			return err
 		}
@@ -552,6 +618,12 @@ func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueR
 	if err != nil {
 		return nil, err
 	}
+
+	if _, ok := sv.(types.SerialMessage); ok {
+		// TODO: __DOLT_DEV__ should support parent closures.
+		return nil, nil
+	}
+
 	s, ok := sv.(types.Struct)
 	if !ok {
 		return nil, fmt.Errorf("target ref is not struct: %v", sv)
@@ -606,15 +678,14 @@ func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
 }
 
 func IsCommit(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); !ok {
-		return false, nil
-	} else {
+	if s, ok := v.(types.Struct); ok {
 		return types.IsValueSubtypeOf(s.Format(), v, valueCommitType)
+	} else if sm, ok := v.(types.SerialMessage); ok {
+		data := []byte(sm)
+		return serial.GetFileID(data) == serial.CommitFileID, nil
+	} else {
+		return false, nil
 	}
-}
-
-func IsRefOfCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {
-	return t.TargetKind() == types.RefKind && IsCommitType(nbf, getRefElementType(t))
 }
 
 type RefByHeightHeap []types.Ref

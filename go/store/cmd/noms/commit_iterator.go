@@ -71,7 +71,7 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
 
-	refs, err := datas.GetCommitParents(ctx, br.commit)
+	refs, err := datas.GetCommitParents(ctx, iter.vr, br.commit)
 	d.PanicIfError(err)
 	for _, r := range refs {
 		v, err := iter.vr.ReadValue(ctx, r.TargetHash())

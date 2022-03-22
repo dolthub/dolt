@@ -181,7 +181,7 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 
 	parentLabel := "Parent"
 	parentValue := "None"
-	parents, err := datas.GetCommitParents(context.Background(), node.commit)
+	parents, err := datas.GetCommitParents(context.Background(), vr, node.commit)
 	d.PanicIfError(err)
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
@@ -339,7 +339,7 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types
 	mlw := &writers.MaxLineWriter{Dest: w, MaxLines: uint32(maxLines), NumLines: uint32(lineno)}
 	pw := &writers.PrefixWriter{Dest: mlw, PrefixFunc: genPrefix, NeedsPrefix: true, NumLines: uint32(lineno)}
 
-	parents, err := datas.GetCommitParents(ctx, node.commit)
+	parents, err := datas.GetCommitParents(ctx, vr, node.commit)
 	d.PanicIfError(err)
 
 	if len(parents) == 0 {
