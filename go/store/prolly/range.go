@@ -15,7 +15,9 @@
 package prolly
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -52,7 +54,7 @@ func (r Range) insideStart(key val.Tuple) bool {
 		if cmp == 0 {
 			return cut.Inclusive
 		}
-		return cmp > 0
+		return cmp < 0
 	}
 	return true
 }
@@ -76,9 +78,13 @@ func (r Range) insideStop(key val.Tuple) bool {
 		if cmp == 0 {
 			return cut.Inclusive
 		}
-		return cmp < 0
+		return cmp > 0
 	}
 	return true
+}
+
+func (r Range) format() string {
+	return formatRange(r)
 }
 
 // todo(andy): inline sort.Search()
@@ -207,4 +213,38 @@ func closeRangeCuts(tup val.Tuple, desc val.TupleDesc) (cut []RangeCut) {
 		}
 	}
 	return
+}
+
+func formatRange(r Range) string {
+	var sb strings.Builder
+	sb.WriteString("( ")
+
+	seenOne := false
+	for i, cut := range r.Start {
+		if seenOne {
+			sb.WriteString(", ")
+		}
+		seenOne = true
+		op := ">"
+		if cut.Inclusive {
+			op = ">="
+		}
+		v := r.KeyDesc.FormatValue(i, cut.Value)
+		sb.WriteString(fmt.Sprintf("tuple[%d] %s %s", i, op, v))
+	}
+	for i, cut := range r.Stop {
+		if seenOne {
+			sb.WriteString(", ")
+		}
+		seenOne = true
+		op := "<"
+		if cut.Inclusive {
+			op = "<="
+		}
+		v := r.KeyDesc.FormatValue(i, cut.Value)
+		sb.WriteString(fmt.Sprintf("tuple[%d] %s %s", i, op, v))
+	}
+
+	sb.WriteString(" )")
+	return sb.String()
 }

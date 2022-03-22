@@ -342,59 +342,59 @@ func (td TupleDesc) Format(tup Tuple) string {
 	sb.WriteString("( ")
 
 	seenOne := false
-	for i, typ := range td.Types {
+	for i := range td.Types {
 		if seenOne {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-
-		if td.IsNull(i, tup) {
-			sb.WriteString("NULL")
-			continue
-		}
-
-		// todo(andy): complete cases
-		switch typ.Enc {
-		case Int8Enc:
-			v, _ := td.GetInt8(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint8Enc:
-			v, _ := td.GetUint8(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int16Enc:
-			v, _ := td.GetInt16(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint16Enc:
-			v, _ := td.GetUint16(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int32Enc:
-			v, _ := td.GetInt32(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint32Enc:
-			v, _ := td.GetUint32(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int64Enc:
-			v, _ := td.GetInt64(i, tup)
-			sb.WriteString(strconv.FormatInt(v, 10))
-		case Uint64Enc:
-			v, _ := td.GetUint64(i, tup)
-			sb.WriteString(strconv.FormatUint(v, 10))
-		case Float32Enc:
-			v, _ := td.GetFloat32(i, tup)
-			sb.WriteString(fmt.Sprintf("%f", v))
-		case Float64Enc:
-			v, _ := td.GetFloat64(i, tup)
-			sb.WriteString(fmt.Sprintf("%f", v))
-		case StringEnc:
-			v, _ := td.GetString(i, tup)
-			sb.WriteString(v)
-		case ByteStringEnc:
-			v, _ := td.GetBytes(i, tup)
-			sb.Write(v)
-		default:
-			sb.Write(tup.GetField(i))
-		}
+		sb.WriteString(td.FormatValue(i, tup.GetField(i)))
 	}
 	sb.WriteString(" )")
 	return sb.String()
+}
+
+func (td TupleDesc) FormatValue(i int, value []byte) string {
+	if value == nil {
+		return "NULL"
+	}
+
+	// todo(andy): complete cases
+	switch td.Types[i].Enc {
+	case Int8Enc:
+		v := readInt8(value)
+		return strconv.Itoa(int(v))
+	case Uint8Enc:
+		v := readUint8(value)
+		return strconv.Itoa(int(v))
+	case Int16Enc:
+		v := readInt16(value)
+		return strconv.Itoa(int(v))
+	case Uint16Enc:
+		v := readUint16(value)
+		return strconv.Itoa(int(v))
+	case Int32Enc:
+		v := readInt32(value)
+		return strconv.Itoa(int(v))
+	case Uint32Enc:
+		v := readUint32(value)
+		return strconv.Itoa(int(v))
+	case Int64Enc:
+		v := readInt64(value)
+		return strconv.FormatInt(v, 10)
+	case Uint64Enc:
+		v := readUint64(value)
+		return strconv.FormatUint(v, 10)
+	case Float32Enc:
+		v := readFloat32(value)
+		return fmt.Sprintf("%f", v)
+	case Float64Enc:
+		v := readFloat64(value)
+		return fmt.Sprintf("%f", v)
+	case StringEnc:
+		return readString(value)
+	case ByteStringEnc:
+		return string(value)
+	default:
+		return string(value)
+	}
 }

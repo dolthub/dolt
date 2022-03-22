@@ -91,10 +91,7 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	if rng.Start == nil {
 		iter = mm.list.IterAtStart()
 	} else {
-		iter = mm.list.GetIterFromSearchFn(func(nodeKey []byte) bool {
-			// advance through list until we're inside |rng|
-			return !rng.insideStart(nodeKey)
-		})
+		iter = mm.list.GetIterFromSearchFn(skipSearchFromRange(rng))
 	}
 
 	// enforce range start
@@ -115,6 +112,16 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	return &memRangeIter{
 		iter: iter,
 		rng:  rng,
+	}
+}
+
+func skipSearchFromRange(rng Range) skip.SearchFn {
+	return func(nodeKey []byte) bool {
+		if nodeKey == nil {
+			return false
+		}
+		// advance through list until we're inside |rng|
+		return !rng.insideStart(nodeKey)
 	}
 }
 
