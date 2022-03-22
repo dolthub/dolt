@@ -17,7 +17,6 @@ package editor
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -289,12 +288,10 @@ func RebuildIndex(ctx context.Context, tbl *doltdb.Table, indexName string, opts
 	}
 
 	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(tbl.Format())
+	defer tupleFactories.Put(tf)
 
-	tmpDir, err := ioutil.TempDir("", "tempif-*")
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	opts.Deaf = NewBulkImportTEAFactory(tbl.Format(), tbl.ValueReadWriter(), tmpDir)
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(tbl.Format(), tbl.ValueReadWriter(), opts.Tempdir))
 	rebuiltIndexData, err := rebuildIndexRowData(ctx, tbl.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 	if err != nil {
 		return types.EmptyMap, err
@@ -323,12 +320,10 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 	}
 
 	tf := tupleFactories.Get().(*types.TupleFactory)
+	tf.Reset(t.Format())
+	defer tupleFactories.Put(tf)
 
-	tmpDir, err := ioutil.TempDir("", "tempif-*")
-	if err != nil {
-		return nil, err
-	}
-	opts.Deaf = NewBulkImportTEAFactory(t.Format(), t.ValueReadWriter(), tmpDir)
+	opts = opts.WithDeaf(NewBulkImportTEAFactory(t.Format(), t.ValueReadWriter(), opts.Tempdir))
 	for _, index := range sch.Indexes().AllIndexes() {
 		rebuiltIndexRowData, err := rebuildIndexRowData(ctx, t.ValueReadWriter(), sch, tableRowData, index, opts, tf)
 		if err != nil {

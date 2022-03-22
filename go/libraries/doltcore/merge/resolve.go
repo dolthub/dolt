@@ -275,7 +275,7 @@ func AutoResolveTables(ctx context.Context, dEnv *env.DoltEnv, autoResolver Auto
 
 func autoResolve(ctx context.Context, dEnv *env.DoltEnv, root *doltdb.RootValue, autoResolver AutoResolver, tbls []string) error {
 	var err error
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	for _, tblName := range tbls {
 		root, err = ResolveTable(ctx, root.VRW(), tblName, root, autoResolver, opts)
 		if err != nil {

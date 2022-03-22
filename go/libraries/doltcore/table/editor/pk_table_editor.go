@@ -91,6 +91,13 @@ func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema
 type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 	Deaf                     DbEaFactory
+	Tempdir                  string
+}
+
+// WithDeaf returns a new Options with the given  edit accumulator factory class
+func (o Options) WithDeaf(deaf DbEaFactory) Options {
+	o.Deaf = deaf
+	return o
 }
 
 func TestEditorOptions(vrw types.ValueReadWriter) Options {

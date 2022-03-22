@@ -84,7 +84,7 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 	if !ok {
 		return HandleErr(errhand.BuildDError("The table `%s` does not exist.", tableName).Build(), nil)
 	}
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	indexRowData, err := editor.RebuildIndex(ctx, table, indexName, opts)
 	if err != nil {
 		return HandleErr(errhand.BuildDError("Unable to rebuild index `%s` on table `%s`.", indexName, tableName).AddCause(err).Build(), nil)

@@ -34,7 +34,7 @@ import (
 func TestSchemaTableRecreation(t *testing.T) {
 	ctx := NewTestSQLCtx(context.Background())
 	dEnv := dtestutils.CreateTestEnv()
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := NewDatabase("dolt", dEnv.DbData(), opts)
 	dbState := getDbState(t, db, dEnv)
 	err := dsess.DSessFromSess(ctx.Session).AddDB(ctx, dbState)

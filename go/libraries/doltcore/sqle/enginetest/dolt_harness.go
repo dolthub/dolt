@@ -205,7 +205,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		d.databases = append(d.databases, db)
 
