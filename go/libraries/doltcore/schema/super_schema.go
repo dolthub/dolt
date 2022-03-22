@@ -201,10 +201,9 @@ func (ss *SuperSchema) nameColumns() map[uint64]string {
 // GenerateColCollection creates a ColCollection from all the columns in the SuperSchema.
 // Each column is assigned its latest name from its name history.
 func (ss *SuperSchema) GenerateColCollection() (*ColCollection, error) {
-	uniqNames := ss.nameColumns()
 	cc := NewColCollection()
 	err := ss.Iter(func(tag uint64, col Column) (stop bool, err error) {
-		col.Name = uniqNames[tag]
+		col.Name = ss.LatestColumnName(tag)
 		cc = cc.Append(col)
 		stop = err != nil
 		return stop, err

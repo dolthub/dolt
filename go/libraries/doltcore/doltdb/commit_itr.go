@@ -66,7 +66,7 @@ func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error
 	return cmItr, nil
 }
 
-// CommitItrForRoots will return a CommitItr which will iterate over all descendant commits of the provided rootCommits.
+// CommitItrForRoots will return a CommitItr which will iterate over all ancestor commits of the provided rootCommits.
 func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 	return &commitItr{
 		ddb:         ddb,
