@@ -84,8 +84,8 @@ teardown() {
     multi_query repo1 1 "
         SELECT DOLT_COMMIT('-am', 'Step 1');"
 
-    # threads guarenteed to flush after we stop server
-    stop_sql_server
+    # wait for the process to exit after we stop it
+    stop_sql_server 1
 
     cd ../repo2
     dolt pull remote1
@@ -177,6 +177,49 @@ teardown() {
     server_query repo2 1 "select name from dolt_branches order by name" "name\nmain\nnew_feature"
 }
 
+@test "remotes-sql-server: connect to remote head" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
+    cd repo1
+    dolt checkout -b new_feature
+    dolt commit -am "first commit"
+    dolt branch new_feature2
+    dolt push remote1 new_feature
+    dolt push remote1 new_feature2
+    dolt checkout main
+    dolt push remote1 main
+
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    start_sql_server repo2
+
+    # No data on main
+    server_query repo2 1 "show tables" ""
+    
+    # Connecting to heads that exist only on the remote should work fine (they get fetched)
+    server_query "repo2/new_feature" 1 "show tables" "Table\ntest"
+    server_query repo2 1 'use `repo2/new_feature2`' ""
+    server_query repo2 1 'select * from `repo2/new_feature2`.test' "pk\n0\n1\n2"
+
+    # Connecting to heads that don't exist should error out
+    run server_query "repo2/notexist" 1 'use `repo2/new_feature2`' ""
+    [ $status -eq 1 ]
+    [[ $output =~ "database not found" ]] || false
+    
+    run server_query repo2 1 'use `repo2/notexist`' ""
+    [ $status -eq 1 ]
+    [[ $output =~ "database not found" ]] || false
+
+    # Creating a branch locally that doesn't exist on the remote
+    # works, but connecting to it is an error (nothing to pull)
+    server_query "repo2/new_feature" 1 "select dolt_checkout('-b', 'new_branch') as b" "b\n0"
+
+    run server_query "repo2/new_branch" 1 "show tables" "Table\ntest"
+    [ $status -eq 1 ]
+    [[ $output =~ "database not found" ]] || false
+}
+
 @test "remotes-sql-server: pull all heads" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -255,3 +298,23 @@ teardown() {
     server_query "repo2/feature-branch" 1 "SHOW Tables" "Table\ntest"
 }
 
+@test "remotes-sql-server: connect to hash works" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    
+    cd repo1
+    dolt commit -am "cm"
+    dolt push remote1 main
+    head_hash=$(get_head_commit)
+
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote remote1
+    dolt config --local --add sqlserver.global.dolt_replicate_heads main
+    start_sql_server repo2
+
+    server_query repo2 1 "show tables" "Table\ntest"
+    server_query repo2 1 "use \`repo2/$head_hash\`" ""
+}
+
+get_head_commit() {
+    dolt log -n 1 | grep -m 1 commit | cut -c 13-44
+}

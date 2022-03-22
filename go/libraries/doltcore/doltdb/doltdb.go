@@ -657,6 +657,22 @@ func (ddb *DoltDB) GetBranches(ctx context.Context) ([]ref.DoltRef, error) {
 	return ddb.GetRefsOfType(ctx, branchRefFilter)
 }
 
+// HasBranch returns whether the DB has a branch with the name given
+func (ddb *DoltDB) HasBranch(ctx context.Context, branchName string) (bool, error) {
+	branches, err := ddb.GetRefsOfType(ctx, branchRefFilter)
+	if err != nil {
+		return false, err
+	}
+
+	for _, b := range branches {
+		if b.GetPath() == branchName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 type BranchWithHash struct {
 	Ref  ref.DoltRef
 	Hash hash.Hash
