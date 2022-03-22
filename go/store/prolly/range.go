@@ -15,8 +15,7 @@
 package prolly
 
 import (
-	"context"
-	"io"
+	"sort"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -34,147 +33,96 @@ type RangeCut struct {
 	Null      bool
 }
 
-type MapRangeIter interface {
-	Next(ctx context.Context) (key, value val.Tuple, err error)
-}
-
 func (r Range) insideStart(key val.Tuple) bool {
-	if r.Start.Unbound {
-		return true
-	}
+	for i, cut := range r.Start {
+		if cut.Value == nil {
+			// no bound for this field
+			continue
+		}
 
-	cmp := r.KeyDesc.Compare(key, r.Start.Key)
-	if cmp == 0 {
-		return r.Start.Inclusive
+		if cut.Null {
+			// value must be null
+			if !r.KeyDesc.IsNull(i, key) {
+				return false
+			}
+			continue
+		}
+
+		cmp := r.KeyDesc.CompareField(cut.Value, i, key)
+		if cmp == 0 {
+			return cut.Inclusive
+		}
+		return cmp > 0
 	}
-	return cmp > 0
+	return true
 }
 
 func (r Range) insideStop(key val.Tuple) bool {
-	if r.Stop.Unbound {
-		return true
-	}
-
-	cmp := r.KeyDesc.Compare(key, r.Stop.Key)
-	if cmp == 0 {
-		return r.Stop.Inclusive
-	}
-	return cmp < 0
-}
-
-func NewMutableMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
-	if memory == nil {
-		memory = emptyIter{}
-	}
-	if prolly == nil {
-		prolly = emptyIter{}
-	}
-
-	return MutableMapRangeIter{
-		memory: memory,
-		prolly: prolly,
-		rng:    rng,
-	}
-}
-
-// MutableMapRangeIter iterates over a Range of Tuples.
-type MutableMapRangeIter struct {
-	memory rangeIter
-	prolly rangeIter
-	rng    Range
-}
-
-type rangeIter interface {
-	iterate(ctx context.Context) error
-	current() (key, value val.Tuple)
-}
-
-// Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
-func (it MutableMapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	for {
-		mk, mv := it.memory.current()
-		pk, pv := it.prolly.current()
-
-		if mk == nil && pk == nil {
-			// range is exhausted
-			return nil, nil, io.EOF
+	for i, cut := range r.Stop {
+		if cut.Value == nil {
+			// no bound for this field
+			continue
 		}
 
-		cmp := it.compareKeys(pk, mk)
-		switch {
-		case cmp < 0:
-			key, value = pk, pv
-			if err = it.prolly.iterate(ctx); err != nil {
-				return nil, nil, err
+		if cut.Null {
+			// value must be null
+			if !r.KeyDesc.IsNull(i, key) {
+				return false
 			}
-
-		case cmp > 0:
-			key, value = mk, mv
-			if err = it.memory.iterate(ctx); err != nil {
-				return nil, nil, err
-			}
-
-		case cmp == 0:
-			// |it.memory| wins ties
-			key, value = mk, mv
-			if err = it.memory.iterate(ctx); err != nil {
-				return nil, nil, err
-			}
-			if err = it.prolly.iterate(ctx); err != nil {
-				return nil, nil, err
-			}
+			continue
 		}
 
-		if key != nil && value == nil {
-			continue // pending delete
+		cmp := r.KeyDesc.CompareField(cut.Value, i, key)
+		if cmp == 0 {
+			return cut.Inclusive
 		}
+		return cmp < 0
+	}
+	return true
+}
 
-		return key, value, nil
+// todo(andy): inline sort.Search()
+// todo(andy): comment doc
+func rangeStartSearchFn(rng Range) searchFn {
+	return func(nd Node) int {
+		return sort.Search(int(nd.count), func(i int) bool {
+			tup := val.Tuple(nd.getKey(i))
+			for i, cut := range rng.Start {
+				cmp := rng.KeyDesc.CompareField(cut.Value, i, tup)
+				if cut.Inclusive {
+					return cmp <= 0
+				} else {
+					return cmp < 0
+				}
+			}
+			return true
+		})
 	}
 }
 
-func (it MutableMapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
-	if it.memory != nil {
-		memKey, _ = it.memory.current()
+// todo(andy): inline sort.Search()
+// todo(andy): comment doc
+func rangeStopSearchFn(rng Range) searchFn {
+	return func(nd Node) int {
+		return sort.Search(int(nd.count), func(i int) bool {
+			tup := val.Tuple(nd.getKey(i))
+			for i, cut := range rng.Stop {
+				cmp := rng.KeyDesc.CompareField(cut.Value, i, tup)
+				if cut.Inclusive {
+					return cmp < 0
+				} else {
+					return cmp <= 0
+				}
+			}
+			return false
+		})
 	}
-	if it.prolly != nil {
-		proKey, _ = it.prolly.current()
-	}
-	return
-}
-
-func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
-	if memKey == nil {
-		return 1
-	}
-	if proKey == nil {
-		return -1
-	}
-	return it.rng.KeyDesc.Compare(memKey, proKey)
-}
-
-type emptyIter struct{}
-
-var _ rangeIter = emptyIter{}
-
-func (e emptyIter) iterate(ctx context.Context) (err error) {
-	return
-}
-
-func (e emptyIter) current() (key, value val.Tuple) {
-	return
 }
 
 // GreaterRange defines a Range of Tuples greater than |lo|.
 func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
+		Start:   openRangeCuts(start, desc),
 		KeyDesc: desc,
 	}
 }
@@ -182,13 +130,7 @@ func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 // GreaterOrEqualRange defines a Range of Tuples greater than or equal to |lo|.
 func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Unbound: true,
-		},
+		Start:   closeRangeCuts(start, desc),
 		KeyDesc: desc,
 	}
 }
@@ -196,13 +138,7 @@ func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 // LesserRange defines a Range of Tuples less than |last|.
 func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
+		Stop:    openRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
 }
@@ -210,13 +146,7 @@ func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 // LesserOrEqualRange defines a Range of Tuples less than or equal to |last|.
 func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Unbound: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
+		Stop:    closeRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
 }
@@ -224,14 +154,8 @@ func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 // OpenRange defines a non-inclusive Range of Tuples from |lo| to |last|.
 func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
+		Start:   openRangeCuts(start, desc),
+		Stop:    openRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
 }
@@ -239,14 +163,8 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 // OpenStartRange defines a half-open Range of Tuples from |lo| to |last|.
 func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: false,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
+		Start:   openRangeCuts(start, desc),
+		Stop:    closeRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
 }
@@ -254,14 +172,8 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 // OpenStopRange defines a half-open Range of Tuples from |lo| to |last|.
 func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: false,
-		},
+		Start:   closeRangeCuts(start, desc),
+		Stop:    openRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
 }
@@ -269,14 +181,30 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 // ClosedRange defines an inclusive Range of Tuples from |lo| to |last|.
 func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
-		Start: RangeCut{
-			Key:       start,
-			Inclusive: true,
-		},
-		Stop: RangeCut{
-			Key:       stop,
-			Inclusive: true,
-		},
+		Start:   closeRangeCuts(start, desc),
+		Stop:    closeRangeCuts(stop, desc),
 		KeyDesc: desc,
 	}
+}
+
+func openRangeCuts(tup val.Tuple, desc val.TupleDesc) (cut []RangeCut) {
+	cut = make([]RangeCut, len(desc.Types))
+	for i := range cut {
+		cut[i] = RangeCut{
+			Value:     tup.GetField(i),
+			Inclusive: false,
+		}
+	}
+	return
+}
+
+func closeRangeCuts(tup val.Tuple, desc val.TupleDesc) (cut []RangeCut) {
+	cut = make([]RangeCut, len(desc.Types))
+	for i := range cut {
+		cut[i] = RangeCut{
+			Value:     tup.GetField(i),
+			Inclusive: true,
+		}
+	}
+	return
 }

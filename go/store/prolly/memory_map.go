@@ -76,11 +76,7 @@ func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
 
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
-	rng := Range{
-		Start:   RangeCut{Unbound: true},
-		Stop:    RangeCut{Unbound: true},
-		KeyDesc: mm.keyDesc,
-	}
+	rng := Range{Start: nil, Stop: nil, KeyDesc: mm.keyDesc}
 	return mm.IterRange(ctx, rng)
 }
 
@@ -92,11 +88,13 @@ func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, err
 
 func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	var iter *skip.ListIter
-	if rng.Start.Unbound {
+	if rng.Start == nil {
 		iter = mm.list.IterAtStart()
 	} else {
-		vc := valueCmpForRange(rng)
-		iter = mm.list.GetIterAtWithFn(rng.Start.Key, vc)
+		iter = mm.list.GetIterFromSearchFn(func(nodeKey []byte) bool {
+			// advance through list until we're inside |rng|
+			return !rng.insideStart(nodeKey)
+		})
 	}
 
 	// enforce range start
@@ -120,21 +118,10 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	}
 }
 
-func valueCmpForRange(rng Range) skip.ValueCmp {
-	return func(left, right []byte) int {
-		l, r := val.Tuple(left), val.Tuple(right)
-		return rng.KeyDesc.Compare(l, r)
-	}
-}
-
 func (mm memoryMap) mutations() mutationIter {
 	return &memRangeIter{
 		iter: mm.list.IterAtStart(),
-		rng: Range{
-			Start:   RangeCut{Unbound: true},
-			Stop:    RangeCut{Unbound: true},
-			KeyDesc: mm.keyDesc,
-		},
+		rng:  Range{Start: nil, Stop: nil, KeyDesc: mm.keyDesc},
 	}
 }
 

@@ -27,10 +27,6 @@ type TupleDesc struct {
 	fast  fixedAccess
 }
 
-type TupleComparator interface {
-	Compare(left, right Tuple, desc TupleDesc) int
-}
-
 func NewTupleDescriptor(types ...Type) TupleDesc {
 	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
@@ -59,30 +55,6 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
 	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
 }
-
-type defaultCompare struct{}
-
-func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
-	for i := range desc.fast {
-		start, stop := desc.fast[i][0], desc.fast[i][1]
-		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
-		if cmp != 0 {
-			return cmp
-		}
-	}
-
-	off := len(desc.fast)
-	for i, typ := range desc.Types[off:] {
-		j := i + off
-		cmp = compare(typ, left.GetField(j), right.GetField(j))
-		if cmp != 0 {
-			return cmp
-		}
-	}
-	return
-}
-
-var _ TupleComparator = defaultCompare{}
 
 type fixedAccess [][2]ByteSize
 
@@ -117,9 +89,14 @@ func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	return tup.GetField(i)
 }
 
-// Compare returns the Comparison of |left| and |right|.
+// Compare compares |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	return td.cmp.Compare(left, right, td)
+}
+
+// CompareField compares |value| with the ith field of |tup|.
+func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
+	return td.cmp.CompareValues(value, tup.GetField(i), td.Types[i])
 }
 
 // Count returns the number of fields in the TupleDesc.

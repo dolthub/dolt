@@ -421,63 +421,66 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 }
 
 func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prolly.Range, err error) {
-	var lower, upper []sql.RangeCut
-	for _, expr := range sqlRange {
-		lower = append(lower, expr.LowerBound)
-		upper = append(upper, expr.UpperBound)
-	}
+	return
 
-	start := prolly.RangeCut{Inclusive: true}
-	startRow := sql.Row{}
-	for _, sc := range lower {
-		if !sql.RangeCutIsBinding(sc) {
-			start = prolly.RangeCut{Unbound: true, Inclusive: false}
-			break
-		}
-		start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
-		startRow = append(startRow, sql.GetRangeCutKey(sc))
-	}
-	if !start.Unbound {
-		startRow, err = normalizeRangeKey(sqlRange, startRow)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-
-		start.Key, err = tupleFromKeys(startRow, tb)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-	}
-
-	stop := prolly.RangeCut{Inclusive: true}
-	stopRow := sql.Row{}
-	for _, sc := range upper {
-		if !sql.RangeCutIsBinding(sc) {
-			stop = prolly.RangeCut{Unbound: true, Inclusive: false}
-			break
-		}
-		stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
-		stopRow = append(stopRow, sql.GetRangeCutKey(sc))
-	}
-	if !stop.Unbound {
-		stopRow, err = normalizeRangeKey(sqlRange, stopRow)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-
-		stop.Key, err = tupleFromKeys(stopRow, tb)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-	}
-
-	rngDesc := tupleDescriptorForRange(tb.Desc, sqlRange, startRow, stopRow)
-
-	return prolly.Range{
-		Start:   start,
-		Stop:    stop,
-		KeyDesc: rngDesc,
-	}, nil
+	// todo(andy)
+	//var lower, upper []sql.RangeCut
+	//for _, expr := range sqlRange {
+	//	lower = append(lower, expr.LowerBound)
+	//	upper = append(upper, expr.UpperBound)
+	//}
+	//
+	//start := prolly.RangeCut{Inclusive: true}
+	//startRow := sql.Row{}
+	//for _, sc := range lower {
+	//	if !sql.RangeCutIsBinding(sc) {
+	//		start = prolly.RangeCut{Unbound: true, Inclusive: false}
+	//		break
+	//	}
+	//	start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
+	//	startRow = append(startRow, sql.GetRangeCutKey(sc))
+	//}
+	//if !start.Unbound {
+	//	startRow, err = normalizeRangeKey(sqlRange, startRow)
+	//	if err != nil {
+	//		return prolly.Range{}, err
+	//	}
+	//
+	//	start.Key, err = tupleFromKeys(startRow, tb)
+	//	if err != nil {
+	//		return prolly.Range{}, err
+	//	}
+	//}
+	//
+	//stop := prolly.RangeCut{Inclusive: true}
+	//stopRow := sql.Row{}
+	//for _, sc := range upper {
+	//	if !sql.RangeCutIsBinding(sc) {
+	//		stop = prolly.RangeCut{Unbound: true, Inclusive: false}
+	//		break
+	//	}
+	//	stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
+	//	stopRow = append(stopRow, sql.GetRangeCutKey(sc))
+	//}
+	//if !stop.Unbound {
+	//	stopRow, err = normalizeRangeKey(sqlRange, stopRow)
+	//	if err != nil {
+	//		return prolly.Range{}, err
+	//	}
+	//
+	//	stop.Key, err = tupleFromKeys(stopRow, tb)
+	//	if err != nil {
+	//		return prolly.Range{}, err
+	//	}
+	//}
+	//
+	//rngDesc := tupleDescriptorForRange(tb.Desc, sqlRange, startRow, stopRow)
+	//
+	//return prolly.Range{
+	//	Start:   start,
+	//	Stop:    stop,
+	//	KeyDesc: rngDesc,
+	//}, nil
 }
 
 func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {

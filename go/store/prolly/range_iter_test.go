@@ -268,124 +268,132 @@ func TestMapIterRange(t *testing.T) {
 		// partial-key range scan
 		{
 			name: "range [1:4]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: true,
-				},
-				KeyDesc: partialDesc,
-			},
+			rng:  ClosedRange(intTuple(1), intTuple(4), partialDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1),
+			//		Inclusive: true,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4),
+			//		Inclusive: true,
+			//	},
+			//	KeyDesc: partialDesc,
+			//},
 			exp: tuples[:],
 		},
 		{
 			name: "range (1:4]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: true,
-				},
-				KeyDesc: partialDesc,
-			},
+			rng:  OpenStartRange(intTuple(1), intTuple(4), partialDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1),
+			//		Inclusive: false,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4),
+			//		Inclusive: true,
+			//	},
+			//	KeyDesc: partialDesc,
+			//},
 			exp: tuples[6:],
 		},
 		{
 			name: "range [1:4)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: false,
-				},
-				KeyDesc: partialDesc,
-			},
+			rng:  OpenStopRange(intTuple(1), intTuple(4), partialDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1),
+			//		Inclusive: true,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4),
+			//		Inclusive: false,
+			//	},
+			//	KeyDesc: partialDesc,
+			//},
 			exp: tuples[:18],
 		},
 		{
 			name: "range (1:4)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: false,
-				},
-				KeyDesc: partialDesc,
-			},
+			rng:  OpenRange(intTuple(1), intTuple(4), partialDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1),
+			//		Inclusive: false,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4),
+			//		Inclusive: false,
+			//	},
+			//	KeyDesc: partialDesc,
+			//},
 			exp: tuples[6:18],
 		},
 
 		// full-key range scan
 		{
 			name: "range [1,2:4,2]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: true,
-				},
-				KeyDesc: fullDesc,
-			},
+			rng:  ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1, 2),
+			//		Inclusive: true,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4, 2),
+			//		Inclusive: true,
+			//	},
+			//	KeyDesc: fullDesc,
+			//},
 			exp: tuples[2:22],
 		},
 		{
 			name: "range (1,2:4,2]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: true,
-				},
-				KeyDesc: fullDesc,
-			},
+			rng:  OpenStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			////rng: Range{
+			////	Start: RangeCut{
+			////		Key:       intTuple(1, 2),
+			////		Inclusive: false,
+			////	},
+			////	Stop: RangeCut{
+			////		Key:       intTuple(4, 2),
+			////		Inclusive: true,
+			////	},
+			////	KeyDesc: fullDesc,
+			//},
 			exp: tuples[4:22],
 		},
 		{
 			name: "range [1,2:4,2)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: false,
-				},
-				KeyDesc: fullDesc,
-			},
+			rng:  OpenStopRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1, 2),
+			//		Inclusive: true,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4, 2),
+			//		Inclusive: false,
+			//	},
+			//	KeyDesc: fullDesc,
+			//},
 			exp: tuples[2:20],
 		},
 		{
 			name: "range (1,2:4,2)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: false,
-				},
-				KeyDesc: fullDesc,
-			},
+			rng:  ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			//rng: Range{
+			//	Start: RangeCut{
+			//		Key:       intTuple(1, 2),
+			//		Inclusive: false,
+			//	},
+			//	Stop: RangeCut{
+			//		Key:       intTuple(4, 2),
+			//		Inclusive: false,
+			//	},
+			//	KeyDesc: fullDesc,
+			//},
 			exp: tuples[4:20], // 🌲
 		},
 	}

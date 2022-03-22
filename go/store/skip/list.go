@@ -37,6 +37,8 @@ type List struct {
 
 type ValueCmp func(left, right []byte) int
 
+type SearchFn func(nodeKey []byte) bool
+
 type nodeId uint32
 
 type skipPointer [maxHeight]nodeId
@@ -177,12 +179,14 @@ func (it *ListIter) Retreat() {
 }
 
 func (l *List) GetIterAt(key []byte) (it *ListIter) {
-	return l.GetIterAtWithFn(key, l.cmp)
+	return l.GetIterFromSearchFn(func(nodeKey []byte) bool {
+		return l.compareKeysWithFn(key, nodeKey, l.cmp) > 0
+	})
 }
 
-func (l *List) GetIterAtWithFn(key []byte, cmp ValueCmp) (it *ListIter) {
+func (l *List) GetIterFromSearchFn(kontinue SearchFn) (it *ListIter) {
 	it = &ListIter{
-		curr: l.seekWithFn(key, cmp),
+		curr: l.seekWithSearchFn(kontinue),
 		list: l,
 	}
 
@@ -211,14 +215,20 @@ func (l *List) IterAtEnd() *ListIter {
 
 // seek returns the skipNode with the smallest key >= |key|.
 func (l *List) seek(key []byte) skipNode {
-	return l.seekWithFn(key, l.cmp)
+	return l.seekWithCompare(key, l.cmp)
 }
 
-func (l *List) seekWithFn(key []byte, cmp ValueCmp) (node skipNode) {
+func (l *List) seekWithCompare(key []byte, cmp ValueCmp) (node skipNode) {
+	return l.seekWithSearchFn(func(nodeKey []byte) bool {
+		return l.compareKeysWithFn(key, nodeKey, cmp) > 0
+	})
+}
+
+func (l *List) seekWithSearchFn(kontinue SearchFn) (node skipNode) {
 	ptr := l.head
 	for h := int64(highest); h >= 0; h-- {
 		node = l.getNode(ptr[h])
-		for l.compareKeysWithFn(key, node.key, cmp) > 0 {
+		for kontinue(node.key) {
 			ptr = node.next
 			node = l.getNode(ptr[h])
 		}
