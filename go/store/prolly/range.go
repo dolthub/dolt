@@ -21,17 +21,17 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// RangeCut bounds a Range.
-type RangeCut struct {
-	Key       val.Tuple
-	Inclusive bool
-	Unbound   bool
+// Range defines a contiguous range of Tuples.
+type Range struct {
+	Start, Stop []RangeCut
+	KeyDesc     val.TupleDesc
 }
 
-// Range is a range of Tuples.
-type Range struct {
-	Start, Stop RangeCut
-	KeyDesc     val.TupleDesc
+// RangeCut bounds one dimension of a Range.
+type RangeCut struct {
+	Value     []byte
+	Inclusive bool
+	Null      bool
 }
 
 type MapRangeIter interface {
