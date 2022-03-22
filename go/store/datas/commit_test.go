@@ -351,7 +351,7 @@ func addCommit(t *testing.T, db *database, datasetID string, val string, parents
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
 	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	return mustHead(ds), mustHeadAddr(ds)
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,31 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "prolly.fbs";
-include "schema.fbs";
-include "table.fbs";
-
 namespace serial;
 
-struct Timestamp {
-  time:uint64;
+table Commit {
+  root:[ubyte] (required);
+  height:uint64;
 
-  // todo(andy): include nano extension?
+  parent_addrs:[ubyte] (required);
+  parent_heights:[uint64] (required);
+
+  parent_closure:[ubyte];
+
+  name:string (required);
+  email:string (required);
+  description:string (required);
+  timestamp_millis:uint64;
+  user_timestamp_millis:int64;
 }
 
-table Ref {
-  // 20 bytes
-  hash:[byte];
-}
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DCMT";
 
-// DatabaseRoot is the top-level chunk for a Database.
-table DatabaseRoot {
-  // map from table name to table ref
-  tables:RefMap (required);
-  foreign_keys:[ForeignKey] (required);
-}
-
-table MergeState {
-  pre_merge_root:Ref (required);
-  candidate_merge_commit:Ref (required);
-}
+root_type Commit;

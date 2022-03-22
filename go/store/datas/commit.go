@@ -27,6 +27,9 @@ import (
 	"errors"
 	"fmt"
 
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
@@ -112,10 +115,36 @@ func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommitForValue(ctx, vrw, v, opts)
 }
 
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions) []byte {
+	builder := flatbuffers.NewBuilder(1024)
+	vaddroff := builder.CreateByteVector(vaddr[:])
+	nameoff := builder.CreateString(opts.Meta.Name)
+	emailoff := builder.CreateString(opts.Meta.Email)
+	descoff := builder.CreateString(opts.Meta.Description)
+	serial.CommitStart(builder)
+	serial.CommitAddRoot(builder, vaddroff)
+	serial.CommitAddName(builder, nameoff)
+	serial.CommitAddEmail(builder, emailoff)
+	serial.CommitAddDescription(builder, descoff)
+	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
+	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
+	builder.FinishWithFileIdentifier(serial.CommitEnd(builder), []byte(serial.CommitFileID))
+	return builder.FinishedBytes()
+}
+
 func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
+
+	if vrw.Format() == types.Format_DOLT_DEV {
+		r, err := vrw.WriteValue(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		return types.SerialMessage(commit_flatbuffer(r.TargetHash(), opts)), nil
+	}
+
 	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
 	if err != nil {
 		return types.Struct{}, err
