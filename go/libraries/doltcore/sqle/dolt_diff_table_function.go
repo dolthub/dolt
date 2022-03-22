@@ -16,8 +16,9 @@ package sqle
 
 import (
 	"fmt"
-	"gopkg.in/src-d/go-errors.v1"
 	"io"
+
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
