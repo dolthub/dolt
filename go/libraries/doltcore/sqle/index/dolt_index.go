@@ -441,17 +441,21 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		}
 	}
 
-	tup := tb.Build(sharePool)
+	// BuildPermissive() allows nulls in non-null fields
+	tup := tb.BuildPermissive(sharePool)
+
 	for i, expr := range rng {
 		if !sql.RangeCutIsBinding(expr.LowerBound) {
 			continue
 		}
+
 		bnd := expr.LowerBound.TypeAsLowerBound()
+		_, null := expr.LowerBound.(sql.NullBound)
 
 		prollyRange.Start[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
 			Inclusive: bnd == sql.Closed,
-			Null:      false, // todo(andy)
+			Null:      null,
 		}
 	}
 
@@ -469,17 +473,19 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		}
 	}
 
-	tup = tb.Build(sharePool)
+	tup = tb.BuildPermissive(sharePool)
 	for i, expr := range rng {
 		if !sql.RangeCutIsBinding(expr.UpperBound) {
 			continue
 		}
+
 		bnd := expr.UpperBound.TypeAsUpperBound()
+		_, null := expr.UpperBound.(sql.NullBound)
 
 		prollyRange.Stop[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
 			Inclusive: bnd == sql.Closed,
-			Null:      false, // todo(andy)
+			Null:      null,
 		}
 	}
 

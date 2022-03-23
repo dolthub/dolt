@@ -98,6 +98,35 @@ func (r Range) BelowStop(t val.Tuple) bool {
 }
 
 func rangeStartSearchFn(rng Range) searchFn {
+	if hasBindingPrefix(rng.Start) {
+		return binarySearchRangeStart(rng)
+	} else {
+		return linearSearchRangeStart(rng)
+	}
+}
+
+func rangeStopSearchFn(rng Range) searchFn {
+	if hasBindingPrefix(rng.Stop) {
+		return binarySearchRangeStop(rng)
+	} else {
+		return linearSearchRangeStop(rng)
+	}
+}
+
+func hasBindingPrefix(bound []RangeCut) bool {
+	seenNonBinding := false
+	for _, cut := range bound {
+		if cut.nonBinding() {
+			seenNonBinding = true
+		} else if seenNonBinding {
+			// binding cut follows non-binding cut
+			return false
+		}
+	}
+	return true
+}
+
+func binarySearchRangeStart(rng Range) searchFn {
 	return func(nd Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (in bool) {
@@ -109,7 +138,19 @@ func rangeStartSearchFn(rng Range) searchFn {
 	}
 }
 
-func rangeStopSearchFn(rng Range) searchFn {
+func linearSearchRangeStart(rng Range) searchFn {
+	return func(nd Node) (idx int) {
+		for idx = 0; idx < int(nd.count); idx++ {
+			tup := val.Tuple(nd.getKey(idx))
+			if rng.AboveStart(tup) {
+				break
+			}
+		}
+		return idx
+	}
+}
+
+func binarySearchRangeStop(rng Range) searchFn {
 	return func(nd Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
@@ -118,6 +159,18 @@ func rangeStopSearchFn(rng Range) searchFn {
 			out = !rng.BelowStop(tup)
 			return
 		})
+	}
+}
+
+func linearSearchRangeStop(rng Range) searchFn {
+	return func(nd Node) (idx int) {
+		for idx = int(nd.count - 1); idx >= 0; idx-- {
+			tup := val.Tuple(nd.getKey(idx))
+			if rng.BelowStop(tup) {
+				break
+			}
+		}
+		return idx
 	}
 }
 
