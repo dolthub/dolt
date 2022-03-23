@@ -119,17 +119,17 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
-        hashsz := 20
-        hashessz := len(opts.Parents) * hashsz
-        builder.Prep(flatbuffers.SizeUOffsetT, hashessz)
-        stop := int(builder.Head())
-        start := stop - hashessz
+	hashsz := 20
+	hashessz := len(opts.Parents) * hashsz
+	builder.Prep(flatbuffers.SizeUOffsetT, hashessz)
+	stop := int(builder.Head())
+	start := stop - hashessz
 	for i := 0; i < len(opts.Parents); i++ {
-                copy(builder.Bytes[start:stop], opts.Parents[i][:])
-                start += hashsz
-        }
-        start = stop - hashessz
-        parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
+		copy(builder.Bytes[start:stop], opts.Parents[i][:])
+		start += hashsz
+	}
+	start = stop - hashessz
+	parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
 
 	// Starts at SerialMessageRefHeight.
 	maxheight := uint64(types.SerialMessageRefHeight)
@@ -147,7 +147,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []
 	descoff := builder.CreateString(opts.Meta.Description)
 	serial.CommitStart(builder)
 	serial.CommitAddRoot(builder, vaddroff)
-	serial.CommitAddHeight(builder, maxheight + 1)
+	serial.CommitAddHeight(builder, maxheight+1)
 	serial.CommitAddParentAddrs(builder, parentaddrsoff)
 	serial.CommitAddParentHeights(builder, parentheightsoff)
 	serial.CommitAddName(builder, nameoff)
