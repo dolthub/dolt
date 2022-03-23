@@ -582,7 +582,6 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assertCommonAncestor(t, a1, a1, a1, db, db) // All self
 	assertCommonAncestor(t, a1, a1, a2, db, db) // One side self
-	return
 	assertCommonAncestor(t, a2, a3, b3, db, db) // Common parent
 	assertCommonAncestor(t, a2, a4, b4, db, db) // Common grandparent
 	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
