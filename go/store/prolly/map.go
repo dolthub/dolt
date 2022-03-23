@@ -164,7 +164,7 @@ func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
 
 // IterAll returns a MutableMapRangeIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
-	rng := Range{Start: nil, Stop: nil, KeyDesc: m.keyDesc}
+	rng := Range{Start: nil, Stop: nil, Desc: m.keyDesc}
 	return m.IterRange(ctx, rng)
 }
 

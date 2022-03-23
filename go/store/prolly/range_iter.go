@@ -129,7 +129,7 @@ func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 	if proKey == nil {
 		return -1
 	}
-	return it.rng.KeyDesc.Compare(memKey, proKey)
+	return it.rng.Desc.Compare(memKey, proKey)
 }
 
 type prollyRangeIter struct {

@@ -76,7 +76,7 @@ func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
 
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
-	rng := Range{Start: nil, Stop: nil, KeyDesc: mm.keyDesc}
+	rng := Range{Start: nil, Stop: nil, Desc: mm.keyDesc}
 	return mm.IterRange(ctx, rng)
 }
 
@@ -98,14 +98,14 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.insideStart(key) {
+		if key == nil || rng.AboveStart(key) {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.insideStop(key) {
+	if key == nil || !rng.BelowStop(key) {
 		iter = nil
 	}
 
@@ -121,14 +121,14 @@ func skipSearchFromRange(rng Range) skip.SearchFn {
 			return false
 		}
 		// advance through list until we're inside |rng|
-		return !rng.insideStart(nodeKey)
+		return !rng.AboveStart(nodeKey)
 	}
 }
 
 func (mm memoryMap) mutations() mutationIter {
 	return &memRangeIter{
 		iter: mm.list.IterAtStart(),
-		rng:  Range{Start: nil, Stop: nil, KeyDesc: mm.keyDesc},
+		rng:  Range{Start: nil, Stop: nil, Desc: mm.keyDesc},
 	}
 }
 
@@ -157,7 +157,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 		it.iter.Advance()
 
 		k, _ := it.current()
-		if k == nil || !it.rng.insideStop(k) {
+		if k == nil || !it.rng.BelowStop(k) {
 			it.iter = nil // range exhausted
 		}
 
