@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -290,6 +291,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 type schemaFragment struct {
 	name     string
 	fragment string
+	created  time.Time
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
@@ -314,6 +316,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),
+			created:  time.Unix(sqlRow[3].(int64), 0),
 		})
 	}
 	return frags, nil
