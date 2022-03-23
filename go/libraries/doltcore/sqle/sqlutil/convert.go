@@ -17,13 +17,12 @@ package sqlutil
 import (
 	"context"
 	"fmt"
-
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 )
 
 func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, error) {
@@ -32,14 +31,26 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
-		var extra string
-		if col.AutoIncrement {
-			extra = "auto_increment"
-		}
 
 		var deflt *sql.ColumnDefaultValue
 		if col.Default != "" {
-			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
+			if col.Default == "NULL" {
+				deflt = nil
+			} else if col.Default == `""` {
+				deflt, err = sql.NewColumnDefaultValue(expression.NewLiteral("", sql.LongText), sqlType, true, col.IsNullable())
+				if err != nil {
+					return true, err
+				}
+			} else {
+				deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
+			}
+		}
+
+		var extra string
+		if col.AutoIncrement {
+			extra = "auto_increment"
+		} else if deflt.String() == "CURRENT_TIMESTAMP" {
+			extra = "DEFAULT_GENERATED"
 		}
 
 		cols[i] = &sql.Column{
