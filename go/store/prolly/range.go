@@ -22,7 +22,11 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// Range defines a contiguous range of Tuples.
+// Range defines a contiguous range of Tuples starting from the
+// lexicographically least Tuple that satisfies all RangeCut
+// predicates, and ending at the greatest Tuple that satisfies
+// all predicates. Tuples inside the Range need not satisfy
+// all predicates, as long as they are in bounds.
 type Range struct {
 	Start, Stop []RangeCut
 	Desc        val.TupleDesc
@@ -43,6 +47,7 @@ func (c RangeCut) nonBinding() bool {
 	return c.Value == nil && c.Null == false
 }
 
+// AboveStart returns true if |t| is a member of |r|.
 func (r Range) AboveStart(t val.Tuple) bool {
 	for i, cut := range r.Start {
 		if cut.nonBinding() {
@@ -67,6 +72,7 @@ func (r Range) AboveStart(t val.Tuple) bool {
 	return true
 }
 
+// BelowStop returns true if |t| is a member of |r|.
 func (r Range) BelowStop(t val.Tuple) bool {
 	for i, cut := range r.Stop {
 		if cut.nonBinding() {
@@ -115,7 +121,7 @@ func rangeStopSearchFn(rng Range) searchFn {
 	}
 }
 
-// GreaterRange defines a Range of Tuples greater than |lo|.
+// GreaterRange defines a Range of Tuples greater than |start|.
 func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: exclusiveBound(start, desc),
@@ -123,7 +129,7 @@ func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |lo|.
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
 func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: inclusiveBound(start, desc),
@@ -131,7 +137,7 @@ func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// LesserRange defines a Range of Tuples less than |last|.
+// LesserRange defines a Range of Tuples less than |stop|.
 func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Stop: exclusiveBound(stop, desc),
@@ -139,7 +145,7 @@ func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// LesserOrEqualRange defines a Range of Tuples less than or equal to |last|.
+// LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
 func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Stop: inclusiveBound(stop, desc),
@@ -147,7 +153,7 @@ func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenRange defines a non-inclusive Range of Tuples from |lo| to |last|.
+// OpenRange defines a non-inclusive Range of Tuples from |start| to |stop|.
 func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: exclusiveBound(start, desc),
@@ -156,7 +162,7 @@ func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenStartRange defines a half-open Range of Tuples from |lo| to |last|.
+// OpenStartRange defines a half-open Range of Tuples from |start| to |stop|.
 func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: exclusiveBound(start, desc),
@@ -165,7 +171,7 @@ func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// OpenStopRange defines a half-open Range of Tuples from |lo| to |last|.
+// OpenStopRange defines a half-open Range of Tuples from |start| to |stop|.
 func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: inclusiveBound(start, desc),
@@ -174,7 +180,7 @@ func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	}
 }
 
-// ClosedRange defines an inclusive Range of Tuples from |lo| to |last|.
+// ClosedRange defines an inclusive Range of Tuples from |start| to |stop|.
 func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
 	return Range{
 		Start: inclusiveBound(start, desc),

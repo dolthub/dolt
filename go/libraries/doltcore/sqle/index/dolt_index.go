@@ -420,111 +420,72 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
-func prollyRangeFromSqlRange(sqlRange sql.Range, tb *val.TupleBuilder) (rng prolly.Range, err error) {
-	return
-
-	// todo(andy)
-	//var lower, upper []sql.RangeCut
-	//for _, expr := range sqlRange {
-	//	lower = append(lower, expr.LowerBound)
-	//	upper = append(upper, expr.UpperBound)
-	//}
-	//
-	//start := prolly.RangeCut{Inclusive: true}
-	//startRow := sql.Row{}
-	//for _, sc := range lower {
-	//	if !sql.RangeCutIsBinding(sc) {
-	//		start = prolly.RangeCut{Unbound: true, Inclusive: false}
-	//		break
-	//	}
-	//	start.Inclusive = start.Inclusive && sc.TypeAsLowerBound() == sql.Closed
-	//	startRow = append(startRow, sql.GetRangeCutKey(sc))
-	//}
-	//if !start.Unbound {
-	//	startRow, err = normalizeRangeKey(sqlRange, startRow)
-	//	if err != nil {
-	//		return prolly.Range{}, err
-	//	}
-	//
-	//	start.Key, err = tupleFromKeys(startRow, tb)
-	//	if err != nil {
-	//		return prolly.Range{}, err
-	//	}
-	//}
-	//
-	//stop := prolly.RangeCut{Inclusive: true}
-	//stopRow := sql.Row{}
-	//for _, sc := range upper {
-	//	if !sql.RangeCutIsBinding(sc) {
-	//		stop = prolly.RangeCut{Unbound: true, Inclusive: false}
-	//		break
-	//	}
-	//	stop.Inclusive = stop.Inclusive && sc.TypeAsUpperBound() == sql.Closed
-	//	stopRow = append(stopRow, sql.GetRangeCutKey(sc))
-	//}
-	//if !stop.Unbound {
-	//	stopRow, err = normalizeRangeKey(sqlRange, stopRow)
-	//	if err != nil {
-	//		return prolly.Range{}, err
-	//	}
-	//
-	//	stop.Key, err = tupleFromKeys(stopRow, tb)
-	//	if err != nil {
-	//		return prolly.Range{}, err
-	//	}
-	//}
-	//
-	//rngDesc := tupleDescriptorForRange(tb.Desc, sqlRange, startRow, stopRow)
-	//
-	//return prolly.Range{
-	//	Start:   start,
-	//	Stop:    stop,
-	//	Desc: rngDesc,
-	//}, nil
-}
-
-func tupleFromKeys(keys sql.Row, tb *val.TupleBuilder) (val.Tuple, error) {
-	var err error
-	for i, v := range keys {
-		if err = PutField(tb, i, v); err != nil {
-			return nil, err
-		}
+func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
+	prollyRange := prolly.Range{
+		Start: make([]prolly.RangeCut, len(rng)),
+		Stop:  make([]prolly.RangeCut, len(rng)),
+		Desc:  tb.Desc,
 	}
 
-	// ranges can be defined using null values even if the index is non-null
-	return tb.BuildPermissive(sharePool), nil
-}
+	for i, expr := range rng {
+		if !sql.RangeCutIsBinding(expr.LowerBound) {
+			continue
+		}
 
-// normalizeRangeKey converts a range's key into a canonical value.
-func normalizeRangeKey(rng sql.Range, key sql.Row) (sql.Row, error) {
-	var err error
-	for i := range key {
-		key[i], err = rng[i].Typ.Convert(key[i])
+		v, err := getRangeCutValue(expr.LowerBound, rng[i].Typ)
 		if err != nil {
-			return nil, err
+			return prolly.Range{}, err
+		}
+		if err = PutField(tb, i, v); err != nil {
+			return prolly.Range{}, err
 		}
 	}
-	return key, nil
+
+	tup := tb.Build(sharePool)
+	for i, expr := range rng {
+		if !sql.RangeCutIsBinding(expr.LowerBound) {
+			continue
+		}
+		bnd := expr.LowerBound.TypeAsLowerBound()
+
+		prollyRange.Start[i] = prolly.RangeCut{
+			Value:     tup.GetField(i),
+			Inclusive: bnd == sql.Closed,
+			Null:      false, // todo(andy)
+		}
+	}
+
+	for i, expr := range rng {
+		if !sql.RangeCutIsBinding(expr.UpperBound) {
+			continue
+		}
+
+		v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
+		if err != nil {
+			return prolly.Range{}, err
+		}
+		if err = PutField(tb, i, v); err != nil {
+			return prolly.Range{}, err
+		}
+	}
+
+	tup = tb.Build(sharePool)
+	for i, expr := range rng {
+		if !sql.RangeCutIsBinding(expr.UpperBound) {
+			continue
+		}
+		bnd := expr.UpperBound.TypeAsUpperBound()
+
+		prollyRange.Stop[i] = prolly.RangeCut{
+			Value:     tup.GetField(i),
+			Inclusive: bnd == sql.Closed,
+			Null:      false, // todo(andy)
+		}
+	}
+
+	return prollyRange, nil
 }
 
-// tupleDescriptorForRange constructs a tuple descriptor suitable for range queries.
-// Range queries can be made over a prefix subset of the index's columns, so we need
-// a tuple descriptor that is aware of that subset.
-// We also need to account for range keys containing nulls and disable tuple access
-// methods that assume non-null tuples.
-func tupleDescriptorForRange(desc val.TupleDesc, rng sql.Range, start, stop sql.Row) val.TupleDesc {
-	rngDesc := val.TupleDescriptorPrefix(desc, len(rng))
-
-	for i := range start {
-		if start[i] == nil {
-			return rngDesc.WithoutFixedAccess()
-		}
-	}
-	for i := range stop {
-		if stop[i] == nil {
-			return rngDesc.WithoutFixedAccess()
-		}
-	}
-
-	return rngDesc
+func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
+	return typ.Convert(sql.GetRangeCutKey(cut))
 }

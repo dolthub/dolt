@@ -52,10 +52,6 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	return
 }
 
-func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
-	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
-}
-
 type fixedAccess [][2]ByteSize
 
 func makeFixedAccess(types []Type) (acc fixedAccess) {
