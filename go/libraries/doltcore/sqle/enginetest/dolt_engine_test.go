@@ -58,26 +58,18 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "insert into sparse auto_increment table",
+			Name: "multi altet table index",
 			SetUpScript: []string{
-				"create table auto (pk int primary key auto_increment)",
-				"insert into auto values (10), (20), (30)",
-				"insert into auto values (NULL)",
-				"insert into auto values (40)",
-				"insert into auto values (0)",
+				"create table a (x int primary key, val int)",
+				"alter table a add index myidx (val)",
+				"INSERT INTO a VALUES (2, 2)",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
-				{
-					Query: "select * from auto order by 1",
-					Expected: []sql.Row{
-						{10}, {20}, {30}, {31}, {40}, {41},
-					},
-				},
-			},
+			Query:    "alter table a drop index myidx, add index myidx2 (val)",
+			Expected: []sql.Row{},
 		},
 	}
 

@@ -2610,3 +2610,48 @@ SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "KEY \`index_test_c1_idx\`" ]] || false
 }
+
+@test "index: multiddl alter statement" {
+     dolt sql <<SQL
+INSERT INTO onepk VALUES (1, 99, 51), (2, 11, 55), (3, 88, 52), (4, 22, 54), (5, 77, 53);
+ALTER TABLE onepk ADD INDEX idx_v1 (v1);
+ALTER TABLE onepk DROP INDEX idx_v1, ADD INDEX myidx (v1)
+SQL
+    run dolt index ls onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "myidx(v1)" ]] || false
+    run dolt index cat onepk myidx -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1,pk1" ]] || false
+    [[ "$output" =~ "11,2" ]] || false
+    [[ "$output" =~ "22,4" ]] || false
+    [[ "$output" =~ "77,5" ]] || false
+    [[ "$output" =~ "88,3" ]] || false
+    [[ "$output" =~ "99,1" ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
+    run dolt schema show onepk
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'KEY `myidx` (`v1`)' ]] || false
+    run dolt sql -q "SELECT pk1 FROM onepk WHERE v1 = 77" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk1" ]] || false
+    [[ "$output" =~ "5" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "index: multiddl drop column add index fails" {
+  # TODO: Why does this fail in the shell.....
+  run dolt sql <<SQL
+    CREATE TABLE t(pk int primary key, v1 int);
+    ALTER TABLE t DROP COLUMN v1, ADD INDEX myidx (v1);
+SQL
+
+    [[ "$output" =~ 'does not exist in the table' ]] || false
+    [ "$status" -eq "1" ]
+    # need to fail due to column not found
+
+    run dolt schema show t
+    [ "$status" -eq "0" ]
+    # column should still exist
+    [[ "$output" =~ '`v1` int' ]] || false
+}
