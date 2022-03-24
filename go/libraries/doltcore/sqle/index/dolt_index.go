@@ -19,6 +19,7 @@ import (
 	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -183,9 +184,18 @@ func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.
 		}
 	}
 
+	// the sql engine provides ranges that are logically disjoint in value space.
+	// however, these ranges may overlap physically within the index. Here we merge
+	// physically overlapping ranges to avoid returning duplicate tuples/rows.
+	merged := prolly.MergeOverlappingRanges(prs...)
+
+	if len(merged) != len(prs) {
+		ctx.GetLogger().Log(logrus.DebugLevel, "merged prolly ranges")
+	}
+
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: prs,
+		prollyRanges: merged,
 		sqlRanges:    sqlRanges,
 	}, nil
 }
@@ -449,11 +459,13 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
+		typ := tb.Desc.Types[i]
 		bnd := expr.LowerBound.TypeAsLowerBound()
 		_, null := expr.LowerBound.(sql.NullBound)
 
 		prollyRange.Start[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
+			Type:      typ,
 			Inclusive: bnd == sql.Closed,
 			Null:      null,
 		}
@@ -479,11 +491,13 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
+		typ := tb.Desc.Types[i]
 		bnd := expr.UpperBound.TypeAsUpperBound()
 		_, null := expr.UpperBound.(sql.NullBound)
 
 		prollyRange.Stop[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
+			Type:      typ,
 			Inclusive: bnd == sql.Closed,
 			Null:      null,
 		}

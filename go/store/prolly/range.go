@@ -32,21 +32,6 @@ type Range struct {
 	Desc        val.TupleDesc
 }
 
-func (r Range) format() string {
-	return formatRange(r)
-}
-
-// RangeCut bounds one dimension of a Range.
-type RangeCut struct {
-	Value     []byte
-	Inclusive bool
-	Null      bool
-}
-
-func (c RangeCut) nonBinding() bool {
-	return c.Value == nil && c.Null == false
-}
-
 // AboveStart returns true if |t| is a member of |r|.
 func (r Range) AboveStart(t val.Tuple) bool {
 	for i, cut := range r.Start {
@@ -63,11 +48,10 @@ func (r Range) AboveStart(t val.Tuple) bool {
 
 		cmp := r.Desc.CompareField(cut.Value, i, t)
 
-		if cut.Inclusive && cmp == 0 {
+		if cmp < 0 || (cut.Inclusive && cmp == 0) {
 			continue
 		}
-
-		return cmp < 0
+		return false
 	}
 	return true
 }
@@ -76,7 +60,7 @@ func (r Range) AboveStart(t val.Tuple) bool {
 func (r Range) BelowStop(t val.Tuple) bool {
 	for i, cut := range r.Stop {
 		if cut.nonBinding() {
-			return true
+			continue
 		}
 
 		v := t.GetField(i)
@@ -88,54 +72,116 @@ func (r Range) BelowStop(t val.Tuple) bool {
 
 		cmp := r.Desc.CompareField(cut.Value, i, t)
 
-		if cut.Inclusive && cmp == 0 {
+		if cmp > 0 || (cut.Inclusive && cmp == 0) {
 			continue
 		}
-
-		return cmp > 0
+		return false
 	}
 	return true
+}
+
+func (r Range) less(other Range) bool {
+	assertTrue(len(r.Start) == len(other.Start))
+
+	compare := r.Desc.Comparator()
+	for i, left := range r.Start {
+		right := other.Start[i]
+		if left.less(right, compare) {
+			return true
+		}
+	}
+	return false
+}
+
+func (r Range) overlaps(other Range) bool {
+	compare := r.Desc.Comparator()
+	if r.Stop[0].less(other.Start[0], compare) {
+		return false
+	}
+	if other.Stop[0].less(r.Start[0], compare) {
+		return false
+	}
+	return true
+}
+
+func (r Range) merge(other Range) Range {
+	assertTrue(r.Desc.Equals(other.Desc))
+	return Range{
+		Start: r.Start,
+		Stop:  other.Stop,
+		Desc:  other.Desc,
+	}
+}
+
+func (r Range) format() string {
+	return formatRange(r)
+}
+
+// RangeCut bounds one dimension of a Range.
+type RangeCut struct {
+	Value     []byte
+	Type      val.Type
+	Inclusive bool
+	Null      bool
+}
+
+func (c RangeCut) nonBinding() bool {
+	return c.Value == nil && c.Null == false
+}
+
+func (c RangeCut) less(other RangeCut, tc val.TupleComparator) bool {
+	if c.Null || other.Null {
+		// order nulls last
+		return !c.Null && other.Null
+	}
+	if c.nonBinding() || other.nonBinding() {
+		return false
+	}
+
+	cmp := tc.CompareValues(c.Value, other.Value, c.Type)
+
+	if cmp == 0 {
+		return !c.Inclusive || !other.Inclusive
+	}
+
+	return cmp < 0
+}
+
+// MergeOverlappingRanges merges overlapping ranges.
+func MergeOverlappingRanges(ranges ...Range) (merged []Range) {
+	if len(ranges) <= 1 {
+		return ranges
+	}
+	ranges = SortRanges(ranges...)
+
+	merged = make([]Range, 0, len(ranges))
+	acc := ranges[0]
+
+	for _, rng := range ranges[1:] {
+		if acc.overlaps(rng) {
+			acc = acc.merge(rng)
+		} else {
+			merged = append(merged, acc)
+			acc = rng
+		}
+	}
+	return merged
+}
+
+// SortRanges sorts ranges by start bound.
+func SortRanges(ranges ...Range) []Range {
+	sort.Slice(ranges, func(i, j int) bool {
+		return ranges[i].less(ranges[j])
+	})
+	return ranges
 }
 
 func rangeStartSearchFn(rng Range) searchFn {
-	if hasBindingPrefix(rng.Start) {
-		return binarySearchRangeStart(rng)
-	} else {
-		return linearSearchRangeStart(rng)
-	}
+	return linearSearchRangeStart(rng)
 }
 
 func rangeStopSearchFn(rng Range) searchFn {
-	if hasBindingPrefix(rng.Stop) {
-		return binarySearchRangeStop(rng)
-	} else {
-		return linearSearchRangeStop(rng)
-	}
-}
-
-func hasBindingPrefix(bound []RangeCut) bool {
-	seenNonBinding := false
-	for _, cut := range bound {
-		if cut.nonBinding() {
-			seenNonBinding = true
-		} else if seenNonBinding {
-			// binding cut follows non-binding cut
-			return false
-		}
-	}
-	return true
-}
-
-func binarySearchRangeStart(rng Range) searchFn {
-	return func(nd Node) int {
-		// todo(andy): inline sort.Search()
-		return sort.Search(int(nd.count), func(i int) (in bool) {
-			// if |tup| ∈ |rng|, set |in| to true
-			tup := val.Tuple(nd.getKey(i))
-			in = rng.AboveStart(tup)
-			return
-		})
-	}
+	return linearSearchRangeStop(rng)
 }
 
 func linearSearchRangeStart(rng Range) searchFn {
@@ -150,18 +196,6 @@ func linearSearchRangeStart(rng Range) searchFn {
 	}
 }
 
-func binarySearchRangeStop(rng Range) searchFn {
-	return func(nd Node) int {
-		// todo(andy): inline sort.Search()
-		return sort.Search(int(nd.count), func(i int) (out bool) {
-			// if |tup| ∈ |rng|, set |out| to false
-			tup := val.Tuple(nd.getKey(i))
-			out = !rng.BelowStop(tup)
-			return
-		})
-	}
-}
-
 func linearSearchRangeStop(rng Range) searchFn {
 	return func(nd Node) (idx int) {
 		for idx = int(nd.count - 1); idx >= 0; idx-- {
@@ -170,7 +204,35 @@ func linearSearchRangeStop(rng Range) searchFn {
 				break
 			}
 		}
-		return idx
+		return idx + 1
+	}
+}
+
+func binarySearchRangeStart(rng Range) searchFn {
+	// todo(andy): this search is broken, it fails to
+	//  maintain the propertry f(i) == true implies f(i+1) == true.
+	return func(nd Node) int {
+		// todo(andy): inline sort.Search()
+		return sort.Search(int(nd.count), func(i int) (in bool) {
+			// if |tup| ∈ |rng|, set |in| to true
+			tup := val.Tuple(nd.getKey(i))
+			in = rng.AboveStart(tup)
+			return
+		})
+	}
+}
+
+func binarySearchRangeStop(rng Range) searchFn {
+	// todo(andy): this search is broken, it fails to
+	//  maintain the propertry f(i) == true implies f(i+1) == true.
+	return func(nd Node) (idx int) {
+		// todo(andy): inline sort.Search()
+		return sort.Search(int(nd.count), func(i int) (out bool) {
+			// if |tup| ∈ |rng|, set |out| to false
+			tup := val.Tuple(nd.getKey(i))
+			out = !rng.BelowStop(tup)
+			return
+		})
 	}
 }
 
@@ -247,6 +309,7 @@ func inclusiveBound(tup val.Tuple, desc val.TupleDesc) (cut []RangeCut) {
 	for i := range cut {
 		cut[i] = RangeCut{
 			Value:     tup.GetField(i),
+			Type:      desc.Types[i],
 			Inclusive: true,
 		}
 	}
@@ -269,11 +332,21 @@ func formatRange(r Range) string {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-		op := ">"
-		if cut.Inclusive {
-			op = ">="
+
+		v := "-∞"
+		if cut.Value != nil {
+			v = r.Desc.FormatValue(i, cut.Value)
 		}
-		v := r.Desc.FormatValue(i, cut.Value)
+
+		var op string
+		switch {
+		case cut.Null:
+			op, v = "==", "NULL"
+		case cut.Inclusive:
+			op = ">="
+		default:
+			op = ">"
+		}
 		sb.WriteString(fmt.Sprintf("tuple[%d] %s %s", i, op, v))
 	}
 	for i, cut := range r.Stop {
@@ -281,11 +354,21 @@ func formatRange(r Range) string {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-		op := "<"
-		if cut.Inclusive {
-			op = "<="
+
+		v := "∞"
+		if cut.Value != nil {
+			v = r.Desc.FormatValue(i, cut.Value)
 		}
-		v := r.Desc.FormatValue(i, cut.Value)
+
+		var op string
+		switch {
+		case cut.Null:
+			op, v = "==", "NULL"
+		case cut.Inclusive:
+			op = "<="
+		default:
+			op = "<"
+		}
 		sb.WriteString(fmt.Sprintf("tuple[%d] %s %s", i, op, v))
 	}
 

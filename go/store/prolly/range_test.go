@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"encoding/binary"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,29 +23,151 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+var tuples = []val.Tuple{
+	intTuple(1, 1),           // 0
+	intTuple(1, 2),           // 1
+	intTuple(1, 3),           // 2
+	intTuple(2, 1),           // 3
+	intTuple(2, 2),           // 4
+	intTuple(2, 3),           // 5
+	intTuple(3, 1),           // 6
+	intTuple(3, 2),           // 7
+	intTuple(3, 3),           // 8
+	intTuple(4, 1),           // 9
+	intTuple(4, 2),           // 10
+	intTuple(4, 3),           // 11
+	intNullTuple(&nine, nil), // 12
+	intNullTuple(nil, &nine), // 13
+}
+
+var nine = int32(9)
+
 func TestRangeBounds(t *testing.T) {
+	intType := val.Type{Enc: val.Int32Enc}
 	twoCol := val.NewTupleDescriptor(
-		val.Type{Enc: val.Int32Enc},
-		val.Type{Enc: val.Int32Enc},
+		intType, // c0
+		intType, // c1
 	)
 
 	tests := []struct {
 		name      string
 		testRange Range
 		inside    []val.Tuple
-		outside   []val.Tuple
 	}{
 		{
-			name:      "range [1,2:4,2]",
-			testRange: ClosedRange(intTuple(1, 2), intTuple(4, 2), twoCol),
-			inside: []val.Tuple{
-				intTuple(1, 2), intTuple(1, 3), intTuple(2, 1), intTuple(2, 2),
-				intTuple(2, 3), intTuple(3, 1), intTuple(3, 2), intTuple(3, 3),
-				intTuple(4, 1), intTuple(4, 2),
+			name: "unbound range",
+			testRange: Range{
+				Start: nil,
+				Stop:  nil,
+				Desc:  twoCol,
 			},
-			outside: []val.Tuple{
-				intTuple(1, 1), intTuple(4, 3),
+			inside: tuples[:],
+		},
+
+		// first column ranges
+		{
+			name: "c0 > 1",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Stop: nil,
+				Desc: twoCol,
 			},
+			inside: tuples[3:13],
+		},
+		{
+			name: "c0 < 1",
+			testRange: Range{
+				Start: nil,
+				Stop: []RangeCut{
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Desc: twoCol,
+			},
+			inside: nil,
+		},
+		{
+			name: "2 <= c0 <= 3",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: intVal(2), Type: intType, Inclusive: true},
+				},
+				Stop: []RangeCut{
+					{Value: intVal(3), Type: intType, Inclusive: true},
+				},
+				Desc: twoCol,
+			},
+			inside: tuples[3:9],
+		},
+		{
+			name: "c0 = NULL",
+			testRange: Range{
+				Start: []RangeCut{
+					{Null: true, Type: intType},
+				},
+				Stop: []RangeCut{
+					{Null: true, Type: intType},
+				},
+				Desc: twoCol,
+			},
+			inside: tuples[13:],
+		},
+
+		// second column ranges
+		{
+			name: "c1 > 1",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Stop: nil,
+				Desc: twoCol,
+			},
+			inside: concat(tuples[1:3], tuples[4:6], tuples[7:9], tuples[10:12], tuples[13:]),
+		},
+		{
+			name: "c1 < 1",
+			testRange: Range{
+				Start: nil,
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Desc: twoCol,
+			},
+			inside: nil,
+		},
+		{
+			name: "2 <= c1 <= 3",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(2), Type: intType, Inclusive: true},
+				},
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(3), Type: intType, Inclusive: true},
+				},
+				Desc: twoCol,
+			},
+			inside: concat(tuples[1:3], tuples[4:6], tuples[7:9], tuples[10:12]),
+		},
+		{
+			name: "c1 = NULL",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Null: true, Type: intType},
+				},
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Null: true, Type: intType},
+				},
+				Desc: twoCol,
+			},
+			inside: tuples[12:13],
 		},
 	}
 
@@ -57,13 +180,39 @@ func TestRangeBounds(t *testing.T) {
 					"%s should be in range %s \n",
 					rng.Desc.Format(tup), rng.format())
 			}
-			for _, tup := range test.outside {
-				inStart, inStop := rng.AboveStart(tup), rng.BelowStop(tup)
-				assert.False(t, inStart && inStop,
-					"%s should not be in range %s \n",
-					rng.Desc.Format(tup), rng.format())
 
+			count := 0
+			for _, tup := range tuples {
+				if rng.AboveStart(tup) && rng.BelowStop(tup) {
+					count++
+				}
 			}
+			assert.Equal(t, len(test.inside), count)
 		})
 	}
+}
+
+func intVal(i int32) (buf []byte) {
+	buf = make([]byte, 4)
+	binary.LittleEndian.PutUint32(buf, uint32(i))
+	return
+}
+
+func intNullTuple(ints ...*int32) val.Tuple {
+	types := make([]val.Type, len(ints))
+	for i := range types {
+		types[i] = val.Type{
+			Enc:      val.Int32Enc,
+			Nullable: true,
+		}
+	}
+
+	desc := val.NewTupleDescriptor(types...)
+	tb := val.NewTupleBuilder(desc)
+	for i, val := range ints {
+		if val != nil {
+			tb.PutInt32(i, *val)
+		}
+	}
+	return tb.Build(sharedPool)
 }

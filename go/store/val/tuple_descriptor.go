@@ -21,12 +21,16 @@ import (
 	"time"
 )
 
+// TupleDesc describes a Tuple set.
+// Data structures that contain Tuples and algorithms that process Tuples
+// use a TupleDesc's types to interpret the fields of a Tuple.
 type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
 }
 
+// NewTupleDescriptor makes a TupleDescriptor from |types|.
 func NewTupleDescriptor(types ...Type) TupleDesc {
 	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
@@ -72,11 +76,7 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 	return
 }
 
-func (td TupleDesc) WithoutFixedAccess() TupleDesc {
-	td.fast = nil
-	return td
-}
-
+// GetField returns the ith field of |tup|.
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
 		start, stop := td.fast[i][0], td.fast[i][1]
@@ -100,6 +100,11 @@ func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
 		v = tup.GetField(i)
 	}
 	return td.cmp.CompareValues(value, v, td.Types[i])
+}
+
+// Comparator returns the TupleDescriptor's TupleComparator.
+func (td TupleDesc) Comparator() TupleComparator {
+	return td.cmp
 }
 
 // Count returns the number of fields in the TupleDesc.
@@ -400,4 +405,17 @@ func (td TupleDesc) FormatValue(i int, value []byte) string {
 	default:
 		return string(value)
 	}
+}
+
+// Equals returns true if |td| and |other| have equal type slices.
+func (td TupleDesc) Equals(other TupleDesc) bool {
+	if len(td.Types) != len(other.Types) {
+		return false
+	}
+	for i, typ := range td.Types {
+		if typ != other.Types[i] {
+			return false
+		}
+	}
+	return true
 }

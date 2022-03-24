@@ -265,10 +265,9 @@ func TestMapIterRange(t *testing.T) {
 	)
 
 	tests := []struct {
-		name     string
-		rng      Range
-		inRange  []val.Tuple
-		outRange []val.Tuple
+		name    string
+		rng     Range
+		inRange []val.Tuple
 	}{
 		// partial-key range scan
 		{
@@ -277,48 +276,41 @@ func TestMapIterRange(t *testing.T) {
 			inRange: tuples[:],
 		},
 		{
-			name:     "range (1:4]",
-			rng:      OpenStartRange(intTuple(1), intTuple(4), partialDesc),
-			inRange:  tuples[6:],
-			outRange: concat(tuples[:6]),
+			name:    "range (1:4]",
+			rng:     OpenStartRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[6:],
 		},
 		{
-			name:     "range [1:4)",
-			rng:      OpenStopRange(intTuple(1), intTuple(4), partialDesc),
-			inRange:  tuples[:18],
-			outRange: concat(tuples[18:]),
+			name:    "range [1:4)",
+			rng:     OpenStopRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[:18],
 		},
 		{
-			name:     "range (1:4)",
-			rng:      OpenRange(intTuple(1), intTuple(4), partialDesc),
-			inRange:  tuples[6:18],
-			outRange: concat(tuples[:6], tuples[18:]),
+			name:    "range (1:4)",
+			rng:     OpenRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[6:18],
 		},
 
 		// full-key range scan
 		{
-			name:     "range [1,2:4,2]",
-			rng:      ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange:  tuples[2:22],
-			outRange: concat(tuples[:2], tuples[22:]),
+			name:    "range [1,2:4,2]",
+			rng:     ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[2:22],
 		},
 		{
-			name:     "range (1,2:4,2]",
-			rng:      OpenStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange:  tuples[4:22],
-			outRange: concat(tuples[:4], tuples[22:]),
+			name:    "range (1,2:4,2]",
+			rng:     OpenStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[4:22],
 		},
 		{
-			name:     "range [1,2:4,2)",
-			rng:      OpenStopRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange:  tuples[2:20],
-			outRange: concat(tuples[:2], tuples[20:]),
+			name:    "range [1,2:4,2)",
+			rng:     OpenStopRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[2:20],
 		},
 		{
-			name:     "range (1,2:4,2)",
-			rng:      OpenRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange:  tuples[4:20], // 🌲
-			outRange: concat(tuples[:4], tuples[20:]),
+			name:    "range (1,2:4,2)",
+			rng:     OpenRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[4:20], // 🌲
 		},
 	}
 
@@ -346,26 +338,6 @@ func TestMapIterRange(t *testing.T) {
 				for i := range test.inRange {
 					assert.Equal(t, test.inRange[i], act[i])
 				}
-			}
-
-			require.True(t, len(test.inRange)%2 == 0)
-			require.True(t, len(test.outRange)%2 == 0)
-			require.Equal(t, len(tuples), len(test.inRange)+len(test.outRange))
-
-			for i := 0; i < len(test.inRange); i += 2 {
-				tup := test.inRange[i] // even tuples are keys
-				inStart, inStop := test.rng.AboveStart(tup), test.rng.BelowStop(tup)
-				assert.True(t, inStart && inStop,
-					"%s should be in range %s \n",
-					fullDesc.Format(tup), test.rng.format())
-			}
-			for i := 0; i < len(test.outRange); i += 2 {
-				tup := test.outRange[i] // even tuples are keys
-				inStart, inStop := test.rng.AboveStart(tup), test.rng.BelowStop(tup)
-				assert.False(t, inStart && inStop,
-					"%s should not be in range %s \n",
-					fullDesc.Format(tup), test.rng.format())
-
 			}
 		})
 	}
