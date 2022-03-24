@@ -170,6 +170,9 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 			return &linestringType{sqlType.(sql.LinestringType)}, nil
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
+		case "GEOMETRY":
+			// TODO: something else
+			return &pointType{sqlType.(sql.GeometryType[sql.PointType])}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
