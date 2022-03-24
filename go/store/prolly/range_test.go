@@ -15,10 +15,13 @@
 package prolly
 
 import (
+	"context"
 	"encoding/binary"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -188,6 +191,183 @@ func TestRangeBounds(t *testing.T) {
 				}
 			}
 			assert.Equal(t, len(test.inside), count)
+		})
+	}
+}
+
+func TestRangeSearch(t *testing.T) {
+	intType := val.Type{Enc: val.Int32Enc}
+	twoCol := val.NewTupleDescriptor(
+		intType, // c0
+		intType, // c1
+	)
+
+	tests := []struct {
+		name      string
+		testRange Range
+		hi, lo    int
+	}{
+		{
+			name: "unbound range",
+			testRange: Range{
+				Start: nil,
+				Stop:  nil,
+				Desc:  twoCol,
+			},
+			lo: 0,
+			hi: 14,
+		},
+
+		// first column ranges
+		{
+			name: "c0 > 1",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Stop: nil,
+				Desc: twoCol,
+			},
+			lo: 3,
+			hi: 14,
+		},
+		{
+			name: "c0 < 1",
+			testRange: Range{
+				Start: nil,
+				Stop: []RangeCut{
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Desc: twoCol,
+			},
+			lo: 0,
+			hi: 0,
+		},
+		{
+			name: "2 <= c0 <= 3",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: intVal(2), Type: intType, Inclusive: true},
+				},
+				Stop: []RangeCut{
+					{Value: intVal(3), Type: intType, Inclusive: true},
+				},
+				Desc: twoCol,
+			},
+			lo: 3,
+			hi: 9,
+		},
+		{
+			name: "c0 = NULL",
+			testRange: Range{
+				Start: []RangeCut{
+					{Null: true, Type: intType},
+				},
+				Stop: []RangeCut{
+					{Null: true, Type: intType},
+				},
+				Desc: twoCol,
+			},
+			lo: 13,
+			hi: 14,
+		},
+
+		// second column ranges
+		{
+			name: "c1 > 1",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Stop: nil,
+				Desc: twoCol,
+			},
+			lo: 1,
+			hi: 14,
+		},
+		{
+			name: "c1 < 1",
+			testRange: Range{
+				Start: nil,
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(1), Type: intType, Inclusive: false},
+				},
+				Desc: twoCol,
+			},
+			lo: 0,
+			hi: 0,
+		},
+		{
+			name: "2 <= c1 <= 3",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(2), Type: intType, Inclusive: true},
+				},
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Value: intVal(3), Type: intType, Inclusive: true},
+				},
+				Desc: twoCol,
+			},
+			lo: 1,
+			hi: 12,
+		},
+		{
+			name: "c1 = NULL",
+			testRange: Range{
+				Start: []RangeCut{
+					{Value: nil, Type: intType},
+					{Null: true, Type: intType},
+				},
+				Stop: []RangeCut{
+					{Value: nil, Type: intType},
+					{Null: true, Type: intType},
+				},
+				Desc: twoCol,
+			},
+			lo: 12,
+			hi: 13,
+		},
+	}
+
+	values := make([]val.Tuple, len(tuples))
+	for i := range values {
+		values[i] = make(val.Tuple, 0)
+	}
+	testNode := newTupleLeafNode(tuples, values)
+	testMap := Map{root: testNode, keyDesc: twoCol}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			rng := test.testRange
+
+			startSearch := rangeStartSearchFn(rng)
+			idx := startSearch(testNode)
+			assert.Equal(t, test.lo, idx, "range should start at index %d", test.lo)
+
+			stopSearch := rangeStopSearchFn(rng)
+			idx = stopSearch(testNode)
+			assert.Equal(t, test.hi, idx, "range should stop before index %d", test.hi)
+
+			iter, err := testMap.IterRange(ctx, rng)
+			require.NoError(t, err)
+			expected := tuples[test.lo:test.hi]
+
+			i := 0
+			for {
+				tup, _, err := iter.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				require.NoError(t, err)
+				require.True(t, i < len(expected))
+				assert.Equal(t, expected[i], tup)
+				i++
+			}
 		})
 	}
 }
