@@ -261,20 +261,17 @@ SQL
     [ "${#lines[@]}" -eq 2 ]
     [[ "$output" =~ "select * from t1" ]] || false
 
-    skip "View definition always come from HEAD, rather than from named commit"
-    
-    # should use the data and view definition from this branch
-    run dolt sql -r csv -q "select * from v1 as of 'view' order by 1"
+    # should use the view definition from branch named, data from branch named
+    run dolt sql -r csv -q "select * from \`dolt_repo_$$/view\`.v1 order by 1"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
     [[ "${lines[1]}" =~ "1,1" ]] || false
-    [[ "${lines[1]}" =~ "2,2" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
 
-    # should use the data and view definition from this branch
-    run dolt sql -r csv -q "select * from v1 as of 'threerows' order by 1"
+    # should use the view definition from HEAD, data from branch named
+    run dolt sql -r csv -q "select * from v1 as of 'view' order by 1"
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 4 ]
-    [[ "${lines[1]}" =~ "1,1" ]] || false
-    [[ "${lines[1]}" =~ "2,2" ]] || false
-    [[ "${lines[1]}" =~ "3,3" ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ "11,11" ]] || false
+    [[ "${lines[2]}" =~ "12,12" ]] || false
 }   
