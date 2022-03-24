@@ -487,3 +487,22 @@ DELIM
     [[ "$output" =~ "Bad Row: [5,<nil>,5]" ]] || false
     [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
 }
+
+@test "default-values: Defining default value to NULL or EMPTY value in ALTER TABLE {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT)"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,YES," ]] || false
+    [[ "$output" =~ "c2,YES," ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 INT NULL DEFAULT NULL"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 varchar(4) NOT NULL DEFAULT ''"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,YES," ]] || false
+    [[ "$output" =~ "c2,NO,\"\"" ]] || false
+}
