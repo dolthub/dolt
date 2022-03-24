@@ -2640,13 +2640,12 @@ SQL
 }
 
 @test "index: multiddl drop column add index fails" {
-  # TODO: Why does this fail in the shell.....
   run dolt sql <<SQL
     CREATE TABLE t(pk int primary key, v1 int);
     ALTER TABLE t DROP COLUMN v1, ADD INDEX myidx (v1);
 SQL
 
-    [[ "$output" =~ 'does not exist in the table' ]] || false
+    [[ "$output" =~ 'column "v1" could not be found in any table' ]] || false
     [ "$status" -eq "1" ]
     # need to fail due to column not found
 
