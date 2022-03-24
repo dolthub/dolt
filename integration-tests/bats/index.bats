@@ -2645,9 +2645,8 @@ SQL
     ALTER TABLE t DROP COLUMN v1, ADD INDEX myidx (v1);
 SQL
 
-    [[ "$output" =~ 'column "v1" could not be found in any table' ]] || false
+    [[ "$output" =~ "key column 'v1' doesn't exist in table" ]] || false
     [ "$status" -eq "1" ]
-    # need to fail due to column not found
 
     run dolt schema show t
     [ "$status" -eq "0" ]
