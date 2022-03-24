@@ -19,7 +19,7 @@ require (
 	github.com/dolthub/ishell v0.0.0-20220112232610-14e753f0f371
 	github.com/dolthub/mmap-go v1.0.4-0.20201107010347-f9f2a9588a66
 	github.com/dolthub/sqllogictest/go v0.0.0-20201107003712-816f3ae12d81
-	github.com/dolthub/vitess v0.0.0-20220321185459-a24823fdb878
+	github.com/dolthub/vitess v0.0.0-20220323175412-7e0381fb7c3f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/fatih/color v1.9.0
 	github.com/flynn-archive/go-shlex v0.0.0-20150515145356-3f9db97f8568
@@ -68,7 +68,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220318174955-93a6edd8d585
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220324205940-f788cef1f2ea
 	github.com/google/flatbuffers v2.0.5+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -127,8 +127,6 @@ require (
 	google.golang.org/genproto v0.0.0-20210506142907-4a47615972c2 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
 )
-
-replace github.com/dolthub/go-mysql-server => /Users/vinairachakonda/go/src/dolthub/go-mysql-server
 
 replace (
 	github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi => ./gen/proto/dolt/services/eventsapi
