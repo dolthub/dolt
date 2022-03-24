@@ -57,7 +57,11 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol)
+	createCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesCreateCol, schema.DoltSchemasCreateTag, typeinfo.Int64Type, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, createCol)
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -316,7 +320,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),
-			created:  time.Unix(sqlRow[3].(int64), 0),
+			created:  time.Unix(sqlRow[4].(int64), 0),
 		})
 	}
 	return frags, nil

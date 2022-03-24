@@ -45,6 +45,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
+		{Name: doltdb.SchemasTablesCreateCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}))
 	require.NoError(t, err)
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)

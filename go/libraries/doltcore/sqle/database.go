@@ -886,7 +886,7 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
-	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Now(), sql.ErrExistingView.New(name))
+	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), sql.ErrExistingView.New(name))
 }
 
 // DropView implements sql.ViewDropper. Removes a view from persistence in the
@@ -996,7 +996,7 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, created, idx})
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, created})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {
