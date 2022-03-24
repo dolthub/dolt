@@ -2654,4 +2654,3 @@ SQL
     # column should still exist
     [[ "$output" =~ '`v1` int' ]] || false
 }
-R
