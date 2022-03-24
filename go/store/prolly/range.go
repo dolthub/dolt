@@ -86,7 +86,7 @@ func (r Range) less(other Range) bool {
 	compare := r.Desc.Comparator()
 	for i, left := range r.Start {
 		right := other.Start[i]
-		if left.less(right, compare) {
+		if left.less(right, r.Desc.Types[i], compare) {
 			return true
 		}
 	}
@@ -95,10 +95,11 @@ func (r Range) less(other Range) bool {
 
 func (r Range) overlaps(other Range) bool {
 	compare := r.Desc.Comparator()
-	if r.Stop[0].less(other.Start[0], compare) {
+	typ := r.Desc.Types[0]
+	if r.Stop[0].less(other.Start[0], typ, compare) {
 		return false
 	}
-	if other.Stop[0].less(r.Start[0], compare) {
+	if other.Stop[0].less(r.Start[0], typ, compare) {
 		return false
 	}
 	return true
@@ -106,9 +107,47 @@ func (r Range) overlaps(other Range) bool {
 
 func (r Range) merge(other Range) Range {
 	assertTrue(r.Desc.Equals(other.Desc))
+	assertTrue(len(r.Start) == len(other.Start))
+	assertTrue(len(r.Stop) == len(other.Stop))
+
+	types := r.Desc.Types
+	compare := r.Desc.Comparator()
+
+	// take the min of each RangeCut pair
+	lower := make([]RangeCut, len(r.Start))
+	for i := range lower {
+		left, right := r.Start[i], other.Start[i]
+
+		if left.nonBinding() || right.nonBinding() {
+			lower[i] = RangeCut{Value: nil}
+			continue
+		}
+
+		lower[i] = left
+		if right.less(left, types[i], compare) {
+			lower[i] = right
+		}
+	}
+
+	// take the max of each RangeCut pair
+	upper := make([]RangeCut, len(r.Stop))
+	for i := range upper {
+		left, right := r.Stop[i], other.Stop[i]
+
+		if left.nonBinding() || right.nonBinding() {
+			upper[i] = RangeCut{Value: nil}
+			continue
+		}
+
+		upper[i] = right
+		if right.less(left, types[i], compare) {
+			upper[i] = left
+		}
+	}
+
 	return Range{
-		Start: r.Start,
-		Stop:  other.Stop,
+		Start: lower,
+		Stop:  upper,
 		Desc:  other.Desc,
 	}
 }
@@ -120,7 +159,6 @@ func (r Range) format() string {
 // RangeCut bounds one dimension of a Range.
 type RangeCut struct {
 	Value     []byte
-	Type      val.Type
 	Inclusive bool
 	Null      bool
 }
@@ -129,7 +167,7 @@ func (c RangeCut) nonBinding() bool {
 	return c.Value == nil && c.Null == false
 }
 
-func (c RangeCut) less(other RangeCut, tc val.TupleComparator) bool {
+func (c RangeCut) less(other RangeCut, typ val.Type, tc val.TupleComparator) bool {
 	if c.Null || other.Null {
 		// order nulls last
 		return !c.Null && other.Null
@@ -138,7 +176,7 @@ func (c RangeCut) less(other RangeCut, tc val.TupleComparator) bool {
 		return false
 	}
 
-	cmp := tc.CompareValues(c.Value, other.Value, c.Type)
+	cmp := tc.CompareValues(c.Value, other.Value, typ)
 
 	if cmp == 0 {
 		return !c.Inclusive || !other.Inclusive
@@ -165,7 +203,8 @@ func MergeOverlappingRanges(ranges ...Range) (merged []Range) {
 			acc = rng
 		}
 	}
-	return merged
+	merged = append(merged, acc)
+	return
 }
 
 // SortRanges sorts ranges by start bound.
@@ -309,7 +348,6 @@ func inclusiveBound(tup val.Tuple, desc val.TupleDesc) (cut []RangeCut) {
 	for i := range cut {
 		cut[i] = RangeCut{
 			Value:     tup.GetField(i),
-			Type:      desc.Types[i],
 			Inclusive: true,
 		}
 	}

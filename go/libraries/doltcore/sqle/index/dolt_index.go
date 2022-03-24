@@ -459,14 +459,12 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
-		typ := tb.Desc.Types[i]
-		bnd := expr.LowerBound.TypeAsLowerBound()
+		bound := expr.LowerBound.TypeAsLowerBound()
 		_, null := expr.LowerBound.(sql.NullBound)
 
 		prollyRange.Start[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
-			Type:      typ,
-			Inclusive: bnd == sql.Closed,
+			Inclusive: bound == sql.Closed,
 			Null:      null,
 		}
 	}
@@ -491,14 +489,12 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
-		typ := tb.Desc.Types[i]
-		bnd := expr.UpperBound.TypeAsUpperBound()
+		bound := expr.UpperBound.TypeAsUpperBound()
 		_, null := expr.UpperBound.(sql.NullBound)
 
 		prollyRange.Stop[i] = prolly.RangeCut{
 			Value:     tup.GetField(i),
-			Type:      typ,
-			Inclusive: bnd == sql.Closed,
+			Inclusive: bound == sql.Closed,
 			Null:      null,
 		}
 	}

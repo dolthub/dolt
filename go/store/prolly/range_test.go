@@ -72,7 +72,7 @@ func TestRangeBounds(t *testing.T) {
 			name: "c0 > 1",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Stop: nil,
 				Desc: twoCol,
@@ -84,7 +84,7 @@ func TestRangeBounds(t *testing.T) {
 			testRange: Range{
 				Start: nil,
 				Stop: []RangeCut{
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Desc: twoCol,
 			},
@@ -94,10 +94,10 @@ func TestRangeBounds(t *testing.T) {
 			name: "2 <= c0 <= 3",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: intVal(2), Type: intType, Inclusive: true},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Stop: []RangeCut{
-					{Value: intVal(3), Type: intType, Inclusive: true},
+					{Value: intVal(3), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
@@ -107,10 +107,10 @@ func TestRangeBounds(t *testing.T) {
 			name: "c0 = NULL",
 			testRange: Range{
 				Start: []RangeCut{
-					{Null: true, Type: intType},
+					{Null: true},
 				},
 				Stop: []RangeCut{
-					{Null: true, Type: intType},
+					{Null: true},
 				},
 				Desc: twoCol,
 			},
@@ -122,8 +122,8 @@ func TestRangeBounds(t *testing.T) {
 			name: "c1 > 1",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: nil},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Stop: nil,
 				Desc: twoCol,
@@ -135,8 +135,8 @@ func TestRangeBounds(t *testing.T) {
 			testRange: Range{
 				Start: nil,
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: nil},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Desc: twoCol,
 			},
@@ -146,12 +146,12 @@ func TestRangeBounds(t *testing.T) {
 			name: "2 <= c1 <= 3",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(2), Type: intType, Inclusive: true},
+					{Value: nil},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(3), Type: intType, Inclusive: true},
+					{Value: nil},
+					{Value: intVal(3), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
@@ -161,12 +161,12 @@ func TestRangeBounds(t *testing.T) {
 			name: "c1 = NULL",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Null: true, Type: intType},
+					{Value: nil},
+					{Null: true},
 				},
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Null: true, Type: intType},
+					{Value: nil},
+					{Null: true},
 				},
 				Desc: twoCol,
 			},
@@ -223,7 +223,7 @@ func TestRangeSearch(t *testing.T) {
 			name: "c0 > 1",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Stop: nil,
 				Desc: twoCol,
@@ -236,7 +236,7 @@ func TestRangeSearch(t *testing.T) {
 			testRange: Range{
 				Start: nil,
 				Stop: []RangeCut{
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Desc: twoCol,
 			},
@@ -247,10 +247,10 @@ func TestRangeSearch(t *testing.T) {
 			name: "2 <= c0 <= 3",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: intVal(2), Type: intType, Inclusive: true},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Stop: []RangeCut{
-					{Value: intVal(3), Type: intType, Inclusive: true},
+					{Value: intVal(3), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
@@ -261,10 +261,10 @@ func TestRangeSearch(t *testing.T) {
 			name: "c0 = NULL",
 			testRange: Range{
 				Start: []RangeCut{
-					{Null: true, Type: intType},
+					{Null: true},
 				},
 				Stop: []RangeCut{
-					{Null: true, Type: intType},
+					{Null: true},
 				},
 				Desc: twoCol,
 			},
@@ -277,8 +277,8 @@ func TestRangeSearch(t *testing.T) {
 			name: "c1 > 1",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: nil},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Stop: nil,
 				Desc: twoCol,
@@ -291,8 +291,8 @@ func TestRangeSearch(t *testing.T) {
 			testRange: Range{
 				Start: nil,
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(1), Type: intType, Inclusive: false},
+					{Value: nil},
+					{Value: intVal(1), Inclusive: false},
 				},
 				Desc: twoCol,
 			},
@@ -303,12 +303,12 @@ func TestRangeSearch(t *testing.T) {
 			name: "2 <= c1 <= 3",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(2), Type: intType, Inclusive: true},
+					{Value: nil},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Value: intVal(3), Type: intType, Inclusive: true},
+					{Value: nil},
+					{Value: intVal(3), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
@@ -319,12 +319,12 @@ func TestRangeSearch(t *testing.T) {
 			name: "c1 = NULL",
 			testRange: Range{
 				Start: []RangeCut{
-					{Value: nil, Type: intType},
-					{Null: true, Type: intType},
+					{Value: nil},
+					{Null: true},
 				},
 				Stop: []RangeCut{
-					{Value: nil, Type: intType},
-					{Null: true, Type: intType},
+					{Value: nil},
+					{Null: true},
 				},
 				Desc: twoCol,
 			},
