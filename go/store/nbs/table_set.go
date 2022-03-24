@@ -35,14 +35,15 @@ import (
 
 const concurrentCompactions = 5
 
-func newTableSet(persister tablePersister) tableSet {
-	return tableSet{p: persister, rl: make(chan struct{}, concurrentCompactions)}
+func newTableSet(p tablePersister, q MemoryQuotaProvider) tableSet {
+	return tableSet{p: p, q: q, rl: make(chan struct{}, concurrentCompactions)}
 }
 
 // tableSet is an immutable set of persistable chunkSources.
 type tableSet struct {
 	novel, upstream chunkSources
 	p               tablePersister
+	q               MemoryQuotaProvider
 	rl              chan struct{}
 }
 
@@ -324,17 +325,24 @@ func (ts tableSet) physicalLen() (uint64, error) {
 
 func (ts tableSet) Close() error {
 	var firstErr error
-	for _, t := range ts.novel {
-		err := t.Close()
+	setErr := func(err error) {
 		if err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
-	for _, t := range ts.upstream {
+
+	for _, t := range ts.novel {
 		err := t.Close()
-		if err != nil && firstErr == nil {
-			firstErr = err
+		setErr(err)
+	}
+	for _, t := range ts.upstream {
+		memSize, err := getCSMemSize(t)
+		err = ts.q.ReleaseQuota(memSize)
+		if err != nil {
+			return err
 		}
+		err = t.Close()
+		setErr(err)
 	}
 	return firstErr
 }
@@ -362,6 +370,7 @@ func (ts tableSet) Prepend(ctx context.Context, mt *memTable, stats *Stats) tabl
 		novel:    make(chunkSources, len(ts.novel)+1),
 		upstream: make(chunkSources, len(ts.upstream)),
 		p:        ts.p,
+		q:        ts.q,
 		rl:       ts.rl,
 	}
 	newTs.novel[0] = newPersistingChunkSource(ctx, mt, ts, ts.p, ts.rl, stats)
@@ -392,16 +401,23 @@ func (ts tableSet) extract(ctx context.Context, chunks chan<- extractRecord) err
 
 // Flatten returns a new tableSet with |upstream| set to the union of ts.novel
 // and ts.upstream.
-func (ts tableSet) Flatten() (tableSet, error) {
+func (ts tableSet) Flatten(ctx context.Context) (tableSet, error) {
 	flattened := tableSet{
 		upstream: make(chunkSources, 0, ts.Size()),
 		p:        ts.p,
+		q:        ts.q,
 		rl:       ts.rl,
 	}
 
 	for _, src := range ts.novel {
 		cnt, err := src.count()
 
+		if err != nil {
+			return tableSet{}, err
+		}
+
+		// TODO: acquire quota when we persist a memory table instead
+		err = ts.q.AcquireQuota(ctx, memSize(cnt))
 		if err != nil {
 			return tableSet{}, err
 		}
@@ -422,6 +438,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		novel:    make(chunkSources, 0, len(ts.novel)),
 		upstream: make(chunkSources, 0, len(specs)),
 		p:        ts.p,
+		q:        ts.q,
 		rl:       ts.rl,
 	}
 
@@ -474,6 +491,16 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 					if spec.name == h {
+						memSize, err := getCSMemSize(existing)
+						if err != nil {
+							ae.SetIfError(err)
+							return
+						}
+						err = ts.q.AcquireQuota(ctx, memSize)
+						if err != nil {
+							ae.SetIfError(err)
+							return
+						}
 						c, err := existing.Clone()
 						if err != nil {
 							ae.SetIfError(err)
@@ -483,7 +510,11 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 				}
-				var err error
+				err := ts.q.AcquireQuota(ctx, spec.GetMemorySize())
+				if err != nil {
+					ae.SetIfError(err)
+					return
+				}
 				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 				ae.SetIfError(err)
 			}

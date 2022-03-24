@@ -60,7 +60,7 @@ func (suite *BlockStoreSuite) SetupTest() {
 	var err error
 	suite.dir, err = os.MkdirTemp("", "")
 	suite.NoError(err)
-	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
+	suite.store, err = NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.NoError(err)
 	suite.putCountFn = func() int {
 		return int(suite.store.putCount)
@@ -78,7 +78,7 @@ func (suite *BlockStoreSuite) TearDownTest() {
 
 func (suite *BlockStoreSuite) TestChunkStoreMissingDir() {
 	newDir := filepath.Join(suite.dir, "does-not-exist")
-	_, err := NewLocalStore(context.Background(), constants.FormatDefaultString, newDir, testMemTableSize)
+	_, err := NewLocalStore(context.Background(), constants.FormatDefaultString, newDir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.Error(err)
 }
 
@@ -87,7 +87,7 @@ func (suite *BlockStoreSuite) TestChunkStoreNotDir() {
 	_, err := os.Create(existingFile)
 	suite.NoError(err)
 
-	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize)
+	_, err = NewLocalStore(context.Background(), constants.FormatDefaultString, existingFile, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.Error(err)
 }
 
@@ -276,7 +276,7 @@ func (suite *BlockStoreSuite) TestChunkStoreFlushOptimisticLockFail() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -322,7 +322,7 @@ func (suite *BlockStoreSuite) TestChunkStoreRebaseOnNoOpFlush() {
 	input1 := []byte("abc")
 	c1 := chunks.NewChunk(input1)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -358,7 +358,7 @@ func (suite *BlockStoreSuite) TestChunkStorePutWithRebase() {
 	root, err := suite.store.Root(context.Background())
 	suite.NoError(err)
 
-	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize)
+	interloper, err := NewLocalStore(context.Background(), constants.FormatDefaultString, suite.dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	suite.NoError(err)
 	err = interloper.Put(context.Background(), c1)
 	suite.NoError(err)
@@ -443,10 +443,15 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("NoConjoin", func(t *testing.T) {
 		mm := makeManifestManager(&fakeManifest{})
 		p := newFakeTablePersister()
+		q := NewUnlimitedMemQuotaProvider()
+		defer func() {
+			require.EqualValues(t, 0, q.Usage())
+		}()
 		c := &fakeConjoiner{}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, q, c, testMemTableSize)
 		require.NoError(t, err)
+		defer smallTableStore.Close()
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
@@ -477,7 +482,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("ConjoinSuccess", func(t *testing.T) {
 		fm := &fakeManifest{}
 		p := newFakeTablePersister()
-
+		q := NewUnlimitedMemQuotaProvider()
+		defer func() {
+			require.EqualValues(t, 0, q.Usage())
+		}()
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
@@ -486,8 +494,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			[]cannedConjoin{makeCanned(upstream[:2], upstream[2:], p)},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
 		require.NoError(t, err)
+		defer smallTableStore.Close()
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)
@@ -509,7 +518,10 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 	t.Run("ConjoinRetry", func(t *testing.T) {
 		fm := &fakeManifest{}
 		p := newFakeTablePersister()
-
+		q := NewUnlimitedMemQuotaProvider()
+		defer func() {
+			require.EqualValues(t, 0, q.Usage())
+		}()
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
@@ -521,8 +533,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 			},
 		}
 
-		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, c, testMemTableSize)
+		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, makeManifestManager(fm), p, q, c, testMemTableSize)
 		require.NoError(t, err)
+		defer smallTableStore.Close()
 
 		root, err := smallTableStore.Root(context.Background())
 		require.NoError(t, err)

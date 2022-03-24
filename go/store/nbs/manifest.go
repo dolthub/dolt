@@ -450,6 +450,11 @@ func (ts tableSpec) GetChunkCount() uint32 {
 	return ts.chunkCount
 }
 
+func (ts tableSpec) GetMemorySize() uint64 {
+	n := ts.GetChunkCount()
+	return memSize(n)
+}
+
 func tableSpecsToMap(specs []tableSpec) map[string]int {
 	m := make(map[string]int)
 	for _, spec := range specs {

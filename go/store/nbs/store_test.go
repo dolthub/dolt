@@ -48,7 +48,7 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
-	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles)
+	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
 	return st, nomsDir
 }
@@ -308,8 +308,8 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 	return tableFileMap, mapIds
 }
 
-func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*fakeManifest, tablePersister, *NomsBlockStore, *Stats, chunks.Chunk) {
-	fm, p, store := makeStoreWithFakes(t)
+func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*fakeManifest, tablePersister, MemoryQuotaProvider, *NomsBlockStore, *Stats, chunks.Chunk) {
+	fm, p, q, store := makeStoreWithFakes(t)
 	h, err := store.Root(ctx)
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
@@ -337,15 +337,20 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 	assert.Equal(1, upstream.NumTableSpecs())
 	// Start with no appendixes
 	assert.Equal(0, upstream.NumAppendixSpecs())
-	return fm, p, store, stats, rootChunk
+	return fm, p, q, store, stats, rootChunk
 }
 
 func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	_, p, store, _, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	_, p, q, store, _, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// persist tablefiles to tablePersister
 	appendixUpdates, appendixIds := persistTableFileSources(t, p, 4)
@@ -410,8 +415,13 @@ func TestNBSUpdateManifestWithAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -433,8 +443,13 @@ func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -480,8 +495,13 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, rootChunk := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, rootChunk := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -532,10 +552,12 @@ func TestNBSOverwriteManifest(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		err := store.Close()
-		require.NoError(t, err, "failed to close store")
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
 	}()
 
 	// Generate a random root hash

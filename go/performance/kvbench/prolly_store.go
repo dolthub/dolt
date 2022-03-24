@@ -38,7 +38,7 @@ func newMemoryProllyStore() keyValStore {
 func newNBSProllyStore(dir string) keyValStore {
 	ctx := context.Background()
 	verStr := types.Format_Default.VersionString()
-	cs, err := nbs.NewLocalStore(ctx, verStr, dir, defaultMemTableSize)
+	cs, err := nbs.NewLocalStore(ctx, verStr, dir, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	if err != nil {
 		panic(err)
 	}

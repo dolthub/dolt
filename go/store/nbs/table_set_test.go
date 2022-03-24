@@ -104,7 +104,7 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	mt.addChunk(computeAddr(testChunks[2]), testChunks[2])
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
-	ts, err = ts.Flatten()
+	ts, err = ts.Flatten(context.Background())
 	require.NoError(t, err)
 	assert.EqualValues(ts.Size(), 2)
 }
@@ -156,26 +156,39 @@ func TestTableSetRebase(t *testing.T) {
 		}
 		return ts
 	}
-	fullTS := newTableSet(persister)
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+
+	fullTS := newTableSet(persister, q)
+	defer func() {
+		require.NoError(t, fullTS.Close())
+	}()
 	specs, err := fullTS.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
 	fullTS = insert(fullTS, testChunks...)
-	fullTS, err = fullTS.Flatten()
+	fullTS, err = fullTS.Flatten(context.Background())
 	require.NoError(t, err)
 
-	ts := newTableSet(persister)
+	ts := newTableSet(persister, q)
 	ts = insert(ts, testChunks[0])
 	assert.Equal(1, ts.Size())
-	ts, err = ts.Flatten()
+	ts, err = ts.Flatten(context.Background())
 	require.NoError(t, err)
 	ts = insert(ts, []byte("novel"))
 
 	specs, err = fullTS.ToSpecs()
 	require.NoError(t, err)
-	ts, err = ts.Rebase(context.Background(), specs, nil)
+	ts2, err := ts.Rebase(context.Background(), specs, nil)
 	require.NoError(t, err)
-	assert.Equal(4, ts.Size())
+	defer func() {
+		require.NoError(t, ts2.Close())
+	}()
+	err = ts.Close()
+	require.NoError(t, err)
+	assert.Equal(4, ts2.Size())
 }
 
 func TestTableSetPhysicalLen(t *testing.T) {

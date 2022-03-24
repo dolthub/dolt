@@ -444,7 +444,7 @@ func OverwriteStoreManifest(ctx context.Context, store *NomsBlockStore, root has
 	return nil
 }
 
-func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
@@ -464,10 +464,10 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
-func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64) (*NomsBlockStore, error) {
+func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string, s3 s3svc, ddb ddbsvc, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	readRateLimiter := make(chan struct{}, 32)
 	p := &awsTablePersister{
@@ -483,32 +483,32 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		},
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
 // NewGCSStore returns an nbs implementation backed by a GCSBlobstore
-func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64) (*NomsBlockStore, error) {
+func NewGCSStore(ctx context.Context, nbfVerStr string, bucketName, path string, gcs *storage.Client, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	bs := blobstore.NewGCSBlobstore(gcs, bucketName, path)
-	return NewBSStore(ctx, nbfVerStr, bs, memTableSize)
+	return NewBSStore(ctx, nbfVerStr, bs, memTableSize, q)
 }
 
 // NewBSStore returns an nbs implementation backed by a Blobstore
-func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64) (*NomsBlockStore, error) {
+func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
 	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
-	return newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{defaultMaxTables}, memTableSize)
+	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
-func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64) (*NomsBlockStore, error) {
-	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables)
+func NewLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, q MemoryQuotaProvider) (*NomsBlockStore, error) {
+	return newLocalStore(ctx, nbfVerStr, dir, memTableSize, defaultMaxTables, q)
 }
 
-func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int) (*NomsBlockStore, error) {
+func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSize uint64, maxTables int, q MemoryQuotaProvider) (*NomsBlockStore, error) {
 	cacheOnce.Do(makeGlobalCaches)
 	err := checkDir(dir)
 
@@ -524,7 +524,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 
 	mm := makeManifestManager(m)
 	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
-	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, inlineConjoiner{maxTables}, memTableSize)
+	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
 	if err != nil {
 		return nil, err
@@ -544,7 +544,7 @@ func checkDir(dir string) error {
 	return nil
 }
 
-func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
+func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager, p tablePersister, q MemoryQuotaProvider, c conjoiner, memTableSize uint64) (*NomsBlockStore, error) {
 	if memTableSize == 0 {
 		memTableSize = defaultMemTableSize
 	}
@@ -553,7 +553,7 @@ func newNomsBlockStore(ctx context.Context, nbfVerStr string, mm manifestManager
 		mm:       mm,
 		p:        p,
 		c:        c,
-		tables:   newTableSet(p),
+		tables:   newTableSet(p, q),
 		upstream: manifestContents{nbfVers: nbfVerStr},
 		mtSize:   memTableSize,
 		stats:    NewStats(),
@@ -1152,7 +1152,7 @@ func (nbs *NomsBlockStore) updateManifest(ctx context.Context, current, last has
 		return handleOptimisticLockFailure(upstream)
 	}
 
-	newTables, err := nbs.tables.Flatten()
+	newTables, err := nbs.tables.Flatten(ctx)
 
 	if err != nil {
 		return nil
@@ -1636,7 +1636,7 @@ func (nbs *NomsBlockStore) swapTables(ctx context.Context, specs []tableSpec) (e
 	nbs.mt = newMemTable(nbs.mtSize)
 
 	// clear nbs.tables.novel
-	nbs.tables, err = nbs.tables.Flatten()
+	nbs.tables, err = nbs.tables.Flatten(ctx)
 	if err != nil {
 		return err
 	}
