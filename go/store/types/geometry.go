@@ -23,8 +23,9 @@ import (
 )
 
 // Geometry represents any of the types Point, Linestring, or Polygon.
+// TODO: Generics maybe?
 type Geometry struct {
-	Inner interface{}
+	Inner interface{} // Can be types.Point, types.Linestring, or types.Polygon
 }
 
 // Value interface
@@ -93,16 +94,56 @@ func (v Geometry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		return err
 	}
 
+	// TODO: write helper functions
 	// Call the appropriate writeTo
 	switch this := v.Inner.(type) {
 	case Point:
-		return this.writeTo(w, nbf)
+		// Allocate buffer for point 4 + 1 + 4 + 16
+		buf := make([]byte, geometry.EWKBHeaderSize+geometry.PointSize)
+		// Write header and data to buffer
+		WriteEWKBHeader(this, buf)
+		WriteEWKBPointData(this, buf[geometry.EWKBHeaderSize:])
+		w.writeString(string(buf))
 	case Linestring:
-		return this.writeTo(w, nbf)
+		// Allocate buffer for linestring
+		buf := make([]byte, geometry.EWKBHeaderSize+LengthSize+geometry.PointSize*len(this.Points))
+		// Write header and data to buffer
+		WriteEWKBHeader(this, buf)
+		WriteEWKBLineData(this, buf[geometry.EWKBHeaderSize:])
+		w.writeString(string(buf))
 	case Polygon:
-		return this.writeTo(w, nbf)
+		// Calculate space for polygon buffer
+		size := 0
+		for _, l := range this.Lines {
+			size += LengthSize + geometry.PointSize*len(l.Points)
+		}
+		// Allocate buffer for poly
+		buf := make([]byte, geometry.EWKBHeaderSize+LengthSize+size)
+		// Write header and data to buffer
+		WriteEWKBHeader(this, buf)
+		WriteEWKBPolyData(this, buf[geometry.EWKBHeaderSize:])
+		w.writeString(string(buf))
 	default:
 		return errors.New("wrong Inner type")
+	}
+	return nil
+}
+
+func readGeometry(nbf *NomsBinFormat, b *valueDecoder) (Geometry, error) {
+	buf := []byte(b.ReadString())
+	srid, _, geomType := geometry.ParseEWKBHeader(buf) // Assume it's always little endian
+	switch geomType {
+	case geometry.PointType:
+		point := ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid)
+		return Geometry{Inner: point}, nil
+	case geometry.LinestringType:
+		line := ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid)
+		return Geometry{Inner: line}, nil
+	case geometry.PolygonType:
+		poly := ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid)
+		return Geometry{Inner: poly}, nil
+	default:
+		return Geometry{}, nil
 	}
 }
 

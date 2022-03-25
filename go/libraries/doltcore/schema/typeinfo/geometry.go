@@ -20,30 +20,40 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type geometryType[T pointType | linestringType | polygonType] struct {
-	sqlInnerType T
+type geometryType struct {
+	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
+	// TODO: maybe just some sort of int or keeping the appropriate (types.Kind)
+	innerType interface{} // References the actual typeinfo (pointType, linestringType, polygonType)
 }
 
 var _ TypeInfo = (*geometryType)(nil)
 
-var GeometryType = &geometryType{} // TODO: fill in
+var GeometryType = &geometryType{sql.GeometryType{}, nil}
 
-// ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Point
+// ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
 func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
-	return sql.Point{SRID: p.SRID, X: p.X, Y: p.Y}
+	switch this := g.Inner.(type) {
+	case types.Point:
+		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(this)}
+	case types.Linestring:
+		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(this)}
+	case types.Polygon:
+		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(this)}
+	default:
+		panic("ahhhhhh!")
+	}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Point, return a sql.Point
-	if val, ok := v.(types.Point); ok {
-		return ConvertTypesPointToSQLPoint(val), nil
+func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Expect a types.Geometry, return a sql.Geometry
+	if val, ok := v.(types.Geometry); ok {
+		return ConvertTypesGeometryToSQLGeometry(val), nil
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -53,11 +63,11 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.PointKind:
-		p, err := reader.ReadPoint()
+	case types.GeometryKind:
+		p, err := reader.ReadGeometry()
 		if err != nil {
 			return nil, err
 		}
@@ -69,66 +79,82 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	}
 }
 
-// TODO: define constants for WKB?
+func ConvertSQLGeometryToTypesGeometry(p sql.Geometry) types.Geometry {
+	switch inner := p.Inner.(type) {
+	case sql.Point:
+		return types.Geometry{Inner: ConvertSQLPointToTypesPoint(inner)}
+	case sql.Linestring:
+		return types.Geometry{Inner: ConvertSQLLinestringToTypesLinestring(inner)}
+	case sql.Polygon:
+		return types.Geometry{Inner: ConvertSQLPolygonToTypesPolygon(inner)}
+	default:
+		return types.Geometry{}
+	}
 
-func ConvertSQLPointToTypesPoint(p sql.Point) types.Point {
-	return types.Point{SRID: p.SRID, X: p.X, Y: p.Y}
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *pointType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	// Convert to sql.PointType
-	point, err := ti.sqlPointType.Convert(v)
+	// Convert accordingly
+	geom, err := ti.sqlGeometryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-
-	return ConvertSQLPointToTypesPoint(point.(sql.Point)), nil
+	return ConvertSQLGeometryToTypesGeometry(geom.(sql.Geometry)), nil
 }
 
 // Equals implements TypeInfo interface.
-func (ti *pointType) Equals(other TypeInfo) bool {
+func (ti *geometryType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*pointType)
+	_, ok := other.(*geometryType)
 	return ok
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *pointType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Point); ok {
-		buf := make([]byte, geometry.EWKBHeaderSize+geometry.PointSize)
-		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
-		types.WriteEWKBPointData(val, buf[geometry.EWKBHeaderSize:])
-		resStr := string(buf)
-		return &resStr, nil
-	}
+func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
+	// Received null value
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
+	}
+
+	// Expect a Geometry type
+	// TODO: ...or do I expect one of the other types??
+	if val, ok := v.(types.Geometry); ok {
+		switch val.Inner.(type) {
+		case types.Point:
+			return PointType.FormatValue(v)
+		case types.Linestring:
+			return LinestringType.FormatValue(v)
+		case types.Polygon:
+			return PolygonType.FormatValue(v)
+		default:
+			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
+		}
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *pointType) GetTypeIdentifier() Identifier {
-	return PointTypeIdentifier
+func (ti *geometryType) GetTypeIdentifier() Identifier {
+	return GeometryTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *pointType) GetTypeParams() map[string]string {
+func (ti *geometryType) GetTypeParams() map[string]string {
 	return map[string]string{}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *pointType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Point); ok {
+func (ti *geometryType) IsValid(v types.Value) bool {
+	if _, ok := v.(types.Geometry); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -138,27 +164,36 @@ func (ti *pointType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *pointType) NomsKind() types.NomsKind {
-	return types.PointKind
+func (ti *geometryType) NomsKind() types.NomsKind {
+	return types.GeometryKind
 }
 
 // Promote implements TypeInfo interface.
-func (ti *pointType) Promote() TypeInfo {
-	return &pointType{ti.sqlPointType.Promote().(sql.PointType)}
+func (ti *geometryType) Promote() TypeInfo {
+	switch inner := ti.innerType.(type) {
+	case pointType:
+		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
+	case linestringType:
+		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
+	case polygonType:
+		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
+	default:
+		panic("geometryType received bad type during Promote()")
+	}
 }
 
 // String implements TypeInfo interface.
-func (ti *pointType) String() string {
-	return "Point"
+func (ti *geometryType) String() string {
+	return "Geometry"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *pointType) ToSqlType() sql.Type {
-	return ti.sqlPointType
+func (ti *geometryType) ToSqlType() sql.Type {
+	return ti.sqlGeometryType
 }
 
-// pointTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// geometryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func geometryTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {

@@ -69,8 +69,6 @@ func (ti *pointType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader
 	}
 }
 
-// TODO: define constants for WKB?
-
 func ConvertSQLPointToTypesPoint(p sql.Point) types.Point {
 	return types.Point{SRID: p.SRID, X: p.X, Y: p.Y}
 }
