@@ -56,6 +56,7 @@ const (
 	TimestampKind
 	DecimalKind
 	JSONKind
+	GeometryKind
 	PointKind
 	LinestringKind
 	PolygonKind
