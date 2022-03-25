@@ -489,20 +489,23 @@ DELIM
 }
 
 @test "default-values: Defining default value to NULL or EMPTY value in ALTER TABLE {
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT)"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT, c3 INT)"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,YES," ]] || false
     [[ "$output" =~ "c2,YES," ]] || false
+    [[ "$output" =~ "c3,YES," ]] || false
 
     dolt sql -q "ALTER TABLE test CHANGE c1 c1 INT NULL DEFAULT NULL"
     dolt sql -q "ALTER TABLE test CHANGE c2 c2 varchar(4) NOT NULL DEFAULT ''"
+    dolt sql -q "ALTER TABLE test CHANGE c3 c3 varchar(4) NOT NULL DEFAULT 'ln'"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,YES," ]] || false
-    [[ "$output" =~ "c2,NO,\"\"" ]] || false
+    [[ "$output" =~ "c2,NO," ]] || false
+    [[ "$output" =~ "c3,NO,ln" ]] || false
 }
