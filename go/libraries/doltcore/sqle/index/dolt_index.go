@@ -19,7 +19,6 @@ import (
 	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/sirupsen/logrus"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -188,10 +187,6 @@ func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.
 	// however, these ranges may overlap physically within the index. Here we merge
 	// physically overlapping ranges to avoid returning duplicate tuples/rows.
 	merged := prolly.MergeOverlappingRanges(prs...)
-
-	if len(merged) != len(prs) {
-		ctx.GetLogger().Log(logrus.DebugLevel, "merged prolly ranges")
-	}
 
 	return &doltIndexLookup{
 		idx:          di,

@@ -73,10 +73,9 @@ func (r Range) AboveStart(t val.Tuple) bool {
 		return true
 	}
 
-	v := t.GetField(0)
-	if cut.Null || v == nil {
+	if cut.Null {
 		// null values are returned iff |cut.Null|
-		return cut.Null && v == nil
+		return t.GetField(0) == nil
 	}
 
 	cmp := r.Desc.CompareField(cut.Value, 0, t)
@@ -94,10 +93,9 @@ func (r Range) BelowStop(t val.Tuple) bool {
 		return true
 	}
 
-	v := t.GetField(0)
-	if cut.Null || v == nil {
-		// null values are returned iff |cut.Null|
-		return cut.Null && v == nil
+	if cut.Null {
+		// order nulls last
+		return true
 	}
 
 	cmp := r.Desc.CompareField(cut.Value, 0, t)
