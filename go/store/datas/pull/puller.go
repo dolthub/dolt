@@ -22,13 +22,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"golang.org/x/sync/semaphore"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nbs"
@@ -201,93 +200,86 @@ type tempTblFile struct {
 	contentHash []byte
 }
 
-func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicError, tmpTblFile tempTblFile) error {
+func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
 	fi, err := os.Stat(tmpTblFile.path)
-
-	if ae.SetIfError(err) {
+	if err != nil {
 		return err
 	}
 
 	f, err := os.Open(tmpTblFile.path)
-
-	if ae.SetIfError(err) {
+	if err != nil {
 		return err
 	}
 
 	fileSize := fi.Size()
 	fWithStats := iohelp.NewReaderWithStats(f, fileSize)
 	fWithStats.Start(func(stats iohelp.ReadStats) {
-		p.addEvent(NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
+		p.addEvent(ctx, NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
 			CurrentFileSize: fileSize,
 			Stats:           stats,
 		}))
 	})
 	defer func() {
 		_ = fWithStats.Stop()
-
-		go func() {
-			_ = file.Remove(tmpTblFile.path)
-		}()
+		_ = file.Remove(tmpTblFile.path)
 	}()
 
 	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithStats, tmpTblFile.contentLen, tmpTblFile.contentHash)
 }
 
-func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.AtomicError, completedTables <-chan FilledWriters) {
+func (p *Puller) processCompletedTables(ctx context.Context, completedTables <-chan FilledWriters) error {
 	fileIdToNumChunks := make(map[string]int)
 
-	var err error
-	for tblFile := range completedTables {
-		p.tablefileSema.Release(1)
+LOOP:
+	for {
+		select {
+		case tblFile, ok := <-completedTables:
+			if !ok {
+				break LOOP
+			}
+			p.tablefileSema.Release(1)
+			if err := p.addEvent(ctx, NewTFPullerEvent(StartUploadTableFileEvent, &TableFileEventDetails{
+				CurrentFileSize: int64(tblFile.wr.ContentLength()),
+			})); err != nil {
+				return err
+			}
 
-		if ae.IsSet() {
-			continue // drain
+			id, err := tblFile.wr.Finish()
+			if err != nil {
+				return err
+			}
+
+			path := filepath.Join(p.tempDir, id)
+			err = tblFile.wr.FlushToFile(path)
+			if err != nil {
+				return err
+			}
+
+			ttf := tempTblFile{
+				id:          id,
+				path:        path,
+				numChunks:   tblFile.wr.Size(),
+				contentLen:  tblFile.wr.ContentLength(),
+				contentHash: tblFile.wr.GetMD5(),
+			}
+			err = p.uploadTempTableFile(ctx, ttf)
+			if err != nil {
+				return err
+			}
+
+			if err := p.addEvent(ctx, NewTFPullerEvent(EndUploadTableFileEvent, &TableFileEventDetails{
+				CurrentFileSize: int64(ttf.contentLen),
+			})); err != nil {
+				return err
+			}
+
+			fileIdToNumChunks[id] = ttf.numChunks
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-
-		p.addEvent(NewTFPullerEvent(StartUploadTableFileEvent, &TableFileEventDetails{
-			CurrentFileSize: int64(tblFile.wr.ContentLength()),
-		}))
-
-		var id string
-		id, err = tblFile.wr.Finish()
-
-		if ae.SetIfError(err) {
-			continue
-		}
-
-		path := filepath.Join(p.tempDir, id)
-		err = tblFile.wr.FlushToFile(path)
-
-		if ae.SetIfError(err) {
-			continue
-		}
-
-		ttf := tempTblFile{
-			id:          id,
-			path:        path,
-			numChunks:   tblFile.wr.Size(),
-			contentLen:  tblFile.wr.ContentLength(),
-			contentHash: tblFile.wr.GetMD5(),
-		}
-
-		err = p.uploadTempTableFile(ctx, ae, ttf)
-		if ae.SetIfError(err) {
-			continue
-		}
-
-		p.addEvent(NewTFPullerEvent(EndUploadTableFileEvent, &TableFileEventDetails{
-			CurrentFileSize: int64(ttf.contentLen),
-		}))
-
-		fileIdToNumChunks[id] = ttf.numChunks
 	}
 
-	if ae.IsSet() {
-		return
-	}
-
-	err = p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
-	ae.SetIfError(err)
+	return p.sinkDBCS.(nbs.TableFileStore).AddTableFilesToManifest(ctx, fileIdToNumChunks)
 }
 
 // Pull executes the sync operation
@@ -298,57 +290,63 @@ func (p *Puller) Pull(ctx context.Context) error {
 	absent := make(hash.HashSet)
 	absent.Insert(p.rootChunkHash)
 
-	ae := atomicerr.New()
-	wg := &sync.WaitGroup{}
+	eg, ctx := errgroup.WithContext(ctx)
+
 	completedTables := make(chan FilledWriters, 8)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		p.processCompletedTables(ctx, ae, completedTables)
-	}()
+	eg.Go(func() error {
+		return p.processCompletedTables(ctx, completedTables)
+	})
 
-	p.tablefileSema.Acquire(ctx, 1)
-	for len(absent) > 0 {
-		limitToNewChunks(absent, p.downloaded)
-
-		chunksInLevel := len(absent)
-		twDetails.ChunksInLevel = chunksInLevel
-		p.addEvent(NewTWPullerEvent(NewLevelTWEvent, twDetails))
-
-		var err error
-		absent, err = p.sinkDBCS.HasMany(ctx, absent)
-
-		if ae.SetIfError(err) {
-			break
+	eg.Go(func() error {
+		if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
+			return err
 		}
+		for len(absent) > 0 {
+			limitToNewChunks(absent, p.downloaded)
 
-		twDetails.ChunksAlreadyHad = chunksInLevel - len(absent)
-		p.addEvent(NewTWPullerEvent(DestDBHasTWEvent, twDetails))
+			chunksInLevel := len(absent)
+			twDetails.ChunksInLevel = chunksInLevel
+			if err := p.addEvent(ctx, NewTWPullerEvent(NewLevelTWEvent, twDetails)); err != nil {
+				return err
+			}
 
-		if len(absent) > 0 {
-			leaves, absent, err = p.getCmp(ctx, twDetails, leaves, absent, completedTables)
+			var err error
+			absent, err = p.sinkDBCS.HasMany(ctx, absent)
+			if err != nil {
+				return err
+			}
 
-			if ae.SetIfError(err) {
-				break
+			twDetails.ChunksAlreadyHad = chunksInLevel - len(absent)
+			if err := p.addEvent(ctx, NewTWPullerEvent(DestDBHasTWEvent, twDetails)); err != nil {
+				return err
+			}
+
+			if len(absent) > 0 {
+				leaves, absent, err = p.getCmp(ctx, twDetails, leaves, absent, completedTables)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
 
-	if !ae.IsSet() && p.wr.Size() > 0 {
-		// p.wr may be nil in the error case
 		if p.wr != nil {
-			p.addEvent(NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
+			if err := p.addEvent(ctx, NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
 				CurrentFileSize: int64(p.wr.ContentLength()),
-			}))
+			})); err != nil {
+				return err
+			}
+			select {
+			case completedTables <- FilledWriters{p.wr}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
 		}
-		completedTables <- FilledWriters{p.wr}
-	}
+		close(completedTables)
+		return nil
+	})
 
-	close(completedTables)
-
-	wg.Wait()
-	return ae.Get()
+	return eg.Wait()
 }
 
 func limitToNewChunks(absent hash.HashSet, downloaded hash.HashSet) {
@@ -370,126 +368,154 @@ func (p *Puller) getCmp(ctx context.Context, twDetails *TreeWalkEventDetails, le
 	found := make(chan nbs.CompressedChunk, 4096)
 	processed := make(chan CmpChnkAndRefs, 4096)
 
-	ae := atomicerr.New()
-	go func() {
-		defer close(found)
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
 		err := p.srcChunkStore.GetManyCompressed(ctx, batch, func(ctx context.Context, c nbs.CompressedChunk) {
 			select {
 			case found <- c:
 			case <-ctx.Done():
 			}
 		})
-		ae.SetIfError(err)
-	}()
+		if err != nil {
+			return err
+		}
+		close(found)
+		return nil
+	})
 
-	batchSize := len(batch)
-	numChunkWorkers := (batchSize / 1024) + 1
-	if numChunkWorkers > maxChunkWorkers {
-		numChunkWorkers = maxChunkWorkers
-	}
-
-	go func() {
-		defer close(processed)
-		for cmpChnk := range found {
-			if ae.IsSet() {
-				break
-			}
-
-			p.downloaded.Insert(cmpChnk.H)
-
-			if leaves.Has(cmpChnk.H) {
-				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}
-			} else {
-				chnk, err := cmpChnk.ToChunk()
-
-				if ae.SetIfError(err) {
-					return
+	eg.Go(func() error {
+LOOP:
+		for {
+			select {
+			case cmpChnk, ok := <-found:
+				if !ok {
+					break LOOP
 				}
-
-				refs := make(map[hash.Hash]int)
-				if err := p.wrf(chnk, func(h hash.Hash, height uint64) error {
-					refs[h] = int(height)
-					return nil
-				}); ae.SetIfError(err) {
-					return
+				p.downloaded.Insert(cmpChnk.H)
+				if leaves.Has(cmpChnk.H) {
+					select {
+					case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk}:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+				} else {
+					chnk, err := cmpChnk.ToChunk()
+					if err != nil {
+						return err
+					}
+					refs := make(map[hash.Hash]int)
+					err = p.wrf(chnk, func(h hash.Hash, height uint64) error {
+						refs[h] = int(height)
+						return nil
+					})
+					if err != nil {
+						return err
+					}
+					select {
+					case processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
 				}
-
-				processed <- CmpChnkAndRefs{cmpChnk: cmpChnk, refs: refs}
+			case <-ctx.Done():
+				return ctx.Err()
 			}
 		}
-	}()
 
-	var err error
+		close(processed)
+		return nil
+	})
+
 	var maxHeight int
+	batchSize := len(batch)
 	nextLeaves := make(hash.HashSet, batchSize)
 	nextLevel := make(hash.HashSet, batchSize)
 
-	twDetails.ChunksBuffered = 0
-	for cmpAndRef := range processed {
-		if err != nil {
-			// drain to prevent deadlock
-			continue
-		}
+	eg.Go(func() error {
+		twDetails.ChunksBuffered = 0
+LOOP:
+		for {
+			select {
+			case cmpAndRef, ok := <-processed:
+				if !ok {
+					break LOOP
+				}
+				twDetails.ChunksBuffered++
 
-		twDetails.ChunksBuffered++
+				if twDetails.ChunksBuffered%100 == 0 {
+					if err := p.addEvent(ctx, NewTWPullerEvent(LevelUpdateTWEvent, twDetails)); err != nil {
+						return err
+					}
+				}
 
-		if twDetails.ChunksBuffered%100 == 0 {
-			p.addEvent(NewTWPullerEvent(LevelUpdateTWEvent, twDetails))
-		}
+				err := p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
+				if err != nil {
+					return err
+				}
 
-		err = p.wr.AddCmpChunk(cmpAndRef.cmpChnk)
+				if p.wr.Size() >= p.chunksPerTF {
+					if err := p.addEvent(ctx, NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
+						CurrentFileSize: int64(p.wr.ContentLength()),
+					})); err != nil {
+						return err
+					}
 
-		if ae.SetIfError(err) {
-			continue
-		}
+					select {
+					case completedTables <- FilledWriters{p.wr}:
+					case <-ctx.Done():
+						return ctx.Err()
+					}
+					p.wr = nil
 
-		if p.wr.Size() >= p.chunksPerTF {
-			p.addEvent(NewTFPullerEvent(TableFileClosedEvent, &TableFileEventDetails{
-				CurrentFileSize: int64(p.wr.ContentLength()),
-			}))
+					if err := p.tablefileSema.Acquire(ctx, 1); err != nil {
+						return err
+					}
+					p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
+					if err != nil {
+						return err
+					}
+				}
 
-			completedTables <- FilledWriters{p.wr}
-			p.wr = nil
+				for h, height := range cmpAndRef.refs {
+					nextLevel.Insert(h)
+					twDetails.ChildrenFound++
 
-			p.tablefileSema.Acquire(ctx, 1)
-			p.wr, err = nbs.NewCmpChunkTableWriter(p.tempDir)
+					if height == 1 {
+						nextLeaves.Insert(h)
+					}
 
-			if ae.SetIfError(err) {
-				continue
+					if height > maxHeight {
+						maxHeight = height
+					}
+				}
+			case <-ctx.Done():
+				return ctx.Err()
 			}
-
 		}
-
-		for h, height := range cmpAndRef.refs {
-			nextLevel.Insert(h)
-			twDetails.ChildrenFound++
-
-			if height == 1 {
-				nextLeaves.Insert(h)
-			}
-
-			if height > maxHeight {
-				maxHeight = height
-			}
+		if twDetails.ChunksBuffered != len(batch) {
+			return errors.New("failed to get all chunks.")
 		}
-	}
+		if err := p.addEvent(ctx, NewTWPullerEvent(LevelDoneTWEvent, twDetails)); err != nil {
+			return err
+		}
+		twDetails.TreeLevel = maxHeight
+		return nil
+	})
 
-	if err := ae.Get(); err != nil {
+	err := eg.Wait()
+	if err != nil {
 		return nil, nil, err
 	}
-
-	if twDetails.ChunksBuffered != len(batch) {
-		return nil, nil, errors.New("failed to get all chunks.")
-	}
-
-	p.addEvent(NewTWPullerEvent(LevelDoneTWEvent, twDetails))
-
-	twDetails.TreeLevel = maxHeight
 	return nextLeaves, nextLevel, nil
 }
 
-func (p *Puller) addEvent(evt PullerEvent) {
+func (p *Puller) addEvent(ctx context.Context, evt PullerEvent) error {
 	if p.eventCh != nil {
-		p.eventCh <- evt
+		select {
+		case p.eventCh <- evt:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
+	return nil
 }
