@@ -82,12 +82,12 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name string
-	ddb  *doltdb.DoltDB
-	rsr  env.RepoStateReader
-	rsw  env.RepoStateWriter
-	drw  env.DocsReadWriter
-	gs   globalstate.GlobalState
+	name     string
+	ddb      *doltdb.DoltDB
+	rsr      env.RepoStateReader
+	rsw      env.RepoStateWriter
+	drw      env.DocsReadWriter
+	gs       globalstate.GlobalState
 	editOpts editor.Options
 }
 
