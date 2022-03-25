@@ -218,40 +218,14 @@ func (c RangeCut) lesserValue(other RangeCut, typ val.Type, tc val.TupleComparat
 }
 
 func rangeStartSearchFn(rng Range) searchFn {
-	return linearSearchRangeStart(rng)
+	return binarySearchRangeStart(rng)
 }
 
 func rangeStopSearchFn(rng Range) searchFn {
-	return linearSearchRangeStop(rng)
-}
-
-func linearSearchRangeStart(rng Range) searchFn {
-	return func(nd Node) (idx int) {
-		for idx = 0; idx < int(nd.count); idx++ {
-			tup := val.Tuple(nd.getKey(idx))
-			if rng.AboveStart(tup) {
-				break
-			}
-		}
-		return idx
-	}
-}
-
-func linearSearchRangeStop(rng Range) searchFn {
-	return func(nd Node) (idx int) {
-		for idx = int(nd.count - 1); idx >= 0; idx-- {
-			tup := val.Tuple(nd.getKey(idx))
-			if rng.BelowStop(tup) {
-				break
-			}
-		}
-		return idx + 1
-	}
+	return binarySearchRangeStop(rng)
 }
 
 func binarySearchRangeStart(rng Range) searchFn {
-	// todo(andy): this search is broken, it fails to
-	//  maintain the propertry f(i) == true implies f(i+1) == true.
 	return func(nd Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (in bool) {
@@ -264,8 +238,6 @@ func binarySearchRangeStart(rng Range) searchFn {
 }
 
 func binarySearchRangeStop(rng Range) searchFn {
-	// todo(andy): this search is broken, it fails to
-	//  maintain the propertry f(i) == true implies f(i+1) == true.
 	return func(nd Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
