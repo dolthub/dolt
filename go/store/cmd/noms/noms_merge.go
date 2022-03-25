@@ -173,9 +173,9 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 		return nil, nil, nil, err
 	}
 
-	vfld, ok, err := ancestorCommit.MaybeGet(datas.ValueField)
+	vfld, err := datas.GetCommitValue(ctx, ancestorCommit)
 	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
+	d.PanicIfFalse(vfld != nil)
 	return leftHead, rightHead, vfld, nil
 
 }

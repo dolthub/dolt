@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -54,6 +56,8 @@ var (
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
+	// Ignore all leading digits
+	name = strings.TrimLeftFunc(name, unicode.IsDigit)
 	return tableNameRegex.MatchString(name)
 }
 

@@ -179,7 +179,7 @@ func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []strin
 }
 
 func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
-	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}

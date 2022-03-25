@@ -66,7 +66,7 @@ func CommitItrForAllBranches(ctx context.Context, ddb *DoltDB) (CommitItr, error
 	return cmItr, nil
 }
 
-// CommitItrForRoots will return a CommitItr which will iterate over all descendant commits of the provided rootCommits.
+// CommitItrForRoots will return a CommitItr which will iterate over all ancestor commits of the provided rootCommits.
 func CommitItrForRoots(ddb *DoltDB, rootCommits ...*Commit) CommitItr {
 	return &commitItr{
 		ddb:         ddb,
@@ -152,8 +152,7 @@ func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (
 		return nil, errors.New("failed to get commit")
 	}
 
-	cmSt := val.(types.Struct)
-	return NewCommit(ctx, vrw, cmSt)
+	return NewCommit(ctx, vrw, val)
 }
 
 // CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept

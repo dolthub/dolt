@@ -47,7 +47,7 @@ jobs:
         run: |
           latest=$(git rev-parse HEAD)
           echo "::set-output name=commitish::$latest"
-          GO_BUILD_VERSION=1.17.1 go/utils/publishrelease/buildbinaries.sh
+          GO_BUILD_VERSION=1.18.0 go/utils/publishrelease/buildbinaries.sh
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1

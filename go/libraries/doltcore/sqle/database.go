@@ -88,7 +88,6 @@ type Database struct {
 	rsw  env.RepoStateWriter
 	drw  env.DocsReadWriter
 	gs   globalstate.GlobalState
-
 	editOpts editor.Options
 }
 

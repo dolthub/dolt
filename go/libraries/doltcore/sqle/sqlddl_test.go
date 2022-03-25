@@ -84,11 +84,6 @@ func TestCreateTable(t *testing.T) {
 			expectedErr: "Invalid table name",
 		},
 		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
-		},
-		{
 			name:        "Test in use table name",
 			query:       "create table people (id int primary key, age int)",
 			expectedErr: "table with name people already exists",
@@ -1126,6 +1121,14 @@ func TestRenameTable(t *testing.T) {
 			expectedRows:   AllAppsRows,
 		},
 		{
+			name:           "alter rename table with alter syntax",
+			query:          "alter table people rename to 123People",
+			oldTableName:   "people",
+			newTableName:   "123People",
+			expectedSchema: PeopleTestSchema,
+			expectedRows:   AllPeopleRows,
+		},
+		{
 			name:        "table not found",
 			query:       "rename table notFound to newNowFound",
 			expectedErr: "table not found: notFound",
@@ -1279,6 +1282,13 @@ func TestParseCreateTableStatement(t *testing.T) {
 				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{})),
 		},
 		{
+			name:          "Test create table starting with number",
+			query:         "create table 123table (id int primary key)",
+			expectedTable: "`123table`",
+			expectedSchema: dtestutils.CreateSchema(
+				schemaNewColumn(t, "id", 4817, sql.Int32, true, schema.NotNullConstraint{})),
+		},
+		{
 			name:          "Test create two column schema",
 			query:         "create table testTable (id int primary key, age int)",
 			expectedTable: "testTable",
@@ -1291,11 +1301,6 @@ func TestParseCreateTableStatement(t *testing.T) {
 			query:         "create table testTable id int, age int",
 			expectedTable: "testTable",
 			expectedErr:   "syntax error",
-		},
-		{
-			name:        "Test bad table name begins with number",
-			query:       "create table 1testTable (id int primary key, age int)",
-			expectedErr: "syntax error",
 		},
 		{
 			name: "Test types",

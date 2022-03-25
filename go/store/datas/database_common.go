@@ -129,7 +129,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 	parentMaps := make([]types.Map, len(parents))
 	parentParentLists := make([]types.List, len(parents))
 	for i, p := range parents {
-		v, ok, err := p.MaybeGet(ParentsClosureField)
+		v, ok, err := p.MaybeGet(parentsClosureField)
 		if err != nil {
 			return types.Ref{}, false, err
 		}
@@ -153,7 +153,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 				return types.Ref{}, false, fmt.Errorf("unexpected target value type for parents_closure in commit struct: %v", tv)
 			}
 		}
-		v, ok, err = p.MaybeGet(ParentsListField)
+		v, ok, err = p.MaybeGet(parentsListField)
 		if err != nil {
 			return types.Ref{}, false, err
 		}
@@ -369,7 +369,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 
 	headType := newHead.TypeName()
 	switch headType {
-	case CommitName:
+	case commitName:
 		var iscommit bool
 		iscommit, err = IsCommit(newSt)
 		if err != nil {
@@ -445,7 +445,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	if newHead == nil {
 		return fmt.Errorf("FastForward: new head address %v not found", newHeadAddr)
 	}
-	if newHead.TypeName() != CommitName {
+	if newHead.TypeName() != commitName {
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
@@ -867,7 +867,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	if rHead == nil {
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
-	if rHead.TypeName() != CommitName {
+	if rHead.TypeName() != commitName {
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
 	}
 
@@ -933,7 +933,7 @@ func (db *database) validateWorkingSet(t types.Struct) error {
 	return nil
 }
 
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
+func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Value, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {

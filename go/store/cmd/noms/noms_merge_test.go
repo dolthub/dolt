@@ -131,13 +131,12 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	if s.NoError(err) {
 		defer sp.Close()
 		commit := mustHead(sp.GetDataset(context.Background()))
-		vparents := mustGetValue(commit.MaybeGet(datas.ParentsListField)).(types.List)
-		i := 0
-		vparents.IterAll(context.TODO(), func(v types.Value, _ uint64) error {
-			s.True(v.(types.Ref).TargetHash() == parents[i])
-			i++
-			return nil
-		})
+		vparents, err := datas.GetCommitParents(context.Background(), commit)
+		s.NoError(err)
+		s.Equal(len(vparents), len(parents), "parents were not the same length")
+		for i := range parents {
+			s.True(parents[i] == vparents[i].TargetHash())
+		}
 		merged := mustHeadValue(sp.GetDataset(context.Background()))
 		s.True(expected.Equals(merged), "%s != %s", mustString(types.EncodedValue(context.Background(), expected)), mustString(types.EncodedValue(context.Background(), merged)))
 	}

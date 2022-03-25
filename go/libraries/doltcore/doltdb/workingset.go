@@ -57,7 +57,7 @@ func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState ty
 		return nil, fmt.Errorf("corrupted MergeState struct")
 	}
 
-	commit, err := NewCommit(ctx, vrw, commitSt.(types.Struct))
+	commit, err := NewCommit(ctx, vrw, commitSt)
 	if err != nil {
 		return nil, err
 	}
@@ -282,8 +282,7 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		// TODO: Remove types.Struct coerce here.
-		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, commitV.(types.Struct))
+		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, commitV)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}

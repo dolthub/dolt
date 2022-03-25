@@ -46,10 +46,10 @@ func Summary(ctx context.Context, value1, value2 types.Value) {
 			fmt.Println("Comparing commit values")
 
 			var err error
-			value1, _, err = value1.(types.Struct).MaybeGet(datas.ValueField)
+			value1, err = datas.GetCommitValue(ctx, value1)
 			d.PanicIfError(err)
 
-			value2, _, err = value2.(types.Struct).MaybeGet(datas.ValueField)
+			value2, err = datas.GetCommitValue(ctx, value2)
 			d.PanicIfError(err)
 		}
 	}

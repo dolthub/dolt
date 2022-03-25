@@ -190,7 +190,7 @@ func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, met
 
 }
 
-func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Struct) (types.Struct, error) {
+func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Value) (types.Struct, error) {
 	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
 }
 

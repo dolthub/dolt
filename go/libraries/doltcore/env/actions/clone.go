@@ -103,8 +103,7 @@ func cloneProg(eventCh <-chan pull.TableFileEvent) {
 		tableFiles        = make(map[string]*nbs.TableFile)
 	)
 
-	p := cli.StartEphemeralPrinter()
-	defer p.Stop()
+	p := cli.NewEphemeralPrinter()
 
 	p.Printf("Retrieving remote information.\n")
 	p.Display()

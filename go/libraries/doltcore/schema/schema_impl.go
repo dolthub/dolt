@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var FeatureFlagKeylessSchema = true
@@ -135,10 +137,19 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colNames[col.Name] = true
 
+		if col.AutoIncrement && !isAutoIncrementKind(col.Kind) {
+			return true, ErrNonAutoIncType
+		}
+
 		return false, nil
 	})
 
 	return err
+}
+
+// isAutoIncrementKind returns true is |k| is a numeric kind.
+func isAutoIncrementKind(k types.NomsKind) bool {
+	return k == types.IntKind || k == types.UintKind || k == types.FloatKind
 }
 
 // UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such

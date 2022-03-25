@@ -239,7 +239,7 @@ func dumpTable(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, fi
 }
 
 func getTableWriter(ctx context.Context, dEnv *env.DoltEnv, tblOpts *tableOptions, outSch schema.Schema, filePath string) (table.SqlTableWriter, errhand.VerboseError) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 
 	writer, err := dEnv.FS.OpenForWriteAppend(filePath, os.ModePerm)
 	if err != nil {

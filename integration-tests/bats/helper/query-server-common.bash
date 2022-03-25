@@ -170,10 +170,20 @@ start_multi_db_server() {
     wait_for_connection $PORT 5000
 }
 
+# stop_sql_server stops the SQL server. For cases where it's important
+# to wait for the process to exit after the kill signal (e.g. waiting
+# for an async replication push), pass 1.
 stop_sql_server() {
+    wait=$1
     if [ ! -z "$SERVER_PID" ]; then
       kill $SERVER_PID
     fi
+    if [ $wait ]; then
+        while ps -p $SERVER_PID > /dev/null; do
+            sleep .1;
+        done
+    fi;
+   
     SERVER_PID=
 }
 
