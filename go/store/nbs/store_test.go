@@ -103,7 +103,7 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 		rd, err := src.Open(context.Background())
 		require.NoError(t, err)
-		
+
 		data, err := io.ReadAll(rd)
 		require.NoError(t, err)
 
