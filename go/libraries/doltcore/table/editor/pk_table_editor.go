@@ -64,7 +64,7 @@ type TableEditor interface {
 	DeleteRow(ctx context.Context, r row.Row) error
 
 	HasEdits() bool
-	SetDirty(bool)
+	MarkDirty()
 
 	SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error
 
@@ -419,7 +419,7 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 		return err
 	}
 
-	te.SetDirty(true)
+	te.MarkDirty()
 	return nil
 }
 
@@ -494,7 +494,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 		return err
 	}
 
-	te.SetDirty(true)
+	te.MarkDirty()
 	return te.tea.Delete(keyHash, key)
 }
 
@@ -592,7 +592,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		return err
 	}
 
-	te.SetDirty(true)
+	te.MarkDirty()
 
 	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyVal); err != nil {
 		return err
@@ -741,7 +741,7 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 		te.cvEditor = cvMap.Edit()
 	}
 	te.cvEditor.Set(k, v)
-	te.SetDirty(true)
+	te.MarkDirty()
 	return nil
 }
 
@@ -770,13 +770,10 @@ func (te *pkTableEditor) Close(ctx context.Context) error {
 	return nil
 }
 
-func (te *pkTableEditor) SetDirty(dirty bool) {
-	var val uint32
-	if dirty {
-		val = 1
-	}
-
-	atomic.StoreUint32(&te.dirty, val)
+// MarkDirty implements TableEditor.
+func (te *pkTableEditor) MarkDirty() {
+	dirty := uint32(1)
+	atomic.StoreUint32(&te.dirty, dirty)
 }
 
 // hasEdits returns whether the table editor has had any successful write operations. This does not track whether the

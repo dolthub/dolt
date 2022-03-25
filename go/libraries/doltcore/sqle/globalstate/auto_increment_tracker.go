@@ -27,7 +27,7 @@ import (
 )
 
 // CoerceAutoIncrementValue converts |val| into an AUTO_INCREMENT sequence value
-func CoerceAutoIncrementValue(val interface{}) (seq uint64, err error) {
+func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	switch typ := val.(type) {
 	case float32:
 		val = math.Round(float64(typ))
@@ -35,6 +35,7 @@ func CoerceAutoIncrementValue(val interface{}) (seq uint64, err error) {
 		val = math.Round(typ)
 	}
 
+	var err error
 	val, err = sql.Uint64.Convert(val)
 	if err != nil {
 		return 0, err
@@ -116,8 +117,8 @@ func (a AutoIncrementTracker) Set(tableName string, val uint64) {
 	a.sequences[tableName] = val
 }
 
-// AddTable adds |tablename| to the AutoIncrementTracker.
-func (a AutoIncrementTracker) AddTable(tableName string) {
+// AddNewTable adds |tablename| to the AutoIncrementTracker.
+func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sequences[tableName] = uint64(1)

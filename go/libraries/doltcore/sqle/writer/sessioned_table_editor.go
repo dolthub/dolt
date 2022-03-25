@@ -123,8 +123,9 @@ func (ste *sessionedTableEditor) HasEdits() bool {
 	return ste.tableEditor.HasEdits()
 }
 
-func (ste *sessionedTableEditor) SetDirty(dirty bool) {
-	ste.tableEditor.SetDirty(dirty)
+// MarkDirty implements TableEditor.
+func (ste *sessionedTableEditor) MarkDirty() {
+	ste.tableEditor.MarkDirty()
 }
 
 // Table implements TableEditor.

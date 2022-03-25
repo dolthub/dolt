@@ -881,7 +881,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		if err != nil {
 			return err
 		}
-		ait.AddTable(t.tableName)
+		ait.AddNewTable(t.tableName)
 	}
 
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
@@ -1163,7 +1163,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		if err != nil {
 			return err
 		}
-		ait.AddTable(t.tableName)
+		ait.AddNewTable(t.tableName)
 		ait.Set(t.tableName, seq)
 	}
 

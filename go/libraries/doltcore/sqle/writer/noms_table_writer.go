@@ -62,7 +62,6 @@ type nomsTableWriter struct {
 	batched     bool
 
 	autoInc globalstate.AutoIncrementTracker
-	autoOrd int
 
 	setter SessionRootSetter
 }
@@ -168,7 +167,7 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 		return err
 	}
 	te.autoInc.Set(te.tableName, seq)
-	te.tableEditor.SetDirty(true)
+	te.tableEditor.MarkDirty()
 
 	return te.flush(ctx)
 }

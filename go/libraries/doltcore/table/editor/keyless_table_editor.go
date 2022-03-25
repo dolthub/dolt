@@ -250,7 +250,8 @@ func (kte *keylessTableEditor) HasEdits() bool {
 	return kte.dirty
 }
 
-func (kte *keylessTableEditor) SetDirty(dirty bool) {
+// MarkDirty implements TableEditor.
+func (kte *keylessTableEditor) MarkDirty() {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 	kte.dirty = true

@@ -111,14 +111,6 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 
 	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch)
 
-	autoOrd := -1
-	for i, col := range sch.GetAllCols().GetColumns() {
-		if col.AutoIncrement {
-			autoOrd = i
-			break
-		}
-	}
-
 	return &nomsTableWriter{
 		tableName:   table,
 		dbName:      db,
@@ -129,7 +121,6 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		sess:        s,
 		batched:     batched,
 		autoInc:     s.tracker,
-		autoOrd:     autoOrd,
 		setter:      setter,
 	}, nil
 }

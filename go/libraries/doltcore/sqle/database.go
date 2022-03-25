@@ -730,7 +730,7 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 		if err != nil {
 			return err
 		}
-		ait.AddTable(tableName)
+		ait.AddNewTable(tableName)
 	}
 
 	return db.createDoltTable(ctx, tableName, root, doltSch)
