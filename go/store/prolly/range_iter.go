@@ -26,7 +26,22 @@ type MapRangeIter interface {
 }
 
 var _ MapRangeIter = &prollyRangeIter{}
+var _ MapRangeIter = &pointLookup{}
 var _ MapRangeIter = &MutableMapRangeIter{}
+
+type pointLookup struct {
+	k, v val.Tuple
+}
+
+func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
+	if p.k == nil || p.v == nil {
+		err = io.EOF
+	} else {
+		key, value = p.k, p.v
+		p.k, p.v = nil, nil
+	}
+	return
+}
 
 type rangeIter interface {
 	iterate(ctx context.Context) error

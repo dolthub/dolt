@@ -183,6 +183,26 @@ func (r Range) merge(other Range) Range {
 	}
 }
 
+func (r Range) isPointLookup(desc val.TupleDesc) bool {
+	if len(r.Start) < len(desc.Types) || len(r.Stop) < len(desc.Types) {
+		return false
+	}
+	for i := range r.Start {
+		if !r.Start[i].Inclusive || !r.Stop[i].Inclusive {
+			return false
+		}
+	}
+
+	compare := desc.Comparator()
+	for i, typ := range desc.Types {
+		lo, hi := r.Start[i].Value, r.Stop[i].Value
+		if compare.CompareValues(lo, hi, typ) != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 func (r Range) format() string {
 	return formatRange(r)
 }
@@ -215,15 +235,17 @@ func (c RangeCut) lesserValue(other RangeCut, typ val.Type, tc val.TupleComparat
 	return cmp < 0
 }
 
+func compareBound(bound []RangeCut, tup val.Tuple, desc val.TupleDesc) int {
+	for i, cut := range bound {
+		cmp := desc.CompareField(cut.Value, i, tup)
+		if cmp != 0 {
+			return cmp
+		}
+	}
+	return 0
+}
+
 func rangeStartSearchFn(rng Range) searchFn {
-	return binarySearchRangeStart(rng)
-}
-
-func rangeStopSearchFn(rng Range) searchFn {
-	return binarySearchRangeStop(rng)
-}
-
-func binarySearchRangeStart(rng Range) searchFn {
 	return func(nd Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (in bool) {
@@ -235,7 +257,7 @@ func binarySearchRangeStart(rng Range) searchFn {
 	}
 }
 
-func binarySearchRangeStop(rng Range) searchFn {
+func rangeStopSearchFn(rng Range) searchFn {
 	return func(nd Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
@@ -243,6 +265,17 @@ func binarySearchRangeStop(rng Range) searchFn {
 			tup := val.Tuple(nd.getKey(i))
 			out = !rng.BelowStop(tup)
 			return
+		})
+	}
+}
+
+func pointLookupSearchFn(rng Range) searchFn {
+	return func(nd Node) (idx int) {
+		// todo(andy): inline sort.Search()
+		return sort.Search(int(nd.count), func(i int) (out bool) {
+			tup := val.Tuple(nd.getKey(i))
+			// |rng.Start| <= |tup|
+			return compareBound(rng.Start, tup, rng.Desc) <= 0
 		})
 	}
 }

@@ -39,19 +39,22 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
-
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    `SELECT * from mytable`,
-		Expected: []sql.Row{},
+		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2
+				FROM two_pk a JOIN two_pk b
+				ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2
+				ORDER BY 1,2,3`,
+		Expected: []sql.Row{
+			{0, 0, 1, 1},
+		},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
 	enginetest.CreateIndexes(t, harness, engine)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
