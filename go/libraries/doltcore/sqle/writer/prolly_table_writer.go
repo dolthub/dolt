@@ -42,7 +42,6 @@ type prollyTableWriter struct {
 
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
-	aiUpdate  bool
 
 	sess    WriteSession
 	setter  SessionRootSetter
@@ -64,7 +63,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	if err := w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
-	w.aiUpdate = true
 	return nil
 }
 
@@ -97,28 +95,27 @@ func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.
 	if err := w.primary.Update(ctx, oldRow, newRow); err != nil {
 		return err
 	}
-	w.aiUpdate = true
 	return nil
 }
 
-// NextAutoIncrementValue implements TableWriter.
-func (w *prollyTableWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
-	return w.aiTracker.Next(w.tableName, potentialVal, tableVal)
+// GetNextAutoIncrementValue implements TableWriter.
+func (w *prollyTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	return w.aiTracker.Next(w.tableName, insertVal)
 }
 
 // SetAutoIncrementValue implements TableWriter.
-func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	nomsVal, err := w.aiCol.TypeInfo.ConvertValueToNomsValue(ctx, w.tbl.ValueReadWriter(), val)
+func (w *prollyTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
+	seq, err := globalstate.CoerceAutoIncrementValue(val)
 	if err != nil {
 		return err
 	}
 
-	w.tbl, err = w.tbl.SetAutoIncrementValue(ctx, nomsVal)
+	// todo(andy) set here or in flush?
+	w.tbl, err = w.tbl.SetAutoIncrementValue(ctx, seq)
 	if err != nil {
 		return err
 	}
-
-	w.aiTracker.Reset(w.tableName, val)
+	w.aiTracker.Set(w.tableName, seq)
 
 	return w.flush(ctx)
 }
@@ -129,7 +126,6 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 	if w.batched {
 		return nil
 	}
-
 	return w.flush(ctx)
 }
 
@@ -187,23 +183,12 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
-	if w.aiCol.AutoIncrement && w.aiUpdate {
-		seq, err := w.aiTracker.Next(w.tableName, nil, nil)
+	if w.aiCol.AutoIncrement {
+		seq := w.aiTracker.Current(w.tableName)
+		t, err = t.SetAutoIncrementValue(ctx, seq)
 		if err != nil {
 			return nil, err
 		}
-		vrw := w.tbl.ValueReadWriter()
-
-		v, err := w.aiCol.TypeInfo.ConvertValueToNomsValue(ctx, vrw, seq)
-		if err != nil {
-			return nil, err
-		}
-
-		t, err = t.SetAutoIncrementValue(ctx, v)
-		if err != nil {
-			return nil, err
-		}
-		w.aiUpdate = false
 	}
 
 	return t, nil
@@ -289,7 +274,9 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		index.PutField(m.keyBld, to, sqlRow[from])
+		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
+			return err
+		}
 	}
 	k := m.keyBld.Build(sharePool)
 
@@ -302,7 +289,9 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		index.PutField(m.valBld, to, sqlRow[from])
+		if err = index.PutField(m.valBld, to, sqlRow[from]); err != nil {
+			return err
+		}
 	}
 	v := m.valBld.Build(sharePool)
 
@@ -312,7 +301,9 @@ func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		index.PutField(m.keyBld, to, sqlRow[from])
+		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
+			return err
+		}
 	}
 	k := m.keyBld.Build(sharePool)
 
@@ -322,7 +313,9 @@ func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		index.PutField(m.keyBld, to, oldRow[from])
+		if err := index.PutField(m.keyBld, to, oldRow[from]); err != nil {
+			return err
+		}
 	}
 	oldKey := m.keyBld.Build(sharePool)
 
@@ -334,7 +327,9 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		index.PutField(m.keyBld, to, newRow[from])
+		if err := index.PutField(m.keyBld, to, newRow[from]); err != nil {
+			return err
+		}
 	}
 	newKey := m.keyBld.Build(sharePool)
 
@@ -347,7 +342,9 @@ func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		index.PutField(m.valBld, to, newRow[from])
+		if err = index.PutField(m.valBld, to, newRow[from]); err != nil {
+			return err
+		}
 	}
 	v := m.valBld.Build(sharePool)
 

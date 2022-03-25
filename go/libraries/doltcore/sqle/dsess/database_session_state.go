@@ -17,11 +17,11 @@ package dsess
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type InitialDbState struct {
@@ -48,6 +48,7 @@ type DatabaseSessionState struct {
 	WorkingSet   *doltdb.WorkingSet
 	dbData       env.DbData
 	WriteSession writer.WriteSession
+	globalState  globalstate.GlobalState
 	readOnly     bool
 	dirty        bool
 	readReplica  *env.Remote

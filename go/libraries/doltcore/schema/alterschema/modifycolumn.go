@@ -149,7 +149,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		return nil, err
 	}
 
-	var autoVal types.Value
+	var autoVal uint64
 	if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
 		autoVal, err = tbl.GetAutoIncrementValue(ctx)
 		if err != nil {
@@ -157,7 +157,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 	}
 
-	updatedTable, err := doltdb.NewNomsTable(ctx, vrw, newSch, rowData, indexData, autoVal)
+	updatedTable, err := doltdb.NewNomsTable(ctx, vrw, newSch, rowData, indexData, types.Uint(autoVal))
 	if err != nil {
 		return nil, err
 	}
