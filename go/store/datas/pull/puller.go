@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -201,36 +202,35 @@ type tempTblFile struct {
 	contentHash []byte
 }
 
-func (p *Puller) uploadTempTableFile(ctx context.Context, ae *atomicerr.AtomicError, tmpTblFile tempTblFile) error {
+func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile) error {
 	fi, err := os.Stat(tmpTblFile.path)
-
-	if ae.SetIfError(err) {
-		return err
-	}
-
-	f, err := os.Open(tmpTblFile.path)
-
-	if ae.SetIfError(err) {
+	if err != nil {
 		return err
 	}
 
 	fileSize := fi.Size()
-	fWithStats := iohelp.NewReaderWithStats(f, fileSize)
-	fWithStats.Start(func(stats iohelp.ReadStats) {
-		p.addEvent(NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
-			CurrentFileSize: fileSize,
-			Stats:           stats,
-		}))
-	})
 	defer func() {
-		_ = fWithStats.Stop()
-
 		go func() {
 			_ = file.Remove(tmpTblFile.path)
 		}()
 	}()
 
-	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithStats, tmpTblFile.contentLen, tmpTblFile.contentHash)
+	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentLen, tmpTblFile.contentHash, func() (io.ReadCloser, error) {
+		f, err := os.Open(tmpTblFile.path)
+		if err != nil {
+			return nil, err
+		}
+
+		fWithStats := iohelp.NewReaderWithStats(f, fileSize)
+		fWithStats.Start(func(stats iohelp.ReadStats) {
+			p.addEvent(NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
+				CurrentFileSize: fileSize,
+				Stats:           stats,
+			}))
+		})
+
+		return fWithStats, nil
+	})
 }
 
 func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.AtomicError, completedTables <-chan FilledWriters) {
@@ -270,7 +270,7 @@ func (p *Puller) processCompletedTables(ctx context.Context, ae *atomicerr.Atomi
 			contentHash: tblFile.wr.GetMD5(),
 		}
 
-		err = p.uploadTempTableFile(ctx, ae, ttf)
+		err = p.uploadTempTableFile(ctx, ttf)
 		if ae.SetIfError(err) {
 			continue
 		}
