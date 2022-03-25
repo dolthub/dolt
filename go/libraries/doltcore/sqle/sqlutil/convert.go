@@ -36,6 +36,8 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 
 		var deflt *sql.ColumnDefaultValue
 		if col.Default != "" {
+			// col.Default == "" represent nil value, and empty value is represented as empty-string value `""`
+			// nil value also can be represented as string `"NULL"`
 			if col.Default == "NULL" {
 				deflt = nil
 			} else if col.Default == `""` {
