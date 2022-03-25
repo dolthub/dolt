@@ -295,22 +295,42 @@ func TestMapIterRange(t *testing.T) {
 		{
 			name:    "range [1,2:4,2]",
 			rng:     ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange: tuples[2:22],
+			inRange: tuples[:],
 		},
 		{
 			name:    "range (1,2:4,2]",
 			rng:     OpenStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange: tuples[4:22],
+			inRange: tuples[:],
 		},
 		{
 			name:    "range [1,2:4,2)",
 			rng:     OpenStopRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange: tuples[2:20],
+			inRange: tuples[:],
 		},
 		{
 			name:    "range (1,2:4,2)",
 			rng:     OpenRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
-			inRange: tuples[4:20], // 🌲
+			inRange: tuples[:],
+		},
+		{
+			name:    "range [2,2:3,2]",
+			rng:     ClosedRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range (2,2:3,2]",
+			rng:     OpenStartRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range [2,2:3,2)",
+			rng:     OpenStopRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range (2,2:3,2)",
+			rng:     OpenRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
 		},
 	}
 

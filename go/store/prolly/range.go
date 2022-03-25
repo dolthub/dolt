@@ -22,169 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// Range defines a contiguous range of Tuples starting from the
-// lexicographically least Tuple that satisfies all RangeCut
-// predicates, and ending at the greatest Tuple that satisfies
-// all predicates. Tuples inside the Range need not satisfy
-// all predicates, as long as they are in bounds.
-type Range struct {
-	Start, Stop []RangeCut
-	Desc        val.TupleDesc
-}
-
-// AboveStart returns true if |t| is a member of |r|.
-func (r Range) AboveStart(t val.Tuple) bool {
-	for i, cut := range r.Start {
-		if cut.nonBinding() {
-			continue
-		}
-
-		v := t.GetField(i)
-
-		if cut.Null || v == nil {
-			// null values are returned iff |cut.Null|
-			return cut.Null && v == nil
-		}
-
-		cmp := r.Desc.CompareField(cut.Value, i, t)
-
-		if cmp < 0 || (cut.Inclusive && cmp == 0) {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-// BelowStop returns true if |t| is a member of |r|.
-func (r Range) BelowStop(t val.Tuple) bool {
-	for i, cut := range r.Stop {
-		if cut.nonBinding() {
-			continue
-		}
-
-		v := t.GetField(i)
-
-		if cut.Null || v == nil {
-			// null values are returned iff |cut.Null|
-			return cut.Null && v == nil
-		}
-
-		cmp := r.Desc.CompareField(cut.Value, i, t)
-
-		if cmp > 0 || (cut.Inclusive && cmp == 0) {
-			continue
-		}
-		return false
-	}
-	return true
-}
-
-func (r Range) less(other Range) bool {
-	assertTrue(len(r.Start) == len(other.Start))
-
-	compare := r.Desc.Comparator()
-	for i, left := range r.Start {
-		right := other.Start[i]
-		if left.less(right, r.Desc.Types[i], compare) {
-			return true
-		}
-	}
-	return false
-}
-
-func (r Range) overlaps(other Range) bool {
-	compare := r.Desc.Comparator()
-	typ := r.Desc.Types[0]
-	if r.Stop[0].less(other.Start[0], typ, compare) {
-		return false
-	}
-	if other.Stop[0].less(r.Start[0], typ, compare) {
-		return false
-	}
-	return true
-}
-
-func (r Range) merge(other Range) Range {
-	assertTrue(r.Desc.Equals(other.Desc))
-	assertTrue(len(r.Start) == len(other.Start))
-	assertTrue(len(r.Stop) == len(other.Stop))
-
-	types := r.Desc.Types
-	compare := r.Desc.Comparator()
-
-	// take the min of each RangeCut pair
-	lower := make([]RangeCut, len(r.Start))
-	for i := range lower {
-		left, right := r.Start[i], other.Start[i]
-
-		if left.nonBinding() || right.nonBinding() {
-			lower[i] = RangeCut{Value: nil}
-			continue
-		}
-
-		lower[i] = left
-		if right.less(left, types[i], compare) {
-			lower[i] = right
-		}
-	}
-
-	// take the max of each RangeCut pair
-	upper := make([]RangeCut, len(r.Stop))
-	for i := range upper {
-		left, right := r.Stop[i], other.Stop[i]
-
-		if left.nonBinding() || right.nonBinding() {
-			upper[i] = RangeCut{Value: nil}
-			continue
-		}
-
-		upper[i] = right
-		if right.less(left, types[i], compare) {
-			upper[i] = left
-		}
-	}
-
-	return Range{
-		Start: lower,
-		Stop:  upper,
-		Desc:  other.Desc,
-	}
-}
-
-func (r Range) format() string {
-	return formatRange(r)
-}
-
-// RangeCut bounds one dimension of a Range.
-type RangeCut struct {
-	Value     []byte
-	Inclusive bool
-	Null      bool
-}
-
-func (c RangeCut) nonBinding() bool {
-	return c.Value == nil && c.Null == false
-}
-
-func (c RangeCut) less(other RangeCut, typ val.Type, tc val.TupleComparator) bool {
-	if c.Null || other.Null {
-		// order nulls last
-		return !c.Null && other.Null
-	}
-	if c.nonBinding() || other.nonBinding() {
-		return false
-	}
-
-	cmp := tc.CompareValues(c.Value, other.Value, typ)
-
-	if cmp == 0 {
-		return !c.Inclusive || !other.Inclusive
-	}
-
-	return cmp < 0
-}
-
 // MergeOverlappingRanges merges overlapping ranges.
 func MergeOverlappingRanges(ranges ...Range) (merged []Range) {
 	if len(ranges) <= 1 {
@@ -213,6 +50,171 @@ func SortRanges(ranges ...Range) []Range {
 		return ranges[i].less(ranges[j])
 	})
 	return ranges
+}
+
+// Range defines a contiguous range of Tuples starting from the
+// lexicographically least Tuple that satisfies all RangeCut
+// predicates, and ending at the greatest Tuple that satisfies
+// all predicates. Tuples inside the Range need not satisfy
+// all predicates, as long as they are in bounds.
+type Range struct {
+	Start, Stop []RangeCut
+	Desc        val.TupleDesc
+}
+
+// AboveStart returns true if |t| is a member of |r|.
+func (r Range) AboveStart(t val.Tuple) bool {
+	if len(r.Start) == 0 {
+		return true
+	}
+
+	cut := r.Start[0]
+	if cut.nonBinding() {
+		return true
+	}
+
+	v := t.GetField(0)
+	if cut.Null || v == nil {
+		// null values are returned iff |cut.Null|
+		return cut.Null && v == nil
+	}
+
+	cmp := r.Desc.CompareField(cut.Value, 0, t)
+	return cmp < 0 || (cut.Inclusive && cmp == 0)
+}
+
+// BelowStop returns true if |t| is a member of |r|.
+func (r Range) BelowStop(t val.Tuple) bool {
+	if len(r.Stop) == 0 {
+		return true
+	}
+
+	cut := r.Stop[0]
+	if cut.nonBinding() {
+		return true
+	}
+
+	v := t.GetField(0)
+	if cut.Null || v == nil {
+		// null values are returned iff |cut.Null|
+		return cut.Null && v == nil
+	}
+
+	cmp := r.Desc.CompareField(cut.Value, 0, t)
+	return cmp > 0 || (cut.Inclusive && cmp == 0)
+}
+
+func (r Range) less(other Range) bool {
+	assertTrue(len(r.Start) == len(other.Start))
+	if len(r.Start) == 0 {
+		return false
+	}
+
+	left, right := r.Start[0], other.Start[0]
+	if left.nonBinding() || right.nonBinding() {
+		// order unbound ranges first
+		return left.nonBinding() && right.binding()
+	}
+
+	compare := r.Desc.Comparator()
+	typ := r.Desc.Types[0]
+	return left.lesserValue(right, typ, compare)
+}
+
+func (r Range) overlaps(other Range) bool {
+	compare := r.Desc.Comparator()
+	typ := r.Desc.Types[0]
+
+	if r.Stop[0].binding() && other.Start[0].binding() {
+		if r.Stop[0].lesserValue(other.Start[0], typ, compare) {
+			return false
+		}
+	}
+	if other.Stop[0].binding() && r.Start[0].binding() {
+		if other.Stop[0].lesserValue(r.Start[0], typ, compare) {
+			return false
+		}
+	}
+	return true
+}
+
+func (r Range) merge(other Range) Range {
+	assertTrue(r.Desc.Equals(other.Desc))
+	assertTrue(len(r.Start) == len(other.Start))
+	assertTrue(len(r.Stop) == len(other.Stop))
+
+	types := r.Desc.Types
+	compare := r.Desc.Comparator()
+
+	// take the min of each RangeCut pair
+	lower := make([]RangeCut, len(r.Start))
+	for i := range lower {
+		left, right := r.Start[i], other.Start[i]
+
+		if left.nonBinding() || right.nonBinding() {
+			lower[i] = RangeCut{Value: nil}
+			continue
+		}
+
+		lower[i] = left
+		if right.lesserValue(left, types[i], compare) {
+			lower[i] = right
+		}
+	}
+
+	// take the max of each RangeCut pair
+	upper := make([]RangeCut, len(r.Stop))
+	for i := range upper {
+		left, right := r.Stop[i], other.Stop[i]
+
+		if left.nonBinding() || right.nonBinding() {
+			upper[i] = RangeCut{Value: nil}
+			continue
+		}
+
+		upper[i] = right
+		if right.lesserValue(left, types[i], compare) {
+			upper[i] = left
+		}
+	}
+
+	return Range{
+		Start: lower,
+		Stop:  upper,
+		Desc:  other.Desc,
+	}
+}
+
+func (r Range) format() string {
+	return formatRange(r)
+}
+
+// RangeCut bounds one dimension of a Range.
+type RangeCut struct {
+	Value     []byte
+	Inclusive bool
+	Null      bool
+}
+
+func (c RangeCut) nonBinding() bool {
+	return c.Value == nil && c.Null == false
+}
+
+func (c RangeCut) binding() bool {
+	return c.Value != nil
+}
+
+func (c RangeCut) lesserValue(other RangeCut, typ val.Type, tc val.TupleComparator) bool {
+	if c.Null || other.Null {
+		// order nulls last
+		return !c.Null && other.Null
+	}
+
+	cmp := tc.CompareValues(c.Value, other.Value, typ)
+	if cmp == 0 {
+		return c.Inclusive && !other.Inclusive
+	}
+	return cmp < 0
 }
 
 func rangeStartSearchFn(rng Range) searchFn {

@@ -119,31 +119,7 @@ func TestRangeBounds(t *testing.T) {
 
 		// second column ranges
 		{
-			name: "c1 > 1",
-			testRange: Range{
-				Start: []RangeCut{
-					{Value: nil},
-					{Value: intVal(1), Inclusive: false},
-				},
-				Stop: nil,
-				Desc: twoCol,
-			},
-			inside: concat(tuples[1:3], tuples[4:6], tuples[7:9], tuples[10:12], tuples[13:]),
-		},
-		{
-			name: "c1 < 1",
-			testRange: Range{
-				Start: nil,
-				Stop: []RangeCut{
-					{Value: nil},
-					{Value: intVal(1), Inclusive: false},
-				},
-				Desc: twoCol,
-			},
-			inside: nil,
-		},
-		{
-			name: "2 <= c1 <= 3",
+			name: "c1 == 2",
 			testRange: Range{
 				Start: []RangeCut{
 					{Value: nil},
@@ -151,26 +127,11 @@ func TestRangeBounds(t *testing.T) {
 				},
 				Stop: []RangeCut{
 					{Value: nil},
-					{Value: intVal(3), Inclusive: true},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
-			inside: concat(tuples[1:3], tuples[4:6], tuples[7:9], tuples[10:12]),
-		},
-		{
-			name: "c1 = NULL",
-			testRange: Range{
-				Start: []RangeCut{
-					{Value: nil},
-					{Null: true},
-				},
-				Stop: []RangeCut{
-					{Value: nil},
-					{Null: true},
-				},
-				Desc: twoCol,
-			},
-			inside: tuples[12:13],
+			inside: tuples[:],
 		},
 	}
 
@@ -274,33 +235,7 @@ func TestRangeSearch(t *testing.T) {
 
 		// second column ranges
 		{
-			name: "c1 > 1",
-			testRange: Range{
-				Start: []RangeCut{
-					{Value: nil},
-					{Value: intVal(1), Inclusive: false},
-				},
-				Stop: nil,
-				Desc: twoCol,
-			},
-			lo: 1,
-			hi: 14,
-		},
-		{
-			name: "c1 < 1",
-			testRange: Range{
-				Start: nil,
-				Stop: []RangeCut{
-					{Value: nil},
-					{Value: intVal(1), Inclusive: false},
-				},
-				Desc: twoCol,
-			},
-			lo: 0,
-			hi: 0,
-		},
-		{
-			name: "2 <= c1 <= 3",
+			name: "c1 == 2",
 			testRange: Range{
 				Start: []RangeCut{
 					{Value: nil},
@@ -308,28 +243,12 @@ func TestRangeSearch(t *testing.T) {
 				},
 				Stop: []RangeCut{
 					{Value: nil},
-					{Value: intVal(3), Inclusive: true},
+					{Value: intVal(2), Inclusive: true},
 				},
 				Desc: twoCol,
 			},
-			lo: 1,
-			hi: 12,
-		},
-		{
-			name: "c1 = NULL",
-			testRange: Range{
-				Start: []RangeCut{
-					{Value: nil},
-					{Null: true},
-				},
-				Stop: []RangeCut{
-					{Value: nil},
-					{Null: true},
-				},
-				Desc: twoCol,
-			},
-			lo: 12,
-			hi: 13,
+			lo: 0,
+			hi: 14,
 		},
 	}
 
