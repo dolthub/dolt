@@ -17,6 +17,7 @@ package types
 import (
 	"context"
 	"errors"
+
 	"github.com/dolthub/dolt/go/store/geometry"
 
 	"github.com/dolthub/dolt/go/store/hash"
