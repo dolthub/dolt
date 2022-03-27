@@ -21,6 +21,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
@@ -31,13 +32,14 @@ import (
 type prollyWriteSession struct {
 	workingSet *doltdb.WorkingSet
 	tables     map[string]*prollyTableWriter
+	tracker    globalstate.AutoIncrementTracker
 	mut        *sync.RWMutex
 }
 
 var _ WriteSession = &prollyWriteSession{}
 
 // GetTableWriter implemented WriteSession.
-func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
+func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -76,13 +78,13 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table string, d
 
 	twr := &prollyTableWriter{
 		tableName: table,
-		dbName:    database,
+		dbName:    db,
 		primary:   pw,
 		secondary: sws,
 		tbl:       t,
 		sch:       sch,
 		aiCol:     autoCol,
-		aiTracker: ait,
+		aiTracker: s.tracker,
 		sess:      s,
 		setter:    setter,
 		batched:   batched,
@@ -148,6 +150,14 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			t, err := wr.table(ctx)
 			if err != nil {
 				return err
+			}
+
+			if schema.HasAutoIncrement(wr.sch) {
+				v := s.tracker.Current(name)
+				t, err = t.SetAutoIncrementValue(ctx, v)
+				if err != nil {
+					return err
+				}
 			}
 
 			mu.Lock()
