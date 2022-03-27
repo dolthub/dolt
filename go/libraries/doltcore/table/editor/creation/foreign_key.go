@@ -23,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // ResolveForeignKey resolves the given foreign key. Errors if the foreign key is already resolved.
@@ -125,30 +124,39 @@ func ResolveForeignKey(
 		}
 	}
 
+	// ref table must have an index on the referenced columns
 	refTableIndex, ok := refSch.Indexes().GetIndexByTags(refColTags...)
 	if !ok {
-		parentPKs := set.NewUint64Set(refSch.GetPKCols().Tags)
-		if parentPKs.ContainsAll(refColTags) {
-			// special exception for parent table primary keys
-			// todo: make clustered PK index usable as parent table FK index
-			var colNames []string
-			for _, t := range refColTags {
-				c, _ := refSch.GetAllCols().GetByTag(t)
-				colNames = append(colNames, c.Name)
-			}
-			ret, err := CreateIndex(ctx, refTbl, "", colNames, true, false, "", opts)
-			if err != nil {
-				return nil, doltdb.ForeignKey{}, err
-			}
-			refTbl = ret.NewTable
-			refTableIndex = ret.NewIndex
-			root, err = root.PutTable(ctx, foreignKey.ReferencedTableName, refTbl)
-			if err != nil {
-				return nil, doltdb.ForeignKey{}, err
-			}
-		} else {
-			// parent index must exist
+		var refPkTags []uint64
+		for _, i := range refSch.GetPkOrdinals() {
+			refPkTags = append(refPkTags, refSch.GetAllCols().GetAtIndex(i).Tag)
+		}
+
+		// It's not currently possible to use a primary key index for a foreign key index in our implementation of foreign
+		// keys, so we create a potentially duplicate index on the parent table here. This is only legal if the columns
+		// given are a prefix of the primary key.
+		// todo: make primary key usable as parent table FK index directly without duplication
+		if !isPrefix(refColTags, refPkTags) {
 			return nil, doltdb.ForeignKey{}, fmt.Errorf("missing index for constraint '%s' in the referenced table '%s'", foreignKey.Name, foreignKey.ReferencedTableName)
+		}
+
+		var colNames []string
+		for _, t := range refColTags {
+			c, _ := refSch.GetAllCols().GetByTag(t)
+			colNames = append(colNames, c.Name)
+		}
+
+		// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
+		unique := len(refPkTags) == len(refColTags)
+		ret, err := CreateIndex(ctx, refTbl, "", colNames, unique, false, "", opts)
+		if err != nil {
+			return nil, doltdb.ForeignKey{}, err
+		}
+		refTbl = ret.NewTable
+		refTableIndex = ret.NewIndex
+		root, err = root.PutTable(ctx, foreignKey.ReferencedTableName, refTbl)
+		if err != nil {
+			return nil, doltdb.ForeignKey{}, err
 		}
 	}
 
@@ -197,4 +205,17 @@ func ResolveForeignKey(
 	}
 
 	return root, foreignKey, nil
+}
+
+func isPrefix(prefix, full []uint64) bool {
+	if len(prefix) > len(full) {
+		return false
+	}
+	for i := range prefix {
+		if prefix[i] != full[i] {
+			return false
+		}
+	}
+
+	return true
 }

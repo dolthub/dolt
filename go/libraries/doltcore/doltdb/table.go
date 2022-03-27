@@ -19,6 +19,8 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -54,6 +56,8 @@ var (
 // IsValidTableName returns true if the name matches the regular expression TableNameRegexStr.
 // Table names must be composed of 1 or more letters and non-initial numerals, as well as the characters _ and -
 func IsValidTableName(name string) bool {
+	// Ignore all leading digits
+	name = strings.TrimLeftFunc(name, unicode.IsDigit)
 	return tableNameRegex.MatchString(name)
 }
 
@@ -451,12 +455,12 @@ func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error 
 }
 
 // GetAutoIncrementValue returns the current AUTO_INCREMENT value for this table.
-func (t *Table) GetAutoIncrementValue(ctx context.Context) (types.Value, error) {
+func (t *Table) GetAutoIncrementValue(ctx context.Context) (uint64, error) {
 	return t.table.GetAutoIncrement(ctx)
 }
 
 // SetAutoIncrementValue sets the current AUTO_INCREMENT value for this table.
-func (t *Table) SetAutoIncrementValue(ctx context.Context, val types.Value) (*Table, error) {
+func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, error) {
 	table, err := t.table.SetAutoIncrement(ctx, val)
 	if err != nil {
 		return nil, err

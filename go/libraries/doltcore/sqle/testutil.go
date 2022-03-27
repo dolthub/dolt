@@ -41,7 +41,7 @@ import (
 // ExecuteSql executes all the SQL non-select statements given in the string against the root value given and returns
 // the updated root, or an error. Statements in the input string are split by `;\n`
 func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, statements string) (*doltdb.RootValue, error) {
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := NewDatabase("dolt", dEnv.DbData(), opts)
 
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
@@ -101,21 +101,32 @@ func ExecuteSql(t *testing.T, dEnv *env.DoltEnv, root *doltdb.RootValue, stateme
 
 // NewTestSQLCtx returns a new *sql.Context with a default DoltSession, a new IndexRegistry, and a new ViewRegistry
 func NewTestSQLCtx(ctx context.Context) *sql.Context {
-	session := dsess.DefaultSession()
-	dsess := session.NewDoltSession(config2.NewMapConfig(make(map[string]string)))
-	sqlCtx := sql.NewContext(
-		ctx,
-		sql.WithSession(dsess),
-	).WithCurrentDB("dolt")
+	return NewTestSQLCtxWithProvider(ctx, dsess.EmptyDatabaseProvider())
+}
 
-	return sqlCtx
+func NewTestSQLCtxWithProvider(ctx context.Context, pro dsess.RevisionDatabaseProvider) *sql.Context {
+	s, err := dsess.NewDoltSession(
+		sql.NewEmptyContext(),
+		sql.NewBaseSession(),
+		pro,
+		config2.NewMapConfig(make(map[string]string)),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return sql.NewContext(
+		ctx,
+		sql.WithSession(s),
+	).WithCurrentDB("dolt")
 }
 
 // NewTestEngine creates a new default engine, and a *sql.Context and initializes indexes and schema fragments.
 func NewTestEngine(t *testing.T, dEnv *env.DoltEnv, ctx context.Context, db Database, root *doltdb.RootValue) (*sqle.Engine, *sql.Context, error) {
-	engine := sqle.NewDefault(NewDoltDatabaseProvider(dEnv.Config, dEnv.FS, db))
-
-	sqlCtx := NewTestSQLCtx(ctx)
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro := NewDoltDatabaseProvider(b, dEnv.FS, db)
+	engine := sqle.NewDefault(pro)
+	sqlCtx := NewTestSQLCtxWithProvider(ctx, pro)
 
 	err := dsess.DSessFromSess(sqlCtx.Session).AddDB(sqlCtx, getDbState(t, db, dEnv))
 	if err != nil {
@@ -160,7 +171,7 @@ func ExecuteSelect(t *testing.T, dEnv *env.DoltEnv, ddb *doltdb.DoltDB, root *do
 		Drw: dEnv.DocsReadWriter(),
 	}
 
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := NewDatabase("dolt", dbData, opts)
 	engine, ctx, err := NewTestEngine(t, dEnv, context.Background(), db, root)
 	if err != nil {

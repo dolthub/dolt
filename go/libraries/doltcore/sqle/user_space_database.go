@@ -55,7 +55,7 @@ func (db *UserSpaceDatabase) GetTableInsensitive(ctx *sql.Context, tableName str
 	if err != nil {
 		return nil, false, err
 	}
-	dt, err := NewDoltTable(tableName, sch, table, db, false, db.editOpts)
+	dt, err := NewDoltTable(tableName, sch, table, db, db.editOpts)
 	if err != nil {
 		return nil, false, err
 	}

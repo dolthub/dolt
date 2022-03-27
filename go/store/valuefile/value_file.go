@@ -92,13 +92,9 @@ func WriteToWriter(ctx context.Context, wr io.Writer, store *FileValueStore, val
 		return err
 	}
 
-	ref, _, err := ds.MaybeHeadRef()
+	addr, _ := ds.MaybeHeadAddr()
 
-	if err != nil {
-		return err
-	}
-
-	err = write(wr, ref.TargetHash(), store)
+	err = write(wr, addr, store)
 
 	if err != nil {
 		return err
@@ -179,8 +175,7 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, ErrCorruptNVF
 	}
 
-	rootVal, ok, err := commitSt.MaybeGet(datas.ValueField)
-
+	rootVal, err := datas.GetCommitValue(ctx, commitSt)
 	if err != nil {
 		return nil, err
 	}

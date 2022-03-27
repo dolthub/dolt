@@ -64,12 +64,9 @@ func (ph *PushOnWriteHook) SetLogger(ctx context.Context, wr io.Writer) error {
 
 // replicate pushes a dataset from srcDB to destDB and force sets the destDB ref to the new dataset value
 func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir string, ds datas.Dataset) error {
-	stRef, ok, err := ds.MaybeHeadRef()
-	if err != nil {
-		return err
-	}
+	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
-		// No head ref, return
+		// No head, return
 		return nil
 	}
 
@@ -85,7 +82,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 		return err
 	}
 
-	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, wrf, stRef.TargetHash(), nil)
+	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, wrf, addr, nil)
 	if err == pull.ErrDBUpToDate {
 		return nil
 	} else if err != nil {
@@ -102,7 +99,7 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 		return err
 	}
 
-	_, err = destDB.SetHead(ctx, ds, stRef.TargetHash())
+	_, err = destDB.SetHead(ctx, ds, addr)
 	return err
 }
 
@@ -138,18 +135,15 @@ func NewAsyncPushOnWriteHook(bThreads *sql.BackgroundThreads, destDB *DoltDB, tm
 
 // Execute implements CommitHook, replicates head updates to the destDb field
 func (ah *AsyncPushOnWriteHook) Execute(ctx context.Context, ds datas.Dataset, db datas.Database) error {
-	rf, ok, err := ds.MaybeHeadRef()
-	if err != nil {
-		return ErrHashNotFound
-	}
+	addr, ok := ds.MaybeHeadAddr()
 	if !ok {
 		return ErrHashNotFound
 	}
 
 	select {
-	case ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}:
+	case ah.ch <- PushArg{ds: ds, db: db, hash: addr}:
 	case <-ctx.Done():
-		ah.ch <- PushArg{ds: ds, db: db, hash: rf.TargetHash()}
+		ah.ch <- PushArg{ds: ds, db: db, hash: addr}
 		return ctx.Err()
 	}
 	return nil

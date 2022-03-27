@@ -19,30 +19,31 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/types"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 // WriteSession encapsulates writes made within a SQL session.
 // It's responsible for creating and managing the lifecycle of TableWriter's.
 type WriteSession interface {
 	// GetTableWriter creates a TableWriter and adds it to the WriteSession.
-	GetTableWriter(ctx context.Context, table, db string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error)
+	GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error)
 
-	// UpdateRoot takes a callback to update this WriteSession's root. WriteSession flushes
-	// the pending writes in the session before calling the callback.
-	UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error
+	// UpdateWorkingSet takes a callback to update this WriteSession's WorkingSet. The update method cannot change the
+	// WorkingSetRef of the WriteSession. WriteSession flushes the pending writes in the session before calling the update.
+	UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error
 
-	// SetRoot sets the root for the WriteSession.
-	SetRoot(ctx context.Context, root *doltdb.RootValue) error
+	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
+	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
 	// Flush flushes the pending writes in the session.
-	Flush(ctx context.Context) (*doltdb.RootValue, error)
+	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
 
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
@@ -54,11 +55,11 @@ type WriteSession interface {
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
 // Serves as coordination for SessionedTableEditors.
 type nomsWriteSession struct {
-	opts editor.Options
-
-	root       *doltdb.RootValue
+	workingSet *doltdb.WorkingSet
 	tables     map[string]*sessionedTableEditor
-	writeMutex *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	tracker    globalstate.AutoIncrementTracker
+	mut        *sync.RWMutex // This mutex is specifically for changes that affect the TES or all STEs
+	opts       editor.Options
 }
 
 var _ WriteSession = &nomsWriteSession{}
@@ -66,34 +67,37 @@ var _ WriteSession = &nomsWriteSession{}
 // NewWriteSession creates and returns a WriteSession. Inserting a nil root is not an error, as there are
 // locations that do not have a root at the time of this call. However, a root must be set through SetRoot before any
 // table editors are returned.
-func NewWriteSession(nbf *types.NomsBinFormat, root *doltdb.RootValue, opts editor.Options) WriteSession {
+func NewWriteSession(nbf *types.NomsBinFormat, ws *doltdb.WorkingSet, tracker globalstate.AutoIncrementTracker, opts editor.Options) WriteSession {
 	if types.IsFormat_DOLT_1(nbf) {
 		return &prollyWriteSession{
-			root:   root,
-			tables: make(map[string]*prollyTableWriter),
-			mut:    &sync.RWMutex{},
+			workingSet: ws,
+			tables:     make(map[string]*prollyTableWriter),
+			tracker:    tracker,
+			mut:        &sync.RWMutex{},
 		}
 	}
 
 	return &nomsWriteSession{
-		opts:       opts,
-		root:       root,
+		workingSet: ws,
 		tables:     make(map[string]*sessionedTableEditor),
-		writeMutex: &sync.RWMutex{},
+		tracker:    tracker,
+		mut:        &sync.RWMutex{},
+		opts:       opts,
 	}
 }
 
-func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table string, database string, ait globalstate.AutoIncrementTracker, setter SessionRootSetter, batched bool) (TableWriter, error) {
-	s.writeMutex.Lock()
-	defer s.writeMutex.Unlock()
+func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string, setter SessionRootSetter, batched bool) (TableWriter, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 
-	t, ok, err := s.root.GetTable(ctx, table)
+	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
 		return nil, doltdb.ErrTableNotFound
 	}
+	vrw := t.ValueReadWriter()
 
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
@@ -106,49 +110,39 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table string, dat
 	}
 
 	conv := index.NewKVToSqlRowConverterForCols(t.Format(), sch)
-	ac := autoIncrementColFromSchema(sch)
 
 	return &nomsTableWriter{
 		tableName:   table,
-		dbName:      database,
+		dbName:      db,
 		sch:         sch,
-		autoIncCol:  ac,
-		vrw:         s.root.VRW(),
+		vrw:         vrw,
 		kvToSQLRow:  conv,
 		tableEditor: te,
 		sess:        s,
 		batched:     batched,
-		aiTracker:   ait,
+		autoInc:     s.tracker,
 		setter:      setter,
 	}, nil
 }
 
 // Flush returns an updated root with all of the changed tables.
-func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.RootValue, error) {
-	s.writeMutex.Lock()
-	defer s.writeMutex.Unlock()
-
+func (s *nomsWriteSession) Flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 	return s.flush(ctx)
 }
 
-// SetRoot uses the given root to set all open table editors to the state as represented in the root. If any
-// tables are removed in the root, but have open table editors, then the references to those are removed. If those
-// removed table's editors are used after this, then the behavior is undefined. This will lose any changes that have not
-// been flushed. If the purpose is to add a new table, foreign key, etc. (using Flush followed up with SetRoot), then
-// use UpdateRoot. Calling the two functions manually for the purposes of root modification may lead to race conditions.
-func (s *nomsWriteSession) SetRoot(ctx context.Context, root *doltdb.RootValue) error {
-	s.writeMutex.Lock()
-	defer s.writeMutex.Unlock()
-
-	return s.setRoot(ctx, root)
+// SetWorkingSet implements WriteSession.
+func (s *nomsWriteSession) SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	return s.setWorkingSet(ctx, ws)
 }
 
-// UpdateRoot takes in a function meant to update the root (whether that be updating a table's schema, adding a foreign
-// key, etc.) and passes in the flushed root. The function may then safely modify the root, and return the modified root
-// (assuming no errors). The nomsWriteSession will update itself in accordance with the newly returned root.
-func (s *nomsWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context.Context, current *doltdb.RootValue) (*doltdb.RootValue, error)) error {
-	s.writeMutex.Lock()
-	defer s.writeMutex.Unlock()
+// UpdateWorkingSet implements WriteSession.
+func (s *nomsWriteSession) UpdateWorkingSet(ctx context.Context, cb func(ctx context.Context, current *doltdb.WorkingSet) (*doltdb.WorkingSet, error)) error {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 
 	current, err := s.flush(ctx)
 	if err != nil {
@@ -159,8 +153,9 @@ func (s *nomsWriteSession) UpdateRoot(ctx context.Context, cb func(ctx context.C
 	if err != nil {
 		return err
 	}
+	s.workingSet = mutated
 
-	return s.setRoot(ctx, mutated)
+	return s.setWorkingSet(ctx, s.workingSet)
 }
 
 func (s *nomsWriteSession) GetOptions() editor.Options {
@@ -172,55 +167,57 @@ func (s *nomsWriteSession) SetOptions(opts editor.Options) {
 }
 
 // flush is the inner implementation for Flush that does not acquire any locks
-func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.RootValue, error) {
-	rootMutex := &sync.Mutex{}
-	wg := &sync.WaitGroup{}
-	wg.Add(len(s.tables))
+func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error) {
+	newRoot := s.workingSet.WorkingRoot()
+	mu := &sync.Mutex{}
+	rootUpdate := func(name string, table *doltdb.Table) (err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if newRoot != nil {
+			newRoot, err = newRoot.PutTable(ctx, name, table)
+		}
+		return err
+	}
 
-	newRoot := s.root
-	var tableErr error
-	var rootErr error
-	for tableName, ste := range s.tables {
-		if !ste.HasEdits() {
-			wg.Done()
+	eg, ctx := errgroup.WithContext(ctx)
+
+	for tblName, tblEditor := range s.tables {
+		if !tblEditor.HasEdits() {
 			continue
 		}
 
-		// we can run all of the Table calls concurrently as long as we guard updating the root
-		go func(tableName string, ste *sessionedTableEditor) {
-			defer wg.Done()
-			updatedTable, err := ste.tableEditor.Table(ctx)
-			// we lock immediately after doing the operation, since both error setting and root updating are guarded
-			rootMutex.Lock()
-			defer rootMutex.Unlock()
-			if err != nil {
-				if tableErr == nil {
-					tableErr = err
-				}
-				return
-			}
-			newRoot, err = newRoot.PutTable(ctx, tableName, updatedTable)
-			if err != nil && rootErr == nil {
-				rootErr = err
-			}
-		}(tableName, ste)
-	}
-	wg.Wait()
-	if tableErr != nil {
-		return nil, tableErr
-	}
-	if rootErr != nil {
-		return nil, rootErr
-	}
+		// copy variables
+		name, ed := tblName, tblEditor
 
-	s.root = newRoot
-	return newRoot, nil
+		eg.Go(func() error {
+			tbl, err := ed.tableEditor.Table(ctx)
+			if err != nil {
+				return err
+			}
+
+			if schema.HasAutoIncrement(ed.Schema()) {
+				v := s.tracker.Current(name)
+				tbl, err = tbl.SetAutoIncrementValue(ctx, v)
+				if err != nil {
+					return err
+				}
+			}
+
+			return rootUpdate(name, tbl)
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	s.workingSet = s.workingSet.WithWorkingRoot(newRoot)
+
+	return s.workingSet, nil
 }
 
 // getTableEditor is the inner implementation for GetTableEditor, allowing recursive calls
 func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string, tableSch schema.Schema) (*sessionedTableEditor, error) {
-	if s.root == nil {
-		return nil, fmt.Errorf("must call SetRoot before a table editor will be returned")
+	if s.workingSet == nil {
+		return nil, fmt.Errorf("must call SetWorkingSet before a table editor will be returned")
 	}
 
 	var t *doltdb.Table
@@ -245,7 +242,9 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 		s.tables[tableName] = localTableEditor
 	}
 
-	t, ok, err = s.root.GetTable(ctx, tableName)
+	root := s.workingSet.WorkingRoot()
+
+	t, ok, err = root.GetTable(ctx, tableName)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +269,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 		return localTableEditor, nil
 	}
 
-	fkCollection, err := s.root.GetForeignKeyCollection(ctx)
+	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -309,16 +308,24 @@ func (s *nomsWriteSession) loadForeignKeys(ctx context.Context, localTableEditor
 }
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
-func (s *nomsWriteSession) setRoot(ctx context.Context, root *doltdb.RootValue) error {
-	if root == nil {
-		return fmt.Errorf("cannot set a nomsWriteSession's root to nil once it has been created")
+func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
+	if ws == nil {
+		return fmt.Errorf("cannot set a nomsWriteSession's working set to nil once it has been created")
 	}
+	if s.workingSet != nil && s.workingSet.Ref() != ws.Ref() {
+		return fmt.Errorf("cannot change working set ref using SetWorkingSet")
+	}
+	s.workingSet = ws
 
+	root := ws.WorkingRoot()
 	fkCollection, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
 	}
-	s.root = root
+
+	if err = s.updateAutoIncrementSequences(ctx, root); err != nil {
+		return err
+	}
 
 	for tableName, localTableEditor := range s.tables {
 		t, ok, err := root.GetTable(ctx, tableName)
@@ -336,6 +343,7 @@ func (s *nomsWriteSession) setRoot(ctx context.Context, root *doltdb.RootValue) 
 		if err != nil {
 			return err
 		}
+
 		newTableEditor, err := editor.NewTableEditor(ctx, t, tSch, tableName, s.opts)
 		if err != nil {
 			return err
@@ -353,4 +361,18 @@ func (s *nomsWriteSession) setRoot(ctx context.Context, root *doltdb.RootValue) 
 		}
 	}
 	return nil
+}
+
+func (s *nomsWriteSession) updateAutoIncrementSequences(ctx context.Context, root *doltdb.RootValue) error {
+	return root.IterTables(ctx, func(name string, table *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		if !schema.HasAutoIncrement(sch) {
+			return
+		}
+		v, err := table.GetAutoIncrementValue(ctx)
+		if err != nil {
+			return true, err
+		}
+		s.tracker.Set(name, v)
+		return
+	})
 }

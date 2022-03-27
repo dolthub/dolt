@@ -126,25 +126,6 @@ var SuperSchemaTests = []SuperSchemaTest{
 		}),
 	},
 	{
-		Name:    "SuperSchema appends tag to disambiguate name collisions",
-		Schemas: []Schema{sch1, nameCollisionWithSch1},
-		ExpectedSuperSchema: SuperSchema{
-			allCols: mustColColl([]Column{
-				strCol("", 1, true),
-				strCol("", 2, false),
-				strCol("", 3, false),
-				strCol("", 22, false),
-			}),
-			tagNames: map[uint64][]string{1: {"a"}, 2: {"b"}, 3: {"c"}, 22: {"b"}},
-		},
-		ExpectedGeneratedSchema: mustSchema([]Column{
-			strCol("a", 1, true),
-			strCol("b_2", 2, false),
-			strCol("c", 3, false),
-			strCol("b_22", 22, false),
-		}),
-	},
-	{
 		Name:              "SuperSchema errors on tag collision",
 		Schemas:           []Schema{sch1, tagCollisionWithSch1},
 		ExpectedErrString: "tag collision for columns b and collision, different definitions (tag: 2)",

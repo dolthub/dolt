@@ -86,7 +86,8 @@ func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]doltdb.CommitHook
 
 func newDatabase(name string, dEnv *env.DoltEnv) sqle.Database {
 	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
+		Deaf:    dEnv.DbEaFactory(),
+		Tempdir: dEnv.TempTableFilesDir(),
 	}
 	return sqle.NewDatabase(name, dEnv.DbData(), opts)
 }
@@ -96,7 +97,8 @@ func newDatabase(name string, dEnv *env.DoltEnv) sqle.Database {
 // that will log warnings when attempting to perform replica commands.
 func newReplicaDatabase(ctx context.Context, name string, remoteName string, dEnv *env.DoltEnv) (sqle.ReadReplicaDatabase, error) {
 	opts := editor.Options{
-		Deaf: dEnv.DbEaFactory(),
+		Deaf:    dEnv.DbEaFactory(),
+		Tempdir: dEnv.TempTableFilesDir(),
 	}
 
 	db := sqle.NewDatabase(name, dEnv.DbData(), opts)

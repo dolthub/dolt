@@ -79,8 +79,7 @@ func runCommit(ctx context.Context, args []string) int {
 		util.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}
 
-	oldCommitRef, oldCommitExists, err := ds.MaybeHeadRef()
-	d.PanicIfError(err)
+	oldCommitAddr, oldCommitExists := ds.MaybeHeadAddr()
 
 	if oldCommitExists {
 		head, ok, err := ds.MaybeHeadValue()
@@ -108,10 +107,7 @@ func runCommit(ctx context.Context, args []string) int {
 	ds, err = db.Commit(ctx, ds, value, datas.CommitOptions{Meta: meta})
 	util.CheckErrorNoUsage(err)
 
-	headRef, ok, err := ds.MaybeHeadRef()
-
-	d.PanicIfError(err)
-
+	headAddr, ok := ds.MaybeHeadAddr()
 	if !ok {
 		panic("commit succeeded, but dataset has no head ref")
 	}
@@ -119,10 +115,10 @@ func runCommit(ctx context.Context, args []string) int {
 	if oldCommitExists {
 
 		if ok {
-			fmt.Fprintf(os.Stdout, "New head #%v (was #%v)\n", headRef.TargetHash().String(), oldCommitRef.TargetHash().String())
+			fmt.Fprintf(os.Stdout, "New head #%v (was #%v)\n", headAddr.String(), oldCommitAddr.String())
 		}
 	} else {
-		fmt.Fprintf(os.Stdout, "New head #%v\n", headRef.TargetHash().String())
+		fmt.Fprintf(os.Stdout, "New head #%v\n", headAddr.String())
 	}
 	return 0
 }

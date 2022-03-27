@@ -164,6 +164,10 @@ func DoltKeyValueAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWr
 // DoltKeyAndMappingFromSqlRow converts a sql.Row to key tuple and keeps a mapping from tag to value that
 // can be used to speed up index key generation for foreign key checks.
 func DoltKeyAndMappingFromSqlRow(ctx context.Context, vrw types.ValueReadWriter, r sql.Row, doltSchema schema.Schema) (types.Tuple, map[uint64]types.Value, error) {
+	if r == nil {
+		return types.EmptyTuple(vrw.Format()), nil, sql.ErrUnexpectedNilRow.New()
+	}
+
 	allCols := doltSchema.GetAllCols()
 	pkCols := doltSchema.GetPKCols()
 

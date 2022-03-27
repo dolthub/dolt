@@ -298,3 +298,14 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$before" ]] || false
 }
+
+@test "sql-create-database: create database with character set should parse correctly and not error" {
+    run dolt sql -q 'CREATE DATABASE metabase CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;'
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW DATABASES;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "dolt_repo_$$" ]] || false
+    [[ "$output" =~ "information_schema" ]] || false
+    [[ "$output" =~ "metabase" ]] || false
+}

@@ -99,23 +99,19 @@ func runMerge(ctx context.Context, args []string) int {
 	closer()
 	util.CheckErrorNoUsage(err)
 
-	leftHeadRef, ok, err := leftDS.MaybeHeadRef()
-	d.PanicIfError(err)
-
+	leftHeadAddr, ok := leftDS.MaybeHeadAddr()
 	if !ok {
 		fmt.Fprintln(os.Stderr, args[1]+" has no head value.")
 		return 1
 	}
 
-	rightHeadRef, ok, err := rightDS.MaybeHeadRef()
-	d.PanicIfError(err)
-
+	rightHeadAddr, ok := rightDS.MaybeHeadAddr()
 	if !ok {
 		fmt.Fprintln(os.Stderr, args[2]+" has no head value.")
 		return 1
 	}
 
-	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{Parents: []hash.Hash{leftHeadRef.TargetHash(), rightHeadRef.TargetHash()}})
+	_, err = db.Commit(ctx, outDS, merged, datas.CommitOptions{Parents: []hash.Hash{leftHeadAddr, rightHeadAddr}})
 	d.PanicIfError(err)
 
 	status.Printf("Done")
@@ -177,9 +173,9 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 		return nil, nil, nil, err
 	}
 
-	vfld, ok, err := ancestorCommit.MaybeGet(datas.ValueField)
+	vfld, err := datas.GetCommitValue(ctx, ancestorCommit)
 	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
+	d.PanicIfFalse(vfld != nil)
 	return leftHead, rightHead, vfld, nil
 
 }

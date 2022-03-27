@@ -224,8 +224,12 @@ func TestCreateTable(t *testing.T) {
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
-func TestPkOrdinals(t *testing.T) {
-	enginetest.TestPkOrdinals(t, newDoltHarness(t))
+func TestPkOrdinalsDDL(t *testing.T) {
+	enginetest.TestPkOrdinalsDDL(t, newDoltHarness(t))
+}
+
+func TestPkOrdinalsDML(t *testing.T) {
+	enginetest.TestPkOrdinalsDML(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
@@ -403,17 +407,6 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
-func TestScopedDoltHistorySystemTables(t *testing.T) {
-	harness := newDoltHarness(t)
-	for _, test := range ScopedDoltHistoryScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
-		})
-	}
-}
-
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
@@ -500,13 +493,15 @@ func TestSingleTransactionScript(t *testing.T) {
 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 }
 
-func TestSystemTableQueries(t *testing.T) {
+func TestBrokenSystemTableQueries(t *testing.T) {
+	t.Skip()
+
 	enginetest.RunQueryTests(t, newDoltHarness(t), BrokenSystemTableQueries)
 }
 
-func TestUnscopedDoltDiffSystemTable(t *testing.T) {
+func TestHistorySystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
-	for _, test := range UnscopedDiffTableTests {
+	for _, test := range HistorySystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {
@@ -515,9 +510,43 @@ func TestUnscopedDoltDiffSystemTable(t *testing.T) {
 	}
 }
 
-func TestDoltDiffSystemTable(t *testing.T) {
+func TestUnscopedDiffSystemTable(t *testing.T) {
 	harness := newDoltHarness(t)
-	for _, test := range DiffTableTests {
+	for _, test := range UnscopedDiffSystemTableScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
+func TestDiffTableFunction(t *testing.T) {
+	harness := newDoltHarness(t)
+
+	for _, test := range DiffTableFunctionScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
+func TestCommitDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range CommitDiffSystemTableScriptTests {
+		databases := harness.NewDatabases("mydb")
+		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		t.Run(test.Name, func(t *testing.T) {
+			enginetest.TestScriptWithEngine(t, engine, harness, test)
+		})
+	}
+}
+
+func TestDiffSystemTable(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, test := range DiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {

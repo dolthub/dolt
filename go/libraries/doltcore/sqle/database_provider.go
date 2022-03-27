@@ -29,7 +29,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -43,9 +42,9 @@ type DoltDatabaseProvider struct {
 	functions map[string]sql.Function
 	mu        *sync.RWMutex
 
-	dataRootDir string
-	fs          filesys.Filesys
-	cfg         config.ReadableConfig
+	defaultBranch string
+	dataRootDir   string
+	fs            filesys.Filesys
 
 	dbFactoryUrl string
 }
@@ -55,10 +54,8 @@ var _ sql.FunctionProvider = DoltDatabaseProvider{}
 var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
 var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
 
-const createDbWC = 1105 // 1105 represents an unknown error.
-
 // NewDoltDatabaseProvider returns a provider for the databases given
-func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
+func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
 	dbs := make(map[string]sql.Database, len(databases))
 	for _, db := range databases {
 		dbs[strings.ToLower(db.Name())] = db
@@ -70,12 +67,12 @@ func NewDoltDatabaseProvider(config config.ReadableConfig, fs filesys.Filesys, d
 	}
 
 	return DoltDatabaseProvider{
-		databases:    dbs,
-		functions:    funcs,
-		mu:           &sync.RWMutex{},
-		fs:           fs,
-		cfg:          config,
-		dbFactoryUrl: doltdb.LocalDirDoltDB,
+		databases:     dbs,
+		functions:     funcs,
+		mu:            &sync.RWMutex{},
+		fs:            fs,
+		defaultBranch: defaultBranch,
+		dbFactoryUrl:  doltdb.LocalDirDoltDB,
 	}
 }
 
@@ -167,12 +164,10 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 		return err
 	}
 
-	dsess := dsess.DSessFromSess(ctx.Session)
-	branch := env.GetDefaultInitBranch(p.cfg)
-
 	// TODO: fill in version appropriately
+	dsess := dsess.DSessFromSess(ctx.Session)
 	newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), branch)
+	err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
 	if err != nil {
 		return err
 	}
@@ -244,23 +239,36 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 		return nil, dsess.InitialDbState{}, false, nil
 	}
 
-	if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
-		// TODO move this out of analysis phase, should only happen at read time
-		err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
-		if err != nil {
-			return nil, dsess.InitialDbState{}, false, err
-		}
+	isBranch, err := isBranch(ctx, srcDb, revSpec)
+	if err != nil {
+		return nil, dsess.InitialDbState{}, false, err
 	}
 
-	if isBranch(ctx, srcDb.DbData().Ddb, revSpec) {
+	if isBranch {
+		// fetch the upstream head if this is a replicated db
+		if replicaDb, ok := srcDb.(ReadReplicaDatabase); ok {
+			// TODO move this out of analysis phase, should only happen at read time
+			err := switchAndFetchReplicaHead(ctx, revSpec, replicaDb)
+			if err != nil {
+				return nil, dsess.InitialDbState{}, false, err
+			}
+		}
+
 		db, init, err := dbRevisionForBranch(ctx, srcDb, revSpec)
 		if err != nil {
 			return nil, dsess.InitialDbState{}, false, err
 		}
+
 		return db, init, true, nil
 	}
 
 	if doltdb.IsValidCommitHash(revSpec) {
+		// TODO: this should be an interface, not a struct
+		replicaDb, ok := srcDb.(ReadReplicaDatabase)
+		if ok {
+			srcDb = replicaDb.Database
+		}
+
 		srcDb, ok = srcDb.(Database)
 		if !ok {
 			return nil, dsess.InitialDbState{}, false, nil
@@ -286,7 +294,8 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string)
 	return init, nil
 }
 
-func (p DoltDatabaseProvider) Function(ctx *sql.Context, name string) (sql.Function, error) {
+// Function implements the FunctionProvider interface
+func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
 	if !ok {
 		return nil, sql.ErrFunctionNotFound.New(name)
@@ -294,19 +303,26 @@ func (p DoltDatabaseProvider) Function(ctx *sql.Context, name string) (sql.Funct
 	return fn, nil
 }
 
+// TableFunction implements the TableFunctionProvider interface
+func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.TableFunction, error) {
+	// currently, only one table function is supported, if we extend this, we should clean this up
+	// and store table functions in a map, similar to regular functions.
+	if strings.ToLower(name) == "dolt_diff" {
+		dtf := &DiffTableFunction{}
+		return dtf, nil
+	}
+
+	return nil, sql.ErrTableFunctionNotFound.New(name)
+}
+
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote. If the target branch is not a replication
 // head, the new branch will not be continuously fetched.
-func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Database) error {
-	destDb, ok := db.(ReadReplicaDatabase)
-	if !ok {
-		return ErrFailedToCastToReplicaDb
-	}
-
+func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplicaDatabase) error {
 	branchRef := ref.NewBranchRef(branch)
 
 	var branchExists bool
-	branches, err := destDb.ddb.GetBranches(ctx)
+	branches, err := db.ddb.GetBranches(ctx)
 	if err != nil {
 		return err
 	}
@@ -319,14 +335,14 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 	}
 
 	// check whether branch is on remote before creating local tracking branch
-	cm, err := actions.FetchRemoteBranch(ctx, destDb.tmpDir, destDb.remote, destDb.srcDB, destDb.DbData().Ddb, branchRef, nil, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
+	cm, err := actions.FetchRemoteBranch(ctx, db.tmpDir, db.remote, db.srcDB, db.DbData().Ddb, branchRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
 	}
 
 	// create refs/heads/branch dataset
 	if !branchExists {
-		err = destDb.ddb.NewBranchAtCommit(ctx, branchRef, cm)
+		err = db.ddb.NewBranchAtCommit(ctx, branchRef, cm)
 		if err != nil {
 			return err
 		}
@@ -334,13 +350,13 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 
 	// update ReadReplicaRemote with new HEAD
 	// dolt_replicate_heads configuration remains unchanged
-	destDb, err = destDb.SetHeadRef(branchRef)
+	db, err = db.SetHeadRef(branchRef)
 	if err != nil {
 		return err
 	}
 
 	// create workingSets/heads/branch and update the working set
-	err = pullBranches(ctx, destDb, []string{branch})
+	err = pullBranches(ctx, db, []string{branch})
 	if err != nil {
 		return err
 	}
@@ -348,19 +364,34 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db sql.Databa
 	return nil
 }
 
-func isBranch(ctx context.Context, ddb *doltdb.DoltDB, revSpec string) bool {
-	branches, err := ddb.GetBranches(ctx)
-	if err != nil {
-		return false
+// isBranch returns whether a branch with the given name is in scope for the database given
+func isBranch(ctx context.Context, db SqlDatabase, branchName string) (bool, error) {
+	var ddbs []*doltdb.DoltDB
+
+	if rdb, ok := db.(ReadReplicaDatabase); ok {
+		remoteDB, err := rdb.remote.GetRemoteDB(ctx, rdb.ddb.Format())
+		if err != nil {
+			return false, err
+		}
+		ddbs = append(ddbs, rdb.ddb, remoteDB)
+	} else if ddb, ok := db.(Database); ok {
+		ddbs = append(ddbs, ddb.ddb)
+	} else {
+		return false, fmt.Errorf("unrecognized type of database %T", db)
 	}
 
-	for _, br := range branches {
-		if revSpec == br.GetPath() {
-			return true
+	for _, ddb := range ddbs {
+		branchExists, err := ddb.HasBranch(ctx, branchName)
+		if err != nil {
+			return false, err
+		}
+
+		if branchExists {
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
 
 func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string) (SqlDatabase, dsess.InitialDbState, error) {
@@ -454,14 +485,12 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
 		drw:      srcDb.DbData().Drw,
-		gs:       nil,
 		editOpts: srcDb.editOpts,
 	}}
 	init := dsess.InitialDbState{
-		Db:           db,
-		HeadCommit:   cm,
-		ReadOnly:     true,
-		DetachedHead: true,
+		Db:         db,
+		HeadCommit: cm,
+		ReadOnly:   true,
 		DbData: env.DbData{
 			Ddb: srcDb.DbData().Ddb,
 			Rsw: srcDb.DbData().Rsw,

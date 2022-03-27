@@ -113,7 +113,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		if remoteTrackRef != nil {
 
 			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, remoteTrackRef, runProgFuncs, stopProgFuncs)
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, runProgFuncs, stopProgFuncs)
 			if err != nil {
 				return noConflicts, err
 			}
@@ -138,7 +138,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 				return conflicts, err
 			}
 
-			err = sess.SetWorkingSet(ctx, dbName, ws, nil)
+			err = sess.SetWorkingSet(ctx, dbName, ws)
 			if err != nil {
 				return conflicts, err
 			}

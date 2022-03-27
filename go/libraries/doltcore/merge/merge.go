@@ -786,14 +786,7 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 	if err != nil {
 		return nil, err
 	}
-	auto := false
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			auto, stop = true, true
-		}
-		return
-	})
-	if !auto {
+	if !schema.HasAutoIncrement(sch) {
 		return resultTbl, nil
 	}
 
@@ -805,14 +798,10 @@ func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *dol
 	if err != nil {
 		return nil, err
 	}
-	less, err := autoVal.Less(tbl.Format(), mergeAutoVal)
-	if err != nil {
-		return nil, err
-	}
-	if less {
+	if autoVal < mergeAutoVal {
 		autoVal = mergeAutoVal
 	}
-	return resultTbl.SetAutoIncrementValue(nil, autoVal)
+	return resultTbl.SetAutoIncrementValue(ctx, autoVal)
 }
 
 func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {

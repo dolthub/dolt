@@ -1921,3 +1921,59 @@ SQL
     run dolt sql -q "SHOW CREATE TABLE public.states"
     [[ $output =~ "KEY \`foreign_key1\` (\`state\`)" ]] || false
 }
+
+@test "foreign-keys: creating a foreign key constraint on a table with an unsupported type works" {
+
+    # https://github.com/dolthub/dolt/issues/3023
+    dolt sql <<SQL
+CREATE TABLE IF NOT EXISTS restaurants (
+    id INT PRIMARY KEY,
+    coordinate POINT
+);
+CREATE TABLE IF NOT EXISTS hours (
+    restaurant_id INT PRIMARY KEY AUTO_INCREMENT,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id)
+);
+SQL
+
+    run dolt sql -q "show create table hours";
+    [ $status -eq 0 ]
+    [[ $output =~ "FOREIGN KEY (\`restaurant_id\`) REFERENCES \`restaurants\` (\`id\`)" ]] || false
+}
+
+@test "foreign-keys: create foreign key onto primary key" {
+    dolt sql <<SQL
+    drop table child;
+    drop table parent;
+    create table parent (a int, b int, c int, primary key (b,a));
+    create table child (a int primary key, b int);
+SQL
+
+    # ok, it's a prefix
+    dolt sql -q "alter table child add constraint fk1 foreign key (b) references parent (b)"
+
+    # not a prefix
+    run dolt sql -q "alter table child add constraint fk2 foreign key (a) references parent (a)"
+    [ $status -eq 1 ]
+    [[ $output =~ "missing index" ]] || false
+
+    # not a prefix
+    run dolt sql -q "alter table child add constraint fk3 foreign key (a,b) references parent (a,b)"
+    [ $status -eq 1 ]
+    [[ $output =~ "missing index" ]] || false
+
+    # ok
+    run dolt sql -q "alter table child add constraint fk4 foreign key (b,a) references parent (b,a)"
+    [ $status -eq 0 ]
+
+    # the prefix key should not be unique
+    run dolt sql -q "show create table parent"
+    [ $status -eq 0 ]
+    [[ $output =~ "KEY \`b\` (\`b\`)" ]] || false
+    [[ ! $output =~ "UNIQUE" ]] || false
+
+    run dolt sql -q "show create table child"
+    [ $status -eq 0 ]
+    [[ $output =~ "CONSTRAINT \`fk1\` FOREIGN KEY (\`b\`) REFERENCES \`parent\` (\`b\`)" ]] || false
+    [[ $output =~ "CONSTRAINT \`fk4\` FOREIGN KEY (\`b\`,\`a\`) REFERENCES \`parent\` (\`b\`,\`a\`)" ]] || false
+}
