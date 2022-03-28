@@ -53,8 +53,6 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 		var extra string
 		if col.AutoIncrement {
 			extra = "auto_increment"
-		} else if deflt.String() == "CURRENT_TIMESTAMP" {
-			extra = "DEFAULT_GENERATED"
 		}
 
 		cols[i] = &sql.Column{
