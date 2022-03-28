@@ -61,21 +61,6 @@ func (e emptyIter) current() (key, value val.Tuple) {
 	return
 }
 
-func NewMutableMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
-	if memory == nil {
-		memory = emptyIter{}
-	}
-	if prolly == nil {
-		prolly = emptyIter{}
-	}
-
-	return MutableMapRangeIter{
-		memory: memory,
-		prolly: prolly,
-		rng:    rng,
-	}
-}
-
 // MutableMapRangeIter iterates over a Range of Tuples.
 type MutableMapRangeIter struct {
 	memory rangeIter
@@ -194,5 +179,11 @@ func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
 		it.curr = nil
 	}
 
+	return
+}
+
+func (it *prollyRangeIter) firstLastKeys() (first, last val.Tuple) {
+	first = val.Tuple(it.curr.currentKey())
+	last = val.Tuple(it.stop.currentKey())
 	return
 }

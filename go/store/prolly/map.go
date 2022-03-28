@@ -168,6 +168,24 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterRange(ctx, rng)
 }
 
+// IterOrdinalRange returns a MapRangeIter for the ordinal range beginning at |start| and ending before |stop|.
+func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error) {
+	lo, err := newCursorAtOrdinal(ctx, m.ns, m.root, start)
+	if err != nil {
+		return nil, err
+	}
+
+	hi, err := newCursorAtOrdinal(ctx, m.ns, m.root, stop)
+	if err != nil {
+		return nil, err
+	}
+
+	return &prollyRangeIter{
+		curr: lo,
+		stop: hi,
+	}, nil
+}
+
 // IterRange returns a MutableMapRangeIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	if rng.isPointLookup(m.keyDesc) {
