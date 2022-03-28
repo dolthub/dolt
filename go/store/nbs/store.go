@@ -1188,9 +1188,8 @@ func (nbs *NomsBlockStore) StatsSummary() string {
 
 // tableFile is our implementation of TableFile.
 type tableFile struct {
-	info          TableSpecInfo
-	contentLength func(ctx context.Context) (uint64, error)
-	open          func(ctx context.Context) (io.ReadCloser, error)
+	info TableSpecInfo
+	open func(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // FileID gets the id of the file
@@ -1203,13 +1202,8 @@ func (tf tableFile) NumChunks() int {
 	return int(tf.info.GetChunkCount())
 }
 
-// ContentLength returns the content length of the table file
-func (tf tableFile) ContentLength(ctx context.Context) (uint64, error) {
-	return tf.contentLength(ctx)
-}
-
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file and the content length in bytes.
-func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+func (tf tableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 	return tf.open(ctx)
 }
 
@@ -1270,20 +1264,17 @@ func getTableFiles(css map[addr]chunkSource, contents manifestContents, numSpecs
 func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
-		contentLength: func(ctx context.Context) (uint64, error) {
+		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
 			s, err := cs.size()
 			if err != nil {
-				return 0, err
+				return nil, 0, err
 			}
-			return s, nil
-		},
-		open: func(ctx context.Context) (io.ReadCloser, error) {
 			r, err := cs.reader(ctx)
 			if err != nil {
-				return nil, err
+				return nil, 0, err
 			}
 
-			return io.NopCloser(r), nil
+			return io.NopCloser(r), s, nil
 		},
 	}
 }
@@ -1356,7 +1347,7 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentLength uint64, contentHash []byte, getRd func() (io.ReadCloser, error)) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
 
 	if !ok {
@@ -1378,7 +1369,7 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		}
 	}()
 
-	r, err := getRd()
+	r, _, err := getRd()
 	if err != nil {
 		return err
 	}

@@ -132,16 +132,11 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				contentLength, err := tblFile.ContentLength(ctx)
-				if err != nil {
-					return err
-				}
-
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), contentLength, nil, func() (io.ReadCloser, error) {
-					rd, err := tblFile.Open(ctx)
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+					rd, contentLength, err := tblFile.Open(ctx)
 					if err != nil {
-						return nil, err
+						return nil, 0, err
 					}
 					rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
 
@@ -153,7 +148,7 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 						})
 					})
 
-					return rdStats, nil
+					return rdStats, contentLength, nil
 				})
 				if err != nil {
 					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})

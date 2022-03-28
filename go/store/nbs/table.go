@@ -285,11 +285,9 @@ type TableFile interface {
 	// NumChunks returns the number of chunks in a table file
 	NumChunks() int
 
-	// ContentLength returns the content length for the table file.
-	ContentLength(ctx context.Context) (uint64, error)
-
-	// Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-	Open(ctx context.Context) (io.ReadCloser, error)
+	// Open returns an io.ReadCloser which can be used to read the bytes of a
+	// table file. It also returns the content length of the table file.
+	Open(ctx context.Context) (io.ReadCloser, uint64, error)
 }
 
 // Describes what is possible to do with TableFiles in a TableFileStore.
@@ -314,7 +312,7 @@ type TableFileStore interface {
 	Size(ctx context.Context) (uint64, error)
 
 	// WriteTableFile will read a table file from the provided reader and write it to the TableFileStore.
-	WriteTableFile(ctx context.Context, fileId string, numChunks int, contentLength uint64, contentHash []byte, getRd func() (io.ReadCloser, error)) error
+	WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error
 
 	// AddTableFilesToManifest adds table files to the manifest
 	AddTableFilesToManifest(ctx context.Context, fileIdToNumChunks map[string]int) error
