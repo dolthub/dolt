@@ -15,36 +15,45 @@
 package globalstate
 
 import (
+	"context"
 	"sync"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 )
 
-type GlobalState interface {
-	GetAutoIncrementTracker(wsref ref.WorkingSetRef) AutoIncrementTracker
+type StateProvider interface {
+	GetGlobalState() GlobalState
 }
 
 func NewGlobalStateStore() GlobalState {
-	return &globalStateImpl{
+	return GlobalState{
 		trackerMap: make(map[ref.WorkingSetRef]AutoIncrementTracker),
+		mu:         &sync.Mutex{},
 	}
 }
 
-type globalStateImpl struct {
+type GlobalState struct {
 	trackerMap map[ref.WorkingSetRef]AutoIncrementTracker
-	mu         sync.Mutex
+	mu         *sync.Mutex
 }
 
-var _ GlobalState = (*globalStateImpl)(nil)
-
-func (g *globalStateImpl) GetAutoIncrementTracker(wsref ref.WorkingSetRef) AutoIncrementTracker {
+func (g GlobalState) GetAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	_, ok := g.trackerMap[wsref]
-	if !ok {
-		g.trackerMap[wsref] = NewAutoIncrementTracker()
+	ait, ok := g.trackerMap[ws.Ref()]
+	if ok {
+		return ait, nil
 	}
 
-	return g.trackerMap[wsref]
+	var err error
+	ait, err = NewAutoIncrementTracker(ctx, ws)
+	if err != nil {
+		return AutoIncrementTracker{}, err
+	}
+	g.trackerMap[ws.Ref()] = ait
+
+	return ait, nil
 }
