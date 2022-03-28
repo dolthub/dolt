@@ -385,8 +385,12 @@ func (ttf *TestFailingTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
-	return io.NopCloser(bytes.NewReader([]byte{0x00})), 1, errors.New("this is a test error")
+func (ttf *TestFailingTableFile) ContentLength(ctx context.Context) (uint64, error) {
+	return 1, errors.New("this is a test error")
+}
+
+func (ttf *TestFailingTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader([]byte{0x00})), errors.New("this is a test error")
 }
 
 type TestTableFile struct {
@@ -403,8 +407,12 @@ func (ttf *TestTableFile) NumChunks() int {
 	return ttf.numChunks
 }
 
-func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
-	return io.NopCloser(bytes.NewReader(ttf.data)), uint64(len(ttf.data)), nil
+func (ttf *TestTableFile) ContentLength(ctx context.Context) (uint64, error) {
+	return uint64(len(ttf.data)), nil
+}
+
+func (ttf *TestTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
+	return io.NopCloser(bytes.NewReader(ttf.data)), nil
 }
 
 type TestTableFileWriter struct {
@@ -457,9 +465,14 @@ func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
 	return sz, nil
 }
 
-func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentLength uint64, contentHash []byte, getRd func() (io.ReadCloser, error)) error {
 	tblFile := &TestTableFileWriter{fileId, numChunks, bytes.NewBuffer(nil), ttfs}
-	_, err := io.Copy(tblFile, rd)
+	rd, err := getRd()
+	if err != nil {
+		return err
+	}
+	defer rd.Close()
+	_, err = io.Copy(tblFile, rd)
 
 	if err != nil {
 		return err
