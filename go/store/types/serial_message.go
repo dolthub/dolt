@@ -166,7 +166,6 @@ func (sm SerialMessage) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 func SerialCommitParentRefs(nbf *NomsBinFormat, sm SerialMessage) ([]Ref, error) {
 	msg := serial.GetRootAsCommit([]byte(sm), 0)
 	ret := make([]Ref, msg.ParentHeightsLength())
-	hashes := make([]string, msg.ParentHeightsLength())
 	addrs := msg.ParentAddrsBytes()
 	for i := 0; i < msg.ParentHeightsLength(); i++ {
 		addr := hash.New(addrs[:20])
@@ -176,7 +175,6 @@ func SerialCommitParentRefs(nbf *NomsBinFormat, sm SerialMessage) ([]Ref, error)
 			return nil, err
 		}
 		ret[i] = r
-		hashes[i] = r.TargetHash().String()
 	}
 	return ret, nil
 }
