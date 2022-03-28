@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -206,25 +207,27 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 		return err
 	}
 
-	f, err := os.Open(tmpTblFile.path)
-	if err != nil {
-		return err
-	}
-
 	fileSize := fi.Size()
-	fWithStats := iohelp.NewReaderWithStats(f, fileSize)
-	fWithStats.Start(func(stats iohelp.ReadStats) {
-		p.addEvent(ctx, NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
-			CurrentFileSize: fileSize,
-			Stats:           stats,
-		}))
-	})
 	defer func() {
-		_ = fWithStats.Stop()
 		_ = file.Remove(tmpTblFile.path)
 	}()
 
-	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, fWithStats, tmpTblFile.contentLen, tmpTblFile.contentHash)
+	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
+		f, err := os.Open(tmpTblFile.path)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		fWithStats := iohelp.NewReaderWithStats(f, fileSize)
+		fWithStats.Start(func(stats iohelp.ReadStats) {
+			p.addEvent(ctx, NewTFPullerEvent(UploadTableFileUpdateEvent, &TableFileEventDetails{
+				CurrentFileSize: fileSize,
+				Stats:           stats,
+			}))
+		})
+
+		return fWithStats, uint64(fileSize), nil
+	})
 }
 
 func (p *Puller) processCompletedTables(ctx context.Context, completedTables <-chan FilledWriters) error {

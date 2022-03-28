@@ -31,6 +31,14 @@ const (
 	To   = "to"
 )
 
+func ToColNamer(name string) string {
+	return To + "_" + name
+}
+
+func FromColNamer(name string) string {
+	return From + "_" + name
+}
+
 type RowDiffSource struct {
 	ad         RowDiffer
 	joiner     *rowconv.Joiner
