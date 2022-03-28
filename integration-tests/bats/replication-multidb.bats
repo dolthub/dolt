@@ -134,5 +134,5 @@ teardown() {
     dolt config --global --add sqlserver.global.dolt_replicate_heads main
     cd dbs1
     start_multi_db_server repo1
-    server_query repo1 1 "show tables" "Table\nt1"
+    server_query repo1 1 "show tables" "Tables_in_repo1\nt1"
 }
