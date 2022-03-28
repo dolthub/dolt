@@ -485,7 +485,6 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsw:      srcDb.DbData().Rsw,
 		rsr:      srcDb.DbData().Rsr,
 		drw:      srcDb.DbData().Drw,
-		gs:       nil,
 		editOpts: srcDb.editOpts,
 	}}
 	init := dsess.InitialDbState{
