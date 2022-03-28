@@ -38,19 +38,20 @@ import (
 
 const tempTablePrefix = "nbs_table_"
 
-func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
+func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache, q MemoryQuotaProvider) tablePersister {
 	d.PanicIfTrue(fc == nil)
-	return &fsTablePersister{dir, fc, indexCache}
+	return &fsTablePersister{dir, fc, indexCache, q}
 }
 
 type fsTablePersister struct {
 	dir        string
 	fc         *fdCache
 	indexCache *indexCache
+	q          MemoryQuotaProvider
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
+	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.q, ftp.fc)
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
@@ -90,7 +91,7 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 			return "", ferr
 		}
 
-		index, ferr := parseTableIndexByCopy(data)
+		index, ferr := parseTableIndexByCopy(data, ftp.q)
 
 		if ferr != nil {
 			return "", ferr
@@ -185,7 +186,7 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 		}
 
 		var index onHeapTableIndex
-		index, ferr = parseTableIndex(plan.mergedIndex)
+		index, ferr = parseTableIndex(plan.mergedIndex, ftp.q)
 
 		if ferr != nil {
 			return "", ferr

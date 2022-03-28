@@ -34,6 +34,8 @@ import (
 	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
+var errCacheMiss = errors.New("index cache miss")
+
 // tablePersister allows interaction with persistent storage. It provides
 // primitives for pushing the contents of a memTable to persistent storage,
 // opening persistent tables for reading, and conjoining a number of existing
@@ -101,11 +103,18 @@ func (sic *indexCache) unlockEntry(name addr) error {
 	return nil
 }
 
-func (sic *indexCache) get(name addr) (onHeapTableIndex, bool) {
+// get returns errCacheMiss if the index with |name| was not found in the cache. It always retuns a Clone of the index.
+func (sic *indexCache) get(name addr) (onHeapTableIndex, error) {
 	if idx, found := sic.cache.Get(name); found {
-		return idx.(onHeapTableIndex), true
+		index := idx.(onHeapTableIndex)
+		index2, err := index.Clone()
+		if err != nil {
+			return onHeapTableIndex{}, err
+		}
+		return index2.(onHeapTableIndex), nil
 	}
-	return onHeapTableIndex{}, false
+
+	return onHeapTableIndex{}, errCacheMiss
 }
 
 func (sic *indexCache) put(name addr, idx onHeapTableIndex) {

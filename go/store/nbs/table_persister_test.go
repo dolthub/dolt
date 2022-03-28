@@ -45,7 +45,7 @@ func TestPlanCompaction(t *testing.T) {
 		}
 		data, name, err := buildTable(content)
 		require.NoError(t, err)
-		ti, err := parseTableIndexByCopy(data)
+		ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
 		require.NoError(t, err)
 		tr, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestPlanCompaction(t *testing.T) {
 		totalChunks += mustUint32(src.count())
 	}
 
-	idx, err := parseTableIndex(plan.mergedIndex)
+	idx, err := parseTableIndex(plan.mergedIndex, &noopQuotaProvider{})
 	require.NoError(t, err)
 
 	assert.Equal(totalChunks, idx.chunkCount)
@@ -74,4 +74,23 @@ func TestPlanCompaction(t *testing.T) {
 	for _, content := range tableContents {
 		assertChunksInReader(content, tr, assert)
 	}
+}
+
+func TestIndexCacheClonesIndicesOnGet(t *testing.T) {
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
+	}
+	indexBytes, h, _ := buildTable(chunks)
+	index, err := parseTableIndexByCopy(indexBytes, &noopQuotaProvider{})
+	require.NoError(t, err)
+	require.Equal(t, int32(1), *index.refCnt)
+
+	indexCache := newIndexCache(1024)
+	indexCache.put(h, index)
+
+	index2, err := indexCache.get(h)
+	require.NoError(t, err)
+	require.Equal(t, int32(2), *index2.refCnt)
 }

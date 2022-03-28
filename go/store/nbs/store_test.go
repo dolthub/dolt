@@ -38,7 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
+func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string, q MemoryQuotaProvider) {
 	ctx := context.Background()
 	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
 	err := os.MkdirAll(nomsDir, os.ModePerm)
@@ -48,9 +48,10 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
-	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, NewUnlimitedMemQuotaProvider())
+	q = NewUnlimitedMemQuotaProvider()
+	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, q)
 	require.NoError(t, err)
-	return st, nomsDir
+	return st, nomsDir, q
 }
 
 type fileToData map[string][]byte
@@ -83,7 +84,13 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 	numTableFiles := 128
 	assert.Greater(t, defaultMaxTables, numTableFiles)
-	st, _ := makeTestLocalStore(t, defaultMaxTables)
+	st, _, q := makeTestLocalStore(t, defaultMaxTables)
+	defer func() {
+		require.Equal(t, uint64(0), q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, st.Close())
+	}()
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	_, sources, _, err := st.Sources(ctx)
@@ -144,7 +151,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	// over populate table files
 	numTableFiles := 64
 	maxTableFiles := 16
-	st, nomsDir := makeTestLocalStore(t, maxTableFiles)
+	st, nomsDir, _ := makeTestLocalStore(t, maxTableFiles)
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	// add a chunk and flush to trigger a conjoin
@@ -226,7 +233,7 @@ func makeChunkSet(N, size int) (s map[hash.Hash]chunks.Chunk) {
 
 func TestNBSCopyGC(t *testing.T) {
 	ctx := context.Background()
-	st, _ := makeTestLocalStore(t, 8)
+	st, _, _ := makeTestLocalStore(t, 8)
 
 	keepers := makeChunkSet(64, 64)
 	tossers := makeChunkSet(64, 64)

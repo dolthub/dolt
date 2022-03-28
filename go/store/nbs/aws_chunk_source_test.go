@@ -53,10 +53,8 @@ func TestAWSChunkSource(t *testing.T) {
 			h,
 			uint32(len(chunks)),
 			ic,
+			NewUnlimitedMemQuotaProvider(),
 			&Stats{},
-			func(bs []byte) (tableIndex, error) {
-				return parseTableIndex(bs)
-			},
 		)
 
 		require.NoError(t, err)
@@ -74,7 +72,7 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index, err := parseTableIndexByCopy(tableData)
+			index, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
 			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)
@@ -98,7 +96,7 @@ func TestAWSChunkSource(t *testing.T) {
 
 		t.Run("WithIndexCache", func(t *testing.T) {
 			assert := assert.New(t)
-			index, err := parseTableIndexByCopy(tableData)
+			index, err := parseTableIndexByCopy(tableData, &noopQuotaProvider{})
 			require.NoError(t, err)
 			cache := newIndexCache(1024)
 			cache.put(h, index)

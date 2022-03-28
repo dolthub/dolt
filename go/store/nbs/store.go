@@ -455,13 +455,7 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
-		func(bs []byte) (tableIndex, error) {
-			ohi, err := parseTableIndex(bs)
-			if err != nil {
-				return nil, err
-			}
-			return newMmapTableIndex(ohi, nil)
-		},
+		q,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -478,9 +472,7 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
 		globalIndexCache,
 		ns,
-		func(bs []byte) (tableIndex, error) {
-			return parseTableIndex(bs)
-		},
+		q,
 	}
 	mm := makeManifestManager(newDynamoManifest(table, ns, ddb))
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
@@ -500,7 +492,7 @@ func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, m
 
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
-	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache}
+	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache, q}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
@@ -523,7 +515,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	}
 
 	mm := makeManifestManager(m)
-	p := newFSTablePersister(dir, globalFDCache, globalIndexCache)
+	p := newFSTablePersister(dir, globalFDCache, globalIndexCache, q)
 	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
 	if err != nil {

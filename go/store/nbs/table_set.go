@@ -336,12 +336,7 @@ func (ts tableSet) Close() error {
 		setErr(err)
 	}
 	for _, t := range ts.upstream {
-		memSize, err := getCSMemSize(t)
-		err = ts.q.ReleaseQuota(memSize)
-		if err != nil {
-			return err
-		}
-		err = t.Close()
+		err := t.Close()
 		setErr(err)
 	}
 	return firstErr
@@ -416,12 +411,6 @@ func (ts tableSet) Flatten(ctx context.Context) (tableSet, error) {
 			return tableSet{}, err
 		}
 
-		// TODO: acquire quota when we persist a memory table instead
-		err = ts.q.AcquireQuota(ctx, memSize(cnt))
-		if err != nil {
-			return tableSet{}, err
-		}
-
 		if cnt > 0 {
 			flattened.upstream = append(flattened.upstream, src)
 		}
@@ -491,16 +480,6 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 					if spec.name == h {
-						memSize, err := getCSMemSize(existing)
-						if err != nil {
-							ae.SetIfError(err)
-							return
-						}
-						err = ts.q.AcquireQuota(ctx, memSize)
-						if err != nil {
-							ae.SetIfError(err)
-							return
-						}
 						c, err := existing.Clone()
 						if err != nil {
 							ae.SetIfError(err)

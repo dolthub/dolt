@@ -55,7 +55,7 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (cs chunkSource, err error) {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	var index onHeapTableIndex
@@ -69,7 +69,12 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 				err = unlockErr
 			}
 		}()
-		index, found = indexCache.get(h)
+		index, err = indexCache.get(h)
+		if err == nil {
+			found = true
+		} else if err != errCacheMiss {
+			return nil, err
+		}
 	}
 
 	if !found {
@@ -113,6 +118,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 			}
 
 			buff := make([]byte, indexSize(chunkCount)+footerSize)
+			// TODO: Don't use mmap here.
 			func() {
 				var mm mmap.MMap
 				mm, err = mmap.MapRegion(f, length, mmap.RDONLY, 0, aligned)
@@ -133,7 +139,7 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *index
 				return onHeapTableIndex{}, err
 			}
 
-			ti, err = parseTableIndex(buff)
+			ti, err = parseTableIndex(buff, q)
 
 			if err != nil {
 				return

@@ -442,11 +442,12 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 	t.Run("NoConjoin", func(t *testing.T) {
 		mm := makeManifestManager(&fakeManifest{})
-		p := newFakeTablePersister()
 		q := NewUnlimitedMemQuotaProvider()
 		defer func() {
 			require.EqualValues(t, 0, q.Usage())
 		}()
+		p := newFakeTablePersister(q)
+
 		c := &fakeConjoiner{}
 
 		smallTableStore, err := newNomsBlockStore(context.Background(), constants.FormatDefaultString, mm, p, q, c, testMemTableSize)
@@ -481,11 +482,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 	t.Run("ConjoinSuccess", func(t *testing.T) {
 		fm := &fakeManifest{}
-		p := newFakeTablePersister()
 		q := NewUnlimitedMemQuotaProvider()
-		defer func() {
-			require.EqualValues(t, 0, q.Usage())
-		}()
+		p := newFakeTablePersister(q)
+
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)
@@ -517,11 +516,9 @@ func TestBlockStoreConjoinOnCommit(t *testing.T) {
 
 	t.Run("ConjoinRetry", func(t *testing.T) {
 		fm := &fakeManifest{}
-		p := newFakeTablePersister()
 		q := NewUnlimitedMemQuotaProvider()
-		defer func() {
-			require.EqualValues(t, 0, q.Usage())
-		}()
+		p := newFakeTablePersister(q)
+
 		srcs := makeTestSrcs(t, []uint32{1, 1, 3, 7, 13}, p)
 		upstream, err := toSpecs(srcs)
 		require.NoError(t, err)

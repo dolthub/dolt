@@ -32,7 +32,7 @@ import (
 var testChunks = [][]byte{[]byte("hello2"), []byte("goodbye2"), []byte("badbye2")}
 
 func TestTableSetPrependEmpty(t *testing.T) {
-	ts := newFakeTableSet().Prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
+	ts := newFakeTableSet(&noopQuotaProvider{}).Prepend(context.Background(), newMemTable(testMemTableSize), &Stats{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(t, specs)
@@ -40,7 +40,7 @@ func TestTableSetPrependEmpty(t *testing.T) {
 
 func TestTableSetPrepend(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet()
+	ts := newFakeTableSet(&noopQuotaProvider{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -65,7 +65,7 @@ func TestTableSetPrepend(t *testing.T) {
 
 func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet()
+	ts := newFakeTableSet(&noopQuotaProvider{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -88,7 +88,7 @@ func TestTableSetToSpecsExcludesEmptyTable(t *testing.T) {
 
 func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet()
+	ts := newFakeTableSet(&noopQuotaProvider{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -111,7 +111,7 @@ func TestTableSetFlattenExcludesEmptyTable(t *testing.T) {
 
 func TestTableSetExtract(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet()
+	ts := newFakeTableSet(&noopQuotaProvider{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)
@@ -146,7 +146,11 @@ func TestTableSetExtract(t *testing.T) {
 
 func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
-	persister := newFakeTablePersister()
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	persister := newFakeTablePersister(q)
 
 	insert := func(ts tableSet, chunks ...[]byte) tableSet {
 		for _, c := range chunks {
@@ -156,10 +160,6 @@ func TestTableSetRebase(t *testing.T) {
 		}
 		return ts
 	}
-	q := NewUnlimitedMemQuotaProvider()
-	defer func() {
-		require.EqualValues(t, 0, q.Usage())
-	}()
 
 	fullTS := newTableSet(persister, q)
 	defer func() {
@@ -193,7 +193,7 @@ func TestTableSetRebase(t *testing.T) {
 
 func TestTableSetPhysicalLen(t *testing.T) {
 	assert := assert.New(t)
-	ts := newFakeTableSet()
+	ts := newFakeTableSet(&noopQuotaProvider{})
 	specs, err := ts.ToSpecs()
 	require.NoError(t, err)
 	assert.Empty(specs)

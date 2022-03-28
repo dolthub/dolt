@@ -34,6 +34,9 @@ func NewUnlimitedMemQuotaProvider() *UnlimitedQuotaProvider {
 	return &UnlimitedQuotaProvider{}
 }
 
+type noopQuotaProvider struct {
+}
+
 func (q *UnlimitedQuotaProvider) AcquireQuota(ctx context.Context, memory uint64) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -55,4 +58,16 @@ func (q *UnlimitedQuotaProvider) Usage() uint64 {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.used
+}
+
+func (q *noopQuotaProvider) AcquireQuota(ctx context.Context, memory uint64) error {
+	return nil
+}
+
+func (q *noopQuotaProvider) ReleaseQuota(memory uint64) error {
+	return nil
+}
+
+func (q *noopQuotaProvider) Usage() uint64 {
+	return 0
 }

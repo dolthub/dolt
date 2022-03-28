@@ -176,11 +176,11 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
-	p := newFakeTablePersister()
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
 	}()
+	p := newFakeTablePersister(q)
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
@@ -227,11 +227,12 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
-	p := newFakeTablePersister()
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
 	}()
+	p := newFakeTablePersister(q)
+
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
@@ -278,11 +279,11 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	fm := &fakeManifest{name: "foo"}
 	upm := &updatePreemptManifest{manifest: fm}
 	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
-	p := newFakeTablePersister()
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
 	}()
+	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
@@ -325,11 +326,12 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	upm := &updatePreemptManifest{manifest: fm}
 	mc := newManifestCache(defaultManifestCacheSize)
 	l := newManifestLocks()
-	p := newFakeTablePersister()
 	q := NewUnlimitedMemQuotaProvider()
 	defer func() {
 		require.EqualValues(t, 0, q.Usage())
 	}()
+	p := newFakeTablePersister(q)
+
 	c := inlineConjoiner{defaultMaxTables}
 
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, manifestManager{upm, mc, l}, p, q, c, defaultMemTableSize)
@@ -391,8 +393,8 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, q MemoryQuotaProvider, store *NomsBlockStore) {
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
-	p = newFakeTablePersister()
 	q = NewUnlimitedMemQuotaProvider()
+	p = newFakeTablePersister(q)
 	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
 	require.NoError(t, err)
 	return
@@ -489,15 +491,16 @@ func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, ap
 	}
 }
 
-func newFakeTableSet() tableSet {
-	return tableSet{p: newFakeTablePersister(), q: NewUnlimitedMemQuotaProvider(), rl: make(chan struct{}, 1)}
+func newFakeTableSet(q MemoryQuotaProvider) tableSet {
+	return tableSet{p: newFakeTablePersister(q), q: NewUnlimitedMemQuotaProvider(), rl: make(chan struct{}, 1)}
 }
 
-func newFakeTablePersister() tablePersister {
-	return fakeTablePersister{map[addr]tableReader{}, &sync.RWMutex{}}
+func newFakeTablePersister(q MemoryQuotaProvider) tablePersister {
+	return fakeTablePersister{q, map[addr]tableReader{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
+	q       MemoryQuotaProvider
 	sources map[addr]tableReader
 	mu      *sync.RWMutex
 }
@@ -515,7 +518,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(data)
+			ti, err := parseTableIndexByCopy(data, ftp.q)
 
 			if err != nil {
 				return nil, err
@@ -542,7 +545,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(data)
+		ti, err := parseTableIndexByCopy(data, ftp.q)
 
 		if err != nil {
 			return nil, err
