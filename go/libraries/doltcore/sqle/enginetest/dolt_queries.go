@@ -108,21 +108,21 @@ var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
 		},
 		Assertions: []enginetest.UserPrivilegeTestAssertion{
 			{
-				// Without access to the database, dolt_diff should fail
+				// Without access to the database, dolt_diff should fail with a database access error
 				User:        "tester",
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
 				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 			{
-				// Grant access to the underlying user table
+				// Grant single-table access to the underlying user table
 				User:     "root",
 				Host:     "localhost",
 				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
 				Expected: []sql.Row{{sql.NewOkResult(0)}},
 			},
 			{
-				// After granting access to `test`, dolt_diff should work
+				// After granting access to mydb.test, dolt_diff should work
 				User:     "tester",
 				Host:     "localhost",
 				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
@@ -134,6 +134,76 @@ var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
 				Host:        "localhost",
 				Query:       "SELECT * FROM dolt_diff('test2', 'main~', 'main');",
 				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// Revoke select on mydb.test
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE SELECT ON mydb.test from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Grant multi-table access for all of mydb
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* to tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After granting access to the entire db, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Revoke multi-table access
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE SELECT ON mydb.* from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Grant global access to *.*
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON *.* to tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After granting global access to *.*, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Revoke global access
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE ALL ON *.* from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking global access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
 			},
 		},
 	},
