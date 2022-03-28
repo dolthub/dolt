@@ -54,6 +54,26 @@ teardown() {
     [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
+@test "sql-server-config: dolt_replicate_heads is global variable" {
+    cd repo1
+    start_sql_server repo1
+
+    insert_query repo1 1 "SET @@GLOBAL.dolt_replicate_heads = main"
+    server_query repo1 1 "select @@GLOBAL.dolt_replicate_heads" "@@GLOBAL.dolt_replicate_heads\nmain"
+    server_query repo1 1 "select @@SESSION.dolt_replicate_heads" "@@SESSION.dolt_replicate_heads\nmain"
+    server_query repo1 1 "select @@dolt_replicate_heads" "@@SESSION.dolt_replicate_heads\nmain"
+}
+
+@test "sql-server-config: dolt_replicate_all_heads is global variable" {
+    cd repo1
+    start_sql_server repo1
+
+    insert_query repo1 1 "SET @@GLOBAL.dolt_replicate_all_heads = 1"
+    server_query repo1 1 "select @@GLOBAL.dolt_replicate_all_heads" "@@GLOBAL.dolt_replicate_all_heads\n1"
+    server_query repo1 1 "select @@SESSION.dolt_replicate_all_heads" "@@SESSION.dolt_replicate_all_heads\n1"
+    server_query repo1 1 "select @@dolt_replicate_all_heads" "@@SESSION.dolt_replicate_all_heads\n1"
+}
+
 @test "sql-server-config: dolt_transaction_commit is global variable" {
     cd repo1
     start_sql_server repo1
