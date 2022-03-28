@@ -78,7 +78,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 
 func indexCoversCols(idx DoltIndex, cols []string) bool {
 	if cols == nil {
-		return false
+		cols = idx.Schema().GetAllCols().GetColumnNames()
 	}
 
 	var idxCols *schema.ColCollection
