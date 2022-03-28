@@ -31,7 +31,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff"
-	"github.com/dustin/go-humanize"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/sync/errgroup"
 
@@ -882,7 +881,7 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 
 	hashToCount := make(map[hash.Hash]int)
 	hashToData := make(map[hash.Hash][]byte)
-	hashToDetails := make(map[hash.Hash]*remotesapi.TableFileDetails)
+	hashToContentHash := make(map[hash.Hash][]byte)
 
 	// structuring so this can be done as multiple files in the future.
 	{
@@ -897,39 +896,15 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 		hashToCount[h] = len(chnks)
 
 		md5Bytes := md5.Sum(data)
-		hashToDetails[h] = &remotesapi.TableFileDetails{
-			Id:            h[:],
-			ContentLength: uint64(len(data)),
-			ContentHash:   md5Bytes[:],
-		}
+		hashToContentHash[h] = md5Bytes[:]
 	}
 
-	tfds := make([]*remotesapi.TableFileDetails, 0, len(hashToDetails))
-	for _, v := range hashToDetails {
-		tfds = append(tfds, v)
-	}
-
-	req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileDetails: tfds}
-	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
-
-	if err != nil {
-		return map[hash.Hash]int{}, NewRpcError(err, "GetUploadLocations", dcs.host, req)
-	}
-
-	for _, loc := range resp.Locs {
-		var err error
-		h := hash.New(loc.TableFileHash)
-		data := hashToData[h]
-		details := hashToDetails[h]
-		switch typedLoc := loc.Location.(type) {
-		case *remotesapi.UploadLoc_HttpPost:
-			err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, int64(len(data)), details.ContentHash, func() (io.ReadCloser, error) {
-				return io.NopCloser(bytes.NewBuffer(data)), nil
-			})
-		default:
-			break
-		}
-
+	for h, contentHash := range hashToContentHash {
+		// Can parallelize this in the future if needed
+		err := dcs.uploadTableFileWithRetries(ctx, h, contentHash, func() (io.ReadCloser, uint64, error) {
+			data := hashToData[h]
+			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
+		})
 		if err != nil {
 			return map[hash.Hash]int{}, err
 		}
@@ -938,55 +913,97 @@ func (dcs *DoltChunkStore) uploadChunks(ctx context.Context) (map[hash.Hash]int,
 	return hashToCount, nil
 }
 
+func (dcs *DoltChunkStore) uploadTableFileWithRetries(ctx context.Context, tableFileId hash.Hash, tableFileContentHash []byte, getContent func() (io.ReadCloser, uint64, error)) error {
+	op := func() error {
+		body, contentLength, err := getContent()
+		if err != nil {
+			return err
+		}
+
+		tbfd := &remotesapi.TableFileDetails{
+			Id:            tableFileId[:],
+			ContentLength: contentLength,
+			ContentHash:   tableFileContentHash,
+		}
+
+		dcs.logf("getting upload location for file %s", tableFileId.String())
+		req := &remotesapi.GetUploadLocsRequest{RepoId: dcs.getRepoId(), TableFileDetails: []*remotesapi.TableFileDetails{tbfd}}
+		resp, err := dcs.csClient.GetUploadLocations(ctx, req)
+		if err != nil {
+			if err != nil {
+				return NewRpcError(err, "GetUploadLocations", dcs.host, req)
+			}
+		}
+
+		if len(resp.Locs) != 1 {
+			return NewRpcError(errors.New("unexpected upload location count"), "GetUploadLocations", dcs.host, req)
+		}
+		loc := resp.Locs[0]
+
+		switch typedLoc := loc.Location.(type) {
+		case *remotesapi.UploadLoc_HttpPost:
+
+			// strip off the query parameters as they clutter the logs. We only
+			// really care about being able to verify the table files are being
+			// uploaded to the correct places on S3.
+			urlStr := typedLoc.HttpPost.Url
+			qmIdx := strings.IndexRune(urlStr, '?')
+			if qmIdx != -1 {
+				urlStr = urlStr[:qmIdx]
+			}
+
+			dcs.logf("uploading file %s to %s", tableFileId.String(), urlStr)
+			err = dcs.httpPostUpload(ctx, typedLoc.HttpPost, tableFileContentHash, int64(contentLength), body)
+			if err != nil {
+				dcs.logf("failed to upload file %s to %s, err: %v", tableFileId.String(), urlStr, err)
+				return err
+			}
+			dcs.logf("successfully uploaded file %s to %s", tableFileId.String(), urlStr)
+		default:
+			break
+		}
+
+		return nil
+	}
+
+	return backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
+}
+
 type Sizer interface {
 	Size() int64
 }
 
-func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, hashBytes []byte, post *remotesapi.HttpPostTableFile, contentLength int64, contentHash []byte, getBody func() (io.ReadCloser, error)) error {
-	return HttpPostUpload(ctx, dcs.httpFetcher, post, contentLength, contentHash, getBody)
+func (dcs *DoltChunkStore) httpPostUpload(ctx context.Context, post *remotesapi.HttpPostTableFile, contentHash []byte, contentLength int64, body io.ReadCloser) error {
+	return HttpPostUpload(ctx, dcs.httpFetcher, post, contentHash, contentLength, body)
 }
 
-func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesapi.HttpPostTableFile, contentLength int64, contentHash []byte, getBody func() (io.ReadCloser, error)) error {
+func HttpPostUpload(ctx context.Context, httpFetcher HTTPFetcher, post *remotesapi.HttpPostTableFile, contentHash []byte, contentLength int64, body io.ReadCloser) error {
 	fetcher := globalHttpFetcher
 	if httpFetcher != nil {
 		fetcher = httpFetcher
 	}
 
-	op := func() error {
-		r, err := getBody()
-		if err != nil {
-			return err
-		}
-		req, err := http.NewRequest(http.MethodPut, post.Url, r)
-		if err != nil {
-			return err
-		}
-
-		req.ContentLength = contentLength
-
-		if len(contentHash) > 0 {
-			md5s := base64.StdEncoding.EncodeToString(contentHash)
-			req.Header.Set("Content-MD5", md5s)
-		}
-
-		resp, err := fetcher.Do(req.WithContext(ctx))
-
-		if err == nil {
-			defer func() {
-				_ = resp.Body.Close()
-			}()
-		}
-
-		return processHttpResp(resp, err)
-	}
-
-	err := backoff.Retry(op, backoff.WithMaxRetries(uploadRetryParams, uploadRetryCount))
-
+	req, err := http.NewRequest(http.MethodPut, post.Url, body)
 	if err != nil {
 		return err
 	}
 
-	return nil
+	req.ContentLength = contentLength
+
+	if len(contentHash) > 0 {
+		md5s := base64.StdEncoding.EncodeToString(contentHash)
+		req.Header.Set("Content-MD5", md5s)
+	}
+
+	resp, err := fetcher.Do(req.WithContext(ctx))
+
+	if err == nil {
+		defer func() {
+			_ = resp.Body.Close()
+		}()
+	}
+
+	return processHttpResp(resp, err)
 }
 
 // aggregateDownloads looks for byte ranges that need to be downloaded, and tries to aggregate them into a smaller number
@@ -1177,58 +1194,12 @@ func (dcs *DoltChunkStore) SupportedOperations() nbs.TableFileStoreOps {
 }
 
 // WriteTableFile reads a table file from the provided reader and writes it to the chunk store.
-func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentLength uint64, contentHash []byte, getRd func() (io.ReadCloser, error)) error {
-	dcs.logf("getting upload location for file %s with %d chunks and size %s", fileId, numChunks, humanize.Bytes(contentLength))
-
+func (dcs *DoltChunkStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	fileIdBytes := hash.Parse(fileId)
-	tfd := &remotesapi.TableFileDetails{
-		Id:            fileIdBytes[:],
-		ContentLength: contentLength,
-		ContentHash:   contentHash,
-	}
-	req := &remotesapi.GetUploadLocsRequest{
-		RepoId:           dcs.getRepoId(),
-		TableFileDetails: []*remotesapi.TableFileDetails{tfd},
-
-		// redundant and deprecated.  Still setting for compatibility, but will remove "promptly".
-		TableFileHashes: [][]byte{fileIdBytes[:]},
-	}
-	resp, err := dcs.csClient.GetUploadLocations(ctx, req)
-
+	err := dcs.uploadTableFileWithRetries(ctx, fileIdBytes, contentHash, getRd)
 	if err != nil {
-		return NewRpcError(err, "GetUploadLocations", dcs.host, req)
+		return err
 	}
-
-	if len(resp.Locs) != 1 {
-		return errors.New("unexpected upload location count")
-	}
-
-	loc := resp.Locs[0]
-	switch typedLoc := loc.Location.(type) {
-	case *remotesapi.UploadLoc_HttpPost:
-		urlStr := typedLoc.HttpPost.Url
-
-		// strip off the query parameters as they clutter the logs. We only really care about being able to verify the table
-		// files are being uploaded to the correct places on S3.
-		qmIdx := strings.IndexRune(urlStr, '?')
-		if qmIdx != -1 {
-			urlStr = urlStr[:qmIdx]
-		}
-		dcs.logf("uploading %s to %s", fileId, urlStr)
-
-		err = dcs.httpPostUpload(ctx, loc.TableFileHash, typedLoc.HttpPost, int64(contentLength), contentHash, getRd)
-
-		if err != nil {
-			dcs.logf("failed to upload %s to %s. err: %s", fileId, urlStr, err.Error())
-			return err
-		}
-
-		dcs.logf("successfully uploaded %s to %s", fileId, urlStr)
-
-	default:
-		return errors.New("unsupported upload location")
-	}
-
 	return nil
 }
 
@@ -1332,33 +1303,8 @@ func sanitizeSignedUrl(url string) string {
 	}
 }
 
-func (drtf DoltRemoteTableFile) ContentLength(ctx context.Context) (cl uint64, err error) {
-	var resp *http.Response
-	resp, err = drtf.getResp(ctx)
-	if err != nil {
-		return 0, err
-	}
-	defer func() {
-		e := resp.Body.Close()
-		if err == nil {
-			err = e
-		}
-	}()
-
-	return uint64(resp.ContentLength), err
-}
-
 // Open returns an io.ReadCloser which can be used to read the bytes of a table file.
-func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, error) {
-	resp, err := drtf.getResp(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.Body, nil
-}
-
-func (drtf DoltRemoteTableFile) getResp(ctx context.Context) (*http.Response, error) {
+func (drtf DoltRemoteTableFile) Open(ctx context.Context) (io.ReadCloser, uint64, error) {
 	if drtf.info.RefreshAfter != nil && drtf.info.RefreshAfter.AsTime().After(time.Now()) {
 		resp, err := drtf.dcs.csClient.RefreshTableFileUrl(ctx, drtf.info.RefreshRequest)
 		if err == nil {
@@ -1369,20 +1315,20 @@ func (drtf DoltRemoteTableFile) getResp(ctx context.Context) (*http.Response, er
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, drtf.info.Url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	resp, err := drtf.dcs.httpFetcher.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if resp.StatusCode/100 != 2 {
 		defer resp.Body.Close()
 		body := make([]byte, 4096)
 		n, _ := io.ReadFull(resp.Body, body)
-		return nil, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
+		return nil, 0, fmt.Errorf("%w: status code: %d;\nurl: %s\n\nbody:\n\n%s\n", ErrRemoteTableFileGet, resp.StatusCode, sanitizeSignedUrl(drtf.info.Url), string(body[0:n]))
 	}
 
-	return resp, nil
+	return resp.Body, uint64(resp.ContentLength), nil
 }

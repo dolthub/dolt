@@ -279,8 +279,8 @@ func (gcs *GenerationalNBS) Size(ctx context.Context) (uint64, error) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the new gen TableFileStore
-func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentLength uint64, contentHash []byte, getRd func() (io.ReadCloser, error)) error {
-	return gcs.newGen.WriteTableFile(ctx, fileId, numChunks, contentLength, contentHash, getRd)
+func (gcs *GenerationalNBS) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	return gcs.newGen.WriteTableFile(ctx, fileId, numChunks, contentHash, getRd)
 }
 
 // AddTableFilesToManifest adds table files to the manifest of the newgen cs

@@ -215,10 +215,10 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 		}()
 	}()
 
-	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentLen, tmpTblFile.contentHash, func() (io.ReadCloser, error) {
+	return p.sinkDBCS.(nbs.TableFileStore).WriteTableFile(ctx, tmpTblFile.id, tmpTblFile.numChunks, tmpTblFile.contentHash, func() (io.ReadCloser, uint64, error) {
 		f, err := os.Open(tmpTblFile.path)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		fWithStats := iohelp.NewReaderWithStats(f, fileSize)
@@ -229,7 +229,7 @@ func (p *Puller) uploadTempTableFile(ctx context.Context, tmpTblFile tempTblFile
 			}))
 		})
 
-		return fWithStats, nil
+		return fWithStats, uint64(fileSize), nil
 	})
 }
 

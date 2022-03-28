@@ -69,8 +69,8 @@ func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fil
 		fileID := addr.String()
 		fileToData[fileID] = data
 		fileIDToNumChunks[fileID] = i + 1
-		err = st.WriteTableFile(ctx, fileID, i+1, uint64(len(data)), nil, func() (io.ReadCloser, error) {
-			return io.NopCloser(bytes.NewReader(data)), nil
+		err = st.WriteTableFile(ctx, fileID, i+1, nil, func() (io.ReadCloser, uint64, error) {
+			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
 		})
 		require.NoError(t, err)
 	}
@@ -97,12 +97,9 @@ func TestNBSAsTableFileStore(t *testing.T) {
 		expected, ok := fileToData[fileID]
 		require.True(t, ok)
 
-		contentLength, err := src.ContentLength(context.Background())
+		rd, contentLength, err := src.Open(context.Background())
 		require.NoError(t, err)
 		require.Equal(t, len(expected), int(contentLength))
-
-		rd, err := src.Open(context.Background())
-		require.NoError(t, err)
 
 		data, err := io.ReadAll(rd)
 		require.NoError(t, err)
