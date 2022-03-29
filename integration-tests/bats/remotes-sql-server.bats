@@ -109,7 +109,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    server_query repo2 1 "show tables" "Tables_in_repo1\ntest"
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
 }
 
 @test "remotes-sql-server: pull remote not found error" {
