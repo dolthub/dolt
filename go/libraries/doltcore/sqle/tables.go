@@ -739,11 +739,7 @@ func partitionsFromProllyRows(rows durable.Index) []doltTablePartition {
 	// naively divide map by top-level keys
 	keys := prolly.PartitionKeysFromMap(pm)
 
-	first := prolly.Range{
-		Start:   prolly.RangeCut{Unbound: true},
-		Stop:    prolly.RangeCut{Key: keys[0], Inclusive: true},
-		KeyDesc: keyDesc,
-	}
+	first := prolly.LesserOrEqualRange(keys[0], keyDesc)
 
 	parts := make([]doltTablePartition, len(keys))
 	parts[0] = doltTablePartition{rowRange: first, rowData: rows}
@@ -751,11 +747,7 @@ func partitionsFromProllyRows(rows durable.Index) []doltTablePartition {
 		if i == 0 {
 			continue
 		}
-		rng := prolly.Range{
-			Start:   prolly.RangeCut{Key: keys[i-1], Inclusive: false},
-			Stop:    prolly.RangeCut{Key: keys[i], Inclusive: true},
-			KeyDesc: keyDesc,
-		}
+		rng := prolly.OpenStartRange(keys[i-1], keys[i], keyDesc)
 		parts[i] = doltTablePartition{rowRange: rng, rowData: rows}
 	}
 
