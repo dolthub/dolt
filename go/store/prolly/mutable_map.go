@@ -16,7 +16,6 @@ package prolly
 
 import (
 	"context"
-	"errors"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -82,33 +81,6 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 	rng := Range{Start: nil, Stop: nil, Desc: mut.prolly.keyDesc}
 	return mut.IterRange(ctx, rng)
-}
-
-// IterOrdinalRange returns a MapRangeIter for the ordinal range beginning at |start| and ending before |stop|.
-func (mut MutableMap) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error) {
-	iter, err := mut.prolly.IterOrdinalRange(ctx, start, stop)
-	if err != nil {
-		return nil, err
-	}
-
-	prollyIter, ok := iter.(*prollyRangeIter)
-	if !ok {
-		return nil, errors.New("expected prollyRangeIter")
-	}
-
-	// convert the ordinal bounds to value bounds for the memory iter
-	first, last := prollyIter.firstLastKeys()
-	rng := OpenStopRange(first, last, mut.prolly.keyDesc)
-
-	// this may cause unbalanced partitions if value distributions
-	// differ between |mut.prolly| and |mut.overlay|
-	memIter := mut.overlay.iterFromRange(rng)
-
-	return &MutableMapRangeIter{
-		memory: memIter,
-		prolly: prollyIter,
-		rng:    rng,
-	}, nil
 }
 
 // IterRange returns a MapRangeIter that iterates over a Range.

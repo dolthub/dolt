@@ -39,6 +39,8 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
+	t.Skip()
+
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
 		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2

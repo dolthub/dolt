@@ -52,7 +52,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter ordinal range", func(t *testing.T) {
 				t.Skip("todo(andy)")
-				testIterOrdinalRange(t, mutableMap.(ordinalMap), tuples)
 			})
 
 			mutableIndex, idxTuples := makeMutableSecondaryIndex(t, s)
@@ -72,7 +71,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter ordinal range", func(t *testing.T) {
 				t.Skip("todo(andy)")
-				testIterOrdinalRange(t, mutableMap2, tuples)
 			})
 
 			mutableIndex2, idxTuples2, _ := deleteFromMutableMap(mutableIndex.(MutableMap), idxTuples)
@@ -93,7 +91,6 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter ordinal range", func(t *testing.T) {
 				t.Skip("todo(andy)")
-				testIterOrdinalRange(t, prollyMap, tuples)
 			})
 
 			prollyIndex, err := mutableIndex2.Map(context.Background())

@@ -46,7 +46,6 @@ type ordinalMap interface {
 }
 
 var _ orderedMap = Map{}
-var _ orderedMap = MutableMap{}
 
 func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
