@@ -43,8 +43,8 @@ type sessionedTableEditor struct {
 var _ editor.TableEditor = &sessionedTableEditor{}
 
 func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc editor.PKDuplicateErrFunc) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.tableEditSession.mut.RLock()
+	defer ste.tableEditSession.mut.RUnlock()
 
 	err := ste.validateForInsert(ctx, tagToVal)
 	if err != nil {
@@ -56,8 +56,8 @@ func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val type
 }
 
 func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.tableEditSession.mut.RLock()
+	defer ste.tableEditSession.mut.RUnlock()
 
 	if !ste.tableEditSession.opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
 		err := ste.onDeleteHandleRowsReferencingValues(ctx, key, tagToVal)
@@ -72,8 +72,8 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
 func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.tableEditSession.mut.RLock()
+	defer ste.tableEditSession.mut.RUnlock()
 
 	dRowTaggedVals, err := dRow.TaggedValues()
 	if err != nil {
@@ -90,8 +90,8 @@ func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, er
 
 // DeleteRow removes the given key from the table.
 func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.tableEditSession.mut.RLock()
+	defer ste.tableEditSession.mut.RUnlock()
 
 	if !ste.tableEditSession.opts.ForeignKeyChecksDisabled && len(ste.referencingTables) > 0 {
 		err := ste.handleReferencingRowsOnDelete(ctx, r)
@@ -107,8 +107,8 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
 func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
-	ste.tableEditSession.writeMutex.RLock()
-	defer ste.tableEditSession.writeMutex.RUnlock()
+	ste.tableEditSession.mut.RLock()
+	defer ste.tableEditSession.mut.RUnlock()
 
 	return ste.updateRow(ctx, dOldRow, dNewRow, true, errFunc)
 }
@@ -123,15 +123,9 @@ func (ste *sessionedTableEditor) HasEdits() bool {
 	return ste.tableEditor.HasEdits()
 }
 
-// GetAutoIncrementValue implements TableEditor.
-func (ste *sessionedTableEditor) GetAutoIncrementValue() types.Value {
-	return ste.tableEditor.GetAutoIncrementValue()
-}
-
-// SetAutoIncrementValue implements TableEditor.
-func (ste *sessionedTableEditor) SetAutoIncrementValue(v types.Value) error {
-	ste.dirty = true
-	return ste.tableEditor.SetAutoIncrementValue(v)
+// MarkDirty implements TableEditor.
+func (ste *sessionedTableEditor) MarkDirty() {
+	ste.tableEditor.MarkDirty()
 }
 
 // Table implements TableEditor.

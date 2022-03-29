@@ -163,6 +163,8 @@ func testRoundTripInts(t *testing.T) {
 
 type testCompare struct{}
 
+var _ TupleComparator = testCompare{}
+
 func (tc testCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	for i, typ := range desc.Types {
 		cmp = compare(typ, left.GetField(i), right.GetField(i))
@@ -173,4 +175,6 @@ func (tc testCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
 	return
 }
 
-var _ TupleComparator = testCompare{}
+func (tc testCompare) CompareValues(left, right []byte, typ Type) int {
+	return compare(typ, left, right)
+}

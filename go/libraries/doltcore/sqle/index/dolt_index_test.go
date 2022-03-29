@@ -1063,6 +1063,12 @@ func TestDoltIndexBetween(t *testing.T) {
 			indexIter, err := index.RowIterForIndexLookup(ctx, indexLookup, pkSch, nil)
 			require.NoError(t, err)
 
+			// If this is a primary index assert that a covering index was used
+			if idx.ID() == "PRIMARY" {
+				_, ok := indexIter.(*index.CoveringIndexRowIterAdapter)
+				require.True(t, ok)
+			}
+
 			var readRows []sql.Row
 			var nextRow sql.Row
 			for nextRow, err = indexIter.Next(ctx); err == nil; nextRow, err = indexIter.Next(ctx) {

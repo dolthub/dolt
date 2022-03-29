@@ -1635,12 +1635,13 @@ get_head_commit() {
 @test "sql: sql -q query vertical format check" {
     run dolt sql -r vertical -q "show tables"
     [ "$status" -eq 0 ]
-    [ "$output" = "*************************** 1. row ***************************
-Table: has_datetimes
-*************************** 2. row ***************************
-Table: one_pk
-*************************** 3. row ***************************
-Table: two_pk" ]
+    [[ "$output" =~ "*************************** 1. row ***************************" ]] || false
+    [[ "$output" =~ "Tables_in_dolt_repo" ]] || false
+    [[ "$output" =~ ": has_datetimes" ]] || false
+    [[ "$output" =~ "*************************** 2. row ***************************" ]] || false
+    [[ "$output" =~ ": one_pk" ]] || false
+    [[ "$output" =~ "*************************** 3. row ***************************" ]] || false
+    [[ "$output" =~ ": two_pk" ]] || false
 
     dolt sql <<SQL
 INSERT INTO one_pk (pk,c1,c2,c3,c4,c5) VALUES (4,40,40,40,40,40),(5,50,50,50,50,50),(6,60,60,60,60,60),(7,70,70,70,70,70);

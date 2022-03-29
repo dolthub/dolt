@@ -15,6 +15,7 @@
 namespace serial;
 
 table Commit {
+  // hash addr of the root value associated with the commit.
   root:[ubyte] (required);
   height:uint64;
 
