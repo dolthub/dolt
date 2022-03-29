@@ -379,7 +379,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		}
 
 		// Deal with older sqlRows
-		if sqlRow[4] == nil {
+		if len(sqlRow) < 5 || sqlRow[4] == nil {
 			frags = append(frags, schemaFragment{
 				name:     sqlRow[1].(string),
 				fragment: sqlRow[2].(string),
