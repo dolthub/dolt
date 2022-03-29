@@ -25,6 +25,7 @@ type MapRangeIter interface {
 	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
+var _ MapRangeIter = emptyIter{}
 var _ MapRangeIter = &prollyRangeIter{}
 var _ MapRangeIter = &pointLookup{}
 var _ MapRangeIter = &MutableMapRangeIter{}
@@ -52,6 +53,10 @@ var _ rangeIter = emptyIter{}
 var _ rangeIter = &prollyRangeIter{}
 
 type emptyIter struct{}
+
+func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
+	return nil, nil, io.EOF
+}
 
 func (e emptyIter) iterate(ctx context.Context) (err error) {
 	return
