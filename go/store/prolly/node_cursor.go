@@ -46,7 +46,9 @@ type nodeCursor struct {
 
 type compareFn func(left, right nodeItem) int
 
-type searchFn func(item nodeItem, nd Node) (idx int)
+type searchFn func(nd Node) (idx int)
+
+type itemSearchFn func(item nodeItem, nd Node) (idx int)
 
 func newCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
@@ -97,11 +99,34 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
-func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search searchFn) (cur *nodeCursor, err error) {
+func newCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search searchFn) (cur *nodeCursor, err error) {
+	cur = &nodeCursor{nd: nd, nrw: nrw}
+
+	cur.idx = search(cur.nd)
+	for !cur.isLeaf() {
+
+		// stay in bounds for internal nodes
+		cur.keepInBounds()
+
+		nd, err = fetchChild(ctx, nrw, cur.currentRef())
+		if err != nil {
+			return cur, err
+		}
+
+		parent := cur
+		cur = &nodeCursor{nd: nd, parent: parent, nrw: nrw}
+
+		cur.idx = search(cur.nd)
+	}
+
+	return
+}
+
+func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search itemSearchFn) (cur *nodeCursor, err error) {
 	return newCursorAtItem(ctx, nrw, nd, nodeItem(tup), search)
 }
 
-func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur *nodeCursor, err error) {
+func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search itemSearchFn) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -124,7 +149,7 @@ func newCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem,
 	return
 }
 
-func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search searchFn) (cur nodeCursor, err error) {
+func newLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item nodeItem, search itemSearchFn) (cur nodeCursor, err error) {
 	cur = nodeCursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)

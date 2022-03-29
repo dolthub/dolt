@@ -82,15 +82,11 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 
 // Database implements sql.Database for a dolt DB.
 type Database struct {
-	name string
-	ddb  *doltdb.DoltDB
-	rsr  env.RepoStateReader
-	rsw  env.RepoStateWriter
-	drw  env.DocsReadWriter
-
-	// todo: needs a major refactor to
-	//   correctly handle persisted sequences
-	//   that must be coordinated across txs
+	name     string
+	ddb      *doltdb.DoltDB
+	rsr      env.RepoStateReader
+	rsw      env.RepoStateWriter
+	drw      env.DocsReadWriter
 	gs       globalstate.GlobalState
 	editOpts editor.Options
 }
@@ -167,6 +163,7 @@ var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
+var _ globalstate.StateProvider = Database{}
 
 // NewDatabase returns a new dolt database to use in queries.
 func NewDatabase(name string, dbData env.DbData, editOpts editor.Options) Database {
@@ -257,6 +254,10 @@ func (db Database) DbData() env.DbData {
 		Rsr: db.rsr,
 		Drw: db.drw,
 	}
+}
+
+func (db Database) GetGlobalState() globalstate.GlobalState {
+	return db.gs
 }
 
 // GetTableInsensitive is used when resolving tables in queries. It returns a best-effort case-insensitive match for
@@ -585,6 +586,18 @@ func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	return dbState.GetRoots().Working, nil
 }
 
+func (db Database) GetWorkingSet(ctx *sql.Context) (*doltdb.WorkingSet, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, ok, err := sess.LookupDbState(ctx, db.Name())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("no root value found in session")
+	}
+	return dbState.WorkingSet, nil
+}
+
 // SetRoot should typically be called on the Session, which is where this state lives. But it's available here as a
 // convenience.
 func (db Database) SetRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
@@ -660,7 +673,10 @@ func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) er
 		return err
 	}
 
-	ait := db.gs.GetAutoIncrementTracker(ws.Ref())
+	ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+	if err != nil {
+		return err
+	}
 	ait.DropTable(tableName)
 
 	return nil
@@ -681,10 +697,11 @@ func (db Database) CreateTable(ctx *sql.Context, tableName string, sch sql.Prima
 
 // Unlike the exported version CreateTable, createSqlTable doesn't enforce any table name checks.
 func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.PrimaryKeySchema) error {
-	root, err := db.GetRoot(ctx)
+	ws, err := db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
 	}
+	root := ws.WorkingRoot()
 
 	if exists, err := root.HasTable(ctx, tableName); err != nil {
 		return err
@@ -705,6 +722,14 @@ func (db Database) createSqlTable(ctx *sql.Context, tableName string, sch sql.Pr
 	// Prevent any tables that use Spatial Types as Primary Key from being created
 	if schema.IsUsingSpatialColAsKey(doltSch) {
 		return schema.ErrUsingSpatialKey.New(tableName)
+	}
+
+	if schema.HasAutoIncrement(doltSch) {
+		ait, err := db.gs.GetAutoIncrementTracker(ctx, ws)
+		if err != nil {
+			return err
+		}
+		ait.AddNewTable(tableName)
 	}
 
 	return db.createDoltTable(ctx, tableName, root, doltSch)

@@ -17,6 +17,7 @@ package commitwalk
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,6 +36,18 @@ const (
 	testHomeDir = "/doesnotexist/home"
 	workingDir  = "/doesnotexist/work"
 )
+
+var lastUserTSMillis int64
+
+func MonotonicNow() time.Time {
+	now := time.Now()
+	millis := now.UnixMilli()
+	if millis <= lastUserTSMillis {
+		now = time.UnixMilli(lastUserTSMillis).Add(time.Millisecond)
+	}
+	lastUserTSMillis = now.UnixMilli()
+	return now
+}
 
 func testHomeDirFunc() (string, error) {
 	return testHomeDir, nil
@@ -109,6 +122,7 @@ func TestGetDotDotRevisions(t *testing.T) {
 
 	res, err := GetDotDotRevisions(context.Background(), dEnv.DoltDB, featureHash, dEnv.DoltDB, mainHash, 100)
 	require.NoError(t, err)
+
 	assert.Len(t, res, 7)
 	assertEqualHashes(t, featureCommits[7], res[0])
 	assertEqualHashes(t, featureCommits[6], res[1])
@@ -201,7 +215,7 @@ func assertEqualHashes(t *testing.T, lc, rc *doltdb.Commit) {
 }
 
 func mustCreateCommit(t *testing.T, ddb *doltdb.DoltDB, bn string, rvh hash.Hash, parents ...*doltdb.Commit) *doltdb.Commit {
-	cm, err := datas.NewCommitMeta("Bill Billerson", "bill@billerson.com", "A New Commit.")
+	cm, err := datas.NewCommitMetaWithUserTS("Bill Billerson", "bill@billerson.com", "A New Commit.", MonotonicNow())
 	require.NoError(t, err)
 	pcs := make([]*doltdb.CommitSpec, 0, len(parents))
 	for _, parent := range parents {

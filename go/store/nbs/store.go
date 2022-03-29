@@ -1265,12 +1265,11 @@ func newTableFile(cs chunkSource, info tableSpec) tableFile {
 	return tableFile{
 		info: info,
 		open: func(ctx context.Context) (io.ReadCloser, uint64, error) {
-			r, err := cs.reader(ctx)
+			s, err := cs.size()
 			if err != nil {
 				return nil, 0, err
 			}
-
-			s, err := cs.size()
+			r, err := cs.reader(ctx)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -1348,7 +1347,7 @@ func (nbs *NomsBlockStore) SupportedOperations() TableFileStoreOps {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	fsPersister, ok := nbs.p.(*fsTablePersister)
 
 	if !ok {
@@ -1370,7 +1369,19 @@ func (nbs *NomsBlockStore) WriteTableFile(ctx context.Context, fileId string, nu
 		}
 	}()
 
-	return writeTo(f, rd, copyTableFileBufferSize)
+	r, _, err := getRd()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeErr := r.Close()
+
+		if err == nil {
+			err = closeErr
+		}
+	}()
+
+	return writeTo(f, r, copyTableFileBufferSize)
 }
 
 // AddTableFilesToManifest adds table files to the manifest

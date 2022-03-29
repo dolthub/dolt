@@ -446,6 +446,8 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.NoError(err)
 	defer unpinned.Close()
 
+	vrw := unpinned.GetVRW(context.Background())
+
 	db := unpinned.GetDatabase(context.Background())
 	ds, err := db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
@@ -462,7 +464,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.True(ok)
 
 	commitValue := func(val types.Value) types.Value {
-		v, err := datas.GetCommitValue(context.Background(), val)
+		v, err := datas.GetCommitValue(context.Background(), vrw, val)
 		d.PanicIfError(err)
 		d.PanicIfFalse(v != nil)
 		return v

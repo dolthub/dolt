@@ -181,7 +181,7 @@ func (suite *PullSuite) TestPullEverything() {
 
 	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr)).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(mustGetCommitValue(v)))
+	suite.True(l.Equals(mustGetCommitValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -228,7 +228,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(v)))
+	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -281,7 +281,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(v)))
+	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -333,7 +333,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(v)))
+	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
@@ -457,9 +457,14 @@ func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
 	return sz, nil
 }
 
-func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	tblFile := &TestTableFileWriter{fileId, numChunks, bytes.NewBuffer(nil), ttfs}
-	_, err := io.Copy(tblFile, rd)
+	rd, _, err := getRd()
+	if err != nil {
+		return err
+	}
+	defer rd.Close()
+	_, err = io.Copy(tblFile, rd)
 
 	if err != nil {
 		return err
@@ -585,8 +590,8 @@ func mustValue(val types.Value, err error) types.Value {
 	return val
 }
 
-func mustGetCommitValue(c types.Value) types.Value {
-	v, err := datas.GetCommitValue(context.Background(), c)
+func mustGetCommitValue(vr types.ValueReader, c types.Value) types.Value {
+	v, err := datas.GetCommitValue(context.Background(), vr, c)
 	d.PanicIfError(err)
 	d.PanicIfFalse(v != nil)
 	return v
