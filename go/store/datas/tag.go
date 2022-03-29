@@ -16,7 +16,6 @@ package datas
 
 import (
 	"context"
-	"errors"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
@@ -57,13 +56,6 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
-		iscommit, err := IsCommit(commitSt)
-		if err != nil {
-			return hash.Hash{}, types.Ref{}, err
-		}
-		if !iscommit {
-			return hash.Hash{}, types.Ref{}, errors.New("newTag: commitAddr does not point to a commit.")
-		}
 		commitRef, err := types.NewRef(commitSt, db.Format())
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
@@ -80,6 +72,11 @@ func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMe
 			metaV = types.EmptyStruct(commitRef.Format())
 		}
 		tagSt, err := tagTemplate.NewStruct(metaV.Format(), []types.Value{metaV, commitRef})
+		if err != nil {
+			return hash.Hash{}, types.Ref{}, err
+		}
+
+		err = db.validateTag(ctx, tagSt)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err
 		}
@@ -134,13 +131,11 @@ func tag_flatbuffer(commitAddr hash.Hash, meta *TagMeta) []byte {
 }
 
 func IsTag(v types.Value) (bool, error) {
-	if s, ok := v.(types.Struct); ok {
+	if s, ok := v.(types.Struct); !ok {
+		return false, nil
+	} else {
 		return types.IsValueSubtypeOf(s.Format(), v, valueTagType)
-	} else if sm, ok := v.(types.SerialMessage); ok {
-		data := []byte(sm)
-		return serial.GetFileID(data) == serial.TagFileID, nil
 	}
-	return false, nil
 }
 
 func makeTagStructType(metaType, refType *types.Type) (*types.Type, error) {

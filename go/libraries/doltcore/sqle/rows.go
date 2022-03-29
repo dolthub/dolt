@@ -203,11 +203,7 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 	if types.IsFormat_DOLT_1(data.Format()) {
 		m := durable.ProllyMapFromIndex(data)
 		kd, _ := m.Descriptors()
-		p.rowRange = prolly.Range{
-			Start:   prolly.RangeCut{Unbound: true},
-			Stop:    prolly.RangeCut{Unbound: true},
-			KeyDesc: kd,
-		}
+		p.rowRange = prolly.Range{Start: nil, Stop: nil, Desc: kd}
 	}
 
 	return newRowIterator(ctx, t, columns, p)

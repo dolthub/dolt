@@ -58,8 +58,10 @@ func NewTagMetaWithUserTS(name, email, desc string, userTS time.Time) *TagMeta {
 	e := strings.TrimSpace(email)
 	d := strings.TrimSpace(desc)
 
-	ms := uint64(TagNowFunc().UnixMilli())
-	userMS := userTS.UnixMilli()
+	ns := uint64(TagNowFunc().UnixNano())
+	ms := ns / uMilliToNano
+
+	userMS := userTS.UnixNano() / milliToNano
 
 	return &TagMeta{n, e, ms, d, userMS}
 }
@@ -121,7 +123,9 @@ func (tm *TagMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, error) 
 
 // Time returns the time at which the tag occurred
 func (tm *TagMeta) Time() time.Time {
-	return time.UnixMilli(int64(tm.Timestamp))
+	seconds := int64(tm.Timestamp) / secToMilli
+	nanos := (int64(tm.Timestamp) % secToMilli) * milliToNano
+	return time.Unix(seconds, nanos)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

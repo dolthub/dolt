@@ -195,11 +195,6 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
-	baseHeight := 0
-	if types.Format_Default == types.Format_DOLT_DEV {
-		baseHeight = types.SerialMessageRefHeight
-	}
-
 	datasetID := "ds1"
 	datasets, err := suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -223,7 +218,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
-	suite.Equal(uint64(1+baseHeight), mustHeight(ds2))
+	suite.Equal(uint64(1), mustHeight(ds2))
 
 	ds = ds2
 	aCommitAddr := mustHeadAddr(ds) // to be used to test disallowing of non-fastforward commits below
@@ -233,7 +228,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	suite.Equal(uint64(2+baseHeight), mustHeight(ds))
+	suite.Equal(uint64(2), mustHeight(ds))
 
 	// |a| <- |b|
 	//   \----|c|
@@ -248,7 +243,7 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
-	suite.Equal(uint64(3+baseHeight), mustHeight(ds))
+	suite.Equal(uint64(3), mustHeight(ds))
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.
@@ -460,15 +455,15 @@ func (suite *DatabaseSuite) TestCommitWithConcurrentChunkStoreUse() {
 func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	datasetID := "ds1"
 	ds1, err := suite.db.GetDataset(context.Background(), datasetID)
-	suite.Require().NoError(err)
+	suite.NoError(err)
 
 	// Setup:
 	// ds1: |a| <- |b|
 	ds1, _ = CommitValue(context.Background(), suite.db, ds1, types.String("a"))
 	b := types.String("b")
 	ds1, err = CommitValue(context.Background(), suite.db, ds1, b)
-	suite.Require().NoError(err)
-	suite.Require().True(mustHeadValue(ds1).Equals(b))
+	suite.NoError(err)
+	suite.True(mustHeadValue(ds1).Equals(b))
 
 	// Craft DB that will allow me to move the backing ChunkStore while suite.db isn't looking
 	interloper := suite.makeDb(suite.storage.NewViewWithDefaultFormat())
@@ -478,28 +473,28 @@ func (suite *DatabaseSuite) TestDeleteWithConcurrentChunkStoreUse() {
 	// ds1: |a| <- |b| <- |e|
 	e := types.String("e")
 	iDS, err := interloper.GetDataset(context.Background(), datasetID)
-	suite.Require().NoError(err)
+	suite.NoError(err)
 	iDS, concErr := CommitValue(context.Background(), interloper, iDS, e)
-	suite.Require().NoError(concErr)
-	suite.Require().True(mustHeadValue(iDS).Equals(e))
+	suite.NoError(concErr)
+	suite.True(mustHeadValue(iDS).Equals(e))
 
 	// Attempt to delete ds1 via suite.db, which should fail due to the above
 	_, err = suite.db.Delete(context.Background(), ds1)
-	suite.Require().Error(err)
+	suite.Error(err)
 
 	// Concurrent change, but to some other dataset. This shouldn't stop changes to ds1.
 	// ds1: |a| <- |b| <- |e|
 	// ds2: |stuff|
 	stf := types.String("stuff")
 	otherDS, err := suite.db.GetDataset(context.Background(), "other")
-	suite.Require().NoError(err)
-	iDS, concErr = CommitValue(context.Background(), suite.db, otherDS, stf)
-	suite.Require().NoError(concErr)
-	suite.Require().True(mustHeadValue(iDS).Equals(stf))
+	suite.NoError(err)
+	iDS, concErr = CommitValue(context.Background(), interloper, otherDS, stf)
+	suite.NoError(concErr)
+	suite.True(mustHeadValue(iDS).Equals(stf))
 
 	// Attempted concurrent delete, which should proceed without a problem
 	ds1, err = suite.db.Delete(context.Background(), ds1)
-	suite.Require().NoError(err)
+	suite.NoError(err)
 	present := ds1.HasHead()
 	suite.False(present, "Dataset %s should not be present", datasetID)
 }
@@ -564,7 +559,7 @@ func (suite *DatabaseSuite) TestFastForward() {
 
 	// This should succeed, because while |a| is not a direct parent of |c|, it is an ancestor.
 	ds, err = suite.db.FastForward(context.Background(), ds, cCommitAddr)
-	suite.Require().NoError(err)
+	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(c))
 }
 
@@ -641,12 +636,11 @@ func (suite *DatabaseSuite) TestDatabaseHeightOfCollections() {
 }
 
 func (suite *DatabaseSuite) TestMetaOption() {
-	ctx := context.Background()
-	ds, err := suite.db.GetDataset(ctx, "ds1")
+	ds, err := suite.db.GetDataset(context.Background(), "ds1")
 	suite.NoError(err)
 
-	ds, err = suite.db.Commit(ctx, ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
+	ds, err = suite.db.Commit(context.Background(), ds, types.String("a"), CommitOptions{Meta: &CommitMeta{Name: "arv"}})
 	suite.NoError(err)
-	meta, err := GetCommitMeta(ctx, mustHead(ds))
-	suite.Equal("arv", meta.Name)
+	c := mustHead(ds).(types.Struct)
+	suite.Equal(types.String("arv"), mustGetValue(mustGetValue(c.MaybeGet("meta")).(types.Struct).MaybeGet("name")))
 }

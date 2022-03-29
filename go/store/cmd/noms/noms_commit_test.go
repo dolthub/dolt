@@ -89,10 +89,9 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	vrw := sp.GetVRW(context.Background())
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
-	value, err := datas.GetCommitValue(context.Background(), vrw, commit)
+	value, err := datas.GetCommitValue(context.Background(), commit)
 	s.NoError(err)
 	s.NotNil(value)
 	h, err := value.Hash(types.Format_7_18)
@@ -119,10 +118,9 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
 
-	vrw := sp.GetVRW(context.Background())
 	commit, ok := sp.GetDataset(context.Background()).MaybeHead()
 	s.True(ok, "should have a commit now")
-	value, err := datas.GetCommitValue(context.Background(), vrw, commit)
+	value, err := datas.GetCommitValue(context.Background(), commit)
 	s.NoError(err)
 	s.NotNil(value)
 	h, err := value.Hash(types.Format_7_18)

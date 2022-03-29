@@ -37,7 +37,7 @@ type Commit struct {
 }
 
 func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Value) (*Commit, error) {
-	parents, err := datas.GetCommitParents(ctx, vrw, commitV)
+	parents, err := datas.GetCommitParents(ctx, commitV)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +49,7 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Val
 	if err != nil {
 		return nil, err
 	}
-	rootVal, err := datas.GetCommitValue(ctx, vrw, commitV)
+	rootVal, err := datas.GetCommitValue(ctx, commitV)
 	if err != nil {
 		return nil, err
 	}
@@ -264,9 +264,7 @@ func (ddb *DoltDB) NewPendingCommit(
 	}
 
 	for _, pc := range parentCommits {
-		if pc.stref.TargetHash() != nomsHeadAddr {
-			parents = append(parents, pc.stref.TargetHash())
-		}
+		parents = append(parents, pc.stref.TargetHash())
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
