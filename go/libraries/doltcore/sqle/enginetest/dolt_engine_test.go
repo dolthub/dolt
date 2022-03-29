@@ -179,7 +179,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestReplaceInto(t *testing.T) {
-	t.Skipf("Skipping, replace returns the wrong number of rows in some cases")
 	enginetest.TestReplaceInto(t, newDoltHarness(t))
 }
 
