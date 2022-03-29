@@ -94,6 +94,121 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 }
 
+// DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
+var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
+	{
+		Name: "dolt_diff table function privilege checking",
+		SetUpScript: []string{
+			"CREATE TABLE mydb.test (pk BIGINT PRIMARY KEY);",
+			"CREATE TABLE mydb.test2 (pk BIGINT PRIMARY KEY);",
+			"SELECT DOLT_COMMIT('-am', 'creating tables test and test2');",
+			"INSERT INTO mydb.test VALUES (1);",
+			"SELECT DOLT_COMMIT('-am', 'inserting into test');",
+			"CREATE USER tester@localhost;",
+		},
+		Assertions: []enginetest.UserPrivilegeTestAssertion{
+			{
+				// Without access to the database, dolt_diff should fail with a database access error
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Grant single-table access to the underlying user table
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.test TO tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After granting access to mydb.test, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// With access to the db, but not the table, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test2', 'main~', 'main');",
+				ExpectedErr: sql.ErrPrivilegeCheckFailed,
+			},
+			{
+				// Revoke select on mydb.test
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE SELECT ON mydb.test from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Grant multi-table access for all of mydb
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON mydb.* to tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After granting access to the entire db, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Revoke multi-table access
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE SELECT ON mydb.* from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+			{
+				// Grant global access to *.*
+				User:     "root",
+				Host:     "localhost",
+				Query:    "GRANT SELECT ON *.* to tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After granting global access to *.*, dolt_diff should work
+				User:     "tester",
+				Host:     "localhost",
+				Query:    "SELECT COUNT(*) FROM dolt_diff('test', 'main~', 'main');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Revoke global access
+				User:     "root",
+				Host:     "localhost",
+				Query:    "REVOKE ALL ON *.* from tester@localhost;",
+				Expected: []sql.Row{{sql.NewOkResult(0)}},
+			},
+			{
+				// After revoking global access, dolt_diff should fail
+				User:        "tester",
+				Host:        "localhost",
+				Query:       "SELECT * FROM dolt_diff('test', 'main~', 'main');",
+				ExpectedErr: sql.ErrDatabaseAccessDeniedForUser,
+			},
+		},
+	},
+}
+
 var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 	{
 		Name: "empty table",

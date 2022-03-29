@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
@@ -195,12 +196,7 @@ func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error)
 	if err != nil {
 		return nil, err
 	}
-
-	val, err := table.GetAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return t.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
+	return table.GetAutoIncrementValue(ctx)
 }
 
 // Name returns the name of the table.
@@ -414,19 +410,13 @@ func (t *WritableDoltTable) getTableEditor(ctx *sql.Context) (ed writer.TableWri
 		}
 	}
 
-	ws, err := ds.WorkingSet(ctx, t.db.name)
-	if err != nil {
-		return nil, err
-	}
-	ait := t.db.gs.GetAutoIncrementTracker(ws.Ref())
-
 	state, _, err := ds.LookupDbState(ctx, t.db.name)
 	if err != nil {
 		return nil, err
 	}
 
 	setter := ds.SetRoot
-	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), ait, setter, batched)
+	ed, err = state.WriteSession.GetTableWriter(ctx, t.tableName, t.db.Name(), setter, batched)
 
 	if err != nil {
 		return nil, err
@@ -541,22 +531,17 @@ func (t *WritableDoltTable) PeekNextAutoIncrementValue(ctx *sql.Context) (interf
 }
 
 // GetNextAutoIncrementValue implements sql.AutoIncrementTable
-func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (interface{}, error) {
+func (t *WritableDoltTable) GetNextAutoIncrementValue(ctx *sql.Context, potentialVal interface{}) (uint64, error) {
 	if !t.autoIncCol.AutoIncrement {
-		return nil, sql.ErrNoAutoIncrementCol
+		return 0, sql.ErrNoAutoIncrementCol
 	}
 
 	ed, err := t.getTableEditor(ctx)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	tableVal, err := t.getTableAutoIncrementValue(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return ed.NextAutoIncrementValue(potentialVal, tableVal)
+	return ed.GetNextAutoIncrementValue(ctx, potentialVal)
 }
 
 func (t *WritableDoltTable) getTableAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
@@ -843,6 +828,18 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return err
 	}
 
+	if column.AutoIncrement {
+		ws, err := t.db.GetWorkingSet(ctx)
+		if err != nil {
+			return err
+		}
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
+		if err != nil {
+			return err
+		}
+		ait.AddNewTable(t.tableName)
+	}
+
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)
 	if err != nil {
 		return err
@@ -998,10 +995,11 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return nil
 	}
 
-	root, err := t.getRoot(ctx)
+	ws, err := t.db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
 	}
+	root := ws.WorkingRoot()
 
 	table, _, err := root.GetTable(ctx, t.tableName)
 	if err != nil {
@@ -1074,10 +1072,6 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			return err
 		}
 
-		initialValue := column.Type.Zero()
-
-		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
-
 		rowData, err := updatedTable.GetRowData(ctx)
 		if err != nil {
 			return err
@@ -1089,6 +1083,9 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		if err != nil {
 			return err
 		}
+
+		initialValue := column.Type.Zero()
+		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
 
 		for {
 			r, err := rowIter.Next(ctx)
@@ -1102,23 +1099,28 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 			if err != nil {
 				return err
 			}
-
 			if cmp < 0 {
 				initialValue = r[colIdx]
 			}
 		}
 
-		initialValNoms, err := col.TypeInfo.ConvertValueToNomsValue(ctx, root.VRW(), initialValue)
+		seq, err := globalstate.CoerceAutoIncrementValue(initialValue)
+		if err != nil {
+			return err
+		}
+		seq++
+
+		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, seq)
 		if err != nil {
 			return err
 		}
 
-		initialValNoms = increment(initialValNoms)
-
-		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, initialValNoms)
+		ait, err := t.db.gs.GetAutoIncrementTracker(ctx, ws)
 		if err != nil {
 			return err
 		}
+		ait.AddNewTable(t.tableName)
+		ait.Set(t.tableName, seq)
 	}
 
 	newRoot, err := root.PutTable(ctx, t.tableName, updatedTable)

@@ -235,3 +235,43 @@ SQL
     [ "$status" -eq 1 ]
     [[ "${lines[0]}" =~ "table not found: five" ]] || false
 }
+
+@test "create-views: AS OF" {
+    dolt sql <<SQL
+create table t1 (a int primary key, b int);
+insert into t1 values (1,1);
+select dolt_commit('-am', 'table with one row');
+select dolt_branch('onerow');
+insert into t1 values (2,2);
+select dolt_commit('-am', 'table with two rows');
+select dolt_branch('tworows');
+create view v1 as select * from t1;
+select dolt_commit('-am', 'view with select *');
+select dolt_branch('view');
+insert into t1 values (3,3);
+select dolt_commit('-am', 'table with three rows');
+select dolt_branch('threerows');
+drop view v1;
+create view v1 as select a+10, b+10 from t1;
+SQL
+
+    # should show the original view definition
+    run dolt sql -r csv -q "select * from dolt_schemas as of 'view' order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "select * from t1" ]] || false
+
+    # should use the view definition from branch named, data from branch named
+    run dolt sql -r csv -q "select * from \`dolt_repo_$$/view\`.v1 order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ "1,1" ]] || false
+    [[ "${lines[2]}" =~ "2,2" ]] || false
+
+    # should use the view definition from HEAD, data from branch named
+    run dolt sql -r csv -q "select * from v1 as of 'view' order by 1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ "11,11" ]] || false
+    [[ "${lines[2]}" =~ "12,12" ]] || false
+}   

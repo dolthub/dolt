@@ -250,6 +250,13 @@ func (kte *keylessTableEditor) HasEdits() bool {
 	return kte.dirty
 }
 
+// MarkDirty implements TableEditor.
+func (kte *keylessTableEditor) MarkDirty() {
+	kte.mu.Lock()
+	defer kte.mu.Unlock()
+	kte.dirty = true
+}
+
 // GetAutoIncrementValue implements TableEditor, AUTO_INCREMENT is not yet supported for keyless tables.
 func (kte *keylessTableEditor) GetAutoIncrementValue() types.Value {
 	return types.NullValue

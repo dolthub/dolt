@@ -236,6 +236,68 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
+// TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
+func TestDoltUserPrivileges(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DoltUserPrivTests {
+		t.Run(script.Name, func(t *testing.T) {
+			myDb := harness.NewDatabase("mydb")
+			databases := []sql.Database{myDb}
+			engine := enginetest.NewEngineWithDbs(t, harness, databases)
+			defer engine.Close()
+
+			ctx := enginetest.NewContextWithClient(harness, sql.Client{
+				User:    "root",
+				Address: "localhost",
+			})
+			engine.Analyzer.Catalog.GrantTables.AddRootAccount()
+
+			for _, statement := range script.SetUpScript {
+				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
+					if sh.SkipQueryTest(statement) {
+						t.Skip()
+					}
+				}
+				enginetest.RunQueryWithContext(t, engine, ctx, statement)
+			}
+			for _, assertion := range script.Assertions {
+				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
+					if sh.SkipQueryTest(assertion.Query) {
+						t.Skipf("Skipping query %s", assertion.Query)
+					}
+				}
+
+				user := assertion.User
+				host := assertion.Host
+				if user == "" {
+					user = "root"
+				}
+				if host == "" {
+					host = "localhost"
+				}
+				ctx := enginetest.NewContextWithClient(harness, sql.Client{
+					User:    user,
+					Address: host,
+				})
+
+				if assertion.ExpectedErr != nil {
+					t.Run(assertion.Query, func(t *testing.T) {
+						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, assertion.ExpectedErr)
+					})
+				} else if assertion.ExpectedErrStr != "" {
+					t.Run(assertion.Query, func(t *testing.T) {
+						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+					})
+				} else {
+					t.Run(assertion.Query, func(t *testing.T) {
+						enginetest.TestQueryWithContext(t, ctx, engine, assertion.Query, assertion.Expected, nil, nil)
+					})
+				}
+			}
+		})
+	}
+}
+
 func TestUserPrivileges(t *testing.T) {
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }

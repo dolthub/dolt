@@ -457,9 +457,14 @@ func (ttfs *TestTableFileStore) Size(ctx context.Context) (uint64, error) {
 	return sz, nil
 }
 
-func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
+func (ttfs *TestTableFileStore) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
 	tblFile := &TestTableFileWriter{fileId, numChunks, bytes.NewBuffer(nil), ttfs}
-	_, err := io.Copy(tblFile, rd)
+	rd, _, err := getRd()
+	if err != nil {
+		return err
+	}
+	defer rd.Close()
+	_, err = io.Copy(tblFile, rd)
 
 	if err != nil {
 		return err
