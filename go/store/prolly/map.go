@@ -170,6 +170,10 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 
 // IterOrdinalRange returns a MapRangeIter for the ordinal range beginning at |start| and ending before |stop|.
 func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error) {
+	if stop <= start {
+		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
+	}
+
 	lo, err := newCursorAtOrdinal(ctx, m.ns, m.root, start)
 	if err != nil {
 		return nil, err

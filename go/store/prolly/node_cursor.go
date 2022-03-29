@@ -100,13 +100,21 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 }
 
 func newCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64) (cur *nodeCursor, err error) {
-	distance := ord
+	distance := int64(ord)
 	return newCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
-		// |subtrees| are the cardinalities of each child tree in |nd|
+		if nd.leafNode() {
+			return int(distance)
+		}
+
+		// |subtrees| contains cardinalities of each child tree in |nd|
 		subtrees := nd.getSubtreeCounts()
-		for distance-subtrees[idx] > 0 {
-			distance -= subtrees[idx]
-			idx++
+
+		for idx = range subtrees {
+			card := int64(subtrees[idx])
+			if (distance - card) < 0 {
+				break
+			}
+			distance -= card
 		}
 		return
 	})

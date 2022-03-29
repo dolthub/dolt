@@ -96,11 +96,12 @@ func (mut MutableMap) IterOrdinalRange(ctx context.Context, start, stop uint64) 
 		return nil, errors.New("expected prollyRangeIter")
 	}
 
+	// convert the ordinal bounds to value bounds for the memory iter
 	first, last := prollyIter.firstLastKeys()
 	rng := OpenStopRange(first, last, mut.prolly.keyDesc)
 
 	// this may cause unbalanced partitions if value distributions
-	// differ between |mut.prolly| and |mut.overlay|.
+	// differ between |mut.prolly| and |mut.overlay|
 	memIter := mut.overlay.iterFromRange(rng)
 
 	return &MutableMapRangeIter{

@@ -52,6 +52,9 @@ func TestMap(t *testing.T) {
 			t.Run("iter range", func(t *testing.T) {
 				testIterRange(t, prollyMap, tuples)
 			})
+			t.Run("iter ordinal range", func(t *testing.T) {
+				testIterOrdinalRange(t, prollyMap.(ordinalMap), tuples)
+			})
 
 			indexMap, tuples2 := makeProllySecondaryIndex(t, s)
 			t.Run("iter prefix range", func(t *testing.T) {

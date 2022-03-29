@@ -391,3 +391,38 @@ func concat(slices ...[]val.Tuple) (c []val.Tuple) {
 	}
 	return
 }
+
+func testIterOrdinalRange(t *testing.T, om ordinalMap, tuples [][2]val.Tuple) {
+	ctx := context.Background()
+	for i := 0; i < 100; i++ {
+		cnt := len(tuples)
+		start, stop := testRand.Intn(cnt), testRand.Intn(cnt)
+		if start > stop {
+			start, stop = stop, start
+		}
+		if start == stop {
+			continue
+		}
+
+		expected := tuples[start:stop]
+
+		iter, err := om.IterOrdinalRange(ctx, uint64(start), uint64(stop))
+		require.NoError(t, err)
+
+		var actual [][2]val.Tuple
+		var k, v val.Tuple
+
+		for {
+			k, v, err = iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			actual = append(actual, [2]val.Tuple{k, v})
+		}
+		assert.Equal(t, len(expected), len(actual),
+			"expected equal tuple slices for bounds (%d, %d)", start, stop)
+		assert.Equal(t, expected, actual)
+		assert.Equal(t, io.EOF, err)
+	}
+}
