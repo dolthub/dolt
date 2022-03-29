@@ -207,6 +207,7 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
@@ -312,38 +313,47 @@ func TestComplexIndexQueries(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDDL(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDDL(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDML(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDML(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
 func TestRenameTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
 func TestRenameColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestRenameColumn(t, newDoltHarness(t))
 }
 
 func TestAddColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 
 func TestModifyColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
 func TestDropColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
@@ -357,14 +367,17 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
 func TestDropForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -394,10 +407,12 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestViews(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestViews(t, newDoltHarness(t))
 }
 
 func TestVersionedViews(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
@@ -430,14 +445,17 @@ func TestNaturalJoinDisjoint(t *testing.T) {
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 
 func TestColumnDefaults(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
 func TestAlterTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAlterTable(t, newDoltHarness(t))
 }
 
@@ -450,10 +468,12 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
 func TestTriggers(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
@@ -491,6 +511,7 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, script := range DoltMerge {
 		enginetest.TestScript(t, harness, script)
@@ -590,6 +611,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range HistorySystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -601,6 +623,7 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -625,6 +648,7 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range CommitDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -636,6 +660,7 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range DiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -651,6 +676,7 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 }
 
 func TestAddDropPks(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
