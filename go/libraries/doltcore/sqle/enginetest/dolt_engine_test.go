@@ -409,7 +409,6 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestViews(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestViews(t, newDoltHarness(t))
 }
 
