@@ -8,7 +8,7 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "*Table: one_pk*" { send "DELIMITER $$\\g\r"; }
+  "*: one_pk*" { send "DELIMITER $$\\g\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
@@ -18,12 +18,12 @@ expect {
   failed { exit 1; }
 }
 expect {
-  "*| Table         |*" { send "show tables\\g\r"; }
+  "*| one_pk *" { send "show tables\\g\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }
 expect {
-  "*| Table         |*" { send "DELIMITER ;\\g\r"; }
+  "*| one_pk *" { send "DELIMITER ;\\g\r"; }
   timeout { exit 1; }
   failed { exit 1; }
 }

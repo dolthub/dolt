@@ -236,7 +236,7 @@ teardown() {
         c2 BIGINT COMMENT 'tag:2',
         PRIMARY KEY (pk)
     )" ""
-    server_query repo1 1 "SHOW tables" "Table\none_pk"
+    server_query repo1 1 "SHOW tables" "Tables_in_repo1\none_pk"
     insert_query repo1 1 "INSERT INTO one_pk (pk) VALUES (0)"
     server_query repo1 1 "SELECT * FROM one_pk ORDER BY pk" "pk,c1,c2\n0,None,None"
     insert_query repo1 1 "INSERT INTO one_pk (pk,c1) VALUES (1,1)"
@@ -331,8 +331,8 @@ SQL
     )" ";"
 
     # validate tables in repos
-    server_query repo1 1 "SHOW tables" "Table\nr1_one_pk"
-    server_query repo1 1 "USE repo2;SHOW tables" ";Table\nr2_one_pk"
+    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nr1_one_pk"
+    server_query repo1 1 "USE repo2;SHOW tables" ";Tables_in_repo2\nr2_one_pk"
 
     # put data in both
     multi_query repo1 1 "
@@ -690,7 +690,7 @@ SQL
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
 
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    server_query "repo1/feature-branch" 1 "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
 
 @test "sql-server: connect to a commit with connection string" {
@@ -736,7 +736,7 @@ SQL
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
 
-    server_query "repo1/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    server_query "repo1/feature-branch" 1 "SHOW Tables" "Tables_in_repo1/feature-branch\ntest"
 }
 
 @test "sql-server: SET GLOBAL default branch as ref" {
@@ -756,7 +756,7 @@ SQL
     server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Table\nt"
+    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }
 
 @test "sql-server: SET GLOBAL default branch as branch name" {
@@ -776,7 +776,7 @@ SQL
     server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
     server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
-    server_query repo1 1 "SHOW tables" "Table\nt"
+    server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }
 
 @test "sql-server: require_secure_transport no key or cert" {
