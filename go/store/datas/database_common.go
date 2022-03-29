@@ -365,48 +365,31 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		return err
 	}
 
-	newVal := newHead.value()
+	newSt := newHead.(nomsHead).st
 
 	headType := newHead.TypeName()
 	switch headType {
 	case commitName:
-		iscommit, err := IsCommit(newVal)
+		var iscommit bool
+		iscommit, err = IsCommit(newSt)
 		if err != nil {
-			return err
+			break
 		}
 		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+			err = fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case TagName:
-		istag, err := IsTag(newVal)
-		if err != nil {
-			return err
-		}
-		if !istag {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
-		}
-		_, commitaddr, err := newHead.HeadTag()
-		if err != nil {
-			return err
-		}
-		commitval, err := db.ReadValue(ctx, commitaddr)
-		if err != nil {
-			return err
-		}
-		iscommit, err := IsCommit(commitval)
-		if err != nil {
-			return err
-		}
-		if !iscommit {
-			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
-		}
+		err = db.validateTag(ctx, newHead.(nomsHead).st)
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
+	}
+	if err != nil {
+		return err
 	}
 
 	key := types.String(ds.ID())
 
-	vref, err := types.NewRef(newVal, db.Format())
+	vref, err := types.NewRef(newSt, db.Format())
 	if err != nil {
 		return err
 	}
@@ -466,7 +449,8 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	v := newHead.value()
+	var v types.Value
+	v = newHead.(nomsHead).st
 	iscommit, err := IsCommit(v)
 	if err != nil {
 		return err
@@ -901,6 +885,52 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	}
 
 	return v.(types.Struct), nil
+}
+
+func (db *database) validateTag(ctx context.Context, t types.Struct) error {
+	is, err := IsTag(t)
+	if err != nil {
+		return err
+	}
+	if !is {
+		return fmt.Errorf("Tag struct %s is malformed, IsTag() == false", t.String())
+	}
+
+	r, ok, err := t.MaybeGet(TagCommitRefField)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("tag is missing field %s", TagCommitRefField)
+	}
+
+	_, err = db.validateRefAsCommit(ctx, r.(types.Ref))
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (db *database) validateWorkingSet(t types.Struct) error {
+	is, err := IsWorkingSet(t)
+	if err != nil {
+		return err
+	}
+	if !is {
+		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
+	}
+
+	_, ok, err := t.MaybeGet(WorkingRootRefField)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("WorkingSet is missing field %s", WorkingRootRefField)
+	}
+
+	return nil
 }
 
 func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Value, error) {

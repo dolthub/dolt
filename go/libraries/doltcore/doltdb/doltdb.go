@@ -525,9 +525,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		if err != nil {
 			return nil, err
 		}
-		if addr != headAddr {
-			parents = append(parents, addr)
-		}
+		parents = append(parents, addr)
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}

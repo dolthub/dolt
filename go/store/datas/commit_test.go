@@ -53,12 +53,15 @@ func mustHeight(ds Dataset) uint64 {
 
 func mustHeadValue(ds Dataset) types.Value {
 	val, ok, err := ds.MaybeHeadValue()
+
 	if err != nil {
-		panic("error getting head " + err.Error())
+		panic("error getting head")
 	}
+
 	if !ok {
 		panic("no head")
 	}
+
 	return val
 }
 
@@ -304,6 +307,8 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 ty
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
 func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
+	assert := assert.New(t)
+
 	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
 
 	methods := map[string]caFinder{
@@ -313,23 +318,21 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 		"FindCommonAncestorUsingParentsList": findCommonAncestorUsingParentsList,
 	}
 
-	aref := mustRef(types.NewRef(a, ldb.Format()))
-	bref := mustRef(types.NewRef(b, rdb.Format()))
-
 	for name, method := range methods {
-		t.Run(fmt.Sprintf("%s/%s_%s", name, aref.TargetHash().String(), bref.TargetHash().String()), func(t *testing.T) {
-			assert := assert.New(t)
+		tn := fmt.Sprintf("find common ancestor using %s", name)
+		t.Run(tn, func(t *testing.T) {
 			ctx := context.Background()
-			found, ok, err := method(ctx, aref, bref, ldb, rdb)
+			found, ok, err := method(ctx, mustRef(types.NewRef(a, ldb.Format())), mustRef(types.NewRef(b, rdb.Format())), ldb, rdb)
 			assert.NoError(err)
+
 			if assert.True(ok) {
 				tv, err := found.TargetValue(context.Background(), ldb)
 				assert.NoError(err)
-				ancestor := tv
-				expV, _ := GetCommitValue(ctx, ldb, expected)
-				aV, _ := GetCommitValue(ctx, ldb, a)
-				bV, _ := GetCommitValue(ctx, rdb, b)
-				ancV, _ := GetCommitValue(ctx, ldb, ancestor)
+				ancestor := tv.(types.Struct)
+				expV, _ := GetCommitValue(ctx, expected)
+				aV, _ := GetCommitValue(ctx, a)
+				bV, _ := GetCommitValue(ctx, b)
+				ancV, _ := GetCommitValue(ctx, ancestor)
 				assert.True(
 					expected.Equals(ancestor),
 					"%s should be common ancestor of %s, %s. Got %s",
@@ -348,7 +351,7 @@ func addCommit(t *testing.T, db *database, datasetID string, val string, parents
 	ds, err := db.GetDataset(context.Background(), datasetID)
 	assert.NoError(t, err)
 	ds, err = db.Commit(context.Background(), ds, types.String(val), CommitOptions{Parents: mustCommitToTargetHashes(db, parents...)})
-	require.NoError(t, err)
+	assert.NoError(t, err)
 	return mustHead(ds), mustHeadAddr(ds)
 }
 
@@ -415,9 +418,6 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	assertCommitParentsClosure := func(v types.Value, es []expected) {
-		if _, ok := v.(types.SerialMessage); ok {
-			t.Skip("__DOLT_DEV__ does not implement ParentsClosure yet.")
-		}
 		s, ok := v.(types.Struct)
 		if !assert.True(ok) {
 			return
@@ -592,10 +592,10 @@ func TestFindCommonAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
-		d2V, _ := GetCommitValue(ctx, db, d2)
-		a6V, _ := GetCommitValue(ctx, db, a6)
+		d2V, _ := GetCommitValue(ctx, d2)
+		a6V, _ := GetCommitValue(ctx, a6)
 		fTV, _ := found.TargetValue(ctx, db)
-		fV, _ := GetCommitValue(ctx, db, fTV)
+		fV, _ := GetCommitValue(ctx, fTV)
 
 		assert.Fail(
 			"Unexpected common ancestor!",
