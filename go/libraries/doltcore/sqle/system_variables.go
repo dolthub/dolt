@@ -73,7 +73,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              ReplicateHeadsKey,
-			Scope:             sql.SystemVariableScope_Session,
+			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemStringType(ReplicateHeadsKey),
@@ -81,7 +81,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              ReplicateAllHeadsKey,
-			Scope:             sql.SystemVariableScope_Session,
+			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ReplicateAllHeadsKey),

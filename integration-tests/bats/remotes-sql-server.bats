@@ -109,7 +109,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    server_query repo2 1 "show tables" "Table\ntest"
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
 }
 
 @test "remotes-sql-server: pull remote not found error" {
@@ -157,7 +157,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
     start_sql_server repo1
 
-    server_query repo1 1 "show tables" "Table\ntest"
+    server_query repo1 1 "show tables" "Tables_in_repo1\ntest"
 }
 
 @test "remotes-sql-server: pull multiple heads" {
@@ -198,7 +198,7 @@ teardown() {
     server_query repo2 1 "show tables" ""
     
     # Connecting to heads that exist only on the remote should work fine (they get fetched)
-    server_query "repo2/new_feature" 1 "show tables" "Table\ntest"
+    server_query "repo2/new_feature" 1 "show tables" "Tables_in_repo2/new_feature\ntest"
     server_query repo2 1 'use `repo2/new_feature2`' ""
     server_query repo2 1 'select * from `repo2/new_feature2`.test' "pk\n0\n1\n2"
 
@@ -232,7 +232,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    server_query repo2 1 "show tables" "Table\ntest"
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
 }
 
 @test "remotes-sql-server: pull invalid head" {
@@ -295,7 +295,7 @@ teardown() {
     start_sql_server repo2
 
     server_query repo2 1 "SHOW tables" "" # no tables on main
-    server_query "repo2/feature-branch" 1 "SHOW Tables" "Table\ntest"
+    server_query "repo2/feature-branch" 1 "SHOW Tables" "Tables_in_repo2/feature-branch\ntest"
 }
 
 @test "remotes-sql-server: connect to hash works" {
@@ -311,7 +311,7 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_heads main
     start_sql_server repo2
 
-    server_query repo2 1 "show tables" "Table\ntest"
+    server_query repo2 1 "show tables" "Tables_in_repo2\ntest"
     server_query repo2 1 "use \`repo2/$head_hash\`" ""
 }
 

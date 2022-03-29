@@ -69,7 +69,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
 	covers := indexCoversCols(idx, columns)
-	if covers {
+	if covers || idx.ID() == "PRIMARY" {
 		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
 	} else {
 		return NewIndexLookupRowIterAdapter(ctx, idx, nrr)
@@ -78,7 +78,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 
 func indexCoversCols(idx DoltIndex, cols []string) bool {
 	if cols == nil {
-		return false
+		cols = idx.Schema().GetAllCols().GetColumnNames()
 	}
 
 	var idxCols *schema.ColCollection

@@ -72,7 +72,7 @@ func (e *StaticErrorEditor) Update(*sql.Context, sql.Row, sql.Row) error {
 	return e.err
 }
 
-func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, interface{}) error {
+func (e *StaticErrorEditor) SetAutoIncrementValue(*sql.Context, uint64) error {
 	return e.err
 }
 

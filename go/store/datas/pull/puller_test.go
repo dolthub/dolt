@@ -131,7 +131,7 @@ func tempDirDB(ctx context.Context) (types.ValueReadWriter, datas.Database, erro
 		return nil, nil, err
 	}
 
-	st, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize)
+	st, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	if err != nil {
 		return nil, nil, err
 	}

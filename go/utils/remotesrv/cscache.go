@@ -60,7 +60,7 @@ func (cache *DBCache) Get(org, repo, nbfVerStr string) (*nbs.NomsBlockStore, err
 			return nil, err
 		}
 
-		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, id, defaultMemTableSize)
+		newCS, err = nbs.NewLocalStore(context.TODO(), nbfVerStr, id, defaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 
 		if err != nil {
 			return nil, err

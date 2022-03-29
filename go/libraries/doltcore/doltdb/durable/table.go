@@ -87,9 +87,9 @@ type Table interface {
 	SetConstraintViolations(ctx context.Context, violations types.Map) (Table, error)
 
 	// GetAutoIncrement returns the AUTO_INCREMENT sequence value for this table.
-	GetAutoIncrement(ctx context.Context) (types.Value, error)
+	GetAutoIncrement(ctx context.Context) (uint64, error)
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
-	SetAutoIncrement(ctx context.Context, val types.Value) (Table, error)
+	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
 }
 
 type nomsTable struct {
@@ -140,7 +140,7 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 		indexesKey:   indexesRef,
 	}
 
-	if autoIncVal != nil {
+	if schema.HasAutoIncrement(sch) && autoIncVal != nil {
 		sd[autoIncrementKey] = autoIncVal
 	}
 
@@ -461,53 +461,36 @@ func (t nomsTable) SetConstraintViolations(ctx context.Context, violationsMap ty
 }
 
 // GetAutoIncrement implements Table.
-func (t nomsTable) GetAutoIncrement(ctx context.Context) (types.Value, error) {
+func (t nomsTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
 	val, ok, err := t.tableStruct.MaybeGet(autoIncrementKey)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	if ok {
-		return val, nil
-	}
-
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return nil, err
+	if !ok {
+		return 1, nil
 	}
 
-	kind := types.UnknownKind
-	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			kind = col.Kind
-			stop = true
-		}
-		return
-	})
-	switch kind {
-	case types.IntKind:
-		return types.Int(1), nil
-	case types.UintKind:
-		return types.Uint(1), nil
-	case types.FloatKind:
-		return types.Float(1), nil
+	// older versions might have serialized auto-increment
+	// value as types.Int or types.Float.
+	switch t := val.(type) {
+	case types.Int:
+		return uint64(t), nil
+	case types.Uint:
+		return uint64(t), nil
+	case types.Float:
+		return uint64(t), nil
 	default:
-		return nil, ErrUnknownAutoIncrementValue
+		return 0, ErrUnknownAutoIncrementValue
 	}
 }
 
 // SetAutoIncrement implements Table.
-func (t nomsTable) SetAutoIncrement(ctx context.Context, val types.Value) (Table, error) {
-	switch val.(type) {
-	case types.Int, types.Uint, types.Float:
-		st, err := t.tableStruct.Set(autoIncrementKey, val)
-		if err != nil {
-			return nil, err
-		}
-		return nomsTable{t.vrw, st}, nil
-
-	default:
-		return nil, fmt.Errorf("cannot set auto increment to non-numeric value")
+func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, error) {
+	st, err := t.tableStruct.Set(autoIncrementKey, types.Uint(val))
+	if err != nil {
+		return nil, err
 	}
+	return nomsTable{t.vrw, st}, nil
 }
 
 func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

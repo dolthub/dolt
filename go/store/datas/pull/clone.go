@@ -17,6 +17,7 @@ package pull
 import (
 	"context"
 	"errors"
+	"io"
 
 	"github.com/cenkalti/backoff"
 	"golang.org/x/sync/errgroup"
@@ -85,13 +86,6 @@ func mapTableFiles(tblFiles []nbs.TableFile) ([]string, map[string]nbs.TableFile
 	return fileIds, fileIDtoTblFile, fileIDtoNumChunks
 }
 
-func stopWithErr(stats *iohelp.ReaderWithStats, err *error) {
-	e := stats.Stop()
-	if *err == nil && e != nil {
-		*err = e
-	}
-}
-
 const concurrentTableFileDownloads = 3
 
 func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<- TableFileEvent) error {
@@ -138,23 +132,24 @@ func clone(ctx context.Context, srcTS, sinkTS nbs.TableFileStore, eventCh chan<-
 					return backoff.Permanent(errors.New("table file not found. please try again"))
 				}
 
-				rd, contentLength, err := tblFile.Open(ctx)
-				if err != nil {
-					return err
-				}
-				rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
-				defer stopWithErr(rdStats, &err)
-
-				rdStats.Start(func(s iohelp.ReadStats) {
-					report(TableFileEvent{
-						EventType:  DownloadStats,
-						TableFiles: []nbs.TableFile{tblFile},
-						Stats:      []iohelp.ReadStats{s},
-					})
-				})
-
 				report(TableFileEvent{EventType: DownloadStart, TableFiles: []nbs.TableFile{tblFile}})
-				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), rdStats, contentLength, nil)
+				err = sinkTS.WriteTableFile(ctx, tblFile.FileID(), tblFile.NumChunks(), nil, func() (io.ReadCloser, uint64, error) {
+					rd, contentLength, err := tblFile.Open(ctx)
+					if err != nil {
+						return nil, 0, err
+					}
+					rdStats := iohelp.NewReaderWithStats(rd, int64(contentLength))
+
+					rdStats.Start(func(s iohelp.ReadStats) {
+						report(TableFileEvent{
+							EventType:  DownloadStats,
+							TableFiles: []nbs.TableFile{tblFile},
+							Stats:      []iohelp.ReadStats{s},
+						})
+					})
+
+					return rdStats, contentLength, nil
+				})
 				if err != nil {
 					report(TableFileEvent{EventType: DownloadFailed, TableFiles: []nbs.TableFile{tblFile}})
 					return err

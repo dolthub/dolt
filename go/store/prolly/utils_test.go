@@ -40,6 +40,13 @@ var _ orderedMap = Map{}
 var _ orderedMap = MutableMap{}
 var _ orderedMap = memoryMap{}
 
+type ordinalMap interface {
+	orderedMap
+	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error)
+}
+
+var _ orderedMap = Map{}
+
 func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
 	require.NoError(t, err)

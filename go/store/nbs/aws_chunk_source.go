@@ -28,80 +28,48 @@ import (
 	"time"
 )
 
-type indexParserF func([]byte) (tableIndex, error)
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, stats *Stats, parseIndex indexParserF) (cs chunkSource, err error) {
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
-
-			if err == nil {
-				err = unlockErr
-			}
-		}()
-
-		if index, found := indexCache.get(name); found {
-			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			tr, err := newTableReader(index, tra, s3BlockSize)
-			if err != nil {
-				return &chunkSourceAdapter{}, err
-			}
-			return &chunkSourceAdapter{tr, name}, nil
-		}
-	}
-
-	t1 := time.Now()
-	index, tra, err := func() (tableIndex, tableReaderAt, error) {
+	index, tra, err := func() (onHeapTableIndex, tableReaderAt, error) {
 		if al.tableMayBeInDynamo(chunkCount) {
+			t1 := time.Now()
 			data, err := ddb.ReadTable(ctx, name, stats)
-
 			if data == nil && err == nil { // There MUST be either data or an error
 				return onHeapTableIndex{}, &dynamoTableReaderAt{}, errors.New("no data available")
 			}
-
 			if data != nil {
+				stats.IndexReadLatency.SampleTimeSince(t1)
 				stats.IndexBytesPerRead.Sample(uint64(len(data)))
-				ind, err := parseTableIndexByCopy(data)
+				ind, err := parseTableIndexByCopy(data, q)
 				if err != nil {
-					return onHeapTableIndex{}, nil, err
+					return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
 				}
 				return ind, &dynamoTableReaderAt{ddb: ddb, h: name}, nil
 			}
-
 			if _, ok := err.(tableNotInDynamoErr); !ok {
 				return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
 			}
 		}
-		size := indexSize(chunkCount) + footerSize
-		buff := make([]byte, size)
-		n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
-		if err != nil {
-			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
-		}
-		if size != uint64(n) {
-			return onHeapTableIndex{}, &dynamoTableReaderAt{}, errors.New("failed to read all data")
-		}
-		stats.IndexBytesPerRead.Sample(uint64(len(buff)))
-		ind, err := parseTableIndex(buff)
-		if err != nil {
-			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
-		}
-		return ind, &s3TableReaderAt{s3: s3, h: name}, nil
-	}()
 
+		index, err := loadTableIndex(stats, chunkCount, q, func(bytesFromEnd int64) ([]byte, error) {
+			buff := make([]byte, bytesFromEnd)
+			n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
+			if err != nil {
+				return nil, err
+			}
+			if bytesFromEnd != int64(n) {
+				return nil, errors.New("failed to read all data")
+			}
+			return buff, nil
+		})
+		if err != nil {
+			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
+		}
+
+		return index, &s3TableReaderAt{h: name, s3: s3}, nil
+	}()
 	if err != nil {
 		return &chunkSourceAdapter{}, err
-	}
-
-	stats.IndexReadLatency.SampleTimeSince(t1)
-
-	if err != nil {
-		return emptyChunkSource{}, err
-	}
-
-	if ohi, ok := index.(onHeapTableIndex); indexCache != nil && ok {
-		indexCache.put(name, ohi)
 	}
 
 	tr, err := newTableReader(index, tra, s3BlockSize)
