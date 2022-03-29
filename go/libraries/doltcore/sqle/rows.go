@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -175,7 +174,13 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 	if err != nil {
 		return nil, err
 	}
-	return index.NewProllyRowIter(ctx, sch, rows, partition.rowRange, projections)
+
+	iter, err := rows.IterOrdinalRange(ctx, partition.start, partition.end)
+	if err != nil {
+		return nil, err
+	}
+
+	return index.NewProllyRowIter(ctx, sch, rows, iter, projections)
 }
 
 // Returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -198,12 +203,6 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 	p := doltTablePartition{
 		end:     NoUpperBound,
 		rowData: data,
-	}
-
-	if types.IsFormat_DOLT_1(data.Format()) {
-		m := durable.ProllyMapFromIndex(data)
-		kd, _ := m.Descriptors()
-		p.rowRange = prolly.Range{Start: nil, Stop: nil, Desc: kd}
 	}
 
 	return newRowIterator(ctx, t, columns, p)
