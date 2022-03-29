@@ -82,8 +82,11 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 
 // IterValueRange returns a MutableMapRangeIter that iterates over a Range.
 func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	memIter := mm.iterFromRange(rng)
-	return NewMutableMapRangeIter(memIter, nil, rng), nil
+	return MutableMapRangeIter{
+		memory: mm.iterFromRange(rng),
+		prolly: emptyIter{},
+		rng:    rng,
+	}, nil
 }
 
 func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {

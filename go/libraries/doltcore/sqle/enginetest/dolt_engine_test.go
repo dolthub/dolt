@@ -43,15 +43,20 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    `SELECT * from mytable`,
-		Expected: []sql.Row{},
+		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2
+				FROM two_pk a JOIN two_pk b
+				ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2
+				ORDER BY 1,2,3`,
+		Expected: []sql.Row{
+			{0, 0, 1, 1},
+		},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
 	enginetest.CreateIndexes(t, harness, engine)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
@@ -124,10 +129,7 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// todo(andy): unskip after secondary index support
-		t.Skip()
-	}
+	skipNewFormat(t)
 
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
@@ -151,6 +153,7 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
 
@@ -207,10 +210,7 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// todo(andy): unskip
-		t.Skip()
-	}
+	skipNewFormat(t)
 
 	skipped := []string{
 		"create index r_c0 on r (c0);",
@@ -234,6 +234,8 @@ func TestScripts(t *testing.T) {
 
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
+	skipNewFormat(t)
+
 	harness := newDoltHarness(t)
 	for _, script := range DoltUserPrivTests {
 		t.Run(script.Name, func(t *testing.T) {
@@ -295,10 +297,12 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -453,6 +457,7 @@ func TestTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
+	skipNewFormat(t)
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
@@ -466,9 +471,7 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
+	skipNewFormat(t)
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -608,6 +611,7 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffTableFunction(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 
 	for _, test := range DiffTableFunctionScriptTests {
@@ -667,4 +671,10 @@ func TestPersist(t *testing.T) {
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
+}
+
+func skipNewFormat(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 }

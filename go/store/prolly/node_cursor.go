@@ -99,6 +99,27 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 	return
 }
 
+func newCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64) (cur *nodeCursor, err error) {
+	distance := int64(ord)
+	return newCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
+		if nd.leafNode() {
+			return int(distance)
+		}
+
+		// |subtrees| contains cardinalities of each child tree in |nd|
+		subtrees := nd.getSubtreeCounts()
+
+		for idx = range subtrees {
+			card := int64(subtrees[idx])
+			if (distance - card) < 0 {
+				break
+			}
+			distance -= card
+		}
+		return
+	})
+}
+
 func newCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search searchFn) (cur *nodeCursor, err error) {
 	cur = &nodeCursor{nd: nd, nrw: nrw}
 

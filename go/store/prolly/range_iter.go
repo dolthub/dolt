@@ -25,8 +25,24 @@ type MapRangeIter interface {
 	Next(ctx context.Context) (key, value val.Tuple, err error)
 }
 
+var _ MapRangeIter = emptyIter{}
 var _ MapRangeIter = &prollyRangeIter{}
+var _ MapRangeIter = &pointLookup{}
 var _ MapRangeIter = &MutableMapRangeIter{}
+
+type pointLookup struct {
+	k, v val.Tuple
+}
+
+func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
+	if p.k == nil || p.v == nil {
+		err = io.EOF
+	} else {
+		key, value = p.k, p.v
+		p.k, p.v = nil, nil
+	}
+	return
+}
 
 type rangeIter interface {
 	iterate(ctx context.Context) error
@@ -38,27 +54,16 @@ var _ rangeIter = &prollyRangeIter{}
 
 type emptyIter struct{}
 
+func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
+	return nil, nil, io.EOF
+}
+
 func (e emptyIter) iterate(ctx context.Context) (err error) {
 	return
 }
 
 func (e emptyIter) current() (key, value val.Tuple) {
 	return
-}
-
-func NewMutableMapRangeIter(memory, prolly rangeIter, rng Range) MapRangeIter {
-	if memory == nil {
-		memory = emptyIter{}
-	}
-	if prolly == nil {
-		prolly = emptyIter{}
-	}
-
-	return MutableMapRangeIter{
-		memory: memory,
-		prolly: prolly,
-		rng:    rng,
-	}
 }
 
 // MutableMapRangeIter iterates over a Range of Tuples.
@@ -179,5 +184,11 @@ func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
 		it.curr = nil
 	}
 
+	return
+}
+
+func (it *prollyRangeIter) firstLastKeys() (first, last val.Tuple) {
+	first = val.Tuple(it.curr.currentKey())
+	last = val.Tuple(it.stop.currentKey())
 	return
 }

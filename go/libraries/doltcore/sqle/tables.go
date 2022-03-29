@@ -42,7 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -673,9 +672,6 @@ type doltTablePartition struct {
 	// half-open index range of partition: [start, end)
 	start, end uint64
 
-	// value range of partition for "prolly" implementation
-	rowRange prolly.Range
-
 	rowData durable.Index
 }
 
@@ -686,21 +682,11 @@ func partitionsFromRows(ctx context.Context, rows durable.Index) []doltTablePart
 		}
 	}
 
-	nbf := rows.Format()
-	switch nbf {
-	case types.Format_LD_1, types.Format_7_18, types.Format_DOLT_DEV:
-		nm := durable.NomsMapFromIndex(rows)
-		return partitionsFromNomsRows(nm, durable.VrwFromNomsIndex(rows))
-
-	case types.Format_DOLT_1:
-		return partitionsFromProllyRows(rows)
-	}
-
-	return nil
+	return partitionsFromTableRows(rows)
 }
 
-func partitionsFromNomsRows(rows types.Map, vrw types.ValueReadWriter) []doltTablePartition {
-	numElements := rows.Len()
+func partitionsFromTableRows(rows durable.Index) []doltTablePartition {
+	numElements := rows.Count()
 	itemsPerPartition := MaxRowsPerPartition
 	numPartitions := (numElements / itemsPerPartition) + 1
 
@@ -719,39 +705,17 @@ func partitionsFromNomsRows(rows types.Map, vrw types.ValueReadWriter) []doltTab
 		partitions[i] = doltTablePartition{
 			start:   i * itemsPerPartition,
 			end:     (i + 1) * itemsPerPartition,
-			rowData: durable.IndexFromNomsMap(rows, vrw),
+			rowData: rows,
 		}
 	}
 
 	partitions[numPartitions-1] = doltTablePartition{
 		start:   (numPartitions - 1) * itemsPerPartition,
 		end:     numElements,
-		rowData: durable.IndexFromNomsMap(rows, vrw),
+		rowData: rows,
 	}
 
 	return partitions
-}
-
-func partitionsFromProllyRows(rows durable.Index) []doltTablePartition {
-	pm := durable.ProllyMapFromIndex(rows)
-	keyDesc, _ := pm.Descriptors()
-
-	// naively divide map by top-level keys
-	keys := prolly.PartitionKeysFromMap(pm)
-
-	first := prolly.LesserOrEqualRange(keys[0], keyDesc)
-
-	parts := make([]doltTablePartition, len(keys))
-	parts[0] = doltTablePartition{rowRange: first, rowData: rows}
-	for i := range parts {
-		if i == 0 {
-			continue
-		}
-		rng := prolly.OpenStartRange(keys[i-1], keys[i], keyDesc)
-		parts[i] = doltTablePartition{rowRange: rng, rowData: rows}
-	}
-
-	return parts
 }
 
 // Key returns the key for this partition, which must uniquely identity the partition.
