@@ -44,7 +44,7 @@ type nomsSyncTestSuite struct {
 }
 
 func (s *nomsSyncTestSuite) TestSyncValidation() {
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
 	source1, err := sourceDB.GetDataset(context.Background(), "src")
@@ -69,7 +69,7 @@ func (s *nomsSyncTestSuite) TestSyncValidation() {
 func (s *nomsSyncTestSuite) TestSync() {
 	defer s.NoError(file.RemoveAll(s.DBDir2))
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
 	source1, err := sourceDB.GetDataset(context.Background(), "src")
@@ -88,7 +88,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sout, _ := s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
 
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest, err := db.GetDataset(context.Background(), "dest")
@@ -101,7 +101,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Synced", sout)
 
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest, err = db.GetDataset(context.Background(), "dest")
@@ -118,7 +118,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
 	s.Regexp("Created", sout)
 
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest, err = db.GetDataset(context.Background(), "dest2")
@@ -130,7 +130,7 @@ func (s *nomsSyncTestSuite) TestSync() {
 func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	defer s.NoError(file.RemoveAll(s.DBDir2))
 
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
 	// Create dataset "src1", which has a lineage of two commits.
@@ -153,7 +153,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sourceDataset := spec.CreateValueSpecString("nbs", s.DBDir, "src1")
 	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir2, "dest")
 	sout, _ := s.MustRun(main, []string{"sync", sourceDataset, sinkDatasetSpec})
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest, err := db.GetDataset(context.Background(), "dest")
@@ -165,7 +165,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 	sourceDataset2 := spec.CreateValueSpecString("nbs", s.DBDir, "src2")
 	sinkDatasetSpec2 := spec.CreateValueSpecString("nbs", s.DBDir2, "dest2")
 	sout, _ = s.MustRun(main, []string{"sync", sourceDataset2, sinkDatasetSpec2})
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir2, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db = datas.NewDatabase(cs)
 	dest, err = db.GetDataset(context.Background(), "dest2")
@@ -179,7 +179,7 @@ func (s *nomsSyncTestSuite) TestSync_Issue2598() {
 
 func (s *nomsSyncTestSuite) TestRewind() {
 	var err error
-	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
+	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	sourceDB := datas.NewDatabase(cs)
 	src, err := sourceDB.GetDataset(context.Background(), "foo")
@@ -195,7 +195,7 @@ func (s *nomsSyncTestSuite) TestRewind() {
 	sinkDatasetSpec := spec.CreateValueSpecString("nbs", s.DBDir, "foo")
 	s.MustRun(main, []string{"sync", sourceSpec, sinkDatasetSpec})
 
-	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize)
+	cs, err = nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), s.DBDir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 	dest, err := db.GetDataset(context.Background(), "foo")

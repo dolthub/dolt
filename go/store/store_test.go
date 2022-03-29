@@ -41,7 +41,7 @@ func poe(err error) {
 }
 
 func getDBAtDir(ctx context.Context, dir string) (datas.Database, types.ValueReadWriter) {
-	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, 1<<28)
+	cs, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), dir, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 	poe(err)
 
 	vrw := types.NewValueStore(nbs.NewNBSMetricWrapper(cs))

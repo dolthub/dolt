@@ -275,6 +275,14 @@ type chunkSource interface {
 	Clone() (chunkSource, error)
 }
 
+func getCSMemSize(cs chunkSource) (uint64, error) {
+	i, err := cs.index()
+	if err != nil {
+		return 0, err
+	}
+	return memSize(i.ChunkCount()), nil
+}
+
 type chunkSources []chunkSource
 
 // TableFile is an interface for working with an existing table file

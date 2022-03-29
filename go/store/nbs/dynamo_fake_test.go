@@ -56,7 +56,7 @@ func (m *fakeDDB) readerForTable(name addr) (chunkReader, error) {
 	if i, present := m.data[fmtTableName(name)]; present {
 		buff, ok := i.([]byte)
 		assert.True(m.t, ok)
-		ti, err := parseTableIndex(buff)
+		ti, err := parseTableIndex(buff, &noopQuotaProvider{})
 
 		if err != nil {
 			return nil, err

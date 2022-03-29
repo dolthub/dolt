@@ -43,7 +43,7 @@ func NewCache(ctx context.Context) (*NomsBlockCache, error) {
 		return nil, err
 	}
 
-	store, err := NewLocalStore(ctx, types.Format_Default.VersionString(), dir, defaultCacheMemTableSize)
+	store, err := NewLocalStore(ctx, types.Format_Default.VersionString(), dir, defaultCacheMemTableSize, NewUnlimitedMemQuotaProvider())
 
 	if err != nil {
 		return nil, err
