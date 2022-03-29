@@ -194,8 +194,8 @@ const (
 	// The schema fragment associated with the database entity.
 	// For example, the SELECT statement for a CREATE VIEW.
 	SchemasTablesFragmentCol = "fragment"
-	// The schema time at which a trigger or view is created
-	SchemasTablesCreateCol = "create"
+	// The extra information for schema; currently contains creation time for triggers and views
+	SchemasTablesExtraCol = "extra"
 	// The name of the index that is on the table.
 	SchemasTablesIndexName = "fragment_name"
 )

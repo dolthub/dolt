@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"io"
 	"time"
 
@@ -39,6 +40,10 @@ const (
 	triggerFragment = "trigger"
 )
 
+type Extra struct {
+	CreatedAt int64
+}
+
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
 	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
@@ -57,7 +62,7 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	createCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesCreateCol, schema.DoltSchemasCreateTag, typeinfo.Int64Type, false, "", false, "")
+	createCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
@@ -79,7 +84,7 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	if found {
 		schemasTable := tbl.(*WritableDoltTable)
 		// Old schemas table does not contain the `id` column.
-		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
+		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
@@ -317,10 +322,18 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		if sqlRow[0] != fragType {
 			continue
 		}
+		// Parse json column
+		extraJSON := sqlRow[4].(json.NomsJSON)
+		doc, err := extraJSON.Unmarshall(ctx)
+		val := doc.Val.(map[string]interface{})
+		createdTime := int64(val["CreatedAt"].(float64))
+		if err != nil {
+			return nil, err
+		}
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),
-			created:  time.Unix(sqlRow[4].(int64), 0),
+			created:  time.Unix(createdTime, 0).UTC(),
 		})
 	}
 	return frags, nil

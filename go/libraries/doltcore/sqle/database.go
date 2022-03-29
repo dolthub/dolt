@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -1021,7 +1022,15 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, created})
+	// Encode createdAt time to JSON
+	extra := Extra{
+		CreatedAt: created.Unix(),
+	}
+	extraJSON, err := json.Marshal(extra)
+	if err != nil {
+		return err
+	}
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, extraJSON})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {

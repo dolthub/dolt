@@ -165,7 +165,7 @@ func TestSystemTableTags(t *testing.T) {
 		assert.Equal(t, doltSchemasMin+1, schema.DoltSchemasTypeTag)
 		assert.Equal(t, doltSchemasMin+2, schema.DoltSchemasNameTag)
 		assert.Equal(t, doltSchemasMin+3, schema.DoltSchemasFragmentTag)
-		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasCreateTag)
+		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasExtraTag)
 	})
 }
 

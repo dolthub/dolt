@@ -78,7 +78,7 @@ const (
 	DoltSchemasTypeTag
 	DoltSchemasNameTag
 	DoltSchemasFragmentTag
-	DoltSchemasCreateTag
+	DoltSchemasExtraTag
 )
 
 // Tags for hidden columns in keyless rows
