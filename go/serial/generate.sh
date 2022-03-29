@@ -7,6 +7,7 @@ rm $GEN_DIR/*.go
 
 # generate golang (de)serialization package
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
+  commit.fbs \
   database.fbs \
   prolly.fbs \
   schema.fbs \

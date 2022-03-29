@@ -31,6 +31,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 )
@@ -232,6 +233,13 @@ func (fp FieldPath) Resolve(ctx context.Context, v Value, vr ValueReader) (Value
 			return nil, err
 		} else if ok {
 			return sv, nil
+		}
+	case SerialMessage:
+		data := []byte(v)
+		if serial.GetFileID(data) == serial.CommitFileID && fp.Name == "value" {
+			msg := serial.GetRootAsCommit(data, 0)
+			addr := hash.New(msg.RootBytes())
+			return vr.ReadValue(ctx, addr)
 		}
 	case *Type:
 		if desc, ok := v.Desc.(StructDesc); ok {

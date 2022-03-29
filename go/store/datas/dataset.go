@@ -52,6 +52,8 @@ type dsHead interface {
 	Addr() hash.Hash
 	HeadTag() (*TagMeta, hash.Hash, error)
 	HeadWorkingSet() (*WorkingSetHead, error)
+
+	value() types.Value
 }
 
 type nomsHead struct {
@@ -65,6 +67,10 @@ func (h nomsHead) TypeName() string {
 
 func (h nomsHead) Addr() hash.Hash {
 	return h.addr
+}
+
+func (h nomsHead) value() types.Value {
+	return h.st
 }
 
 type serialTagHead struct {
@@ -82,6 +88,10 @@ func (h serialTagHead) TypeName() string {
 
 func (h serialTagHead) Addr() hash.Hash {
 	return h.addr
+}
+
+func (h serialTagHead) value() types.Value {
+	return types.SerialMessage(h.msg.Table().Bytes)
 }
 
 func (h serialTagHead) HeadTag() (*TagMeta, hash.Hash, error) {
@@ -117,6 +127,10 @@ func (h serialWorkingSetHead) Addr() hash.Hash {
 	return h.addr
 }
 
+func (h serialWorkingSetHead) value() types.Value {
+	return types.SerialMessage(h.msg.Table().Bytes)
+}
+
 func (h serialWorkingSetHead) HeadTag() (*TagMeta, hash.Hash, error) {
 	return nil, hash.Hash{}, errors.New("HeadTag called on working set")
 }
@@ -141,6 +155,35 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	return &ret, nil
 }
 
+type serialCommitHead struct {
+	msg  types.SerialMessage
+	addr hash.Hash
+}
+
+func newSerialCommitHead(sm types.SerialMessage, addr hash.Hash) serialCommitHead {
+	return serialCommitHead{sm, addr}
+}
+
+func (h serialCommitHead) TypeName() string {
+	return commitName
+}
+
+func (h serialCommitHead) Addr() hash.Hash {
+	return h.addr
+}
+
+func (h serialCommitHead) value() types.Value {
+	return h.msg
+}
+
+func (h serialCommitHead) HeadTag() (*TagMeta, hash.Hash, error) {
+	return nil, hash.Hash{}, errors.New("HeadTag called on commit")
+}
+
+func (h serialCommitHead) HeadWorkingSet() (*WorkingSetHead, error) {
+	return nil, errors.New("HeadWorkingSet called on commit")
+}
+
 // Dataset is a named value within a Database. Different head values may be stored in a dataset. Most commonly, this is
 // a commit, but other values are also supported in some cases.
 type Dataset struct {
@@ -161,6 +204,9 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		}
 		if serial.GetFileID(data) == serial.WorkingSetFileID {
 			return newSerialWorkingSetHead(data, addr), nil
+		}
+		if serial.GetFileID(data) == serial.CommitFileID {
+			return newSerialCommitHead(sm, addr), nil
 		}
 	}
 
@@ -213,7 +259,12 @@ func (ds Dataset) MaybeHead() (types.Value, bool) {
 	if ds.head == nil {
 		return types.Struct{}, false
 	}
-	return ds.head.(nomsHead).st, true
+	if nh, ok := ds.head.(nomsHead); ok {
+		return nh.st, true
+	} else if sch, ok := ds.head.(serialCommitHead); ok {
+		return sch.msg, true
+	}
+	panic("unexpected ds.head type for MaybeHead call")
 }
 
 // MaybeHeadRef returns the Ref of the current Head Commit of this Dataset,
@@ -352,11 +403,11 @@ func (ds Dataset) HasHead() bool {
 // available. If not it returns nil and 'false'.
 func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 	if c, ok := ds.MaybeHead(); ok {
-		v, err := GetCommitValue(context.TODO(), c)
+		v, err := GetCommitValue(context.TODO(), ds.db, c)
 		if err != nil {
 			return nil, false, err
 		}
-		return v, true, nil
+		return v, v != nil, nil
 	}
 	return nil, false, nil
 }
