@@ -28,7 +28,7 @@ jobs:
     - name: Test All with New Format
       working-directory: ./go
       run: |
-        go test -timeout 30m "./libraries/doltcore/sqle/enginetest/dolt_engine_test.go"
+        go test -timeout 30m "./libraries/doltcore/sqle/enginetest/..."
       env:
         MATRIX_OS: ${{ matrix.os }}
         DOLT_FORMAT_FEATURE_FLAG: "true"
