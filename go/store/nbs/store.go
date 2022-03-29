@@ -60,8 +60,7 @@ const (
 	defaultMemTableSize uint64 = (1 << 20) * 128 // 128MB
 	defaultMaxTables           = 256
 
-	defaultIndexCacheSize    = (1 << 20) * 64 // 64MB
-	defaultManifestCacheSize = 1 << 23        // 8MB
+	defaultManifestCacheSize = 1 << 23 // 8MB
 	preflushChunkCount       = 8
 
 	copyTableFileBufferSize = 128 * 1024 * 1024
@@ -69,13 +68,11 @@ const (
 
 var (
 	cacheOnce           = sync.Once{}
-	globalIndexCache    *indexCache
 	makeManifestManager func(manifest) manifestManager
 	globalFDCache       *fdCache
 )
 
 func makeGlobalCaches() {
-	globalIndexCache = newIndexCache(defaultIndexCacheSize)
 	globalFDCache = newFDCache(defaultMaxTables)
 
 	manifestCache := newManifestCache(defaultManifestCacheSize)
@@ -453,7 +450,6 @@ func NewAWSStoreWithMMapIndex(ctx context.Context, nbfVerStr string, table, ns, 
 		readRateLimiter,
 		&ddbTableStore{ddb, table, readRateLimiter, nil},
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
-		globalIndexCache,
 		ns,
 		q,
 	}
@@ -470,7 +466,6 @@ func NewAWSStore(ctx context.Context, nbfVerStr string, table, ns, bucket string
 		readRateLimiter,
 		&ddbTableStore{ddb, table, readRateLimiter, nil},
 		awsLimits{defaultS3PartSize, minS3PartSize, maxS3PartSize, maxDynamoItemSize, maxDynamoChunks},
-		globalIndexCache,
 		ns,
 		q,
 	}
@@ -492,7 +487,7 @@ func NewBSStore(ctx context.Context, nbfVerStr string, bs blobstore.Blobstore, m
 
 	mm := makeManifestManager(blobstoreManifest{"manifest", bs})
 
-	p := &blobstorePersister{bs, s3BlockSize, globalIndexCache, q}
+	p := &blobstorePersister{bs, s3BlockSize, q}
 	return newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{defaultMaxTables}, memTableSize)
 }
 
@@ -515,7 +510,7 @@ func newLocalStore(ctx context.Context, nbfVerStr string, dir string, memTableSi
 	}
 
 	mm := makeManifestManager(m)
-	p := newFSTablePersister(dir, globalFDCache, globalIndexCache, q)
+	p := newFSTablePersister(dir, globalFDCache, q)
 	nbs, err := newNomsBlockStore(ctx, nbfVerStr, mm, p, q, inlineConjoiner{maxTables}, memTableSize)
 
 	if err != nil {

@@ -346,9 +346,10 @@ func (ti onHeapTableIndex) Close() error {
 }
 
 func (ti onHeapTableIndex) Clone() (tableIndex, error) {
-	_ = atomic.AddInt32(ti.refCnt, 1)
-	// We allow Closed onHeapTableIndex's to be Cloned because we may pull a
-	// closed index from the singleton indexCache.
+	cnt := atomic.AddInt32(ti.refCnt, 1)
+	if cnt == 1 {
+		panic("Clone() called after last Close(). This index is no longer valid.")
+	}
 	return ti, nil
 }
 

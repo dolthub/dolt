@@ -44,7 +44,7 @@ func TestFSTableCacheOnOpen(t *testing.T) {
 	cacheSize := 2
 	fc := newFDCache(cacheSize)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	// Create some tables manually, load them into the cache
 	func() {
@@ -120,7 +120,7 @@ func TestFSTablePersisterPersist(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	src, err := persistTableData(fts, testChunks...)
 	require.NoError(t, err)
@@ -159,7 +159,7 @@ func TestFSTablePersisterPersistNoData(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	src, err := fts.Persist(context.Background(), mt, existingTable, &Stats{})
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestFSTablePersisterCacheOnPersist(t *testing.T) {
 	dir := makeTempDir(t)
 	fc := newFDCache(1)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 	defer file.RemoveAll(dir)
 
 	var name addr
@@ -210,7 +210,7 @@ func TestFSTablePersisterConjoinAll(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(len(sources))
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	for i, c := range testChunks {
 		randChunk := make([]byte, (i+1)*13)
@@ -246,7 +246,7 @@ func TestFSTablePersisterConjoinAllDups(t *testing.T) {
 	defer file.RemoveAll(dir)
 	fc := newFDCache(defaultMaxTables)
 	defer fc.Drop()
-	fts := newFSTablePersister(dir, fc, nil, &noopQuotaProvider{})
+	fts := newFSTablePersister(dir, fc, &noopQuotaProvider{})
 
 	reps := 3
 	sources := make(chunkSources, reps)

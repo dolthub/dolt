@@ -28,30 +28,7 @@ import (
 	"time"
 )
 
-func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, indexCache *indexCache, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
-
-			if err == nil {
-				err = unlockErr
-			}
-		}()
-
-		index, err := indexCache.get(name)
-		if err == nil {
-			tra := &awsTableReaderAt{al: al, ddb: ddb, s3: s3, name: name, chunkCount: chunkCount}
-			tr, err := newTableReader(index, tra, s3BlockSize)
-			if err != nil {
-				return &chunkSourceAdapter{}, err
-			}
-			return &chunkSourceAdapter{tr, name}, nil
-		}
-		if err != errCacheMiss {
-			return &chunkSourceAdapter{}, err
-		}
-	}
+func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
 	index, tra, err := func() (onHeapTableIndex, tableReaderAt, error) {
 		if al.tableMayBeInDynamo(chunkCount) {
@@ -93,10 +70,6 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 	}()
 	if err != nil {
 		return &chunkSourceAdapter{}, err
-	}
-
-	if indexCache != nil {
-		indexCache.put(name, index)
 	}
 
 	tr, err := newTableReader(index, tra, s3BlockSize)

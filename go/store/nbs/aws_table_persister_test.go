@@ -56,13 +56,11 @@ func TestAWSTablePersisterPersist(t *testing.T) {
 			t.Run("InMultipleParts", func(t *testing.T) {
 				assert := assert.New(t)
 				s3svc, ddb := makeFakeS3(t), makeFakeDTS(makeFakeDDB(t), nil)
-				ic := newIndexCache(1024)
 				limits := awsLimits{partTarget: calcPartSize(mt, 3)}
-				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, indexCache: ic, ns: ns, q: &noopQuotaProvider{}}
+				s3p := awsTablePersister{s3: s3svc, bucket: "bucket", ddb: ddb, limits: limits, ns: ns, q: &noopQuotaProvider{}}
 
 				src, err := s3p.Persist(context.Background(), mt, nil, &Stats{})
 				require.NoError(t, err)
-				assert.NotNil(ic.get(mustAddr(src.hash())))
 
 				if assert.True(mustUint32(src.count()) > 0) {
 					if r, err := s3svc.readerForTableWithNamespace(ns, mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -328,7 +326,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 	minPartSize, maxPartSize := targetPartSize, 5*targetPartSize
 	maxItemSize, maxChunkCount := int(targetPartSize/2), uint32(4)
 
-	ic := newIndexCache(1024)
 	rl := make(chan struct{}, 8)
 	defer close(rl)
 
@@ -339,7 +336,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			rl,
 			ddb,
 			awsLimits{targetPartSize, minPartSize, maxPartSize, maxItemSize, maxChunkCount},
-			ic,
 			"",
 			&noopQuotaProvider{},
 		}
@@ -378,7 +374,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, chunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
-			assert.NotNil(ic.get(mustAddr(src.hash())))
 
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -395,7 +390,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 			sources := makeSources(s3p, smallChunks)
 			src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 			require.NoError(t, err)
-			assert.NotNil(ic.get(mustAddr(src.hash())))
 
 			if assert.True(mustUint32(src.count()) > 0) {
 				if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -432,7 +426,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 		}
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
-		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -469,7 +462,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
-		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {
@@ -520,7 +512,6 @@ func TestAWSTablePersisterConjoinAll(t *testing.T) {
 
 		src, err := s3p.ConjoinAll(context.Background(), sources, &Stats{})
 		require.NoError(t, err)
-		assert.NotNil(ic.get(mustAddr(src.hash())))
 
 		if assert.True(mustUint32(src.count()) > 0) {
 			if r, err := s3svc.readerForTable(mustAddr(src.hash())); assert.NotNil(r) && assert.NoError(err) {

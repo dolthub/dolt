@@ -75,22 +75,3 @@ func TestPlanCompaction(t *testing.T) {
 		assertChunksInReader(content, tr, assert)
 	}
 }
-
-func TestIndexCacheClonesIndicesOnGet(t *testing.T) {
-	chunks := [][]byte{
-		[]byte("hello2"),
-		[]byte("goodbye2"),
-		[]byte("badbye2"),
-	}
-	indexBytes, h, _ := buildTable(chunks)
-	index, err := parseTableIndexByCopy(indexBytes, &noopQuotaProvider{})
-	require.NoError(t, err)
-	require.Equal(t, int32(1), *index.refCnt)
-
-	indexCache := newIndexCache(1024)
-	indexCache.put(h, index)
-
-	index2, err := indexCache.get(h)
-	require.NoError(t, err)
-	require.Equal(t, int32(2), *index2.refCnt)
-}

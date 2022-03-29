@@ -27,11 +27,7 @@ import (
 	"crypto/sha512"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"sort"
-	"sync"
-
-	"github.com/dolthub/dolt/go/store/util/sizecache"
 )
 
 var errCacheMiss = errors.New("index cache miss")
@@ -55,71 +51,6 @@ type tablePersister interface {
 
 	// PruneTableFiles deletes old table files that are no longer referenced in the manifest.
 	PruneTableFiles(ctx context.Context, contents manifestContents) error
-}
-
-// indexCache provides sized storage for table indices. While getting and/or
-// setting the cache entry for a given table name, the caller MUST hold the
-// lock that for that entry.
-type indexCache struct {
-	cache  *sizecache.SizeCache
-	cond   *sync.Cond
-	locked map[addr]struct{}
-}
-
-// Returns an indexCache which will burn roughly |size| bytes of memory.
-func newIndexCache(size uint64) *indexCache {
-	return &indexCache{sizecache.New(size), sync.NewCond(&sync.Mutex{}), map[addr]struct{}{}}
-}
-
-// Take an exclusive lock on the cache entry for |name|. Callers must do this
-// before calling get(addr) or put(addr, index)
-func (sic *indexCache) lockEntry(name addr) {
-	sic.cond.L.Lock()
-	defer sic.cond.L.Unlock()
-
-	for {
-		if _, present := sic.locked[name]; !present {
-			sic.locked[name] = struct{}{}
-			break
-		}
-		sic.cond.Wait()
-	}
-}
-
-func (sic *indexCache) unlockEntry(name addr) error {
-	sic.cond.L.Lock()
-	defer sic.cond.L.Unlock()
-
-	_, ok := sic.locked[name]
-
-	if !ok {
-		return fmt.Errorf("failed to unlock %s", name.String())
-	}
-
-	delete(sic.locked, name)
-
-	sic.cond.Broadcast()
-
-	return nil
-}
-
-// get returns errCacheMiss if the index with |name| was not found in the cache. It always retuns a Clone of the index.
-func (sic *indexCache) get(name addr) (onHeapTableIndex, error) {
-	if idx, found := sic.cache.Get(name); found {
-		index := idx.(onHeapTableIndex)
-		index2, err := index.Clone()
-		if err != nil {
-			return onHeapTableIndex{}, err
-		}
-		return index2.(onHeapTableIndex), nil
-	}
-
-	return onHeapTableIndex{}, errCacheMiss
-}
-
-func (sic *indexCache) put(name addr, idx onHeapTableIndex) {
-	indexSize := uint64(idx.chunkCount) * (addrSize + ordinalSize + lengthSize + uint64Size)
-	sic.cache.Add(name, indexSize, idx)
 }
 
 type chunkSourcesByAscendingCount struct {
