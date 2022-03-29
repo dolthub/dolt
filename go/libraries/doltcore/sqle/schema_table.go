@@ -169,7 +169,7 @@ func migrateOldSchemasTableToNew(
 	[]sql.Row,
 	error,
 ) {
-	// Copy all of the old data over and add an index column
+	// Copy all of the old data over and add an index column and a extra column
 	var rowsToAdd []sql.Row
 	table, err := schemasTable.doltTable(ctx)
 	if err != nil {
@@ -190,8 +190,8 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		// prepend the new id to each row
-		sqlRow = append(sqlRow, id)
+		// prepend the new id and nil to each row
+		sqlRow = append(sqlRow, id, nil)
 		rowsToAdd = append(rowsToAdd, sqlRow)
 		id++
 		return nil
