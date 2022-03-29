@@ -1527,6 +1527,7 @@ var systemTableSelectTests = []SelectTest{
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
+				types.EmptyJSONDoc(nil),
 			)),
 		Query: "select * from dolt_schemas",
 		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),

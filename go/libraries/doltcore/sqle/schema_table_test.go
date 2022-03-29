@@ -45,7 +45,6 @@ func TestSchemaTableRecreation(t *testing.T) {
 		{Name: doltdb.SchemasTablesTypeCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesNameCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: true},
 		{Name: doltdb.SchemasTablesFragmentCol, Type: sql.Text, Source: doltdb.SchemasTableName, PrimaryKey: false},
-		{Name: doltdb.SchemasTablesExtraCol, Type: sql.JSON, Source: doltdb.SchemasTableName, PrimaryKey: false},
 	}))
 	require.NoError(t, err)
 	sqlTbl, found, err := db.GetTableInsensitive(ctx, doltdb.SchemasTableName)
@@ -88,8 +87,8 @@ func TestSchemaTableRecreation(t *testing.T) {
 	rowData, err = table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 	expectedVals = []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", int64(1)},
-		{"view", "view2", "SELECT v2 FROM test;", int64(2)},
+		{"view", "view1", "SELECT v1 FROM test;", int64(1), nil},
+		{"view", "view2", "SELECT v2 FROM test;", int64(2), nil},
 	}
 	index = 0
 	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {

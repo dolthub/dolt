@@ -408,6 +408,7 @@ var systemTableUpdateTests = []UpdateTest{
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
+				types.EmptyJSONDoc(nil),
 			)),
 		UpdateQuery: "update dolt_schemas set type = 'not a view'",
 		SelectQuery: "select * from dolt_schemas",
