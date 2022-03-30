@@ -393,7 +393,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 	// Enforce invariant (1)
 	if height > 1 {
-		err := v.WalkRefs(lvs.nbf, func(childRef Ref) error {
+		err := v.walkRefs(lvs.nbf, func(childRef Ref) error {
 			childHash := childRef.TargetHash()
 			if _, isBuffered := lvs.bufferedChunks[childHash]; isBuffered {
 				lvs.withBufferedChildren[h] = height

@@ -30,6 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -148,10 +149,10 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 
 	numChildChunks := 0
-	_ = l.WalkRefs(vrw.Format(), func(r types.Ref) error {
+	err = types.WalkAddrs(l, vrw.Format(), func(_ hash.Hash, _ bool) {
 		numChildChunks++
-		return nil
 	})
+	s.NoError(err)
 	s.True(numChildChunks > 0)
 	test(l)
 }

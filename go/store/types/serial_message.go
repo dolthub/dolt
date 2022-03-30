@@ -84,7 +84,7 @@ func (sm SerialMessage) WalkValues(ctx context.Context, cb ValueCallback) error 
 // any true Ref height we expect to see in a RootValue.
 const SerialMessageRefHeight = 1024
 
-func (sm SerialMessage) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	switch serial.GetFileID([]byte(sm)) {
 	case serial.StoreRootFileID:
 		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)

@@ -38,7 +38,7 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(Format_7_18, func(r Ref) error {
+		v.walkRefs(Format_7_18, func(r Ref) error {
 			expected = append(expected, r.TargetHash())
 			return nil
 		})

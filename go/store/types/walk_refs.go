@@ -26,7 +26,7 @@ import (
 )
 
 // walkRefs calls cb() on each Ref that can be decoded from |c|. The results
-// are precisely equal to DecodeValue(c).WalkRefs(cb), but this should be much
+// are precisely equal to DecodeValue(c).walkRefs(cb), but this should be much
 // faster.
 func walkRefs(data []byte, nbf *NomsBinFormat, cb RefCallback) error {
 	rw := newRefWalker(data)
@@ -171,7 +171,7 @@ func (r *refWalker) walkSerialMessage(nbf *NomsBinFormat, cb RefCallback) error 
 	if err != nil {
 		return err
 	}
-	return sm.WalkRefs(nbf, cb)
+	return sm.walkRefs(nbf, cb)
 }
 
 func (r *refWalker) walkValue(nbf *NomsBinFormat, cb RefCallback) error {

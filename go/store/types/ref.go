@@ -131,7 +131,7 @@ func skipRef(dec *typedBinaryNomsReader) ([]uint32, error) {
 }
 
 func maxChunkHeight(nbf *NomsBinFormat, v Value) (max uint64, err error) {
-	err = v.WalkRefs(nbf, func(r Ref) error {
+	err = v.walkRefs(nbf, func(r Ref) error {
 		if height := r.Height(); height > max {
 			max = height
 		}
@@ -242,4 +242,11 @@ func WalkAddrsForNBF(nbf *NomsBinFormat) (func(chunks.Chunk, func(h hash.Hash, i
 			return cb(r.TargetHash(), r.Height() == 1)
 		})
 	}
+}
+
+func WalkAddrs(v Value, nbf *NomsBinFormat, cb func(h hash.Hash, isleaf bool)) error {
+	return v.walkRefs(nbf, func(r Ref) error {
+		cb(r.TargetHash(), r.Height() == 1)
+		return nil
+	})
 }
