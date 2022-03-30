@@ -464,7 +464,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.True(ok)
 
 	commitValue := func(val types.Value) types.Value {
-		v, err := datas.GetCommitValue(context.Background(), vrw, val)
+		v, err := datas.GetCommittedValue(context.Background(), vrw, val)
 		d.PanicIfError(err)
 		d.PanicIfFalse(v != nil)
 		return v

@@ -49,7 +49,7 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commitV types.Val
 	if err != nil {
 		return nil, err
 	}
-	rootVal, err := datas.GetCommitValue(ctx, vrw, commitV)
+	rootVal, err := datas.GetCommittedValue(ctx, vrw, commitV)
 	if err != nil {
 		return nil, err
 	}

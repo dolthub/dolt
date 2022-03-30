@@ -39,8 +39,8 @@ func mustGetValue(v types.Value, found bool, err error) types.Value {
 	return v
 }
 
-func mustGetCommitValue(db *database, v types.Value) types.Value {
-	r, err := GetCommitValue(context.Background(), db, v)
+func mustGetCommittedValue(db *database, v types.Value) types.Value {
+	r, err := GetCommittedValue(context.Background(), db, v)
 	d.PanicIfError(err)
 	d.PanicIfFalse(r != nil)
 	return r
@@ -67,7 +67,7 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	a := types.String("a")
 	ds1, err = CommitValue(context.Background(), store, ds1, a)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(ds1.db, mustHead(ds1)).Equals(a))
+	assert.True(mustGetCommittedValue(ds1.db, mustHead(ds1)).Equals(a))
 
 	// ds1: |a|
 	//        \ds2
@@ -75,31 +75,31 @@ func TestExplicitBranchUsingDatasets(t *testing.T) {
 	assert.NoError(err)
 	ds2, err = store.Commit(context.Background(), ds2, mustHeadValue(ds1), CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1)}})
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(store, mustHead(ds2)).Equals(a))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(a))
 
 	// ds1: |a| <- |b|
 	b := types.String("b")
 	ds1, err = CommitValue(context.Background(), store, ds1, b)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(store, mustHead(ds1)).Equals(b))
+	assert.True(mustGetCommittedValue(store, mustHead(ds1)).Equals(b))
 
 	// ds1: |a|    <- |b|
 	//        \ds2 <- |c|
 	c := types.String("c")
 	ds2, err = CommitValue(context.Background(), store, ds2, c)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(store, mustHead(ds2)).Equals(c))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(c))
 
 	// ds1: |a|    <- |b| <--|d|
 	//        \ds2 <- |c| <--/
 	d := types.String("d")
 	ds2, err = store.Commit(context.Background(), ds2, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(store, mustHead(ds2)).Equals(d))
+	assert.True(mustGetCommittedValue(store, mustHead(ds2)).Equals(d))
 
 	ds1, err = store.Commit(context.Background(), ds1, d, CommitOptions{Parents: []hash.Hash{mustHeadAddr(ds1), mustHeadAddr(ds2)}})
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(store, mustHead(ds1)).Equals(d))
+	assert.True(mustGetCommittedValue(store, mustHead(ds1)).Equals(d))
 }
 
 func TestTwoClientsWithEmptyDataset(t *testing.T) {
@@ -118,7 +118,7 @@ func TestTwoClientsWithEmptyDataset(t *testing.T) {
 	a := types.String("a")
 	dsx, err = CommitValue(context.Background(), store, dsx, a)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(dsx.db, mustHead(dsx)).Equals(a))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(a))
 
 	// dsy: || -> |b|
 	_, ok := dsy.MaybeHead()
@@ -151,7 +151,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 		assert.NoError(err)
 		ds1, err = CommitValue(context.Background(), store, ds1, a)
 		assert.NoError(err)
-		assert.True(mustGetCommitValue(ds1.db, mustHead(ds1)).Equals(a))
+		assert.True(mustGetCommittedValue(ds1.db, mustHead(ds1)).Equals(a))
 	}
 
 	dsx, err := store.GetDataset(context.Background(), id1)
@@ -160,14 +160,14 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 
 	// dsx: |a| -> |b|
-	assert.True(mustGetCommitValue(dsx.db, mustHead(dsx)).Equals(a))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(a))
 	b := types.String("b")
 	dsx, err = CommitValue(context.Background(), store, dsx, b)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(dsx.db, mustHead(dsx)).Equals(b))
+	assert.True(mustGetCommittedValue(dsx.db, mustHead(dsx)).Equals(b))
 
 	// dsy: |a| -> |c|
-	assert.True(mustGetCommitValue(dsy.db, mustHead(dsy)).Equals(a))
+	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(a))
 	c := types.String("c")
 	_, err = CommitValue(context.Background(), store, dsy, c)
 	assert.Error(err)
@@ -177,7 +177,7 @@ func TestTwoClientsWithNonEmptyDataset(t *testing.T) {
 	assert.NoError(err)
 	dsy, err = CommitValue(context.Background(), store, dsy, c)
 	assert.NoError(err)
-	assert.True(mustGetCommitValue(dsy.db, mustHead(dsy)).Equals(c))
+	assert.True(mustGetCommittedValue(dsy.db, mustHead(dsy)).Equals(c))
 }
 
 func TestIdValidation(t *testing.T) {
@@ -211,7 +211,7 @@ func TestHeadValueFunctions(t *testing.T) {
 	assert.NoError(err)
 	assert.True(ds1.HasHead())
 
-	hv, err := GetCommitValue(context.Background(), ds1.db, mustHead(ds1))
+	hv, err := GetCommittedValue(context.Background(), ds1.db, mustHead(ds1))
 	assert.NoError(err)
 	assert.Equal(a, hv)
 	assert.Equal(a, mustHeadValue(ds1))

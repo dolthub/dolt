@@ -403,7 +403,7 @@ func (ds Dataset) HasHead() bool {
 // available. If not it returns nil and 'false'.
 func (ds Dataset) MaybeHeadValue() (types.Value, bool, error) {
 	if c, ok := ds.MaybeHead(); ok {
-		v, err := GetCommitValue(context.TODO(), ds.db, c)
+		v, err := GetCommittedValue(context.TODO(), ds.db, c)
 		if err != nil {
 			return nil, false, err
 		}

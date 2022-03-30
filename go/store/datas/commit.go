@@ -403,11 +403,11 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	}
 }
 
-func GetCommitValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
+func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
 		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitValue: provided value is not a commit.")
+			return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 		}
 		cmsg := serial.GetRootAsCommit(data, 0)
 		var roothash hash.Hash
@@ -416,10 +416,10 @@ func GetCommitValue(ctx context.Context, vr types.ValueReader, cv types.Value) (
 	}
 	c, ok := cv.(types.Struct)
 	if !ok {
-		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
 	if c.Name() != commitName {
-		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
 	v, _, err := c.MaybeGet(valueField)
 	return v, err

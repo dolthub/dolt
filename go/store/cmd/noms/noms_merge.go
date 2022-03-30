@@ -173,7 +173,7 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 		return nil, nil, nil, err
 	}
 
-	vfld, err := datas.GetCommitValue(ctx, vrw, ancestorCommit)
+	vfld, err := datas.GetCommittedValue(ctx, vrw, ancestorCommit)
 	d.PanicIfError(err)
 	d.PanicIfFalse(vfld != nil)
 	return leftHead, rightHead, vfld, nil

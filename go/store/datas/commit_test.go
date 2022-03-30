@@ -326,10 +326,10 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 				tv, err := ldb.ReadValue(context.Background(), found)
 				assert.NoError(err)
 				ancestor := tv
-				expV, _ := GetCommitValue(ctx, ldb, expected)
-				aV, _ := GetCommitValue(ctx, ldb, a)
-				bV, _ := GetCommitValue(ctx, rdb, b)
-				ancV, _ := GetCommitValue(ctx, ldb, ancestor)
+				expV, _ := GetCommittedValue(ctx, ldb, expected)
+				aV, _ := GetCommittedValue(ctx, ldb, a)
+				bV, _ := GetCommittedValue(ctx, rdb, b)
+				ancV, _ := GetCommittedValue(ctx, ldb, ancestor)
 				assert.True(
 					expected.Equals(ancestor),
 					"%s should be common ancestor of %s, %s. Got %s",
@@ -592,10 +592,10 @@ func TestFindCommonAncestor(t *testing.T) {
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
-		d2V, _ := GetCommitValue(ctx, db, d2)
-		a6V, _ := GetCommitValue(ctx, db, a6)
+		d2V, _ := GetCommittedValue(ctx, db, d2)
+		a6V, _ := GetCommittedValue(ctx, db, a6)
 		fTV, _ := db.ReadValue(ctx, found)
-		fV, _ := GetCommitValue(ctx, db, fTV)
+		fV, _ := GetCommittedValue(ctx, db, fTV)
 
 		assert.Fail(
 			"Unexpected common ancestor!",
