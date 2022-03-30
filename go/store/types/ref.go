@@ -34,6 +34,8 @@ type Ref struct {
 	valueImpl
 }
 
+type RefSlice []Ref
+
 type refPart uint32
 
 const (
