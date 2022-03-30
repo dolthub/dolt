@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var expected = hash.Hash{
+var goldenHash = hash.Hash{
 	0x0, 0x26, 0x55, 0xec, 0x3,
 	0x30, 0x52, 0xed, 0xdc, 0x9a,
 	0xdd, 0xe, 0x76, 0x4f, 0x3f,
@@ -36,7 +36,7 @@ func TestContentAddress(t *testing.T) {
 	keys, values := ascendingIntTuples(t, 12345)
 	m := makeTree(t, keys, values)
 	require.NotNil(t, m)
-	require.Equal(t, expected, m.hashOf())
+	require.Equal(t, goldenHash, m.hashOf())
 	assert.Equal(t, 12345, m.treeCount())
 }
 

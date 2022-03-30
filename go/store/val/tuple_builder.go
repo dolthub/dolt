@@ -53,8 +53,7 @@ func (tb *TupleBuilder) Build(pool pool.BuffPool) (tup Tuple) {
 }
 
 // BuildPermissive materializes a Tuple from the fields
-// written to the TupleBuilder without checking nullability.
-// todo(andy): restructure
+// written to the TupleBuilder without validating nullability.
 func (tb *TupleBuilder) BuildPermissive(pool pool.BuffPool) (tup Tuple) {
 	values := tb.fields[:tb.Desc.Count()]
 	tup = NewTuple(pool, values...)

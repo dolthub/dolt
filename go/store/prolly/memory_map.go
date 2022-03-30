@@ -76,41 +76,39 @@ func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
 
 // IterAll returns a MapIterator that iterates over the entire Map.
 func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
-	rng := Range{
-		Start:   RangeCut{Unbound: true},
-		Stop:    RangeCut{Unbound: true},
-		KeyDesc: mm.keyDesc,
-	}
+	rng := Range{Start: nil, Stop: nil, Desc: mm.keyDesc}
 	return mm.IterRange(ctx, rng)
 }
 
 // IterValueRange returns a MutableMapRangeIter that iterates over a Range.
 func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	memIter := mm.iterFromRange(rng)
-	return NewMutableMapRangeIter(memIter, nil, rng), nil
+	return MutableMapRangeIter{
+		memory: mm.iterFromRange(rng),
+		prolly: emptyIter{},
+		rng:    rng,
+	}, nil
 }
 
 func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	var iter *skip.ListIter
-	if rng.Start.Unbound {
+	if rng.Start == nil {
 		iter = mm.list.IterAtStart()
 	} else {
-		vc := valueCmpForRange(rng)
-		iter = mm.list.GetIterAtWithFn(rng.Start.Key, vc)
+		iter = mm.list.GetIterFromSearchFn(skipSearchFromRange(rng))
 	}
 
 	// enforce range start
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.insideStart(key) {
+		if key == nil || rng.AboveStart(key) {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.insideStop(key) {
+	if key == nil || !rng.BelowStop(key) {
 		iter = nil
 	}
 
@@ -120,21 +118,20 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	}
 }
 
-func valueCmpForRange(rng Range) skip.ValueCmp {
-	return func(left, right []byte) int {
-		l, r := val.Tuple(left), val.Tuple(right)
-		return rng.KeyDesc.Compare(l, r)
+func skipSearchFromRange(rng Range) skip.SearchFn {
+	return func(nodeKey []byte) bool {
+		if nodeKey == nil {
+			return false
+		}
+		// advance through list until we're inside |rng|
+		return !rng.AboveStart(nodeKey)
 	}
 }
 
 func (mm memoryMap) mutations() mutationIter {
 	return &memRangeIter{
 		iter: mm.list.IterAtStart(),
-		rng: Range{
-			Start:   RangeCut{Unbound: true},
-			Stop:    RangeCut{Unbound: true},
-			KeyDesc: mm.keyDesc,
-		},
+		rng:  Range{Start: nil, Stop: nil, Desc: mm.keyDesc},
 	}
 }
 
@@ -163,7 +160,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 		it.iter.Advance()
 
 		k, _ := it.current()
-		if k == nil || !it.rng.insideStop(k) {
+		if k == nil || !it.rng.BelowStop(k) {
 			it.iter = nil // range exhausted
 		}
 

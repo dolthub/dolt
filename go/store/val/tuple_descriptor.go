@@ -21,16 +21,16 @@ import (
 	"time"
 )
 
+// TupleDesc describes a Tuple set.
+// Data structures that contain Tuples and algorithms that process Tuples
+// use a TupleDesc's types to interpret the fields of a Tuple.
 type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
 }
 
-type TupleComparator interface {
-	Compare(left, right Tuple, desc TupleDesc) int
-}
-
+// NewTupleDescriptor makes a TupleDescriptor from |types|.
 func NewTupleDescriptor(types ...Type) TupleDesc {
 	return NewTupleDescriptorWithComparator(defaultCompare{}, types...)
 }
@@ -56,34 +56,6 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 	return
 }
 
-func TupleDescriptorPrefix(td TupleDesc, count int) TupleDesc {
-	return NewTupleDescriptorWithComparator(td.cmp, td.Types[:count]...)
-}
-
-type defaultCompare struct{}
-
-func (d defaultCompare) Compare(left, right Tuple, desc TupleDesc) (cmp int) {
-	for i := range desc.fast {
-		start, stop := desc.fast[i][0], desc.fast[i][1]
-		cmp = compare(desc.Types[i], left[start:stop], right[start:stop])
-		if cmp != 0 {
-			return cmp
-		}
-	}
-
-	off := len(desc.fast)
-	for i, typ := range desc.Types[off:] {
-		j := i + off
-		cmp = compare(typ, left.GetField(j), right.GetField(j))
-		if cmp != 0 {
-			return cmp
-		}
-	}
-	return
-}
-
-var _ TupleComparator = defaultCompare{}
-
 type fixedAccess [][2]ByteSize
 
 func makeFixedAccess(types []Type) (acc fixedAccess) {
@@ -104,11 +76,7 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 	return
 }
 
-func (td TupleDesc) WithoutFixedAccess() TupleDesc {
-	td.fast = nil
-	return td
-}
-
+// GetField returns the ith field of |tup|.
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {
 		start, stop := td.fast[i][0], td.fast[i][1]
@@ -117,9 +85,26 @@ func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	return tup.GetField(i)
 }
 
-// Compare returns the Comparison of |left| and |right|.
+// Compare compares |left| and |right|.
 func (td TupleDesc) Compare(left, right Tuple) (cmp int) {
 	return td.cmp.Compare(left, right, td)
+}
+
+// CompareField compares |value| with the ith field of |tup|.
+func (td TupleDesc) CompareField(value []byte, i int, tup Tuple) (cmp int) {
+	var v []byte
+	if i < len(td.fast) {
+		start, stop := td.fast[i][0], td.fast[i][1]
+		v = tup[start:stop]
+	} else {
+		v = tup.GetField(i)
+	}
+	return td.cmp.CompareValues(value, v, td.Types[i])
+}
+
+// Comparator returns the TupleDescriptor's TupleComparator.
+func (td TupleDesc) Comparator() TupleComparator {
+	return td.cmp
 }
 
 // Count returns the number of fields in the TupleDesc.
@@ -365,59 +350,72 @@ func (td TupleDesc) Format(tup Tuple) string {
 	sb.WriteString("( ")
 
 	seenOne := false
-	for i, typ := range td.Types {
+	for i := range td.Types {
 		if seenOne {
 			sb.WriteString(", ")
 		}
 		seenOne = true
-
-		if td.IsNull(i, tup) {
-			sb.WriteString("NULL")
-			continue
-		}
-
-		// todo(andy): complete cases
-		switch typ.Enc {
-		case Int8Enc:
-			v, _ := td.GetInt8(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint8Enc:
-			v, _ := td.GetUint8(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int16Enc:
-			v, _ := td.GetInt16(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint16Enc:
-			v, _ := td.GetUint16(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int32Enc:
-			v, _ := td.GetInt32(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Uint32Enc:
-			v, _ := td.GetUint32(i, tup)
-			sb.WriteString(strconv.Itoa(int(v)))
-		case Int64Enc:
-			v, _ := td.GetInt64(i, tup)
-			sb.WriteString(strconv.FormatInt(v, 10))
-		case Uint64Enc:
-			v, _ := td.GetUint64(i, tup)
-			sb.WriteString(strconv.FormatUint(v, 10))
-		case Float32Enc:
-			v, _ := td.GetFloat32(i, tup)
-			sb.WriteString(fmt.Sprintf("%f", v))
-		case Float64Enc:
-			v, _ := td.GetFloat64(i, tup)
-			sb.WriteString(fmt.Sprintf("%f", v))
-		case StringEnc:
-			v, _ := td.GetString(i, tup)
-			sb.WriteString(v)
-		case ByteStringEnc:
-			v, _ := td.GetBytes(i, tup)
-			sb.Write(v)
-		default:
-			sb.Write(tup.GetField(i))
-		}
+		sb.WriteString(td.FormatValue(i, tup.GetField(i)))
 	}
 	sb.WriteString(" )")
 	return sb.String()
+}
+
+func (td TupleDesc) FormatValue(i int, value []byte) string {
+	if value == nil {
+		return "NULL"
+	}
+
+	// todo(andy): complete cases
+	switch td.Types[i].Enc {
+	case Int8Enc:
+		v := readInt8(value)
+		return strconv.Itoa(int(v))
+	case Uint8Enc:
+		v := readUint8(value)
+		return strconv.Itoa(int(v))
+	case Int16Enc:
+		v := readInt16(value)
+		return strconv.Itoa(int(v))
+	case Uint16Enc:
+		v := readUint16(value)
+		return strconv.Itoa(int(v))
+	case Int32Enc:
+		v := readInt32(value)
+		return strconv.Itoa(int(v))
+	case Uint32Enc:
+		v := readUint32(value)
+		return strconv.Itoa(int(v))
+	case Int64Enc:
+		v := readInt64(value)
+		return strconv.FormatInt(v, 10)
+	case Uint64Enc:
+		v := readUint64(value)
+		return strconv.FormatUint(v, 10)
+	case Float32Enc:
+		v := readFloat32(value)
+		return fmt.Sprintf("%f", v)
+	case Float64Enc:
+		v := readFloat64(value)
+		return fmt.Sprintf("%f", v)
+	case StringEnc:
+		return readString(value)
+	case ByteStringEnc:
+		return string(value)
+	default:
+		return string(value)
+	}
+}
+
+// Equals returns true if |td| and |other| have equal type slices.
+func (td TupleDesc) Equals(other TupleDesc) bool {
+	if len(td.Types) != len(other.Types) {
+		return false
+	}
+	for i, typ := range td.Types {
+		if typ != other.Types[i] {
+			return false
+		}
+	}
+	return true
 }

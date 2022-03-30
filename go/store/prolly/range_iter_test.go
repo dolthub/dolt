@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type rangeTest struct {
+type rangeIterTest struct {
 	name      string
 	testRange Range
 	expCount  int
@@ -44,7 +44,7 @@ func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 		}
 		start, stop := tuples[a][0], tuples[z][0]
 
-		tests := []rangeTest{
+		tests := []rangeIterTest{
 			// two-sided ranges
 			{
 				name:      "OpenRange",
@@ -220,7 +220,7 @@ func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
 func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 	for i := range tuples {
 		k := tuples[i][0]
-		if rng.insideStart(k) && rng.insideStop(k) {
+		if rng.AboveStart(k) && rng.BelowStop(k) {
 			sz++
 		}
 	}
@@ -237,18 +237,18 @@ func TestMapIterRange(t *testing.T) {
 	vd := val.NewTupleDescriptor()
 
 	tuples := []val.Tuple{
-		intTuple(1, 1), intTuple(),
-		intTuple(1, 2), intTuple(),
-		intTuple(1, 3), intTuple(),
-		intTuple(2, 1), intTuple(),
-		intTuple(2, 2), intTuple(),
-		intTuple(2, 3), intTuple(),
-		intTuple(3, 1), intTuple(),
-		intTuple(3, 2), intTuple(),
-		intTuple(3, 3), intTuple(),
-		intTuple(4, 1), intTuple(),
-		intTuple(4, 2), intTuple(),
-		intTuple(4, 3), intTuple(),
+		intTuple(1, 1), intTuple(), // 0
+		intTuple(1, 2), intTuple(), // 2
+		intTuple(1, 3), intTuple(), // 4
+		intTuple(2, 1), intTuple(), // 6
+		intTuple(2, 2), intTuple(), // 8
+		intTuple(2, 3), intTuple(), // 10
+		intTuple(3, 1), intTuple(), // 12
+		intTuple(3, 2), intTuple(), // 14
+		intTuple(3, 3), intTuple(), // 16
+		intTuple(4, 1), intTuple(), // 18
+		intTuple(4, 2), intTuple(), // 20
+		intTuple(4, 3), intTuple(), // 22
 	}
 	require.Equal(t, 24, len(tuples))
 
@@ -264,166 +264,102 @@ func TestMapIterRange(t *testing.T) {
 		val.Type{Enc: val.Int32Enc},
 	)
 
-	tests := []mapRangeTest{
+	tests := []struct {
+		name    string
+		rng     Range
+		inRange []val.Tuple
+	}{
 		// partial-key range scan
 		{
-			name: "range [1:4]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: true,
-				},
-				KeyDesc: partialDesc,
-			},
-			exp: tuples[:],
+			name:    "range [1:4]",
+			rng:     ClosedRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[:],
 		},
 		{
-			name: "range (1:4]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: true,
-				},
-				KeyDesc: partialDesc,
-			},
-			exp: tuples[6:],
+			name:    "range (1:4]",
+			rng:     OpenStartRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[6:],
 		},
 		{
-			name: "range [1:4)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: false,
-				},
-				KeyDesc: partialDesc,
-			},
-			exp: tuples[:18],
+			name:    "range [1:4)",
+			rng:     OpenStopRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[:18],
 		},
 		{
-			name: "range (1:4)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4),
-					Inclusive: false,
-				},
-				KeyDesc: partialDesc,
-			},
-			exp: tuples[6:18],
+			name:    "range (1:4)",
+			rng:     OpenRange(intTuple(1), intTuple(4), partialDesc),
+			inRange: tuples[6:18],
 		},
 
 		// full-key range scan
 		{
-			name: "range [1,2:4,2]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: true,
-				},
-				KeyDesc: fullDesc,
-			},
-			exp: tuples[2:22],
+			name:    "range [1,2:4,2]",
+			rng:     ClosedRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[:],
 		},
 		{
-			name: "range (1,2:4,2]",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: true,
-				},
-				KeyDesc: fullDesc,
-			},
-			exp: tuples[4:22],
+			name:    "range (1,2:4,2]",
+			rng:     OpenStartRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[:],
 		},
 		{
-			name: "range [1,2:4,2)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: true,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: false,
-				},
-				KeyDesc: fullDesc,
-			},
-			exp: tuples[2:20],
+			name:    "range [1,2:4,2)",
+			rng:     OpenStopRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[:],
 		},
 		{
-			name: "range (1,2:4,2)",
-			rng: Range{
-				Start: RangeCut{
-					Key:       intTuple(1, 2),
-					Inclusive: false,
-				},
-				Stop: RangeCut{
-					Key:       intTuple(4, 2),
-					Inclusive: false,
-				},
-				KeyDesc: fullDesc,
-			},
-			exp: tuples[4:20], // 🌲
+			name:    "range (1,2:4,2)",
+			rng:     OpenRange(intTuple(1, 2), intTuple(4, 2), fullDesc),
+			inRange: tuples[:],
+		},
+		{
+			name:    "range [2,2:3,2]",
+			rng:     ClosedRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range (2,2:3,2]",
+			rng:     OpenStartRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range [2,2:3,2)",
+			rng:     OpenStopRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
+		},
+		{
+			name:    "range (2,2:3,2)",
+			rng:     OpenRange(intTuple(2, 2), intTuple(3, 2), fullDesc),
+			inRange: tuples[6:18],
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			testMapRange(t, index, test)
+			ctx := context.Background()
+
+			iter, err := index.IterRange(ctx, test.rng)
+			require.NoError(t, err)
+
+			var k, v val.Tuple
+			act := make([]val.Tuple, 0, len(test.inRange))
+			for {
+				k, v, err = iter.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				assert.NoError(t, err)
+				act = append(act, k, v)
+			}
+			assert.Error(t, io.EOF, err)
+
+			assert.Equal(t, len(test.inRange), len(act))
+			if len(test.inRange) == len(act) {
+				for i := range test.inRange {
+					assert.Equal(t, test.inRange[i], act[i])
+				}
+			}
 		})
-	}
-}
-
-type mapRangeTest struct {
-	name string
-	rng  Range
-	exp  []val.Tuple
-}
-
-func testMapRange(t *testing.T, idx Map, test mapRangeTest) {
-	ctx := context.Background()
-
-	iter, err := idx.IterRange(ctx, test.rng)
-	require.NoError(t, err)
-
-	var k, v val.Tuple
-	act := make([]val.Tuple, 0, len(test.exp))
-	for {
-		k, v, err = iter.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		assert.NoError(t, err)
-		act = append(act, k, v)
-	}
-	assert.Error(t, io.EOF, err)
-
-	require.Equal(t, len(test.exp), len(act))
-	for i := range test.exp {
-		assert.Equal(t, test.exp[i], act[i])
 	}
 }
 
@@ -439,4 +375,54 @@ func intTuple(ints ...int32) val.Tuple {
 		tb.PutInt32(i, ints[i])
 	}
 	return tb.Build(sharedPool)
+}
+
+func concat(slices ...[]val.Tuple) (c []val.Tuple) {
+	var n int
+	for _, sl := range slices {
+		n += len(sl)
+	}
+	c = make([]val.Tuple, n)
+
+	n = 0
+	for _, sl := range slices {
+		copy(c[n:], sl)
+		n += len(sl)
+	}
+	return
+}
+
+func testIterOrdinalRange(t *testing.T, om ordinalMap, tuples [][2]val.Tuple) {
+	ctx := context.Background()
+	for i := 0; i < 100; i++ {
+		cnt := len(tuples)
+		start, stop := testRand.Intn(cnt), testRand.Intn(cnt)
+		if start > stop {
+			start, stop = stop, start
+		}
+		if start == stop {
+			continue
+		}
+
+		expected := tuples[start:stop]
+
+		iter, err := om.IterOrdinalRange(ctx, uint64(start), uint64(stop))
+		require.NoError(t, err)
+
+		var actual [][2]val.Tuple
+		var k, v val.Tuple
+
+		for {
+			k, v, err = iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+			actual = append(actual, [2]val.Tuple{k, v})
+		}
+		assert.Equal(t, len(expected), len(actual),
+			"expected equal tuple slices for bounds (%d, %d)", start, stop)
+		assert.Equal(t, expected, actual)
+		assert.Equal(t, io.EOF, err)
+	}
 }

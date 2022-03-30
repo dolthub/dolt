@@ -150,7 +150,7 @@ func TestMemTableWrite(t *testing.T) {
 
 	td1, _, err := buildTable(chunks[1:2])
 	require.NoError(t, err)
-	ti1, err := parseTableIndexByCopy(td1)
+	ti1, err := parseTableIndexByCopy(td1, &noopQuotaProvider{})
 	require.NoError(t, err)
 	tr1, err := newTableReader(ti1, tableReaderAtFromBytes(td1), fileBlockSize)
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestMemTableWrite(t *testing.T) {
 
 	td2, _, err := buildTable(chunks[2:])
 	require.NoError(t, err)
-	ti2, err := parseTableIndexByCopy(td2)
+	ti2, err := parseTableIndexByCopy(td2, &noopQuotaProvider{})
 	require.NoError(t, err)
 	tr2, err := newTableReader(ti2, tableReaderAtFromBytes(td2), fileBlockSize)
 	require.NoError(t, err)
@@ -168,7 +168,7 @@ func TestMemTableWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(uint32(1), count)
 
-	ti, err := parseTableIndexByCopy(data)
+	ti, err := parseTableIndexByCopy(data, &noopQuotaProvider{})
 	require.NoError(t, err)
 	outReader, err := newTableReader(ti, tableReaderAtFromBytes(data), fileBlockSize)
 	require.NoError(t, err)

@@ -50,6 +50,9 @@ func TestMutableMapReads(t *testing.T) {
 			t.Run("iter prefix range", func(t *testing.T) {
 				testIterPrefixRange(t, mutableMap, tuples)
 			})
+			t.Run("iter ordinal range", func(t *testing.T) {
+				t.Skip("todo(andy)")
+			})
 
 			mutableIndex, idxTuples := makeMutableSecondaryIndex(t, s)
 			t.Run("iter prefix range", func(t *testing.T) {
@@ -65,6 +68,9 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter range with pending deletes", func(t *testing.T) {
 				testIterRange(t, mutableMap2, tuples2)
+			})
+			t.Run("iter ordinal range", func(t *testing.T) {
+				t.Skip("todo(andy)")
 			})
 
 			mutableIndex2, idxTuples2, _ := deleteFromMutableMap(mutableIndex.(MutableMap), idxTuples)
@@ -82,6 +88,9 @@ func TestMutableMapReads(t *testing.T) {
 			})
 			t.Run("iter range after deletes applied", func(t *testing.T) {
 				testIterRange(t, prollyMap, tuples2)
+			})
+			t.Run("iter ordinal range", func(t *testing.T) {
+				t.Skip("todo(andy)")
 			})
 
 			prollyIndex, err := mutableIndex2.Map(context.Background())

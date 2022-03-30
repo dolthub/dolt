@@ -172,13 +172,13 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 
 func testInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int) {
 	ctx := context.Background()
-	kd, vd := from.Descriptors()
-	inserts := randomTuplePairs(numInserts, kd, vd)
-	to := makeMapWithInserts(t, from, inserts...)
+	to, inserts := makeMapWithInserts(t, from, numInserts)
 
 	var cnt int
 	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff Diff) error {
-		assert.Equal(t, AddedDiff, diff.Type)
+		if !assert.Equal(t, AddedDiff, diff.Type) {
+			fmt.Println("")
+		}
 		assert.Equal(t, inserts[cnt][0], diff.Key)
 		assert.Equal(t, inserts[cnt][1], diff.To)
 		cnt++
@@ -229,8 +229,10 @@ func makeMapWithDeletes(t *testing.T, m Map, deletes ...[2]val.Tuple) Map {
 	return mm
 }
 
-func makeMapWithInserts(t *testing.T, m Map, inserts ...[2]val.Tuple) Map {
+func makeMapWithInserts(t *testing.T, m Map, numInserts int) (Map, [][2]val.Tuple) {
 	ctx := context.Background()
+	kd, vd := m.Descriptors()
+	inserts := generateInserts(t, m, kd, vd, numInserts)
 	mut := m.Mutate()
 	for _, pair := range inserts {
 		err := mut.Put(ctx, pair[0], pair[1])
@@ -238,7 +240,40 @@ func makeMapWithInserts(t *testing.T, m Map, inserts ...[2]val.Tuple) Map {
 	}
 	mm, err := mut.Map(ctx)
 	require.NoError(t, err)
-	return mm
+	return mm, inserts
+}
+
+// generates tuple pairs not currently in |m|
+func generateInserts(t *testing.T, m Map, kd, vd val.TupleDesc, numInserts int) [][2]val.Tuple {
+	ctx := context.Background()
+	tups := randomTuplePairs(numInserts*2, kd, vd)
+	inserts, extra := tups[:numInserts], tups[numInserts:]
+
+	j := 0
+	for i, pair := range inserts {
+		ok, err := m.Has(ctx, pair[0])
+		require.NoError(t, err)
+		if !ok {
+			// |pair[0]| is not in |m|
+			continue
+		}
+
+		// replace the key from |pair|
+		for {
+			ok, err = m.Has(ctx, extra[j][0])
+			require.NoError(t, err)
+			if !ok {
+				// |extra[j][0]| is not in |m|
+				inserts[i][0] = extra[j][0]
+				break
+			}
+			j++
+			require.True(t, j < len(extra))
+		}
+	}
+	sortTuplePairs(inserts, kd)
+
+	return inserts
 }
 
 func makeMapWithUpdates(t *testing.T, m Map, updates ...[3]val.Tuple) Map {

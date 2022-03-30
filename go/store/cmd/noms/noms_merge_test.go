@@ -131,7 +131,7 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 	if s.NoError(err) {
 		defer sp.Close()
 		commit := mustHead(sp.GetDataset(context.Background()))
-		vparents, err := datas.GetCommitParents(context.Background(), commit)
+		vparents, err := datas.GetCommitParents(context.Background(), sp.GetVRW(context.Background()), commit)
 		s.NoError(err)
 		s.Equal(len(vparents), len(parents), "parents were not the same length")
 		for i := range parents {

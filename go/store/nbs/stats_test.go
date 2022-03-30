@@ -44,7 +44,7 @@ func TestStats(t *testing.T) {
 
 	dir, err := os.MkdirTemp("", "")
 	require.NoError(t, err)
-	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize)
+	store, err := NewLocalStore(context.Background(), constants.FormatDefaultString, dir, testMemTableSize, NewUnlimitedMemQuotaProvider())
 	require.NoError(t, err)
 
 	assert.EqualValues(1, stats(store).OpenLatency.Samples())

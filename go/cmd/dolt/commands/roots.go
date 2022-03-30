@@ -26,6 +26,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -140,11 +141,17 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 
 			if mightBeDatasetMap {
 				err := types.WriteEncodedValue(ctx, cli.OutStream, value)
-
 				if err != nil {
 					return false, err
 				}
-
+				cli.Println()
+			}
+		} else if sm, ok := value.(types.SerialMessage); ok {
+			if serial.GetFileID([]byte(sm)) == serial.StoreRootFileID {
+				err := types.WriteEncodedValue(ctx, cli.OutStream, value)
+				if err != nil {
+					return false, err
+				}
 				cli.Println()
 			}
 		}

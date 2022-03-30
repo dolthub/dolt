@@ -74,7 +74,7 @@ func runDiff(ctx context.Context, args []string) int {
 	d.PanicIfFalse(vrw1.Format() == vrw2.Format())
 
 	if stat {
-		diff.Summary(ctx, value1, value2)
+		diff.Summary(ctx, vrw1, vrw2, value1, value2)
 		return 0
 	}
 

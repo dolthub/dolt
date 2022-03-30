@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/d"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -167,15 +166,5 @@ func validate(ctx context.Context, nbf *types.NomsBinFormat, r types.Value) bool
 		return false
 	}
 
-	yep, err := r.(types.Map).Any(ctx, func(k, v types.Value) bool {
-		if !datas.IsRefOfCommitType(nbf, mustType(types.TypeOf(v))) {
-			fmt.Fprintf(os.Stderr, "Invalid root map. Value for key '%s' is not a ref of commit.", string(k.(types.String)))
-			return false
-		}
-		return true
-	})
-
-	d.PanicIfError(err)
-
-	return yep
+	return true
 }
