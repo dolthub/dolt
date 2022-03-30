@@ -62,11 +62,11 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	createCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
+	extraCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
-	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, createCol)
+	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, extraCol)
 	return schema.MustSchemaFromCols(colColl)
 }
 
