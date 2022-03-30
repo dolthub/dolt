@@ -1527,14 +1527,19 @@ var systemTableSelectTests = []SelectTest{
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
-				types.EmptyJSONDoc(nil),
+				CreateTestJSON(),
 			)),
 		Query: "select * from dolt_schemas",
 		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
+			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
 		),
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
+}
+
+func CreateTestJSON() types.JSON {
+	res, _ := types.NewJSONDoc(types.Format_Default, types.NewMemoryValueStore(), types.EmptyJSONDoc(types.Format_Default))
+	return res
 }
 
 func TestSelectSystemTables(t *testing.T) {
