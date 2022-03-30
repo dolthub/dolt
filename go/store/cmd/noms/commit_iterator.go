@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -40,8 +41,7 @@ type CommitIterator struct {
 func NewCommitIterator(vr types.ValueReader, commit types.Struct) *CommitIterator {
 	cr, err := types.NewRef(commit, vr.Format())
 	d.PanicIfError(err)
-
-	return &CommitIterator{vr: vr, branches: branchList{branch{cr: cr, commit: commit}}}
+	return &CommitIterator{vr: vr, branches: branchList{branch{addr: cr.TargetHash(), height: cr.Height(), commit: commit}}}
 }
 
 // Next returns information about the next commit to be printed. LogNode contains enough contextual
@@ -71,20 +71,18 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
 
-	refs, err := datas.GetCommitParents(ctx, iter.vr, br.commit)
+	parents, err := datas.GetCommitParents(ctx, iter.vr, br.commit)
 	d.PanicIfError(err)
-	for _, r := range refs {
-		v, err := iter.vr.ReadValue(ctx, r.TargetHash())
-		d.PanicIfError(err)
-
-		b := branch{cr: r, commit: v.(types.Struct)}
+	for _, p := range parents {
+		v := p.NomsValue()
+		b := branch{height: p.Height(), addr: p.Addr(), commit: v.(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
 
 	// Collect the indexes for any newly created branches.
 	newCols := []int{}
-	for cnt := 1; cnt < len(refs); cnt++ {
+	for cnt := 1; cnt < len(parents); cnt++ {
 		newCols = append(newCols, col+cnt)
 	}
 
@@ -92,7 +90,8 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// ancestors that will be folded together on this commit's graph.
 	foldedCols := iter.branches.HighestBranchIndexes()
 	node := LogNode{
-		cr:               br.cr,
+		height:           br.height,
+		addr:             br.addr,
 		commit:           br.commit,
 		startingColCount: startingColCount,
 		endingColCount:   len(iter.branches),
@@ -105,7 +104,8 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 }
 
 type LogNode struct {
-	cr               types.Ref    // typed ref of commit to be printed
+	addr             hash.Hash
+	height           uint64
 	commit           types.Struct // commit that needs to be printed
 	startingColCount int          // how many branches are being tracked when this commit is printed
 	endingColCount   int          // home many branches will be tracked when next commit is printed
@@ -116,7 +116,7 @@ type LogNode struct {
 }
 
 func (n LogNode) String() string {
-	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.cr.TargetHash().String()[0:9], n.cr.Height(), n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
+	return fmt.Sprintf("cr: %s(%d), startingColCount: %d, endingColCount: %d, col: %d, newCols: %v, foldedCols: %v, expanding: %t, shrunk: %t, shrinking: %t", n.addr.String()[0:9], n.height, n.startingColCount, n.endingColCount, n.col, n.newCols, n.foldedCols, n.Expanding(), n.Shrunk(), n.Shrinking())
 }
 
 // Expanding reports whether this commit's graph will expand to show an additional branch
@@ -135,12 +135,13 @@ func (n LogNode) Shrunk() bool {
 }
 
 type branch struct {
-	cr     types.Ref
+	addr   hash.Hash
+	height uint64
 	commit types.Struct
 }
 
 func (b branch) String() string {
-	return fmt.Sprintf("%s(%d)", b.cr.TargetHash().String()[0:9], b.cr.Height())
+	return fmt.Sprintf("%s(%d)", b.addr.String()[0:9], b.height)
 }
 
 type branchList []branch
@@ -155,14 +156,14 @@ func (bl branchList) IsEmpty() bool {
 // This indicates that two or more branches or converging.
 func (bl branchList) HighestBranchIndexes() []int {
 	maxHeight := uint64(0)
-	var cr types.Ref
+	var br branch
 	cols := []int{}
 	for i, b := range bl {
-		if b.cr.Height() > maxHeight {
-			maxHeight = b.cr.Height()
-			cr = b.cr
+		if b.height > maxHeight {
+			maxHeight = b.height
+			br = b
 			cols = []int{i}
-		} else if b.cr.Height() == maxHeight && b.cr.Equals(cr) {
+		} else if b.height == maxHeight && b.addr == br.addr {
 			cols = append(cols, i)
 		}
 	}

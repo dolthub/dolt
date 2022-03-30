@@ -135,7 +135,7 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 		s.NoError(err)
 		s.Equal(len(vparents), len(parents), "parents were not the same length")
 		for i := range parents {
-			s.True(parents[i] == vparents[i].TargetHash())
+			s.True(parents[i] == vparents[i].Addr())
 		}
 		merged := mustHeadValue(sp.GetDataset(context.Background()))
 		s.True(expected.Equals(merged), "%s != %s", mustString(types.EncodedValue(context.Background(), expected)), mustString(types.EncodedValue(context.Background(), merged)))

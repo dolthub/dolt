@@ -289,17 +289,25 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 	return le.List(context.Background())
 }
 
-func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
-	closure, err := NewSetRefClosure(ctx, vr1, c1)
+func commonAncWithSetClosure(ctx context.Context, c1r, c2r types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+	c1, err := commitPtrFromRef(ctx, vr1, c1r)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
-	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
+	closure, err := NewSetCommitClosure(ctx, vr1, c1)
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+	return FindClosureCommonAncestor(ctx, closure, c2r, vr2)
 }
 
-func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
-	closure := NewLazyRefClosure(c1, vr1)
-	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
+func commonAncWithLazyClosure(ctx context.Context, c1r, c2r types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+	c1, err := commitPtrFromRef(ctx, vr1, c1r)
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+	closure := NewLazyCommitClosure(c1, vr1)
+	return FindClosureCommonAncestor(ctx, closure, c2r, vr2)
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.

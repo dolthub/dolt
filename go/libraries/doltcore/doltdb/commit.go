@@ -31,7 +31,7 @@ var errHasNoRootValue = errors.New("no root value")
 type Commit struct {
 	vrw     types.ValueReadWriter
 	meta    *datas.CommitMeta
-	parents []types.Ref
+	parents []*datas.Commit
 	stref   types.Ref
 	rootV   types.Value
 }
@@ -69,8 +69,8 @@ func (c *Commit) GetCommitMeta() (*datas.CommitMeta, error) {
 	return c.meta, nil
 }
 
-// ParentRefs returns the noms types.Refs for the commits
-func (c *Commit) ParentRefs() []types.Ref {
+// DatasParents returns the []*datas.Commit of the commit parents.
+func (c *Commit) DatasParents() []*datas.Commit {
 	return c.parents
 }
 
@@ -78,7 +78,7 @@ func (c *Commit) ParentRefs() []types.Ref {
 func (c *Commit) ParentHashes(ctx context.Context) ([]hash.Hash, error) {
 	hashes := make([]hash.Hash, len(c.parents))
 	for i, pr := range c.parents {
-		hashes[i] = pr.TargetHash()
+		hashes[i] = pr.Addr()
 	}
 	return hashes, nil
 }
@@ -107,11 +107,8 @@ func (c *Commit) GetStRef() (types.Ref, error) {
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
-	ref := c.parents[idx]
-	v, err := ref.TargetValue(ctx, c.vrw)
-	if err != nil {
-		return nil, err
-	}
+	p := c.parents[idx]
+	v := p.NomsValue()
 	return NewCommit(ctx, c.vrw, v)
 }
 

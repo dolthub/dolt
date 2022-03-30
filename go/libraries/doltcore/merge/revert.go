@@ -51,7 +51,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, com
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
 		var theirRoot *doltdb.RootValue
-		if len(baseCommit.ParentRefs()) > 0 {
+		if len(baseCommit.DatasParents()) > 0 {
 			parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
 			if err != nil {
 				return nil, "", err

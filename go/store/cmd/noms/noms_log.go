@@ -186,12 +186,12 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
 		for i, p := range parents {
-			pstrings[i] = p.TargetHash().String()
+			pstrings[i] = p.Addr().String()
 		}
 		parentLabel = "Merge"
 		parentValue = strings.Join(pstrings, " ")
 	} else if len(parents) == 1 {
-		parentValue = parents[0].TargetHash().String()
+		parentValue = parents[0].Addr().String()
 	}
 
 	if oneline {
@@ -349,9 +349,8 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types
 
 	parent := parents[0]
 
-	val, err := parent.TargetValue(ctx, vr)
+	val := parent.NomsValue()
 	parentCommit := val.(types.Struct)
-	d.PanicIfError(err)
 
 	var old, neu types.Value
 	err = functions.All(

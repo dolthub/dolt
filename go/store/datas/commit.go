@@ -58,6 +58,24 @@ const (
 	commitName          = "Commit"
 )
 
+type Commit struct {
+	val    types.Value
+	addr   hash.Hash
+	height uint64
+}
+
+func (c *Commit) NomsValue() types.Value {
+	return c.val
+}
+
+func (c *Commit) Height() uint64 {
+	return c.height
+}
+
+func (c *Commit) Addr() hash.Hash {
+	return c.addr
+}
+
 var commitTemplateWithParentsClosure = types.MakeStructTemplate(commitName, []string{
 	commitMetaField,
 	parentsField,
@@ -213,14 +231,48 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
 }
 
-func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
-	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
+func commitPtr(nbf *types.NomsBinFormat, v types.Value, r types.Ref) *Commit {
+	if nbf == types.Format_DOLT_DEV {
+		height := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0).Height()
+		return &Commit{
+			val:    v,
+			height: height,
+			addr:   r.TargetHash(),
+		}
+	}
+	return &Commit{
+		val:    v,
+		height: r.Height(),
+		addr:   r.TargetHash(),
+	}
+}
+
+func commitPtrFromRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Commit, error) {
+	v, err := vr.ReadValue(ctx, r.TargetHash())
+	if err != nil {
+		return nil, err
+	}
+	return commitPtr(vr.Format(), v, r), nil
+}
+
+func findCommonAncestorUsingParentsList(ctx context.Context, c1r, c2r types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
+	c1, err := commitPtrFromRef(ctx, vr1, c1r)
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	c2, err := commitPtrFromRef(ctx, vr2, c2r)
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	c1Q, c2Q := CommitByHeightHeap{c1}, CommitByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
 		if c1Ht == c2Ht {
-			c1Parents, c2Parents := c1Q.PopRefsOfHeight(c1Ht), c2Q.PopRefsOfHeight(c2Ht)
-			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
-				return common.TargetHash(), true, nil
+			c1Parents, c2Parents := c1Q.PopCommitsOfHeight(c1Ht), c2Q.PopCommitsOfHeight(c2Ht)
+			if common, ok := findCommonCommit(c1Parents, c2Parents); ok {
+				return common.Addr(), true, nil
 			}
 			err := parentsToQueue(ctx, c1Parents, &c1Q, vr1)
 			if err != nil {
@@ -231,12 +283,12 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 				return hash.Hash{}, false, err
 			}
 		} else if c1Ht > c2Ht {
-			err := parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
+			err := parentsToQueue(ctx, c1Q.PopCommitsOfHeight(c1Ht), &c1Q, vr1)
 			if err != nil {
 				return hash.Hash{}, false, err
 			}
 		} else {
-			err := parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
+			err := parentsToQueue(ctx, c2Q.PopCommitsOfHeight(c2Ht), &c2Q, vr2)
 			if err != nil {
 				return hash.Hash{}, false, err
 			}
@@ -295,12 +347,17 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 // FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
 // where |cl| is the transitive closure of one or more refs. If a common ancestor
 // exists, |ok| is set to true, else false.
-func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
-	q := &RefByHeightHeap{cm}
-	var curr types.RefSlice
+func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cr types.Ref, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
+	cm, err := commitPtrFromRef(ctx, vr, cr)
+	if err != nil {
+		return hash.Hash{}, false, err
+	}
+
+	q := &CommitByHeightHeap{cm}
+	var curr []*Commit
 
 	for !q.Empty() {
-		curr = q.PopRefsOfHeight(q.MaxHeight())
+		curr = q.PopCommitsOfHeight(q.MaxHeight())
 
 		for _, r := range curr {
 			ok, err = cl.Contains(ctx, r)
@@ -308,7 +365,7 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 				return hash.Hash{}, false, err
 			}
 			if ok {
-				return r.TargetHash(), ok, nil
+				return r.Addr(), ok, nil
 			}
 		}
 
@@ -322,13 +379,37 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 }
 
 // GetCommitParents returns |Ref|s to the parents of the commit.
-func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]types.Ref, error) {
+func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]*Commit, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
-		return types.SerialCommitParentRefs(vr.Format(), sm)
+		refs, err := types.SerialCommitParentRefs(vr.Format(), sm)
+		if err != nil {
+			return nil, err
+		}
+		hashes := make([]hash.Hash, len(refs))
+		for i, r := range refs {
+			hashes[i] = r.TargetHash()
+		}
+		vals, err := vr.ReadManyValues(ctx, hashes)
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*Commit, len(vals))
+		for i, v := range vals {
+			if v == nil {
+				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+			}
+			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0)
+			res[i] = &Commit{
+				val:    v,
+				height: csm.Height(),
+				addr:   hashes[i],
+			}
+		}
+		return res, nil
 	}
 	c, ok := cv.(types.Struct)
 	if !ok {
@@ -337,7 +418,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 	if c.Name() != commitName {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	var ret []types.Ref
+	var refs []types.Ref
 	ps, ok, err := c.MaybeGet(parentsListField)
 	if err != nil {
 		return nil, err
@@ -345,24 +426,42 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 	if ok {
 		p := ps.(types.List)
 		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
-			ret = append(ret, v.(types.Ref))
+			refs = append(refs, v.(types.Ref))
 			return nil
 		})
-		return ret, err
+	} else {
+		ps, ok, err = c.MaybeGet(parentsField)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			p := ps.(types.Set)
+			err = p.IterAll(ctx, func(v types.Value) error {
+				refs = append(refs, v.(types.Ref))
+				return nil
+			})
+		}
 	}
-	ps, ok, err = c.MaybeGet(parentsField)
+	hashes := make([]hash.Hash, len(refs))
+	for i, r := range refs {
+		hashes[i] = r.TargetHash()
+	}
+	vals, err := vr.ReadManyValues(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p := ps.(types.Set)
-		err = p.IterAll(ctx, func(v types.Value) error {
-			ret = append(ret, v.(types.Ref))
-			return nil
-		})
-		return ret, err
+	res := make([]*Commit, len(refs))
+	for i, val := range vals {
+		if val == nil {
+			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+		}
+		res[i] = &Commit{
+			val:    val,
+			height: refs[i].Height(),
+			addr:   refs[i].TargetHash(),
+		}
 	}
-	return ret, nil
+	return res, nil
 }
 
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
@@ -425,23 +524,15 @@ func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value
 	return v, err
 }
 
-func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
+func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
-	for _, r := range refs {
-		if _, ok := seen[r.TargetHash()]; ok {
+	for _, c := range commits {
+		if _, ok := seen[c.Addr()]; ok {
 			continue
 		}
-		seen[r.TargetHash()] = true
+		seen[c.Addr()] = true
 
-		v, err := r.TargetValue(ctx, vr)
-		if err != nil {
-			return err
-		}
-		if v == nil {
-			return fmt.Errorf("target not found: %v", r.TargetHash())
-		}
-
-		parents, err := GetCommitParents(ctx, vr, v)
+		parents, err := GetCommitParents(ctx, vr, c.NomsValue())
 		if err != nil {
 			return err
 		}
@@ -453,22 +544,22 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 	return nil
 }
 
-func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
-	toRefSet := func(s types.RefSlice) map[hash.Hash]types.Ref {
-		out := map[hash.Hash]types.Ref{}
+func findCommonCommit(a, b []*Commit) (*Commit, bool) {
+	toAddrMap := func(s []*Commit) map[hash.Hash]*Commit {
+		out := map[hash.Hash]*Commit{}
 		for _, r := range s {
-			out[r.TargetHash()] = r
+			out[r.Addr()] = r
 		}
 		return out
 	}
 
-	aSet, bSet := toRefSet(a), toRefSet(b)
-	for s, r := range aSet {
-		if _, present := bSet[s]; present {
-			return r, true
+	as, bs := toAddrMap(a), toAddrMap(b)
+	for s, c := range as {
+		if _, present := bs[s]; present {
+			return c, true
 		}
 	}
-	return types.Ref{}, false
+	return nil, false
 }
 
 func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type, includeParentsClosure bool) (*types.Type, error) {
@@ -676,43 +767,46 @@ func IsCommit(v types.Value) (bool, error) {
 	}
 }
 
-type RefByHeightHeap []types.Ref
+type CommitByHeightHeap []*Commit
 
-func (r RefByHeightHeap) Less(i, j int) bool {
-	return types.HeightOrder(r[i], r[j])
+func (r CommitByHeightHeap) Less(i, j int) bool {
+	if r[i].Height() == r[j].Height() {
+		return r[i].Addr().Less(r[j].Addr())
+	}
+	return r[i].Height() > r[j].Height()
 }
 
-func (r RefByHeightHeap) Swap(i, j int) {
+func (r CommitByHeightHeap) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
-func (r RefByHeightHeap) Len() int {
+func (r CommitByHeightHeap) Len() int {
 	return len(r)
 }
 
-func (r *RefByHeightHeap) Push(x interface{}) {
-	*r = append(*r, x.(types.Ref))
+func (r *CommitByHeightHeap) Push(x interface{}) {
+	*r = append(*r, x.(*Commit))
 }
 
-func (r *RefByHeightHeap) Pop() interface{} {
+func (r *CommitByHeightHeap) Pop() interface{} {
 	old := *r
 	ret := old[len(old)-1]
 	*r = old[:len(old)-1]
 	return ret
 }
 
-func (r RefByHeightHeap) Empty() bool {
+func (r CommitByHeightHeap) Empty() bool {
 	return len(r) == 0
 }
 
-func (r RefByHeightHeap) MaxHeight() uint64 {
+func (r CommitByHeightHeap) MaxHeight() uint64 {
 	return r[0].Height()
 }
 
-func (r *RefByHeightHeap) PopRefsOfHeight(h uint64) types.RefSlice {
-	var ret types.RefSlice
+func (r *CommitByHeightHeap) PopCommitsOfHeight(h uint64) []*Commit {
+	var ret []*Commit
 	for !r.Empty() && r.MaxHeight() == h {
-		ret = append(ret, heap.Pop(r).(types.Ref))
+		ret = append(ret, heap.Pop(r).(*Commit))
 	}
 	return ret
 }
