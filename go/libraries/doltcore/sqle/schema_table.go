@@ -291,13 +291,19 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 	}()
 
-	sqlRow, err := iter.Next(ctx)
-	if err == nil {
+	// todo(andy): use filtered reader?
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if sqlRow[0] != fragType || sqlRow[1] != name {
+			continue
+		}
 		return sqlRow, true, nil
-	} else if err == io.EOF {
-		return nil, false, nil
-	} else {
-		return nil, false, err
 	}
 }
 
