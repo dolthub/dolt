@@ -172,9 +172,9 @@ func (suite *PullSuite) TestPullEverything() {
 	sourceAddr := suite.commitToSource(l, nil)
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
@@ -217,9 +217,9 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
@@ -270,9 +270,9 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
@@ -322,9 +322,9 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)

@@ -223,18 +223,19 @@ func (r Ref) HumanReadableString() string {
 	panic("unreachable")
 }
 
-// Returns a function that can be used to walk the hash and height of all the
-// Refs of a given Chunk.  This function is meant to decouple callers from the
-// types package itself, and so the callback itself does not take |types.Ref|
-// values.
-func WalkRefsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h hash.Hash, height uint64) error) error, error) {
+// Returns a function that can be used to walk the hashes of all the
+// Refs of a given Chunk. The callback also takes a boolean parameter |isleaf|,
+// which is true when the ref points to a known leaf chunk. This function is
+// meant to decouple callers from the types package itself, and so the callback
+// itself does not take |types.Ref| values.
+func WalkAddrsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error, error) {
 	nbf, err := GetFormatForVersionString(cs.Version())
 	if err != nil {
 		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
 	}
-	return func(c chunks.Chunk, cb func(h hash.Hash, height uint64) error) error {
+	return func(c chunks.Chunk, cb func(h hash.Hash, isleaf bool) error) error {
 		return WalkRefs(c, nbf, func(r Ref) error {
-			return cb(r.TargetHash(), r.Height())
+			return cb(r.TargetHash(), r.Height() == 1)
 		})
 	}, nil
 }

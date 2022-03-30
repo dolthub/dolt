@@ -58,12 +58,12 @@ type FilledWriters struct {
 // CmpChnkAndRefs holds a CompressedChunk and all of it's references
 type CmpChnkAndRefs struct {
 	cmpChnk nbs.CompressedChunk
-	refs    map[hash.Hash]int
+	refs    map[hash.Hash]bool
 }
 
 // Puller is used to sync data between to Databases
 type Puller struct {
-	wrf WalkRefs
+	waf WalkAddrs
 
 	srcChunkStore nbs.NBSCompressedChunkStore
 	sinkDBCS      chunks.ChunkStore
@@ -83,7 +83,7 @@ type Puller struct {
 
 // NewPuller creates a new Puller instance to do the syncing.  If a nil puller is returned without error that means
 // that there is nothing to pull and the sinkDB is already up to date.
-func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, rootChunkHash hash.Hash, statsCh chan Stats) (*Puller, error) {
+func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, rootChunkHash hash.Hash, statsCh chan Stats) (*Puller, error) {
 	// Sanity Check
 	exists, err := srcCS.Has(ctx, rootChunkHash)
 
@@ -131,7 +131,7 @@ func NewPuller(ctx context.Context, tempDir string, chunksPerTF int, srcCS, sink
 	}
 
 	p := &Puller{
-		wrf:           walkRefs,
+		waf:           walkAddrs,
 		srcChunkStore: srcChunkStore,
 		sinkDBCS:      sinkCS,
 		rootChunkHash: rootChunkHash,
@@ -482,9 +482,9 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 					if err != nil {
 						return err
 					}
-					refs := make(map[hash.Hash]int)
-					err = p.wrf(chnk, func(h hash.Hash, height uint64) error {
-						refs[h] = int(height)
+					refs := make(map[hash.Hash]bool)
+					err = p.waf(chnk, func(h hash.Hash, isleaf bool) error {
+						refs[h] = isleaf
 						return nil
 					})
 					if err != nil {
@@ -544,10 +544,9 @@ func (p *Puller) getCmp(ctx context.Context, leaves, batch hash.HashSet, complet
 					}
 				}
 
-				for h, height := range cmpAndRef.refs {
+				for h, isleaf := range cmpAndRef.refs {
 					nextLevel.Insert(h)
-
-					if height == 1 {
+					if isleaf {
 						nextLeaves.Insert(h)
 					}
 				}
