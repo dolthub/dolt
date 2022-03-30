@@ -213,37 +213,37 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
 }
 
-func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
 	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
 		if c1Ht == c2Ht {
 			c1Parents, c2Parents := c1Q.PopRefsOfHeight(c1Ht), c2Q.PopRefsOfHeight(c2Ht)
 			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
-				return common, true, nil
+				return common.TargetHash(), true, nil
 			}
 			err := parentsToQueue(ctx, c1Parents, &c1Q, vr1)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 			err = parentsToQueue(ctx, c2Parents, &c2Q, vr2)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		} else if c1Ht > c2Ht {
 			err := parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		} else {
 			err := parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		}
 	}
 
-	return types.Ref{}, false, nil
+	return hash.Hash{}, false, nil
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
@@ -254,10 +254,10 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
 // implementation delegates to findCommonAncestorUsingParentsList.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
 	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	if pi1 == nil {
 		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
@@ -265,7 +265,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 
 	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	if pi2 == nil {
 		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
@@ -275,22 +275,18 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		h1, h2 := pi1.Hash(), pi2.Hash()
 		if h1 == h2 {
 			if err := firstError(pi1.Err(), pi2.Err()); err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
-			r, err := hashToRef(ctx, vr1, h1)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			return r, true, nil
+			return h1, true, nil
 		}
 		if pi1.Less(vr1.Format(), pi2) {
 			// TODO: Should pi2.Seek(pi1.curr), but MapIterator does not expose Seek yet.
 			if !pi2.Next(ctx) {
-				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
+				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
 			}
 		} else {
 			if !pi1.Next(ctx) {
-				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
+				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
 			}
 		}
 	}
@@ -299,7 +295,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 // FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
 // where |cl| is the transitive closure of one or more refs. If a common ancestor
 // exists, |ok| is set to true, else false.
-func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
+func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
 	q := &RefByHeightHeap{cm}
 	var curr types.RefSlice
 
@@ -309,20 +305,20 @@ func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref,
 		for _, r := range curr {
 			ok, err = cl.Contains(ctx, r)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 			if ok {
-				return r, ok, nil
+				return r.TargetHash(), ok, nil
 			}
 		}
 
 		err = parentsToQueue(ctx, curr, q, vr)
 		if err != nil {
-			return types.Ref{}, false, err
+			return hash.Hash{}, false, err
 		}
 	}
 
-	return types.Ref{}, false, nil
+	return hash.Hash{}, false, nil
 }
 
 // GetCommitParents returns |Ref|s to the parents of the commit.
@@ -589,14 +585,6 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 	}
 	i.curr = t
 	return true
-}
-
-func hashToRef(ctx context.Context, vr types.ValueReader, h hash.Hash) (types.Ref, error) {
-	fetched, err := vr.ReadValue(ctx, h)
-	if err != nil {
-		return types.Ref{}, err
-	}
-	return types.NewRef(fetched, vr.Format())
 }
 
 func refToMapKeyTuple(f *types.NomsBinFormat, r types.Ref) (types.Tuple, error) {

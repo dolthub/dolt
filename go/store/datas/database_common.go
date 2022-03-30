@@ -490,11 +490,11 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return err
 	} else if ok {
 		currentHeadAddr = ref.TargetHash()
-		ancestorRef, found, err := FindCommonAncestor(ctx, ref, newRef, db, db)
+		ancestorHash, found, err := FindCommonAncestor(ctx, ref, newRef, db, db)
 		if err != nil {
 			return err
 		}
-		if !found || mergeNeeded(currentHeadAddr, ancestorRef.TargetHash()) {
+		if !found || mergeNeeded(currentHeadAddr, ancestorHash) {
 			return ErrMergeNeeded
 		}
 	}

@@ -128,14 +128,12 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	ref, err := getCommitAncestorRef(ctx, ref1, ref2, cm1.vrw, cm2.vrw)
-
+	addr, err := getCommitAncestorAddr(ctx, ref1, ref2, cm1.vrw, cm2.vrw)
 	if err != nil {
 		return nil, err
 	}
 
-	targetVal, err := ref.TargetValue(ctx, cm1.vrw)
-
+	targetVal, err := cm1.vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -143,18 +141,18 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	return NewCommit(ctx, cm1.vrw, targetVal)
 }
 
-func getCommitAncestorRef(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (types.Ref, error) {
-	ancestorRef, ok, err := datas.FindCommonAncestor(ctx, ref1, ref2, vrw1, vrw2)
+func getCommitAncestorAddr(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (hash.Hash, error) {
+	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, ref1, ref2, vrw1, vrw2)
 
 	if err != nil {
-		return types.Ref{}, err
+		return hash.Hash{}, err
 	}
 
 	if !ok {
-		return types.Ref{}, ErrNoCommonAncestor
+		return hash.Hash{}, ErrNoCommonAncestor
 	}
 
-	return ancestorRef, nil
+	return ancestorAddr, nil
 }
 
 func (c *Commit) CanFastForwardTo(ctx context.Context, new *Commit) (bool, error) {

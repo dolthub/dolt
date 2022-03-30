@@ -289,22 +289,22 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 	return le.List(context.Background())
 }
 
-func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
+func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
 	closure, err := NewSetRefClosure(ctx, vr1, c1)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
-func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
+func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
 	closure := NewLazyRefClosure(c1, vr1)
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
 func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
-	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
+	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error)
 
 	methods := map[string]caFinder{
 		"FindCommonAncestor":                 FindCommonAncestor,
@@ -323,7 +323,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 			found, ok, err := method(ctx, aref, bref, ldb, rdb)
 			assert.NoError(err)
 			if assert.True(ok) {
-				tv, err := found.TargetValue(context.Background(), ldb)
+				tv, err := ldb.ReadValue(context.Background(), found)
 				assert.NoError(err)
 				ancestor := tv
 				expV, _ := GetCommitValue(ctx, ldb, expected)
@@ -594,7 +594,7 @@ func TestFindCommonAncestor(t *testing.T) {
 	if !assert.False(ok) {
 		d2V, _ := GetCommitValue(ctx, db, d2)
 		a6V, _ := GetCommitValue(ctx, db, a6)
-		fTV, _ := found.TargetValue(ctx, db)
+		fTV, _ := db.ReadValue(ctx, found)
 		fV, _ := GetCommitValue(ctx, db, fTV)
 
 		assert.Fail(
