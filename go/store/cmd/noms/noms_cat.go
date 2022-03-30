@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/d"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -160,6 +161,7 @@ func runCat(ctx context.Context, args []string) int {
 		//Want a clean db every loop
 		sp, _ := spec.ForDatabase("mem")
 		vrw := sp.GetVRW(ctx)
+		waf := types.WalkAddrsForNBF(vrw.Format())
 
 		fmt.Printf("        chunk[%d].raw.len:     %d\n", cidx, len(currCD.compressed))
 
@@ -192,12 +194,12 @@ func runCat(ctx context.Context, args []string) int {
 
 		if !catNoRefs {
 			refIdx := 0
-			err = types.WalkRefs(chunk, vrw.Format(), func(ref types.Ref) error {
+			err = waf(chunk, func(addr hash.Hash, _ bool) error {
 				if refIdx == 0 {
 					fmt.Printf("    chunk[%d] references chunks:\n", cidx)
 				}
 
-				fmt.Printf("        Ref Hash: %s\n", ref.TargetHash().String())
+				fmt.Printf("        Ref Hash: %s\n", addr.String())
 				refIdx++
 
 				return nil

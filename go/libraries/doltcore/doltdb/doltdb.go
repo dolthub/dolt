@@ -1150,10 +1150,7 @@ func (ddb *DoltDB) pruneUnreferencedDatasets(ctx context.Context) error {
 func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB, targetHash hash.Hash, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	srcCS := datas.ChunkStoreFromDatabase(srcDB.db)
 	destCS := datas.ChunkStoreFromDatabase(ddb.db)
-	waf, err := types.WalkAddrsForChunkStore(srcCS)
-	if err != nil {
-		return err
-	}
+	waf := types.WalkAddrsForNBF(srcDB.Format())
 
 	if datas.CanUsePuller(srcDB.db) && datas.CanUsePuller(ddb.db) {
 		puller, err := pull.NewPuller(ctx, tempDir, defaultChunksPerTF, srcCS, destCS, waf, targetHash, statsCh)

@@ -103,8 +103,7 @@ func runSync(ctx context.Context, args []string) int {
 	nonFF := false
 	srcCS := datas.ChunkStoreFromDatabase(sourceStore)
 	sinkCS := datas.ChunkStoreFromDatabase(sinkDB)
-	waf, err := types.WalkAddrsForChunkStore(srcCS)
-	util.CheckError(err)
+	waf := types.WalkAddrsForNBF(sourceVRW.Format())
 	f := func() error {
 		defer profile.MaybeStartProfile().Stop()
 		addr := sourceRef.TargetHash()

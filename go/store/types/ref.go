@@ -233,9 +233,13 @@ func WalkAddrsForChunkStore(cs chunks.ChunkStore) (func(chunks.Chunk, func(h has
 	if err != nil {
 		return nil, fmt.Errorf("could not find binary format corresponding to %s. try upgrading dolt.", cs.Version())
 	}
+	return WalkAddrsForNBF(nbf), nil
+}
+
+func WalkAddrsForNBF(nbf *NomsBinFormat) (func(chunks.Chunk, func(h hash.Hash, isleaf bool) error) error) {
 	return func(c chunks.Chunk, cb func(h hash.Hash, isleaf bool) error) error {
-		return WalkRefs(c, nbf, func(r Ref) error {
+		return walkRefs(c.Data(), nbf, func(r Ref) error {
 			return cb(r.TargetHash(), r.Height() == 1)
 		})
-	}, nil
+	}
 }

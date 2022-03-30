@@ -44,7 +44,7 @@ func TestWalkRefs(t *testing.T) {
 		})
 		val, err := EncodeValue(v, Format_7_18)
 		require.NoError(t, err)
-		err = WalkRefs(val, Format_7_18, func(r Ref) error {
+		err = walkRefs(val.Data(), Format_7_18, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]

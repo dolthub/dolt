@@ -22,17 +22,12 @@
 package types
 
 import (
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 )
 
-// WalkRefs calls cb() on each Ref that can be decoded from |c|. The results
+// walkRefs calls cb() on each Ref that can be decoded from |c|. The results
 // are precisely equal to DecodeValue(c).WalkRefs(cb), but this should be much
 // faster.
-func WalkRefs(c chunks.Chunk, nbf *NomsBinFormat, cb RefCallback) error {
-	return walkRefs(c.Data(), nbf, cb)
-}
-
 func walkRefs(data []byte, nbf *NomsBinFormat, cb RefCallback) error {
 	rw := newRefWalker(data)
 	return rw.walkValue(nbf, cb)

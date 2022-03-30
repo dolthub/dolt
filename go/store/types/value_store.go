@@ -373,7 +373,7 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		}
 
-		err := WalkRefs(pending, lvs.nbf, func(grandchildRef Ref) error {
+		err := walkRefs(pending.Data(), lvs.nbf, func(grandchildRef Ref) error {
 			gch := grandchildRef.TargetHash()
 			if pending, present := lvs.bufferedChunks[gch]; present {
 				return put(gch, pending)
@@ -482,7 +482,7 @@ func (lvs *ValueStore) flush(ctx context.Context, current hash.Hash) error {
 
 	for parent := range lvs.withBufferedChildren {
 		if pending, present := lvs.bufferedChunks[parent]; present {
-			err := WalkRefs(pending, lvs.nbf, func(reachable Ref) error {
+			err := walkRefs(pending.Data(), lvs.nbf, func(reachable Ref) error {
 				if pending, present := lvs.bufferedChunks[reachable.TargetHash()]; present {
 					return put(reachable.TargetHash(), pending)
 				}
