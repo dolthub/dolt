@@ -51,7 +51,7 @@ RUN apt update -y && \
 
 # install go
 WORKDIR /root
-ENV GO_VERSION=1.17.1
+ENV GO_VERSION=1.18
 ENV GOPATH=$HOME/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
