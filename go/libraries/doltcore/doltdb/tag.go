@@ -37,16 +37,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commitSt, err := vrw.ReadValue(ctx, commitAddr)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: tomfoolery.
-	ref, err := types.NewRef(commitSt, vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-	dc, err := datas.LoadCommitRef(ctx, vrw, ref)
+	dc, err := datas.LoadCommitAddr(ctx, vrw, commitAddr)
 	if err != nil {
 		return nil, err
 	}

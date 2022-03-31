@@ -219,19 +219,9 @@ func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.Val
 		if err != nil {
 			return nil, err
 		}
-		// TODO: tomfoolery.
-		v, err := vrw.ReadValue(ctx, commitaddr)
-		if err != nil {
-			return nil, err
-		}
-		r, err := types.NewRef(v, vrw.Format())
-		if err != nil {
-			return nil, err
-		}
-		return datas.LoadCommitRef(ctx, vrw, r)
+		return datas.LoadCommitAddr(ctx, vrw, commitaddr)
 	}
 
-	// TODO: tomfoolery.
 	r, _, err := ds.MaybeHeadRef()
 	if err != nil {
 		return nil, err
@@ -245,20 +235,7 @@ func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*
 	if !ok {
 		return nil, errors.New("invalid hash: " + c)
 	}
-
-	val, err := vr.ReadValue(ctx, hash)
-	if err != nil {
-		return nil, err
-	}
-	if val == nil {
-		return nil, ErrHashNotFound
-	}
-	// TODO: tomfoolery.
-	r, err := types.NewRef(val, vr.Format())
-	if err != nil {
-		return nil, err
-	}
-	return datas.LoadCommitRef(ctx, vr, r)
+	return datas.LoadCommitAddr(ctx, vr, hash)
 }
 
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and

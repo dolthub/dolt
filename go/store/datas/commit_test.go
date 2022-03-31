@@ -673,10 +673,11 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
 
-	a9c, err := LoadCommitRef(ctx, rdb, mustRef(types.NewRef(a9, rdb.Format())))
+	a9c, err := CommitFromValue(db.Format(), a9)
 	require.NoError(t, err)
-	ra9c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(ra9, db.Format())))
-	_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, rdb, db)
+	ra9c, err := CommitFromValue(rdb.Format(), ra9)
+	require.NoError(t, err)
+	_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
 	assert.Error(err)
 }
 

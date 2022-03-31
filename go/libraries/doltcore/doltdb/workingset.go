@@ -52,18 +52,11 @@ func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState ty
 	if err != nil {
 		return nil, err
 	}
-
 	if !ok {
 		return nil, fmt.Errorf("corrupted MergeState struct")
 	}
 
-	ref, err := types.NewRef(commitSt, vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-	// TODO: tomfoolery.
-	// TODO: Is this guaranteed to be value'd?
-	dc, err := datas.LoadCommitRef(ctx, vrw, ref)
+	dc, err := datas.CommitFromValue(vrw.Format(), commitSt)
 	if err != nil {
 		return nil, err
 	}

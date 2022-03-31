@@ -1367,7 +1367,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', 'fakefakefakefakefakefakefakefake', @Commit2);",
-				ExpectedErrStr: "could not find a value for this hash",
+				ExpectedErrStr: "target commit not found",
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",

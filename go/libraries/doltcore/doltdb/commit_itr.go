@@ -16,7 +16,6 @@ package doltdb
 
 import (
 	"context"
-	"errors"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/datas"
@@ -143,26 +142,10 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 }
 
 func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*Commit, error) {
-	val, err := vrw.ReadValue(ctx, h)
+	dc, err := datas.LoadCommitAddr(ctx, vrw, h)
 	if err != nil {
 		return nil, err
 	}
-	if val == nil {
-		return nil, errors.New("failed to get commit")
-	}
-
-	// TODO: Get rid of this tomfoolery.
-
-	ref, err := types.NewRef(val, vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-
-	dc, err := datas.LoadCommitRef(ctx, vrw, ref)
-	if err != nil {
-		return nil, err
-	}
-
 	return NewCommit(ctx, vrw, dc)
 }
 

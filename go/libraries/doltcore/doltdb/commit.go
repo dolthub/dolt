@@ -100,17 +100,7 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 		return nil, err
 	}
 
-	targetVal, err := cm1.vrw.ReadValue(ctx, addr)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: Get rid of this tomfoolery.
-	targetRef, err := types.NewRef(targetVal, cm1.vrw.Format())
-	if err != nil {
-		return nil, err
-	}
-	targetCommit, err := datas.LoadCommitRef(ctx, cm1.vrw, targetRef)
+	targetCommit, err := datas.LoadCommitAddr(ctx, cm1.vrw, addr)
 	if err != nil {
 		return nil, err
 	}

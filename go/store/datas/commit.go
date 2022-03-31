@@ -242,20 +242,38 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 	return &Commit{cv, r.TargetHash(), r.Height()}, nil
 }
 
-func commitPtr(nbf *types.NomsBinFormat, v types.Value, r types.Ref) *Commit {
+func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
 	if nbf == types.Format_DOLT_DEV {
-		height := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0).Height()
+		bs := []byte(v.(types.SerialMessage))
+		height := serial.GetRootAsCommit(bs, 0).Height()
+		var addr hash.Hash
+		if r != nil {
+			addr = r.TargetHash()
+		} else {
+			addr = hash.Of(bs)
+		}
 		return &Commit{
 			val:    v,
 			height: height,
-			addr:   r.TargetHash(),
+			addr:   addr,
+		}, nil
+	}
+	if r == nil {
+		rv, err := types.NewRef(v, nbf)
+		if err != nil {
+			return nil, err
 		}
+		r = &rv
 	}
 	return &Commit{
 		val:    v,
 		height: r.Height(),
 		addr:   r.TargetHash(),
-	}
+	}, nil
+}
+
+func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+	return commitPtr(nbf, v, nil)
 }
 
 func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Commit, error) {
@@ -263,7 +281,21 @@ func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Com
 	if err != nil {
 		return nil, err
 	}
-	return commitPtr(vr.Format(), v, r), nil
+	if v == nil {
+		return nil, errors.New("target commit not found")
+	}
+	return commitPtr(vr.Format(), v, &r)
+}
+
+func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (*Commit, error) {
+	v, err := vr.ReadValue(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, errors.New("target commit not found")
+	}
+	return CommitFromValue(vr.Format(), v)
 }
 
 func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
