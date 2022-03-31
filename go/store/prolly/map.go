@@ -168,9 +168,54 @@ func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
 	return m.IterRange(ctx, rng)
 }
 
+// IterOrdinalRange returns a MapRangeIter for the ordinal range beginning at |start| and ending before |stop|.
+func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error) {
+	if stop == start {
+		return emptyIter{}, nil
+	} else if stop < start {
+		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
+	}
+
+	lo, err := newCursorAtOrdinal(ctx, m.ns, m.root, start)
+	if err != nil {
+		return nil, err
+	}
+
+	hi, err := newCursorAtOrdinal(ctx, m.ns, m.root, stop)
+	if err != nil {
+		return nil, err
+	}
+
+	return &prollyRangeIter{
+		curr: lo,
+		stop: hi,
+	}, nil
+}
+
 // IterRange returns a MutableMapRangeIter that iterates over a Range.
 func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	return m.iterFromRange(ctx, rng)
+	if rng.isPointLookup(m.keyDesc) {
+		return m.pointLookupFromRange(ctx, rng)
+	} else {
+		return m.iterFromRange(ctx, rng)
+	}
+}
+
+func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
+	search := pointLookupSearchFn(rng)
+	cur, err := newCursorFromSearchFn(ctx, m.ns, m.root, search)
+	if err != nil {
+		return nil, err
+	}
+
+	key := val.Tuple(cur.currentKey())
+	value := val.Tuple(cur.currentValue())
+	if compareBound(rng.Start, key, m.keyDesc) != 0 {
+		// map does not contain this point lookup
+		key, value = nil, nil
+	}
+
+	return &pointLookup{k: key, v: value}, nil
 }
 
 func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {

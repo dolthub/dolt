@@ -96,7 +96,7 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
 // and footer and its length and capacity must match the expected indexSize for the chunkCount specified in the footer.
 // Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
-func parseTableIndex(buff []byte) (onHeapTableIndex, error) {
+func parseTableIndex(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -106,19 +106,19 @@ func parseTableIndex(buff []byte) (onHeapTableIndex, error) {
 		return onHeapTableIndex{}, ErrWrongBufferSize
 	}
 	buff = buff[:len(buff)-footerSize]
-	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData)
+	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData, q)
 }
 
 // parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
 // Useful to create an onHeapTableIndex without retaining the entire underlying array of data.
-func parseTableIndexByCopy(buff []byte) (onHeapTableIndex, error) {
+func parseTableIndexByCopy(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	r := bytes.NewReader(buff)
-	return ReadTableIndexByCopy(r)
+	return ReadTableIndexByCopy(r, q)
 }
 
 // ReadTableIndexByCopy loads an index into memory from an io.ReadSeeker
 // Caution: Allocates new memory for entire index
-func ReadTableIndexByCopy(rd io.ReadSeeker) (onHeapTableIndex, error) {
+func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(rd)
 	if err != nil {
 		return onHeapTableIndex{}, err
@@ -134,10 +134,12 @@ func ReadTableIndexByCopy(rd io.ReadSeeker) (onHeapTableIndex, error) {
 		return onHeapTableIndex{}, err
 	}
 
-	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData)
+	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData, q)
 }
 
 type onHeapTableIndex struct {
+	q             MemoryQuotaProvider
+	refCnt        *int32
 	tableFileSize uint64
 	// Tuple bytes
 	tupleB []byte
@@ -152,7 +154,7 @@ type onHeapTableIndex struct {
 var _ tableIndex = &onHeapTableIndex{}
 
 // NewOnHeapTableIndex creates a table index given a buffer of just the table index (no footer)
-func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint64) (onHeapTableIndex, error) {
+func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	tuples := b[:prefixTupleSize*chunkCount]
 	lengths := b[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
 	suffixes := b[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
@@ -169,7 +171,12 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 	store half the offsets and then allocate an additional len(lengths) to store the rest.
 	*/
 
+	refCnt := new(int32)
+	*refCnt = 1
+
 	return onHeapTableIndex{
+		refCnt:                refCnt,
+		q:                     q,
 		tupleB:                tuples,
 		offsetB:               offsets,
 		suffixB:               suffixes,
@@ -328,10 +335,21 @@ func (ti onHeapTableIndex) TotalUncompressedData() uint64 {
 }
 
 func (ti onHeapTableIndex) Close() error {
+	cnt := atomic.AddInt32(ti.refCnt, -1)
+	if cnt == 0 {
+		return ti.q.ReleaseQuota(memSize(ti.chunkCount))
+	}
+	if cnt < 0 {
+		panic("Close() called and reduced ref count to < 0.")
+	}
 	return nil
 }
 
 func (ti onHeapTableIndex) Clone() (tableIndex, error) {
+	cnt := atomic.AddInt32(ti.refCnt, 1)
+	if cnt == 1 {
+		panic("Clone() called after last Close(). This index is no longer valid.")
+	}
 	return ti, nil
 }
 

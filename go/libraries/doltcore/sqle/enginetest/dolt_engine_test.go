@@ -43,15 +43,20 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query:    `SELECT * from mytable`,
-		Expected: []sql.Row{},
+		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2
+				FROM two_pk a JOIN two_pk b
+				ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2
+				ORDER BY 1,2,3`,
+		Expected: []sql.Row{
+			{0, 0, 1, 1},
+		},
 	}
 
 	harness := newDoltHarness(t)
 	engine := enginetest.NewEngine(t, harness)
 	enginetest.CreateIndexes(t, harness, engine)
-	engine.Analyzer.Debug = true
-	engine.Analyzer.Verbose = true
+	//engine.Analyzer.Debug = true
+	//engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
 }
@@ -124,10 +129,7 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// todo(andy): unskip after secondary index support
-		t.Skip()
-	}
+	skipNewFormat(t)
 
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
@@ -151,6 +153,7 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
 
@@ -179,7 +182,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestReplaceInto(t *testing.T) {
-	t.Skipf("Skipping, replace returns the wrong number of rows in some cases")
 	enginetest.TestReplaceInto(t, newDoltHarness(t))
 }
 
@@ -204,14 +206,12 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
 func TestScripts(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// todo(andy): unskip
-		t.Skip()
-	}
+	skipNewFormat(t)
 
 	skipped := []string{
 		"create index r_c0 on r (c0);",
@@ -235,6 +235,8 @@ func TestScripts(t *testing.T) {
 
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
+	skipNewFormat(t)
+
 	harness := newDoltHarness(t)
 	for _, script := range DoltUserPrivTests {
 		t.Run(script.Name, func(t *testing.T) {
@@ -296,10 +298,12 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
 func TestUserAuthentication(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -308,38 +312,47 @@ func TestComplexIndexQueries(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDDL(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDDL(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDML(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDML(t, newDoltHarness(t))
 }
 
 func TestDropTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
 func TestRenameTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
 func TestRenameColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestRenameColumn(t, newDoltHarness(t))
 }
 
 func TestAddColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 
 func TestModifyColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
 func TestDropColumn(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
@@ -353,14 +366,17 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
 func TestDropForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -390,10 +406,12 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestViews(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestViews(t, newDoltHarness(t))
 }
 
 func TestVersionedViews(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
@@ -426,14 +444,17 @@ func TestNaturalJoinDisjoint(t *testing.T) {
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 
 func TestColumnDefaults(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
 func TestAlterTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAlterTable(t, newDoltHarness(t))
 }
 
@@ -446,14 +467,17 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
 func TestTriggers(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
 func TestStoredProcedures(t *testing.T) {
+	skipNewFormat(t)
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
@@ -467,9 +491,7 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
+	skipNewFormat(t)
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -488,6 +510,7 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, script := range DoltMerge {
 		enginetest.TestScript(t, harness, script)
@@ -587,6 +610,7 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range HistorySystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -598,6 +622,7 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -609,6 +634,7 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffTableFunction(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 
 	for _, test := range DiffTableFunctionScriptTests {
@@ -621,6 +647,7 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range CommitDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -632,6 +659,7 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range DiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -647,6 +675,7 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 }
 
 func TestAddDropPks(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
@@ -668,4 +697,10 @@ func TestPersist(t *testing.T) {
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
+}
+
+func skipNewFormat(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 }

@@ -37,8 +37,10 @@ import (
 
 func TestChunkStoreZeroValue(t *testing.T) {
 	assert := assert.New(t)
-	_, _, store := makeStoreWithFakes(t)
-	defer store.Close()
+	_, _, _, store := makeStoreWithFakes(t)
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// No manifest file gets written until the first call to Commit(). Prior to that, Root() will simply return hash.Hash{}.
 	h, err := store.Root(context.Background())
@@ -49,8 +51,10 @@ func TestChunkStoreZeroValue(t *testing.T) {
 
 func TestChunkStoreVersion(t *testing.T) {
 	assert := assert.New(t)
-	_, _, store := makeStoreWithFakes(t)
-	defer store.Close()
+	_, _, _, store := makeStoreWithFakes(t)
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	assert.Equal(constants.NomsVersion, store.Version())
 	newRoot := hash.Of([]byte("new root"))
@@ -61,8 +65,13 @@ func TestChunkStoreVersion(t *testing.T) {
 
 func TestChunkStoreRebase(t *testing.T) {
 	assert := assert.New(t)
-	fm, p, store := makeStoreWithFakes(t)
-	defer store.Close()
+	fm, p, q, store := makeStoreWithFakes(t)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -92,8 +101,13 @@ func TestChunkStoreRebase(t *testing.T) {
 
 func TestChunkStoreCommit(t *testing.T) {
 	assert := assert.New(t)
-	_, _, store := makeStoreWithFakes(t)
-	defer store.Close()
+	_, _, q, store := makeStoreWithFakes(t)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -135,8 +149,13 @@ func TestChunkStoreCommit(t *testing.T) {
 
 func TestChunkStoreManifestAppearsAfterConstruction(t *testing.T) {
 	assert := assert.New(t)
-	fm, p, store := makeStoreWithFakes(t)
-	defer store.Close()
+	fm, p, q, store := makeStoreWithFakes(t)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -157,15 +176,21 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
-	p := newFakeTablePersister()
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	p := newFakeTablePersister(q)
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
 	require.NoError(t, err)
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, inlineConjoiner{defaultMaxTables}, defaultMemTableSize)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	h, err := store.Root(context.Background())
 	require.NoError(t, err)
@@ -176,8 +201,13 @@ func TestChunkStoreManifestFirstWriteByOtherProcess(t *testing.T) {
 
 func TestChunkStoreCommitOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
-	fm, p, store := makeStoreWithFakes(t)
-	defer store.Close()
+	fm, p, q, store := makeStoreWithFakes(t)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// Simulate another process writing a manifest behind store's back.
 	newRoot, chunks, err := interloperWrite(fm, p, []byte("new root"), []byte("hello2"), []byte("goodbye2"), []byte("badbye2"))
@@ -197,17 +227,26 @@ func TestChunkStoreManifestPreemptiveOptimisticLockFail(t *testing.T) {
 	assert := assert.New(t)
 	fm := &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
-	p := newFakeTablePersister()
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	p := newFakeTablePersister(q)
+
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// Simulate another goroutine writing a manifest behind store's back.
-	interloper, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
+	interloper, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
-	defer interloper.Close()
+	defer func() {
+		require.NoError(t, interloper.Close())
+	}()
 
 	chunk := chunks.NewChunk([]byte("hello"))
 	err = interloper.Put(context.Background(), chunk)
@@ -240,12 +279,18 @@ func TestChunkStoreCommitLocksOutFetch(t *testing.T) {
 	fm := &fakeManifest{name: "foo"}
 	upm := &updatePreemptManifest{manifest: fm}
 	mm := manifestManager{upm, newManifestCache(defaultManifestCacheSize), newManifestLocks()}
-	p := newFakeTablePersister()
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	p := newFakeTablePersister(q)
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// store.Commit() should lock out calls to mm.Fetch()
 	wg := sync.WaitGroup{}
@@ -281,12 +326,19 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	upm := &updatePreemptManifest{manifest: fm}
 	mc := newManifestCache(defaultManifestCacheSize)
 	l := newManifestLocks()
-	p := newFakeTablePersister()
+	q := NewUnlimitedMemQuotaProvider()
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	p := newFakeTablePersister(q)
+
 	c := inlineConjoiner{defaultMaxTables}
 
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, manifestManager{upm, mc, l}, p, c, defaultMemTableSize)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, manifestManager{upm, mc, l}, p, q, c, defaultMemTableSize)
 	require.NoError(t, err)
-	defer store.Close()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	storeChunk := chunks.NewChunk([]byte("store"))
 	interloperChunk := chunks.NewChunk([]byte("interloper"))
@@ -299,10 +351,13 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 			updatePreemptManifest{fm, func() { updateCount++ }}, mc, l,
 		},
 		p,
+		q,
 		c,
 		defaultMemTableSize)
 	require.NoError(t, err)
-	defer interloper.Close()
+	defer func() {
+		require.NoError(t, interloper.Close())
+	}()
 
 	wg := sync.WaitGroup{}
 	upm.preUpdate = func() {
@@ -335,11 +390,12 @@ func TestChunkStoreSerializeCommits(t *testing.T) {
 	assert.True(interloper.Has(context.Background(), interloperChunk.Hash()))
 }
 
-func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, store *NomsBlockStore) {
+func makeStoreWithFakes(t *testing.T) (fm *fakeManifest, p tablePersister, q MemoryQuotaProvider, store *NomsBlockStore) {
 	fm = &fakeManifest{}
 	mm := manifestManager{fm, newManifestCache(0), newManifestLocks()}
-	p = newFakeTablePersister()
-	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, inlineConjoiner{defaultMaxTables}, 0)
+	q = NewUnlimitedMemQuotaProvider()
+	p = newFakeTablePersister(q)
+	store, err := newNomsBlockStore(context.Background(), constants.Format718String, mm, p, q, inlineConjoiner{defaultMaxTables}, 0)
 	require.NoError(t, err)
 	return
 }
@@ -356,7 +412,7 @@ func interloperWrite(fm *fakeManifest, p tablePersister, rootChunk []byte, chunk
 		return hash.Hash{}, nil, err
 	}
 
-	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks))}}, nil)
+	fm.set(constants.NomsVersion, newLock, newRoot, []tableSpec{{mustAddr(src.hash()), uint32(len(chunks) + 1)}}, nil)
 	return
 }
 
@@ -435,15 +491,16 @@ func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, ap
 	}
 }
 
-func newFakeTableSet() tableSet {
-	return tableSet{p: newFakeTablePersister(), rl: make(chan struct{}, 1)}
+func newFakeTableSet(q MemoryQuotaProvider) tableSet {
+	return tableSet{p: newFakeTablePersister(q), q: NewUnlimitedMemQuotaProvider(), rl: make(chan struct{}, 1)}
 }
 
-func newFakeTablePersister() tablePersister {
-	return fakeTablePersister{map[addr]tableReader{}, &sync.RWMutex{}}
+func newFakeTablePersister(q MemoryQuotaProvider) tablePersister {
+	return fakeTablePersister{q, map[addr]tableReader{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
+	q       MemoryQuotaProvider
 	sources map[addr]tableReader
 	mu      *sync.RWMutex
 }
@@ -461,7 +518,7 @@ func (ftp fakeTablePersister) Persist(ctx context.Context, mt *memTable, haver c
 		if chunkCount > 0 {
 			ftp.mu.Lock()
 			defer ftp.mu.Unlock()
-			ti, err := parseTableIndexByCopy(data)
+			ti, err := parseTableIndexByCopy(data, ftp.q)
 
 			if err != nil {
 				return nil, err
@@ -488,7 +545,7 @@ func (ftp fakeTablePersister) ConjoinAll(ctx context.Context, sources chunkSourc
 	if chunkCount > 0 {
 		ftp.mu.Lock()
 		defer ftp.mu.Unlock()
-		ti, err := parseTableIndexByCopy(data)
+		ti, err := parseTableIndexByCopy(data, ftp.q)
 
 		if err != nil {
 			return nil, err

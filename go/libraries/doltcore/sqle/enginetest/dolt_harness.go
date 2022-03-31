@@ -77,9 +77,11 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		skippedQueries: defaultSkippedQueries,
 	}
 
-	format := dEnv.DoltDB.Format()
-	if types.IsFormat_DOLT_1(format) {
-		dh = dh.WithSkippedQueries(newFormatSkippedQueries)
+	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
+		dh = dh.WithSkippedQueries([]string{
+			"show",    // todo(andy): "show_create_table_t2"
+			"keyless", // todo(andy)
+		})
 	}
 
 	return dh
@@ -93,14 +95,6 @@ var defaultSkippedQueries = []string{
 	"json_objectagg",             // TODO: aggregation ordering
 	"typestable",                 // Bit type isn't working?
 	"show global variables like", // we set extra variables
-}
-
-var newFormatSkippedQueries = []string{
-	"alter",              // todo(andy): remove after DDL support
-	"desc",               // todo(andy): remove after secondary index support
-	"show",               // todo(andy): remove after secondary index support
-	"information_schema", // todo(andy): remove after secondary index support
-	"keyless",            // todo(andy): remove after keyless table support
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or

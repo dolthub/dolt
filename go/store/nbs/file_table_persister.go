@@ -38,19 +38,19 @@ import (
 
 const tempTablePrefix = "nbs_table_"
 
-func newFSTablePersister(dir string, fc *fdCache, indexCache *indexCache) tablePersister {
+func newFSTablePersister(dir string, fc *fdCache, q MemoryQuotaProvider) tablePersister {
 	d.PanicIfTrue(fc == nil)
-	return &fsTablePersister{dir, fc, indexCache}
+	return &fsTablePersister{dir, fc, q}
 }
 
 type fsTablePersister struct {
-	dir        string
-	fc         *fdCache
-	indexCache *indexCache
+	dir string
+	fc  *fdCache
+	q   MemoryQuotaProvider
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.indexCache, ftp.fc)
+	return newMmapTableReader(ftp.dir, name, chunkCount, ftp.q, ftp.fc)
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
@@ -85,27 +85,8 @@ func (ftp *fsTablePersister) persistTable(ctx context.Context, name addr, data [
 		}()
 
 		_, ferr = io.Copy(temp, bytes.NewReader(data))
-
 		if ferr != nil {
 			return "", ferr
-		}
-
-		index, ferr := parseTableIndexByCopy(data)
-
-		if ferr != nil {
-			return "", ferr
-		}
-
-		if ftp.indexCache != nil {
-			ftp.indexCache.lockEntry(name)
-			defer func() {
-				unlockErr := ftp.indexCache.unlockEntry(name)
-
-				if ferr == nil {
-					ferr = unlockErr
-				}
-			}()
-			ftp.indexCache.put(name, index)
 		}
 
 		return temp.Name(), nil
@@ -182,17 +163,6 @@ func (ftp *fsTablePersister) ConjoinAll(ctx context.Context, sources chunkSource
 
 		if ferr != nil {
 			return "", ferr
-		}
-
-		var index onHeapTableIndex
-		index, ferr = parseTableIndex(plan.mergedIndex)
-
-		if ferr != nil {
-			return "", ferr
-		}
-
-		if ftp.indexCache != nil {
-			ftp.indexCache.put(name, index)
 		}
 
 		return temp.Name(), nil

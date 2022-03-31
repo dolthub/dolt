@@ -139,8 +139,8 @@ func putChunks(t *testing.T, ctx context.Context, chunks []chunks.Chunk, cs chun
 
 func TestGenerationalCS(t *testing.T) {
 	ctx := context.Background()
-	oldGen, _ := makeTestLocalStore(t, 64)
-	newGen, _ := makeTestLocalStore(t, 64)
+	oldGen, _, _ := makeTestLocalStore(t, 64)
+	newGen, _, _ := makeTestLocalStore(t, 64)
 	inOld := make(map[int]bool)
 	inNew := make(map[int]bool)
 	chnks := genChunks(t, 100, 1000)

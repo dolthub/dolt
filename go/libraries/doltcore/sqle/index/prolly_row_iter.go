@@ -65,14 +65,9 @@ type prollyRowIter struct {
 var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
-func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, rng prolly.Range, projections []string) (sql.RowIter, error) {
+func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, iter prolly.MapRangeIter, projections []string) (sql.RowIter, error) {
 	if schema.IsKeyless(sch) {
 		return nil, errors.New("format __DOLT_1__ does not support keyless tables")
-	}
-
-	iter, err := rows.IterRange(ctx, rng)
-	if err != nil {
-		return nil, err
 	}
 
 	return rowIterFromMapIter(ctx, sch, rows, iter, projections)
