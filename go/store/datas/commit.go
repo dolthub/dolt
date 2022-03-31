@@ -247,7 +247,7 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r types.Ref) *Commit {
 	}
 }
 
-func commitPtrFromRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Commit, error) {
+func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Commit, error) {
 	v, err := vr.ReadValue(ctx, r.TargetHash())
 	if err != nil {
 		return nil, err
@@ -255,17 +255,7 @@ func commitPtrFromRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*
 	return commitPtr(vr.Format(), v, r), nil
 }
 
-func findCommonAncestorUsingParentsList(ctx context.Context, c1r, c2r types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
-	c1, err := commitPtrFromRef(ctx, vr1, c1r)
-	if err != nil {
-		return hash.Hash{}, false, err
-	}
-
-	c2, err := commitPtrFromRef(ctx, vr2, c2r)
-	if err != nil {
-		return hash.Hash{}, false, err
-	}
-
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
 	c1Q, c2Q := CommitByHeightHeap{c1}, CommitByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
@@ -306,7 +296,7 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1r, c2r types.Ref,
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
 // implementation delegates to findCommonAncestorUsingParentsList.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
+func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
 	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
 		return hash.Hash{}, false, err
@@ -347,12 +337,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 // FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
 // where |cl| is the transitive closure of one or more refs. If a common ancestor
 // exists, |ok| is set to true, else false.
-func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cr types.Ref, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
-	cm, err := commitPtrFromRef(ctx, vr, cr)
-	if err != nil {
-		return hash.Hash{}, false, err
-	}
-
+func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cm *Commit, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
 	q := &CommitByHeightHeap{cm}
 	var curr []*Commit
 
@@ -678,11 +663,11 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 	return true
 }
 
-func refToMapKeyTuple(f *types.NomsBinFormat, r types.Ref) (types.Tuple, error) {
-	h := r.TargetHash()
+func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
+	h := c.Addr()
 	ib := make([]byte, len(hash.Hash{}))
 	copy(ib, h[:])
-	return types.NewTuple(f, types.Uint(r.Height()), types.InlineBlob(ib))
+	return types.NewTuple(f, types.Uint(c.Height()), types.InlineBlob(ib))
 }
 
 func firstError(l, r error) error {
@@ -692,11 +677,8 @@ func firstError(l, r error) error {
 	return r
 }
 
-func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueReader) (*parentsClosureIterator, error) {
-	sv, err := r.TargetValue(ctx, vr)
-	if err != nil {
-		return nil, err
-	}
+func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (*parentsClosureIterator, error) {
+	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
 		// TODO: __DOLT_DEV__ should support parent closures.
@@ -744,7 +726,7 @@ func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueR
 		return nil, err
 	}
 
-	initialCurr, err := refToMapKeyTuple(vr.Format(), r)
+	initialCurr, err := commitToMapKeyTuple(vr.Format(), c)
 	if err != nil {
 		return nil, err
 	}

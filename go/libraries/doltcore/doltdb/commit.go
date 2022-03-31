@@ -139,8 +139,17 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 }
 
 func getCommitAncestorAddr(ctx context.Context, ref1, ref2 types.Ref, vrw1, vrw2 types.ValueReadWriter) (hash.Hash, error) {
-	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, ref1, ref2, vrw1, vrw2)
+	c1, err := datas.LoadCommitRef(ctx, vrw1, ref1)
+	if err != nil {
+		return hash.Hash{}, err
+	}
 
+	c2, err := datas.LoadCommitRef(ctx, vrw2, ref2)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2)
 	if err != nil {
 		return hash.Hash{}, err
 	}

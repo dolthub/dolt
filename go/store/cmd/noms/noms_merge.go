@@ -181,7 +181,11 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aaddr, found, err := datas.FindCommonAncestor(ctx, r1, r2, vr, vr)
+	c1, err := datas.LoadCommitRef(ctx, vr, r1)
+	d.PanicIfError(err)
+	c2, err := datas.LoadCommitRef(ctx, vr, r2)
+	d.PanicIfError(err)
+	aaddr, found, err := datas.FindCommonAncestor(ctx, c1, c2, vr, vr)
 	d.PanicIfError(err)
 	if !found {
 		return

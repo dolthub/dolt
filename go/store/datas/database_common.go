@@ -490,7 +490,15 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return err
 	} else if ok {
 		currentHeadAddr = ref.TargetHash()
-		ancestorHash, found, err := FindCommonAncestor(ctx, ref, newRef, db, db)
+		currCommit, err := LoadCommitRef(ctx, db, ref)
+		if err != nil {
+			return err
+		}
+		newCommit, err := LoadCommitRef(ctx, db, newRef)
+		if err != nil {
+			return err
+		}
+		ancestorHash, found, err := FindCommonAncestor(ctx, currCommit, newCommit, db, db)
 		if err != nil {
 			return err
 		}
