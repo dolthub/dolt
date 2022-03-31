@@ -35,6 +35,21 @@ func (v Geometry) Value(ctx context.Context) (Value, error) {
 }
 
 func (v Geometry) Equals(other Value) bool {
+	// If other is Geometry, recurse on other.Inner
+	if otherGeom, ok := other.(Geometry); ok {
+		switch inner := otherGeom.Inner.(type) {
+		case Point:
+			return v.Equals(inner)
+		case Linestring:
+			return v.Equals(inner)
+		case Polygon:
+			return v.Equals(inner)
+		default:
+			return false
+		}
+	}
+
+	// Compare based on v.Inner type
 	switch this := v.Inner.(type) {
 	case Point:
 		return this.Equals(other)

@@ -249,6 +249,8 @@ func floatTypeConverter(ctx context.Context, src *floatType, destTi TypeInfo) (t
 		}, true, nil
 	case *floatType:
 		return wrapIsValid(dest.IsValid, src, dest)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:

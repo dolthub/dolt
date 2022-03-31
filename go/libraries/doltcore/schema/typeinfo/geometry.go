@@ -193,7 +193,7 @@ func (ti *geometryType) ToSqlType() sql.Type {
 }
 
 // geometryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func geometryTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
@@ -211,14 +211,14 @@ func geometryTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo)
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return identityTypeConverter, false, nil
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
-	case *geometryType:
-		return identityTypeConverter, false, nil
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
