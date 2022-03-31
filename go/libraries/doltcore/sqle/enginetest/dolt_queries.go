@@ -24,6 +24,47 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
+	Name: "Describe table as of",
+	SetUpScript: []string{
+		"set @Commit0 = dolt_commit('--allow-empty', '-m', 'before creating table a');",
+		"create table a (pk int primary key, c1 int);",
+		"set @Commit1 = dolt_commit('-am', 'creating table a');",
+		"alter table a add column c2 text;",
+		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
+		"alter table a drop column c1;",
+		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
+	},
+	Assertions: []enginetest.ScriptTestAssertion{
+		{
+			Query:       "describe a as of @Commit0;",
+			ExpectedErr: sql.ErrTableNotFound,
+		},
+		{
+			Query: "describe a as of @Commit1;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "", ""},
+				{"c1", "int", "YES", "", "", ""},
+			},
+		},
+		{
+			Query: "describe a as of @Commit2;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "", ""},
+				{"c1", "int", "YES", "", "", ""},
+				{"c2", "text", "YES", "", "", ""},
+			},
+		},
+		{
+			Query: "describe a as of @Commit3;",
+			Expected: []sql.Row{
+				{"pk", "int", "NO", "PRI", "", ""},
+				{"c2", "text", "YES", "", "", ""},
+			},
+		},
+	},
+}
+
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
 var DoltScripts = []enginetest.ScriptTest{

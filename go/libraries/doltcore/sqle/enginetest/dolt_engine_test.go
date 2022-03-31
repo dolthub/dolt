@@ -510,6 +510,16 @@ func TestDoltScripts(t *testing.T) {
 	}
 }
 
+func TestDescribeTableAsOf(t *testing.T) {
+	// These tests rely on altering schema, and the new storage format doesn't support that yet,
+	// so we need to skip them. Once the new storage format supports altering schema, we can move
+	// these ScriptTests back into the DoltScripts var so they get picked up by the TestDoltScripts
+	// method above and then remove this method.
+	skipNewFormat(t)
+
+	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
+}
+
 func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
