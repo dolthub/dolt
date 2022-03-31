@@ -123,6 +123,7 @@ func TestSingleScript(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
 
