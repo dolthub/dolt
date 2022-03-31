@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
@@ -62,7 +62,11 @@ func (we WriterEmitter) LogEvents(version string, evts []*eventsapi.ClientEvent)
 			return err
 		}
 
-		str := proto.MarshalTextString(evt)
+		bs, err := prototext.Marshal(evt)
+		if err != nil {
+			return err
+		}
+		str := string(bs)
 		tokens := strings.Split(strings.TrimSpace(str), "\n")
 		str = "\t" + strings.Join(tokens, "\n\t") + "\n>\n"
 

@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var FeatureFlagKeylessSchema = true
@@ -135,10 +137,19 @@ func ValidateForInsert(allCols *ColCollection) error {
 		}
 		colNames[col.Name] = true
 
+		if col.AutoIncrement && !isAutoIncrementKind(col.Kind) {
+			return true, ErrNonAutoIncType
+		}
+
 		return false, nil
 	})
 
 	return err
+}
+
+// isAutoIncrementKind returns true is |k| is a numeric kind.
+func isAutoIncrementKind(k types.NomsKind) bool {
+	return k == types.IntKind || k == types.UintKind || k == types.FloatKind
 }
 
 // UnkeyedSchemaFromCols creates a schema without any primary keys to be used for displaying to users, tests, etc. Such
@@ -225,12 +236,14 @@ func (si *schemaImpl) SetPkOrdinals(o []int) error {
 
 	si.pkOrdinals = o
 	newPks := make([]Column, si.pkCols.Size())
+	newPkTags := make([]uint64, si.pkCols.Size())
 	for i, j := range si.pkOrdinals {
-		newPks[i] = si.allCols.GetByIndex(j)
+		pkCol := si.allCols.GetByIndex(j)
+		newPks[i] = pkCol
+		newPkTags[i] = pkCol.Tag
 	}
 	si.pkCols = NewColCollection(newPks...)
-
-	return nil
+	return si.indexCollection.SetPks(newPkTags)
 }
 
 func (si *schemaImpl) String() string {

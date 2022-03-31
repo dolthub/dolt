@@ -24,9 +24,9 @@ import (
 )
 
 type blobstorePersister struct {
-	bs         blobstore.Blobstore
-	blockSize  uint64
-	indexCache *indexCache
+	bs        blobstore.Blobstore
+	blockSize uint64
+	q         MemoryQuotaProvider
 }
 
 // Persist makes the contents of mt durable. Chunks already present in
@@ -49,7 +49,7 @@ func (bsp *blobstorePersister) Persist(ctx context.Context, mt *memTable, haver 
 	}
 
 	bsTRA := &bsTableReaderAt{name.String(), bsp.bs}
-	return newReaderFromIndexData(bsp.indexCache, data, name, bsTRA, bsp.blockSize)
+	return newReaderFromIndexData(bsp.q, data, name, bsTRA, bsp.blockSize)
 }
 
 // ConjoinAll (Not currently implemented) conjoins all chunks in |sources| into a single,
@@ -60,7 +60,7 @@ func (bsp *blobstorePersister) ConjoinAll(ctx context.Context, sources chunkSour
 
 // Open a table named |name|, containing |chunkCount| chunks.
 func (bsp *blobstorePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.indexCache, stats)
+	return newBSChunkSource(ctx, bsp.bs, name, chunkCount, bsp.blockSize, bsp.q, stats)
 }
 
 type bsTableReaderAt struct {
@@ -96,64 +96,41 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, indexCache *indexCache, stats *Stats) (cs chunkSource, err error) {
-	if indexCache != nil {
-		indexCache.lockEntry(name)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(name)
-
-			if err == nil {
-				err = unlockErr
-			}
-		}()
-
-		if index, found := indexCache.get(name); found {
-			bsTRA := &bsTableReaderAt{name.String(), bs}
-			tr, err := newTableReader(index, bsTRA, blockSize)
-			if err != nil {
-				return nil, err
-			}
-			return &chunkSourceAdapter{tr, name}, nil
-		}
-	}
-
+func loadTableIndex(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, getBytesFromEnd func(n int64) ([]byte, error)) (onHeapTableIndex, error) {
+	size := indexSize(chunkCount) + footerSize
 	t1 := time.Now()
-	indexBytes, tra, err := func() ([]byte, tableReaderAt, error) {
-		size := int64(indexSize(chunkCount) + footerSize)
-		key := name.String()
-		rc, _, err := bs.Get(ctx, key, blobstore.NewBlobRange(-size, 0))
+	bytes, err := getBytesFromEnd(int64(size))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+	stats.IndexReadLatency.SampleTimeSince(t1)
+	stats.IndexBytesPerRead.Sample(uint64(len(bytes)))
+
+	return parseTableIndex(bytes, q)
+}
+
+func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
+
+	index, err := loadTableIndex(stats, chunkCount, q, func(size int64) ([]byte, error) {
+		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-size, 0))
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		defer rc.Close()
 
 		buff := make([]byte, size)
 		_, err = io.ReadFull(rc, buff)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
-		return buff, &bsTableReaderAt{key, bs}, nil
-	}()
-
+		return buff, nil
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	stats.IndexBytesPerRead.Sample(uint64(len(indexBytes)))
-	stats.IndexReadLatency.SampleTimeSince(t1)
-
-	index, err := parseTableIndex(indexBytes)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if indexCache != nil {
-		indexCache.put(name, index)
-	}
-
-	tr, err := newTableReader(index, tra, s3BlockSize)
+	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
 	if err != nil {
 		return nil, err
 	}

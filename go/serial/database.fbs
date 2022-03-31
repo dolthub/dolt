@@ -40,18 +40,3 @@ table MergeState {
   pre_merge_root:Ref (required);
   candidate_merge_commit:Ref (required);
 }
-
-table Commit {
-  root:Ref (required);
-  parent_list:[Ref] (required);
-  parent_closure:Ref (required);
-  meta:CommitMeta (required);
-}
-
-table CommitMeta {
-  name:string (required);
-  email:string (required);
-  desc:string (required);
-  timestamp:Timestamp (required);
-  user_timestamp:Timestamp (required);
-}

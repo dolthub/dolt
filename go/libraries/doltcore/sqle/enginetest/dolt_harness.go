@@ -62,7 +62,8 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	pro := sqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem())
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
 	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
@@ -76,9 +77,11 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		skippedQueries: defaultSkippedQueries,
 	}
 
-	format := dEnv.DoltDB.Format()
-	if types.IsFormat_DOLT_1(format) {
-		dh = dh.WithSkippedQueries(newFormatSkippedQueries)
+	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
+		dh = dh.WithSkippedQueries([]string{
+			"show",    // todo(andy): "show_create_table_t2"
+			"keyless", // todo(andy)
+		})
 	}
 
 	return dh
@@ -91,16 +94,7 @@ var defaultSkippedQueries = []string{
 	"json_arrayagg",              // TODO: aggregation ordering
 	"json_objectagg",             // TODO: aggregation ordering
 	"typestable",                 // Bit type isn't working?
-	"dolt_commit_diff_",          // see broken queries in `dolt_system_table_queries.go`
 	"show global variables like", // we set extra variables
-}
-
-var newFormatSkippedQueries = []string{
-	"alter",              // todo(andy): remove after DDL support
-	"desc",               // todo(andy): remove after secondary index support
-	"show",               // todo(andy): remove after secondary index support
-	"information_schema", // todo(andy): remove after secondary index support
-	"keyless",            // todo(andy): remove after keyless table support
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
@@ -204,7 +198,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		d.databases = append(d.databases, db)
 
@@ -234,7 +228,8 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	}
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
 	require.NoError(d.t, err)
-	pro := sqle.NewDoltDatabaseProvider(d.env.Config, mrEnv.FileSystem(), dbs...)
+	b := env.GetDefaultInitBranch(d.env.Config)
+	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), dbs...)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
@@ -309,7 +304,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 	ctx := enginetest.NewContext(d)
 	_, iter, err := e.Query(ctx,
-		"set @@"+dsess.HeadKey(db.Name())+" = COMMIT('-m', 'test commit');")
+		"SELECT COMMIT('-am', 'test commit');")
 	require.NoError(d.t, err)
 	_, err = sql.RowIterToRows(ctx, nil, iter)
 	require.NoError(d.t, err)

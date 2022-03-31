@@ -82,7 +82,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 			"lst": mustValue(types.NewList(context.Background(), leftSpec.GetVRW(context.Background()), types.Float(1), types.String("foo"))),
 			"map": mustValue(types.NewMap(context.Background(), leftSpec.GetVRW(context.Background()), types.Float(1), types.String("foo"), types.String("foo"), types.Float(1))),
 		},
-		[]hash.Hash{p.TargetHash()})
+		[]hash.Hash{p})
 
 	r := s.setupMergeDataset(
 		rightSpec,
@@ -92,7 +92,7 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
 			"lst": mustValue(types.NewList(context.Background(), rightSpec.GetVRW(context.Background()), types.Float(1), types.String("foo"))),
 			"map": mustValue(types.NewMap(context.Background(), rightSpec.GetVRW(context.Background()), types.Float(1), types.String("foo"), types.String("foo"), types.Float(1), types.Float(2), types.String("bar"))),
 		},
-		[]hash.Hash{p.TargetHash()})
+		[]hash.Hash{p})
 
 	expected := mustValue(types.NewStruct(parentSpec.GetVRW(context.Background()).Format(), "", types.StructData{
 		"num": types.Float(42),
@@ -117,22 +117,26 @@ func (s *nomsMergeTestSuite) spec(name string) spec.Spec {
 	return sp
 }
 
-func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p []hash.Hash) types.Ref {
+func (s *nomsMergeTestSuite) setupMergeDataset(sp spec.Spec, data types.StructData, p []hash.Hash) hash.Hash {
 	ds := sp.GetDataset(context.Background())
 	db := sp.GetDatabase(context.Background())
 	vrw := sp.GetVRW(context.Background())
 	ds, err := db.Commit(context.Background(), ds, mustValue(types.NewStruct(vrw.Format(), "", data)), datas.CommitOptions{Parents: p})
 	s.NoError(err)
-	return mustHeadRef(ds)
+	return mustHeadAddr(ds)
 }
 
-func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...types.Value) {
+func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct, parents ...hash.Hash) {
 	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, name))
-	vrw := sp.GetVRW(context.Background())
 	if s.NoError(err) {
 		defer sp.Close()
 		commit := mustHead(sp.GetDataset(context.Background()))
-		s.True(mustGetValue(commit.MaybeGet(datas.ParentsField)).Equals(mustSet(types.NewSet(context.Background(), vrw, parents...))))
+		vparents, err := datas.GetCommitParents(context.Background(), sp.GetVRW(context.Background()), commit)
+		s.NoError(err)
+		s.Equal(len(vparents), len(parents), "parents were not the same length")
+		for i := range parents {
+			s.True(parents[i] == vparents[i].TargetHash())
+		}
 		merged := mustHeadValue(sp.GetDataset(context.Background()))
 		s.True(expected.Equals(merged), "%s != %s", mustString(types.EncodedValue(context.Background(), expected)), mustString(types.EncodedValue(context.Background(), merged)))
 	}
@@ -148,8 +152,8 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 	defer rightSpec.Close()
 
 	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, nil)
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p.TargetHash()})
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p.TargetHash()})
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p})
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p})
 
 	expected := mustValue(types.NewStruct(parentSpec.GetVRW(context.Background()).Format(), "", types.StructData{"num": types.Float(43)}))
 
@@ -173,8 +177,8 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
 	defer rightSpec.Close()
 
 	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, nil)
-	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p.TargetHash()})
-	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p.TargetHash()})
+	l := s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p})
+	r := s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p})
 
 	expected := mustValue(types.NewStruct(parentSpec.GetVRW(context.Background()).Format(), "", types.StructData{"num": types.Float(44)}))
 
@@ -197,8 +201,8 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Conflict() {
 	rightSpec := s.spec(right)
 	defer rightSpec.Close()
 	p := s.setupMergeDataset(parentSpec, types.StructData{"num": types.Float(42)}, nil)
-	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p.TargetHash()})
-	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p.TargetHash()})
+	s.setupMergeDataset(leftSpec, types.StructData{"num": types.Float(43)}, []hash.Hash{p})
+	s.setupMergeDataset(rightSpec, types.StructData{"num": types.Float(44)}, []hash.Hash{p})
 
 	s.Panics(func() { s.MustRun(main, []string{"merge", s.DBDir, left, right, "output"}) })
 }

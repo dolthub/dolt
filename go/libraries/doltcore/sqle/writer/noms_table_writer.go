@@ -35,8 +35,7 @@ type TableWriter interface {
 	sql.RowInserter
 	sql.RowDeleter
 	sql.AutoIncrementSetter
-
-	NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error)
+	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
 
 // SessionRootSetter sets the root value for the session.
@@ -56,13 +55,13 @@ type nomsTableWriter struct {
 	tableName   string
 	dbName      string
 	sch         schema.Schema
-	autoIncCol  schema.Column
 	vrw         types.ValueReadWriter
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
 	sess        WriteSession
-	aiTracker   globalstate.AutoIncrementTracker
 	batched     bool
+
+	autoInc globalstate.AutoIncrementTracker
 
 	setter SessionRootSetter
 }
@@ -158,25 +157,17 @@ func (te *nomsTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 	return err
 }
 
-func (te *nomsTableWriter) NextAutoIncrementValue(potentialVal, tableVal interface{}) (interface{}, error) {
-	return te.aiTracker.Next(te.tableName, potentialVal, tableVal)
+func (te *nomsTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
+	return te.autoInc.Next(te.tableName, insertVal)
 }
 
-func (te *nomsTableWriter) GetAutoIncrementValue() (interface{}, error) {
-	val := te.tableEditor.GetAutoIncrementValue()
-	return te.autoIncCol.TypeInfo.ConvertNomsValueToValue(val)
-}
-
-func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val interface{}) error {
-	nomsVal, err := te.autoIncCol.TypeInfo.ConvertValueToNomsValue(ctx, te.vrw, val)
+func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) error {
+	seq, err := globalstate.CoerceAutoIncrementValue(val)
 	if err != nil {
 		return err
 	}
-	if err = te.tableEditor.SetAutoIncrementValue(nomsVal); err != nil {
-		return err
-	}
-
-	te.aiTracker.Reset(te.tableName, val)
+	te.autoInc.Set(te.tableName, seq)
+	te.tableEditor.MarkDirty()
 
 	return te.flush(ctx)
 }
@@ -207,12 +198,11 @@ func (te *nomsTableWriter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (te *nomsTableWriter) flush(ctx *sql.Context) error {
-	newRoot, err := te.sess.Flush(ctx)
+	ws, err := te.sess.Flush(ctx)
 	if err != nil {
 		return err
 	}
-
-	return te.setter(ctx, te.dbName, newRoot)
+	return te.setter(ctx, te.dbName, ws.WorkingRoot())
 }
 
 func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
@@ -221,7 +211,8 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 		return err
 	}
 
-	return te.sess.UpdateRoot(ctx, func(ctx context.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	return te.sess.UpdateWorkingSet(ctx, func(ctx context.Context, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
+		root := ws.WorkingRoot()
 		fkc, err := root.GetForeignKeyCollection(ctx)
 		if err != nil {
 			return nil, err
@@ -232,7 +223,7 @@ func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
 				root = newRoot
 			}
 		}
-		return root, nil
+		return ws.WithWorkingRoot(root), nil
 	})
 }
 

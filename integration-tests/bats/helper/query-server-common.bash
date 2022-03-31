@@ -65,8 +65,6 @@ for i in range(len(queries)):
 
     if expected[i] is not None:
         expected_rows = csv_to_row_maps(expected[i])
-        print('expected:', expected_rows, '\n  actual:', actual_rows)
-
         if expected_rows != actual_rows:
             print('expected:', expected_rows, '\n  actual:', actual_rows)
             sys.exit(1)
@@ -172,10 +170,20 @@ start_multi_db_server() {
     wait_for_connection $PORT 5000
 }
 
+# stop_sql_server stops the SQL server. For cases where it's important
+# to wait for the process to exit after the kill signal (e.g. waiting
+# for an async replication push), pass 1.
 stop_sql_server() {
+    wait=$1
     if [ ! -z "$SERVER_PID" ]; then
       kill $SERVER_PID
     fi
+    if [ $wait ]; then
+        while ps -p $SERVER_PID > /dev/null; do
+            sleep .1;
+        done
+    fi;
+   
     SERVER_PID=
 }
 

@@ -51,10 +51,6 @@ type CommitMeta struct {
 	UserTimestamp int64
 }
 
-var uMilliToNano = uint64(time.Millisecond / time.Nanosecond)
-var milliToNano = int64(time.Millisecond / time.Nanosecond)
-var secToMilli = int64(time.Second / time.Millisecond)
-
 // NewCommitMeta creates a CommitMeta instance from a name, email, and description and uses the current time for the
 // timestamp
 func NewCommitMeta(name, email, desc string) (*CommitMeta, error) {
@@ -79,10 +75,8 @@ func NewCommitMetaWithUserTS(name, email, desc string, userTS time.Time) (*Commi
 		return nil, ErrEmptyCommitMessage
 	}
 
-	ns := uint64(CommitNowFunc().UnixNano())
-	ms := ns / uMilliToNano
-
-	userMS := userTS.UnixNano() / milliToNano
+	ms := uint64(CommitNowFunc().UnixMilli())
+	userMS := userTS.UnixMilli()
 
 	return &CommitMeta{n, e, ms, d, userMS}, nil
 }
@@ -154,9 +148,7 @@ func (cm *CommitMeta) toNomsStruct(nbf *types.NomsBinFormat) (types.Struct, erro
 
 // Time returns the time at which the commit occurred
 func (cm *CommitMeta) Time() time.Time {
-	seconds := cm.UserTimestamp / secToMilli
-	nanos := (cm.UserTimestamp % secToMilli) * milliToNano
-	return time.Unix(seconds, nanos)
+	return time.UnixMilli(cm.UserTimestamp)
 }
 
 // FormatTS takes the internal timestamp and turns it into a human readable string in the time.RubyDate format

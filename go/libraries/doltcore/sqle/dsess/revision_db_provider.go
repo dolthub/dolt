@@ -30,6 +30,10 @@ type RevisionDatabaseProvider interface {
 	RevisionDbState(ctx context.Context, revDB string) (InitialDbState, error)
 }
 
+func EmptyDatabaseProvider() RevisionDatabaseProvider {
+	return emptyRevisionDatabaseProvider{}
+}
+
 type emptyRevisionDatabaseProvider struct{}
 
 func (e emptyRevisionDatabaseProvider) RevisionDbState(_ context.Context, revDB string) (InitialDbState, error) {

@@ -51,7 +51,7 @@ RUN apt update -y && \
 
 # install go
 WORKDIR /root
-ENV GO_VERSION=1.17.1
+ENV GO_VERSION=1.18
 ENV GOPATH=$HOME/go
 ENV PATH=$PATH:$GOPATH/bin
 ENV PATH=$PATH:$GOPATH/bin:/usr/local/go/bin
@@ -62,8 +62,12 @@ RUN curl -O "https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz" && \
     mkdir -p $HOME/go/{bin,src} && \
     go version
 
-# go get the MySQL dependency
-RUN go get -u github.com/go-sql-driver/mysql
+# install MySQL dependency from source
+RUN git clone https://github.com/go-sql-driver/mysql.git
+WORKDIR mysql
+RUN git checkout tags/v1.6.0 -b v1.6.0
+RUN go install .
+WORKDIR /
 
 # install dotnet
 RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a35b-4ffe-8f62-447a01403d64/1f9ae31daa0f7d98513e7551246899f2/dotnet-sdk-5.0.400-linux-x64.tar.gz && \
@@ -106,7 +110,7 @@ RUN service postgresql start
 
 # install mysql_fdw
 WORKDIR /mysql-client-tests/mysql_fdw
-RUN git clone https://github.com/EnterpriseDB/mysql_fdw
+RUN git clone https://github.com/EnterpriseDB/mysql_fdw --branch REL-2_7_0
 WORKDIR /mysql-client-tests/mysql_fdw/mysql_fdw
 RUN make USE_PGXS=1 && \
     make USE_PGXS=1 install

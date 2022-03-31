@@ -62,10 +62,10 @@ type TableEditor interface {
 	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
 	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
 	DeleteRow(ctx context.Context, r row.Row) error
-	HasEdits() bool
 
-	GetAutoIncrementValue() types.Value
-	SetAutoIncrementValue(v types.Value) (err error)
+	HasEdits() bool
+	MarkDirty()
+
 	SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error
 
 	Table(ctx context.Context) (*doltdb.Table, error)
@@ -91,6 +91,13 @@ func NewTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Schema
 type Options struct {
 	ForeignKeyChecksDisabled bool // If true, then ALL foreign key checks AND updates (through CASCADE, etc.) are skipped
 	Deaf                     DbEaFactory
+	Tempdir                  string
+}
+
+// WithDeaf returns a new Options with the given  edit accumulator factory class
+func (o Options) WithDeaf(deaf DbEaFactory) Options {
+	o.Deaf = deaf
+	return o
 }
 
 func TestEditorOptions(vrw types.ValueReadWriter) Options {
@@ -120,10 +127,6 @@ type pkTableEditor struct {
 
 	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
 	dirty uint32
-
-	hasAutoInc bool
-	autoIncCol schema.Column
-	autoIncVal types.Value
 
 	// This mutex blocks on each operation, so that map reads and updates are serialized
 	writeMutex *sync.Mutex
@@ -156,22 +159,6 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 			return nil, err
 		}
 		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, tableSch, opts)
-	}
-
-	err = tableSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		if col.AutoIncrement {
-			te.autoIncVal, err = t.GetAutoIncrementValue(ctx)
-			if err != nil {
-				return true, err
-			}
-			te.hasAutoInc = true
-			te.autoIncCol = col
-			return true, err
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, err
 	}
 
 	return te, nil
@@ -439,32 +426,7 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 		return err
 	}
 
-	if te.hasAutoInc {
-		insertVal, ok := tagToVal[te.autoIncCol.Tag]
-
-		if ok {
-			var less bool
-
-			// float auto increment values should be rounded before comparing to the current auto increment values
-			if te.autoIncVal.Kind() == types.FloatKind {
-				rounded := types.Round(insertVal)
-				less, err = rounded.Less(te.nbf, te.autoIncVal)
-			} else {
-				less, err = insertVal.Less(te.nbf, te.autoIncVal)
-			}
-
-			if err != nil {
-				return err
-			}
-
-			if !less {
-				te.autoIncVal = types.Round(insertVal)
-				te.autoIncVal = types.Increment(te.autoIncVal)
-			}
-		}
-	}
-
-	te.setDirty(true)
+	te.MarkDirty()
 	return nil
 }
 
@@ -539,7 +501,7 @@ func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagTo
 		return err
 	}
 
-	te.setDirty(true)
+	te.MarkDirty()
 	return te.tea.Delete(keyHash, key)
 }
 
@@ -637,7 +599,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		return err
 	}
 
-	te.setDirty(true)
+	te.MarkDirty()
 
 	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyVal); err != nil {
 		return err
@@ -648,37 +610,14 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	return te.tea.Insert(newHash, dNewKeyVal, dNewRowVal)
 }
 
-func (te *pkTableEditor) GetAutoIncrementValue() types.Value {
-	return te.autoIncVal
-}
-
-func (te *pkTableEditor) SetAutoIncrementValue(v types.Value) (err error) {
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
-
-	te.setDirty(true)
-	te.autoIncVal = v
-	te.t, err = te.t.SetAutoIncrementValue(nil, te.autoIncVal)
-
-	return err
-}
-
 // Table returns a Table based on the edits given, if any. If Flush() was not called prior, it will be called here.
 func (te *pkTableEditor) Table(ctx context.Context) (*doltdb.Table, error) {
 	if !te.HasEdits() {
 		return te.t, nil
 	}
 
-	var err error
-	if te.hasAutoInc {
-		te.t, err = te.t.SetAutoIncrementValue(nil, te.autoIncVal)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	var tbl *doltdb.Table
-	err = func() error {
+	err := func() error {
 		te.writeMutex.Lock()
 		defer te.writeMutex.Unlock()
 
@@ -809,7 +748,7 @@ func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.Les
 		te.cvEditor = cvMap.Edit()
 	}
 	te.cvEditor.Set(k, v)
-	te.setDirty(true)
+	te.MarkDirty()
 	return nil
 }
 
@@ -838,13 +777,10 @@ func (te *pkTableEditor) Close(ctx context.Context) error {
 	return nil
 }
 
-func (te *pkTableEditor) setDirty(dirty bool) {
-	var val uint32
-	if dirty {
-		val = 1
-	}
-
-	atomic.StoreUint32(&te.dirty, val)
+// MarkDirty implements TableEditor.
+func (te *pkTableEditor) MarkDirty() {
+	dirty := uint32(1)
+	atomic.StoreUint32(&te.dirty, dirty)
 }
 
 // hasEdits returns whether the table editor has had any successful write operations. This does not track whether the

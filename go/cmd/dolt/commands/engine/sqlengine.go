@@ -72,7 +72,8 @@ func NewSqlEngine(
 	infoDB := information_schema.NewInformationSchemaDatabase()
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
-	pro := dsqle.NewDoltDatabaseProvider(mrEnv.Config(), mrEnv.FileSystem(), all...)
+	b := env.GetDefaultInitBranch(mrEnv.Config())
+	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
 

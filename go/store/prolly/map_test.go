@@ -52,6 +52,9 @@ func TestMap(t *testing.T) {
 			t.Run("iter range", func(t *testing.T) {
 				testIterRange(t, prollyMap, tuples)
 			})
+			t.Run("iter ordinal range", func(t *testing.T) {
+				testIterOrdinalRange(t, prollyMap.(ordinalMap), tuples)
+			})
 
 			indexMap, tuples2 := makeProllySecondaryIndex(t, s)
 			t.Run("iter prefix range", func(t *testing.T) {
@@ -121,6 +124,8 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 
 func testGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
+
+	// test get
 	for _, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
@@ -129,6 +134,27 @@ func testGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 			return
 		})
 		require.NoError(t, err)
+	}
+
+	desc := keyDescFromMap(om)
+
+	// test point lookup
+	for _, kv := range tuples {
+		rng := pointRangeFromTuple(kv[0], desc)
+		require.True(t, rng.isPointLookup(desc))
+
+		iter, err := om.IterRange(ctx, rng)
+		require.NoError(t, err)
+
+		k, v, err := iter.Next(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, kv[0], k)
+		assert.Equal(t, kv[1], v)
+
+		k, v, err = iter.Next(ctx)
+		assert.Error(t, err, io.EOF)
+		assert.Nil(t, k)
+		assert.Nil(t, v)
 	}
 }
 
@@ -164,5 +190,21 @@ func testIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
 		require.True(t, i < len(tuples))
 		assert.Equal(t, tuples[i][0], kv[0])
 		assert.Equal(t, tuples[i][1], kv[1])
+	}
+}
+
+func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
+	start := make([]RangeCut, len(desc.Types))
+	stop := make([]RangeCut, len(desc.Types))
+	for i := range start {
+		start[i].Value = tup.GetField(i)
+		start[i].Inclusive = true
+	}
+	copy(stop, start)
+
+	return Range{
+		Start: start,
+		Stop:  stop,
+		Desc:  desc,
 	}
 }

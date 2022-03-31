@@ -177,7 +177,7 @@ func TestModifyColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			assert.NoError(t, err)
 
-			opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 			updatedTable, err := ModifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)

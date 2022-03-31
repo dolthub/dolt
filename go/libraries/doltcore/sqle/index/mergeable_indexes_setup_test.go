@@ -39,7 +39,7 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 	dEnv := dtestutils.CreateTestEnv()
 	root, err := dEnv.WorkingRoot(context.Background())
 	require.NoError(t, err)
-	opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 	db := dsqle.NewDatabase("dolt", dEnv.DbData(), opts)
 	engine, sqlCtx, err := dsqle.NewTestEngine(t, dEnv, context.Background(), db, root)
 	require.NoError(t, err)
@@ -96,7 +96,8 @@ func setupIndexes(t *testing.T, tableName, insertQuery string) (*sqle.Engine, *e
 
 	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
-	pro := dsqle.NewDoltDatabaseProvider(dEnv.Config, mrEnv.FileSystem(), db)
+	b := env.GetDefaultInitBranch(dEnv.Config)
+	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), db)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	engine = sqle.NewDefault(pro)

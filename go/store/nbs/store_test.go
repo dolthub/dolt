@@ -38,7 +38,7 @@ import (
 	"github.com/dolthub/dolt/go/store/util/tempfiles"
 )
 
-func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string) {
+func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, nomsDir string, q MemoryQuotaProvider) {
 	ctx := context.Background()
 	nomsDir = filepath.Join(tempfiles.MovableTempFileProvider.GetTempDir(), "noms_"+uuid.New().String()[:8])
 	err := os.MkdirAll(nomsDir, os.ModePerm)
@@ -48,9 +48,10 @@ func makeTestLocalStore(t *testing.T, maxTableFiles int) (st *NomsBlockStore, no
 	_, err = fileManifest{nomsDir}.Update(ctx, addr{}, manifestContents{}, &Stats{}, nil)
 	require.NoError(t, err)
 
-	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles)
+	q = NewUnlimitedMemQuotaProvider()
+	st, err = newLocalStore(ctx, types.Format_Default.VersionString(), nomsDir, defaultMemTableSize, maxTableFiles, q)
 	require.NoError(t, err)
-	return st, nomsDir
+	return st, nomsDir, q
 }
 
 type fileToData map[string][]byte
@@ -69,7 +70,9 @@ func populateLocalStore(t *testing.T, st *NomsBlockStore, numTableFiles int) fil
 		fileID := addr.String()
 		fileToData[fileID] = data
 		fileIDToNumChunks[fileID] = i + 1
-		err = st.WriteTableFile(ctx, fileID, i+1, bytes.NewReader(data), 0, nil)
+		err = st.WriteTableFile(ctx, fileID, i+1, nil, func() (io.ReadCloser, uint64, error) {
+			return io.NopCloser(bytes.NewReader(data)), uint64(len(data)), nil
+		})
 		require.NoError(t, err)
 	}
 	err := st.AddTableFilesToManifest(ctx, fileIDToNumChunks)
@@ -83,7 +86,13 @@ func TestNBSAsTableFileStore(t *testing.T) {
 
 	numTableFiles := 128
 	assert.Greater(t, defaultMaxTables, numTableFiles)
-	st, _ := makeTestLocalStore(t, defaultMaxTables)
+	st, _, q := makeTestLocalStore(t, defaultMaxTables)
+	defer func() {
+		require.Equal(t, uint64(0), q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, st.Close())
+	}()
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	_, sources, _, err := st.Sources(ctx)
@@ -144,7 +153,7 @@ func TestNBSPruneTableFiles(t *testing.T) {
 	// over populate table files
 	numTableFiles := 64
 	maxTableFiles := 16
-	st, nomsDir := makeTestLocalStore(t, maxTableFiles)
+	st, nomsDir, _ := makeTestLocalStore(t, maxTableFiles)
 	fileToData := populateLocalStore(t, st, numTableFiles)
 
 	// add a chunk and flush to trigger a conjoin
@@ -226,7 +235,7 @@ func makeChunkSet(N, size int) (s map[hash.Hash]chunks.Chunk) {
 
 func TestNBSCopyGC(t *testing.T) {
 	ctx := context.Background()
-	st, _ := makeTestLocalStore(t, 8)
+	st, _, _ := makeTestLocalStore(t, 8)
 
 	keepers := makeChunkSet(64, 64)
 	tossers := makeChunkSet(64, 64)
@@ -308,8 +317,8 @@ func persistTableFileSources(t *testing.T, p tablePersister, numTableFiles int) 
 	return tableFileMap, mapIds
 }
 
-func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*fakeManifest, tablePersister, *NomsBlockStore, *Stats, chunks.Chunk) {
-	fm, p, store := makeStoreWithFakes(t)
+func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*fakeManifest, tablePersister, MemoryQuotaProvider, *NomsBlockStore, *Stats, chunks.Chunk) {
+	fm, p, q, store := makeStoreWithFakes(t)
 	h, err := store.Root(ctx)
 	require.NoError(t, err)
 	assert.Equal(hash.Hash{}, h)
@@ -337,15 +346,20 @@ func prepStore(ctx context.Context, t *testing.T, assert *assert.Assertions) (*f
 	assert.Equal(1, upstream.NumTableSpecs())
 	// Start with no appendixes
 	assert.Equal(0, upstream.NumAppendixSpecs())
-	return fm, p, store, stats, rootChunk
+	return fm, p, q, store, stats, rootChunk
 }
 
 func TestNBSUpdateManifestWithAppendixOptions(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	_, p, store, _, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	_, p, q, store, _, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	// persist tablefiles to tablePersister
 	appendixUpdates, appendixIds := persistTableFileSources(t, p, 4)
@@ -410,8 +424,13 @@ func TestNBSUpdateManifestWithAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -433,8 +452,13 @@ func TestNBSUpdateManifestRetainsAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -480,8 +504,13 @@ func TestNBSCommitRetainsAppendix(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, rootChunk := prepStore(ctx, t, assert)
-	defer store.Close()
+	fm, p, q, store, stats, rootChunk := prepStore(ctx, t, assert)
+	defer func() {
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
+	}()
 
 	_, upstream, err := fm.ParseIfExists(ctx, stats, nil)
 	require.NoError(t, err)
@@ -532,10 +561,12 @@ func TestNBSOverwriteManifest(t *testing.T) {
 	assert := assert.New(t)
 	ctx := context.Background()
 
-	fm, p, store, stats, _ := prepStore(ctx, t, assert)
+	fm, p, q, store, stats, _ := prepStore(ctx, t, assert)
 	defer func() {
-		err := store.Close()
-		require.NoError(t, err, "failed to close store")
+		require.EqualValues(t, 0, q.Usage())
+	}()
+	defer func() {
+		require.NoError(t, store.Close())
 	}()
 
 	// Generate a random root hash

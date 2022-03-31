@@ -57,8 +57,8 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	if err != nil {
 		return nil, nil, err
 	}
-
-	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize)
+	q := nbs.NewUnlimitedMemQuotaProvider()
+	newGenSt, err := nbs.NewLocalStore(ctx, nbf.VersionString(), path, defaultMemTableSize, q)
 
 	if err != nil {
 		return nil, nil, err
@@ -77,7 +77,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 		}
 	}
 
-	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize)
+	oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenPath, defaultMemTableSize, q)
 
 	if err != nil {
 		return nil, nil, err

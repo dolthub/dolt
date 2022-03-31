@@ -129,7 +129,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 	parentMaps := make([]types.Map, len(parents))
 	parentParentLists := make([]types.List, len(parents))
 	for i, p := range parents {
-		v, ok, err := p.MaybeGet(ParentsClosureField)
+		v, ok, err := p.MaybeGet(parentsClosureField)
 		if err != nil {
 			return types.Ref{}, false, err
 		}
@@ -153,7 +153,7 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 				return types.Ref{}, false, fmt.Errorf("unexpected target value type for parents_closure in commit struct: %v", tv)
 			}
 		}
-		v, ok, err = p.MaybeGet(ParentsListField)
+		v, ok, err = p.MaybeGet(parentsListField)
 		if err != nil {
 			return types.Ref{}, false, err
 		}
@@ -365,31 +365,48 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		return err
 	}
 
-	newSt := newHead.(nomsHead).st
+	newVal := newHead.value()
 
 	headType := newHead.TypeName()
 	switch headType {
-	case CommitName:
-		var iscommit bool
-		iscommit, err = IsCommit(newSt)
+	case commitName:
+		iscommit, err := IsCommit(newVal)
 		if err != nil {
-			break
+			return err
 		}
 		if !iscommit {
-			err = fmt.Errorf("SetHead failed: reffered to value is not a commit:")
+			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
 	case TagName:
-		err = db.validateTag(ctx, newHead.(nomsHead).st)
+		istag, err := IsTag(newVal)
+		if err != nil {
+			return err
+		}
+		if !istag {
+			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+		}
+		_, commitaddr, err := newHead.HeadTag()
+		if err != nil {
+			return err
+		}
+		commitval, err := db.ReadValue(ctx, commitaddr)
+		if err != nil {
+			return err
+		}
+		iscommit, err := IsCommit(commitval)
+		if err != nil {
+			return err
+		}
+		if !iscommit {
+			return fmt.Errorf("SetHead failed: reffered to value is not a tag:")
+		}
 	default:
 		return fmt.Errorf("Unrecognized dataset value: %s", headType)
-	}
-	if err != nil {
-		return err
 	}
 
 	key := types.String(ds.ID())
 
-	vref, err := types.NewRef(newSt, db.Format())
+	vref, err := types.NewRef(newVal, db.Format())
 	if err != nil {
 		return err
 	}
@@ -445,12 +462,11 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 	if newHead == nil {
 		return fmt.Errorf("FastForward: new head address %v not found", newHeadAddr)
 	}
-	if newHead.TypeName() != CommitName {
+	if newHead.TypeName() != commitName {
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	var v types.Value
-	v = newHead.(nomsHead).st
+	v := newHead.value()
 	iscommit, err := IsCommit(v)
 	if err != nil {
 		return err
@@ -478,7 +494,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		if err != nil {
 			return err
 		}
-		if !found || mergeNeeded(ref, ancestorRef, newRef) {
+		if !found || mergeNeeded(currentHeadAddr, ancestorRef.TargetHash()) {
 			return ErrMergeNeeded
 		}
 	}
@@ -491,12 +507,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 }
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
-	var currentAddr hash.Hash
-	if currRef, ok, err := ds.MaybeHeadRef(); err != nil {
-		return Dataset{}, err
-	} else if ok {
-		currentAddr = currRef.TargetHash()
-	}
+	currentAddr, _ := ds.MaybeHeadAddr()
 	st, err := buildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
@@ -560,8 +571,8 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 	})
 }
 
-func mergeNeeded(currentHeadRef types.Ref, ancestorRef types.Ref, commitRef types.Ref) bool {
-	return currentHeadRef.TargetHash() != ancestorRef.TargetHash()
+func mergeNeeded(currentAddr hash.Hash, ancestorAddr hash.Hash) bool {
+	return currentAddr != ancestorAddr
 }
 
 func (db *database) Tag(ctx context.Context, ds Dataset, commitAddr hash.Hash, opts TagOptions) (Dataset, error) {
@@ -688,14 +699,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	var currDSHash hash.Hash
-	currDSRef, ok, err := commitDS.MaybeHeadRef()
-	if err != nil {
-		return Dataset{}, Dataset{}, err
-	}
-	if ok {
-		currDSHash = currDSRef.TargetHash()
-	}
+	currDSHash, _ := commitDS.MaybeHeadAddr()
 
 	err = db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		success, err := assertDatasetHash(ctx, datasets, workingSetDS.ID(), prevWsHash)
@@ -707,21 +711,16 @@ func (db *database) CommitWithWorkingSet(
 			return types.Map{}, ErrOptimisticLockFailed
 		}
 
-		r, hasHead, err := datasets.MaybeGet(ctx, types.String(commitDS.ID()))
-		if err != nil {
+		var currDS hash.Hash
+
+		if r, hasHead, err := datasets.MaybeGet(ctx, types.String(commitDS.ID())); err != nil {
 			return types.Map{}, err
+		} else if hasHead {
+			currDS = r.(types.Ref).TargetHash()
 		}
 
-		if hasHead {
-			currentHeadRef := r.(types.Ref)
-			ancestorRef, found, err := FindCommonAncestor(ctx, commitRef, currentHeadRef, db, db)
-			if err != nil {
-				return types.Map{}, err
-			}
-
-			if !found || mergeNeeded(currentHeadRef, ancestorRef, commitRef) {
-				return types.Map{}, ErrMergeNeeded
-			}
+		if currDS != currDSHash {
+			return types.Map{}, ErrMergeNeeded
 		}
 
 		return datasets.Edit().
@@ -884,7 +883,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	if rHead == nil {
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: unable to validate ref; %s not found", r.TargetHash().String())
 	}
-	if rHead.TypeName() != CommitName {
+	if rHead.TypeName() != commitName {
 		return types.Struct{}, fmt.Errorf("validateRefAsCommit: referred valus is not a commit")
 	}
 
@@ -904,68 +903,18 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	return v.(types.Struct), nil
 }
 
-func (db *database) validateTag(ctx context.Context, t types.Struct) error {
-	is, err := IsTag(t)
-	if err != nil {
-		return err
-	}
-	if !is {
-		return fmt.Errorf("Tag struct %s is malformed, IsTag() == false", t.String())
-	}
-
-	r, ok, err := t.MaybeGet(TagCommitRefField)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("tag is missing field %s", TagCommitRefField)
-	}
-
-	_, err = db.validateRefAsCommit(ctx, r.(types.Ref))
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (db *database) validateWorkingSet(t types.Struct) error {
-	is, err := IsWorkingSet(t)
-	if err != nil {
-		return err
-	}
-	if !is {
-		return fmt.Errorf("WorkingSet struct %s is malformed, IsWorkingSet() == false", t.String())
-	}
-
-	_, ok, err := t.MaybeGet(WorkingRootRefField)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("WorkingSet is missing field %s", WorkingRootRefField)
-	}
-
-	return nil
-}
-
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Struct, error) {
+func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Value, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
-		if headRef, ok, err := ds.MaybeHeadRef(); err != nil {
-			return types.Struct{}, err
-		} else if ok {
-			opts.Parents = []hash.Hash{headRef.TargetHash()}
+		headAddr, ok := ds.MaybeHeadAddr()
+		if ok {
+			opts.Parents = []hash.Hash{headAddr}
 		}
 	} else {
-		curr, ok, err := ds.MaybeHeadRef()
-		if err != nil {
-			return types.Struct{}, err
-		}
+		curr, ok := ds.MaybeHeadAddr()
 		if ok {
 			found := false
 			for _, h := range opts.Parents {
-				if h == curr.TargetHash() {
+				if h == curr {
 					found = true
 					break
 				}

@@ -170,7 +170,7 @@ func TestNBSDatabaseSpec(t *testing.T) {
 		store1 := filepath.Join(tmpDir, "store1")
 		os.Mkdir(store1, 0777)
 		func() {
-			cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), store1, 8*(1<<20))
+			cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), store1, 8*(1<<20), nbs.NewUnlimitedMemQuotaProvider())
 			assert.NoError(err)
 			vrw := types.NewValueStore(cs)
 			db := datas.NewTypesDatabase(vrw)
@@ -446,6 +446,8 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.NoError(err)
 	defer unpinned.Close()
 
+	vrw := unpinned.GetVRW(context.Background())
+
 	db := unpinned.GetDatabase(context.Background())
 	ds, err := db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
@@ -462,9 +464,9 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.True(ok)
 
 	commitValue := func(val types.Value) types.Value {
-		v, ok, err := val.(types.Struct).MaybeGet(datas.ValueField)
+		v, err := datas.GetCommitValue(context.Background(), vrw, val)
 		d.PanicIfError(err)
-		d.PanicIfFalse(ok)
+		d.PanicIfFalse(v != nil)
 		return v
 	}
 

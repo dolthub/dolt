@@ -55,103 +55,80 @@ func init() {
 	}
 }
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, indexCache *indexCache, fc *fdCache) (cs chunkSource, err error) {
+func newMmapTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
-	var index onHeapTableIndex
-	found := false
-	if indexCache != nil {
-		indexCache.lockEntry(h)
-		defer func() {
-			unlockErr := indexCache.unlockEntry(h)
+	index, err := func() (ti onHeapTableIndex, err error) {
+		var f *os.File
+		f, err = fc.RefFile(path)
 
-			if err == nil {
-				err = unlockErr
+		if err != nil {
+			return
+		}
+
+		defer func() {
+			unrefErr := fc.UnrefFile(path)
+
+			if unrefErr != nil {
+				err = unrefErr
 			}
 		}()
-		index, found = indexCache.get(h)
-	}
 
-	if !found {
-		f := func() (ti onHeapTableIndex, err error) {
-			var f *os.File
-			f, err = fc.RefFile(path)
+		var fi os.FileInfo
+		fi, err = f.Stat()
 
+		if err != nil {
+			return
+		}
+
+		if fi.Size() < 0 {
+			// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+			err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
+			return
+		}
+
+		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
+		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
+		aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
+		length := int(fi.Size() - aligned)
+
+		if fi.Size()-aligned > maxInt {
+			err = fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
+			return
+		}
+
+		buff := make([]byte, indexSize(chunkCount)+footerSize)
+		// TODO: Don't use mmap here.
+		func() {
+			var mm mmap.MMap
+			mm, err = mmap.MapRegion(f, length, mmap.RDONLY, 0, aligned)
 			if err != nil {
 				return
 			}
 
 			defer func() {
-				unrefErr := fc.UnrefFile(path)
+				unmapErr := mm.Unmap()
 
-				if unrefErr != nil {
-					err = unrefErr
+				if unmapErr != nil {
+					err = unmapErr
 				}
 			}()
+			copy(buff, mm[indexOffset-aligned:])
+		}()
+		if err != nil {
+			return onHeapTableIndex{}, err
+		}
 
-			var fi os.FileInfo
-			fi, err = f.Stat()
+		ti, err = parseTableIndex(buff, q)
 
-			if err != nil {
-				return
-			}
-
-			if fi.Size() < 0 {
-				// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
-				err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
-				return
-			}
-
-			// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
-			indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
-			aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
-			length := int(fi.Size() - aligned)
-
-			if fi.Size()-aligned > maxInt {
-				err = fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
-				return
-			}
-
-			buff := make([]byte, indexSize(chunkCount)+footerSize)
-			func() {
-				var mm mmap.MMap
-				mm, err = mmap.MapRegion(f, length, mmap.RDONLY, 0, aligned)
-				if err != nil {
-					return
-				}
-
-				defer func() {
-					unmapErr := mm.Unmap()
-
-					if unmapErr != nil {
-						err = unmapErr
-					}
-				}()
-				copy(buff, mm[indexOffset-aligned:])
-			}()
-			if err != nil {
-				return onHeapTableIndex{}, err
-			}
-
-			ti, err = parseTableIndex(buff)
-
-			if err != nil {
-				return
-			}
-
-			if indexCache != nil {
-				indexCache.put(h, ti)
-			}
-
+		if err != nil {
 			return
 		}
 
-		var err error
-		index, err = f()
-
-		if err != nil {
-			return nil, err
-		}
+		return
+	}()
+	if err != nil {
+		return nil, err
 	}
 
 	if chunkCount != index.chunkCount {

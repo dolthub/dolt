@@ -17,23 +17,22 @@ package dsess
 import (
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
 type InitialDbState struct {
-	Db           sql.Database
-	HeadCommit   *doltdb.Commit
-	DetachedHead bool
-	ReadOnly     bool
-	WorkingSet   *doltdb.WorkingSet
-	DbData       env.DbData
-	ReadReplica  *env.Remote
-	Remotes      map[string]env.Remote
-	Branches     map[string]env.BranchConfig
+	Db          sql.Database
+	HeadCommit  *doltdb.Commit
+	ReadOnly    bool
+	WorkingSet  *doltdb.WorkingSet
+	DbData      env.DbData
+	ReadReplica *env.Remote
+	Remotes     map[string]env.Remote
+	Branches    map[string]env.BranchConfig
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
@@ -43,19 +42,17 @@ type InitialDbState struct {
 }
 
 type DatabaseSessionState struct {
-	dbName                string
-	headCommit            *doltdb.Commit
-	headRoot              *doltdb.RootValue
-	WorkingSet            *doltdb.WorkingSet
-	dbData                env.DbData
-	WriteSession          writer.WriteSession
-	detachedHead          bool
-	readOnly              bool
-	dirty                 bool
-	readReplica           *env.Remote
-	TempTableRoot         *doltdb.RootValue
-	TempTableWriteSession writer.WriteSession
-	tmpTablesDir          string
+	dbName       string
+	headCommit   *doltdb.Commit
+	headRoot     *doltdb.RootValue
+	WorkingSet   *doltdb.WorkingSet
+	dbData       env.DbData
+	WriteSession writer.WriteSession
+	globalState  globalstate.GlobalState
+	readOnly     bool
+	dirty        bool
+	readReplica  *env.Remote
+	tmpFileDir   string
 
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a

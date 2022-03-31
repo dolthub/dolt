@@ -200,7 +200,7 @@ func TestCreateRdWr(t *testing.T) {
 
 		loc := test.dl
 
-		opts := editor.Options{Deaf: dEnv.DbEaFactory()}
+		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 
 		filePath, fpErr := dEnv.FS.Abs(strings.Split(loc.String(), ":")[1])
 		if fpErr != nil {

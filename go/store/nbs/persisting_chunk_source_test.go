@@ -31,7 +31,7 @@ import (
 
 func TestPersistingChunkStoreEmpty(t *testing.T) {
 	mt := newMemTable(testMemTableSize)
-	ccs := newPersistingChunkSource(context.Background(), mt, nil, newFakeTablePersister(), make(chan struct{}, 1), &Stats{})
+	ccs := newPersistingChunkSource(context.Background(), mt, nil, newFakeTablePersister(&noopQuotaProvider{}), make(chan struct{}, 1), &Stats{})
 
 	h, err := ccs.hash()
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestPersistingChunkStore(t *testing.T) {
 	}
 
 	trigger := make(chan struct{})
-	ccs := newPersistingChunkSource(context.Background(), mt, nil, pausingFakeTablePersister{newFakeTablePersister(), trigger}, make(chan struct{}, 1), &Stats{})
+	ccs := newPersistingChunkSource(context.Background(), mt, nil, pausingFakeTablePersister{newFakeTablePersister(&noopQuotaProvider{}), trigger}, make(chan struct{}, 1), &Stats{})
 
 	assertChunksInReader(testChunks, ccs, assert)
 	assert.EqualValues(mustUint32(mt.count()), mustUint32(ccs.getReader().count()))

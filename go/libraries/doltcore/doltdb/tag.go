@@ -41,7 +41,10 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commit := NewCommit(vrw, commitSt.(types.Struct))
+	commit, err := NewCommit(ctx, vrw, commitSt)
+	if err != nil {
+		return nil, err
+	}
 
 	addr, _ := ds.MaybeHeadAddr()
 
@@ -54,7 +57,7 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	}, nil
 }
 
-// GetStRef returns a Noms Ref for this Tag's Noms tag Struct.
+// GetAddr returns a content address hash for this Tag.
 func (t *Tag) GetAddr() (hash.Hash, error) {
 	return t.addr, nil
 }

@@ -62,6 +62,8 @@ type IndexCollection interface {
 	RemoveIndex(indexName string) (Index, error)
 	// RenameIndex renames an index in the table metadata.
 	RenameIndex(oldName, newName string) (Index, error)
+	//SetPks changes the pks or pk ordinals
+	SetPks([]uint64) error
 }
 
 type IndexProperties struct {
@@ -141,11 +143,16 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 	if !ixc.tagsExist(tags...) {
 		return nil, fmt.Errorf("tags %v do not exist on this table", tags)
 	}
-	for _, c := range ixc.colColl.cols {
-		if IsColSpatialType(c) {
-			return nil, fmt.Errorf("cannot create an index over spatial type columns")
+
+	for _, tag := range tags {
+		// we already validated the tag exists
+		c, _ := ixc.colColl.GetByTag(tag)
+		err := validateColumnIndexable(c)
+		if err != nil {
+			return nil, err
 		}
 	}
+
 	index := &indexImpl{
 		indexColl:     ixc,
 		name:          indexName,
@@ -160,6 +167,14 @@ func (ixc *indexCollectionImpl) AddIndexByColTags(indexName string, tags []uint6
 		ixc.colTagToIndex[tag] = append(ixc.colTagToIndex[tag], index)
 	}
 	return index, nil
+}
+
+// validateColumnIndexable returns an error if the column given cannot be used in an index
+func validateColumnIndexable(c Column) error {
+	if IsColSpatialType(c) {
+		return fmt.Errorf("cannot create an index over spatial type columns")
+	}
+	return nil
 }
 
 func (ixc *indexCollectionImpl) UnsafeAddIndexByColTags(indexName string, tags []uint64, props IndexProperties) (Index, error) {
@@ -403,6 +418,14 @@ func (ixc *indexCollectionImpl) tagsExist(tags ...uint64) bool {
 		}
 	}
 	return true
+}
+
+func (ixc *indexCollectionImpl) SetPks(tags []uint64) error {
+	if len(tags) != len(ixc.pks) {
+		return ErrInvalidPkOrdinals
+	}
+	ixc.pks = tags
+	return nil
 }
 
 func combineAllTags(tags []uint64, pks []uint64) []uint64 {

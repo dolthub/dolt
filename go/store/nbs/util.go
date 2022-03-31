@@ -25,7 +25,7 @@ import (
 )
 
 func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err error)) error {
-	idx, err := ReadTableIndexByCopy(rd)
+	idx, err := ReadTableIndexByCopy(rd, &noopQuotaProvider{})
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func IterChunks(rd io.ReadSeeker, cb func(chunk chunks.Chunk) (stop bool, err er
 }
 
 func GetTableIndexPrefixes(rd io.ReadSeeker) (prefixes []uint64, err error) {
-	idx, err := ReadTableIndexByCopy(rd)
+	idx, err := ReadTableIndexByCopy(rd, &noopQuotaProvider{})
 	if err != nil {
 		return nil, err
 	}

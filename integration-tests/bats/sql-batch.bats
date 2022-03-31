@@ -96,7 +96,7 @@ SQL
     [[ "$output" =~ "poop" ]] || false
 }
 
-@test "sql-batch: sql reset('hard') function" {
+@test "sql-batch: sql dolt_reset('--hard') function" {
     mkdir test && cd test && dolt init
     dolt sql -b <<SQL
 CREATE TABLE test (
@@ -118,7 +118,7 @@ SQL
     [[ "$output" =~ "test" ]] || false
 
    dolt sql -b <<SQL
-SET @@test_head=reset('hard');
+SELECT dolt_reset('--hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
 SQL
 
@@ -128,7 +128,7 @@ SQL
 
     dolt sql -b <<SQL
 INSERT INTO test VALUES (1,1);
-SET @@test_head = reset('hard');
+SELECT dolt_reset('--hard');
 REPLACE INTO dolt_branches (hash,name) VALUES (@@test_head,'main');
 SQL
 

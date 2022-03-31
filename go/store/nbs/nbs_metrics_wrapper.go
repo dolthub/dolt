@@ -52,8 +52,8 @@ func (nbsMW *NBSMetricWrapper) Size(ctx context.Context) (uint64, error) {
 }
 
 // WriteTableFile will read a table file from the provided reader and write it to the TableFileStore
-func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, rd io.Reader, contentLength uint64, contentHash []byte) error {
-	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, rd, contentLength, contentHash)
+func (nbsMW *NBSMetricWrapper) WriteTableFile(ctx context.Context, fileId string, numChunks int, contentHash []byte, getRd func() (io.ReadCloser, uint64, error)) error {
+	return nbsMW.nbs.WriteTableFile(ctx, fileId, numChunks, contentHash, getRd)
 }
 
 // AddTableFilesToManifest adds table files to the manifest

@@ -18,9 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/uuid"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 )
@@ -28,10 +27,10 @@ import (
 // EventNowFunc function is used to get the current time and can be overridden for testing.
 var EventNowFunc = time.Now
 
-func nowTimestamp() *timestamp.Timestamp {
+func nowTimestamp() *timestamppb.Timestamp {
 	now := EventNowFunc()
-	ts, err := ptypes.TimestampProto(now)
-
+	ts := timestamppb.New(now)
+	err := ts.CheckValid()
 	if err != nil {
 		panic(err)
 	}

@@ -28,11 +28,8 @@ meanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_
 
 meanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
 
-tpccMedianLatencyMultiplierReadsQuery="select f.test_name as read_tests, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
-tpccMeanMultiplierReadsQuery="select round(avg(multipliers), $precision) as reads_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name)"
-tpccMedianLatencyMultiplierWritesQuery="select f.test_name as write_tests, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
-tpccMeanMultiplierWritesQuery="select round(avg(multipliers), $precision) as writes_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name)"
-tpccMeanMultiplierOverallQuery="select round(avg(multipliers), $precision) as overall_mean_multiplier from (select case when (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) < 1.0 then 1.0 else (round(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision)) end as multipliers from from_results as f join to_results as t on f.test_name = t.test_name group by f.test_name)"
+tpccLatencyQuery="select f.test_name as test_name, f.server_name, f.server_version, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, t.server_name, t.server_version, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) < 1.0 then 1.0 else ROUND(avg(t.latency_percentile) / (avg(f.latency_percentile) + .000001), $precision) end as multiplier from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE '$tpccRegex' group by f.test_name;"
+tpccTpsQuery="select f.test_name as test_name, f.server_name, f.server_version, avg(f.sql_transactions_per_second) as tps, t.test_name as test_name, t.server_name, t.server_version, avg(t.sql_transactions_per_second) as tps from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name LIKE 'tpcc%' group by f.test_name;"
 
 echo '
 {
@@ -83,11 +80,8 @@ echo '
               "--sysbenchQueries='"$medianLatencyMultiplierWritesQuery"'",
               "--sysbenchQueries='"$meanMultiplierWritesQuery"'",
               "--sysbenchQueries='"$meanMultiplierOverallQuery"'",
-              "--tpccQueries='"$tpccMedianLatencyMultiplierReadsQuery"'",
-              "--tpccQueries='"$tpccMeanMultiplierReadsQuery"'",
-              "--tpccQueries='"$tpccMedianLatencyMultiplierWritesQuery"'",
-              "--tpccQueries='"$tpccMeanMultiplierWritesQuery"'",
-              "--tpccQueries='"$tpccMeanMultiplierOverallQuery"'"
+              "--tpccQueries='"$tpccLatencyQuery"'",
+              "--tpccQueries='"$tpccTpsQuery"'"
             ]
           }
         ],

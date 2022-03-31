@@ -70,23 +70,21 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	// If this commit has parents, then a branch is splitting. Create a branch for each of the parents
 	// and splice that into the iterators list of branches.
 	branches := branchList{}
-	pFld, ok, err := br.commit.MaybeGet(datas.ParentsField)
-	d.PanicIfError(err)
-	d.PanicIfFalse(ok)
 
-	parents := commitRefsFromSet(ctx, pFld.(types.Set))
-	for _, p := range parents {
-		v, err := iter.vr.ReadValue(ctx, p.TargetHash())
+	refs, err := datas.GetCommitParents(ctx, iter.vr, br.commit)
+	d.PanicIfError(err)
+	for _, r := range refs {
+		v, err := iter.vr.ReadValue(ctx, r.TargetHash())
 		d.PanicIfError(err)
 
-		b := branch{cr: p, commit: v.(types.Struct)}
+		b := branch{cr: r, commit: v.(types.Struct)}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
 
 	// Collect the indexes for any newly created branches.
 	newCols := []int{}
-	for cnt := 1; cnt < len(parents); cnt++ {
+	for cnt := 1; cnt < len(refs); cnt++ {
 		newCols = append(newCols, col+cnt)
 	}
 

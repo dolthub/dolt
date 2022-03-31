@@ -457,7 +457,6 @@ SQL
 CREATE TEMPORARY TABLE colors (
     id INT NOT NULL,
     color VARCHAR(32) NOT NULL,
-
     PRIMARY KEY (id),
     INDEX color_index(color)
 );
@@ -582,6 +581,8 @@ SQL
 }
 
 @test "sql-create-tables: Alter on a temporary table" {
+    skip "unskip once DDL operations are moved to the SQL engine"
+
     run dolt sql <<SQL
 CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
 ALTER TABLE goodtable ADD COLUMN val int;

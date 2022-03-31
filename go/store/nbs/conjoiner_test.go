@@ -119,7 +119,7 @@ func TestConjoin(t *testing.T) {
 	}
 
 	setup := func(lock addr, root hash.Hash, sizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister()
+		p = newFakeTablePersister(&noopQuotaProvider{})
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(sizes, p), nil)
 
@@ -213,7 +213,7 @@ func TestConjoin(t *testing.T) {
 	})
 
 	setupAppendix := func(lock addr, root hash.Hash, specSizes, appendixSizes []uint32) (fm *fakeManifest, p tablePersister, upstream manifestContents) {
-		p = newFakeTablePersister()
+		p = newFakeTablePersister(&noopQuotaProvider{})
 		fm = &fakeManifest{}
 		fm.set(constants.NomsVersion, lock, root, makeTestTableSpecs(specSizes, p), makeTestTableSpecs(appendixSizes, p))
 

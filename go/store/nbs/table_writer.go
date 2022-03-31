@@ -64,6 +64,10 @@ func maxTableSize(numChunks, totalData uint64) uint64 {
 	return numChunks*(prefixTupleSize+lengthSize+addrSuffixSize+checksumSize+uint64(maxSnappySize)) + footerSize
 }
 
+func memSize(numChunks uint32) uint64 {
+	return indexSize(numChunks) + footerSize
+}
+
 func indexSize(numChunks uint32) uint64 {
 	return uint64(numChunks) * (addrSuffixSize + lengthSize + prefixTupleSize)
 }
