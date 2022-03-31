@@ -411,7 +411,7 @@ func (p *Puller) Pull(ctx context.Context) error {
 			}
 		}
 
-		if p.wr != nil {
+		if p.wr != nil && p.wr.Size() > 0 {
 			select {
 			case completedTables <- FilledWriters{p.wr}:
 			case <-ctx.Done():
