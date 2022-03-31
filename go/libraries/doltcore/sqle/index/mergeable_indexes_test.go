@@ -17,6 +17,7 @@ package index_test
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"testing"
 
 	sqle "github.com/dolthub/go-mysql-server"
@@ -1590,7 +1591,7 @@ func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*n
 	}
 
 	var lookup sql.IndexLookup
-	plan.Inspect(analyzed, func(n sql.Node) bool {
+	transform.Inspect(analyzed, func(n sql.Node) bool {
 		switch node := n.(type) {
 		case *plan.IndexedTableAccess:
 			lookup = plan.GetIndexLookup(node)

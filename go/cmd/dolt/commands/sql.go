@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"io"
 	"os"
 	"os/signal"
@@ -1304,14 +1305,14 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *engine.SqlEngine, query s
 	}
 
 	isAutoInc := false
-	plan.Inspect(a, func(n sql.Node) bool {
+	transform.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, err = plan.TransformExpressionsUp(n.Source, func(exp sql.Expression) (sql.Expression, error) {
+			_, _, err = transform.NodeExprs(n.Source, func(exp sql.Expression) (sql.Expression, sql.TreeIdentity, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
-				return exp, nil
+				return exp, sql.SameTree, nil
 			})
 			return false
 		default:

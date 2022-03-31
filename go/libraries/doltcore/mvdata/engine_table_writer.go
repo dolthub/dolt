@@ -17,6 +17,7 @@ package mvdata
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"io"
 	"sync/atomic"
 
@@ -342,7 +343,7 @@ func (s *SqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignor
 	analyzed = analyzer.StripPassthroughNodes(analyzed)
 
 	// Get the first insert (wrapped with the error handler)
-	plan.Inspect(analyzed, func(node sql.Node) bool {
+	transform.Inspect(analyzed, func(node sql.Node) bool {
 		switch n := node.(type) {
 		case *plan.InsertInto:
 			analyzed = n

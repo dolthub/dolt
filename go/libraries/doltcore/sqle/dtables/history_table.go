@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"io"
 	"strings"
 
@@ -203,20 +204,20 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 
 func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
+		filters[i], _, _ = transform.Expr(filters[i], func(e sql.Expression) (sql.Expression, sql.TreeIdentity, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
-				return e, nil
+				return e, sql.SameTree, nil
 			}
 			switch gf.Name() {
 			case CommitHashCol:
-				return gf.WithIndex(0), nil
+				return gf.WithIndex(0), sql.NewTree, nil
 			case CommitterCol:
-				return gf.WithIndex(1), nil
+				return gf.WithIndex(1), sql.NewTree, nil
 			case CommitDateCol:
-				return gf.WithIndex(2), nil
+				return gf.WithIndex(2), sql.NewTree, nil
 			default:
-				return gf, nil
+				return gf, sql.SameTree, nil
 			}
 		})
 	}
