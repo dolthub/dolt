@@ -246,7 +246,7 @@ func migrateLessOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		// prepend the new id and nil to each row
+		// append the new id and nil to each row
 		sqlRow = append(sqlRow, nil)
 		rowsToAdd = append(rowsToAdd, sqlRow)
 		return nil
