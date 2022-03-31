@@ -1538,8 +1538,9 @@ var systemTableSelectTests = []SelectTest{
 }
 
 func CreateTestJSON() types.JSON {
-	extraJSON, _ := types.NewMap(nil, types.NewMemoryValueStore(), types.String("CreatedAt"), types.Float(1))
-	res, _ := types.NewJSONDoc(types.Format_Default, types.NewMemoryValueStore(), extraJSON)
+	vrw := types.NewMemoryValueStore()
+	extraJSON, _ := types.NewMap(nil, vrw, types.String("CreatedAt"), types.Float(1))
+	res, _ := types.NewJSONDoc(types.Format_Default, vrw, extraJSON)
 	return res
 }
 
