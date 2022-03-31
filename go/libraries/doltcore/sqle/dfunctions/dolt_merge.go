@@ -253,7 +253,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
-	rv, err := cm2.GetRootValue()
+	rv, err := cm2.GetRootValue(ctx)
 	if err != nil {
 		return ws, err
 	}
@@ -298,7 +298,7 @@ func executeNoFFMerge(
 	dbData env.DbData,
 	//headCommit, mergeCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
-	mergeRoot, err := spec.MergeC.GetRootValue()
+	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -205,7 +205,7 @@ func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.D
 			return err
 		}
 
-		commitRoot, err := srcDBCommit.GetRootValue()
+		commitRoot, err := srcDBCommit.GetRootValue(ctx)
 		if err != nil {
 			return err
 		}

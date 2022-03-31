@@ -199,7 +199,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 	return err
 }
 
-func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (types.Value, error) {
+func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.ValueReadWriter, ref string) (*datas.Commit, error) {
 	if !datas.DatasetFullRe.MatchString(ref) {
 		return nil, fmt.Errorf("invalid ref format: %s", ref)
 	}
@@ -219,14 +219,27 @@ func getCommitValForRefStr(ctx context.Context, db datas.Database, vrw types.Val
 		if err != nil {
 			return nil, err
 		}
-		return vrw.ReadValue(ctx, commitaddr)
+		// TODO: tomfoolery.
+		v, err := vrw.ReadValue(ctx, commitaddr)
+		if err != nil {
+			return nil, err
+		}
+		r, err := types.NewRef(v, vrw.Format())
+		if err != nil {
+			return nil, err
+		}
+		return datas.LoadCommitRef(ctx, vrw, r)
 	}
 
-	v, _ := ds.MaybeHead()
-	return v, nil
+	// TODO: tomfoolery.
+	r, _, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
+	return datas.LoadCommitRef(ctx, vrw, r)
 }
 
-func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (types.Value, error) {
+func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (*datas.Commit, error) {
 	unprefixed := strings.TrimPrefix(c, "#")
 	hash, ok := hash.MaybeParse(unprefixed)
 	if !ok {
@@ -240,7 +253,12 @@ func getCommitValForHash(ctx context.Context, vr types.ValueReader, c string) (t
 	if val == nil {
 		return nil, ErrHashNotFound
 	}
-	return val, nil
+	// TODO: tomfoolery.
+	r, err := types.NewRef(val, vr.Format())
+	if err != nil {
+		return nil, err
+	}
+	return datas.LoadCommitRef(ctx, vr, r)
 }
 
 // Roots is a convenience struct to package up the three roots that most library functions will need to inspect and
@@ -266,7 +284,7 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 		panic("nil commit spec")
 	}
 
-	var commitVal types.Value
+	var commitVal *datas.Commit
 	var err error
 	switch cs.csType {
 	case hashCommitSpec:
@@ -538,16 +556,24 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 	}
 
 	ds, err = ddb.db.Commit(ctx, ds, val, commitOpts)
-
 	if err != nil {
 		return nil, err
 	}
 
-	commitSt, ok := ds.MaybeHead()
+	r, ok, err := ds.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
-	return NewCommit(ctx, ddb.vrw, commitSt)
+
+	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewCommit(ctx, ddb.vrw, dc)
 }
 
 // dangling commits are unreferenced by any branch or ref. They are created in the course of programmatic updates
@@ -576,12 +602,17 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 		return nil, err
 	}
 
-	_, err = ddb.vrw.WriteValue(ctx, commitVal)
+	r, err := ddb.vrw.WriteValue(ctx, commitVal)
 	if err != nil {
 		return nil, err
 	}
 
-	return NewCommit(ctx, ddb.vrw, commitVal)
+	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewCommit(ctx, ddb.vrw, dc)
 }
 
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
@@ -815,7 +846,7 @@ func (ddb *DoltDB) NewBranchAtCommit(ctx context.Context, branchRef ref.DoltRef,
 	// Update the corresponding working set at the same time, either by updating it or creating a new one
 	// TODO: find all the places HEAD can change, update working set too. This is only necessary when we don't already
 	//  update the working set when the head changes.
-	commitRoot, err := commit.GetRootValue()
+	commitRoot, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -997,12 +1028,20 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	commitSt, ok := commitDataset.MaybeHead()
+	commitRef, ok, err := commitDataset.MaybeHeadRef()
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, errors.New("Commit has no head but commit succeeded. This is a bug.")
 	}
 
-	return NewCommit(ctx, ddb.vrw, commitSt)
+	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, commitRef)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewCommit(ctx, ddb.vrw, dc)
 }
 
 // DeleteWorkingSet deletes the working set given

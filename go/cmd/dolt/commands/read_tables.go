@@ -218,7 +218,7 @@ func getRemoteDBAtCommit(ctx context.Context, remoteUrl string, remoteUrlParams 
 		return nil, nil, errhand.BuildDError("Failed to find commit '%s'", commitStr).Build()
 	}
 
-	srcRoot, err := cm.GetRootValue()
+	srcRoot, err := cm.GetRootValue(ctx)
 
 	if err != nil {
 		return nil, nil, errhand.BuildDError("Failed to read from database").AddCause(err).Build()

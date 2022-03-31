@@ -89,7 +89,7 @@ func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogI
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *LogItr) Next(*sql.Context) (sql.Row, error) {
+func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.commits) {
 		return nil, io.EOF
 	}
@@ -99,7 +99,7 @@ func (itr *LogItr) Next(*sql.Context) (sql.Row, error) {
 	}()
 
 	cm := itr.commits[itr.idx]
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 
 	if err != nil {
 		return nil, err

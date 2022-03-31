@@ -1623,7 +1623,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	require.NoError(t, err)
 
 	err = dEnv.UpdateStagedRoot(ctx, root)

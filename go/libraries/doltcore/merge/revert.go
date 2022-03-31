@@ -40,11 +40,11 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, com
 		if i > 0 {
 			revertMessage += " and"
 		}
-		baseRoot, err := baseCommit.GetRootValue()
+		baseRoot, err := baseCommit.GetRootValue(ctx)
 		if err != nil {
 			return nil, "", err
 		}
-		baseMeta, err := baseCommit.GetCommitMeta()
+		baseMeta, err := baseCommit.GetCommitMeta(ctx)
 		if err != nil {
 			return nil, "", err
 		}
@@ -56,7 +56,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, com
 			if err != nil {
 				return nil, "", err
 			}
-			theirRoot, err = parentCM.GetRootValue()
+			theirRoot, err = parentCM.GetRootValue(ctx)
 			if err != nil {
 				return nil, "", err
 			}

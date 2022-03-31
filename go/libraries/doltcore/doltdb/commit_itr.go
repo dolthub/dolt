@@ -19,6 +19,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -143,16 +144,26 @@ func (cmItr *commitItr) Next(ctx context.Context) (hash.Hash, *Commit, error) {
 
 func hashToCommit(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*Commit, error) {
 	val, err := vrw.ReadValue(ctx, h)
-
 	if err != nil {
 		return nil, err
 	}
-
 	if val == nil {
 		return nil, errors.New("failed to get commit")
 	}
 
-	return NewCommit(ctx, vrw, val)
+	// TODO: Get rid of this tomfoolery.
+
+	ref, err := types.NewRef(val, vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+
+	dc, err := datas.LoadCommitRef(ctx, vrw, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewCommit(ctx, vrw, dc)
 }
 
 // CommitFilter is a function that returns true if a commit should be filtered out, and false if it should be kept

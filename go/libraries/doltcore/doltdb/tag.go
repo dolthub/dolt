@@ -41,7 +41,16 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commit, err := NewCommit(ctx, vrw, commitSt)
+	// TODO: tomfoolery.
+	ref, err := types.NewRef(commitSt, vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	dc, err := datas.LoadCommitRef(ctx, vrw, ref)
+	if err != nil {
+		return nil, err
+	}
+	commit, err := NewCommit(ctx, vrw, dc)
 	if err != nil {
 		return nil, err
 	}

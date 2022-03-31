@@ -15,6 +15,7 @@
 package dtables
 
 import (
+	"context"
 	"errors"
 	"io"
 
@@ -124,7 +125,7 @@ func (itr *UnscopedDiffTableItr) incrementIndexes() {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
+func (itr *UnscopedDiffTableItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if !itr.HasNext() {
 		return nil, io.EOF
 	}
@@ -132,7 +133,7 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 
 	// Load table changes if we don't have them for this commit yet
 	for itr.tableChanges == nil {
-		err := itr.loadTableChanges(itr.commits[itr.commitIdx])
+		err := itr.loadTableChanges(ctx, itr.commits[itr.commitIdx])
 		if err != nil {
 			return nil, err
 		}
@@ -144,7 +145,7 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	meta, err := commit.GetCommitMeta()
+	meta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -157,8 +158,8 @@ func (itr *UnscopedDiffTableItr) Next(*sql.Context) (sql.Row, error) {
 
 // loadTableChanges loads the set of table changes for the current commit into this iterator, taking
 // care of advancing the iterator if that commit didn't mutate any tables and checking for EOF condition.
-func (itr *UnscopedDiffTableItr) loadTableChanges(commit *doltdb.Commit) error {
-	tableChanges, err := itr.calculateTableChanges(commit)
+func (itr *UnscopedDiffTableItr) loadTableChanges(ctx context.Context, commit *doltdb.Commit) error {
+	tableChanges, err := itr.calculateTableChanges(ctx, commit)
 	if err != nil {
 		return err
 	}
@@ -180,23 +181,23 @@ func (itr *UnscopedDiffTableItr) loadTableChanges(commit *doltdb.Commit) error {
 
 // calculateTableChanges calculates the tables that changed in the specified commit, by comparing that
 // commit with its immediate ancestor commit.
-func (itr *UnscopedDiffTableItr) calculateTableChanges(commit *doltdb.Commit) ([]tableChange, error) {
-	toRootValue, err := commit.GetRootValue()
+func (itr *UnscopedDiffTableItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]tableChange, error) {
+	toRootValue, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	parent, err := itr.ddb.ResolveParent(itr.ctx, commit, 0)
+	parent, err := itr.ddb.ResolveParent(ctx, commit, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	fromRootValue, err := parent.GetRootValue()
+	fromRootValue, err := parent.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	deltas, err := diff.GetTableDeltas(itr.ctx, fromRootValue, toRootValue)
+	deltas, err := diff.GetTableDeltas(ctx, fromRootValue, toRootValue)
 	if err != nil {
 		return nil, err
 	}

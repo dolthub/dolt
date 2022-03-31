@@ -70,7 +70,7 @@ func (vc *ConstraintsVerifyFunc) Eval(ctx *sql.Context, row sql.Row) (interface{
 		if err != nil {
 			return nil, err
 		}
-		comparingRoot, err = headCommit.GetRootValue()
+		comparingRoot, err = headCommit.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}

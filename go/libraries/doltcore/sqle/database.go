@@ -441,13 +441,13 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 			return nil, err
 		}
 
-		meta, err := curr.GetCommitMeta()
+		meta, err := curr.GetCommitMeta(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
-			return curr.GetRootValue()
+			return curr.GetRootValue(ctx)
 		}
 	}
 
@@ -465,7 +465,7 @@ func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*dol
 		return nil, err
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +612,7 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	return head.GetRootValue()
+	return head.GetRootValue(ctx)
 }
 
 // DropTable drops the table with the name given.
