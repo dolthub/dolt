@@ -125,15 +125,15 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
+func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
-		return types.Struct{}, errors.New("cannot create commit without parents")
+		return nil, errors.New("cannot create commit without parents")
 	}
 
 	return newCommitForValue(ctx, vrw, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []byte {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([]byte, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
@@ -174,10 +174,10 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	builder.FinishWithFileIdentifier(serial.CommitEnd(builder), []byte(serial.CommitFileID))
-	return builder.FinishedBytes()
+	return builder.FinishedBytes(), maxheight+1
 }
 
-func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
+func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
@@ -195,40 +195,51 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		for i := range heights {
 			heights[i] = serial.GetRootAsCommit([]byte(parents[i].(types.SerialMessage)), 0).Height()
 		}
-		return types.SerialMessage(commit_flatbuffer(r.TargetHash(), opts, heights)), nil
+		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights)
+		v := types.SerialMessage(bs)
+		addr := hash.Of(bs)
+		return &Commit{v, addr, height}, nil
 	}
 
 	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
 	refs := make([]types.Value, len(opts.Parents))
 	for i, h := range opts.Parents {
 		commitSt, err := vrw.ReadValue(ctx, h)
 		if err != nil {
-			return types.Struct{}, err
+			return nil, err
 		}
 		if commitSt == nil {
 			panic("parent not found " + h.String())
 		}
 		ref, err := types.NewRef(commitSt, vrw.Format())
 		if err != nil {
-			return types.Struct{}, err
+			return nil, err
 		}
 		refs[i] = ref
 	}
 	parentsList, err := types.NewList(ctx, vrw, refs...)
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
 	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, parentsList)
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
-	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
+	cv, err := newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
+	if err != nil {
+		return nil, err
+	}
+	r, err := types.NewRef(cv, vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	return &Commit{cv, r.TargetHash(), r.Height()}, nil
 }
 
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r types.Ref) *Commit {

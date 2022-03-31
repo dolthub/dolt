@@ -597,22 +597,17 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	commitVal, err := datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
+	dcommit, err := datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	r, err := ddb.vrw.WriteValue(ctx, commitVal)
+	_, err = ddb.vrw.WriteValue(ctx, dcommit.NomsValue())
 	if err != nil {
 		return nil, err
 	}
 
-	dc, err := datas.LoadCommitRef(ctx, ddb.vrw, r)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewCommit(ctx, ddb.vrw, dc)
+	return NewCommit(ctx, ddb.vrw, dcommit)
 }
 
 // ValueReadWriter returns the underlying noms database as a types.ValueReadWriter.
