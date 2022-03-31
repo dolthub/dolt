@@ -38,7 +38,7 @@ type CommitIterator struct {
 }
 
 // NewCommitIterator initializes a new CommitIterator with the first commit to be printed.
-func NewCommitIterator(vr types.ValueReader, commit types.Struct) *CommitIterator {
+func NewCommitIterator(vr types.ValueReader, commit types.Value) *CommitIterator {
 	cr, err := types.NewRef(commit, vr.Format())
 	d.PanicIfError(err)
 	return &CommitIterator{vr: vr, branches: branchList{branch{addr: cr.TargetHash(), height: cr.Height(), commit: commit}}}
@@ -75,7 +75,7 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 	d.PanicIfError(err)
 	for _, p := range parents {
 		v := p.NomsValue()
-		b := branch{height: p.Height(), addr: p.Addr(), commit: v.(types.Struct)}
+		b := branch{height: p.Height(), addr: p.Addr(), commit: v}
 		branches = append(branches, b)
 	}
 	iter.branches = iter.branches.Splice(col, 1, branches...)
@@ -106,7 +106,7 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 type LogNode struct {
 	addr             hash.Hash
 	height           uint64
-	commit           types.Struct // commit that needs to be printed
+	commit           types.Value  // commit that needs to be printed
 	startingColCount int          // how many branches are being tracked when this commit is printed
 	endingColCount   int          // home many branches will be tracked when next commit is printed
 	col              int          // col to put the '*' character in graph
@@ -137,7 +137,7 @@ func (n LogNode) Shrunk() bool {
 type branch struct {
 	addr   hash.Hash
 	height uint64
-	commit types.Struct
+	commit types.Value
 }
 
 func (b branch) String() string {

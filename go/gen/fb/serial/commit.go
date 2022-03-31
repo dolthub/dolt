@@ -127,34 +127,8 @@ func (rcv *Commit) MutateParentAddrs(j int, n byte) bool {
 	return false
 }
 
-func (rcv *Commit) ParentHeights(j int) uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetUint64(a + flatbuffers.UOffsetT(j*8))
-	}
-	return 0
-}
-
-func (rcv *Commit) ParentHeightsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *Commit) MutateParentHeights(j int, n uint64) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateUint64(a+flatbuffers.UOffsetT(j*8), n)
-	}
-	return false
-}
-
 func (rcv *Commit) ParentClosure(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
@@ -163,7 +137,7 @@ func (rcv *Commit) ParentClosure(j int) byte {
 }
 
 func (rcv *Commit) ParentClosureLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -171,7 +145,7 @@ func (rcv *Commit) ParentClosureLength() int {
 }
 
 func (rcv *Commit) ParentClosureBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -179,7 +153,7 @@ func (rcv *Commit) ParentClosureBytes() []byte {
 }
 
 func (rcv *Commit) MutateParentClosure(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
@@ -188,7 +162,7 @@ func (rcv *Commit) MutateParentClosure(j int, n byte) bool {
 }
 
 func (rcv *Commit) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -196,7 +170,7 @@ func (rcv *Commit) Name() []byte {
 }
 
 func (rcv *Commit) Email() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -204,7 +178,7 @@ func (rcv *Commit) Email() []byte {
 }
 
 func (rcv *Commit) Description() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -212,7 +186,7 @@ func (rcv *Commit) Description() []byte {
 }
 
 func (rcv *Commit) TimestampMillis() uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -220,11 +194,11 @@ func (rcv *Commit) TimestampMillis() uint64 {
 }
 
 func (rcv *Commit) MutateTimestampMillis(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(20, n)
+	return rcv._tab.MutateUint64Slot(18, n)
 }
 
 func (rcv *Commit) UserTimestampMillis() int64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
 	if o != 0 {
 		return rcv._tab.GetInt64(o + rcv._tab.Pos)
 	}
@@ -232,11 +206,11 @@ func (rcv *Commit) UserTimestampMillis() int64 {
 }
 
 func (rcv *Commit) MutateUserTimestampMillis(n int64) bool {
-	return rcv._tab.MutateInt64Slot(22, n)
+	return rcv._tab.MutateInt64Slot(20, n)
 }
 
 func CommitStart(builder *flatbuffers.Builder) {
-	builder.StartObject(10)
+	builder.StartObject(9)
 }
 func CommitAddRoot(builder *flatbuffers.Builder, root flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(root), 0)
@@ -253,32 +227,26 @@ func CommitAddParentAddrs(builder *flatbuffers.Builder, parentAddrs flatbuffers.
 func CommitStartParentAddrsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func CommitAddParentHeights(builder *flatbuffers.Builder, parentHeights flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(parentHeights), 0)
-}
-func CommitStartParentHeightsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(8, numElems, 8)
-}
 func CommitAddParentClosure(builder *flatbuffers.Builder, parentClosure flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(parentClosure), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(parentClosure), 0)
 }
 func CommitStartParentClosureVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
 func CommitAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(name), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(name), 0)
 }
 func CommitAddEmail(builder *flatbuffers.Builder, email flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(email), 0)
+	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(email), 0)
 }
 func CommitAddDescription(builder *flatbuffers.Builder, description flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(description), 0)
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(description), 0)
 }
 func CommitAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis uint64) {
-	builder.PrependUint64Slot(8, timestampMillis, 0)
+	builder.PrependUint64Slot(7, timestampMillis, 0)
 }
 func CommitAddUserTimestampMillis(builder *flatbuffers.Builder, userTimestampMillis int64) {
-	builder.PrependInt64Slot(9, userTimestampMillis, 0)
+	builder.PrependInt64Slot(8, userTimestampMillis, 0)
 }
 func CommitEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

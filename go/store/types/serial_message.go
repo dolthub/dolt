@@ -165,12 +165,13 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 
 func SerialCommitParentRefs(nbf *NomsBinFormat, sm SerialMessage) ([]Ref, error) {
 	msg := serial.GetRootAsCommit([]byte(sm), 0)
-	ret := make([]Ref, msg.ParentHeightsLength())
 	addrs := msg.ParentAddrsBytes()
-	for i := 0; i < msg.ParentHeightsLength(); i++ {
+	n := len(addrs)/20
+	ret := make([]Ref, n)
+	for i := 0; i < n; i++ {
 		addr := hash.New(addrs[:20])
 		addrs = addrs[20:]
-		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], msg.ParentHeights(i))
+		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 		if err != nil {
 			return nil, err
 		}

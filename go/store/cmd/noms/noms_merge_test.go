@@ -55,6 +55,9 @@ func (s *nomsMergeTestSuite) TearDownTest() {
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Success() {
+	if types.Format_Default == types.Format_DOLT_DEV {
+		s.T().Skip()
+	}
 	left, right := "left", "right"
 	parentSpec := s.spec("parent")
 	defer parentSpec.Close()
@@ -143,6 +146,9 @@ func (s *nomsMergeTestSuite) validateDataset(name string, expected types.Struct,
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
+	if types.Format_Default == types.Format_DOLT_DEV {
+		s.T().Skip()
+	}
 	left, right := "left", "right"
 	parentSpec := s.spec("parent")
 	defer parentSpec.Close()
@@ -168,6 +174,9 @@ func (s *nomsMergeTestSuite) TestNomsMerge_Left() {
 }
 
 func (s *nomsMergeTestSuite) TestNomsMerge_Right() {
+	if types.Format_Default == types.Format_DOLT_DEV {
+		s.T().Skip()
+	}
 	left, right := "left", "right"
 	parentSpec := s.spec("parent")
 	defer parentSpec.Close()

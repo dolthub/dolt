@@ -480,7 +480,6 @@ func (ddb *DoltDB) CommitWithParentSpecs(ctx context.Context, valHash hash.Hash,
 	var parentCommits []*Commit
 	for _, parentCmSpec := range parentCmSpecs {
 		cm, err := ddb.Resolve(ctx, parentCmSpec, nil)
-
 		if err != nil {
 			return nil, err
 		}

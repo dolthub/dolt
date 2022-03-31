@@ -150,15 +150,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
 
 	// Starts at SerialMessageRefHeight.
-	maxheight := uint64(types.SerialMessageRefHeight)
-	serial.CommitStartParentHeightsVector(builder, len(opts.Parents))
-	for i := len(opts.Parents) - 1; i >= 0; i-- {
-		builder.PrependUint64(heights[i])
-		if heights[i] > maxheight {
-			maxheight = heights[i]
+	maxheight := uint64(0)
+	for _, h := range heights {
+		if h > maxheight {
+			maxheight = h
 		}
 	}
-	parentheightsoff := builder.EndVector(len(opts.Parents))
 
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
@@ -167,7 +164,6 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
 	serial.CommitAddParentAddrs(builder, parentaddrsoff)
-	serial.CommitAddParentHeights(builder, parentheightsoff)
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
@@ -197,7 +193,10 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		}
 		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights)
 		v := types.SerialMessage(bs)
-		addr := hash.Of(bs)
+		addr, err := v.Hash(vrw.Format())
+		if err != nil {
+			return nil, err
+		}
 		return &Commit{v, addr, height}, nil
 	}
 
@@ -250,7 +249,11 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 		if r != nil {
 			addr = r.TargetHash()
 		} else {
-			addr = hash.Of(bs)
+			var err error
+			addr, err = v.Hash(nbf)
+			if err != nil {
+				return nil, err
+			}
 		}
 		return &Commit{
 			val:    v,
