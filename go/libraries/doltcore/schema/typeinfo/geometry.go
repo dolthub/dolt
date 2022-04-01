@@ -27,8 +27,7 @@ import (
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
-	// TODO: maybe just some sort of int or keeping the appropriate (types.Kind)
-	innerType interface{} // References the actual typeinfo (pointType, linestringType, polygonType)
+	innerType       TypeInfo         // References the actual typeinfo (pointType, linestringType, polygonType)
 }
 
 var _ TypeInfo = (*geometryType)(nil)
@@ -125,18 +124,8 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 	}
 
 	// Expect a Geometry type
-	// TODO: ...or do I expect one of the other types??
 	if val, ok := v.(types.Geometry); ok {
-		switch val.Inner.(type) {
-		case types.Point:
-			return PointType.FormatValue(v)
-		case types.Linestring:
-			return LinestringType.FormatValue(v)
-		case types.Polygon:
-			return PolygonType.FormatValue(v)
-		default:
-			return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
-		}
+		return ti.innerType.FormatValue(val.Inner)
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
@@ -170,16 +159,7 @@ func (ti *geometryType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *geometryType) Promote() TypeInfo {
-	switch inner := ti.innerType.(type) {
-	case pointType:
-		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
-	case linestringType:
-		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
-	case polygonType:
-		return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), inner.Promote()}
-	default:
-		panic("geometryType received bad type during Promote()")
-	}
+	return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), ti.innerType.Promote()}
 }
 
 // String implements TypeInfo interface.
