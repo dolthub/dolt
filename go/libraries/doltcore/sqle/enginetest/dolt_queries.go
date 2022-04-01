@@ -24,6 +24,61 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
+var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
+	Name: "Show create table as of",
+	SetUpScript: []string{
+		"set @Commit0 = hashof('main');",
+		"create table a (pk int primary key, c1 int);",
+		"set @Commit1 = dolt_commit('-am', 'creating table a');",
+		"alter table a add column c2 text;",
+		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
+		"alter table a drop column c1;",
+		"alter table a add constraint unique(c2);",
+		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
+	},
+	Assertions: []enginetest.ScriptTestAssertion{
+		{
+			Query:       "show create table a as of @Commit0;",
+			ExpectedErr: sql.ErrTableNotFound,
+		},
+		{
+			Query: "show create table a as of @Commit1;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c1` int,\n" +
+					"  PRIMARY KEY (`pk`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+		{
+			Query: "show create table a as of @Commit2;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c1` int,\n" +
+					"  `c2` text,\n" +
+					"  PRIMARY KEY (`pk`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+		{
+			Query: "show create table a as of @Commit3;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c2` text,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  UNIQUE KEY `c2` (`c2`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+	},
+}
+
 var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
 	Name: "Describe table as of",
 	SetUpScript: []string{
