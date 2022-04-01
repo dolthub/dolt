@@ -1308,11 +1308,11 @@ func insertsIntoAutoIncrementCol(ctx *sql.Context, se *engine.SqlEngine, query s
 	transform.Inspect(a, func(n sql.Node) bool {
 		switch n := n.(type) {
 		case *plan.InsertInto:
-			_, _, err = transform.NodeExprs(n.Source, func(exp sql.Expression) (sql.Expression, sql.TreeIdentity, error) {
+			_, _, err = transform.NodeExprs(n.Source, func(exp sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 				if _, ok := exp.(*expression.AutoIncrement); ok {
 					isAutoInc = true
 				}
-				return exp, sql.SameTree, nil
+				return exp, transform.SameTree, nil
 			})
 			return false
 		default:

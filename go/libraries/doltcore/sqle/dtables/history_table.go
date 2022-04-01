@@ -204,20 +204,20 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 
 func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _, _ = transform.Expr(filters[i], func(e sql.Expression) (sql.Expression, sql.TreeIdentity, error) {
+		filters[i], _, _ = transform.Expr(filters[i], func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
-				return e, sql.SameTree, nil
+				return e, transform.SameTree, nil
 			}
 			switch gf.Name() {
 			case CommitHashCol:
-				return gf.WithIndex(0), sql.NewTree, nil
+				return gf.WithIndex(0), transform.NewTree, nil
 			case CommitterCol:
-				return gf.WithIndex(1), sql.NewTree, nil
+				return gf.WithIndex(1), transform.NewTree, nil
 			case CommitDateCol:
-				return gf.WithIndex(2), sql.NewTree, nil
+				return gf.WithIndex(2), transform.NewTree, nil
 			default:
-				return gf, sql.SameTree, nil
+				return gf, transform.SameTree, nil
 			}
 		})
 	}
