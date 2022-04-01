@@ -109,15 +109,12 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 	require.NoError(t, err)
 	defer f.Close()
 	bs, err := io.ReadAll(f)
-	bs1 := make([]byte, len(bs), len(bs))
-	copy(bs1, bs)
 	require.NoError(t, err)
-	idx, err := parseTableIndex(bs1)
+	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
 	res, err := idx.ResolveShortHash("0")
 	require.NoError(t, err)
-	//assert.Equal(t, "5ckvoqdsg5p64na6n2re8ba0vmq1lbf5", res[0])
 	t.Log("matched: ", len(res))
 	for _, h := range res {
 		t.Log("\t", h)
@@ -132,7 +129,7 @@ func TestResolveOneHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td)
+	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -163,7 +160,7 @@ func TestResolveFewHash(t *testing.T) {
 
 	// build table index
 	td, _, err := buildTable(chunks)
-	tIdx, err := parseTableIndexByCopy(td)
+	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
 	require.NoError(t, err)
 
 	// get hashes out
@@ -179,6 +176,7 @@ func TestResolveFewHash(t *testing.T) {
 		for i := 0; i < 32; i++ {
 			res, err := tIdx.ResolveShortHash(h[:i])
 			require.NoError(t, err)
+			t.Log("asserting length: ", i)
 			assert.Less(t, 0, len(res))
 		}
 	}
@@ -188,30 +186,31 @@ func TestAmbiguousShortHash(t *testing.T) {
 	// create chunks
 	chunks := []fakeChunk{
 		{address: addrFromPrefix("abcdef"), data: fakeData},
-		{address: addrFromPrefix("abcxyz"), data: fakeData},
+		{address: addrFromPrefix("abctuv"), data: fakeData},
 		{address: addrFromPrefix("abcd123"), data: fakeData},
 	}
 
 	// build table index
 	td, _, err := buildFakeChunkTable(chunks)
-	idx, err := parseTableIndexByCopy(td)
+	idx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
 	require.NoError(t, err)
 
 	tests := []struct {
 		pre string
 		sz  int
 	}{
+		{pre: "", sz: 3},
 		{pre: "a", sz: 3},
 		{pre: "b", sz: 0},
-		{pre: "z", sz: 0},
+		{pre: "v", sz: 0},
 		{pre: "ab", sz: 3},
 		{pre: "abc", sz: 3},
 		{pre: "abcd", sz: 2},
-		{pre: "abcx", sz: 1},
-		{pre: "abcxde", sz: 1},
-		{pre: "abcxd1", sz: 1},
+		{pre: "abct", sz: 1},
+		{pre: "abcde", sz: 1},
+		{pre: "abcd1", sz: 1},
 		{pre: "abcdef", sz: 1},
-		{pre: "abcxyz", sz: 1},
+		{pre: "abctuv", sz: 1},
 		{pre: "abcd123", sz: 1},
 	}
 
@@ -235,7 +234,13 @@ var fakeData = []byte("supercalifragilisticexpialidocious")
 
 func addrFromPrefix(prefix string) (a addr) {
 	// create a full length addr from a prefix
-	copy(a[:], []byte(prefix))
+	for i := 0; i < addrSize; i++ {
+		prefix += "0"
+	}
+
+	// base32 decode string
+	h, _ := encoding.DecodeString(prefix)
+	copy(a[:], h)
 	return
 }
 

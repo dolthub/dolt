@@ -339,43 +339,52 @@ func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
 
 // prefixIdxLBound returns the first position in |tr.prefixes| whose value is <= |prefix|.
 // will return index less than where prefix would be if prefix is not found.
-func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) (idx uint32) {
-	idx, j := 0, ti.chunkCount
-	for j-idx != 1 {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if ti.prefixAt(h) < prefix {
-			idx = h + 1 // preserves f(i-1) == false
+func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) uint32 {
+	l, r := uint32(0), ti.chunkCount
+	for l < r {
+		m := l + (r-l)/2 // find middle, rounding down
+		if ti.prefixAt(m) < prefix {
+			l = m + 1
 		} else {
-			j = h // preserves f(j) == true
+			r = m
 		}
 	}
 
-	return
+	return l
 }
 
 // prefixIdxLBound returns the first position in |tr.prefixes| whose value is >= |prefix|.
 // will return index greater than where prefix would be if prefix is not found.
 func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
-	idx, j := uint32(0), ti.chunkCount
-	for j-idx != 1 {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if ti.prefixAt(h) <= prefix {
-			idx = h // preserves f(i-1) == false
+	l, r := uint32(0), ti.chunkCount
+	for l < r {
+		m := l + (r-l+1)/2      // find middle, rounding up
+		if m >= ti.chunkCount { // prevent index out of bounds
+			return r
+		}
+		pre := ti.prefixAt(m)
+		if pre <= prefix {
+			l = m
 		} else {
-			j = h // preserves f(j) == true
+			r = m - 1
 		}
 	}
 
-	return idx + 1
+	return l
 }
 
 func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
 	// Pad string
-	for i := len(s); i < 16; i++ {
-		s += p
+	if p == "0" {
+		for i := len(s); i < 16; i++ {
+			s = s + p
+		}
+	} else {
+		for i := len(s); i < 16; i++ {
+			s = p + s
+		}
 	}
+
 	// Decode
 	h, _ := encoding.DecodeString(s)
 	return binary.BigEndian.Uint64(h)
