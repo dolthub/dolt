@@ -235,6 +235,8 @@ func inlineBlobTypeConverter(ctx context.Context, src *inlineBlobType, destTi Ty
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *intType:

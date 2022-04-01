@@ -56,6 +56,7 @@ const (
 	TimestampKind
 	DecimalKind
 	JSONKind
+	GeometryKind
 	PointKind
 	LinestringKind
 	PolygonKind
@@ -88,6 +89,7 @@ func init() {
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
 	KindToType[JSONKind] = JSON{}
+	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
 	KindToType[LinestringKind] = Linestring{}
 	KindToType[PolygonKind] = Polygon{}
@@ -115,6 +117,7 @@ func init() {
 	SupportedKinds[TimestampKind] = true
 	SupportedKinds[DecimalKind] = true
 	SupportedKinds[JSONKind] = true
+	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
 	SupportedKinds[LinestringKind] = true
 	SupportedKinds[PolygonKind] = true
@@ -147,6 +150,7 @@ var KindToString = map[NomsKind]string{
 	TimestampKind:     "Timestamp",
 	DecimalKind:       "Decimal",
 	JSONKind:          "JSON",
+	GeometryKind:      "Geometry",
 	PointKind:         "Point",
 	LinestringKind:    "Linestring",
 	PolygonKind:       "Polygon",

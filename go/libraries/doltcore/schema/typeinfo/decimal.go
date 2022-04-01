@@ -238,6 +238,8 @@ func decimalTypeConverter(ctx context.Context, src *decimalType, destTi TypeInfo
 		}, true, nil
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
 			s, err := src.ConvertNomsValueToValue(v)

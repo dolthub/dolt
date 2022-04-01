@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"github.com/dolthub/dolt/go/store/geometry"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
