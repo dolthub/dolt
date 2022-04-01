@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -450,7 +451,21 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 	actualRows, sch, err := executeSelect(t, context.Background(), dEnv, root, test.SelectQuery)
 	require.NoError(t, err)
 
-	assert.Equal(t, test.ExpectedRows, actualRows)
+	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
+	for i := 0; i < len(test.ExpectedRows); i++ {
+		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
+		for j := 0; j < len(test.ExpectedRows[i]); j++ {
+			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
+				cmp, err := actualRows[i][j].(json.NomsJSON).Compare(nil, test.ExpectedRows[i][j].(json.NomsJSON))
+				assert.NoError(t, err)
+				assert.Equal(t, 0, cmp)
+			} else {
+				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+			}
+
+		}
+	}
+
 	sqlSchema := mustSqlSchema(test.ExpectedSchema)
 	assertSchemasEqual(t, sqlSchema, sch)
 }

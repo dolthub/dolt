@@ -1601,7 +1601,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		require.NoError(t, err)
 	}
 
-	// TODO: can't compare JSONs like this...
+	// JSON columns must be compared using like so
 	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
 	for i := 0; i < len(test.ExpectedRows); i++ {
 		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
@@ -1616,7 +1616,7 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 
 		}
 	}
-	//assert.Equal(t, test.ExpectedRows, actualRows)
+
 	var sqlSchema sql.Schema
 	if test.ExpectedSqlSchema != nil {
 		sqlSchema = test.ExpectedSqlSchema
