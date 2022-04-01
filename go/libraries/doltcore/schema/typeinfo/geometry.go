@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// This is a dolt implementation of the MySQL type Point, thus most of the functionality
+// This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
@@ -37,15 +37,15 @@ var GeometryType = &geometryType{sql.GeometryType{}, nil}
 
 // ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
 func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
-	switch this := g.Inner.(type) {
+	switch inner := g.Inner.(type) {
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(this)}
+		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(inner)}
 	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(this)}
+		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(inner)}
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(this)}
+		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(inner)}
 	default:
-		panic("ahhhhhh!")
+		panic("used an invalid type types.Geometry.Inner")
 	}
 }
 
@@ -88,7 +88,7 @@ func ConvertSQLGeometryToTypesGeometry(p sql.Geometry) types.Geometry {
 	case sql.Polygon:
 		return types.Geometry{Inner: ConvertSQLPolygonToTypesPolygon(inner)}
 	default:
-		return types.Geometry{}
+		panic("used an invalid type sql.Geometry.Inner")
 	}
 
 }
