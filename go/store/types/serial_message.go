@@ -139,6 +139,38 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
+	case serial.RootValueFileID:
+		msg := serial.GetRootAsRootValue([]byte(sm), 0)
+		addr := hash.New(msg.TablesAddrBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+		addr = hash.New(msg.ForeignKeyAddrBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+		addr = hash.New(msg.SuperSchemasAddrBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentRefs(nbf, sm)
 		if err != nil {

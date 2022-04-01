@@ -1,4 +1,4 @@
-// Copyright 2022 Dolthub, Inc.
+// Copyright 2021 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package serial
+namespace serial;
 
-// KEEP THESE IN SYNC WITH .fbs FILES!
+table RootValue {
+  feature_version:int64;
 
-const StoreRootFileID = "STRT"
-const TagFileID = "DTAG"
-const WorkingSetFileID = "WRST"
-const CommitFileID = "DCMT"
-const RootValueFileID = "RTVL"
-
-func GetFileID(bs []byte) string {
-	if len(bs) < 8 {
-		return ""
-	}
-	return string(bs[4:8])
+  tables_addr:[ubyte];
+  foreign_key_addr:[ubyte];
+  super_schemas_addr:[ubyte];
 }
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "RTVL";
+
+root_type RootValue;
+

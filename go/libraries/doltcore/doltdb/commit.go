@@ -84,8 +84,7 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	if rootV == nil {
 		return nil, errHasNoRootValue
 	}
-	// TODO: Get rid of this types.Struct assert.
-	return newRootValue(c.vrw, rootV.(types.Struct))
+	return newRootValue(c.vrw, rootV)
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
