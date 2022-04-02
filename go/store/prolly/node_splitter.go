@@ -23,6 +23,7 @@ package prolly
 
 import (
 	"fmt"
+	"math/bits"
 
 	"github.com/kch42/buzhash"
 	"github.com/zeebo/xxh3"
@@ -136,20 +137,38 @@ func patternFromOffset(offset uint32) uint32 {
 }
 
 type keySplitter struct {
-	current, target uint32
+	count    uint32
+	hi, lo   uint32
+	min, max uint32
+
 	crossedBoundary bool
 }
 
-func newKeySplitter(target uint32) *keySplitter {
-	return &keySplitter{target: target}
+func newKeySplitter(rowSize uint32) *keySplitter {
+	return &keySplitter{
+		// todo(andy) ceilingLog2 creates discontinuities
+		hi:  uint32(16 - ceilingLog2(rowSize)),
+		lo:  uint32(10 - ceilingLog2(rowSize)),
+		min: minChunkSize / rowSize,
+		max: maxChunkSize / rowSize,
+	}
 }
 
 func (ks *keySplitter) Append(items ...nodeItem) error {
 	if len(items) != 2 {
 		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
 	}
-	ks.current++
-	p := patternFromCount(ks.current)
+
+	ks.count++
+	if ks.count < ks.min {
+		return nil
+	}
+	if ks.count > ks.max {
+		ks.crossedBoundary = true
+		return nil
+	}
+
+	p := ks.patternFromCount(ks.count)
 	h := xxHash32(items[0])
 	ks.crossedBoundary = h&p == p
 	return nil
@@ -160,13 +179,19 @@ func (ks *keySplitter) CrossedBoundary() bool {
 }
 
 func (ks *keySplitter) Reset() {
-	ks.current = 0
+	ks.count = 0
 	ks.crossedBoundary = false
 }
 
-func patternFromCount(count uint32) uint32 {
-	shift := 15 - (count >> 10)
+func (ks *keySplitter) patternFromCount(count uint32) uint32 {
+	shift := ks.hi - (count >> ks.lo)
 	return 1<<shift - 1
+}
+
+// ceil(Log2(sz))
+func ceilingLog2(sz uint32) int {
+	// invariant: |sz| > 1
+	return bits.Len32(sz - 1)
 }
 
 func xxHash32(b []byte) uint32 {
