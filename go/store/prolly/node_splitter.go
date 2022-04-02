@@ -22,7 +22,10 @@
 package prolly
 
 import (
+	"fmt"
+
 	"github.com/kch42/buzhash"
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -130,4 +133,42 @@ func (sns *dynamicNodeSplitter) Reset() {
 func patternFromOffset(offset uint32) uint32 {
 	shift := 15 - (offset >> 10)
 	return 1<<shift - 1
+}
+
+type keySplitter struct {
+	current, target uint32
+	crossedBoundary bool
+}
+
+func newKeySplitter(target uint32) *keySplitter {
+	return &keySplitter{target: target}
+}
+
+func (ks *keySplitter) Append(items ...nodeItem) error {
+	if len(items) != 2 {
+		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
+	}
+	ks.current++
+	p := patternFromCount(ks.current)
+	h := xxHash32(items[0])
+	ks.crossedBoundary = h&p == p
+	return nil
+}
+
+func (ks *keySplitter) CrossedBoundary() bool {
+	return ks.crossedBoundary
+}
+
+func (ks *keySplitter) Reset() {
+	ks.current = 0
+	ks.crossedBoundary = false
+}
+
+func patternFromCount(count uint32) uint32 {
+	shift := 15 - (count >> 10)
+	return 1<<shift - 1
+}
+
+func xxHash32(b []byte) uint32 {
+	return uint32(xxh3.Hash(b))
 }
