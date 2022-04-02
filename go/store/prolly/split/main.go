@@ -15,6 +15,8 @@
 package main
 
 import (
+	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 
@@ -25,7 +27,7 @@ import (
 
 const (
 	n            = 100_000
-	minChunkSize = 1 << 9
+	minChunkSize = 1 << 10
 	maxChunkSize = 1 << 14
 )
 
@@ -72,12 +74,24 @@ func randUint32() uint32 {
 	return uint32(rand.Uint64())
 }
 
-func average(data []int) float32 {
-	sum := float32(0)
+func average(data []int) float64 {
+	sum := float64(0)
 	for _, d := range data {
-		sum += float32(d)
+		sum += float64(d)
 	}
-	return sum / float32(len(data))
+	return sum / float64(len(data))
+}
+
+func stddev(data []int) float64 {
+	avg := average(data)
+	acc := float64(0)
+	for _, d := range data {
+		delta := float64(d) - avg
+		acc += (delta * delta)
+
+	}
+	variance := acc / float64(len(data))
+	return math.Sqrt(variance)
 }
 
 func plotIntHistogram(data []int) {
@@ -89,7 +103,7 @@ func plotIntHistogram(data []int) {
 	p := plot.New()
 	p.Title.Text = "histogram plot"
 
-	hist, err := plotter.NewHist(values, 50)
+	hist, err := plotter.NewHist(values, 100)
 	if err != nil {
 		panic(err)
 	}
@@ -108,4 +122,6 @@ func main() {
 	}
 	sort.Ints(data)
 	plotIntHistogram(data)
+	fmt.Println("mean: %f", average(data))
+	fmt.Println("std: %f", stddev(data))
 }
