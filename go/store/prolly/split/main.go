@@ -29,6 +29,8 @@ import (
 const (
 	minChunkSize = 1 << 10
 	maxChunkSize = 1 << 14
+
+	alpha = float64(1.2)
 )
 
 func collectData(rowSize, numSamples int) (data []int) {
@@ -63,8 +65,8 @@ func randUint32() uint32 {
 }
 
 func patternFromCount(count, rowSize int) uint32 {
-	hi := uint32(16 - ceilingLog2(rowSize))
-	lo := uint32(10 - ceilingLog2(rowSize))
+	hi := uint32(16 - roundLog2(rowSize))
+	lo := uint32(10 - roundLog2(rowSize))
 	shift := hi - (uint32(count) >> lo)
 	return 1<<shift - 1
 }
@@ -83,6 +85,12 @@ func ceilingLog2(sz int) int {
 	return bits.Len32(uint32(sz - 1))
 }
 
+func roundLog2(sz int) int {
+	x := float64(sz) * alpha
+	lg2 := math.Log2(x)
+	return int(math.Round(lg2))
+}
+
 func stddev(data []int) float64 {
 	avg := mean(data)
 	acc := float64(0)
@@ -95,7 +103,7 @@ func stddev(data []int) float64 {
 }
 
 func main() {
-	const numSamples = 10_000
+	const numSamples = 1000
 
 	sizes := []int{
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
@@ -104,15 +112,17 @@ func main() {
 		31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
 	}
 
+	allSamples := make([]int, 0, numSamples*len(sizes))
 	for _, sz := range sizes {
 		data := collectData(sz, numSamples)
 		m, s := mean(data), stddev(data)
 		fmt.Printf("row size: %d, mean: %f \t std: %f \n", sz, m, s)
+		allSamples = append(allSamples, collectData(sz, numSamples)...)
 	}
+	m, s := mean(allSamples), stddev(allSamples)
+	fmt.Printf("mean: %f \t std: %f \n", m, s)
 
-	plotIntHistogram("row_size_24.png", collectData(24, numSamples))
-	plotIntHistogram("row_size_180.png", collectData(180, numSamples))
-	plotIntHistogram("row_size_500.png", collectData(500, numSamples))
+	plotIntHistogram("row_size_all.png", allSamples)
 }
 
 func plotIntHistogram(name string, data []int) {
