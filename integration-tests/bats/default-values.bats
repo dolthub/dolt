@@ -488,7 +488,7 @@ DELIM
     [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
 }
 
-@test "default-values: Defining default value to NULL or EMPTY value in ALTER TABLE {
+@test "default-values: Defining literal default value to NULL or EMPTY value in ALTER TABLE {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT, c3 INT)"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
@@ -508,4 +508,25 @@ DELIM
     [[ "$output" =~ "c1,YES," ]] || false
     [[ "$output" =~ "c2,NO," ]] || false
     [[ "$output" =~ "c3,NO,ln" ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 FLOAT NOT NULL DEFAULT '4.44'"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 DOUBLE NOT NULL DEFAULT '3.333'"
+    dolt sql -q "ALTER TABLE test CHANGE c3 c3 BOOLEAN NULL DEFAULT FALSE"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,NO,4.44" ]] || false
+    [[ "$output" =~ "c2,NO,3.333" ]] || false
+    [[ "$output" =~ "c3,YES,false" ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 DATETIME NOT NULL DEFAULT '2020-04-01 16:16:16'"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 TIMESTAMP NULL DEFAULT '2008-04-22 16:16:16'"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,NO,2020-04-01 16:16:16" ]] || false
+    [[ "$output" =~ "c2,YES,2008-04-22 16:16:16" ]] || false
+    [[ "$output" =~ "c3,YES,false" ]] || false
 }
