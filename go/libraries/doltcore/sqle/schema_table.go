@@ -327,7 +327,7 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			continue
 		}
 
-		// Deal with older sqlRows
+		// For tables that haven't been converted yet or are filled with nil, use 1 as the trigger creation time
 		if len(sqlRow) < 5 || sqlRow[4] == nil {
 			frags = append(frags, schemaFragment{
 				name:     sqlRow[1].(string),
@@ -337,14 +337,9 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 			continue
 		}
 
-		// Parse json column
-		extraJSON := sqlRow[4].(json.NomsJSON)
-		doc, err := extraJSON.Unmarshall(ctx)
-		val := doc.Val.(map[string]interface{})
-		createdTime := int64(val["CreatedAt"].(float64))
-		if err != nil {
-			return nil, err
-		}
+		// Extract Created Time from JSON column
+		createdTime, err := getCreatedTime(ctx, sqlRow)
+
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),
@@ -352,4 +347,15 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		})
 	}
 	return frags, nil
+}
+
+func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
+	extraJSON := row[4].(json.NomsJSON)
+	doc, err := extraJSON.Unmarshall(ctx)
+	if err != nil {
+		return 0, err
+	}
+	val := doc.Val.(map[string]interface{})
+	createdTime := int64(val["CreatedAt"].(float64))
+	return createdTime, nil
 }
