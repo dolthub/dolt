@@ -208,6 +208,8 @@ func bitTypeConverter(ctx context.Context, src *bitType, destTi TypeInfo) (tc Ty
 		return wrapIsValid(dest.IsValid, src, dest)
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+	case *geometryType:
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
