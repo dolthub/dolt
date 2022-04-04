@@ -33,7 +33,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 		"alter table a add column c2 text;",
 		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
 		"alter table a drop column c1;",
-		"alter table a add constraint unique(c2);",
+		"alter table a add constraint unique_c2 unique(c2);",
 		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
 	},
 	Assertions: []enginetest.ScriptTestAssertion{
