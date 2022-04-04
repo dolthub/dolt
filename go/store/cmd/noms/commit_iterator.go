@@ -106,13 +106,13 @@ func (iter *CommitIterator) Next(ctx context.Context) (LogNode, bool) {
 type LogNode struct {
 	addr             hash.Hash
 	height           uint64
-	commit           types.Value  // commit that needs to be printed
-	startingColCount int          // how many branches are being tracked when this commit is printed
-	endingColCount   int          // home many branches will be tracked when next commit is printed
-	col              int          // col to put the '*' character in graph
-	newCols          []int        // col to start using '\' in graph
-	foldedCols       []int        // cols with common ancestors, that will get folded together
-	lastCommit       bool         // this is the last commit that will be returned by iterator
+	commit           types.Value // commit that needs to be printed
+	startingColCount int         // how many branches are being tracked when this commit is printed
+	endingColCount   int         // home many branches will be tracked when next commit is printed
+	col              int         // col to put the '*' character in graph
+	newCols          []int       // col to start using '\' in graph
+	foldedCols       []int       // cols with common ancestors, that will get folded together
+	lastCommit       bool        // this is the last commit that will be returned by iterator
 }
 
 func (n LogNode) String() string {

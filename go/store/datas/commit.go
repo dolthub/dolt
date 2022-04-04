@@ -170,7 +170,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	builder.FinishWithFileIdentifier(serial.CommitEnd(builder), []byte(serial.CommitFileID))
-	return builder.FinishedBytes(), maxheight+1
+	return builder.FinishedBytes(), maxheight + 1
 }
 
 func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
