@@ -42,15 +42,15 @@ var ErrFailedToDeleteBackup = errors.New("failed to delete backup")
 var ErrFailedToGetBackupDb = errors.New("failed to get backup db")
 var ErrUnknownPushErr = errors.New("unknown push error")
 
-type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent)
-type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent)
+type ProgStarter func(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats)
+type ProgStopper func(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats)
 
 // Push will update a destination branch, in a given destination database if it can be done as a fast forward merge.
 // This is accomplished first by verifying that the remote tracking reference for the source database can be updated to
 // the given commit via a fast forward merge.  If this is the case, an attempt will be made to update the branch in the
 // destination db to the given commit via fast forward move.  If that succeeds the tracking branch is updated in the
 // source db.
-func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
+func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef ref.BranchRef, remoteRef ref.RemoteRef, srcDB, destDB *doltdb.DoltDB, commit *doltdb.Commit, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	var err error
 	if mode == ref.FastForwardOnly {
 		canFF, err := srcDB.CanFastForward(ctx, remoteRef, commit)
@@ -68,7 +68,7 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, pullerEventCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -140,7 +140,7 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 }
 
 // PushTag pushes a commit tag and all underlying data from a local source database to a remote destination database.
-func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
+func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB, destDB *doltdb.DoltDB, tag *doltdb.Tag, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	var err error
 
 	addr, err := tag.GetAddr()
@@ -148,7 +148,7 @@ func PushTag(ctx context.Context, tempTableDir string, destRef ref.TagRef, srcDB
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, pullerEventCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -188,9 +188,9 @@ func PushToRemoteBranch(ctx context.Context, rsr env.RepoStateReader, tempTableD
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = Push(ctx, tempTableDir, mode, destRef.(ref.BranchRef), remoteRef.(ref.RemoteRef), localDB, remoteDB, cm, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
 
 	switch err {
 	case nil:
@@ -211,9 +211,9 @@ func pushTagToRemote(ctx context.Context, tempTableDir string, srcRef, destRef r
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = PushTag(ctx, tempTableDir, destRef.(ref.TagRef), localDB, remoteDB, tg, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -250,24 +250,24 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 }
 
 // FetchCommit takes a fetches a commit and all underlying data from a remote source database to the local destination database.
-func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
+func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	stRef, err := srcDBCommit.GetStRef()
 
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef.TargetHash(), progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef.TargetHash(), progChan, statsCh)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.
-func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) error {
+func FetchTag(ctx context.Context, tempTableDir string, srcDB, destDB *doltdb.DoltDB, srcDBTag *doltdb.Tag, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
 	addr, err := srcDBTag.GetAddr()
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, pullerEventCh)
+	return destDB.PullChunks(ctx, tempTableDir, srcDB, addr, progChan, statsCh)
 }
 
 // Clone pulls all data from a remote source database to a local destination database.
@@ -309,9 +309,9 @@ func FetchFollowTags(ctx context.Context, tempTableDir string, srcDB, destDB *do
 		}
 
 		newCtx, cancelFunc := context.WithCancel(ctx)
-		wg, progChan, pullerEventCh := progStarter(newCtx)
-		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, pullerEventCh)
-		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		wg, progChan, statsCh := progStarter(newCtx)
+		err = FetchTag(ctx, tempTableDir, srcDB, destDB, tag, progChan, statsCh)
+		progStopper(cancelFunc, wg, progChan, statsCh)
 		if err == nil {
 			cli.Println()
 		} else if err == pull.ErrDBUpToDate {
@@ -363,9 +363,9 @@ func FetchRemoteBranch(
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
-	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, pullerEventCh)
-	progStopper(cancelFunc, wg, progChan, pullerEventCh)
+	wg, progChan, statsCh := progStarter(newCtx)
+	err = FetchCommit(ctx, tempTablesDir, srcDB, destDB, srcDBCommit, progChan, statsCh)
+	progStopper(cancelFunc, wg, progChan, statsCh)
 	if err == pull.ErrDBUpToDate {
 		err = nil
 	}
@@ -466,15 +466,15 @@ func SyncRoots(ctx context.Context, srcDb, destDb *doltdb.DoltDB, tempTableDir s
 	}
 
 	newCtx, cancelFunc := context.WithCancel(ctx)
-	wg, progChan, pullerEventCh := progStarter(newCtx)
+	wg, progChan, statsCh := progStarter(newCtx)
 	defer func() {
-		progStopper(cancelFunc, wg, progChan, pullerEventCh)
+		progStopper(cancelFunc, wg, progChan, statsCh)
 		if err == nil {
 			cli.Println()
 		}
 	}()
 
-	err = destDb.PullChunks(ctx, tempTableDir, srcDb, srcRoot, progChan, pullerEventCh)
+	err = destDb.PullChunks(ctx, tempTableDir, srcDb, srcRoot, progChan, statsCh)
 	if err != nil {
 		return err
 	}

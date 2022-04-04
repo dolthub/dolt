@@ -47,6 +47,7 @@ const (
 	VarBinaryTypeIdentifier  Identifier = "varbinary"
 	VarStringTypeIdentifier  Identifier = "varstring"
 	YearTypeIdentifier       Identifier = "year"
+	GeometryTypeIdentifier   Identifier = "geometry"
 	PointTypeIdentifier      Identifier = "point"
 	LinestringTypeIdentifier Identifier = "linestring"
 	PolygonTypeIdentifier    Identifier = "polygon"
@@ -72,6 +73,7 @@ var Identifiers = map[Identifier]struct{}{
 	VarBinaryTypeIdentifier:  {},
 	VarStringTypeIdentifier:  {},
 	YearTypeIdentifier:       {},
+	GeometryTypeIdentifier:   {},
 	PointTypeIdentifier:      {},
 	LinestringTypeIdentifier: {},
 	PolygonTypeIdentifier:    {},
@@ -164,12 +166,15 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 	case sqltypes.Geometry:
 		// TODO: bad, but working way to determine which specific geometry type
 		switch sqlType.String() {
-		case sql.PolygonType{}.String():
-			return &polygonType{sqlType.(sql.PolygonType)}, nil
-		case sql.LinestringType{}.String():
-			return &linestringType{sqlType.(sql.LinestringType)}, nil
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
+		case sql.LinestringType{}.String():
+			return &linestringType{sqlType.(sql.LinestringType)}, nil
+		case sql.PolygonType{}.String():
+			return &polygonType{sqlType.(sql.PolygonType)}, nil
+		case sql.GeometryType{}.String():
+			// TODO: not sure how to determine inner type
+			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType), innerType: &pointType{}}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
@@ -267,6 +272,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateIntTypeFromParams(params)
 	case JSONTypeIdentifier:
 		return JSONType, nil
+	case GeometryTypeIdentifier:
+		return GeometryType, nil
 	case PointTypeIdentifier:
 		return PointType, nil
 	case LinestringTypeIdentifier:
@@ -313,6 +320,8 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return LinestringType
 	case types.NullKind:
 		return UnknownType
+	case types.GeometryKind:
+		return GeometryType
 	case types.PointKind:
 		return PointType
 	case types.PolygonKind:

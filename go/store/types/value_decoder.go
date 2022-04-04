@@ -47,6 +47,7 @@ type CodecReader interface {
 	ReadInlineBlob() []byte
 	ReadTimestamp() (time.Time, error)
 	ReadDecimal() (decimal.Decimal, error)
+	ReadGeometry() (Geometry, error)
 	ReadPoint() (Point, error)
 	ReadLinestring() (Linestring, error)
 	ReadPolygon() (Polygon, error)
@@ -82,6 +83,10 @@ func (r *valueDecoder) ReadBlob() (Blob, error) {
 		return Blob{}, err
 	}
 	return newBlob(seq), nil
+}
+
+func (r *valueDecoder) ReadGeometry() (Geometry, error) {
+	return readGeometry(nil, r)
 }
 
 func (r *valueDecoder) ReadPoint() (Point, error) {
@@ -372,6 +377,20 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		return r.readTuple(nbf)
 	case JSONKind:
 		return r.ReadJSON()
+	case GeometryKind:
+		r.skipKind()
+		buf := []byte(r.ReadString())
+		srid, _, geomType := geometry.ParseEWKBHeader(buf)
+		switch geomType {
+		case geometry.PointType:
+			return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
+		case geometry.LinestringType:
+			return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
+		case geometry.PolygonType:
+			return ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid), nil
+		default:
+			return nil, ErrUnknownType
+		}
 	case PointKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
@@ -443,6 +462,9 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 		r.skipKind()
 		r.skipUint()
 	case StringKind:
+		r.skipKind()
+		r.skipString()
+	case GeometryKind:
 		r.skipKind()
 		r.skipString()
 	case PointKind:

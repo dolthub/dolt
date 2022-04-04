@@ -206,7 +206,8 @@ var ErrUsingSpatialKey = errors.NewKind("can't use Spatial Types as Primary Key 
 func IsColSpatialType(c Column) bool {
 	return c.TypeInfo.Equals(typeinfo.PointType) ||
 		c.TypeInfo.Equals(typeinfo.LinestringType) ||
-		c.TypeInfo.Equals(typeinfo.PolygonType)
+		c.TypeInfo.Equals(typeinfo.PolygonType) ||
+		c.TypeInfo.Equals(typeinfo.GeometryType)
 }
 
 // IsUsingSpatialColAsKey is a utility function that checks for any spatial types being used as a primary key

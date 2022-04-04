@@ -298,6 +298,11 @@ func TestDoltUserPrivileges(t *testing.T) {
 	}
 }
 
+func TestJoinQueries(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestJoinQueries(t, newDoltHarness(t))
+}
+
 func TestUserPrivileges(t *testing.T) {
 	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))

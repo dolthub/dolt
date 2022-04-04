@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1590,7 +1591,7 @@ func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*n
 	}
 
 	var lookup sql.IndexLookup
-	plan.Inspect(analyzed, func(n sql.Node) bool {
+	transform.Inspect(analyzed, func(n sql.Node) bool {
 		switch node := n.(type) {
 		case *plan.IndexedTableAccess:
 			lookup = plan.GetIndexLookup(node)

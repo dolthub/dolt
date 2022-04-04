@@ -20,34 +20,39 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/store/geometry"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-// This is a dolt implementation of the MySQL type Point, thus most of the functionality
+// This is a dolt implementation of the MySQL type Geometry, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
-type linestringType struct {
-	sqlLinestringType sql.LinestringType
+type geometryType struct {
+	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
+	innerType       TypeInfo         // References the actual typeinfo (pointType, linestringType, polygonType)
 }
 
-var _ TypeInfo = (*linestringType)(nil)
+var _ TypeInfo = (*geometryType)(nil)
 
-var LinestringType = &linestringType{sql.LinestringType{}}
+var GeometryType = &geometryType{sql.GeometryType{}, nil}
 
-// ConvertTypesLinestringToSQLLinestring basically makes a deep copy of sql.Linestring
-func ConvertTypesLinestringToSQLLinestring(l types.Linestring) sql.Linestring {
-	points := make([]sql.Point, len(l.Points))
-	for i, p := range l.Points {
-		points[i] = ConvertTypesPointToSQLPoint(p)
+// ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
+func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
+	switch inner := g.Inner.(type) {
+	case types.Point:
+		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(inner)}
+	case types.Linestring:
+		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(inner)}
+	case types.Polygon:
+		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(inner)}
+	default:
+		panic("used an invalid type types.Geometry.Inner")
 	}
-	return sql.Linestring{SRID: l.SRID, Points: points}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
-func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Linestring, return a sql.Linestring
-	if val, ok := v.(types.Linestring); ok {
-		return ConvertTypesLinestringToSQLLinestring(val), nil
+func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
+	// Expect a types.Geometry, return a sql.Geometry
+	if val, ok := v.(types.Geometry); ok {
+		return ConvertTypesGeometryToSQLGeometry(val), nil
 	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -57,84 +62,88 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
-func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.LinestringKind:
-		l, err := reader.ReadLinestring()
+	case types.GeometryKind:
+		p, err := reader.ReadGeometry()
 		if err != nil {
 			return nil, err
 		}
-		return ti.ConvertNomsValueToValue(l)
+		return ti.ConvertNomsValueToValue(p)
 	case types.NullKind:
 		return nil, nil
+	default:
+		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
-
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLLinestringToTypesLinestring(l sql.Linestring) types.Linestring {
-	points := make([]types.Point, len(l.Points))
-	for i, p := range l.Points {
-		points[i] = ConvertSQLPointToTypesPoint(p)
+func ConvertSQLGeometryToTypesGeometry(p sql.Geometry) types.Geometry {
+	switch inner := p.Inner.(type) {
+	case sql.Point:
+		return types.Geometry{Inner: ConvertSQLPointToTypesPoint(inner)}
+	case sql.Linestring:
+		return types.Geometry{Inner: ConvertSQLLinestringToTypesLinestring(inner)}
+	case sql.Polygon:
+		return types.Geometry{Inner: ConvertSQLPolygonToTypesPolygon(inner)}
+	default:
+		panic("used an invalid type sql.Geometry.Inner")
 	}
-	return types.Linestring{SRID: l.SRID, Points: points}
+
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
-func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
+func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.ValueReadWriter, v interface{}) (types.Value, error) {
 	// Check for null
 	if v == nil {
 		return types.NullValue, nil
 	}
 
-	// Convert to sql.LinestringType
-	line, err := ti.sqlLinestringType.Convert(v)
+	// Convert accordingly
+	geom, err := ti.sqlGeometryType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-
-	return ConvertSQLLinestringToTypesLinestring(line.(sql.Linestring)), nil
+	return ConvertSQLGeometryToTypesGeometry(geom.(sql.Geometry)), nil
 }
 
 // Equals implements TypeInfo interface.
-func (ti *linestringType) Equals(other TypeInfo) bool {
+func (ti *geometryType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*linestringType)
+	_, ok := other.(*geometryType)
 	return ok
 }
 
 // FormatValue implements TypeInfo interface.
-func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Linestring); ok {
-		buf := make([]byte, geometry.EWKBHeaderSize+types.LengthSize+geometry.PointSize*len(val.Points))
-		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
-		types.WriteEWKBLineData(val, buf[geometry.EWKBHeaderSize:])
-		resStr := string(buf)
-		return &resStr, nil
-	}
+func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
+	// Received null value
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
+	}
+
+	// Expect a Geometry type
+	if val, ok := v.(types.Geometry); ok {
+		return ti.innerType.FormatValue(val.Inner)
 	}
 
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
-func (ti *linestringType) GetTypeIdentifier() Identifier {
-	return LinestringTypeIdentifier
+func (ti *geometryType) GetTypeIdentifier() Identifier {
+	return GeometryTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
-func (ti *linestringType) GetTypeParams() map[string]string {
+func (ti *geometryType) GetTypeParams() map[string]string {
 	return map[string]string{}
 }
 
 // IsValid implements TypeInfo interface.
-func (ti *linestringType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Linestring); ok {
+func (ti *geometryType) IsValid(v types.Value) bool {
+	if _, ok := v.(types.Geometry); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -144,27 +153,27 @@ func (ti *linestringType) IsValid(v types.Value) bool {
 }
 
 // NomsKind implements TypeInfo interface.
-func (ti *linestringType) NomsKind() types.NomsKind {
-	return types.LinestringKind
+func (ti *geometryType) NomsKind() types.NomsKind {
+	return types.GeometryKind
 }
 
 // Promote implements TypeInfo interface.
-func (ti *linestringType) Promote() TypeInfo {
-	return &linestringType{ti.sqlLinestringType.Promote().(sql.LinestringType)}
+func (ti *geometryType) Promote() TypeInfo {
+	return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), ti.innerType.Promote()}
 }
 
 // String implements TypeInfo interface.
-func (ti *linestringType) String() string {
-	return "Linestring"
+func (ti *geometryType) String() string {
+	return "Geometry"
 }
 
 // ToSqlType implements TypeInfo interface.
-func (ti *linestringType) ToSqlType() sql.Type {
-	return ti.sqlLinestringType
+func (ti *geometryType) ToSqlType() sql.Type {
+	return ti.sqlGeometryType
 }
 
-// linestringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
-func linestringTypeConverter(ctx context.Context, src *linestringType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
+// geometryTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
+func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeInfo) (tc TypeConverter, needsConversion bool, err error) {
 	switch dest := destTi.(type) {
 	case *bitType:
 		return func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
@@ -183,7 +192,7 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
-		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
+		return identityTypeConverter, false, nil
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
@@ -191,7 +200,7 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
