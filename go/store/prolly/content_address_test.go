@@ -33,7 +33,7 @@ var goldenHash = hash.Hash{
 }
 
 func TestContentAddress(t *testing.T) {
-	keys, values := ascendingIntTuples(t, 12345)
+	keys, values, _ := ascendingIntTuples(12345)
 	m := makeTree(t, keys, values)
 	require.NotNil(t, m)
 	require.Equal(t, goldenHash, m.hashOf())

@@ -63,9 +63,22 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf Node) ([]mutat
 }
 
 func TestWriteAmplification(t *testing.T) {
-	t.Run("Map<(uint),(uint,uint,uint)>", func(t *testing.T) {
-		pm, _ := makeProllyMap(t, 100_000)
+	const scale = 100_000
+
+	t.Run("Random Uint Map<(uint),(uint,uint,uint)>", func(t *testing.T) {
+		pm, _ := makeProllyMap(t, scale)
 		before := pm.(Map)
+		t.Run("delete last key", func(t *testing.T) {
+			testWriteAmplification(t, before, deleteLastKey{})
+		})
+		t.Run("delete random key", func(t *testing.T) {
+			testWriteAmplification(t, before, deleteSingleKey{})
+		})
+	})
+
+	t.Run("Ascending Uint Map<(uint),(uint,uint,uint)>", func(t *testing.T) {
+		keys, values, desc := ascendingIntTuples(scale)
+		before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 		t.Run("delete last key", func(t *testing.T) {
 			testWriteAmplification(t, before, deleteLastKey{})
 		})
@@ -91,11 +104,13 @@ func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 		sizes = append(sizes, s)
 	}
 	countSummary, cardSummary, sizeSummary := summarizeTree(t, before)
-	fmt.Printf("node count summary \t %s \n", countSummary)
-	fmt.Printf("node card  summary \t %s \n", cardSummary)
-	fmt.Printf("node size  summary \t %s \n\n", sizeSummary)
-	fmt.Printf("node counts %s \n", counts.summary())
-	fmt.Printf("node sizes  %s \n\n", sizes.summary())
+	fmt.Println("pre-edit map summary: ")
+	fmt.Printf("\t node count \t %s \n", countSummary)
+	fmt.Printf("\t node card  \t %s \n", cardSummary)
+	fmt.Printf("\t node size  \t %s \n", sizeSummary)
+	fmt.Println("post-edit write amplification: ")
+	fmt.Printf("\t node counts %s \n", counts.summary())
+	fmt.Printf("\t node sizes  %s \n\n", sizes.summary())
 }
 
 func collectMutations(t *testing.T, before Map, method mutationProvider) (muts []mutation) {
@@ -263,5 +278,28 @@ func plotIntHistogram(name string, data []int) {
 
 	if err := p.Save(3*vg.Inch, 3*vg.Inch, name); err != nil {
 		panic(err)
+	}
+}
+
+func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values []val.Tuple) Map {
+	ctx := context.Background()
+	ns := newTestNodeStore()
+	require.Equal(t, len(keys), len(values))
+
+	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	require.NoError(t, err)
+
+	for i := range keys {
+		err := chunker.AddPair(ctx, keys[i], values[i])
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+
+	return Map{
+		root:    root,
+		keyDesc: kd,
+		valDesc: vd,
+		ns:      ns,
 	}
 }

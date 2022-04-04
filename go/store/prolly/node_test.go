@@ -29,7 +29,7 @@ import (
 )
 
 func TestRoundTripInts(t *testing.T) {
-	keys, values := ascendingIntTuples(t, 10)
+	keys, values, _ := ascendingIntTuples(10)
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
 
 	nd := newTupleLeafNode(keys, values)
@@ -140,8 +140,8 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
-func ascendingIntTuples(t *testing.T, count int) (keys, values []val.Tuple) {
-	desc := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+func ascendingIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc)
 
 	tups := make([]val.Tuple, count*2)
