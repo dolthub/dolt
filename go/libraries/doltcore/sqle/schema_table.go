@@ -83,15 +83,9 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	var rowsToAdd []sql.Row
 	if found {
 		schemasTable := tbl.(*WritableDoltTable)
-		// Old schemas table does not contain the `id` and `extra` column.
-		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
+		// Old schemas table does not contain the `id` or `extra` column.
+		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
-			if err != nil {
-				return nil, err
-			}
-		} else if !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
-			// Less old schemas table are just missing `extra` column
-			root, rowsToAdd, err = migrateLessOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
 			}
@@ -196,59 +190,14 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		// append the new id and nil to each row
-		sqlRow = append(sqlRow, id, nil)
-		rowsToAdd = append(rowsToAdd, sqlRow)
-		id++
-		return nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	err = db.DropTable(ctx, doltdb.SchemasTableName)
-	if err != nil {
-		return nil, nil, err
-	}
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	return root, rowsToAdd, nil
-}
-
-func migrateLessOldSchemasTableToNew(
-	ctx *sql.Context,
-	db Database,
-	root *doltdb.RootValue,
-	schemasTable *WritableDoltTable,
-) (
-	*doltdb.RootValue,
-	[]sql.Row,
-	error,
-) {
-	// Copy all of the old data over and add an index column and an extra column
-	var rowsToAdd []sql.Row
-	table, err := schemasTable.doltTable(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	rowData, err := table.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	err = rowData.IterAll(ctx, func(key, val types.Value) error {
-		dRow, err := row.FromNoms(schemasTable.sch, key.(types.Tuple), val.(types.Tuple))
-		if err != nil {
-			return err
+		// append the new id to row, if missing
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTablesIdCol) {
+			sqlRow = append(sqlRow, id)
 		}
-		sqlRow, err := sqlutil.DoltRowToSqlRow(dRow, schemasTable.sch)
-		if err != nil {
-			return err
-		}
-		// append the new id and nil to each row
+		// append the extra cols to row
 		sqlRow = append(sqlRow, nil)
 		rowsToAdd = append(rowsToAdd, sqlRow)
+		id++
 		return nil
 	})
 	if err != nil {
