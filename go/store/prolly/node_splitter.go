@@ -23,7 +23,7 @@ package prolly
 
 import (
 	"fmt"
-	"math/bits"
+	"math"
 
 	"github.com/kch42/buzhash"
 	"github.com/zeebo/xxh3"
@@ -58,7 +58,8 @@ type nodeSplitter interface {
 }
 
 func newDefaultNodeSplitter(salt byte) nodeSplitter {
-	return newSmoothRollingHasher(salt)
+	//return newSmoothRollingHasher(salt)
+	return newKeySplitter(24, salt)
 }
 
 // dynamicNodeSplitter is a nodeSplitter designed to constrain the chunk size
@@ -137,20 +138,23 @@ func patternFromOffset(offset uint32) uint32 {
 }
 
 type keySplitter struct {
-	count    uint32
-	hi, lo   uint32
-	min, max uint32
-
+	count           uint32
 	crossedBoundary bool
+
+	// the following are const
+	min, max uint32
+	hi, lo   uint32
+	salt     uint32
 }
 
-func newKeySplitter(rowSize uint32) *keySplitter {
+func newKeySplitter(rowSize uint32, level uint8) *keySplitter {
 	return &keySplitter{
-		// todo(andy) ceilingLog2 creates discontinuities
-		hi:  uint32(16 - ceilingLog2(rowSize)),
-		lo:  uint32(10 - ceilingLog2(rowSize)),
-		min: minChunkSize / rowSize,
-		max: maxChunkSize / rowSize,
+		// todo(andy) roundLog2 creates discontinuities
+		min:  minChunkSize / rowSize,
+		max:  maxChunkSize / rowSize,
+		hi:   uint32(16 - roundLog2(rowSize)),
+		lo:   uint32(10 - roundLog2(rowSize)),
+		salt: xxHash32([]byte{level}),
 	}
 }
 
@@ -188,10 +192,10 @@ func (ks *keySplitter) patternFromCount(count uint32) uint32 {
 	return 1<<shift - 1
 }
 
-// ceil(Log2(sz))
-func ceilingLog2(sz uint32) int {
+func roundLog2(sz uint32) int {
 	// invariant: |sz| > 1
-	return bits.Len32(sz - 1)
+	lg2 := math.Log2(float64(sz))
+	return int(math.Round(lg2))
 }
 
 func xxHash32(b []byte) uint32 {

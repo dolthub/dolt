@@ -447,10 +447,11 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 }
 
 func (tc *treeChunker) currentSubtreeSize() uint64 {
-	if tc.isLeaf() {
-		return 1
-	}
-	return tc.subtrees[tc.cur.idx]
+	//if tc.isLeaf() {
+	//	return 1
+	//}
+	//return tc.subtrees[tc.cur.idx]
+	return 1
 }
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.

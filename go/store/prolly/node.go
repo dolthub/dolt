@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"context"
 	"math"
 
 	fb "github.com/google/flatbuffers/go"
@@ -39,6 +40,56 @@ type Node struct {
 	keys, values val.SlicedBuffer
 	buf          serial.TupleMap
 	count        uint16
+}
+
+type AddressCb func(ctx context.Context, addr hash.Hash) error
+
+func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
+	if nd.leafNode() {
+		// todo(andy): ref'd values
+		return nil
+	}
+
+	for i := 0; i < int(nd.count); i++ {
+		addr := nd.getRef(i)
+
+		if err := cb(ctx, addr); err != nil {
+			return err
+		}
+
+		child, err := ns.Read(ctx, addr)
+		if err != nil {
+			return err
+		}
+
+		if err := WalkAddresses(ctx, child, ns, cb); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type NodeCb func(ctx context.Context, nd Node) error
+
+func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
+	if err := cb(ctx, nd); err != nil {
+		return err
+	}
+	if nd.leafNode() {
+		// todo(andy): walk ref'd values?
+		return nil
+	}
+
+	for i := 0; i < int(nd.count); i++ {
+		child, err := ns.Read(ctx, nd.getRef(i))
+		if err != nil {
+			return err
+		}
+		if err := WalkNodes(ctx, child, ns, cb); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func mapNodeFromBytes(bb []byte) Node {
@@ -115,6 +166,10 @@ func (nd Node) empty() bool {
 
 func (nd Node) bytes() []byte {
 	return nd.buf.Table().Bytes
+}
+
+func (nd Node) size() int {
+	return len(nd.bytes())
 }
 
 func getKeyOffsetsVector(buf serial.TupleMap) []byte {
