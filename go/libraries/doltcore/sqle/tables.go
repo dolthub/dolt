@@ -336,6 +336,10 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 	}
 
 	iter, err := partitionRows(ctx, table, t.projectedCols, part)
+	if err != nil {
+		return nil, err
+	}
+
 	return iter.(sql.RowIter2), err
 }
 

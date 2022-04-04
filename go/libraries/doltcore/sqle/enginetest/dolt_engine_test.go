@@ -39,16 +39,13 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2
-				FROM two_pk a JOIN two_pk b
-				ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2
-				ORDER BY 1,2,3`,
+		Query: `select i from mytable where i = 1`,
 		Expected: []sql.Row{
-			{0, 0, 1, 1},
+			{1},
 		},
 	}
 
