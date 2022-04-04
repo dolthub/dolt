@@ -236,7 +236,7 @@ func mustForkDB(t *testing.T, fromDB *doltdb.DoltDB, bn string, cm *doltdb.Commi
 	err = forkEnv.InitRepo(context.Background(), types.Format_Default, "Bill Billerson", "bill@billerson.com", env.DefaultInitBranch)
 	require.NoError(t, err)
 	p1 := make(chan pull.PullProgress)
-	p2 := make(chan pull.PullerEvent)
+	p2 := make(chan pull.Stats)
 	go func() {
 		for range p1 {
 		}
