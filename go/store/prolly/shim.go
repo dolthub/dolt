@@ -76,7 +76,7 @@ func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 }
 
 func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *treeChunker {
-	ch, err := newEmptyTreeChunker(ctx, m.ns, newDefaultNodeSplitter)
+	ch, err := newEmptyTreeChunker(ctx, m.ns, defaultSplitterFactory)
 	if err != nil {
 		panic(err)
 	}

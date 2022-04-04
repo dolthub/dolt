@@ -27,9 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-//  newSplitterFn makes a nodeSplitter.
-type newSplitterFn func(salt byte) nodeSplitter
-
 type treeChunker struct {
 	cur      *nodeCursor
 	parent   *treeChunker
@@ -40,16 +37,16 @@ type treeChunker struct {
 	done    bool
 
 	splitter nodeSplitter
-	newSplit newSplitterFn
+	factory  splitterFactory
 
 	ns NodeStore
 }
 
-func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
+func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit splitterFactory) (*treeChunker, error) {
 	return newTreeChunker(ctx, nil, 0, ns, newSplit)
 }
 
-func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
+func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStore, newSplit splitterFactory) (*treeChunker, error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -58,8 +55,8 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		parent:   nil,
 		level:    level,
 		builder:  newNodeBuilder(level),
-		newSplit: newSplit,
-		splitter: newSplit(byte(level % 256)),
+		splitter: newSplit(1, byte(level%256)),
+		factory:  newSplit,
 		ns:       ns,
 	}
 
@@ -336,7 +333,7 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = newTreeChunker(ctx, parent, tc.level+1, tc.ns, tc.newSplit)
+	tc.parent, err = newTreeChunker(ctx, parent, tc.level+1, tc.ns, tc.factory)
 	if err != nil {
 		return err
 	}

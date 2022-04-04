@@ -38,7 +38,7 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		return m, err
 	}
 
-	chunker, err := newTreeChunker(ctx, cur.clone(), 0, m.ns, newDefaultNodeSplitter)
+	chunker, err := newTreeChunker(ctx, cur.clone(), 0, m.ns, defaultSplitterFactory)
 	if err != nil {
 		return m, err
 	}

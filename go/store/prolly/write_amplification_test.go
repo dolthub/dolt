@@ -32,32 +32,34 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// mutation is a single point edit
 type mutation struct {
 	key, value val.Tuple
 }
 
-type leafMutation interface {
-	makeMutation(ctx context.Context, leaf Node) (mutation, error)
+// mutationProvider creates a set of mutations from a given leaf node.
+type mutationProvider interface {
+	makeMutations(ctx context.Context, leaf Node) ([]mutation, error)
 }
 
 type deleteLastKey struct{}
 
-func (lk deleteLastKey) makeMutation(ctx context.Context, leaf Node) (mutation, error) {
+func (lk deleteLastKey) makeMutations(ctx context.Context, leaf Node) ([]mutation, error) {
 	c := int(leaf.count)
-	return mutation{
+	return []mutation{{
 		key:   val.Tuple(leaf.getKey(c - 1)),
 		value: nil,
-	}, nil
+	}}, nil
 }
 
-type deleteRandKey struct{}
+type deleteSingleKey struct{}
 
-func (rk deleteRandKey) makeMutation(ctx context.Context, leaf Node) (mutation, error) {
+func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf Node) ([]mutation, error) {
 	idx := testRand.Int() % int(leaf.count)
-	return mutation{
+	return []mutation{{
 		key:   val.Tuple(leaf.getKey(idx)),
 		value: nil,
-	}, nil
+	}}, nil
 }
 
 func TestWriteAmplification(t *testing.T) {
@@ -68,12 +70,12 @@ func TestWriteAmplification(t *testing.T) {
 			testWriteAmplification(t, before, deleteLastKey{})
 		})
 		t.Run("delete random key", func(t *testing.T) {
-			testWriteAmplification(t, before, deleteRandKey{})
+			testWriteAmplification(t, before, deleteSingleKey{})
 		})
 	})
 }
 
-func testWriteAmplification(t *testing.T, before Map, method leafMutation) {
+func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 	ctx := context.Background()
 	mutations := collectMutations(t, before, method)
 
@@ -96,13 +98,13 @@ func testWriteAmplification(t *testing.T, before Map, method leafMutation) {
 	fmt.Printf("node sizes  %s \n\n", sizes.summary())
 }
 
-func collectMutations(t *testing.T, before Map, method leafMutation) (muts []mutation) {
+func collectMutations(t *testing.T, before Map, method mutationProvider) (muts []mutation) {
 	ctx := context.Background()
 	err := before.WalkNodes(ctx, func(ctx context.Context, nd Node) error {
 		if nd.leafNode() {
-			mut, err := method.makeMutation(ctx, nd)
+			mm, err := method.makeMutations(ctx, nd)
 			require.NoError(t, err)
-			muts = append(muts, mut)
+			muts = append(muts, mm...)
 		}
 		return nil
 	})

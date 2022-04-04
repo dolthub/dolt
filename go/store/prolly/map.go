@@ -46,7 +46,7 @@ func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	m := NewMap(Node{}, ns, keyDesc, valDesc)
 
-	ch, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	ch, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	if err != nil {
 		return Map{}, err
 	}

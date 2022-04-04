@@ -57,10 +57,10 @@ type nodeSplitter interface {
 	Reset()
 }
 
-func newDefaultNodeSplitter(salt byte) nodeSplitter {
-	//return newSmoothRollingHasher(salt)
-	return newKeySplitter(24, salt)
-}
+//  splitterFactory makes a nodeSplitter.
+type splitterFactory func(itemSize uint32, salt byte) nodeSplitter
+
+var defaultSplitterFactory splitterFactory = newSmoothRollingHasher
 
 // dynamicNodeSplitter is a nodeSplitter designed to constrain the chunk size
 // distribution by reducing the likelihood of forming very large or very small chunks.
@@ -78,13 +78,15 @@ type dynamicNodeSplitter struct {
 
 var _ nodeSplitter = &dynamicNodeSplitter{}
 
-func newSmoothRollingHasher(salt byte) *dynamicNodeSplitter {
+func newSmoothRollingHasher(_ uint32, salt byte) nodeSplitter {
 	return &dynamicNodeSplitter{
 		bz:     buzhash.NewBuzHash(chunkWindow),
 		window: chunkWindow,
 		salt:   salt,
 	}
 }
+
+var _ splitterFactory = newSmoothRollingHasher
 
 // Append implements NodeSplitter
 func (sns *dynamicNodeSplitter) Append(items ...nodeItem) (err error) {
@@ -147,16 +149,18 @@ type keySplitter struct {
 	salt     uint32
 }
 
-func newKeySplitter(rowSize uint32, level uint8) *keySplitter {
+func newKeySplitter(rowSize uint32, salt byte) nodeSplitter {
 	return &keySplitter{
 		// todo(andy) roundLog2 creates discontinuities
 		min:  minChunkSize / rowSize,
 		max:  maxChunkSize / rowSize,
 		hi:   uint32(16 - roundLog2(rowSize)),
 		lo:   uint32(10 - roundLog2(rowSize)),
-		salt: xxHash32([]byte{level}),
+		salt: xxHash32([]byte{salt}),
 	}
 }
+
+var _ splitterFactory = newKeySplitter
 
 func (ks *keySplitter) Append(items ...nodeItem) error {
 	if len(items) != 2 {
