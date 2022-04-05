@@ -390,15 +390,18 @@ func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
 	return binary.BigEndian.Uint64(h)
 }
 
-func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
+func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
+	// Convert to string
+	shortHash := string(short)
+
 	// Calculate length
-	sLen := len(short)
+	sLen := len(shortHash)
 
 	// Find lower and upper bounds of prefix indexes to check
 	var pIdxL, pIdxU uint32
 	if sLen >= 13 {
 		// Convert short string to prefix
-		sPrefix := ti.padStringAndDecode(short, "0")
+		sPrefix := ti.padStringAndDecode(shortHash, "0")
 
 		// Binary Search for prefix
 		pIdxL = ti.prefixIdx(sPrefix)
@@ -415,8 +418,8 @@ func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
 		}
 	} else {
 		// Convert short string to lower and upper bounds
-		sPrefixL := ti.padStringAndDecode(short, "0")
-		sPrefixU := ti.padStringAndDecode(short, "v")
+		sPrefixL := ti.padStringAndDecode(shortHash, "0")
+		sPrefixU := ti.padStringAndDecode(shortHash, "v")
 
 		// Binary search for lower and upper bounds
 		pIdxL = ti.prefixIdxLBound(sPrefixL)
@@ -433,7 +436,7 @@ func (ti onHeapTableIndex) ResolveShortHash(short string) ([]string, error) {
 		hashStr := h.String()
 
 		// If it matches append to result
-		if hashStr[:sLen] == short {
+		if hashStr[:sLen] == shortHash {
 			res = append(res, hashStr)
 		}
 	}
