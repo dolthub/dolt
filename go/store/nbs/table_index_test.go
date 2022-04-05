@@ -113,7 +113,7 @@ func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
 	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
-	res, err := idx.ResolveShortHash("0")
+	res, err := idx.ResolveShortHash([]byte("0"))
 	require.NoError(t, err)
 	t.Log("matched: ", len(res))
 	for _, h := range res {
@@ -143,7 +143,7 @@ func TestResolveOneHash(t *testing.T) {
 	for _, h := range hashes {
 		// try every length
 		for i := 0; i < 32; i++ {
-			res, err := tIdx.ResolveShortHash(h[:i])
+			res, err := tIdx.ResolveShortHash([]byte(h[:i]))
 			require.NoError(t, err)
 			assert.Equal(t, 1, len(res))
 		}
@@ -174,7 +174,7 @@ func TestResolveFewHash(t *testing.T) {
 	for _, h := range hashes {
 		// try every length
 		for i := 0; i < 32; i++ {
-			res, err := tIdx.ResolveShortHash(h[:i])
+			res, err := tIdx.ResolveShortHash([]byte(h[:i]))
 			require.NoError(t, err)
 			t.Log("asserting length: ", i)
 			assert.Less(t, 0, len(res))
@@ -217,7 +217,7 @@ func TestAmbiguousShortHash(t *testing.T) {
 	for _, test := range tests {
 		name := fmt.Sprintf("Expect %d results for prefix %s", test.sz, test.pre)
 		t.Run(name, func(t *testing.T) {
-			res, err := idx.ResolveShortHash(test.pre)
+			res, err := idx.ResolveShortHash([]byte(test.pre))
 			require.NoError(t, err)
 			assert.Len(t, res, test.sz)
 		})
