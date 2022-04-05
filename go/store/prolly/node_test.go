@@ -140,6 +140,7 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
+// Map<Tuple<Uint32>,Tuple<Uint32>>
 func ascendingIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc) {
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc)
@@ -147,6 +148,21 @@ func ascendingIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc
 	tups := make([]val.Tuple, count*2)
 	for i := range tups {
 		bld.PutUint32(0, uint32(i))
+		tups[i] = bld.Build(sharedPool)
+	}
+	keys, values = tups[:count], tups[count:]
+	return
+}
+
+// Map<Tuple<Uint32,Uint32>,Tuple<Uint32,Uint32>>
+func ascendingCompositeIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc}, val.Type{Enc: val.Uint32Enc})
+	bld := val.NewTupleBuilder(desc)
+
+	tups := make([]val.Tuple, count*2)
+	for i := range tups {
+		bld.PutUint32(0, uint32(i))
+		bld.PutUint32(1, uint32(i))
 		tups[i] = bld.Build(sharedPool)
 	}
 	keys, values = tups[:count], tups[count:]

@@ -71,7 +71,7 @@ func TestWriteAmplification(t *testing.T) {
 }
 
 func TestNodeSplitterMetrics(t *testing.T) {
-	const scale = 1_000_000
+	const scale = 100_000
 	t.Run("Key Splitter", func(t *testing.T) {
 		defaultSplitterFactory = newKeySplitter
 		t.Run("Random Uints", func(t *testing.T) {
@@ -80,7 +80,7 @@ func TestNodeSplitterMetrics(t *testing.T) {
 			printTreeSummary(t, before)
 		})
 		t.Run("Ascending Uints", func(t *testing.T) {
-			keys, values, desc := ascendingIntTuples(scale)
+			keys, values, desc := ascendingCompositeIntTuples(scale)
 			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 			printTreeSummary(t, before)
 		})
@@ -93,7 +93,7 @@ func TestNodeSplitterMetrics(t *testing.T) {
 			printTreeSummary(t, before)
 		})
 		t.Run("Ascending Uints", func(t *testing.T) {
-			keys, values, desc := ascendingIntTuples(scale)
+			keys, values, desc := ascendingCompositeIntTuples(scale)
 			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 			printTreeSummary(t, before)
 		})
@@ -101,7 +101,7 @@ func TestNodeSplitterMetrics(t *testing.T) {
 }
 
 func testWriteAmpWithSplitter(t *testing.T, factory splitterFactory) {
-	const scale = 1_000_000
+	const scale = 100_000
 	defaultSplitterFactory = factory
 
 	t.Run("Random Uint Map", func(t *testing.T) {
@@ -115,7 +115,7 @@ func testWriteAmpWithSplitter(t *testing.T, factory splitterFactory) {
 		})
 	})
 	t.Run("Ascending Uint Map", func(t *testing.T) {
-		keys, values, desc := ascendingIntTuples(scale)
+		keys, values, desc := ascendingCompositeIntTuples(scale)
 		before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 		t.Run("delete random key", func(t *testing.T) {
 			testWriteAmplification(t, before, deleteSingleKey{})

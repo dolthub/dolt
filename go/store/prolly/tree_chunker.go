@@ -55,7 +55,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		parent:   nil,
 		level:    level,
 		builder:  newNodeBuilder(level),
-		splitter: newSplit(1, byte(level%256)),
+		splitter: newSplit(1, uint8(level%256)),
 		factory:  newSplit,
 		ns:       ns,
 	}
@@ -444,10 +444,12 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 }
 
 func (tc *treeChunker) currentSubtreeSize() uint64 {
-	if tc.isLeaf() {
-		return 1
-	}
-	return tc.subtrees[tc.cur.idx]
+	// todo(andy) fix this
+	//if tc.isLeaf() {
+	//	return 1
+	//}
+	//return tc.subtrees[tc.cur.idx]
+	return 1
 }
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.

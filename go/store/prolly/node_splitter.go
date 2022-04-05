@@ -41,24 +41,23 @@ const (
 	maxChunkSize = 1 << 14
 )
 
-// nodeSplitter decides where sequences should be split into chunks.
+// nodeSplitter decides where nodeItem streams should be split into chunks.
 type nodeSplitter interface {
-	// Append provides more sequenceItems to the splitter. Callers pass a callback
-	// function that uses |bw| to serialize sequenceItems. Splitter's make chunk
-	// boundary decisions based on the contents of the byte buffer |bw.buff|. Upon
-	// return, callers can use |CrossedBoundary| to see if a chunk boundary has crossed.
+	// Append provides more nodeItems to the splitter. Splitter's make chunk
+	// boundary decisions based on the nodeItem contents. Upon return, callers
+	// can use CrossedBoundary() to see if a chunk boundary has crossed.
 	Append(items ...nodeItem) error
 
-	// CrossedBoundary returns true if the provided sequenceItems have caused a chunk
+	// CrossedBoundary returns true if the provided nodeItems have caused a chunk
 	// boundary to be crossed.
 	CrossedBoundary() bool
 
-	// Reset clears the currentPair byte buffer and resets the state of the splitter.
+	// Reset resets the state of the splitter.
 	Reset()
 }
 
 //  splitterFactory makes a nodeSplitter.
-type splitterFactory func(itemSize uint32, salt byte) nodeSplitter
+type splitterFactory func(itemSize uint32, level uint8) nodeSplitter
 
 var defaultSplitterFactory splitterFactory = newSmoothRollingHasher
 
@@ -78,11 +77,11 @@ type dynamicNodeSplitter struct {
 
 var _ nodeSplitter = &dynamicNodeSplitter{}
 
-func newSmoothRollingHasher(_ uint32, salt byte) nodeSplitter {
+func newSmoothRollingHasher(_ uint32, salt uint8) nodeSplitter {
 	return &dynamicNodeSplitter{
 		bz:     buzhash.NewBuzHash(chunkWindow),
 		window: chunkWindow,
-		salt:   salt,
+		salt:   byte(salt),
 	}
 }
 
@@ -146,21 +145,19 @@ type keySplitter struct {
 	// the following are const
 	min, max uint32
 	hi, lo   uint32
-
-	// todo(andy)
-	//salt     uint32
+	salt     uint32
 }
 
-func newKeySplitter(rowSize uint32, salt byte) nodeSplitter {
+func newKeySplitter(rowSize uint32, level uint8) nodeSplitter {
 	// todo(andy): thread this param
 	rowSize = 24
 	return &keySplitter{
 		// todo(andy) roundLog2 creates discontinuities
-		min: minChunkSize / rowSize,
-		max: maxChunkSize / rowSize,
-		hi:  uint32(16 - roundLog2(rowSize)),
-		lo:  uint32(10 - roundLog2(rowSize)),
-		//salt: xxHash32([]byte{salt}),
+		min:  minChunkSize / rowSize,
+		max:  maxChunkSize / rowSize,
+		hi:   uint32(16 - roundLog2(rowSize)),
+		lo:   uint32(10 - roundLog2(rowSize)),
+		salt: xxHash32([]byte{level}, 0),
 	}
 }
 
@@ -181,7 +178,7 @@ func (ks *keySplitter) Append(items ...nodeItem) error {
 	}
 
 	p := ks.patternFromCount(ks.count)
-	h := xxHash32(items[0])
+	h := xxHash32(items[0], ks.salt)
 	ks.crossedBoundary = h&p == p
 	return nil
 }
@@ -206,6 +203,6 @@ func roundLog2(sz uint32) int {
 	return int(math.Round(lg2))
 }
 
-func xxHash32(b []byte) uint32 {
-	return uint32(xxh3.Hash(b))
+func xxHash32(b []byte, salt uint32) uint32 {
+	return uint32(xxh3.Hash(b)) ^ salt
 }
