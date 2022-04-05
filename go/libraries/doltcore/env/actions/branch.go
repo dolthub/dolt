@@ -347,7 +347,7 @@ func BranchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
-	branchRoot, err := cm.GetRootValue()
+	branchRoot, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}

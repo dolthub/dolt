@@ -62,13 +62,12 @@ func Push(ctx context.Context, tempTableDir string, mode ref.UpdateMode, destRef
 		}
 	}
 
-	rf, err := commit.GetStRef()
-
+	h, err := commit.HashOf()
 	if err != nil {
 		return err
 	}
 
-	err = destDB.PullChunks(ctx, tempTableDir, srcDB, rf.TargetHash(), progChan, statsCh)
+	err = destDB.PullChunks(ctx, tempTableDir, srcDB, h, progChan, statsCh)
 
 	if err != nil {
 		return err
@@ -251,13 +250,12 @@ func DeleteRemoteBranch(ctx context.Context, targetRef ref.BranchRef, remoteRef 
 
 // FetchCommit takes a fetches a commit and all underlying data from a remote source database to the local destination database.
 func FetchCommit(ctx context.Context, tempTablesDir string, srcDB, destDB *doltdb.DoltDB, srcDBCommit *doltdb.Commit, progChan chan pull.PullProgress, statsCh chan pull.Stats) error {
-	stRef, err := srcDBCommit.GetStRef()
-
+	h, err := srcDBCommit.HashOf()
 	if err != nil {
 		return err
 	}
 
-	return destDB.PullChunks(ctx, tempTablesDir, srcDB, stRef.TargetHash(), progChan, statsCh)
+	return destDB.PullChunks(ctx, tempTablesDir, srcDB, h, progChan, statsCh)
 }
 
 // FetchTag takes a fetches a commit tag and all underlying data from a remote source database to the local destination database.

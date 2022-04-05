@@ -581,7 +581,7 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	require.NoError(t, err)
 
 	root = UpdateTables(t, ctx, root, node.Updates)

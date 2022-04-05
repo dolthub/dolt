@@ -46,10 +46,10 @@ func Summary(ctx context.Context, vr1 types.ValueReader, vr2 types.ValueReader, 
 			fmt.Println("Comparing commit values")
 
 			var err error
-			value1, err = datas.GetCommitValue(ctx, vr1, value1)
+			value1, err = datas.GetCommittedValue(ctx, vr1, value1)
 			d.PanicIfError(err)
 
-			value2, err = datas.GetCommitValue(ctx, vr2, value2)
+			value2, err = datas.GetCommittedValue(ctx, vr2, value2)
 			d.PanicIfError(err)
 		}
 	}

@@ -59,7 +59,7 @@ func (v Float) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
-func (v Float) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Float) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

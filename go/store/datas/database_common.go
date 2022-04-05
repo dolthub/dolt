@@ -490,11 +490,19 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return err
 	} else if ok {
 		currentHeadAddr = ref.TargetHash()
-		ancestorRef, found, err := FindCommonAncestor(ctx, ref, newRef, db, db)
+		currCommit, err := LoadCommitRef(ctx, db, ref)
 		if err != nil {
 			return err
 		}
-		if !found || mergeNeeded(currentHeadAddr, ancestorRef.TargetHash()) {
+		newCommit, err := LoadCommitRef(ctx, db, newRef)
+		if err != nil {
+			return err
+		}
+		ancestorHash, found, err := FindCommonAncestor(ctx, currCommit, newCommit, db, db)
+		if err != nil {
+			return err
+		}
+		if !found || mergeNeeded(currentHeadAddr, ancestorHash) {
 			return ErrMergeNeeded
 		}
 	}
@@ -508,12 +516,12 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 
 func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (Dataset, error) {
 	currentAddr, _ := ds.MaybeHeadAddr()
-	st, err := buildNewCommit(ctx, ds, v, opts)
+	commit, err := buildNewCommit(ctx, ds, v, opts)
 	if err != nil {
 		return Dataset{}, err
 	}
 
-	commitRef, err := db.WriteValue(ctx, st)
+	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -689,7 +697,7 @@ func (db *database) CommitWithWorkingSet(
 		return Dataset{}, Dataset{}, err
 	}
 
-	commitRef, err := db.WriteValue(ctx, commit)
+	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
 	if err != nil {
 		return Dataset{}, Dataset{}, err
 	}
@@ -903,7 +911,7 @@ func (db *database) validateRefAsCommit(ctx context.Context, r types.Ref) (types
 	return v.(types.Struct), nil
 }
 
-func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (types.Value, error) {
+func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		headAddr, ok := ds.MaybeHeadAddr()
 		if ok {
@@ -920,7 +928,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 				}
 			}
 			if !found {
-				return types.Struct{}, ErrMergeNeeded
+				return nil, ErrMergeNeeded
 			}
 		}
 	}

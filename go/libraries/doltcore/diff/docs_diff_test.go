@@ -37,7 +37,7 @@ func TestDocDiff(t *testing.T) {
 	cs, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	cm, _ := ddb.Resolve(ctx, cs, nil)
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	assert.NoError(t, err)
 
 	docs := doltdocs.Docs{

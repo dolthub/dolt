@@ -810,17 +810,17 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 		return nil, nil, err
 	}
 
-	ourRoot, err := commit.GetRootValue()
+	ourRoot, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	theirRoot, err := mergeCommit.GetRootValue()
+	theirRoot, err := mergeCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancRoot, err := ancCommit.GetRootValue()
+	ancRoot, err := ancCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1013,7 +1013,7 @@ func GetDocsInConflict(ctx context.Context, workingRoot *doltdb.RootValue, docs 
 }
 
 func MergeWouldStompChanges(ctx context.Context, roots doltdb.Roots, mergeCommit *doltdb.Commit) ([]string, map[string]hash.Hash, error) {
-	mergeRoot, err := mergeCommit.GetRootValue()
+	mergeRoot, err := mergeCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, nil, err
 	}

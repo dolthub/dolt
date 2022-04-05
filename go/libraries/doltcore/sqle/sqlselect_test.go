@@ -87,7 +87,7 @@ func LoadedLocalLocation() *time.Location {
 func BasicSelectTests() []SelectTest {
 	headCommitHash := "so275enkvulb96mkckbun1kjo9seg7c9"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "dv6aeqnsqqvb0bsl0eae1m2dgvpq20rs"
+		headCommitHash = "pi04gco3l5jb373lhohv1ggoif4o7d8p"
 	}
 	return []SelectTest{
 		{
@@ -1623,7 +1623,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	require.NoError(t, err)
 
 	err = dEnv.UpdateStagedRoot(ctx, root)
