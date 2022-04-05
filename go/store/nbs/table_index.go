@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/mmap-go"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 var (
@@ -316,6 +317,131 @@ func (ti onHeapTableIndex) Prefixes() ([]uint64, error) {
 		p[i] = binary.BigEndian.Uint64(b)
 	}
 	return p, nil
+}
+
+func (ti onHeapTableIndex) hashAt(idx uint32) hash.Hash {
+	// Get tuple
+	off := int64(prefixTupleSize * idx)
+	tuple := ti.tupleB[off : off+prefixTupleSize]
+
+	// Get prefix, ordinal, and suffix
+	prefix := tuple[:addrPrefixSize]
+	ord := binary.BigEndian.Uint32(tuple[addrPrefixSize:]) * addrSuffixSize
+	suffix := ti.suffixB[ord : ord+addrSuffixSize] // suffix is 12 bytes
+
+	// Combine prefix and suffix to get hash
+	buf := [hash.ByteLen]byte{}
+	copy(buf[:addrPrefixSize], prefix)
+	copy(buf[addrPrefixSize:], suffix)
+
+	return buf
+}
+
+// prefixIdxLBound returns the first position in |tr.prefixes| whose value is <= |prefix|.
+// will return index less than where prefix would be if prefix is not found.
+func (ti onHeapTableIndex) prefixIdxLBound(prefix uint64) uint32 {
+	l, r := uint32(0), ti.chunkCount
+	for l < r {
+		m := l + (r-l)/2 // find middle, rounding down
+		if ti.prefixAt(m) < prefix {
+			l = m + 1
+		} else {
+			r = m
+		}
+	}
+
+	return l
+}
+
+// prefixIdxLBound returns the first position in |tr.prefixes| whose value is >= |prefix|.
+// will return index greater than where prefix would be if prefix is not found.
+func (ti onHeapTableIndex) prefixIdxUBound(prefix uint64) (idx uint32) {
+	l, r := uint32(0), ti.chunkCount
+	for l < r {
+		m := l + (r-l+1)/2      // find middle, rounding up
+		if m >= ti.chunkCount { // prevent index out of bounds
+			return r
+		}
+		pre := ti.prefixAt(m)
+		if pre <= prefix {
+			l = m
+		} else {
+			r = m - 1
+		}
+	}
+
+	return l
+}
+
+func (ti onHeapTableIndex) padStringAndDecode(s string, p string) uint64 {
+	// Pad string
+	if p == "0" {
+		for i := len(s); i < 16; i++ {
+			s = s + p
+		}
+	} else {
+		for i := len(s); i < 16; i++ {
+			s = p + s
+		}
+	}
+
+	// Decode
+	h, _ := encoding.DecodeString(s)
+	return binary.BigEndian.Uint64(h)
+}
+
+func (ti onHeapTableIndex) ResolveShortHash(short []byte) ([]string, error) {
+	// Convert to string
+	shortHash := string(short)
+
+	// Calculate length
+	sLen := len(shortHash)
+
+	// Find lower and upper bounds of prefix indexes to check
+	var pIdxL, pIdxU uint32
+	if sLen >= 13 {
+		// Convert short string to prefix
+		sPrefix := ti.padStringAndDecode(shortHash, "0")
+
+		// Binary Search for prefix
+		pIdxL = ti.prefixIdx(sPrefix)
+
+		// Prefix doesn't exist
+		if pIdxL == ti.chunkCount {
+			return []string{}, errors.New("can't find prefix")
+		}
+
+		// Find last equal
+		pIdxU = pIdxL + 1
+		for sPrefix == ti.prefixAt(pIdxU) {
+			pIdxU++
+		}
+	} else {
+		// Convert short string to lower and upper bounds
+		sPrefixL := ti.padStringAndDecode(shortHash, "0")
+		sPrefixU := ti.padStringAndDecode(shortHash, "v")
+
+		// Binary search for lower and upper bounds
+		pIdxL = ti.prefixIdxLBound(sPrefixL)
+		pIdxU = ti.prefixIdxUBound(sPrefixU)
+	}
+
+	// Go through all equal prefixes
+	var res []string
+	for i := pIdxL; i < pIdxU; i++ {
+		// Get full hash at index
+		h := ti.hashAt(i)
+
+		// Convert to string representation
+		hashStr := h.String()
+
+		// If it matches append to result
+		if hashStr[:sLen] == shortHash {
+			res = append(res, hashStr)
+		}
+	}
+
+	return res, nil
 }
 
 // TableFileSize returns the size of the table file that this index references.

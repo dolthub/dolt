@@ -15,6 +15,7 @@
 package nbs
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"testing"
@@ -101,4 +102,168 @@ func TestMMapIndex(t *testing.T) {
 	assert.Equal(t, p1, p2)
 	assert.Equal(t, idx.TableFileSize(), mmidx.TableFileSize())
 	assert.Equal(t, idx.TotalUncompressedData(), mmidx.TotalUncompressedData())
+}
+
+func TestOnHeapTableIndex_ResolveShortHash(t *testing.T) {
+	f, err := os.Open("testdata/0oa7mch34jg1rvghrnhr4shrp2fm4ftd.idx")
+	require.NoError(t, err)
+	defer f.Close()
+	bs, err := io.ReadAll(f)
+	require.NoError(t, err)
+	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
+	require.NoError(t, err)
+	defer idx.Close()
+	res, err := idx.ResolveShortHash([]byte("0"))
+	require.NoError(t, err)
+	t.Log("matched: ", len(res))
+	for _, h := range res {
+		t.Log("\t", h)
+	}
+}
+
+func TestResolveOneHash(t *testing.T) {
+	// create chunks
+	chunks := [][]byte{
+		[]byte("chunk1"),
+	}
+
+	// build table index
+	td, _, err := buildTable(chunks)
+	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	require.NoError(t, err)
+
+	// get hashes out
+	hashes := make([]string, len(chunks))
+	for i, c := range chunks {
+		hashes[i] = computeAddr(c).String()
+		t.Log(hashes[i])
+	}
+
+	// resolve them
+	for _, h := range hashes {
+		// try every length
+		for i := 0; i < 32; i++ {
+			res, err := tIdx.ResolveShortHash([]byte(h[:i]))
+			require.NoError(t, err)
+			assert.Equal(t, 1, len(res))
+		}
+	}
+}
+
+func TestResolveFewHash(t *testing.T) {
+	// create chunks
+	chunks := [][]byte{
+		[]byte("chunk1"),
+		[]byte("chunk2"),
+		[]byte("chunk3"),
+	}
+
+	// build table index
+	td, _, err := buildTable(chunks)
+	tIdx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	require.NoError(t, err)
+
+	// get hashes out
+	hashes := make([]string, len(chunks))
+	for i, c := range chunks {
+		hashes[i] = computeAddr(c).String()
+		t.Log(hashes[i])
+	}
+
+	// resolve them
+	for _, h := range hashes {
+		// try every length
+		for i := 0; i < 32; i++ {
+			res, err := tIdx.ResolveShortHash([]byte(h[:i]))
+			require.NoError(t, err)
+			t.Log("asserting length: ", i)
+			assert.Less(t, 0, len(res))
+		}
+	}
+}
+
+func TestAmbiguousShortHash(t *testing.T) {
+	// create chunks
+	chunks := []fakeChunk{
+		{address: addrFromPrefix("abcdef"), data: fakeData},
+		{address: addrFromPrefix("abctuv"), data: fakeData},
+		{address: addrFromPrefix("abcd123"), data: fakeData},
+	}
+
+	// build table index
+	td, _, err := buildFakeChunkTable(chunks)
+	idx, err := parseTableIndexByCopy(td, &noopQuotaProvider{})
+	require.NoError(t, err)
+
+	tests := []struct {
+		pre string
+		sz  int
+	}{
+		{pre: "", sz: 3},
+		{pre: "a", sz: 3},
+		{pre: "b", sz: 0},
+		{pre: "v", sz: 0},
+		{pre: "ab", sz: 3},
+		{pre: "abc", sz: 3},
+		{pre: "abcd", sz: 2},
+		{pre: "abct", sz: 1},
+		{pre: "abcde", sz: 1},
+		{pre: "abcd1", sz: 1},
+		{pre: "abcdef", sz: 1},
+		{pre: "abctuv", sz: 1},
+		{pre: "abcd123", sz: 1},
+	}
+
+	for _, test := range tests {
+		name := fmt.Sprintf("Expect %d results for prefix %s", test.sz, test.pre)
+		t.Run(name, func(t *testing.T) {
+			res, err := idx.ResolveShortHash([]byte(test.pre))
+			require.NoError(t, err)
+			assert.Len(t, res, test.sz)
+		})
+	}
+}
+
+// fakeChunk is chunk with a faked address
+type fakeChunk struct {
+	address addr
+	data    []byte
+}
+
+var fakeData = []byte("supercalifragilisticexpialidocious")
+
+func addrFromPrefix(prefix string) (a addr) {
+	// create a full length addr from a prefix
+	for i := 0; i < addrSize; i++ {
+		prefix += "0"
+	}
+
+	// base32 decode string
+	h, _ := encoding.DecodeString(prefix)
+	copy(a[:], h)
+	return
+}
+
+func buildFakeChunkTable(chunks []fakeChunk) ([]byte, addr, error) {
+	totalData := uint64(0)
+	for _, chunk := range chunks {
+		totalData += uint64(len(chunk.data))
+	}
+	capacity := maxTableSize(uint64(len(chunks)), totalData)
+
+	buff := make([]byte, capacity)
+
+	tw := newTableWriter(buff, nil)
+
+	for _, chunk := range chunks {
+		tw.addChunk(chunk.address, chunk.data)
+	}
+
+	length, blockHash, err := tw.finish()
+
+	if err != nil {
+		return nil, addr{}, err
+	}
+
+	return buff[:length], blockHash, nil
 }
