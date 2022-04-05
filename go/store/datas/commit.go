@@ -149,7 +149,6 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	start = stop - hashessz
 	parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
 
-	// Starts at SerialMessageRefHeight.
 	maxheight := uint64(0)
 	for _, h := range heights {
 		if h > maxheight {
