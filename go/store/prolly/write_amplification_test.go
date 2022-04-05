@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"math"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,27 +62,66 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf Node) ([]mutat
 }
 
 func TestWriteAmplification(t *testing.T) {
-	const scale = 100_000
+	t.Run("Key Splitter", func(t *testing.T) {
+		testWriteAmpWithSplitter(t, newKeySplitter)
+	})
+	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
+		testWriteAmpWithSplitter(t, newSmoothRollingHasher)
+	})
+}
 
-	t.Run("Random Uint Map<(uint),(uint,uint,uint)>", func(t *testing.T) {
-		pm, _ := makeProllyMap(t, scale)
-		before := pm.(Map)
-		t.Run("delete last key", func(t *testing.T) {
-			testWriteAmplification(t, before, deleteLastKey{})
+func TestNodeSplitterMetrics(t *testing.T) {
+	const scale = 1_000_000
+	t.Run("Key Splitter", func(t *testing.T) {
+		defaultSplitterFactory = newKeySplitter
+		t.Run("Random Uints", func(t *testing.T) {
+			pm, _ := makeProllyMap(t, scale)
+			before := pm.(Map)
+			printTreeSummary(t, before)
 		})
-		t.Run("delete random key", func(t *testing.T) {
-			testWriteAmplification(t, before, deleteSingleKey{})
+		t.Run("Ascending Uints", func(t *testing.T) {
+			keys, values, desc := ascendingIntTuples(scale)
+			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
+			printTreeSummary(t, before)
 		})
 	})
+	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
+		defaultSplitterFactory = newSmoothRollingHasher
+		t.Run("Random Uints", func(t *testing.T) {
+			pm, _ := makeProllyMap(t, scale)
+			before := pm.(Map)
+			printTreeSummary(t, before)
+		})
+		t.Run("Ascending Uints", func(t *testing.T) {
+			keys, values, desc := ascendingIntTuples(scale)
+			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
+			printTreeSummary(t, before)
+		})
+	})
+}
 
-	t.Run("Ascending Uint Map<(uint),(uint,uint,uint)>", func(t *testing.T) {
-		keys, values, desc := ascendingIntTuples(scale)
-		before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
+func testWriteAmpWithSplitter(t *testing.T, factory splitterFactory) {
+	const scale = 1_000_000
+	defaultSplitterFactory = factory
+
+	t.Run("Random Uint Map", func(t *testing.T) {
+		pm, _ := makeProllyMap(t, scale)
+		before := pm.(Map)
+		t.Run("delete random key", func(t *testing.T) {
+			testWriteAmplification(t, before, deleteSingleKey{})
+		})
 		t.Run("delete last key", func(t *testing.T) {
 			testWriteAmplification(t, before, deleteLastKey{})
 		})
+	})
+	t.Run("Ascending Uint Map", func(t *testing.T) {
+		keys, values, desc := ascendingIntTuples(scale)
+		before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
 		t.Run("delete random key", func(t *testing.T) {
 			testWriteAmplification(t, before, deleteSingleKey{})
+		})
+		t.Run("delete last key", func(t *testing.T) {
+			testWriteAmplification(t, before, deleteLastKey{})
 		})
 	})
 }
@@ -103,11 +141,6 @@ func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 		counts = append(counts, c)
 		sizes = append(sizes, s)
 	}
-	countSummary, cardSummary, sizeSummary := summarizeTree(t, before)
-	fmt.Println("pre-edit map summary: ")
-	fmt.Printf("\t node count \t %s \n", countSummary)
-	fmt.Printf("\t node card  \t %s \n", cardSummary)
-	fmt.Printf("\t node size  \t %s \n", sizeSummary)
 	fmt.Println("post-edit write amplification: ")
 	fmt.Printf("\t node counts %s \n", counts.summary())
 	fmt.Printf("\t node sizes  %s \n\n", sizes.summary())
@@ -155,7 +188,7 @@ func measureWriteAmplification(t *testing.T, before, after Map) (count, size int
 	return
 }
 
-func summarizeTree(t *testing.T, m Map) (string, string, string) {
+func printTreeSummary(t *testing.T, m Map) {
 	ctx := context.Background()
 
 	sizeByLevel := make([]samples, m.Height())
@@ -168,21 +201,16 @@ func summarizeTree(t *testing.T, m Map) (string, string, string) {
 	})
 	require.NoError(t, err)
 
-	var sizes, cards, counts strings.Builder
-	seenOne := false
+	fmt.Println("pre-edit map summary: ")
+	fmt.Println("| level | count | avg size \t  p50 \t  p90 \t p100 | avg card \t  p50 \t  p90 \t p100 |")
 	for i := m.root.level(); i >= 0; i-- {
-		if seenOne {
-			sizes.WriteString("\t")
-			cards.WriteString("\t")
-			counts.WriteString("\t")
-		}
-		seenOne = true
-		sz, card := sizeByLevel[i], cardByLevel[i]
-		counts.WriteString(fmt.Sprintf("level %d: %8d", i, int(len(card))))
-		cards.WriteString(fmt.Sprintf("level %d: %8.2f", i, card.mean()))
-		sizes.WriteString(fmt.Sprintf("level %d: %8.2f", i, sz.mean()))
+		sizes, cards := sizeByLevel[i], cardByLevel[i]
+		sp50, _, sp90, _, sp100 := sizes.percentiles()
+		cp50, _, cp90, _, cp100 := cards.percentiles()
+		fmt.Printf("| %5d | %5d | %8.2f \t %4d \t %4d \t %4d | %8.2f \t %4d \t %4d \t %4d |\n",
+			i, len(cards), sizes.mean(), sp50, sp90, sp100, cards.mean(), cp50, cp90, cp100)
 	}
-	return counts.String(), cards.String(), sizes.String()
+	fmt.Println()
 }
 
 type samples []int
@@ -212,12 +240,8 @@ func (s samples) stdDev() float64 {
 	return math.Sqrt(acc / s.count())
 }
 
-func (s samples) sort() {
-	sort.Ints(s)
-}
-
 func (s samples) percentiles() (p50, p90, p99, p999, p100 int) {
-	s.sort()
+	sort.Ints(s)
 	l := len(s)
 	p50 = s[l/2]
 	p90 = s[(l*9)/10]

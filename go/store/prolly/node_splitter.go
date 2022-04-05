@@ -146,17 +146,21 @@ type keySplitter struct {
 	// the following are const
 	min, max uint32
 	hi, lo   uint32
-	salt     uint32
+
+	// todo(andy)
+	//salt     uint32
 }
 
 func newKeySplitter(rowSize uint32, salt byte) nodeSplitter {
+	// todo(andy): thread this param
+	rowSize = 24
 	return &keySplitter{
 		// todo(andy) roundLog2 creates discontinuities
-		min:  minChunkSize / rowSize,
-		max:  maxChunkSize / rowSize,
-		hi:   uint32(16 - roundLog2(rowSize)),
-		lo:   uint32(10 - roundLog2(rowSize)),
-		salt: xxHash32([]byte{salt}),
+		min: minChunkSize / rowSize,
+		max: maxChunkSize / rowSize,
+		hi:  uint32(16 - roundLog2(rowSize)),
+		lo:  uint32(10 - roundLog2(rowSize)),
+		//salt: xxHash32([]byte{salt}),
 	}
 }
 
