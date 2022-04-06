@@ -174,6 +174,9 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 	if err != nil {
 		return nil, err
 	}
+	if partition.end > uint64(rows.Count()) {
+		partition.end = uint64(rows.Count())
+	}
 
 	iter, err := rows.IterOrdinalRange(ctx, partition.start, partition.end)
 	if err != nil {
@@ -195,6 +198,7 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 	if err != nil {
 		return nil, err
 	}
+
 	data, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err
