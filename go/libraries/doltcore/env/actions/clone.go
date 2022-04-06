@@ -213,7 +213,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	}
 
-	rootVal, err := cm.GetRootValue()
+	rootVal, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %s; %s", ErrFailedToGetRootValue, branch, err.Error())
 	}

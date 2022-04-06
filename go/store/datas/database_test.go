@@ -195,11 +195,6 @@ func (suite *DatabaseSuite) TestCommitProperlyTracksRoot() {
 }
 
 func (suite *DatabaseSuite) TestDatabaseCommit() {
-	baseHeight := 0
-	if types.Format_Default == types.Format_DOLT_DEV {
-		baseHeight = types.SerialMessageRefHeight
-	}
-
 	datasetID := "ds1"
 	datasets, err := suite.db.Datasets(context.Background())
 	suite.NoError(err)
@@ -223,7 +218,9 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	suite.NoError(err)
 	suite.True(ok)
 	suite.True(h.Equals(a))
-	suite.Equal(uint64(1+baseHeight), mustHeight(ds2))
+	comm, err := CommitFromValue(suite.db.Format(), mustHead(ds2))
+	suite.NoError(err)
+	suite.Equal(uint64(1), comm.Height())
 
 	ds = ds2
 	aCommitAddr := mustHeadAddr(ds) // to be used to test disallowing of non-fastforward commits below
@@ -233,7 +230,9 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, b)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(b))
-	suite.Equal(uint64(2+baseHeight), mustHeight(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
+	suite.NoError(err)
+	suite.Equal(uint64(2), comm.Height())
 
 	// |a| <- |b|
 	//   \----|c|
@@ -248,7 +247,9 @@ func (suite *DatabaseSuite) TestDatabaseCommit() {
 	ds, err = CommitValue(context.Background(), suite.db, ds, d)
 	suite.NoError(err)
 	suite.True(mustHeadValue(ds).Equals(d))
-	suite.Equal(uint64(3+baseHeight), mustHeight(ds))
+	comm, err = CommitFromValue(suite.db.Format(), mustHead(ds))
+	suite.NoError(err)
+	suite.Equal(uint64(3), comm.Height())
 
 	// Attempt to recommit |b| with |a| as parent.
 	// Should be disallowed.

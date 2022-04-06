@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -87,7 +88,7 @@ func LoadedLocalLocation() *time.Location {
 func BasicSelectTests() []SelectTest {
 	headCommitHash := "so275enkvulb96mkckbun1kjo9seg7c9"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "dv6aeqnsqqvb0bsl0eae1m2dgvpq20rs"
+		headCommitHash = "pi04gco3l5jb373lhohv1ggoif4o7d8p"
 	}
 	return []SelectTest{
 		{
@@ -1527,13 +1528,21 @@ var systemTableSelectTests = []SelectTest{
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
+				CreateTestJSON(),
 			)),
 		Query: "select * from dolt_schemas",
 		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
+			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
 		),
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
+}
+
+func CreateTestJSON() types.JSON {
+	vrw := types.NewMemoryValueStore()
+	extraJSON, _ := types.NewMap(nil, vrw, types.String("CreatedAt"), types.Float(1))
+	res, _ := types.NewJSONDoc(types.Format_Default, vrw, extraJSON)
+	return res
 }
 
 func TestSelectSystemTables(t *testing.T) {
@@ -1592,7 +1601,22 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, test.ExpectedRows, actualRows)
+	// JSON columns must be compared using like so
+	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
+	for i := 0; i < len(test.ExpectedRows); i++ {
+		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
+		for j := 0; j < len(test.ExpectedRows[i]); j++ {
+			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
+				cmp, err := actualRows[i][j].(json.NomsJSON).Compare(nil, test.ExpectedRows[i][j].(json.NomsJSON))
+				assert.NoError(t, err)
+				assert.Equal(t, 0, cmp)
+			} else {
+				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+			}
+
+		}
+	}
+
 	var sqlSchema sql.Schema
 	if test.ExpectedSqlSchema != nil {
 		sqlSchema = test.ExpectedSqlSchema
@@ -1623,7 +1647,7 @@ func testSelectDiffQuery(t *testing.T, test SelectTest) {
 	cm, err := dEnv.DoltDB.Resolve(ctx, cs, nil)
 	require.NoError(t, err)
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	require.NoError(t, err)
 
 	err = dEnv.UpdateStagedRoot(ctx, root)

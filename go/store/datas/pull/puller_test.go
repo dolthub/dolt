@@ -291,24 +291,15 @@ func TestPuller(t *testing.T) {
 
 	for k, rootAddr := range states {
 		t.Run(k, func(t *testing.T) {
-			eventCh := make(chan PullerEvent, 128)
+			statsCh := make(chan Stats, 16)
 			wg := new(sync.WaitGroup)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for evt := range eventCh {
-					var details interface{}
-					switch evt.EventType {
-					case NewLevelTWEvent, DestDBHasTWEvent, LevelUpdateTWEvent:
-						details = evt.TWEventDetails
-					default:
-						details = evt.TFEventDetails
-					}
-
-					jsonBytes, err := json.Marshal(details)
-
+				for evt := range statsCh {
+					jsonBytes, err := json.Marshal(evt)
 					if err == nil {
-						t.Logf("event_type: %d details: %s\n", evt.EventType, string(jsonBytes))
+						t.Logf("stats: %s\n", string(jsonBytes))
 					}
 				}
 			}()
@@ -319,13 +310,13 @@ func TestPuller(t *testing.T) {
 			tmpDir := filepath.Join(os.TempDir(), uuid.New().String())
 			err = os.MkdirAll(tmpDir, os.ModePerm)
 			require.NoError(t, err)
-			wrf, err := types.WalkRefsForChunkStore(datas.ChunkStoreFromDatabase(db))
+			waf, err := types.WalkAddrsForChunkStore(datas.ChunkStoreFromDatabase(db))
 			require.NoError(t, err)
-			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), wrf, rootAddr, eventCh)
+			plr, err := NewPuller(ctx, tmpDir, 128, datas.ChunkStoreFromDatabase(db), datas.ChunkStoreFromDatabase(sinkdb), waf, rootAddr, statsCh)
 			require.NoError(t, err)
 
 			err = plr.Pull(ctx)
-			close(eventCh)
+			close(statsCh)
 			require.NoError(t, err)
 			wg.Wait()
 

@@ -43,6 +43,9 @@ func TestNomsDiff(t *testing.T) {
 }
 
 func (s *nomsDiffTestSuite) TestNomsDiffOutputNotTruncated() {
+	if types.Format_Default == types.Format_DOLT_DEV {
+		s.T().Skip()
+	}
 	sp, err := spec.ForDataset(spec.CreateValueSpecString("nbs", s.DBDir, "diffTest"))
 	s.NoError(err)
 	defer sp.Close()

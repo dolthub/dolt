@@ -513,13 +513,23 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDescribeTableAsOf(t *testing.T) {
-	// These tests rely on altering schema, and the new storage format doesn't support that yet,
-	// so we need to skip them. Once the new storage format supports altering schema, we can move
-	// these ScriptTests back into the DoltScripts var so they get picked up by the TestDoltScripts
-	// method above and then remove this method.
+	// This test relies on altering schema in order to describe the table at different revisions
+	// and see changes. Until the new storage format supports altering schema, we need to skip them.
+	// Once the new storage format supports altering schema, we can move these ScriptTests back into
+	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
 	skipNewFormat(t)
 
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
+}
+
+func TestShowCreateTableAsOf(t *testing.T) {
+	// This test relies on altering schema in order to show the create table statement at different revisions
+	// and see changes. Until the new storage format supports altering schema, we need to skip them.
+	// Once the new storage format supports altering schema, we can move these ScriptTests back into
+	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
+	skipNewFormat(t)
+
+	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
 func TestDoltMerge(t *testing.T) {

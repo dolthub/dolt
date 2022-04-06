@@ -118,7 +118,7 @@ SQL
 @test "triggers: Writing directly into dolt_schemas" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
-    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', 2);"
+    dolt sql -q "INSERT INTO dolt_schemas VALUES ('trigger', 'trigger1', 'CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;', 2, json_object('CreatedAt', 1));"
     dolt sql -q "INSERT INTO test VALUES (1, 1);"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]

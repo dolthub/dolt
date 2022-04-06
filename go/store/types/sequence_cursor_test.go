@@ -124,7 +124,7 @@ func (ts testSequence) WalkValues(cb ValueCallback) error {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (ts testSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	panic("not reached")
 }
 

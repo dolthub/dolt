@@ -40,23 +40,23 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, com
 		if i > 0 {
 			revertMessage += " and"
 		}
-		baseRoot, err := baseCommit.GetRootValue()
+		baseRoot, err := baseCommit.GetRootValue(ctx)
 		if err != nil {
 			return nil, "", err
 		}
-		baseMeta, err := baseCommit.GetCommitMeta()
+		baseMeta, err := baseCommit.GetCommitMeta(ctx)
 		if err != nil {
 			return nil, "", err
 		}
 		revertMessage = fmt.Sprintf(`%s "%s"`, revertMessage, baseMeta.Description)
 
 		var theirRoot *doltdb.RootValue
-		if len(baseCommit.ParentRefs()) > 0 {
+		if len(baseCommit.DatasParents()) > 0 {
 			parentCM, err := ddb.ResolveParent(ctx, baseCommit, 0)
 			if err != nil {
 				return nil, "", err
 			}
-			theirRoot, err = parentCM.GetRootValue()
+			theirRoot, err = parentCM.GetRootValue(ctx)
 			if err != nil {
 				return nil, "", err
 			}

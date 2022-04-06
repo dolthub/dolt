@@ -253,13 +253,13 @@ func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.C
 			return false
 		}
 
-		metaI, sortErr = uniqueCommits[i].GetCommitMeta()
+		metaI, sortErr = uniqueCommits[i].GetCommitMeta(ctx)
 
 		if sortErr != nil {
 			return false
 		}
 
-		metaJ, sortErr = uniqueCommits[j].GetCommitMeta()
+		metaJ, sortErr = uniqueCommits[j].GetCommitMeta(ctx)
 
 		if sortErr != nil {
 			return false

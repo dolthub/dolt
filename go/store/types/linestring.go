@@ -114,7 +114,7 @@ func (v Linestring) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
-func (v Linestring) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Linestring) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

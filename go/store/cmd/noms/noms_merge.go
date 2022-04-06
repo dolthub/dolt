@@ -173,7 +173,7 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 		return nil, nil, nil, err
 	}
 
-	vfld, err := datas.GetCommitValue(ctx, vrw, ancestorCommit)
+	vfld, err := datas.GetCommittedValue(ctx, vrw, ancestorCommit)
 	d.PanicIfError(err)
 	d.PanicIfFalse(vfld != nil)
 	return leftHead, rightHead, vfld, nil
@@ -181,15 +181,19 @@ func getMergeCandidates(ctx context.Context, db datas.Database, vrw types.ValueR
 }
 
 func getCommonAncestor(ctx context.Context, r1, r2 types.Ref, vr types.ValueReader) (a types.Struct, found bool) {
-	aRef, found, err := datas.FindCommonAncestor(ctx, r1, r2, vr, vr)
+	c1, err := datas.LoadCommitRef(ctx, vr, r1)
+	d.PanicIfError(err)
+	c2, err := datas.LoadCommitRef(ctx, vr, r2)
+	d.PanicIfError(err)
+	aaddr, found, err := datas.FindCommonAncestor(ctx, c1, c2, vr, vr)
 	d.PanicIfError(err)
 	if !found {
 		return
 	}
-	v, err := vr.ReadValue(ctx, aRef.TargetHash())
+	v, err := vr.ReadValue(ctx, aaddr)
 	d.PanicIfError(err)
 	if v == nil {
-		panic(aRef.TargetHash().String() + " not found")
+		panic(aaddr.String() + " not found")
 	}
 
 	isCm, err := datas.IsCommit(v)

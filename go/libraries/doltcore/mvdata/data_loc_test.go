@@ -65,7 +65,7 @@ func createRootAndFS() (*doltdb.DoltDB, *doltdb.RootValue, filesys.Filesys) {
 
 	cs, _ := doltdb.NewCommitSpec("master")
 	commit, _ := ddb.Resolve(context.Background(), cs, nil)
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(context.Background())
 
 	if err != nil {
 		panic(err)

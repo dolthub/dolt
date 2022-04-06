@@ -77,7 +77,7 @@ func NewMemoryRepoState(ctx context.Context, ddb *doltdb.DoltDB, initBranch stri
 		return MemoryRepoState{}, err
 	}
 
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return MemoryRepoState{}, err
 	}

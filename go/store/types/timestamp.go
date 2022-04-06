@@ -60,7 +60,7 @@ func (v Timestamp) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
-func (v Timestamp) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Timestamp) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

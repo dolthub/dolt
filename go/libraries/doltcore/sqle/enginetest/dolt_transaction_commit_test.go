@@ -154,7 +154,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	require.NoError(t, err)
 	commit, err := db.Resolve(context.Background(), cs, headRefs[0])
 	require.NoError(t, err)
-	cm, err := commit.GetCommitMeta()
+	cm, err := commit.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm.Description, "Transaction commit")
 
@@ -162,7 +162,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	require.NoError(t, err)
 	initialCommit, err := commit.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	icm, err := initialCommit.GetCommitMeta()
+	icm, err := initialCommit.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "Initialize data repository", icm.Description)
 }
@@ -280,7 +280,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	commit2, err := db.Resolve(context.Background(), cs, headRefs[0])
 	require.NoError(t, err)
-	cm2, err := commit2.GetCommitMeta()
+	cm2, err := commit2.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm2.Description, "Transaction commit")
 
@@ -288,13 +288,13 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	commit1, err := commit2.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	cm1, err := commit1.GetCommitMeta()
+	cm1, err := commit1.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm1.Description, "Transaction commit")
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	cm0, err := commit0.GetCommitMeta()
+	cm0, err := commit0.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "Initialize data repository", cm0.Description)
 }
@@ -352,7 +352,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	commit3, err := db.Resolve(context.Background(), cs, headRefs[0])
 	require.NoError(t, err)
-	cm3, err := commit3.GetCommitMeta()
+	cm3, err := commit3.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm3.Description, "Transaction commit")
 
@@ -360,19 +360,19 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	commit2, err := commit3.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	cm2, err := commit2.GetCommitMeta()
+	cm2, err := commit2.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Contains(t, cm2.Description, "Transaction commit")
 
 	commit1, err := commit2.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	cm1, err := commit1.GetCommitMeta()
+	cm1, err := commit1.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "Transaction commit", cm1.Description)
 
 	commit0, err := commit1.GetAncestor(context.Background(), as)
 	require.NoError(t, err)
-	cm0, err := commit0.GetCommitMeta()
+	cm0, err := commit0.GetCommitMeta(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "Initialize data repository", cm0.Description)
 }

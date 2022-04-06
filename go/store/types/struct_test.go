@@ -30,7 +30,7 @@ import (
 )
 
 func getChunks(v Value) (chunks []Ref) {
-	_ = v.WalkRefs(Format_7_18, func(r Ref) error {
+	_ = v.walkRefs(Format_7_18, func(r Ref) error {
 		chunks = append(chunks, r)
 		return nil
 	})

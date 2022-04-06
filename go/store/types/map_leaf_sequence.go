@@ -164,7 +164,7 @@ func (ml mapLeafSequence) getTupleMapEntry(idx int) (tupleMapEntry, error) {
 	return readTupleMapEntry(&dec, ml.format())
 }
 
-func (ml mapLeafSequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (ml mapLeafSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	w := binaryNomsWriter{make([]byte, 4), 0}
 	err := ml.writeTo(&w, ml.format())
 
@@ -553,7 +553,7 @@ func (mes mapEntrySequence) typeOf() (*Type, error) {
 	panic("not implemented")
 }
 
-func (mes mapEntrySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (mes mapEntrySequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	panic("not implemented")
 }
 

@@ -58,6 +58,24 @@ const (
 	commitName          = "Commit"
 )
 
+type Commit struct {
+	val    types.Value
+	addr   hash.Hash
+	height uint64
+}
+
+func (c *Commit) NomsValue() types.Value {
+	return c.val
+}
+
+func (c *Commit) Height() uint64 {
+	return c.height
+}
+
+func (c *Commit) Addr() hash.Hash {
+	return c.addr
+}
+
 var commitTemplateWithParentsClosure = types.MakeStructTemplate(commitName, []string{
 	commitMetaField,
 	parentsField,
@@ -107,15 +125,15 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
+func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
-		return types.Struct{}, errors.New("cannot create commit without parents")
+		return nil, errors.New("cannot create commit without parents")
 	}
 
 	return newCommitForValue(ctx, vrw, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []byte {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([]byte, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
@@ -131,16 +149,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []
 	start = stop - hashessz
 	parentaddrsoff := builder.CreateByteVector(builder.Bytes[start:stop])
 
-	// Starts at SerialMessageRefHeight.
-	maxheight := uint64(types.SerialMessageRefHeight)
-	serial.CommitStartParentHeightsVector(builder, len(opts.Parents))
-	for i := len(opts.Parents) - 1; i >= 0; i-- {
-		builder.PrependUint64(heights[i])
-		if heights[i] > maxheight {
-			maxheight = heights[i]
+	maxheight := uint64(0)
+	for _, h := range heights {
+		if h > maxheight {
+			maxheight = h
 		}
 	}
-	parentheightsoff := builder.EndVector(len(opts.Parents))
 
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
@@ -149,17 +163,16 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) []
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
 	serial.CommitAddParentAddrs(builder, parentaddrsoff)
-	serial.CommitAddParentHeights(builder, parentheightsoff)
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
 	serial.CommitAddTimestampMillis(builder, opts.Meta.Timestamp)
 	serial.CommitAddUserTimestampMillis(builder, opts.Meta.UserTimestamp)
 	builder.FinishWithFileIdentifier(serial.CommitEnd(builder), []byte(serial.CommitFileID))
-	return builder.FinishedBytes()
+	return builder.FinishedBytes(), maxheight + 1
 }
 
-func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (types.Value, error) {
+func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
@@ -177,73 +190,147 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		for i := range heights {
 			heights[i] = serial.GetRootAsCommit([]byte(parents[i].(types.SerialMessage)), 0).Height()
 		}
-		return types.SerialMessage(commit_flatbuffer(r.TargetHash(), opts, heights)), nil
+		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights)
+		v := types.SerialMessage(bs)
+		addr, err := v.Hash(vrw.Format())
+		if err != nil {
+			return nil, err
+		}
+		return &Commit{v, addr, height}, nil
 	}
 
 	metaSt, err := opts.Meta.toNomsStruct(vrw.Format())
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
 	refs := make([]types.Value, len(opts.Parents))
 	for i, h := range opts.Parents {
 		commitSt, err := vrw.ReadValue(ctx, h)
 		if err != nil {
-			return types.Struct{}, err
+			return nil, err
 		}
 		if commitSt == nil {
 			panic("parent not found " + h.String())
 		}
 		ref, err := types.NewRef(commitSt, vrw.Format())
 		if err != nil {
-			return types.Struct{}, err
+			return nil, err
 		}
 		refs[i] = ref
 	}
 	parentsList, err := types.NewList(ctx, vrw, refs...)
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
 	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, parentsList)
 	if err != nil {
-		return types.Struct{}, err
+		return nil, err
 	}
 
-	return newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
+	cv, err := newCommit(ctx, v, parentsList, parentsClosure, includeParentsClosure, metaSt)
+	if err != nil {
+		return nil, err
+	}
+	r, err := types.NewRef(cv, vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	return &Commit{cv, r.TargetHash(), r.Height()}, nil
 }
 
-func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
-	c1Q, c2Q := RefByHeightHeap{c1}, RefByHeightHeap{c2}
+func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
+	if nbf == types.Format_DOLT_DEV {
+		bs := []byte(v.(types.SerialMessage))
+		height := serial.GetRootAsCommit(bs, 0).Height()
+		var addr hash.Hash
+		if r != nil {
+			addr = r.TargetHash()
+		} else {
+			var err error
+			addr, err = v.Hash(nbf)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &Commit{
+			val:    v,
+			height: height,
+			addr:   addr,
+		}, nil
+	}
+	if r == nil {
+		rv, err := types.NewRef(v, nbf)
+		if err != nil {
+			return nil, err
+		}
+		r = &rv
+	}
+	return &Commit{
+		val:    v,
+		height: r.Height(),
+		addr:   r.TargetHash(),
+	}, nil
+}
+
+func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+	return commitPtr(nbf, v, nil)
+}
+
+func LoadCommitRef(ctx context.Context, vr types.ValueReader, r types.Ref) (*Commit, error) {
+	v, err := vr.ReadValue(ctx, r.TargetHash())
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, errors.New("target commit not found")
+	}
+	return commitPtr(vr.Format(), v, &r)
+}
+
+func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (*Commit, error) {
+	v, err := vr.ReadValue(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	if v == nil {
+		return nil, errors.New("target commit not found")
+	}
+	return CommitFromValue(vr.Format(), v)
+}
+
+func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
+	c1Q, c2Q := CommitByHeightHeap{c1}, CommitByHeightHeap{c2}
 	for !c1Q.Empty() && !c2Q.Empty() {
 		c1Ht, c2Ht := c1Q.MaxHeight(), c2Q.MaxHeight()
 		if c1Ht == c2Ht {
-			c1Parents, c2Parents := c1Q.PopRefsOfHeight(c1Ht), c2Q.PopRefsOfHeight(c2Ht)
-			if common, ok := findCommonRef(c1Parents, c2Parents); ok {
-				return common, true, nil
+			c1Parents, c2Parents := c1Q.PopCommitsOfHeight(c1Ht), c2Q.PopCommitsOfHeight(c2Ht)
+			if common, ok := findCommonCommit(c1Parents, c2Parents); ok {
+				return common.Addr(), true, nil
 			}
 			err := parentsToQueue(ctx, c1Parents, &c1Q, vr1)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 			err = parentsToQueue(ctx, c2Parents, &c2Q, vr2)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		} else if c1Ht > c2Ht {
-			err := parentsToQueue(ctx, c1Q.PopRefsOfHeight(c1Ht), &c1Q, vr1)
+			err := parentsToQueue(ctx, c1Q.PopCommitsOfHeight(c1Ht), &c1Q, vr1)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		} else {
-			err := parentsToQueue(ctx, c2Q.PopRefsOfHeight(c2Ht), &c2Q, vr2)
+			err := parentsToQueue(ctx, c2Q.PopCommitsOfHeight(c2Ht), &c2Q, vr2)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 		}
 	}
 
-	return types.Ref{}, false, nil
+	return hash.Hash{}, false, nil
 }
 
 // FindCommonAncestor returns the most recent common ancestor of c1 and c2, if
@@ -254,10 +341,10 @@ func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 types.Ref, v
 // This implementation makes use of the parents_closure field on the commit
 // struct.  If the commit does not have a materialized parents_closure, this
 // implementation delegates to findCommonAncestorUsingParentsList.
-func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (types.Ref, bool, error) {
+func FindCommonAncestor(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
 	pi1, err := newParentsClosureIterator(ctx, c1, vr1)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	if pi1 == nil {
 		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
@@ -265,7 +352,7 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 
 	pi2, err := newParentsClosureIterator(ctx, c2, vr2)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	if pi2 == nil {
 		return findCommonAncestorUsingParentsList(ctx, c1, c2, vr1, vr2)
@@ -275,22 +362,18 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 		h1, h2 := pi1.Hash(), pi2.Hash()
 		if h1 == h2 {
 			if err := firstError(pi1.Err(), pi2.Err()); err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
-			r, err := hashToRef(ctx, vr1, h1)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			return r, true, nil
+			return h1, true, nil
 		}
 		if pi1.Less(vr1.Format(), pi2) {
 			// TODO: Should pi2.Seek(pi1.curr), but MapIterator does not expose Seek yet.
 			if !pi2.Next(ctx) {
-				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
+				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
 			}
 		} else {
 			if !pi1.Next(ctx) {
-				return types.Ref{}, false, firstError(pi1.Err(), pi2.Err())
+				return hash.Hash{}, false, firstError(pi1.Err(), pi2.Err())
 			}
 		}
 	}
@@ -299,40 +382,64 @@ func FindCommonAncestor(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.Va
 // FindClosureCommonAncestor returns the most recent common ancestor of |cl| and |cm|,
 // where |cl| is the transitive closure of one or more refs. If a common ancestor
 // exists, |ok| is set to true, else false.
-func FindClosureCommonAncestor(ctx context.Context, cl RefClosure, cm types.Ref, vr types.ValueReader) (a types.Ref, ok bool, err error) {
-	q := &RefByHeightHeap{cm}
-	var curr types.RefSlice
+func FindClosureCommonAncestor(ctx context.Context, cl CommitClosure, cm *Commit, vr types.ValueReader) (a hash.Hash, ok bool, err error) {
+	q := &CommitByHeightHeap{cm}
+	var curr []*Commit
 
 	for !q.Empty() {
-		curr = q.PopRefsOfHeight(q.MaxHeight())
+		curr = q.PopCommitsOfHeight(q.MaxHeight())
 
 		for _, r := range curr {
 			ok, err = cl.Contains(ctx, r)
 			if err != nil {
-				return types.Ref{}, false, err
+				return hash.Hash{}, false, err
 			}
 			if ok {
-				return r, ok, nil
+				return r.Addr(), ok, nil
 			}
 		}
 
 		err = parentsToQueue(ctx, curr, q, vr)
 		if err != nil {
-			return types.Ref{}, false, err
+			return hash.Hash{}, false, err
 		}
 	}
 
-	return types.Ref{}, false, nil
+	return hash.Hash{}, false, nil
 }
 
 // GetCommitParents returns |Ref|s to the parents of the commit.
-func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]types.Ref, error) {
+func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value) ([]*Commit, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
-		return types.SerialCommitParentRefs(vr.Format(), sm)
+		refs, err := types.SerialCommitParentRefs(vr.Format(), sm)
+		if err != nil {
+			return nil, err
+		}
+		hashes := make([]hash.Hash, len(refs))
+		for i, r := range refs {
+			hashes[i] = r.TargetHash()
+		}
+		vals, err := vr.ReadManyValues(ctx, hashes)
+		if err != nil {
+			return nil, err
+		}
+		res := make([]*Commit, len(vals))
+		for i, v := range vals {
+			if v == nil {
+				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+			}
+			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0)
+			res[i] = &Commit{
+				val:    v,
+				height: csm.Height(),
+				addr:   hashes[i],
+			}
+		}
+		return res, nil
 	}
 	c, ok := cv.(types.Struct)
 	if !ok {
@@ -341,7 +448,7 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 	if c.Name() != commitName {
 		return nil, errors.New("GetCommitParents: provided value is not a commit.")
 	}
-	var ret []types.Ref
+	var refs []types.Ref
 	ps, ok, err := c.MaybeGet(parentsListField)
 	if err != nil {
 		return nil, err
@@ -349,24 +456,42 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 	if ok {
 		p := ps.(types.List)
 		err = p.IterAll(ctx, func(v types.Value, _ uint64) error {
-			ret = append(ret, v.(types.Ref))
+			refs = append(refs, v.(types.Ref))
 			return nil
 		})
-		return ret, err
+	} else {
+		ps, ok, err = c.MaybeGet(parentsField)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			p := ps.(types.Set)
+			err = p.IterAll(ctx, func(v types.Value) error {
+				refs = append(refs, v.(types.Ref))
+				return nil
+			})
+		}
 	}
-	ps, ok, err = c.MaybeGet(parentsField)
+	hashes := make([]hash.Hash, len(refs))
+	for i, r := range refs {
+		hashes[i] = r.TargetHash()
+	}
+	vals, err := vr.ReadManyValues(ctx, hashes)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
-		p := ps.(types.Set)
-		err = p.IterAll(ctx, func(v types.Value) error {
-			ret = append(ret, v.(types.Ref))
-			return nil
-		})
-		return ret, err
+	res := make([]*Commit, len(refs))
+	for i, val := range vals {
+		if val == nil {
+			return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+		}
+		res[i] = &Commit{
+			val:    val,
+			height: refs[i].Height(),
+			addr:   refs[i].TargetHash(),
+		}
 	}
-	return ret, nil
+	return res, nil
 }
 
 // GetCommitMeta extracts the CommitMeta field from a commit. Returns |nil,
@@ -407,11 +532,11 @@ func GetCommitMeta(ctx context.Context, cv types.Value) (*CommitMeta, error) {
 	}
 }
 
-func GetCommitValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
+func GetCommittedValue(ctx context.Context, vr types.ValueReader, cv types.Value) (types.Value, error) {
 	if sm, ok := cv.(types.SerialMessage); ok {
 		data := []byte(sm)
 		if serial.GetFileID(data) != serial.CommitFileID {
-			return nil, errors.New("GetCommitValue: provided value is not a commit.")
+			return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 		}
 		cmsg := serial.GetRootAsCommit(data, 0)
 		var roothash hash.Hash
@@ -420,32 +545,24 @@ func GetCommitValue(ctx context.Context, vr types.ValueReader, cv types.Value) (
 	}
 	c, ok := cv.(types.Struct)
 	if !ok {
-		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
 	if c.Name() != commitName {
-		return nil, errors.New("GetCommitValue: provided value is not a commit.")
+		return nil, errors.New("GetCommittedValue: provided value is not a commit.")
 	}
 	v, _, err := c.MaybeGet(valueField)
 	return v, err
 }
 
-func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap, vr types.ValueReader) error {
+func parentsToQueue(ctx context.Context, commits []*Commit, q *CommitByHeightHeap, vr types.ValueReader) error {
 	seen := make(map[hash.Hash]bool)
-	for _, r := range refs {
-		if _, ok := seen[r.TargetHash()]; ok {
+	for _, c := range commits {
+		if _, ok := seen[c.Addr()]; ok {
 			continue
 		}
-		seen[r.TargetHash()] = true
+		seen[c.Addr()] = true
 
-		v, err := r.TargetValue(ctx, vr)
-		if err != nil {
-			return err
-		}
-		if v == nil {
-			return fmt.Errorf("target not found: %v", r.TargetHash())
-		}
-
-		parents, err := GetCommitParents(ctx, vr, v)
+		parents, err := GetCommitParents(ctx, vr, c.NomsValue())
 		if err != nil {
 			return err
 		}
@@ -457,22 +574,22 @@ func parentsToQueue(ctx context.Context, refs types.RefSlice, q *RefByHeightHeap
 	return nil
 }
 
-func findCommonRef(a, b types.RefSlice) (types.Ref, bool) {
-	toRefSet := func(s types.RefSlice) map[hash.Hash]types.Ref {
-		out := map[hash.Hash]types.Ref{}
+func findCommonCommit(a, b []*Commit) (*Commit, bool) {
+	toAddrMap := func(s []*Commit) map[hash.Hash]*Commit {
+		out := map[hash.Hash]*Commit{}
 		for _, r := range s {
-			out[r.TargetHash()] = r
+			out[r.Addr()] = r
 		}
 		return out
 	}
 
-	aSet, bSet := toRefSet(a), toRefSet(b)
-	for s, r := range aSet {
-		if _, present := bSet[s]; present {
-			return r, true
+	as, bs := toAddrMap(a), toAddrMap(b)
+	for s, c := range as {
+		if _, present := bs[s]; present {
+			return c, true
 		}
 	}
-	return types.Ref{}, false
+	return nil, false
 }
 
 func makeCommitStructType(metaType, parentsType, parentsListType, parentsClosureType, valueType *types.Type, includeParentsClosure bool) (*types.Type, error) {
@@ -591,19 +708,11 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 	return true
 }
 
-func hashToRef(ctx context.Context, vr types.ValueReader, h hash.Hash) (types.Ref, error) {
-	fetched, err := vr.ReadValue(ctx, h)
-	if err != nil {
-		return types.Ref{}, err
-	}
-	return types.NewRef(fetched, vr.Format())
-}
-
-func refToMapKeyTuple(f *types.NomsBinFormat, r types.Ref) (types.Tuple, error) {
-	h := r.TargetHash()
+func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
+	h := c.Addr()
 	ib := make([]byte, len(hash.Hash{}))
 	copy(ib, h[:])
-	return types.NewTuple(f, types.Uint(r.Height()), types.InlineBlob(ib))
+	return types.NewTuple(f, types.Uint(c.Height()), types.InlineBlob(ib))
 }
 
 func firstError(l, r error) error {
@@ -613,11 +722,8 @@ func firstError(l, r error) error {
 	return r
 }
 
-func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueReader) (*parentsClosureIterator, error) {
-	sv, err := r.TargetValue(ctx, vr)
-	if err != nil {
-		return nil, err
-	}
+func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (*parentsClosureIterator, error) {
+	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
 		// TODO: __DOLT_DEV__ should support parent closures.
@@ -665,7 +771,7 @@ func newParentsClosureIterator(ctx context.Context, r types.Ref, vr types.ValueR
 		return nil, err
 	}
 
-	initialCurr, err := refToMapKeyTuple(vr.Format(), r)
+	initialCurr, err := commitToMapKeyTuple(vr.Format(), c)
 	if err != nil {
 		return nil, err
 	}
@@ -688,43 +794,46 @@ func IsCommit(v types.Value) (bool, error) {
 	}
 }
 
-type RefByHeightHeap []types.Ref
+type CommitByHeightHeap []*Commit
 
-func (r RefByHeightHeap) Less(i, j int) bool {
-	return types.HeightOrder(r[i], r[j])
+func (r CommitByHeightHeap) Less(i, j int) bool {
+	if r[i].Height() == r[j].Height() {
+		return r[i].Addr().Less(r[j].Addr())
+	}
+	return r[i].Height() > r[j].Height()
 }
 
-func (r RefByHeightHeap) Swap(i, j int) {
+func (r CommitByHeightHeap) Swap(i, j int) {
 	r[i], r[j] = r[j], r[i]
 }
 
-func (r RefByHeightHeap) Len() int {
+func (r CommitByHeightHeap) Len() int {
 	return len(r)
 }
 
-func (r *RefByHeightHeap) Push(x interface{}) {
-	*r = append(*r, x.(types.Ref))
+func (r *CommitByHeightHeap) Push(x interface{}) {
+	*r = append(*r, x.(*Commit))
 }
 
-func (r *RefByHeightHeap) Pop() interface{} {
+func (r *CommitByHeightHeap) Pop() interface{} {
 	old := *r
 	ret := old[len(old)-1]
 	*r = old[:len(old)-1]
 	return ret
 }
 
-func (r RefByHeightHeap) Empty() bool {
+func (r CommitByHeightHeap) Empty() bool {
 	return len(r) == 0
 }
 
-func (r RefByHeightHeap) MaxHeight() uint64 {
+func (r CommitByHeightHeap) MaxHeight() uint64 {
 	return r[0].Height()
 }
 
-func (r *RefByHeightHeap) PopRefsOfHeight(h uint64) types.RefSlice {
-	var ret types.RefSlice
+func (r *CommitByHeightHeap) PopCommitsOfHeight(h uint64) []*Commit {
+	var ret []*Commit
 	for !r.Empty() && r.MaxHeight() == h {
-		ret = append(ret, heap.Pop(r).(types.Ref))
+		ret = append(ret, heap.Pop(r).(*Commit))
 	}
 	return ret
 }
