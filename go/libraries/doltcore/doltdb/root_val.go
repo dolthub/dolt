@@ -561,7 +561,7 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 		return nil, false, nil
 	}
 
-	table, err := durable.NomsTableFromRef(ctx, root.VRW(), r.(types.Ref))
+	table, err := durable.NomsTableFromAddr(ctx, root.VRW(), r.(types.Ref).TargetHash())
 	if err != nil {
 		return nil, false, err
 	}
@@ -743,7 +743,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 		}
 
 		name := string(nm.(types.String))
-		nt, err := durable.NomsTableFromRef(ctx, root.VRW(), tableRef.(types.Ref))
+		nt, err := durable.NomsTableFromAddr(ctx, root.VRW(), tableRef.(types.Ref).TargetHash())
 		if err != nil {
 			return err
 		}

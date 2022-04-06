@@ -152,9 +152,9 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 	return nomsTable{vrw, tableStruct}, nil
 }
 
-// NomsTableFromRef deserializes the table referenced by |ref|.
-func NomsTableFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (Table, error) {
-	val, err := ref.TargetValue(ctx, vrw)
+// NomsTableFromAddr deserializes the table in the chunk at |addr|.
+func NomsTableFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (Table, error) {
+	val, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
