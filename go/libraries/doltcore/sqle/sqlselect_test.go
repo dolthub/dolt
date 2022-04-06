@@ -86,7 +86,7 @@ func LoadedLocalLocation() *time.Location {
 
 // BasicSelectTests cover basic select statement features and error handling
 func BasicSelectTests() []SelectTest {
-	headCommitHash := "so275enkvulb96mkckbun1kjo9seg7c9"
+	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun" // "so275enkvulb96mkckbun1kjo9seg7c9"
 	if types.Format_Default == types.Format_DOLT_DEV {
 		headCommitHash = "pi04gco3l5jb373lhohv1ggoif4o7d8p"
 	}
