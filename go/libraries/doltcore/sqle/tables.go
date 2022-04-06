@@ -826,7 +826,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		nullable = Null
 	}
 
-	updatedTable, err := AddColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
+	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
 	if err != nil {
 		return err
 	}
@@ -856,17 +856,17 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func orderToOrder(order *sql.ColumnOrder) *ColumnOrder {
+func orderToOrder(order *sql.ColumnOrder) *columnOrder {
 	if order == nil {
 		return nil
 	}
-	return &ColumnOrder{
+	return &columnOrder{
 		First: order.First,
 		After: order.AfterColumn,
 	}
 }
 
-// DropColumn implements sql.AlterableTable
+// dropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil
@@ -909,7 +909,7 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 	}
 	declaresFk, referencesFk := fkCollection.KeysForTable(t.tableName)
 
-	updatedTable, err = DropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
+	updatedTable, err = dropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
 	if err != nil {
 		return err
 	}
@@ -992,7 +992,7 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
-// ModifyColumn implements sql.AlterableTable
+// modifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil
@@ -1063,7 +1063,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
+	updatedTable, err := modifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
 	if err != nil {
 		return err
 	}
@@ -1710,7 +1710,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 		return err
 	}
 
-	table, err = AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
+	table, err = addPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
 	if err != nil {
 		return err
 	}
@@ -1764,7 +1764,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	table, err = DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
+	table, err = dropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
 	if err != nil {
 		return err
 	}

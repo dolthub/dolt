@@ -29,8 +29,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// RenameTable renames a table with in a RootValue and returns the updated root.
-func RenameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
+// renameTable renames a table with in a RootValue and returns the updated root.
+func renameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
 	if newName == oldName {
 		return root, nil
 	} else if root == nil {
@@ -49,17 +49,18 @@ const (
 )
 
 // Clone of sql.ColumnOrder to avoid a dependency on sql here
-type ColumnOrder struct {
+// TODO (zachmu): kill off
+type columnOrder struct {
 	First bool
 	After string
 }
 
-// AddColumnToTable adds a new column to the schema given and returns the new table value. Non-null column additions
+// addColumnToTable adds a new column to the schema given and returns the new table value. Non-null column additions
 // rewrite the entire table, since we must write a value for each row. If the column is not nullable, a default value
 // must be provided.
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
-func AddColumnToTable(
+func addColumnToTable(
 		ctx context.Context,
 		root *doltdb.RootValue,
 		tbl *doltdb.Table,
@@ -70,7 +71,7 @@ func AddColumnToTable(
 		nullable Nullable,
 		defaultVal *sql.ColumnDefaultValue,
 		comment string,
-		order *ColumnOrder,
+		order *columnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -100,7 +101,7 @@ func addColumnToSchema(
 		newColName string,
 		typeInfo typeinfo.TypeInfo,
 		nullable Nullable,
-		order *ColumnOrder,
+		order *columnOrder,
 		defaultVal sql.Expression,
 		comment string,
 ) (schema.Schema, error) {
@@ -212,14 +213,14 @@ func validateNewColumn(
 
 var ErrPrimaryKeySetsIncompatible = errors.New("primary key sets incompatible")
 
-// ModifyColumn modifies the column with the name given, replacing it with the new definition provided. A column with
+// modifyColumn modifies the column with the name given, replacing it with the new definition provided. A column with
 // the name given must exist in the schema of the table.
-func ModifyColumn(
+func modifyColumn(
 		ctx context.Context,
 		tbl *doltdb.Table,
 		existingCol schema.Column,
 		newCol schema.Column,
-		order *ColumnOrder,
+		order *columnOrder,
 		opts editor.Options,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
@@ -463,14 +464,14 @@ func updateRowDataWithNewType(
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
-func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *ColumnOrder) (schema.Schema, error) {
+func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *columnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	prevColumn := ""
 	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.Name == oldCol.Name {
 			if prevColumn == "" {
 				if order == nil {
-					order = &ColumnOrder{First: true}
+					order = &columnOrder{First: true}
 				}
 			}
 			break
@@ -481,7 +482,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 
 	if order == nil {
 		if prevColumn != "" {
-			order = &ColumnOrder{After: prevColumn}
+			order = &columnOrder{After: prevColumn}
 		} else {
 			return nil, fmt.Errorf("Couldn't find column %s", oldCol.Name)
 		}
@@ -579,7 +580,7 @@ func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	return newPkOrdinals, nil
 }
 
-func AddPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn, opts editor.Options) (*doltdb.Table, error) {
+func addPrimaryKeyToTable(ctx context.Context, table *doltdb.Table, tableName string, nbf *types.NomsBinFormat, columns []sql.IndexColumn, opts editor.Options) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err
@@ -757,8 +758,8 @@ func duplicatePkFunction(keyString, indexName string, k, v types.Tuple, isPk boo
 
 var ErrKeylessAltTbl = errors.New("schema alterations not supported for keyless tables")
 
-// DropColumn drops a column from a table, and removes its associated cell values
-func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []doltdb.ForeignKey) (*doltdb.Table, error) {
+// dropColumn drops a column from a table, and removes its associated cell values
+func dropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignKeys []doltdb.ForeignKey) (*doltdb.Table, error) {
 	if tbl == nil {
 		panic("invalid parameters")
 	}
@@ -840,7 +841,7 @@ func DropColumn(ctx context.Context, tbl *doltdb.Table, colName string, foreignK
 	return tbl.UpdateSchema(ctx, newSch)
 }
 
-func DropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, opts editor.Options) (*doltdb.Table, error) {
+func dropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, opts editor.Options) (*doltdb.Table, error) {
 	sch, err := table.GetSchema(ctx)
 	if err != nil {
 		return nil, err

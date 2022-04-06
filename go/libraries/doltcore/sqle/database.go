@@ -788,7 +788,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	return nil
 }
 
-// RenameTable implements sql.TableRenamer
+// renameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
 	root, err := db.GetRoot(ctx)
 
@@ -812,7 +812,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return sql.ErrTableAlreadyExists.New(newName)
 	}
 
-	newRoot, err := RenameTable(ctx, root, oldName, newName)
+	newRoot, err := renameTable(ctx, root, oldName, newName)
 
 	if err != nil {
 		return err
