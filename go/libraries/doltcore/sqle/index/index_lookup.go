@@ -55,7 +55,7 @@ func RowIterForIndexLookup(ctx *sql.Context, ilu sql.IndexLookup, pkSch sql.Prim
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter2, error) {
 	covers := indexCoversCols(idx, columns)
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch)
