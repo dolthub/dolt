@@ -174,6 +174,8 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRange
 		return emptyIter{}, nil
 	} else if stop < start {
 		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
+	} else if stop > uint64(m.Count()) {
+		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
 	}
 
 	lo, err := newCursorAtOrdinal(ctx, m.ns, m.root, start)

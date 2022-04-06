@@ -47,8 +47,6 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 		return novelNode{}, err
 	}
 
-	fmt.Println(formatHack(addr, bld))
-
 	var lastKey val.Tuple
 	if len(bld.keys) > 0 {
 		lastKey = val.Tuple(bld.keys[len(bld.keys)-1])
@@ -251,11 +249,6 @@ func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
 	// todo(andy) write without copy
 	arr := writeSubtreeCounts(sc)
 	return b.CreateByteVector(arr)
-}
-
-func formatHack(addr hash.Hash, bld *nodeBuilder) string {
-	desc := val.NewTupleDescriptor(val.Type{Enc: val.Int32Enc})
-	return formatCompletedNode(addr, bld, desc, desc)
 }
 
 func formatCompletedNode(addr hash.Hash, bld *nodeBuilder, kd, vd val.TupleDesc) string {

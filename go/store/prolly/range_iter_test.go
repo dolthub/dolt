@@ -393,10 +393,31 @@ func concat(slices ...[]val.Tuple) (c []val.Tuple) {
 }
 
 func testIterOrdinalRange(t *testing.T, om ordinalMap, tuples [][2]val.Tuple) {
+	cnt := len(tuples)
+	t.Run("test two sided bounds", func(t *testing.T) {
+		bounds := make([][2]int, 100)
+		for i := range bounds {
+			bounds[i] = [2]int{testRand.Intn(cnt)}
+		}
+		testIterOrdinalRangeWithBounds(t, om, tuples, bounds)
+	})
+	t.Run("test one sided bounds", func(t *testing.T) {
+		bounds := make([][2]int, 100)
+		for i := range bounds {
+			if i%2 == 0 {
+				bounds[i] = [2]int{0, testRand.Intn(cnt)}
+			} else {
+				bounds[i] = [2]int{testRand.Intn(cnt), cnt}
+			}
+		}
+		testIterOrdinalRangeWithBounds(t, om, tuples, bounds)
+	})
+}
+
+func testIterOrdinalRangeWithBounds(t *testing.T, om ordinalMap, tuples [][2]val.Tuple, bounds [][2]int) {
 	ctx := context.Background()
-	for i := 0; i < 100; i++ {
-		cnt := len(tuples)
-		start, stop := testRand.Intn(cnt), testRand.Intn(cnt)
+	for _, bound := range bounds {
+		start, stop := bound[0], bound[1]
 		if start > stop {
 			start, stop = stop, start
 		}
