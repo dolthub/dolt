@@ -87,8 +87,8 @@ func TestSchemaTableRecreation(t *testing.T) {
 	rowData, err = table.GetNomsRowData(ctx)
 	require.NoError(t, err)
 	expectedVals = []sql.Row{
-		{"view", "view1", "SELECT v1 FROM test;", int64(1)},
-		{"view", "view2", "SELECT v2 FROM test;", int64(2)},
+		{"view", "view1", "SELECT v1 FROM test;", int64(1), nil},
+		{"view", "view2", "SELECT v2 FROM test;", int64(2), nil},
 	}
 	index = 0
 	_ = rowData.IterAll(ctx, func(keyTpl, valTpl types.Value) error {

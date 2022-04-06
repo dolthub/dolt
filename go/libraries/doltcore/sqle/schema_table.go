@@ -17,6 +17,7 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -26,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -37,6 +39,10 @@ const (
 	viewFragment    = "view"
 	triggerFragment = "trigger"
 )
+
+type Extra struct {
+	CreatedAt int64
+}
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
@@ -56,7 +62,11 @@ func SchemasTableSchema() schema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol)
+	extraCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesExtraCol, schema.DoltSchemasExtraTag, typeinfo.JSONType, false, "", false, "")
+	if err != nil {
+		panic(err)
+	}
+	colColl := schema.NewColCollection(typeCol, nameCol, fragmentCol, idCol, extraCol)
 	return schema.MustSchemaFromCols(colColl)
 }
 
@@ -73,8 +83,8 @@ func GetOrCreateDoltSchemasTable(ctx *sql.Context, db Database) (retTbl *Writabl
 	var rowsToAdd []sql.Row
 	if found {
 		schemasTable := tbl.(*WritableDoltTable)
-		// Old schemas table does not contain the `id` column.
-		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
+		// Old schemas table does not contain the `id` or `extra` column.
+		if !tbl.Schema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) || !tbl.Schema().Contains(doltdb.SchemasTablesExtraCol, doltdb.SchemasTableName) {
 			root, rowsToAdd, err = migrateOldSchemasTableToNew(ctx, db, root, schemasTable)
 			if err != nil {
 				return nil, err
@@ -159,7 +169,7 @@ func migrateOldSchemasTableToNew(
 	[]sql.Row,
 	error,
 ) {
-	// Copy all of the old data over and add an index column
+	// Copy all of the old data over and add an index column and an extra column
 	var rowsToAdd []sql.Row
 	table, err := schemasTable.doltTable(ctx)
 	if err != nil {
@@ -180,8 +190,12 @@ func migrateOldSchemasTableToNew(
 		if err != nil {
 			return err
 		}
-		// prepend the new id to each row
-		sqlRow = append(sqlRow, id)
+		// append the new id to row, if missing
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTablesIdCol) {
+			sqlRow = append(sqlRow, id)
+		}
+		// append the extra cols to row
+		sqlRow = append(sqlRow, nil)
 		rowsToAdd = append(rowsToAdd, sqlRow)
 		id++
 		return nil
@@ -290,6 +304,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 type schemaFragment struct {
 	name     string
 	fragment string
+	created  time.Time
 }
 
 func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType string) ([]schemaFragment, error) {
@@ -311,10 +326,36 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 		if sqlRow[0] != fragType {
 			continue
 		}
+
+		// For tables that haven't been converted yet or are filled with nil, use 1 as the trigger creation time
+		if len(sqlRow) < 5 || sqlRow[4] == nil {
+			frags = append(frags, schemaFragment{
+				name:     sqlRow[1].(string),
+				fragment: sqlRow[2].(string),
+				created:  time.Unix(1, 0).UTC(), // TablePlus editor thinks 0 is out of range
+			})
+			continue
+		}
+
+		// Extract Created Time from JSON column
+		createdTime, err := getCreatedTime(ctx, sqlRow)
+
 		frags = append(frags, schemaFragment{
 			name:     sqlRow[1].(string),
 			fragment: sqlRow[2].(string),
+			created:  time.Unix(createdTime, 0).UTC(),
 		})
 	}
 	return frags, nil
+}
+
+func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
+	extraJSON := row[4].(json.NomsJSON)
+	doc, err := extraJSON.Unmarshall(ctx)
+	if err != nil {
+		return 0, err
+	}
+	val := doc.Val.(map[string]interface{})
+	createdTime := int64(val["CreatedAt"].(float64))
+	return createdTime, nil
 }

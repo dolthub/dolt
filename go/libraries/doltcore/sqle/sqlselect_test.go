@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -1527,13 +1528,21 @@ var systemTableSelectTests = []SelectTest{
 				types.String("name"),
 				types.String("select 2+2 from dual"),
 				types.Int(1),
+				CreateTestJSON(),
 			)),
 		Query: "select * from dolt_schemas",
 		ExpectedRows: ToSqlRows(CompressSchema(SchemasTableSchema()),
-			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1)),
+			NewRow(types.String("view"), types.String("name"), types.String("select 2+2 from dual"), types.Int(1), CreateTestJSON()),
 		),
 		ExpectedSchema: CompressSchema(SchemasTableSchema()),
 	},
+}
+
+func CreateTestJSON() types.JSON {
+	vrw := types.NewMemoryValueStore()
+	extraJSON, _ := types.NewMap(nil, vrw, types.String("CreatedAt"), types.Float(1))
+	res, _ := types.NewJSONDoc(types.Format_Default, vrw, extraJSON)
+	return res
 }
 
 func TestSelectSystemTables(t *testing.T) {
@@ -1592,7 +1601,22 @@ func testSelectQuery(t *testing.T, test SelectTest) {
 		require.NoError(t, err)
 	}
 
-	assert.Equal(t, test.ExpectedRows, actualRows)
+	// JSON columns must be compared using like so
+	assert.Equal(t, len(test.ExpectedRows), len(actualRows))
+	for i := 0; i < len(test.ExpectedRows); i++ {
+		assert.Equal(t, len(test.ExpectedRows[i]), len(actualRows[i]))
+		for j := 0; j < len(test.ExpectedRows[i]); j++ {
+			if _, ok := actualRows[i][j].(json.NomsJSON); ok {
+				cmp, err := actualRows[i][j].(json.NomsJSON).Compare(nil, test.ExpectedRows[i][j].(json.NomsJSON))
+				assert.NoError(t, err)
+				assert.Equal(t, 0, cmp)
+			} else {
+				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
+			}
+
+		}
+	}
+
 	var sqlSchema sql.Schema
 	if test.ExpectedSqlSchema != nil {
 		sqlSchema = test.ExpectedSqlSchema
