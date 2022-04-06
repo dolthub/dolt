@@ -355,7 +355,10 @@ func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	val := doc.Val.(map[string]interface{})
+	val, ok := doc.Val.(map[string]interface{})
+	if !ok {
+		return int64(doc.Val.(float64)), nil
+	}
 	createdTime := int64(val["CreatedAt"].(float64))
 	return createdTime, nil
 }
