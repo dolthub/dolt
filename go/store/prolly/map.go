@@ -211,12 +211,16 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	if err != nil {
 		return nil, err
 	}
+	if !cur.valid() {
+		// map does not contain |rng|
+		return &pointLookup{}, nil
+	}
 
 	key := val.Tuple(cur.currentKey())
 	value := val.Tuple(cur.currentValue())
 	if compareBound(rng.Start, key, m.keyDesc) != 0 {
-		// map does not contain this point lookup
-		key, value = nil, nil
+		// map does not contain |rng|
+		return &pointLookup{}, nil
 	}
 
 	return &pointLookup{k: key, v: value}, nil

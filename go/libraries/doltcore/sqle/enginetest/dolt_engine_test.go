@@ -479,7 +479,6 @@ func TestTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
-	skipNewFormat(t)
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
