@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -822,12 +821,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return errors.New("adding primary keys is not supported")
 	}
 
-	nullable := alterschema.NotNull
+	nullable := NotNull
 	if col.IsNullable() {
-		nullable = alterschema.Null
+		nullable = Null
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
+	updatedTable, err := AddColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
 	if err != nil {
 		return err
 	}
@@ -857,11 +856,11 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
+func orderToOrder(order *sql.ColumnOrder) *ColumnOrder {
 	if order == nil {
 		return nil
 	}
-	return &alterschema.ColumnOrder{
+	return &ColumnOrder{
 		First: order.First,
 		After: order.AfterColumn,
 	}
@@ -910,7 +909,7 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 	}
 	declaresFk, referencesFk := fkCollection.KeysForTable(t.tableName)
 
-	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
+	updatedTable, err = DropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
 	if err != nil {
 		return err
 	}
@@ -1064,7 +1063,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
+	updatedTable, err := ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
 	if err != nil {
 		return err
 	}
@@ -1711,7 +1710,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 		return err
 	}
 
-	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
+	table, err = AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
 	if err != nil {
 		return err
 	}
@@ -1765,7 +1764,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
+	table, err = DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
 	if err != nil {
 		return err
 	}

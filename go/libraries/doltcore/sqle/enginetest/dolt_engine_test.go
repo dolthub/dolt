@@ -15,10 +15,13 @@
 package enginetest
 
 import (
+	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -720,6 +723,171 @@ func TestPersist(t *testing.T) {
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
+}
+
+func TestAddDropPrimaryKeys(t *testing.T) {
+	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
+		harness := newDoltHarness(t)
+		addPkScript := enginetest.ScriptTest{
+			Name: "add primary keys",
+			SetUpScript: []string{
+				"create table test (id int not null, c1 int);",
+				"create index c1_idx on test(c1)",
+				"insert into test values (1,1),(2,2)",
+				"ALTER TABLE test ADD PRIMARY KEY(id)",
+				"ALTER TABLE test DROP PRIMARY KEY",
+				"ALTER TABLE test ADD PRIMARY KEY(id)",
+				"ALTER TABLE test DROP PRIMARY KEY",
+				"ALTER TABLE test ADD PRIMARY KEY(id)",
+				"ALTER TABLE test DROP PRIMARY KEY",
+				"ALTER TABLE test ADD PRIMARY KEY(id)",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query: "show create table test",
+					Expected: []sql.Row{
+						{"test", "CREATE TABLE `test` (\n" +
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  PRIMARY KEY (`id`),\n" +
+								"  KEY `c1_idx` (`c1`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+					},
+				},
+			},
+		}
+
+		enginetest.TestScript(t, harness, addPkScript)
+
+		// make sure there is only one NOT NULL constraint after all those mutations
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
+		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		require.NoError(t, err)
+
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		sch, err := table.GetSchema(ctx)
+		for _, col := range sch.GetAllCols().GetColumns() {
+			count := 0
+			for _, cc := range col.Constraints {
+				if cc.GetConstraintType() == schema.NotNullConstraintType {
+					count++
+				}
+			}
+			require.Less(t, count, 2)
+		}
+	})
+
+	t.Run("Add primary key to table with index", func(t *testing.T) {
+		harness := newDoltHarness(t)
+		script := enginetest.ScriptTest{
+			Name: "add primary keys to table with index",
+			SetUpScript: []string{
+				"create table test (id int not null, c1 int);",
+				"create index c1_idx on test(c1)",
+				"insert into test values (1,1),(2,2)",
+				"ALTER TABLE test ADD constraint test_check CHECK (c1 > 0)",
+				"ALTER TABLE test ADD PRIMARY KEY(id)",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query: "show create table test",
+					Expected: []sql.Row{
+						{"test", "CREATE TABLE `test` (\n" +
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  PRIMARY KEY (`id`),\n" +
+								"  KEY `c1_idx` (`c1`),\n" +
+								"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+					},
+				},
+			},
+		}
+		enginetest.TestScript(t, harness, script)
+
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
+		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		require.NoError(t, err)
+
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		require.NoError(t, err)
+
+		// Assert the new index map is not empty
+		newMap, err := table.GetNomsRowData(ctx)
+		assert.NoError(t, err)
+		assert.False(t, newMap.Empty())
+		assert.Equal(t, newMap.Len(), uint64(2))
+	})
+
+	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
+		harness := newDoltHarness(t)
+		script := enginetest.ScriptTest{
+			Name: "Add primary key when one more cells contain NULL",
+			SetUpScript: []string{
+				"create table test (id int not null, c1 int);",
+				"create index c1_idx on test(c1)",
+				"insert into test values (1,1),(2,2)",
+				"ALTER TABLE test ADD PRIMARY KEY (c1)",
+				"ALTER TABLE test ADD COLUMN (c2 INT NULL)",
+				"ALTER TABLE test DROP PRIMARY KEY",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query: "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
+					ExpectedErrStr: "primary key cannot have NULL values",
+				},
+			},
+		}
+		enginetest.TestScript(t, harness, script)
+	})
+
+	t.Run("Drop primary key from table with index", func(t *testing.T) {
+		harness := newDoltHarness(t)
+		script := enginetest.ScriptTest{
+			Name: "Drop primary key from table with index",
+			SetUpScript: []string{
+				"create table test (id int not null primary key, c1 int);",
+				"create index c1_idx on test(c1)",
+				"insert into test values (1,1),(2,2)",
+				"ALTER TABLE test DROP PRIMARY KEY",
+			},
+			Assertions: []enginetest.ScriptTestAssertion{
+				{
+					Query: "show create table test",
+					Expected: []sql.Row{
+						{"test", "CREATE TABLE `test` (\n" +
+								"  `id` int NOT NULL,\n" +
+								"  `c1` int,\n" +
+								"  KEY `c1_idx` (`c1`)\n" +
+								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+					},
+				},
+			},
+		}
+		enginetest.TestScript(t, harness, script)
+
+		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
+		ws, err := harness.session.WorkingSet(ctx, "mydb")
+		require.NoError(t, err)
+
+		table, ok, err := ws.WorkingRoot().GetTable(ctx, "test")
+		require.NoError(t, err)
+		require.True(t, ok)
+
+		require.NoError(t, err)
+
+		// Assert the index map is not empty
+		newMap, err := table.GetNomsIndexRowData(ctx, "c1_idx")
+		assert.NoError(t, err)
+		assert.False(t, newMap.Empty())
+		assert.Equal(t, newMap.Len(), uint64(2))
+	})
 }
 
 func skipNewFormat(t *testing.T) {
