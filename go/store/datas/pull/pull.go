@@ -58,11 +58,11 @@ func makeProgTrack(progressCh chan PullProgress) func(moreDone, moreKnown, moreA
 }
 
 // Pull objects that descend from sourceHash from srcDB to sinkDB.
-func Pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, sourceHash hash.Hash, progressCh chan PullProgress) error {
-	return pull(ctx, srcCS, sinkCS, walkRefs, sourceHash, progressCh, defaultBatchSize)
+func Pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress) error {
+	return pull(ctx, srcCS, sinkCS, walkAddrs, sourceHash, progressCh, defaultBatchSize)
 }
 
-func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, sourceHash hash.Hash, progressCh chan PullProgress, batchSize int) error {
+func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress, batchSize int) error {
 	// Sanity Check
 	exists, err := srcCS.Has(ctx, sourceHash)
 
@@ -113,7 +113,7 @@ func pull(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRef
 				return err
 			}
 
-			uniqueOrdered, err = putChunks(ctx, walkRefs, sinkCS, batch, neededChunks, nextLevel, uniqueOrdered)
+			uniqueOrdered, err = putChunks(ctx, walkAddrs, sinkCS, batch, neededChunks, nextLevel, uniqueOrdered)
 
 			if err != nil {
 				return err
@@ -160,9 +160,9 @@ func persistChunks(ctx context.Context, cs chunks.ChunkStore) error {
 // PullWithoutBatching effectively removes the batching of chunk retrieval done on each level of the tree.  This means
 // all chunks from one level of the tree will be retrieved from the underlying chunk store in one call, which pushes the
 // optimization problem down to the chunk store which can make smarter decisions.
-func PullWithoutBatching(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkRefs WalkRefs, sourceHash hash.Hash, progressCh chan PullProgress) error {
+func PullWithoutBatching(ctx context.Context, srcCS, sinkCS chunks.ChunkStore, walkAddrs WalkAddrs, sourceHash hash.Hash, progressCh chan PullProgress) error {
 	// by increasing the batch size to MaxInt32 we effectively remove batching here.
-	return pull(ctx, srcCS, sinkCS, walkRefs, sourceHash, progressCh, math.MaxInt32)
+	return pull(ctx, srcCS, sinkCS, walkAddrs, sourceHash, progressCh, math.MaxInt32)
 }
 
 // concurrently pull all chunks from this batch that the sink is missing out of the source
@@ -187,11 +187,11 @@ func getChunks(ctx context.Context, srcCS chunks.ChunkStore, batch hash.HashSlic
 	return neededChunks, nil
 }
 
-type WalkRefs func(chunks.Chunk, func(hash.Hash, uint64) error) error
+type WalkAddrs func(chunks.Chunk, func(hash.Hash, bool) error) error
 
 // put the chunks that were downloaded into the sink IN ORDER and at the same time gather up an ordered, uniquified list
 // of all the children of the chunks and add them to the list of the next level tree chunks.
-func putChunks(ctx context.Context, wrh WalkRefs, sinkCS chunks.ChunkStore, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) (hash.HashSlice, error) {
+func putChunks(ctx context.Context, wah WalkAddrs, sinkCS chunks.ChunkStore, hashes hash.HashSlice, neededChunks map[hash.Hash]*chunks.Chunk, nextLevel hash.HashSet, uniqueOrdered hash.HashSlice) (hash.HashSlice, error) {
 	for _, h := range hashes {
 		c := neededChunks[h]
 		err := sinkCS.Put(ctx, *c)
@@ -200,7 +200,7 @@ func putChunks(ctx context.Context, wrh WalkRefs, sinkCS chunks.ChunkStore, hash
 			return hash.HashSlice{}, err
 		}
 
-		err = wrh(*c, func(h hash.Hash, height uint64) error {
+		err = wah(*c, func(h hash.Hash, _ bool) error {
 			if !nextLevel.Has(h) {
 				uniqueOrdered = append(uniqueOrdered, h)
 				nextLevel.Insert(h)

@@ -105,7 +105,7 @@ func printSchemas(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env
 			args = args[1:]
 
 			var err error
-			root, err = cm.GetRootValue()
+			root, err = cm.GetRootValue(ctx)
 
 			if err != nil {
 				verr = errhand.BuildDError("unable to get root value").AddCause(err).Build()

@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
@@ -177,7 +178,7 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 	filters = transformFilters(ctx, filters...)
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
-		meta, err := cm.GetCommitMeta()
+		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
 			return false, err
@@ -203,20 +204,20 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 
 func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Expression {
 	for i := range filters {
-		filters[i], _ = expression.TransformUp(filters[i], func(e sql.Expression) (sql.Expression, error) {
+		filters[i], _, _ = transform.Expr(filters[i], func(e sql.Expression) (sql.Expression, transform.TreeIdentity, error) {
 			gf, ok := e.(*expression.GetField)
 			if !ok {
-				return e, nil
+				return e, transform.SameTree, nil
 			}
 			switch gf.Name() {
 			case CommitHashCol:
-				return gf.WithIndex(0), nil
+				return gf.WithIndex(0), transform.NewTree, nil
 			case CommitterCol:
-				return gf.WithIndex(1), nil
+				return gf.WithIndex(1), transform.NewTree, nil
 			case CommitDateCol:
-				return gf.WithIndex(2), nil
+				return gf.WithIndex(2), transform.NewTree, nil
 			default:
-				return gf, nil
+				return gf, transform.SameTree, nil
 			}
 		})
 	}
@@ -306,7 +307,7 @@ func newRowItrForTableAtCommit(
 	sch schema.Schema,
 	filters []sql.Expression,
 	readerCreateFuncCache *ThreadSafeCRFuncCache) (*rowItrForTableAtCommit, error) {
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +361,7 @@ func newRowItrForTableAtCommit(
 		panic("Bug: History table schema should always have commit_hash")
 	}
 
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

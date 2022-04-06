@@ -296,7 +296,6 @@ var CopiedNomsFiles []CopiedNomsFile = []CopiedNomsFile{
 	{Path: "store/types/perf/perf_test.go", NomsPath: "go/types/perf/perf_test.go", HadCopyrightNotice: true},
 	{Path: "store/types/primitives_test.go", NomsPath: "go/types/primitives_test.go", HadCopyrightNotice: true},
 	{Path: "store/types/ref.go", NomsPath: "go/types/ref.go", HadCopyrightNotice: true},
-	{Path: "store/types/ref_heap.go", NomsPath: "go/types/ref_heap.go", HadCopyrightNotice: true},
 	{Path: "store/types/ref_test.go", NomsPath: "go/types/ref_test.go", HadCopyrightNotice: true},
 	{Path: "store/types/rolling_value_hasher.go", NomsPath: "go/types/rolling_value_hasher.go", HadCopyrightNotice: true},
 	{Path: "store/types/sequence.go", NomsPath: "go/types/sequence.go", HadCopyrightNotice: true},

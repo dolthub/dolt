@@ -121,7 +121,7 @@ func MergeCommitSpec(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (m
 }
 
 func ExecNoFFMerge(ctx context.Context, dEnv *env.DoltEnv, spec *MergeSpec) (map[string]*MergeStats, error) {
-	mergedRoot, err := spec.MergeC.GetRootValue()
+	mergedRoot, err := spec.MergeC.GetRootValue(ctx)
 
 	if err != nil {
 		return nil, ErrFailedToReadDatabase
@@ -189,7 +189,7 @@ func ExecuteFFMerge(
 	dEnv *env.DoltEnv,
 	spec *MergeSpec,
 ) error {
-	stagedRoot, err := spec.MergeC.GetRootValue()
+	stagedRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}

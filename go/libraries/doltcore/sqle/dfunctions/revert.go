@@ -60,7 +60,7 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	headRoot, err := headCommit.GetRootValue()
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}

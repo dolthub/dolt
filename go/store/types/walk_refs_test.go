@@ -38,13 +38,13 @@ func TestWalkRefs(t *testing.T) {
 	runTest := func(v Value, t *testing.T) {
 		assert := assert.New(t)
 		expected := hash.HashSlice{}
-		v.WalkRefs(Format_7_18, func(r Ref) error {
+		v.walkRefs(Format_7_18, func(r Ref) error {
 			expected = append(expected, r.TargetHash())
 			return nil
 		})
 		val, err := EncodeValue(v, Format_7_18)
 		require.NoError(t, err)
-		err = WalkRefs(val, Format_7_18, func(r Ref) error {
+		err = walkRefs(val.Data(), Format_7_18, func(r Ref) error {
 			if assert.True(len(expected) > 0) {
 				assert.Equal(expected[0], r.TargetHash())
 				expected = expected[1:]

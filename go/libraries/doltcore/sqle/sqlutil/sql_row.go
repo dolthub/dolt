@@ -346,6 +346,8 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			}
 		case time.Time:
 			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
+		case sql.Geometry:
+			return SqlColToStr(ctx, typedCol.Inner)
 		case sql.Point:
 			buf := make([]byte, 25)
 			WriteEWKBHeader(typedCol, buf)

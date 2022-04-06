@@ -105,7 +105,7 @@ SQL
 @test "revert: invalid hash" {
     run dolt revert aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "hash" ]] || false
+    [[ "$output" =~ "target commit not found" ]] || false
 }
 
 @test "revert: HEAD with --author parameter" {
@@ -223,7 +223,7 @@ SQL
 @test "revert: SQL invalid hash" {
     run dolt sql -q "SELECT DOLT_REVERT('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "hash" ]] || false
+    [[ "$output" =~ "target commit not found" ]] || false
 }
 
 @test "revert: SQL HEAD with author" {

@@ -451,7 +451,7 @@ func (dEnv *DoltEnv) InitializeRepoState(ctx context.Context, branchName string)
 		return err
 	}
 
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -703,7 +703,7 @@ func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
 		return nil, err
 	}
 
-	return commit.GetRootValue()
+	return commit.GetRootValue(ctx)
 }
 
 func (dEnv *DoltEnv) DbData() DbData {

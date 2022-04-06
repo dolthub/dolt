@@ -60,6 +60,14 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	dir := s.DBDir
 
 	cs, err := nbs.NewLocalStore(context.Background(), types.Format_Default.VersionString(), dir, clienttest.DefaultMemTableSize, nbs.NewUnlimitedMemQuotaProvider())
+
+	golden1 := "oetp3jigkp5pid2f5c4mknpo17mso31b"
+	golden2 := "tsbj1qq88llk3k8qqqb5n3188sbpiu7r"
+	if types.Format_Default == types.Format_DOLT_DEV {
+		golden1 = "v5hvf758gu5gkbe987gcju2de2sunkul"
+		golden2 = "c5j2ve21fdtr8vmqu548lc7546tmv6sl"
+	}
+
 	s.NoError(err)
 	db := datas.NewDatabase(cs)
 
@@ -92,7 +100,7 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	// delete one dataset, print message at delete
 	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", datasetName})
-	s.Equal("Deleted "+datasetName+" (was #oetp3jigkp5pid2f5c4mknpo17mso31b)\n", rtnVal)
+	s.Equal("Deleted "+datasetName+" (was #"+golden1+")\n", rtnVal)
 
 	// print datasets, just one left
 	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})
@@ -100,7 +108,7 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 
 	// delete the second dataset
 	rtnVal, _ = s.MustRun(main, []string{"ds", "-d", dataset2Name})
-	s.Equal("Deleted "+dataset2Name+" (was #tsbj1qq88llk3k8qqqb5n3188sbpiu7r)\n", rtnVal)
+	s.Equal("Deleted "+dataset2Name+" (was #"+golden2+")\n", rtnVal)
 
 	// print datasets, none left
 	rtnVal, _ = s.MustRun(main, []string{"ds", dbSpec})

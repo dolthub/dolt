@@ -37,11 +37,11 @@ func NewTag(ctx context.Context, name string, ds datas.Dataset, vrw types.ValueR
 	if err != nil {
 		return nil, err
 	}
-	commitSt, err := vrw.ReadValue(ctx, commitAddr)
+	dc, err := datas.LoadCommitAddr(ctx, vrw, commitAddr)
 	if err != nil {
 		return nil, err
 	}
-	commit, err := NewCommit(ctx, vrw, commitSt)
+	commit, err := NewCommit(ctx, vrw, dc)
 	if err != nil {
 		return nil, err
 	}

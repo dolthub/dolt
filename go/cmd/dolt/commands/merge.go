@@ -269,11 +269,11 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec
 	}
 
 	if ok, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC); ok {
-		ancRoot, err := spec.HeadC.GetRootValue()
+		ancRoot, err := spec.HeadC.GetRootValue(ctx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}
-		mergedRoot, err := spec.MergeC.GetRootValue()
+		mergedRoot, err := spec.MergeC.GetRootValue(ctx)
 		if err != nil {
 			return errhand.VerboseErrorFromError(err)
 		}

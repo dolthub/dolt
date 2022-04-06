@@ -363,7 +363,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	mRoot, err := mainHead.GetRootValue()
+	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
 	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
@@ -400,16 +400,16 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 func TestMergeCommits(t *testing.T) {
 	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest(t)
 
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mergeRoot, err := mergeCommit.GetRootValue()
+	mergeRoot, err := mergeCommit.GetRootValue(context.Background())
 	require.NoError(t, err)
 
 	ancCm, err := doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
 	require.NoError(t, err)
 
-	ancRoot, err := ancCm.GetRootValue()
+	ancRoot, err := ancCm.GetRootValue(context.Background())
 	require.NoError(t, err)
 
 	ff, err := commit.CanFastForwardTo(context.Background(), mergeCommit)

@@ -18,6 +18,10 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-18.04, macos-10.15 ]
+        dolt_fmt: [ "", "__DOLT_DEV__" ]
+        exclude:
+          - os: "macos-10.15"
+            dolt_fmt: "__DOLT_DEV__"
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:
@@ -86,6 +90,9 @@ jobs:
       - name: Check expect
         run: expect -v
       - name: Test all Unix
+        env:
+          DOLT_FMT: ${{ maxtrix.dolt_fmt }}
         run: |
+          if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .
         working-directory: ./integration-tests/bats

@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/go-mysql-server/sql/transform"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -342,7 +343,7 @@ func (s *SqlEngineTableWriter) createInsertImportNode(source chan sql.Row, ignor
 	analyzed = analyzer.StripPassthroughNodes(analyzed)
 
 	// Get the first insert (wrapped with the error handler)
-	plan.Inspect(analyzed, func(node sql.Node) bool {
+	transform.Inspect(analyzed, func(node sql.Node) bool {
 		switch n := node.(type) {
 		case *plan.InsertInto:
 			analyzed = n

@@ -293,7 +293,7 @@ func (m Merge) Exec(t *testing.T, dEnv *env.DoltEnv) error {
 			return errhand.VerboseErrorFromError(err)
 		}
 
-		rv, err := cm2.GetRootValue()
+		rv, err := cm2.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
 		err = dEnv.UpdateWorkingSet(context.Background(), workingSet.WithWorkingRoot(rv))

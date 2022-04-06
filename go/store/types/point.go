@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"github.com/dolthub/dolt/go/store/geometry"
-
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -63,7 +62,7 @@ func (v Point) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return cb(v)
 }
 
-func (v Point) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Point) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 
