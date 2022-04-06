@@ -38,8 +38,8 @@ type prollyIndexIter struct {
 	pkMap val.OrdinalMapping
 	pkBld *val.TupleBuilder
 
-	eg      *errgroup.Group
-	rowChan chan sql.Row
+	eg       *errgroup.Group
+	rowChan  chan sql.Row
 	row2Chan chan sql.Row2
 
 	// keyMap and valMap transform tuples from
