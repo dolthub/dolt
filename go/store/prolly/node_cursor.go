@@ -100,7 +100,7 @@ func newCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *nodeCur
 }
 
 func newCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64) (cur *nodeCursor, err error) {
-	if ord == uint64(nd.treeCount()) {
+	if ord >= uint64(nd.treeCount()) {
 		return newCursorPastEnd(ctx, nrw, nd)
 	}
 
