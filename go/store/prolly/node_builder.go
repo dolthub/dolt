@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	fb "github.com/google/flatbuffers/go"
 
@@ -33,7 +34,7 @@ const (
 
 type novelNode struct {
 	node      Node
-	ref       hash.Hash
+	addr      hash.Hash
 	lastKey   nodeItem
 	treeCount uint64
 }
@@ -41,10 +42,12 @@ type novelNode struct {
 func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNode, error) {
 	node := bld.build(ns.Pool())
 
-	ref, err := ns.Write(ctx, node)
+	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
 	}
+
+	fmt.Println(formatHack(addr, bld))
 
 	var lastKey val.Tuple
 	if len(bld.keys) > 0 {
@@ -55,7 +58,7 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 	treeCount := uint64(node.treeCount())
 
 	return novelNode{
-		ref:       ref,
+		addr:      addr,
 		node:      node,
 		lastKey:   nodeItem(lastKey),
 		treeCount: treeCount,
@@ -248,4 +251,29 @@ func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
 	// todo(andy) write without copy
 	arr := writeSubtreeCounts(sc)
 	return b.CreateByteVector(arr)
+}
+
+func formatHack(addr hash.Hash, bld *nodeBuilder) string {
+	desc := val.NewTupleDescriptor(val.Type{Enc: val.Int32Enc})
+	return formatCompletedNode(addr, bld, desc, desc)
+}
+
+func formatCompletedNode(addr hash.Hash, bld *nodeBuilder, kd, vd val.TupleDesc) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Novel Node (level %d) #%s { \n", bld.level, addr.String()))
+	for i := range bld.keys {
+		k, v := bld.keys[i], bld.values[i]
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(val.Tuple(k)))
+		sb.WriteString(": ")
+		if bld.level == 0 {
+			sb.WriteString(vd.Format(val.Tuple(v)))
+		} else {
+			sb.WriteString("#")
+			sb.WriteString(hash.New(v).String())
+		}
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("} ")
+	return sb.String()
 }

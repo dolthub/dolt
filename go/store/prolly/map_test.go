@@ -69,6 +69,12 @@ func TestMap(t *testing.T) {
 	}
 }
 
+func TestIterAll10KMap(t *testing.T) {
+	tups, desc := ascendingIntTuples(t, 10_000)
+	prollyMap := prollyMapFromTuples(t, desc, desc, tups)
+	testIterAll(t, prollyMap, tups)
+}
+
 func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},

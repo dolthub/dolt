@@ -16,9 +16,10 @@ package enginetest
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
-	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
