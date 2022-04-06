@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -356,12 +355,26 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 }
 
 func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
-	extraJSON := row[4].(json.NomsJSON)
-	doc, err := extraJSON.Unmarshall(ctx)
+	doc, err := row[4].(sql.JSONValue).Unmarshall(ctx)
 	if err != nil {
 		return 0, err
 	}
-	val := doc.Val.(map[string]interface{})
-	createdTime := int64(val["CreatedAt"].(float64))
-	return createdTime, nil
+
+	err = fmt.Errorf("value %v does not contain creation time", doc.Val)
+
+	obj, ok := doc.Val.(map[string]interface{})
+	if !ok {
+		return 0, err
+	}
+
+	v, ok := obj["CreatedAt"]
+	if !ok {
+		return 0, err
+	}
+
+	f, ok := v.(float64)
+	if !ok {
+		return 0, err
+	}
+	return int64(f), nil
 }
