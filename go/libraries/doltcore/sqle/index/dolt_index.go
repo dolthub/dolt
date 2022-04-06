@@ -297,7 +297,7 @@ RangeLoop:
 func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
 		// todo(andy): handle first column filters
-		return filters
+		return nil
 	} else {
 		return filters
 	}
