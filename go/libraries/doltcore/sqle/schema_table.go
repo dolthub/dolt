@@ -191,7 +191,7 @@ func migrateOldSchemasTableToNew(
 			return err
 		}
 		// append the new id to row, if missing
-		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTablesIdCol) {
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
 			sqlRow = append(sqlRow, id)
 		}
 		// append the extra cols to row
@@ -355,10 +355,7 @@ func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	val, ok := doc.Val.(map[string]interface{})
-	if !ok {
-		return int64(doc.Val.(float64)), nil
-	}
+	val := doc.Val.(map[string]interface{})
 	createdTime := int64(val["CreatedAt"].(float64))
 	return createdTime, nil
 }
