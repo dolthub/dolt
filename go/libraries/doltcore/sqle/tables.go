@@ -826,7 +826,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		nullable = Null
 	}
 
-	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
+	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, order)
 	if err != nil {
 		return err
 	}
@@ -856,17 +856,7 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func orderToOrder(order *sql.ColumnOrder) *columnOrder {
-	if order == nil {
-		return nil
-	}
-	return &columnOrder{
-		First: order.First,
-		After: order.AfterColumn,
-	}
-}
-
-// dropColumn implements sql.AlterableTable
+// DropColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil
@@ -1063,7 +1053,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := modifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
+	updatedTable, err := modifyColumn(ctx, table, existingCol, col, order, t.opts)
 	if err != nil {
 		return err
 	}

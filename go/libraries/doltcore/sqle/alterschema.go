@@ -42,18 +42,10 @@ func renameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName s
 
 // Nullable represents whether a column can have a null value.
 type Nullable bool
-
 const (
 	NotNull Nullable = false
 	Null    Nullable = true
 )
-
-// Clone of sql.ColumnOrder to avoid a dependency on sql here
-// TODO (zachmu): kill off
-type columnOrder struct {
-	First bool
-	After string
-}
 
 // addColumnToTable adds a new column to the schema given and returns the new table value. Non-null column additions
 // rewrite the entire table, since we must write a value for each row. If the column is not nullable, a default value
@@ -71,7 +63,7 @@ func addColumnToTable(
 		nullable Nullable,
 		defaultVal *sql.ColumnDefaultValue,
 		comment string,
-		order *columnOrder,
+		order *sql.ColumnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -101,7 +93,7 @@ func addColumnToSchema(
 		newColName string,
 		typeInfo typeinfo.TypeInfo,
 		nullable Nullable,
-		order *columnOrder,
+		order *sql.ColumnOrder,
 		defaultVal sql.Expression,
 		comment string,
 ) (schema.Schema, error) {
@@ -116,7 +108,7 @@ func addColumnToSchema(
 	}
 	for _, col := range sch.GetAllCols().GetColumns() {
 		newCols = append(newCols, col)
-		if order != nil && order.After == col.Name {
+		if order != nil && order.AfterColumn == col.Name {
 			newCols = append(newCols, newCol)
 		}
 	}
@@ -220,7 +212,7 @@ func modifyColumn(
 		tbl *doltdb.Table,
 		existingCol schema.Column,
 		newCol schema.Column,
-		order *columnOrder,
+		order *sql.ColumnOrder,
 		opts editor.Options,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
@@ -464,14 +456,14 @@ func updateRowDataWithNewType(
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
-func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *columnOrder) (schema.Schema, error) {
+func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *sql.ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	prevColumn := ""
 	for _, col := range sch.GetAllCols().GetColumns() {
 		if col.Name == oldCol.Name {
 			if prevColumn == "" {
 				if order == nil {
-					order = &columnOrder{First: true}
+					order = &sql.ColumnOrder{First: true}
 				}
 			}
 			break
@@ -482,7 +474,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 
 	if order == nil {
 		if prevColumn != "" {
-			order = &columnOrder{After: prevColumn}
+			order = &sql.ColumnOrder{AfterColumn: prevColumn}
 		} else {
 			return nil, fmt.Errorf("Couldn't find column %s", oldCol.Name)
 		}
@@ -498,7 +490,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 			newCols = append(newCols, col)
 		}
 
-		if order.After == col.Name {
+		if order.AfterColumn == col.Name {
 			newCols = append(newCols, newCol)
 		}
 	}
