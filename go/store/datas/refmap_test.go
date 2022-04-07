@@ -17,38 +17,61 @@ package datas
 import (
 	"testing"
 
+	flatbuffers "github.com/google/flatbuffers/go"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func TestRefMap(t *testing.T) {
-	var rm refmap
-	rm.set("refs/heads/main", hash.Parse("dhuvd5ujhsndlqrbds90vapt2325v7lq"))
-	rm.set("refs/heads/branch", hash.Parse("vrgo3ao6fcqrsr6chqlakanqeg936i9c"))
-	got := rm.lookup("refs/heads/main")
-	assert.Equal(t, hash.Parse("dhuvd5ujhsndlqrbds90vapt2325v7lq"), got)
-	got = rm.lookup("nonexistant")
-	assert.Equal(t, hash.Hash{}, got)
-	serialized := rm.storeroot_flatbuffer()
-	assert.NotNil(t, serialized)
-	parsed := parse_storeroot(serialized)
-	assert.Len(t, parsed.entries, 2)
-	got = parsed.lookup("refs/heads/main")
-	assert.Equal(t, hash.Parse("dhuvd5ujhsndlqrbds90vapt2325v7lq"), got)
-	got = parsed.lookup("refs/heads/branch")
-	assert.Equal(t, hash.Parse("vrgo3ao6fcqrsr6chqlakanqeg936i9c"), got)
-	got = parsed.lookup("nonexistant")
-	assert.Equal(t, hash.Hash{}, got)
+func TestRefMapLookupEmpty(t *testing.T) {
+	rm := empty_refmap().RefMap
+	assert.Equal(t, rm.NamesLength(), 0)
+	assert.Equal(t, RefMapLookup(rm, ""), hash.Hash{})
+	assert.Equal(t, RefMapLookup(rm, "doesnotexist"), hash.Hash{})
 }
 
-func TestRefMapDelete(t *testing.T) {
-	var rm refmap
-	rm.set("refs/heads/main", hash.Parse("dhuvd5ujhsndlqrbds90vapt2325v7lq"))
-	rm.set("refs/heads/branch", hash.Parse("vrgo3ao6fcqrsr6chqlakanqeg936i9c"))
-	rm.delete("refs/heads/main")
-	got := rm.lookup("refs/heads/branch")
-	assert.Equal(t, hash.Parse("vrgo3ao6fcqrsr6chqlakanqeg936i9c"), got)
-	got = rm.lookup("refs/heads/main")
-	assert.Equal(t, hash.Hash{}, got)
+func edit_refmap(rm *serial.RefMap, edits []rmedit) *serial.RefMap {
+	builder := flatbuffers.NewBuilder(1024)
+	builder.Finish(RefMapEdit(rm, builder, edits))
+	return serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+}
+
+func TestRefMapEditInserts(t *testing.T) {
+	empty := empty_refmap().RefMap
+	a_hash := hash.Parse("3i50gcjrl9m2pgolrkc22kq46sj4p96o")
+	with_a := edit_refmap(empty, []rmedit{rmedit{"a", a_hash}})
+	assert.Equal(t, RefMapLookup(with_a, "a"), a_hash)
+	assert.Equal(t, RefMapLookup(with_a, "A"), hash.Hash{})
+	assert.Equal(t, RefMapLookup(empty, "a"), hash.Hash{})
+
+	b_hash := hash.Parse("7mm15d7prjlurr8g4u51n7dfg6bemt7p")
+	with_ab_from_a := edit_refmap(with_a, []rmedit{rmedit{"b", b_hash}})
+	with_ab_from_empty := edit_refmap(empty, []rmedit{rmedit{"b", b_hash}, rmedit{"a", a_hash}})
+	assert.Equal(t, with_ab_from_a.Table().Bytes, with_ab_from_empty.Table().Bytes)
+	assert.Equal(t, RefMapLookup(with_ab_from_a, "a"), a_hash)
+	assert.Equal(t, RefMapLookup(with_ab_from_a, "b"), b_hash)
+	assert.Equal(t, RefMapLookup(with_ab_from_a, "c"), hash.Hash{})
+	assert.Equal(t, RefMapLookup(with_ab_from_a, "A"), hash.Hash{})
+}
+
+func TestRefMapEditDeletes(t *testing.T) {
+	empty := empty_refmap().RefMap
+	a_hash := hash.Parse("3i50gcjrl9m2pgolrkc22kq46sj4p96o")
+	b_hash := hash.Parse("7mm15d7prjlurr8g4u51n7dfg6bemt7p")
+	with_ab := edit_refmap(empty, []rmedit{rmedit{"b", b_hash}, rmedit{"a", a_hash}})
+
+	without_a := edit_refmap(with_ab, []rmedit{{name: "a"}})
+	assert.Equal(t, RefMapLookup(without_a, "a"), hash.Hash{})
+	assert.Equal(t, RefMapLookup(without_a, "b"), b_hash)
+
+	without_ab := edit_refmap(without_a, []rmedit{{name: "b"}})
+	assert.Equal(t, without_ab.NamesLength(), 0)
+	assert.Equal(t, without_ab.RefArrayLength(), 0)
+	assert.Equal(t, RefMapLookup(without_ab, "a"), hash.Hash{})
+	assert.Equal(t, RefMapLookup(without_ab, "b"), hash.Hash{})
+	assert.Equal(t, empty.Table().Bytes, without_ab.Table().Bytes)
+
+	with_b := edit_refmap(empty, []rmedit{rmedit{"b", b_hash}})
+	assert.Equal(t, without_a.Table().Bytes, with_b.Table().Bytes)
 }
