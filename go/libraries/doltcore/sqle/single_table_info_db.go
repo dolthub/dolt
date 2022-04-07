@@ -184,22 +184,31 @@ type fmtIndex struct {
 	comment   string
 }
 
-// ID implementes sql.Index
+// ID implements sql.Index
 func (idx fmtIndex) ID() string {
 	return idx.id
 }
 
-// Database implementes sql.Index
+// Database implements sql.Index
 func (idx fmtIndex) Database() string {
 	return idx.db
 }
 
-// Table implementes sql.Index
+// Table implements sql.Index
 func (idx fmtIndex) Table() string {
 	return idx.tbl
 }
 
-// Expressions implementes sql.Index
+// ColumnNames implements sql.Index
+func (idx fmtIndex) ColumnNames() []string {
+	colNames := make([]string, len(idx.cols))
+	for i, col := range idx.cols {
+		colNames[i] = col.Name
+	}
+	return colNames
+}
+
+// Expressions implements sql.Index
 func (idx fmtIndex) Expressions() []string {
 	strs := make([]string, len(idx.cols))
 	for i, col := range idx.cols {
@@ -208,32 +217,32 @@ func (idx fmtIndex) Expressions() []string {
 	return strs
 }
 
-// IsUnique implementes sql.Index
+// IsUnique implements sql.Index
 func (idx fmtIndex) IsUnique() bool {
 	return idx.unique
 }
 
-// Comment implementes sql.Index
+// Comment implements sql.Index
 func (idx fmtIndex) Comment() string {
 	return idx.comment
 }
 
-// IndexType implementes sql.Index
+// IndexType implements sql.Index
 func (idx fmtIndex) IndexType() string {
 	return "BTREE"
 }
 
-// IsGenerated implementes sql.Index
+// IsGenerated implements sql.Index
 func (idx fmtIndex) IsGenerated() bool {
 	return idx.generated
 }
 
-// NewLookup implementes sql.Index
+// NewLookup implements sql.Index
 func (idx fmtIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	panic("unimplemented")
 }
 
-// ColumnExpressionTypes implementes sql.Index
+// ColumnExpressionTypes implements sql.Index
 func (idx fmtIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	panic("unimplemented")
 }

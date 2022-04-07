@@ -308,6 +308,15 @@ func (di doltIndex) Database() string {
 	return di.dbName
 }
 
+// Columns implements sql.Index
+func (di doltIndex) ColumnNames() []string {
+	colNames := make([]string, len(di.columns))
+	for i, col := range di.columns {
+		colNames[i] = col.Name
+	}
+	return colNames
+}
+
 // Expressions implements sql.Index
 func (di doltIndex) Expressions() []string {
 	strs := make([]string, len(di.columns))
