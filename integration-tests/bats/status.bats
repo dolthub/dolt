@@ -19,7 +19,7 @@ get_head_commit() {
     run dolt version --feature
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt version" ]] || false
-    [[ "$output" =~ "feature version: 2" ]] || false
+    [[ "$output" =~ "feature version: 3" ]] || false
 }
 
 @test "status: no changes" {
