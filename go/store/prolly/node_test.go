@@ -29,7 +29,13 @@ import (
 )
 
 func TestRoundTripInts(t *testing.T) {
-	keys, values := ascendingIntTuples(t, 10)
+	tups, _ := ascendingUintTuples(t, 10)
+	keys := make([]val.Tuple, len(tups))
+	values := make([]val.Tuple, len(tups))
+	for i := range tups {
+		keys[i] = tups[i][0]
+		values[i] = tups[i][1]
+	}
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
 
 	nd := newTupleLeafNode(keys, values)
@@ -140,16 +146,29 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
-func ascendingIntTuples(t *testing.T, count int) (keys, values []val.Tuple) {
-	desc := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+func ascendingUintTuples(t *testing.T, count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc)
-
-	tups := make([]val.Tuple, count*2)
-	for i := range tups {
+	tuples = make([][2]val.Tuple, count)
+	for i := range tuples {
 		bld.PutUint32(0, uint32(i))
-		tups[i] = bld.Build(sharedPool)
+		tuples[i][0] = bld.Build(sharedPool)
+		bld.PutUint32(0, uint32(i+count))
+		tuples[i][1] = bld.Build(sharedPool)
 	}
-	keys, values = tups[:count], tups[count:]
+	return
+}
+
+func ascendingIntTuples(t *testing.T, count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Int32Enc})
+	bld := val.NewTupleBuilder(desc)
+	tuples = make([][2]val.Tuple, count)
+	for i := range tuples {
+		bld.PutInt32(0, int32(i))
+		tuples[i][0] = bld.Build(sharedPool)
+		bld.PutInt32(0, int32(i+count))
+		tuples[i][1] = bld.Build(sharedPool)
+	}
 	return
 }
 
