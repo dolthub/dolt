@@ -470,7 +470,6 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
