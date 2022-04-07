@@ -138,9 +138,9 @@ func (rm refmap) len() uint64 {
 }
 
 func (rm refmap) edit(edits []rmedit) refmap {
-        builder := flatbuffers.NewBuilder(1024)
-        builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
-        return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+	builder := flatbuffers.NewBuilder(1024)
+	builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
+	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
 }
 
 func (rm refmap) lookup(key string) hash.Hash {

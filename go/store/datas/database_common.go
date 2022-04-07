@@ -251,7 +251,7 @@ func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Has
 	addrs := m.rm.RefMap.RefArrayBytes()
 	for i := 0; i < m.rm.RefMap.NamesLength(); i++ {
 		name := string(m.rm.RefMap.Names(i))
-		addr := hash.New(addrs[i*20:i*20+20])
+		addr := hash.New(addrs[i*20 : i*20+20])
 		if err := cb(name, addr); err != nil {
 			return err
 		}
