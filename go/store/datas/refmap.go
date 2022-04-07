@@ -24,55 +24,75 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type rmentry struct {
+type rmedit struct {
 	name string
 	addr hash.Hash
 }
 
-type refmap struct {
-	entries []rmentry
-}
-
-func (rm refmap) lookup(key string) hash.Hash {
-	for _, e := range rm.entries {
-		if e.name == key {
-			return e.addr
-		}
-	}
-	return hash.Hash{}
-}
-
-func (rm *refmap) set(key string, addr hash.Hash) {
-	for i := range rm.entries {
-		if rm.entries[i].name == key {
-			rm.entries[i].addr = addr
-			return
-		}
-	}
-	rm.entries = append(rm.entries, rmentry{key, addr})
-}
-
-func (rm *refmap) delete(key string) {
-	entries := make([]rmentry, len(rm.entries)-1)
-	j := 0
-	for i := range rm.entries {
-		if rm.entries[i].name != key {
-			entries[j] = rm.entries[i]
-			j++
-		}
-	}
-	rm.entries = entries
-}
-
-func (rm refmap) storeroot_flatbuffer() []byte {
-	sort.Slice(rm.entries, func(i, j int) bool {
-		return rm.entries[i].name < rm.entries[j].name
+func RefMapLookup(rm *serial.RefMap, key string) hash.Hash {
+	var res hash.Hash
+	n := sort.Search(rm.NamesLength(), func(i int) bool {
+		return string(rm.Names(i)) >= key
 	})
-	builder := flatbuffers.NewBuilder(1024)
-	nameoffs := make([]flatbuffers.UOffsetT, len(rm.entries))
-	for i := len(nameoffs) - 1; i >= 0; i-- {
-		nameoffs[i] = builder.CreateString(rm.entries[i].name)
+	if n != rm.NamesLength() && string(rm.Names(n)) == key {
+		copy(res[:], rm.RefArrayBytes()[n*20:])
 	}
+	return res
+}
+
+func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit) flatbuffers.UOffsetT {
+	sort.Slice(edits, func(i, j int) bool {
+		return edits[i].name < edits[j].name
+	})
+
+	type idx struct {
+		l, r int
+	}
+	var indexes []idx
+	ni := 0
+	ei := 0
+	for ni < rm.NamesLength() && ei < len(edits) {
+		if string(rm.Names(ni)) < edits[ei].name {
+			indexes = append(indexes, idx{ni, -1})
+			ni += 1
+		} else if string(rm.Names(ni)) == edits[ei].name {
+			if !edits[ei].addr.IsEmpty() {
+				indexes = append(indexes, idx{-1, ei})
+			}
+			ei += 1
+			ni += 1
+		} else {
+			if !edits[ei].addr.IsEmpty() {
+				indexes = append(indexes, idx{-1, ei})
+			}
+			ei += 1
+		}
+	}
+	for ni < rm.NamesLength() {
+		indexes = append(indexes, idx{ni, -1})
+		ni += 1
+	}
+	for ei < len(edits) {
+		indexes = append(indexes, idx{-1, ei})
+		ei += 1
+	}
+
+	if len(indexes) == 0 {
+		serial.RefMapStart(builder)
+		return serial.RefMapEnd(builder)
+	}
+
+	nameoffs := make([]flatbuffers.UOffsetT, len(indexes))
+	for i := len(nameoffs) - 1; i >= 0; i-- {
+		var name string
+		if indexes[i].l != -1 {
+			name = string(rm.Names(indexes[i].l))
+		} else {
+			name = edits[indexes[i].r].name
+		}
+		nameoffs[i] = builder.CreateString(name)
+	}
+
 	serial.RefMapStartNamesVector(builder, len(nameoffs))
 	for i := len(nameoffs) - 1; i >= 0; i-- {
 		builder.PrependUOffsetT(nameoffs[i])
@@ -80,12 +100,17 @@ func (rm refmap) storeroot_flatbuffer() []byte {
 	namesoff := builder.EndVector(len(nameoffs))
 
 	hashsz := 20
-	hashessz := len(rm.entries) * hashsz
+	hashessz := len(indexes) * hashsz
 	builder.Prep(flatbuffers.SizeUOffsetT, hashessz)
 	stop := int(builder.Head())
+	rmaddrbytes := rm.RefArrayBytes()
 	start := stop - hashessz
-	for _, e := range rm.entries {
-		copy(builder.Bytes[start:stop], e.addr[:])
+	for _, idx := range indexes {
+		if idx.l != -1 {
+			copy(builder.Bytes[start:stop], rmaddrbytes[idx.l*20:idx.l*20+20])
+		} else {
+			copy(builder.Bytes[start:stop], edits[idx.r].addr[:])
+		}
 		start += hashsz
 	}
 	start = stop - hashessz
@@ -94,14 +119,48 @@ func (rm refmap) storeroot_flatbuffer() []byte {
 	serial.RefMapStart(builder)
 	serial.RefMapAddNames(builder, namesoff)
 	serial.RefMapAddRefArray(builder, refarrayoff)
-	serial.RefMapAddTreeCount(builder, uint64(len(rm.entries)))
+	serial.RefMapAddTreeCount(builder, uint64(len(indexes)))
 	serial.RefMapAddTreeLevel(builder, 0)
-	refmap := serial.RefMapEnd(builder)
+	return serial.RefMapEnd(builder)
+}
 
+type rmentry struct {
+	name string
+	addr hash.Hash
+}
+
+type refmap struct {
+	*serial.RefMap
+}
+
+func (rm refmap) len() uint64 {
+	return uint64(rm.RefMap.NamesLength())
+}
+
+func (rm refmap) edit(edits []rmedit) refmap {
+        builder := flatbuffers.NewBuilder(1024)
+        builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
+        return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+}
+
+func (rm refmap) lookup(key string) hash.Hash {
+	return RefMapLookup(rm.RefMap, key)
+}
+
+func (rm refmap) set(key string, addr hash.Hash) refmap {
+	return rm.edit([]rmedit{{key, addr}})
+}
+
+func (rm *refmap) delete(key string) refmap {
+	return rm.edit([]rmedit{{key, hash.Hash{}}})
+}
+
+func (rm refmap) storeroot_flatbuffer() []byte {
+	builder := flatbuffers.NewBuilder(1024)
+	refmap := RefMapEdit(rm.RefMap, builder, []rmedit{})
 	serial.StoreRootStart(builder)
 	serial.StoreRootAddRefs(builder, refmap)
 	builder.FinishWithFileIdentifier(serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
-
 	return builder.FinishedBytes()
 }
 
@@ -121,16 +180,5 @@ func parse_storeroot(bs []byte) refmap {
 	if uint64(rm.NamesLength()) != rm.TreeCount() {
 		panic("inconsistent refmap at level 0 where names length != tree count")
 	}
-	hashsz := 20
-	if rm.RefArrayLength() != rm.NamesLength()*hashsz {
-		panic("inconsistent refmap at level 0 ref array length length != hashsz * names length")
-	}
-	entries := make([]rmentry, rm.NamesLength())
-	refs := rm.RefArrayBytes()
-	for i := 0; i < rm.NamesLength(); i++ {
-		entries[i].name = string(rm.Names(i))
-		off := i * hashsz
-		copy(entries[i].addr[:], refs[off:off+hashsz])
-	}
-	return refmap{entries}
+	return refmap{rm}
 }

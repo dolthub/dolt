@@ -244,12 +244,15 @@ type refmapDatasetsMap struct {
 }
 
 func (m refmapDatasetsMap) Len() uint64 {
-	return uint64(len(m.rm.entries))
+	return m.rm.len()
 }
 
 func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
-	for _, e := range m.rm.entries {
-		if err := cb(e.name, e.addr); err != nil {
+	addrs := m.rm.RefMap.RefArrayBytes()
+	for i := 0; i < m.rm.RefMap.NamesLength(); i++ {
+		name := string(m.rm.RefMap.Names(i))
+		addr := hash.New(addrs[i*20:i*20+20])
+		if err := cb(name, addr); err != nil {
 			return err
 		}
 	}
