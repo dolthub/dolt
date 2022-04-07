@@ -124,11 +124,6 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 	return serial.RefMapEnd(builder)
 }
 
-type rmentry struct {
-	name string
-	addr hash.Hash
-}
-
 type refmap struct {
 	*serial.RefMap
 }
