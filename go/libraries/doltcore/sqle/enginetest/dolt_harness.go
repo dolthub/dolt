@@ -91,8 +91,6 @@ var defaultSkippedQueries = []string{
 	"show variables",             // we set extra variables
 	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
 	"show indexes from",          // we create / expose extra indexes (for foreign keys)
-	"json_arrayagg",              // TODO: aggregation ordering
-	"json_objectagg",             // TODO: aggregation ordering
 	"typestable",                 // Bit type isn't working?
 	"show global variables like", // we set extra variables
 }
