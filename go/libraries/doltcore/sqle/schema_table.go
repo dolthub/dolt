@@ -191,7 +191,7 @@ func migrateOldSchemasTableToNew(
 			return err
 		}
 		// append the new id to row, if missing
-		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTablesIdCol) {
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
 			sqlRow = append(sqlRow, id)
 		}
 		// append the extra cols to row
