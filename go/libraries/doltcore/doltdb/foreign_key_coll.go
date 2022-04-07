@@ -61,9 +61,8 @@ func (f *ForeignKeyViolationError) Error() string {
 		}
 		key, _ := f.ViolationRows[i].NomsMapKey(f.Schema).Value(context.Background())
 		val, _ := f.ViolationRows[i].NomsMapValue(f.Schema).Value(context.Background())
-		valSlice, _ := val.(types.Tuple).AsSlice()
-		all, _ := key.(types.Tuple).Append(valSlice...)
-		str, _ := types.EncodedValue(context.Background(), all)
+
+		str := getRowValuesAsString(key, val)
 		sb.WriteRune('\n')
 		sb.WriteString(str)
 	}
@@ -73,6 +72,27 @@ func (f *ForeignKeyViolationError) Error() string {
 	} else {
 		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s", f.ForeignKey.Name, f.ForeignKey.TableName, sb.String())
 	}
+}
+
+// getRowValuesAsString returns row values as string format.
+// Variables key and val have tags in them, so tags are removed, and blobs are converted appropriately
+func getRowValuesAsString(key types.Value, val types.Value) string {
+	valSlice, _ := val.(types.Tuple).AsSlice()
+	all, _ := key.(types.Tuple).Append(valSlice...)
+	allSlice, _ := all.AsSlice()
+	var rowVals []string
+	for i, s := range allSlice {
+		if i%2 == 1 {
+			switch v := s.(type) {
+			case types.Blob:
+				rowVals = append(rowVals, v.DebugText())
+			default:
+				rowVals = append(rowVals, v.HumanReadableString())
+			}
+		}
+	}
+
+	return fmt.Sprintf("(%s)", strings.Join(rowVals, ", "))
 }
 
 var _ error = (*ForeignKeyViolationError)(nil)
