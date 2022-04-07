@@ -43,7 +43,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 2 // last bumped when changing TEXT types to use noms Blobs
+var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation time for triggers
 
 // RootValue defines the structure used inside all Dolthub noms dbs
 type RootValue struct {

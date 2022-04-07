@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -191,7 +190,7 @@ func migrateOldSchemasTableToNew(
 			return err
 		}
 		// append the new id to row, if missing
-		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTablesIdCol) {
+		if !schemasTable.sqlSchema().Contains(doltdb.SchemasTablesIdCol, doltdb.SchemasTableName) {
 			sqlRow = append(sqlRow, id)
 		}
 		// append the extra cols to row
@@ -291,13 +290,19 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		}
 	}()
 
-	sqlRow, err := iter.Next(ctx)
-	if err == nil {
+	// todo(andy): use filtered reader?
+	for {
+		sqlRow, err := iter.Next(ctx)
+		if err == io.EOF {
+			return nil, false, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		if sqlRow[0] != fragType || sqlRow[1] != name {
+			continue
+		}
 		return sqlRow, true, nil
-	} else if err == io.EOF {
-		return nil, false, nil
-	} else {
-		return nil, false, err
 	}
 }
 
@@ -350,12 +355,26 @@ func getSchemaFragmentsOfType(ctx *sql.Context, tbl *WritableDoltTable, fragType
 }
 
 func getCreatedTime(ctx *sql.Context, row sql.Row) (int64, error) {
-	extraJSON := row[4].(json.NomsJSON)
-	doc, err := extraJSON.Unmarshall(ctx)
+	doc, err := row[4].(sql.JSONValue).Unmarshall(ctx)
 	if err != nil {
 		return 0, err
 	}
-	val := doc.Val.(map[string]interface{})
-	createdTime := int64(val["CreatedAt"].(float64))
-	return createdTime, nil
+
+	err = fmt.Errorf("value %v does not contain creation time", doc.Val)
+
+	obj, ok := doc.Val.(map[string]interface{})
+	if !ok {
+		return 0, err
+	}
+
+	v, ok := obj["CreatedAt"]
+	if !ok {
+		return 0, err
+	}
+
+	f, ok := v.(float64)
+	if !ok {
+		return 0, err
+	}
+	return int64(f), nil
 }

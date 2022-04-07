@@ -33,24 +33,23 @@ var goldenHash = hash.Hash{
 }
 
 func TestContentAddress(t *testing.T) {
-	keys, values := ascendingIntTuples(t, 12345)
-	m := makeTree(t, keys, values)
+	tups, _ := ascendingUintTuples(t, 12345)
+	m := makeTree(t, tups)
 	require.NotNil(t, m)
 	require.Equal(t, goldenHash, m.hashOf())
 	assert.Equal(t, 12345, m.treeCount())
 }
 
-func makeTree(t *testing.T, keys, values []val.Tuple) Node {
+func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ctx := context.Background()
 	ns := newTestNodeStore()
 
 	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
 	require.NoError(t, err)
-	for i := range keys {
-		err := chunker.AddPair(ctx, keys[i], values[i])
+	for _, pair := range tuples {
+		err := chunker.AddPair(ctx, pair[0], pair[1])
 		require.NoError(t, err)
 	}
-
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 	return root
