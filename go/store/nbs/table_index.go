@@ -19,11 +19,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-	"os"
-	"sort"
 	"sync/atomic"
-
-	"github.com/dolthub/mmap-go"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -56,6 +52,8 @@ type tableIndex interface {
 	// Prefixes returns the sorted slice of |uint64| |addr| prefixes; each
 	// entry corresponds to an indexed chunk address.
 	Prefixes() ([]uint64, error)
+	// PrefixAt returns the prefix at the specified index
+	PrefixAt(idx uint32) uint64
 	// TableFileSize returns the total size of the indexed table file, in bytes.
 	TableFileSize() uint64
 	// TotalUncompressedData returns the total uncompressed data size of
@@ -92,6 +90,13 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 	totalUncompressedData = binary.BigEndian.Uint64(footer[uint32Size:])
 
 	return
+}
+
+func indexMemSize(chunkCount uint32) uint64 {
+	is := indexSize(chunkCount) + footerSize
+	// leftover offsets that don't fit into lengths, see NewOnHeapTableIndex
+	is += uint64(offsetSize * chunkCount / 2)
+	return is
 }
 
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
@@ -145,7 +150,8 @@ type onHeapTableIndex struct {
 	// Tuple bytes
 	tupleB []byte
 	// Offset bytes
-	offsetB []byte
+	offsetB1 []byte
+	offsetB2 []byte
 	// Suffix bytes
 	suffixB               []byte
 	chunkCount            uint32
@@ -160,17 +166,26 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 	lengths := b[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
 	suffixes := b[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
 
+	chunks2 := chunkCount / 2
+	chunks1 := chunkCount - chunks2
+
+	offsets1 := make([]byte, chunks1*offsetSize)
+
 	lR := bytes.NewReader(lengths)
-	offsets := make([]byte, chunkCount*offsetSize)
-	_, err := io.ReadFull(NewOffsetsReader(lR), offsets)
+	r := NewOffsetsReader(lR)
+	_, err := io.ReadFull(r, offsets1)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	/**
-	TODO: Optimize memory usage further
-	There's wasted space here. The lengths segment in the buffer is retained unnecessarily. We can use that space to
-	store half the offsets and then allocate an additional len(lengths) to store the rest.
-	*/
+
+	var offsets2 []byte
+	if chunks2 > 0 {
+		offsets2 = lengths[:chunks2*offsetSize]
+		_, err = io.ReadFull(r, offsets2)
+		if err != nil {
+			return onHeapTableIndex{}, err
+		}
+	}
 
 	refCnt := new(int32)
 	*refCnt = 1
@@ -179,7 +194,8 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 		refCnt:                refCnt,
 		q:                     q,
 		tupleB:                tuples,
-		offsetB:               offsets,
+		offsetB1:              offsets1,
+		offsetB2:              offsets2,
 		suffixB:               suffixes,
 		chunkCount:            chunkCount,
 		totalUncompressedData: totalUncompressedData,
@@ -188,6 +204,10 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 
 func (ti onHeapTableIndex) ChunkCount() uint32 {
 	return ti.chunkCount
+}
+
+func (ti onHeapTableIndex) PrefixAt(idx uint32) uint64 {
+	return ti.prefixAt(idx)
 }
 
 func (ti onHeapTableIndex) EntrySuffixMatches(idx uint32, h *addr) (bool, error) {
@@ -296,8 +316,16 @@ func (ti onHeapTableIndex) ordinalAt(idx uint32) uint32 {
 }
 
 func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
-	off := int64(offsetSize * ord)
-	b := ti.offsetB[off : off+offsetSize]
+	chunks1 := ti.chunkCount - ti.chunkCount/2
+	var b []byte
+	if ord < chunks1 {
+		off := int64(offsetSize * ord)
+		b = ti.offsetB1[off : off+offsetSize]
+	} else {
+		off := int64(offsetSize * (ord - chunks1))
+		b = ti.offsetB2[off : off+offsetSize]
+	}
+
 	return binary.BigEndian.Uint64(b)
 }
 
@@ -463,11 +491,17 @@ func (ti onHeapTableIndex) TotalUncompressedData() uint64 {
 func (ti onHeapTableIndex) Close() error {
 	cnt := atomic.AddInt32(ti.refCnt, -1)
 	if cnt == 0 {
-		return ti.q.ReleaseQuota(memSize(ti.chunkCount))
+		return ti.q.ReleaseQuota(indexMemSize(ti.chunkCount))
 	}
 	if cnt < 0 {
 		panic("Close() called and reduced ref count to < 0.")
 	}
+
+	ti.tupleB = nil
+	ti.offsetB1 = nil
+	ti.offsetB2 = nil
+	ti.suffixB = nil
+
 	return nil
 }
 
@@ -477,190 +511,4 @@ func (ti onHeapTableIndex) Clone() (tableIndex, error) {
 		panic("Clone() called after last Close(). This index is no longer valid.")
 	}
 	return ti, nil
-}
-
-// mmap table index
-
-type mmapIndexEntry []byte
-
-const mmapIndexEntryOffsetStart = addrSuffixSize
-const mmapIndexEntryLengthStart = addrSuffixSize + uint64Size
-
-func (e mmapIndexEntry) suffix() []byte {
-	return e[:addrSuffixSize]
-}
-
-func (e mmapIndexEntry) Offset() uint64 {
-	return binary.BigEndian.Uint64(e[mmapIndexEntryOffsetStart:])
-}
-
-func (e mmapIndexEntry) Length() uint32 {
-	return binary.BigEndian.Uint32(e[mmapIndexEntryLengthStart:])
-}
-
-func mmapOffheapSize(chunks int) int {
-	pageSize := 4096
-	esz := addrSuffixSize + uint64Size + lengthSize
-	min := esz * chunks
-	if min%pageSize == 0 {
-		return min
-	} else {
-		return (min/pageSize + 1) * pageSize
-	}
-}
-
-// An mmapIndexEntry is an addrSuffix, a BigEndian uint64 for the offset and a
-// BigEnding uint32 for the chunk size.
-const mmapIndexEntrySize = addrSuffixSize + uint64Size + lengthSize
-
-type mmapOrdinal struct {
-	idx    int
-	offset uint64
-}
-type mmapOrdinalSlice []mmapOrdinal
-
-func (s mmapOrdinalSlice) Len() int           { return len(s) }
-func (s mmapOrdinalSlice) Less(i, j int) bool { return s[i].offset < s[j].offset }
-func (s mmapOrdinalSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-
-type mmapTableIndex struct {
-	chunkCount            uint32
-	totalUncompressedData uint64
-	fileSz                uint64
-	prefixes              []uint64
-	data                  mmap.MMap
-	refCnt                *int32
-}
-
-func newMmapTableIndex(ti onHeapTableIndex, f *os.File) (mmapTableIndex, error) {
-	flags := 0
-	if f == nil {
-		flags = mmap.ANON
-	}
-	arr, err := mmap.MapRegion(f, mmapOffheapSize(int(ti.chunkCount)), mmap.RDWR, flags, 0)
-	if err != nil {
-		return mmapTableIndex{}, err
-	}
-	var a addr
-	for i := uint32(0); i < ti.chunkCount; i++ {
-		idx := i * mmapIndexEntrySize
-		si := addrSuffixSize * ti.ordinalAt(i)
-		copy(arr[idx:], ti.suffixB[si:si+addrSuffixSize])
-
-		e, err := ti.IndexEntry(i, &a)
-		if err != nil {
-			return mmapTableIndex{}, err
-		}
-		binary.BigEndian.PutUint64(arr[idx+mmapIndexEntryOffsetStart:], e.Offset())
-		binary.BigEndian.PutUint32(arr[idx+mmapIndexEntryLengthStart:], e.Length())
-	}
-
-	refCnt := new(int32)
-	*refCnt = 1
-	p, err := ti.Prefixes()
-	if err != nil {
-		return mmapTableIndex{}, err
-	}
-	return mmapTableIndex{
-		ti.chunkCount,
-		ti.totalUncompressedData,
-		ti.TableFileSize(),
-		p,
-		arr,
-		refCnt,
-	}, nil
-}
-
-func (i mmapTableIndex) ChunkCount() uint32 {
-	return i.chunkCount
-}
-
-func (i mmapTableIndex) EntrySuffixMatches(idx uint32, h *addr) (bool, error) {
-	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-	return bytes.Equal(e.suffix(), h[addrPrefixSize:]), nil
-}
-
-func (i mmapTableIndex) IndexEntry(idx uint32, a *addr) (indexEntry, error) {
-	mi := idx * mmapIndexEntrySize
-	e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-	if a != nil {
-		binary.BigEndian.PutUint64(a[:], i.prefixes[idx])
-		copy(a[addrPrefixSize:], e.suffix())
-	}
-	return e, nil
-}
-
-func (i mmapTableIndex) Lookup(h *addr) (indexEntry, bool, error) {
-	prefix := binary.BigEndian.Uint64(h[:])
-	for idx := i.prefixIdx(prefix); idx < i.chunkCount && i.prefixes[idx] == prefix; idx++ {
-		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-		if bytes.Equal(e.suffix(), h[addrPrefixSize:]) {
-			return e, true, nil
-		}
-	}
-	return mmapIndexEntry{}, false, nil
-}
-
-func (i mmapTableIndex) Ordinals() ([]uint32, error) {
-	s := mmapOrdinalSlice(make([]mmapOrdinal, i.chunkCount))
-	for idx := 0; uint32(idx) < i.chunkCount; idx++ {
-		mi := idx * mmapIndexEntrySize
-		e := mmapIndexEntry(i.data[mi : mi+mmapIndexEntrySize])
-		s[idx] = mmapOrdinal{idx, e.Offset()}
-	}
-	sort.Sort(s)
-	res := make([]uint32, i.chunkCount)
-	for j, r := range s {
-		res[r.idx] = uint32(j)
-	}
-	return res, nil
-}
-
-func (i mmapTableIndex) Prefixes() ([]uint64, error) {
-	return i.prefixes, nil
-}
-
-func (i mmapTableIndex) TableFileSize() uint64 {
-	return i.fileSz
-}
-
-func (i mmapTableIndex) TotalUncompressedData() uint64 {
-	return i.totalUncompressedData
-}
-
-func (i mmapTableIndex) Close() error {
-	cnt := atomic.AddInt32(i.refCnt, -1)
-	if cnt == 0 {
-		return i.data.Unmap()
-	}
-	if cnt < 0 {
-		panic("Close() called and reduced ref count to < 0.")
-	}
-	return nil
-}
-
-func (i mmapTableIndex) Clone() (tableIndex, error) {
-	cnt := atomic.AddInt32(i.refCnt, 1)
-	if cnt == 1 {
-		panic("Clone() called after last Close(). This index is no longer valid.")
-	}
-	return i, nil
-}
-
-func (i mmapTableIndex) prefixIdx(prefix uint64) (idx uint32) {
-	// NOTE: The golang impl of sort.Search is basically inlined here. This method can be called in
-	// an extremely tight loop and inlining the code was a significant perf improvement.
-	idx, j := 0, i.chunkCount
-	for idx < j {
-		h := idx + (j-idx)/2 // avoid overflow when computing h
-		// i ≤ h < j
-		if i.prefixes[h] < prefix {
-			idx = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-	return
 }

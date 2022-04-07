@@ -489,7 +489,7 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 						return
 					}
 				}
-				err := ts.q.AcquireQuota(ctx, spec.GetMemorySize())
+				err := ts.q.AcquireQuota(ctx, indexMemSize(spec.chunkCount))
 				if err != nil {
 					ae.SetIfError(err)
 					return
