@@ -296,7 +296,6 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
 
@@ -330,7 +329,6 @@ func TestPkOrdinalsDML(t *testing.T) {
 }
 
 func TestDropTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
