@@ -128,6 +128,13 @@ type refmap struct {
 	*serial.RefMap
 }
 
+func empty_refmap() refmap {
+	builder := flatbuffers.NewBuilder(24)
+	serial.RefMapStart(builder)
+	builder.Finish(serial.RefMapEnd(builder))
+	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+}
+
 func (rm refmap) len() uint64 {
 	return uint64(rm.RefMap.NamesLength())
 }
