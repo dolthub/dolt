@@ -423,7 +423,7 @@ func (ts tableSet) Flatten(ctx context.Context) (tableSet, error) {
 func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
 	merged := tableSet{
 		novel:    make(chunkSources, 0, len(ts.novel)),
-		upstream: make(chunkSources, 0, len(specs)),
+		upstream: make(chunkSources, len(specs)),
 		p:        ts.p,
 		q:        ts.q,
 		rl:       ts.rl,
