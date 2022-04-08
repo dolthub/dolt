@@ -11,6 +11,9 @@ teardown() {
 }
 
 skip_if_no_aws_tests() {
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_DEV__" ]; then
+      skip "skipping aws tests; DOLT_DEFAULT_BIN_FORMAT is __DOLT_DEV__"
+    fi
     if [ -z "$DOLT_BATS_AWS_TABLE" -o -z "$DOLT_BATS_AWS_BUCKET" -o -z "$DOLT_BATS_AWS_EXISTING_REPO" ]; then
       skip "skipping aws tests; set DOLT_BATS_AWS_TABLE, DOLT_BATS_AWS_BUCKET and DOLT_BATS_AWS_EXISTING_REPO to run"
     fi

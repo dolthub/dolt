@@ -296,7 +296,6 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
 
@@ -330,12 +329,10 @@ func TestPkOrdinalsDML(t *testing.T) {
 }
 
 func TestDropTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
 func TestRenameTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
@@ -409,7 +406,6 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestViews(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestViews(t, newDoltHarness(t))
 }
 
@@ -470,7 +466,6 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
@@ -480,7 +475,6 @@ func TestTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
-	skipNewFormat(t)
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion

@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -209,12 +211,16 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	if err != nil {
 		return nil, err
 	}
+	if !cur.valid() {
+		// map does not contain |rng|
+		return &pointLookup{}, nil
+	}
 
 	key := val.Tuple(cur.currentKey())
 	value := val.Tuple(cur.currentValue())
 	if compareBound(rng.Start, key, m.keyDesc) != 0 {
-		// map does not contain this point lookup
-		key, value = nil, nil
+		// map does not contain |rng|
+		return &pointLookup{}, nil
 	}
 
 	return &pointLookup{k: key, v: value}, nil
@@ -289,4 +295,34 @@ func (m Map) compareItems(left, right nodeItem) int {
 
 func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
+}
+
+// DebugFormat formats a Map.
+func DebugFormat(ctx context.Context, m Map) (string, error) {
+	kd, vd := m.Descriptors()
+	iter, err := m.IterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	c := m.Count()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Prolly Map (count: %d) {\n", c))
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		sb.WriteString(vd.Format(v))
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("}")
+	return sb.String(), nil
 }
