@@ -17,7 +17,6 @@ package editor
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -342,7 +341,7 @@ func RebuildAllIndexes(ctx context.Context, t *doltdb.Table, opts Options) (*dol
 
 func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, tblRowData types.Map, index schema.Index, opts Options, tf *types.TupleFactory) (types.Map, error) {
 	const rebuildIndexFlushInterval = 20_000_000
-	
+
 	emptyIndexMap, err := types.NewMap(ctx, vrw)
 	if err != nil {
 		return types.EmptyMap, err
@@ -368,7 +367,7 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 
 		rowNumber++
 		if rowNumber%rebuildIndexFlushInterval == 0 {
-			log.Println("flushing index editor")
+			//log.Println("flushing index editor")
 			rebuiltIndexMap, err := indexEditor.Map(ctx)
 			if err != nil {
 				return err
