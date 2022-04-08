@@ -210,7 +210,7 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	delete(iea.deletes, keyHash)
 
 	if _, ok := iea.partialAdds[partialKeyHash]; !ok {
-		iea.partialAdds[partialKeyHash] = hashedTuple{key, types.EmptyTuple(key.Format()), keyHash}
+		iea.partialAdds[partialKeyHash] = hashedTuple{key, iea.emptyTuple, keyHash}
 	}
 
 	return nil
