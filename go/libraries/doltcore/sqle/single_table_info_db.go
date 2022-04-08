@@ -199,15 +199,6 @@ func (idx fmtIndex) Table() string {
 	return idx.tbl
 }
 
-// ColumnNames implements sql.Index
-func (idx fmtIndex) ColumnNames() []string {
-	colNames := make([]string, len(idx.cols))
-	for i, col := range idx.cols {
-		colNames[i] = col.Name
-	}
-	return colNames
-}
-
 // Expressions implements sql.Index
 func (idx fmtIndex) Expressions() []string {
 	strs := make([]string, len(idx.cols))
