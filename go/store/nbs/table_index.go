@@ -491,16 +491,16 @@ func (ti onHeapTableIndex) TotalUncompressedData() uint64 {
 func (ti onHeapTableIndex) Close() error {
 	cnt := atomic.AddInt32(ti.refCnt, -1)
 	if cnt == 0 {
+		ti.tupleB = nil
+		ti.offsetB1 = nil
+		ti.offsetB2 = nil
+		ti.suffixB = nil
+
 		return ti.q.ReleaseQuota(indexMemSize(ti.chunkCount))
 	}
 	if cnt < 0 {
 		panic("Close() called and reduced ref count to < 0.")
 	}
-
-	ti.tupleB = nil
-	ti.offsetB1 = nil
-	ti.offsetB2 = nil
-	ti.suffixB = nil
 
 	return nil
 }
