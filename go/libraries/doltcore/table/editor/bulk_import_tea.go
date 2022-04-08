@@ -172,8 +172,8 @@ type BulkImportIEA struct {
 
 	// opCount contains the number of edits that would be applied in materializing the edits
 	opCount     int64
-	adds        map[hash.Hash]bool
-	deletes     map[hash.Hash]bool
+	adds        map[hash.Hash]struct{}
+	deletes     map[hash.Hash]struct{}
 	partialAdds map[hash.Hash]hashedTuple
 }
 
@@ -187,7 +187,7 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 	iea.opCount++
 	iea.ea.AddEdit(key, nil)
 
-	iea.deletes[keyHash] = true
+	iea.deletes[keyHash] = struct{}{}
 	delete(iea.adds, keyHash)
 	delete(iea.partialAdds, keyHash)
 
@@ -206,7 +206,7 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	iea.opCount++
 	iea.ea.AddEdit(key, val)
 
-	iea.adds[keyHash] = true
+	iea.adds[keyHash] = struct{}{}
 	delete(iea.deletes, keyHash)
 
 	if _, ok := iea.partialAdds[partialKeyHash]; !ok {
@@ -218,11 +218,11 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 
 // Has returns true if the current TableEditAccumulator contains the given key, or it exists in the row data.
 func (iea *BulkImportIEA) Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error) {
-	if iea.deletes[keyHash] {
+	if _, ok := iea.deletes[keyHash]; ok {
 		return false, nil
 	}
 
-	if iea.adds[keyHash] {
+	if _, ok := iea.adds[keyHash]; ok {
 		return true, nil
 	}
 
@@ -367,8 +367,8 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 		capMon:      uncapped{},
 		rowData:     rowData,
 		ea:          ea,
-		adds:        make(map[hash.Hash]bool),
-		deletes:     make(map[hash.Hash]bool),
+		adds:        make(map[hash.Hash]struct{}),
+		deletes:     make(map[hash.Hash]struct{}),
 		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(b.nbf),
 	}
@@ -416,8 +416,8 @@ func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEdit
 		capMon:      i.capMon,
 		rowData:     rowData,
 		ea:          ea,
-		adds:        make(map[hash.Hash]bool),
-		deletes:     make(map[hash.Hash]bool),
+		adds:        make(map[hash.Hash]struct{}),
+		deletes:     make(map[hash.Hash]struct{}),
 		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(i.nbf),
 	}

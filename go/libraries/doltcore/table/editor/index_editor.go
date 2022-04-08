@@ -17,7 +17,6 @@ package editor
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -25,6 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
+
+const indexEditorBatchLimit = 1 << 25
 
 var _ error = (*uniqueKeyErr)(nil)
 
@@ -365,8 +366,7 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 		}
 
 		rowNumber++
-		if rowNumber%5000000 == 0 {
-			log.Println("flushing index editor")
+		if rowNumber%indexEditorBatchLimit == 0 {
 			rebuiltIndexMap, err := indexEditor.Map(ctx)
 			if err != nil {
 				return err
