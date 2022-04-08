@@ -168,12 +168,13 @@ type BulkImportIEA struct {
 
 	ea      types.EditAccumulator
 	rowData types.Map
+	unique  bool
 
 	// opCount contains the number of edits that would be applied in materializing the edits
 	opCount     int64
 	adds        map[hash.Hash]bool
 	deletes     map[hash.Hash]bool
-	partialAdds map[hash.Hash]map[hash.Hash]types.Tuple
+	partialAdds map[hash.Hash]hashedTuple
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied.
@@ -188,7 +189,7 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 
 	iea.deletes[keyHash] = true
 	delete(iea.adds, keyHash)
-	delete(iea.partialAdds[partialKeyHash], keyHash)
+	delete(iea.partialAdds, keyHash)
 
 	return nil
 }
@@ -208,10 +209,8 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	iea.adds[keyHash] = true
 	delete(iea.deletes, keyHash)
 
-	if matchingMap, ok := iea.partialAdds[partialKeyHash]; ok {
-		matchingMap[keyHash] = key
-	} else {
-		iea.partialAdds[partialKeyHash] = map[hash.Hash]types.Tuple{keyHash: key}
+	if _, ok := iea.partialAdds[partialKeyHash]; !ok {
+		iea.partialAdds[partialKeyHash] = hashedTuple{key, types.EmptyTuple(key.Format()), keyHash}
 	}
 
 	return nil
@@ -281,10 +280,11 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 			matches = matches[:len(matches)-1]
 		}
 	}
-	for addedHash, addedTpl := range iea.partialAdds[partialKeyHash] {
-		matches = append(matches, hashedTuple{addedTpl, types.EmptyTuple(addedTpl.Format()), addedHash})
+	match, ok := iea.partialAdds[partialKeyHash]
+	if !ok {
+		return nil, nil
 	}
-	return matches, nil
+	return []hashedTuple{match}, nil
 }
 
 // Commit is the default behavior and does nothing
@@ -369,7 +369,7 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 		ea:          ea,
 		adds:        make(map[hash.Hash]bool),
 		deletes:     make(map[hash.Hash]bool),
-		partialAdds: make(map[hash.Hash]map[hash.Hash]types.Tuple),
+		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(b.nbf),
 	}
 }
@@ -418,7 +418,7 @@ func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEdit
 		ea:          ea,
 		adds:        make(map[hash.Hash]bool),
 		deletes:     make(map[hash.Hash]bool),
-		partialAdds: make(map[hash.Hash]map[hash.Hash]types.Tuple),
+		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(i.nbf),
 	}
 }
