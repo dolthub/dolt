@@ -57,7 +57,7 @@ type nodeSplitter interface {
 }
 
 //  splitterFactory makes a nodeSplitter.
-type splitterFactory func(itemSize uint32, level uint8) nodeSplitter
+type splitterFactory func(level uint8) nodeSplitter
 
 var defaultSplitterFactory splitterFactory = newSmoothRollingHasher
 
@@ -77,7 +77,7 @@ type dynamicNodeSplitter struct {
 
 var _ nodeSplitter = &dynamicNodeSplitter{}
 
-func newSmoothRollingHasher(_ uint32, salt uint8) nodeSplitter {
+func newSmoothRollingHasher(salt uint8) nodeSplitter {
 	return &dynamicNodeSplitter{
 		bz:     buzhash.NewBuzHash(chunkWindow),
 		window: chunkWindow,
@@ -139,24 +139,14 @@ func patternFromOffset(offset uint32) uint32 {
 }
 
 type keySplitter struct {
-	count           uint32
+	count, size     uint32
 	crossedBoundary bool
 
-	// the following are const
-	min, max uint32
-	hi, lo   uint32
-	salt     uint32
+	salt uint32
 }
 
-func newKeySplitter(rowSize uint32, level uint8) nodeSplitter {
-	// todo(andy): thread this param
-	rowSize = 24
+func newKeySplitter(level uint8) nodeSplitter {
 	return &keySplitter{
-		// todo(andy) roundLog2 creates discontinuities
-		min:  minChunkSize / rowSize,
-		max:  maxChunkSize / rowSize,
-		hi:   uint32(16 - roundLog2(rowSize)),
-		lo:   uint32(10 - roundLog2(rowSize)),
 		salt: xxHash32([]byte{level}, 0),
 	}
 }
@@ -168,16 +158,18 @@ func (ks *keySplitter) Append(items ...nodeItem) error {
 		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
 	}
 
+	ks.size += uint32(len(items[0]) + len(items[1]))
 	ks.count++
-	if ks.count < ks.min {
+
+	if ks.size < minChunkSize {
 		return nil
 	}
-	if ks.count > ks.max {
+	if ks.size > maxChunkSize {
 		ks.crossedBoundary = true
 		return nil
 	}
 
-	p := ks.patternFromCount(ks.count)
+	p := ks.getPattern()
 	h := xxHash32(items[0], ks.salt)
 	ks.crossedBoundary = h&p == p
 	return nil
@@ -189,18 +181,22 @@ func (ks *keySplitter) CrossedBoundary() bool {
 
 func (ks *keySplitter) Reset() {
 	ks.count = 0
+	ks.size = 0
 	ks.crossedBoundary = false
 }
 
-func (ks *keySplitter) patternFromCount(count uint32) uint32 {
-	shift := ks.hi - (count >> ks.lo)
+func (ks *keySplitter) getPattern() uint32 {
+	avgSz := float64(ks.size) / float64(ks.count)
+	hi := 16 - roundLog2(avgSz)
+	lo := 10 - roundLog2(avgSz)
+	shift := hi - (ks.count >> lo)
 	return 1<<shift - 1
 }
 
-func roundLog2(sz uint32) int {
+func roundLog2(sz float64) uint32 {
 	// invariant: |sz| > 1
-	lg2 := math.Log2(float64(sz))
-	return int(math.Round(lg2))
+	lg2 := math.Log2(sz)
+	return uint32(math.Round(lg2))
 }
 
 func xxHash32(b []byte, salt uint32) uint32 {

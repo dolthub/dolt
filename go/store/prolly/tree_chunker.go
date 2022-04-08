@@ -55,7 +55,7 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		parent:   nil,
 		level:    level,
 		builder:  newNodeBuilder(level),
-		splitter: newSplit(1, uint8(level%256)),
+		splitter: newSplit(uint8(level % 256)),
 		factory:  newSplit,
 		ns:       ns,
 	}

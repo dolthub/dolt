@@ -23,9 +23,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
@@ -77,12 +74,12 @@ func TestNodeSplitterMetrics(t *testing.T) {
 		t.Run("Random Uints", func(t *testing.T) {
 			pm, _ := makeProllyMap(t, scale)
 			before := pm.(Map)
-			printTreeSummary(t, before)
+			printMapSummary(t, before)
 		})
 		t.Run("Ascending Uints", func(t *testing.T) {
 			keys, values, desc := ascendingCompositeIntTuples(scale)
 			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
-			printTreeSummary(t, before)
+			printMapSummary(t, before)
 		})
 	})
 	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
@@ -90,12 +87,12 @@ func TestNodeSplitterMetrics(t *testing.T) {
 		t.Run("Random Uints", func(t *testing.T) {
 			pm, _ := makeProllyMap(t, scale)
 			before := pm.(Map)
-			printTreeSummary(t, before)
+			printMapSummary(t, before)
 		})
 		t.Run("Ascending Uints", func(t *testing.T) {
 			keys, values, desc := ascendingCompositeIntTuples(scale)
 			before := prollyMapFromKeysAndValues(t, desc, desc, keys, values)
-			printTreeSummary(t, before)
+			printMapSummary(t, before)
 		})
 	})
 }
@@ -188,29 +185,8 @@ func measureWriteAmplification(t *testing.T, before, after Map) (count, size int
 	return
 }
 
-func printTreeSummary(t *testing.T, m Map) {
-	ctx := context.Background()
-
-	sizeByLevel := make([]samples, m.Height())
-	cardByLevel := make([]samples, m.Height())
-	err := WalkNodes(ctx, m.root, m.ns, func(ctx context.Context, nd Node) error {
-		lvl := nd.level()
-		sizeByLevel[lvl] = append(sizeByLevel[lvl], nd.size())
-		cardByLevel[lvl] = append(cardByLevel[lvl], int(nd.count))
-		return nil
-	})
-	require.NoError(t, err)
-
-	fmt.Println("pre-edit map summary: ")
-	fmt.Println("| level | count | avg size \t  p50 \t  p90 \t p100 | avg card \t  p50 \t  p90 \t p100 |")
-	for i := m.root.level(); i >= 0; i-- {
-		sizes, cards := sizeByLevel[i], cardByLevel[i]
-		sp50, _, sp90, _, sp100 := sizes.percentiles()
-		cp50, _, cp90, _, cp100 := cards.percentiles()
-		fmt.Printf("| %5d | %5d | %8.2f \t %4d \t %4d \t %4d | %8.2f \t %4d \t %4d \t %4d |\n",
-			i, len(cards), sizes.mean(), sp50, sp90, sp100, cards.mean(), cp50, cp90, cp100)
-	}
-	fmt.Println()
+func printMapSummary(t *testing.T, m Map) {
+	printTreeSummaryByLevel(t, m.root, m.ns)
 }
 
 type samples []int
@@ -282,26 +258,6 @@ func TestSamples(t *testing.T) {
 		assert.Equal(t, test.sum, test.data.sum())
 		assert.Equal(t, test.mean, test.data.mean())
 		assert.Equal(t, test.std, test.data.stdDev())
-	}
-}
-
-func plotIntHistogram(name string, data []int) {
-	var values plotter.Values
-	for _, d := range data {
-		values = append(values, float64(d))
-	}
-
-	p := plot.New()
-	p.Title.Text = "histogram plot"
-
-	hist, err := plotter.NewHist(values, 100)
-	if err != nil {
-		panic(err)
-	}
-	p.Add(hist)
-
-	if err := p.Save(3*vg.Inch, 3*vg.Inch, name); err != nil {
-		panic(err)
 	}
 }
 
