@@ -488,7 +488,7 @@ DELIM
     [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
 }
 
-@test "default-values: Defining literal default value to NULL or EMPTY value in ALTER TABLE {
+@test "default-values: Defining literal default value to NULL or EMPTY value in ALTER TABLE" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT, c3 INT)"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
