@@ -538,7 +538,7 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 
 	toInfoForCommit := dps.cmHashToTblInfo[cmHash]
 	cmHashStr := cmHash.String()
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 
 	if err != nil {
 		return nil, err
@@ -581,7 +581,7 @@ func (dps *DiffPartitions) Next(ctx *sql.Context) (sql.Partition, error) {
 			return nil, err
 		}
 
-		root, err := cm.GetRootValue()
+		root, err := cm.GetRootValue(ctx)
 
 		if err != nil {
 			return nil, err

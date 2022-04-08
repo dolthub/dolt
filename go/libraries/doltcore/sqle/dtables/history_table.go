@@ -178,7 +178,7 @@ func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.Com
 	filters = transformFilters(ctx, filters...)
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
-		meta, err := cm.GetCommitMeta()
+		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
 			return false, err
@@ -307,7 +307,7 @@ func newRowItrForTableAtCommit(
 	sch schema.Schema,
 	filters []sql.Expression,
 	readerCreateFuncCache *ThreadSafeCRFuncCache) (*rowItrForTableAtCommit, error) {
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -361,7 +361,7 @@ func newRowItrForTableAtCommit(
 		panic("Bug: History table schema should always have commit_hash")
 	}
 
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

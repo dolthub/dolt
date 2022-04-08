@@ -65,7 +65,7 @@ func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueR
 			}
 
 			if col, ok := v.(Collection); ok && !col.asSequence().isLeaf() {
-				err := col.WalkRefs(nbf, func(r Ref) error {
+				err := col.walkRefs(nbf, func(r Ref) error {
 					refs[r.TargetHash()] = false
 					return nil
 				})
@@ -78,7 +78,7 @@ func WalkValues(ctx context.Context, nbf *NomsBinFormat, target Value, vr ValueR
 			}
 
 			if sm, ok := v.(SerialMessage); ok {
-				err := sm.WalkRefs(nbf, func(r Ref) error {
+				err := sm.walkRefs(nbf, func(r Ref) error {
 					refs[r.TargetHash()] = false
 					return nil
 				})

@@ -16,6 +16,7 @@ package sqle
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -441,13 +442,13 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 			return nil, err
 		}
 
-		meta, err := curr.GetCommitMeta()
+		meta, err := curr.GetCommitMeta(ctx)
 		if err != nil {
 			return nil, err
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
-			return curr.GetRootValue()
+			return curr.GetRootValue(ctx)
 		}
 	}
 
@@ -465,7 +466,7 @@ func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*dol
 		return nil, err
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -612,7 +613,7 @@ func (db Database) GetHeadRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	if err != nil {
 		return nil, err
 	}
-	return head.GetRootValue()
+	return head.GetRootValue(ctx)
 }
 
 // DropTable drops the table with the name given.
@@ -911,14 +912,16 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
-	return db.addFragToSchemasTable(ctx, "view", name, definition, sql.ErrExistingView.New(name))
+	err := sql.ErrExistingView.New(db.name, name)
+	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), err)
 }
 
 // DropView implements sql.ViewDropper. Removes a view from persistence in the
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	return db.dropFragFromSchemasTable(ctx, "view", name, sql.ErrViewDoesNotExist.New(name))
+	err := sql.ErrViewDoesNotExist.New(db.name, name)
+	return db.dropFragFromSchemasTable(ctx, "view", name, err)
 }
 
 // GetTriggers implements sql.TriggerDatabase.
@@ -941,6 +944,7 @@ func (db Database) GetTriggers(ctx *sql.Context) ([]sql.TriggerDefinition, error
 		triggers = append(triggers, sql.TriggerDefinition{
 			Name:            frag.name,
 			CreateStatement: frag.fragment,
+			CreatedAt:       frag.created,
 		})
 	}
 	if err != nil {
@@ -956,6 +960,7 @@ func (db Database) CreateTrigger(ctx *sql.Context, definition sql.TriggerDefinit
 		"trigger",
 		definition.Name,
 		definition.CreateStatement,
+		definition.CreatedAt,
 		fmt.Errorf("triggers `%s` already exists", definition.Name), //TODO: add a sql error and return that instead
 	)
 }
@@ -981,7 +986,7 @@ func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return DoltProceduresDropProcedure(ctx, db, name)
 }
 
-func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, existingErr error) (retErr error) {
+func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (retErr error) {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
@@ -1019,7 +1024,15 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 			retErr = err
 		}
 	}()
-	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx})
+	// Encode createdAt time to JSON
+	extra := Extra{
+		CreatedAt: created.Unix(),
+	}
+	extraJSON, err := json.Marshal(extra)
+	if err != nil {
+		return err
+	}
+	return inserter.Insert(ctx, sql.Row{fragType, name, definition, idx, extraJSON})
 }
 
 func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name string, missingErr error) error {

@@ -165,6 +165,7 @@ func TestSystemTableTags(t *testing.T) {
 		assert.Equal(t, doltSchemasMin+1, schema.DoltSchemasTypeTag)
 		assert.Equal(t, doltSchemasMin+2, schema.DoltSchemasNameTag)
 		assert.Equal(t, doltSchemasMin+3, schema.DoltSchemasFragmentTag)
+		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasExtraTag)
 	})
 }
 
@@ -263,14 +264,14 @@ func TestLDNoms(t *testing.T) {
 			t.Fatal("Couldn't find commit")
 		}
 
-		meta, err := commit.GetCommitMeta()
+		meta, err := commit.GetCommitMeta(context.Background())
 		assert.NoError(t, err)
 
 		if meta.Name != committerName || meta.Email != committerEmail {
 			t.Error("Unexpected metadata")
 		}
 
-		root, err := commit.GetRootValue()
+		root, err := commit.GetRootValue(context.Background())
 
 		assert.NoError(t, err)
 
@@ -311,7 +312,7 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Unexpected ancestry")
 		}
 
-		root, err = commit.GetRootValue()
+		root, err = commit.GetRootValue(context.Background())
 		assert.NoError(t, err)
 
 		readTable, ok, err := root.GetTable(context.Background(), "test")

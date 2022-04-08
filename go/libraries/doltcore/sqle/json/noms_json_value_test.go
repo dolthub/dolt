@@ -184,18 +184,16 @@ func TestJSONStructuralSharing(t *testing.T) {
 		val := MustNomsJSONWithVRW(vrw, sb.String())
 
 		json_refs := make(hash.HashSet)
-		err := types.JSON(val).WalkRefs(vrw.Format(), func(r types.Ref) error {
-			json_refs.Insert(r.TargetHash())
-			return nil
+		err := types.WalkAddrs(types.JSON(val), vrw.Format(), func(h hash.Hash, _ bool) {
+			json_refs.Insert(h)
 		})
 		require.NoError(t, err)
 
 		tup, err := types.NewTuple(types.Format_Default, types.Int(12), types.JSON(val))
 		require.NoError(t, err)
 		tuple_refs := make(hash.HashSet)
-		tup.WalkRefs(vrw.Format(), func(r types.Ref) error {
-			tuple_refs.Insert(r.TargetHash())
-			return nil
+		types.WalkAddrs(tup, vrw.Format(), func(h hash.Hash, _ bool) {
+			tuple_refs.Insert(h)
 		})
 
 		assert.Greater(t, len(json_refs), 0)

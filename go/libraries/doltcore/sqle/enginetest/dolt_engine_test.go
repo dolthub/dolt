@@ -43,12 +43,9 @@ func TestSingleQuery(t *testing.T) {
 
 	var test enginetest.QueryTest
 	test = enginetest.QueryTest{
-		Query: `SELECT a.pk1, a.pk2, b.pk1, b.pk2
-				FROM two_pk a JOIN two_pk b
-				ON a.pk1+1=b.pk1 AND a.pk2+1=b.pk2
-				ORDER BY 1,2,3`,
+		Query: `select i from mytable where i = 1`,
 		Expected: []sql.Row{
-			{0, 0, 1, 1},
+			{1},
 		},
 	}
 
@@ -299,7 +296,6 @@ func TestDoltUserPrivileges(t *testing.T) {
 }
 
 func TestJoinQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJoinQueries(t, newDoltHarness(t))
 }
 
@@ -333,12 +329,10 @@ func TestPkOrdinalsDML(t *testing.T) {
 }
 
 func TestDropTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropTable(t, newDoltHarness(t))
 }
 
 func TestRenameTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
@@ -412,7 +406,6 @@ func TestReadOnly(t *testing.T) {
 }
 
 func TestViews(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestViews(t, newDoltHarness(t))
 }
 
@@ -473,7 +466,6 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestJsonScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestJsonScripts(t, newDoltHarness(t))
 }
 
@@ -483,7 +475,6 @@ func TestTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
-	skipNewFormat(t)
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
@@ -516,13 +507,23 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDescribeTableAsOf(t *testing.T) {
-	// These tests rely on altering schema, and the new storage format doesn't support that yet,
-	// so we need to skip them. Once the new storage format supports altering schema, we can move
-	// these ScriptTests back into the DoltScripts var so they get picked up by the TestDoltScripts
-	// method above and then remove this method.
+	// This test relies on altering schema in order to describe the table at different revisions
+	// and see changes. Until the new storage format supports altering schema, we need to skip them.
+	// Once the new storage format supports altering schema, we can move these ScriptTests back into
+	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
 	skipNewFormat(t)
 
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
+}
+
+func TestShowCreateTableAsOf(t *testing.T) {
+	// This test relies on altering schema in order to show the create table statement at different revisions
+	// and see changes. Until the new storage format supports altering schema, we need to skip them.
+	// Once the new storage format supports altering schema, we can move these ScriptTests back into
+	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
+	skipNewFormat(t)
+
+	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
 func TestDoltMerge(t *testing.T) {

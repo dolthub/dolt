@@ -15,6 +15,9 @@
 package enginetest
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -23,6 +26,61 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
+
+var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
+	Name: "Show create table as of",
+	SetUpScript: []string{
+		"set @Commit0 = hashof('main');",
+		"create table a (pk int primary key, c1 int);",
+		"set @Commit1 = dolt_commit('-am', 'creating table a');",
+		"alter table a add column c2 text;",
+		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
+		"alter table a drop column c1;",
+		"alter table a add constraint unique_c2 unique(c2);",
+		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
+	},
+	Assertions: []enginetest.ScriptTestAssertion{
+		{
+			Query:       "show create table a as of @Commit0;",
+			ExpectedErr: sql.ErrTableNotFound,
+		},
+		{
+			Query: "show create table a as of @Commit1;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c1` int,\n" +
+					"  PRIMARY KEY (`pk`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+		{
+			Query: "show create table a as of @Commit2;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c1` int,\n" +
+					"  `c2` text,\n" +
+					"  PRIMARY KEY (`pk`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+		{
+			Query: "show create table a as of @Commit3;",
+			Expected: []sql.Row{
+				{"a", "CREATE TABLE `a` (\n" +
+					"  `pk` int NOT NULL,\n" +
+					"  `c2` text,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  UNIQUE KEY `c2` (`c2`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+				},
+			},
+		},
+	},
+}
 
 var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
 	Name: "Describe table as of",
@@ -133,6 +191,41 @@ var DoltScripts = []enginetest.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Query table with 10K rows ",
+		SetUpScript: []string{
+			"create table bigTable (pk int primary key, c0 int);",
+			makeLargeInsert(10_000),
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "select count(*) from bigTable;",
+				Expected: []sql.Row{
+					{int32(10_000)},
+				},
+			},
+			{
+				Query: "select * from bigTable order by pk limit 5 offset 9990;",
+				Expected: []sql.Row{
+					{int64(9990), int64(9990)},
+					{int64(9991), int64(9991)},
+					{int64(9992), int64(9992)},
+					{int64(9993), int64(9993)},
+					{int64(9994), int64(9994)},
+				},
+			},
+		},
+	},
+}
+
+func makeLargeInsert(sz int) string {
+	var sb strings.Builder
+	sb.WriteString("insert into bigTable values (0,0)")
+	for i := 1; i < sz; i++ {
+		sb.WriteString(fmt.Sprintf(",(%d,%d)", i, i))
+	}
+	sb.WriteString(";")
+	return sb.String()
 }
 
 // DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
@@ -1312,7 +1405,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', 'fakefakefakefakefakefakefakefake', @Commit2);",
-				ExpectedErrStr: "could not find a value for this hash",
+				ExpectedErrStr: "target commit not found",
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",

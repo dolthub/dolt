@@ -130,7 +130,7 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.GeometryEnc:
 		tb.PutGeometry(i, serializeGeometry(v))
 	case val.JSONEnc:
-		buf, err := json.Marshal(v.(sql.JSONDocument).Val)
+		buf, err := convJson(v)
 		if err != nil {
 			return err
 		}
@@ -191,6 +191,14 @@ func convUint(v interface{}) uint {
 	default:
 		panic("impossible conversion")
 	}
+}
+
+func convJson(v interface{}) (buf []byte, err error) {
+	v, err = sql.JSON.Convert(v)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(v.(sql.JSONDocument).Val)
 }
 
 func deserializeGeometry(buf []byte) (v interface{}) {

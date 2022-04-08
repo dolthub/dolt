@@ -289,22 +289,22 @@ func toRefList(vrw types.ValueReadWriter, commits ...types.Struct) (types.List, 
 	return le.List(context.Background())
 }
 
-func commonAncWithSetClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
-	closure, err := NewSetRefClosure(ctx, vr1, c1)
+func commonAncWithSetClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+	closure, err := NewSetCommitClosure(ctx, vr1, c1)
 	if err != nil {
-		return types.Ref{}, false, err
+		return hash.Hash{}, false, err
 	}
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
-func commonAncWithLazyClosure(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error) {
-	closure := NewLazyRefClosure(c1, vr1)
+func commonAncWithLazyClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error) {
+	closure := NewLazyCommitClosure(c1, vr1)
 	return FindClosureCommonAncestor(ctx, closure, c2, vr2)
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
 func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
-	type caFinder func(ctx context.Context, c1, c2 types.Ref, vr1, vr2 types.ValueReader) (a types.Ref, ok bool, err error)
+	type caFinder func(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error)
 
 	methods := map[string]caFinder{
 		"FindCommonAncestor":                 FindCommonAncestor,
@@ -315,21 +315,25 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 
 	aref := mustRef(types.NewRef(a, ldb.Format()))
 	bref := mustRef(types.NewRef(b, rdb.Format()))
+	ac, err := LoadCommitRef(context.Background(), ldb, aref)
+	require.NoError(t, err)
+	bc, err := LoadCommitRef(context.Background(), rdb, bref)
+	require.NoError(t, err)
 
 	for name, method := range methods {
 		t.Run(fmt.Sprintf("%s/%s_%s", name, aref.TargetHash().String(), bref.TargetHash().String()), func(t *testing.T) {
 			assert := assert.New(t)
 			ctx := context.Background()
-			found, ok, err := method(ctx, aref, bref, ldb, rdb)
+			found, ok, err := method(ctx, ac, bc, ldb, rdb)
 			assert.NoError(err)
 			if assert.True(ok) {
-				tv, err := found.TargetValue(context.Background(), ldb)
+				tv, err := ldb.ReadValue(context.Background(), found)
 				assert.NoError(err)
 				ancestor := tv
-				expV, _ := GetCommitValue(ctx, ldb, expected)
-				aV, _ := GetCommitValue(ctx, ldb, a)
-				bV, _ := GetCommitValue(ctx, rdb, b)
-				ancV, _ := GetCommitValue(ctx, ldb, ancestor)
+				expV, _ := GetCommittedValue(ctx, ldb, expected)
+				aV, _ := GetCommittedValue(ctx, ldb, a)
+				bV, _ := GetCommittedValue(ctx, rdb, b)
+				ancV, _ := GetCommittedValue(ctx, ldb, ancestor)
 				assert.True(
 					expected.Equals(ancestor),
 					"%s should be common ancestor of %s, %s. Got %s",
@@ -588,14 +592,18 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	// No common ancestor
 	ctx := context.Background()
-	found, ok, err := FindCommonAncestor(ctx, mustRef(types.NewRef(d2, db.Format())), mustRef(types.NewRef(a6, db.Format())), db, db)
+	d2c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(d2, db.Format())))
+	require.NoError(t, err)
+	a6c, err := LoadCommitRef(ctx, db, mustRef(types.NewRef(a6, db.Format())))
+	require.NoError(t, err)
+	found, ok, err := FindCommonAncestor(ctx, d2c, a6c, db, db)
 	require.NoError(t, err)
 
 	if !assert.False(ok) {
-		d2V, _ := GetCommitValue(ctx, db, d2)
-		a6V, _ := GetCommitValue(ctx, db, a6)
-		fTV, _ := found.TargetValue(ctx, db)
-		fV, _ := GetCommitValue(ctx, db, fTV)
+		d2V, _ := GetCommittedValue(ctx, db, d2)
+		a6V, _ := GetCommittedValue(ctx, db, a6)
+		fTV, _ := db.ReadValue(ctx, found)
+		fV, _ := GetCommittedValue(ctx, db, fTV)
 
 		assert.Fail(
 			"Unexpected common ancestor!",
@@ -665,7 +673,11 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
 
-	_, _, err = FindCommonAncestor(context.Background(), mustRef(types.NewRef(a9, db.Format())), mustRef(types.NewRef(ra9, db.Format())), rdb, db)
+	a9c, err := CommitFromValue(db.Format(), a9)
+	require.NoError(t, err)
+	ra9c, err := CommitFromValue(rdb.Format(), ra9)
+	require.NoError(t, err)
+	_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
 	assert.Error(err)
 }
 

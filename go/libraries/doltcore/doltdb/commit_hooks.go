@@ -77,12 +77,12 @@ func pushDataset(ctx context.Context, destDB, srcDB datas.Database, tempTableDir
 
 	srcCS := datas.ChunkStoreFromDatabase(srcDB)
 	destCS := datas.ChunkStoreFromDatabase(destDB)
-	wrf, err := types.WalkRefsForChunkStore(srcCS)
+	waf, err := types.WalkAddrsForChunkStore(srcCS)
 	if err != nil {
 		return err
 	}
 
-	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, wrf, addr, nil)
+	puller, err := pull.NewPuller(ctx, tempTableDir, defaultChunksPerTF, srcCS, destCS, waf, addr, nil)
 	if err == pull.ErrDBUpToDate {
 		return nil
 	} else if err != nil {

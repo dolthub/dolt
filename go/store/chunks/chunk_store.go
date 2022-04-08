@@ -111,6 +111,12 @@ type ChunkStoreGarbageCollector interface {
 	MarkAndSweepChunks(ctx context.Context, last hash.Hash, keepChunks <-chan []hash.Hash, dest ChunkStore) error
 }
 
+type PrefixChunkStore interface {
+	ChunkStore
+
+	ResolveShortHash(ctx context.Context, short []byte) (hash.Hash, error)
+}
+
 // GenerationalCS is an interface supporting the getting old gen and new gen chunk stores
 type GenerationalCS interface {
 	NewGen() ChunkStoreGarbageCollector
