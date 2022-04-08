@@ -174,6 +174,10 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
+	if types.IsFormat_DOLT_1(d.env.DoltDB.Format()) {
+		// todo(andy): support keyless tables
+		return false
+	}
 	return true
 }
 
