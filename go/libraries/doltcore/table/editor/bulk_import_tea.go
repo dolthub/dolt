@@ -281,10 +281,10 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 		}
 	}
 	match, ok := iea.partialAdds[partialKeyHash]
-	if !ok {
-		return nil, nil
+	if ok {
+		matches = append(matches, match)
 	}
-	return []hashedTuple{match}, nil
+	return matches, nil
 }
 
 // Commit is the default behavior and does nothing
