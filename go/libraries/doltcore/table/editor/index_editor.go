@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const indexEditorBatchLimit = 1 << 25
+const rebuildIndexFlushInterval = 1 << 25
 
 var _ error = (*uniqueKeyErr)(nil)
 
@@ -366,7 +366,7 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 		}
 
 		rowNumber++
-		if rowNumber%indexEditorBatchLimit == 0 {
+		if rowNumber%rebuildIndexFlushInterval == 0 {
 			rebuiltIndexMap, err := indexEditor.Map(ctx)
 			if err != nil {
 				return err
