@@ -32,15 +32,14 @@ func FromDoltSchema(tableName string, sch schema.Schema) (sql.PrimaryKeySchema, 
 	var i int
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		sqlType := col.TypeInfo.ToSqlType()
+		var extra string
+		if col.AutoIncrement {
+			extra = "auto_increment"
+		}
 
 		var deflt *sql.ColumnDefaultValue
 		if col.Default != "" {
 			deflt = sql.NewUnresolvedColumnDefaultValue(col.Default)
-		}
-
-		var extra string
-		if col.AutoIncrement {
-			extra = "auto_increment"
 		}
 
 		cols[i] = &sql.Column{
