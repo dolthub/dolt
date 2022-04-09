@@ -530,3 +530,27 @@ DELIM
     [[ "$output" =~ "c2,YES,2008-04-22 16:16:16" ]] || false
     [[ "$output" =~ "c3,YES,false" ]] || false
 }
+
+@test "default-values: Function default values are correctly represented in the information_schema.columns table" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 SMALLINT DEFAULT (GREATEST(pk, 2)))"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ 'v1,YES,"(greatest(pk, 2))"' ]] || false
+}
+
+@test "default-values: Outputting the string version of a more complex default value works" {
+    skip "dolt does a bad job with parentheses and expressions"
+
+  	dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20))"
+		dolt sql -q "ALTER TABLE test_table CHANGE fname col2 INT NULL DEFAULT (RAND()+RAND());"
+		dolt sql -q "ALTER TABLE test_table CHANGE lname col3 BOOLEAN NULL DEFAULT (CASE pk WHEN 1 THEN false ELSE true END);"
+
+    run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns where table_name='test_table'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,column_default" ]] || false
+    [[ "$output" =~ "pk," ]] || false
+    [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
+    [[ "$output" =~ "col3,(CASE `pk` WHEN 1 THEN false ELSE true END)" ]] || false
+}
