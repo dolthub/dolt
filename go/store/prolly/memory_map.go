@@ -94,6 +94,7 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	if rng.Start == nil {
 		iter = mm.list.IterAtStart()
 	} else {
+		// use the lower bound of |rng| to construct a skip.ListIter
 		iter = mm.list.GetIterFromSearchFn(skipSearchFromRange(rng))
 	}
 
@@ -118,12 +119,15 @@ func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
 	}
 }
 
+// skipSearchFromRange is a skip.SearchFn used to initialize
+// a skip.List iterator for a given Range. The skip.SearchFn
+// returns true if the iter being initialized is not yet
+// within the bounds of Range |rng|.
 func skipSearchFromRange(rng Range) skip.SearchFn {
 	return func(nodeKey []byte) bool {
 		if nodeKey == nil {
 			return false
 		}
-		// advance through list until we're inside |rng|
 		return !rng.AboveStart(nodeKey)
 	}
 }
