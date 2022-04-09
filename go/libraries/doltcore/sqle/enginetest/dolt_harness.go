@@ -81,6 +81,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		dh = dh.WithSkippedQueries([]string{
 			"show",    // todo(andy): "show_create_table_t2"
 			"keyless", // todo(andy)
+			"no_primary",
 		})
 	}
 
