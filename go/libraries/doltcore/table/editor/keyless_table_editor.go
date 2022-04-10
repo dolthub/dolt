@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -143,6 +144,69 @@ func newKeylessTableEditor(ctx context.Context, tbl *doltdb.Table, sch schema.Sc
 		te.indexEds[i] = NewIndexEditor(ctx, index, indexData, sch, opts)
 	}
 	return te, nil
+}
+
+func (kte *keylessTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, indexName string, idxSch schema.Schema) ([]row.Row, error) {
+	//TODO: This probably fails on some cases due to the edit materialization via the Table call.
+	// For example, for the REPLACE statement, if the deletion succeeds but the insertion fails,
+	// the deletion will not be rolled back due to Table(). This needs to be able to query rows
+	// without materializing edits, similar to the pkTable.
+	tbl, err := kte.Table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	idxMap, err := tbl.GetNomsIndexRowData(ctx, indexName)
+	if err != nil {
+		return nil, err
+	}
+
+	indexIter := noms.NewNomsRangeReader(idxSch, idxMap,
+		[]*noms.ReadRange{{Start: key, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(key)}},
+	)
+
+	rowData, err := tbl.GetNomsRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	lookupTags := map[uint64]int{schema.KeylessRowIdTag: 0}
+
+	var rowKVPS [][2]types.Tuple
+	for {
+		k, err := indexIter.ReadKey(ctx)
+
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		keylessKey, err := indexKeyToTableKey(tbl.Format(), k, lookupTags)
+		if err != nil {
+			return nil, err
+		}
+
+		keylessVal, ok, err := rowData.MaybeGetTuple(ctx, keylessKey)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, nil
+		}
+
+		rowKVPS = append(rowKVPS, [2]types.Tuple{keylessKey, keylessVal})
+	}
+
+	rows := make([]row.Row, len(rowKVPS))
+	for i, rowKVP := range rowKVPS {
+		rows[i], err = row.FromNoms(kte.Schema(), rowKVP[0], rowKVP[1])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rows, nil
 }
 
 func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {

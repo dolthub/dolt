@@ -23,10 +23,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -77,29 +77,28 @@ func (f *ForeignKeyViolationError) Error() string {
 
 var _ error = (*ForeignKeyViolationError)(nil)
 
-type ForeignKeyReferenceOption byte
+type ForeignKeyReferentialAction byte
 
 const (
-	ForeignKeyReferenceOption_DefaultAction ForeignKeyReferenceOption = iota
-	ForeignKeyReferenceOption_Cascade
-	ForeignKeyReferenceOption_NoAction
-	ForeignKeyReferenceOption_Restrict
-	ForeignKeyReferenceOption_SetNull
+	ForeignKeyReferentialAction_DefaultAction ForeignKeyReferentialAction = iota
+	ForeignKeyReferentialAction_Cascade
+	ForeignKeyReferentialAction_NoAction
+	ForeignKeyReferentialAction_Restrict
+	ForeignKeyReferentialAction_SetNull
 )
 
 // ForeignKey is the complete, internal representation of a Foreign Key.
 type ForeignKey struct {
-	// TODO: remove index names and retrieve indexes by column tags
-	Name                   string                    `noms:"name" json:"name"`
-	TableName              string                    `noms:"tbl_name" json:"tbl_name"`
-	TableIndex             string                    `noms:"tbl_index" json:"tbl_index"`
-	TableColumns           []uint64                  `noms:"tbl_cols" json:"tbl_cols"`
-	ReferencedTableName    string                    `noms:"ref_tbl_name" json:"ref_tbl_name"`
-	ReferencedTableIndex   string                    `noms:"ref_tbl_index" json:"ref_tbl_index"`
-	ReferencedTableColumns []uint64                  `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
-	OnUpdate               ForeignKeyReferenceOption `noms:"on_update" json:"on_update"`
-	OnDelete               ForeignKeyReferenceOption `noms:"on_delete" json:"on_delete"`
-	UnresolvedFKDetails    UnresolvedFKDetails       `noms:"unres_fk,omitempty" json:"unres_fk,omitempty"`
+	Name                   string                      `noms:"name" json:"name"`
+	TableName              string                      `noms:"tbl_name" json:"tbl_name"`
+	TableIndex             string                      `noms:"tbl_index" json:"tbl_index"`
+	TableColumns           []uint64                    `noms:"tbl_cols" json:"tbl_cols"`
+	ReferencedTableName    string                      `noms:"ref_tbl_name" json:"ref_tbl_name"`
+	ReferencedTableIndex   string                      `noms:"ref_tbl_index" json:"ref_tbl_index"`
+	ReferencedTableColumns []uint64                    `noms:"ref_tbl_cols" json:"ref_tbl_cols"`
+	OnUpdate               ForeignKeyReferentialAction `noms:"on_update" json:"on_update"`
+	OnDelete               ForeignKeyReferentialAction `noms:"on_delete" json:"on_delete"`
+	UnresolvedFKDetails    UnresolvedFKDetails         `noms:"unres_fk,omitempty" json:"unres_fk,omitempty"`
 }
 
 // UnresolvedFKDetails contains any details necessary for an unresolved foreign key to resolve to a valid foreign key.
@@ -171,7 +170,7 @@ func (fk ForeignKey) IsSelfReferential() bool {
 
 // IsResolved returns whether the foreign key has been resolved.
 func (fk ForeignKey) IsResolved() bool {
-	return len(fk.UnresolvedFKDetails.TableColumns) == 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) == 0
+	return len(fk.TableColumns) > 0 && len(fk.ReferencedTableColumns) > 0
 }
 
 // ValidateReferencedTableSchema verifies that the given schema matches the expectation of the referenced table.
@@ -507,28 +506,11 @@ func (fkc *ForeignKeyCollection) RemoveKeys(fks ...ForeignKey) {
 }
 
 // RemoveKeyByName removes a foreign key from the collection. It does not remove the associated indexes from their
-// respective tables.
-func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) error {
+// respective tables. Returns true if the key was successfully removed.
+func (fkc *ForeignKeyCollection) RemoveKeyByName(foreignKeyName string) bool {
 	var key string
 	for k, fk := range fkc.foreignKeys {
 		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) {
-			key = k
-			break
-		}
-	}
-	if key == "" {
-		return fmt.Errorf("`%s` does not exist as a foreign key", foreignKeyName)
-	}
-	delete(fkc.foreignKeys, key)
-	return nil
-}
-
-// RemoveUnresolvedKeyByName removes an unresolved foreign key from the collection if it exists. Returns true if a key
-// was found and successfully removed. It does not remove the associated indexes from their respective tables.
-func (fkc *ForeignKeyCollection) RemoveUnresolvedKeyByName(foreignKeyName string) bool {
-	var key string
-	for k, fk := range fkc.foreignKeys {
-		if strings.ToLower(fk.Name) == strings.ToLower(foreignKeyName) && !fk.IsResolved() {
 			key = k
 			break
 		}
@@ -668,33 +650,18 @@ func (fkc *ForeignKeyCollection) Tables() map[string]struct{} {
 	return tables
 }
 
-// UnresolvedForeignKeys returns all foreign keys that have not yet been resolved. Sorted in ascending alphanumeric
-// order by the foreign key's name.
-func (fkc *ForeignKeyCollection) UnresolvedForeignKeys() []ForeignKey {
-	var unresolvedFks []ForeignKey
-	for _, fk := range fkc.foreignKeys {
-		if !fk.IsResolved() {
-			unresolvedFks = append(unresolvedFks, fk)
-		}
-	}
-	sort.Slice(unresolvedFks, func(i, j int) bool {
-		return unresolvedFks[i].Name < unresolvedFks[j].Name
-	})
-	return unresolvedFks
-}
-
 // String returns the SQL reference option in uppercase.
-func (refOp ForeignKeyReferenceOption) String() string {
+func (refOp ForeignKeyReferentialAction) String() string {
 	switch refOp {
-	case ForeignKeyReferenceOption_DefaultAction:
+	case ForeignKeyReferentialAction_DefaultAction:
 		return "NONE SPECIFIED"
-	case ForeignKeyReferenceOption_Cascade:
+	case ForeignKeyReferentialAction_Cascade:
 		return "CASCADE"
-	case ForeignKeyReferenceOption_NoAction:
+	case ForeignKeyReferentialAction_NoAction:
 		return "NO ACTION"
-	case ForeignKeyReferenceOption_Restrict:
+	case ForeignKeyReferentialAction_Restrict:
 		return "RESTRICT"
-	case ForeignKeyReferenceOption_SetNull:
+	case ForeignKeyReferentialAction_SetNull:
 		return "SET NULL"
 	default:
 		return "INVALID"
@@ -703,27 +670,17 @@ func (refOp ForeignKeyReferenceOption) String() string {
 
 // ReducedString returns the SQL reference option in uppercase. All reference options are functionally equivalent to
 // either RESTRICT, CASCADE, or SET NULL, therefore only one those three options are returned.
-func (refOp ForeignKeyReferenceOption) ReducedString() string {
+func (refOp ForeignKeyReferentialAction) ReducedString() string {
 	switch refOp {
-	case ForeignKeyReferenceOption_DefaultAction, ForeignKeyReferenceOption_NoAction, ForeignKeyReferenceOption_Restrict:
+	case ForeignKeyReferentialAction_DefaultAction, ForeignKeyReferentialAction_NoAction, ForeignKeyReferentialAction_Restrict:
 		return "RESTRICT"
-	case ForeignKeyReferenceOption_Cascade:
+	case ForeignKeyReferentialAction_Cascade:
 		return "CASCADE"
-	case ForeignKeyReferenceOption_SetNull:
+	case ForeignKeyReferentialAction_SetNull:
 		return "SET NULL"
 	default:
 		return "INVALID"
 	}
-}
-
-// copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
-// that the original collection is not affected by any operations applied to the copied collection.
-func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
-	copiedForeignKeys := make(map[string]ForeignKey)
-	for hashOf, key := range fkc.foreignKeys {
-		copiedForeignKeys[hashOf] = key
-	}
-	return &ForeignKeyCollection{copiedForeignKeys}
 }
 
 // ValidateData ensures that the foreign key is valid by comparing the index data from the given table
@@ -850,17 +807,27 @@ func (fk ForeignKey) ValidateData(
 	}
 }
 
-// ColumnHasFkRelationship returns true if a columns is either a parent or child in a foreign key column
-func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) bool {
+// ColumnHasFkRelationship returns a foreign key that uses this tag. Returns n
+func (fkc *ForeignKeyCollection) ColumnHasFkRelationship(tag uint64) (ForeignKey, bool) {
 	for _, key := range fkc.AllKeys() {
 		tags := append(key.TableColumns, key.ReferencedTableColumns...)
 
 		for _, keyTag := range tags {
 			if tag == keyTag {
-				return true
+				return key, true
 			}
 		}
 	}
 
-	return false
+	return ForeignKey{}, false
+}
+
+// copy returns an exact copy of the calling collection. As collections are meant to be modified in-place, this ensures
+// that the original collection is not affected by any operations applied to the copied collection.
+func (fkc *ForeignKeyCollection) copy() *ForeignKeyCollection {
+	copiedForeignKeys := make(map[string]ForeignKey)
+	for hashOf, key := range fkc.foreignKeys {
+		copiedForeignKeys[hashOf] = key
+	}
+	return &ForeignKeyCollection{copiedForeignKeys}
 }

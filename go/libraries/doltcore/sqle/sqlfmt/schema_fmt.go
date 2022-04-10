@@ -137,11 +137,11 @@ func FmtForeignKey(fk doltdb.ForeignKey, sch, parentSch schema.Schema) string {
 		}
 	}
 	sb.WriteRune(')')
-	if fk.OnDelete != doltdb.ForeignKeyReferenceOption_DefaultAction {
+	if fk.OnDelete != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		sb.WriteString("\n    ON DELETE ")
 		sb.WriteString(fk.OnDelete.String())
 	}
-	if fk.OnUpdate != doltdb.ForeignKeyReferenceOption_DefaultAction {
+	if fk.OnUpdate != doltdb.ForeignKeyReferentialAction_DefaultAction {
 		sb.WriteString("\n    ON UPDATE ")
 		sb.WriteString(fk.OnUpdate.String())
 	}

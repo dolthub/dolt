@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -92,7 +91,6 @@ var _ sql.Table = &TempTable{}
 var _ sql.PrimaryKeyTable = &TempTable{}
 var _ sql.IndexedTable = &TempTable{}
 var _ sql.IndexAlterableTable = &TempTable{}
-var _ sql.ForeignKeyAlterableTable = &TempTable{}
 var _ sql.ForeignKeyTable = &TempTable{}
 var _ sql.CheckTable = &TempTable{}
 var _ sql.CheckAlterableTable = &TempTable{}
@@ -228,15 +226,32 @@ func (t *TempTable) RenameIndex(ctx *sql.Context, fromIndexName string, toIndexN
 	return nil
 }
 
-func (t *TempTable) GetForeignKeys(*sql.Context) ([]sql.ForeignKeyConstraint, error) {
+func (t *TempTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	return nil, nil
 }
 
-func (t *TempTable) CreateForeignKey(*sql.Context, string, []string, string, []string, sql.ForeignKeyReferenceOption, sql.ForeignKeyReferenceOption) error {
-	return plan.ErrTemporaryTablesForeignKeySupport.New()
+func (t *TempTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	return nil, nil
 }
-func (t *TempTable) DropForeignKey(*sql.Context, string) error {
-	return plan.ErrTemporaryTablesForeignKeySupport.New()
+
+func (t *TempTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+	return sql.ErrTemporaryTablesForeignKeySupport.New()
+}
+
+func (t *TempTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	return sql.ErrTemporaryTablesForeignKeySupport.New()
+}
+
+func (t *TempTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	return sql.ErrTemporaryTablesForeignKeySupport.New()
+}
+
+func (t *TempTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+	return sql.ErrTemporaryTablesForeignKeySupport.New()
+}
+
+func (t *TempTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+	return nil
 }
 
 func (t *TempTable) Inserter(*sql.Context) sql.RowInserter {

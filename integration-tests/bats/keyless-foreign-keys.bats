@@ -376,7 +376,7 @@ SQL
     dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);"
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "already exists" ]] || false
+    [[ "$output" =~ "duplicate foreign key" ]] || false
 }
 
 @test "keyless-foreign-keys: ALTER TABLE DROP FOREIGN KEY" {
@@ -510,10 +510,10 @@ ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1);
 SQL
     run dolt sql -q "ALTER TABLE child DROP INDEX v1"
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    [[ "$output" =~ 'cannot drop index: `v1` is used by foreign key `fk_name`' ]] || false
     run dolt sql -q "ALTER TABLE parent DROP INDEX v1"
     [ "$status" -ne "0" ]
-    [[ "$output" =~ "cannot drop index: v1 is referenced by foreign key fk_name" ]] || false
+    [[ "$output" =~ 'cannot drop index: `v1` is used by foreign key `fk_name`' ]] || false
 
     run dolt sql -q "ALTER TABLE child DROP FOREIGN KEY fk_name"
     [ "$status" -eq "0" ]
@@ -1397,12 +1397,10 @@ SQL
     dolt sql <<SQL
 CREATE INDEX v1v2 ON parent(v1, v2);
 SQL
-    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1);"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ 'the same column `v1` cannot be used in self referential foreign keys' ]] || false
-    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_named FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);"
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "self referential" ]] || false
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent(v1);"
+    [ "$status" -eq "0" ]
+    run dolt sql -q "ALTER TABLE parent ADD CONSTRAINT fk_name2 FOREIGN KEY (v1, v2) REFERENCES parent(v1, v2);"
+    [ "$status" -eq "0" ]
 }
 
 @test "keyless-foreign-keys: self-referential child column follows parent RESTRICT" {
@@ -1613,7 +1611,7 @@ SQL
     # Run a query and assert that no changes were made
     run dolt sql -q "DELETE FROM colors where color='green'"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["green"]`' ]] || false
+    [[ "$output" =~ 'cannot delete or update a parent row' ]] || false
 
     run dolt sql -r csv -q "SELECT * FROM colors"
     [ "$status" -eq "0" ]
@@ -1669,7 +1667,7 @@ SHOW WARNINGS;
 SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ '1452' ]] || false # first ensure the proper code
-    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `["yellow"]`' ]] || false
+    [[ "$output" =~ 'cannot add or update a child row - Foreign key violation on fk: `color_fk`, table: `objects`, referenced table: `colors`, key: `[yellow]`' ]] || false
 }
 
 @test "keyless-foreign-keys: updating to null works as expected in commit" {

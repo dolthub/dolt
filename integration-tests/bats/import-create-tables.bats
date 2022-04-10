@@ -162,7 +162,7 @@ DELIM
     [[ "$output" =~ "fktest already exists. Use -f to overwrite." ]] || false
     run dolt table import -c --pk=pk test 1pk5col-ints.csv -f
     [ "$status" -eq 1 ]
-    [[ "$output" =~ 'since it is referenced from table `fktest`' ]] || false
+    [[ "$output" =~ 'it is referenced in foreign key' ]] || false
 }
 
 @test "import-create-tables: try to create a table with a bad csv" {

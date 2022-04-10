@@ -870,7 +870,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			// Merge root deleted this table
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 
-			newRoot, err = newRoot.RemoveTables(ctx, false, tblName)
+			newRoot, err = newRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -578,8 +578,12 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 	return checks
 }
 
-// GetForeignKeys implements sql.ForeignKeyTable
-func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+// GetDeclaredForeignKeys implements sql.ForeignKeyTable
+func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil, nil
+	}
+
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -590,18 +594,23 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 		return nil, err
 	}
 
-	declaredFk, _ := fkc.KeysForTable(t.tableName)
-	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFk))
+	declaredFks, _ := fkc.KeysForTable(t.tableName)
+	toReturn := make([]sql.ForeignKeyConstraint, len(declaredFks))
 
-	for i, fk := range declaredFk {
-		if !fk.IsResolved() {
+	for i, fk := range declaredFks {
+		if len(fk.UnresolvedFKDetails.TableColumns) > 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
+			//TODO: implement multi-db support for foreign keys
 			toReturn[i] = sql.ForeignKeyConstraint{
-				Name:              fk.Name,
-				Columns:           fk.UnresolvedFKDetails.TableColumns,
-				ReferencedTable:   fk.ReferencedTableName,
-				ReferencedColumns: fk.UnresolvedFKDetails.ReferencedTableColumns,
-				OnUpdate:          toReferenceOption(fk.OnUpdate),
-				OnDelete:          toReferenceOption(fk.OnDelete),
+				Name:           fk.Name,
+				Database:       t.db.Name(),
+				Table:          fk.TableName,
+				Columns:        fk.UnresolvedFKDetails.TableColumns,
+				ParentDatabase: t.db.Name(),
+				ParentTable:    fk.ReferencedTableName,
+				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:       toReferentialAction(fk.OnUpdate),
+				OnDelete:       toReferentialAction(fk.OnDelete),
+				IsResolved:     fk.IsResolved(),
 			}
 			continue
 		}
@@ -616,13 +625,94 @@ func (t *DoltTable) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint
 		if err != nil {
 			return nil, err
 		}
-		toReturn[i], err = toForeignKeyConstraint(fk, t.sch, parentSch)
+		toReturn[i], err = toForeignKeyConstraint(fk, t.db.Name(), t.sch, parentSch)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return toReturn, nil
+}
+
+// GetReferencedForeignKeys implements sql.ForeignKeyTable
+func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	if types.IsFormat_DOLT_1(t.nbf) {
+		return nil, nil
+	}
+
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	_, referencedByFk := fkc.KeysForTable(t.tableName)
+	toReturn := make([]sql.ForeignKeyConstraint, len(referencedByFk))
+
+	for i, fk := range referencedByFk {
+		if len(fk.UnresolvedFKDetails.TableColumns) > 0 && len(fk.UnresolvedFKDetails.ReferencedTableColumns) > 0 {
+			//TODO: implement multi-db support for foreign keys
+			toReturn[i] = sql.ForeignKeyConstraint{
+				Name:           fk.Name,
+				Database:       t.db.Name(),
+				Table:          fk.TableName,
+				Columns:        fk.UnresolvedFKDetails.TableColumns,
+				ParentDatabase: t.db.Name(),
+				ParentTable:    fk.ReferencedTableName,
+				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:       toReferentialAction(fk.OnUpdate),
+				OnDelete:       toReferentialAction(fk.OnDelete),
+				IsResolved:     fk.IsResolved(),
+			}
+			continue
+		}
+		child, ok, err := root.GetTable(ctx, fk.TableName)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, fmt.Errorf("cannot find table %s declared by foreign key %s", fk.TableName, fk.Name)
+		}
+		childSch, err := child.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		toReturn[i], err = toForeignKeyConstraint(fk, t.db.Name(), childSch, t.sch)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return toReturn, nil
+}
+
+// CreateIndexForForeignKey implements sql.ForeignKeyTable
+func (t DoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+	return fmt.Errorf("no foreign key operations on a read-only table")
+}
+
+// AddForeignKey implements sql.ForeignKeyTable
+func (t DoltTable) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("no foreign key operations on a read-only table")
+}
+
+// DropForeignKey implements sql.ForeignKeyTable
+func (t DoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
+	return fmt.Errorf("no foreign key operations on a read-only table")
+}
+
+// UpdateForeignKey implements sql.ForeignKeyTable
+func (t DoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("no foreign key operations on a read-only table")
+}
+
+// GetForeignKeyUpdater implements sql.ForeignKeyTable
+func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+	return nil
 }
 
 func (t *DoltTable) Projection() []string {
@@ -779,7 +869,6 @@ func (t *AlterableDoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
 type doltAlterableTableInterface interface {
 	sql.AlterableTable
 	sql.IndexAlterableTable
-	sql.ForeignKeyAlterableTable
 	sql.ForeignKeyTable
 	sql.CheckAlterableTable
 	sql.PrimaryKeyAlterableTable
@@ -899,18 +988,7 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		}
 	}
 
-	updatedTable, err = updatedTable.UpdateSchema(ctx, sch)
-	if err != nil {
-		return err
-	}
-
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-	declaresFk, referencesFk := fkCollection.KeysForTable(t.tableName)
-
-	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName, append(declaresFk, referencesFk...))
+	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName)
 	if err != nil {
 		return err
 	}
@@ -1025,33 +1103,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-	declaresFk, referencedByFk := fkCollection.KeysForTable(t.tableName)
-	for _, foreignKey := range declaresFk {
-		if (foreignKey.OnUpdate == doltdb.ForeignKeyReferenceOption_SetNull || foreignKey.OnDelete == doltdb.ForeignKeyReferenceOption_SetNull) &&
-			col.IsNullable() {
-			return fmt.Errorf("foreign key `%s` has SET NULL thus column `%s` cannot be altered to accept null values", foreignKey.Name, col.Name)
-		}
-	}
-
 	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
-		for _, foreignKey := range declaresFk {
-			for _, tag := range foreignKey.TableColumns {
-				if tag == existingCol.Tag {
-					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
-				}
-			}
-		}
-		for _, foreignKey := range referencedByFk {
-			for _, tag := range foreignKey.ReferencedTableColumns {
-				if tag == existingCol.Tag {
-					return fmt.Errorf("cannot alter a column's type when it is used in a foreign key")
-				}
-			}
-		}
 		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
 			tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{col.Name}, []types.NomsKind{col.Kind}, nil)
 			if err != nil {
@@ -1247,23 +1299,6 @@ func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error
 	if err != nil {
 		return err
 	}
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-	ourKeys, referencingKeys := fkc.KeysForTable(t.tableName)
-	for _, k := range ourKeys {
-		if k.TableIndex == indexName {
-			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
-				k.TableIndex, k.Name)
-		}
-	}
-	for _, k := range referencingKeys {
-		if k.ReferencedTableIndex == indexName {
-			return fmt.Errorf("cannot drop index: %s is referenced by foreign key %s",
-				k.ReferencedTableIndex, k.Name)
-		}
-	}
 
 	newTable, _, err := t.dropIndex(ctx, indexName)
 	if err != nil {
@@ -1318,87 +1353,189 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-// CreateForeignKey implements sql.ForeignKeyAlterableTable
-func (t *AlterableDoltTable) CreateForeignKey(
-	ctx *sql.Context,
-	fkName string,
-	columns []string,
-	refTblName string,
-	refColumns []string,
-	onUpdate, onDelete sql.ForeignKeyReferenceOption,
-) error {
+// AddForeignKey implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		// todo(andy)
 		return nil
 	}
 
-	if fkName != "" && !doltdb.IsValidForeignKeyName(fkName) {
-		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", fkName, doltdb.ForeignKeyNameRegexStr)
+	if sqlFk.Name != "" && !doltdb.IsValidForeignKeyName(sqlFk.Name) {
+		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", sqlFk.Name, doltdb.ForeignKeyNameRegexStr)
 	}
-	isSelfFk := strings.ToLower(t.tableName) == strings.ToLower(refTblName)
-	if isSelfFk {
-		if len(columns) > 1 {
-			return fmt.Errorf("support for self referential composite foreign keys is not yet implemented")
-		}
+	if strings.ToLower(sqlFk.Database) != strings.ToLower(sqlFk.ParentDatabase) || strings.ToLower(sqlFk.Database) != strings.ToLower(t.db.Name()) {
+		return fmt.Errorf("only foreign keys on the same database are currently supported")
 	}
 
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err
 	}
-	table, err := t.doltTable(ctx)
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return sql.ErrTableNotFound.New(t.tableName)
+	}
+
+	onUpdateRefAction, err := parseFkReferentialAction(sqlFk.OnUpdate)
+	if err != nil {
+		return err
+	}
+	onDeleteRefAction, err := parseFkReferentialAction(sqlFk.OnDelete)
 	if err != nil {
 		return err
 	}
 
-	onUpdateRefOp, err := parseFkReferenceOption(onUpdate)
-	if err != nil {
-		return err
-	}
-	onDeleteRefOp, err := parseFkReferenceOption(onDelete)
-	if err != nil {
-		return err
-	}
+	var doltFk doltdb.ForeignKey
 
-	foreignKey := doltdb.ForeignKey{
-		Name:                   fkName,
-		TableName:              t.tableName,
-		TableIndex:             "",
-		TableColumns:           nil,
-		ReferencedTableName:    refTblName,
-		ReferencedTableIndex:   "",
-		ReferencedTableColumns: nil,
-		OnUpdate:               onUpdateRefOp,
-		OnDelete:               onDeleteRefOp,
-		UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
-			TableColumns:           columns,
-			ReferencedTableColumns: refColumns,
-		},
-	}
+	if sqlFk.IsResolved {
+		colTags := make([]uint64, len(sqlFk.Columns))
+		for i, col := range sqlFk.Columns {
+			tableCol, ok := t.sch.GetAllCols().GetByNameCaseInsensitive(col)
+			if !ok {
+				return fmt.Errorf("table `%s` does not have column `%s`", sqlFk.Table, col)
+			}
+			colTags[i] = tableCol.Tag
+		}
 
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
+		var refTbl *doltdb.Table
+		var ok bool
+		var refSch schema.Schema
+		if sqlFk.IsSelfReferential() {
+			refTbl = tbl
+			refSch = t.sch
+		} else {
+			refTbl, _, ok, err = root.GetTableInsensitive(ctx, sqlFk.ParentTable)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+			}
+			refSch, err = refTbl.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
+		}
 
-	if fkChecks.(int8) == 1 {
-		root, foreignKey, err = creation.ResolveForeignKey(ctx, root, table, foreignKey, t.opts)
+		refColTags := make([]uint64, len(sqlFk.ParentColumns))
+		for i, name := range sqlFk.ParentColumns {
+			refCol, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
+			if !ok {
+				return fmt.Errorf("table `%s` does not have column `%s`", sqlFk.ParentTable, name)
+			}
+			refColTags[i] = refCol.Tag
+		}
+
+		tableIndex, ok, err := findIndexWithPrefix(t.sch, sqlFk.Columns)
 		if err != nil {
 			return err
+		}
+		if !ok {
+			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
+			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
+			// meantime, we must generate a duplicate key over the primary key.
+			//TODO: use the primary key as-is
+			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
+				ForeignKeyChecksDisabled: true,
+				Deaf:                     t.opts.Deaf,
+				Tempdir:                  t.opts.Tempdir,
+			})
+			if err != nil {
+				return err
+			}
+			tableIndex = idxReturn.NewIndex
+			tbl = idxReturn.NewTable
+			root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
+			if sqlFk.IsSelfReferential() {
+				refTbl = idxReturn.NewTable
+			}
+		}
+
+		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
+			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
+			// meantime, we must generate a duplicate key over the primary key.
+			//TODO: use the primary key as-is
+			var refPkTags []uint64
+			for _, i := range refSch.GetPkOrdinals() {
+				refPkTags = append(refPkTags, refSch.GetAllCols().GetAtIndex(i).Tag)
+			}
+
+			var colNames []string
+			for _, t := range refColTags {
+				c, _ := refSch.GetAllCols().GetByTag(t)
+				colNames = append(colNames, c.Name)
+			}
+
+			// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
+			unique := len(refPkTags) == len(refColTags)
+			idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
+				ForeignKeyChecksDisabled: true,
+				Deaf:                     t.opts.Deaf,
+				Tempdir:                  t.opts.Tempdir,
+			})
+			if err != nil {
+				return err
+			}
+			refTbl = idxReturn.NewTable
+			refTableIndex = idxReturn.NewIndex
+			root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
+			if err != nil {
+				return err
+			}
+		}
+
+		doltFk = doltdb.ForeignKey{
+			Name:                   sqlFk.Name,
+			TableName:              sqlFk.Table,
+			TableIndex:             tableIndex.Name(),
+			TableColumns:           colTags,
+			ReferencedTableName:    sqlFk.ParentTable,
+			ReferencedTableIndex:   refTableIndex.Name(),
+			ReferencedTableColumns: refColTags,
+			OnUpdate:               onUpdateRefAction,
+			OnDelete:               onDeleteRefAction,
+			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
+				TableColumns:           sqlFk.Columns,
+				ReferencedTableColumns: sqlFk.ParentColumns,
+			},
 		}
 	} else {
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return err
+		doltFk = doltdb.ForeignKey{
+			Name:                   sqlFk.Name,
+			TableName:              sqlFk.Table,
+			TableIndex:             "",
+			TableColumns:           nil,
+			ReferencedTableName:    sqlFk.ParentTable,
+			ReferencedTableIndex:   "",
+			ReferencedTableColumns: nil,
+			OnUpdate:               onUpdateRefAction,
+			OnDelete:               onDeleteRefAction,
+			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
+				TableColumns:           sqlFk.Columns,
+				ReferencedTableColumns: sqlFk.ParentColumns,
+			},
 		}
-		err = fkc.AddKeys(foreignKey)
-		if err != nil {
-			return err
-		}
-		root, err = root.PutForeignKeyCollection(ctx, fkc)
-		if err != nil {
-			return err
-		}
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	err = fkc.AddKeys(doltFk)
+	if err != nil {
+		return err
+	}
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
 	}
 
 	err = t.setRoot(ctx, root)
@@ -1408,7 +1545,7 @@ func (t *AlterableDoltTable) CreateForeignKey(
 	return t.updateFromRoot(ctx, root)
 }
 
-// DropForeignKey implements sql.ForeignKeyAlterableTable
+// DropForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		// todo(andy)
@@ -1423,9 +1560,8 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	if err != nil {
 		return err
 	}
-	err = fkc.RemoveKeyByName(fkName)
-	if err != nil {
-		return err
+	if !fkc.RemoveKeyByName(fkName) {
+		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
 	}
 	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
@@ -1439,14 +1575,229 @@ func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) err
 	return t.updateFromRoot(ctx, newRoot)
 }
 
-func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
+// UpdateForeignKey implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) UpdateForeignKey(ctx *sql.Context, fkName string, sqlFk sql.ForeignKeyConstraint) error {
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return err
+	}
+	doltFk, ok := fkc.GetByNameCaseInsensitive(fkName)
+	if !ok {
+		return sql.ErrForeignKeyNotFound.New(fkName, t.tableName)
+	}
+	fkc.RemoveKeyByName(doltFk.Name)
+	doltFk.TableName = sqlFk.Table
+	doltFk.ReferencedTableName = sqlFk.ParentTable
+	doltFk.UnresolvedFKDetails.TableColumns = sqlFk.Columns
+	doltFk.UnresolvedFKDetails.ReferencedTableColumns = sqlFk.ParentColumns
+
+	if doltFk.IsResolved() && !sqlFk.IsResolved { // Need to unresolve the foreign key
+		doltFk.TableIndex = ""
+		doltFk.TableColumns = nil
+		doltFk.ReferencedTableIndex = ""
+		doltFk.ReferencedTableColumns = nil
+	} else if !doltFk.IsResolved() && sqlFk.IsResolved { // Need to assign tags and indexes since it's resolved
+		tbl, _, ok, err := root.GetTableInsensitive(ctx, t.tableName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return sql.ErrTableNotFound.New(t.tableName)
+		}
+
+		colTags := make([]uint64, len(sqlFk.Columns))
+		for i, col := range sqlFk.Columns {
+			tableCol, ok := t.sch.GetAllCols().GetByNameCaseInsensitive(col)
+			if !ok {
+				return fmt.Errorf("table `%s` does not have column `%s`", sqlFk.Table, col)
+			}
+			colTags[i] = tableCol.Tag
+		}
+
+		var refTbl *doltdb.Table
+		var refSch schema.Schema
+		if sqlFk.IsSelfReferential() {
+			refTbl = tbl
+			refSch = t.sch
+		} else {
+			refTbl, _, ok, err = root.GetTableInsensitive(ctx, sqlFk.ParentTable)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return fmt.Errorf("referenced table `%s` does not exist", sqlFk.ParentTable)
+			}
+			refSch, err = refTbl.GetSchema(ctx)
+			if err != nil {
+				return err
+			}
+		}
+
+		refColTags := make([]uint64, len(sqlFk.ParentColumns))
+		for i, name := range sqlFk.ParentColumns {
+			refCol, ok := refSch.GetAllCols().GetByNameCaseInsensitive(name)
+			if !ok {
+				return fmt.Errorf("table `%s` does not have column `%s`", sqlFk.ParentTable, name)
+			}
+			refColTags[i] = refCol.Tag
+		}
+
+		tableIndex, ok, err := findIndexWithPrefix(t.sch, sqlFk.Columns)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
+			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
+			// meantime, we must generate a duplicate key over the primary key.
+			//TODO: use the primary key as-is
+			idxReturn, err := creation.CreateIndex(ctx, tbl, "", sqlFk.Columns, false, false, "", editor.Options{
+				ForeignKeyChecksDisabled: true,
+				Deaf:                     t.opts.Deaf,
+				Tempdir:                  t.opts.Tempdir,
+			})
+			if err != nil {
+				return err
+			}
+			tableIndex = idxReturn.NewIndex
+			tbl = idxReturn.NewTable
+			root, err = root.PutTable(ctx, t.tableName, idxReturn.NewTable)
+			if sqlFk.IsSelfReferential() {
+				refTbl = idxReturn.NewTable
+			}
+		}
+
+		refTableIndex, ok, err := findIndexWithPrefix(refSch, sqlFk.ParentColumns)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			// The engine matched on a primary key, and Dolt does not yet support using the primary key within the
+			// schema.Index interface (which is used internally to represent indexes across the codebase). In the
+			// meantime, we must generate a duplicate key over the primary key.
+			//TODO: use the primary key as-is
+			var refPkTags []uint64
+			for _, i := range refSch.GetPkOrdinals() {
+				refPkTags = append(refPkTags, refSch.GetAllCols().GetAtIndex(i).Tag)
+			}
+
+			var colNames []string
+			for _, t := range refColTags {
+				c, _ := refSch.GetAllCols().GetByTag(t)
+				colNames = append(colNames, c.Name)
+			}
+
+			// Our duplicate index is only unique if it's the entire primary key (which is by definition unique)
+			unique := len(refPkTags) == len(refColTags)
+			idxReturn, err := creation.CreateIndex(ctx, refTbl, "", colNames, unique, false, "", editor.Options{
+				ForeignKeyChecksDisabled: true,
+				Deaf:                     t.opts.Deaf,
+				Tempdir:                  t.opts.Tempdir,
+			})
+			if err != nil {
+				return err
+			}
+			refTbl = idxReturn.NewTable
+			refTableIndex = idxReturn.NewIndex
+			root, err = root.PutTable(ctx, sqlFk.ParentTable, idxReturn.NewTable)
+			if err != nil {
+				return err
+			}
+		}
+
+		doltFk.TableIndex = tableIndex.Name()
+		doltFk.TableColumns = colTags
+		doltFk.ReferencedTableIndex = refTableIndex.Name()
+		doltFk.ReferencedTableColumns = refColTags
+	}
+
+	err = fkc.AddKeys(doltFk)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return err
+	}
+	err = t.setRoot(ctx, newRoot)
+	if err != nil {
+		return err
+	}
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+// CreateIndexForForeignKey implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, indexColumns []sql.IndexColumn) error {
+	if constraint != sql.IndexConstraint_None && constraint != sql.IndexConstraint_Unique {
+		return fmt.Errorf("only the following types of index constraints are supported: none, unique")
+	}
+	columns := make([]string, len(indexColumns))
+	for i, indexCol := range indexColumns {
+		columns[i] = indexCol.Name
+	}
+
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	ret, err := creation.CreateIndex(
+		ctx,
+		table,
+		indexName,
+		columns,
+		constraint == sql.IndexConstraint_Unique,
+		false,
+		"",
+		t.opts,
+	)
+	if err != nil {
+		return err
+	}
+	root, err := t.getRoot(ctx)
+	if err != nil {
+		return err
+	}
+	newRoot, err := root.PutTable(ctx, t.tableName, ret.NewTable)
+	if err != nil {
+		return err
+	}
+
+	err = t.setRoot(ctx, newRoot)
+
+	if err != nil {
+		return err
+	}
+	return t.updateFromRoot(ctx, newRoot)
+}
+
+// GetForeignKeyUpdater implements sql.ForeignKeyTable
+func (t *AlterableDoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+	te, err := t.getTableEditor(ctx)
+	if err != nil {
+		return sqlutil.NewStaticErrorEditor(err)
+	}
+	return te
+}
+
+// toForeignKeyConstraint converts a Dolt resolved foreign key to a GMS foreign key. If the key is unresolved, then this
+// function should not be used.
+func toForeignKeyConstraint(fk doltdb.ForeignKey, dbName string, childSch, parentSch schema.Schema) (cst sql.ForeignKeyConstraint, err error) {
 	cst = sql.ForeignKeyConstraint{
-		Name:              fk.Name,
-		Columns:           make([]string, len(fk.TableColumns)),
-		ReferencedTable:   fk.ReferencedTableName,
-		ReferencedColumns: make([]string, len(fk.ReferencedTableColumns)),
-		OnUpdate:          toReferenceOption(fk.OnUpdate),
-		OnDelete:          toReferenceOption(fk.OnDelete),
+		Name:           fk.Name,
+		Database:       dbName,
+		Table:          fk.TableName,
+		Columns:        make([]string, len(fk.TableColumns)),
+		ParentDatabase: dbName,
+		ParentTable:    fk.ReferencedTableName,
+		ParentColumns:  make([]string, len(fk.ReferencedTableColumns)),
+		OnUpdate:       toReferentialAction(fk.OnUpdate),
+		OnDelete:       toReferentialAction(fk.OnDelete),
+		IsResolved:     fk.IsResolved(),
 	}
 
 	for i, tag := range fk.TableColumns {
@@ -1464,46 +1815,46 @@ func toForeignKeyConstraint(fk doltdb.ForeignKey, childSch, parentSch schema.Sch
 			return cst, fmt.Errorf("cannot find column for tag %d "+
 				"in table %s used in foreign key %s", tag, fk.ReferencedTableName, fk.Name)
 		}
-		cst.ReferencedColumns[i] = c.Name
+		cst.ParentColumns[i] = c.Name
 
 	}
 
 	return cst, nil
 }
 
-func toReferenceOption(opt doltdb.ForeignKeyReferenceOption) sql.ForeignKeyReferenceOption {
+func toReferentialAction(opt doltdb.ForeignKeyReferentialAction) sql.ForeignKeyReferentialAction {
 	switch opt {
-	case doltdb.ForeignKeyReferenceOption_DefaultAction:
-		return sql.ForeignKeyReferenceOption_DefaultAction
-	case doltdb.ForeignKeyReferenceOption_Cascade:
-		return sql.ForeignKeyReferenceOption_Cascade
-	case doltdb.ForeignKeyReferenceOption_NoAction:
-		return sql.ForeignKeyReferenceOption_NoAction
-	case doltdb.ForeignKeyReferenceOption_Restrict:
-		return sql.ForeignKeyReferenceOption_Restrict
-	case doltdb.ForeignKeyReferenceOption_SetNull:
-		return sql.ForeignKeyReferenceOption_SetNull
+	case doltdb.ForeignKeyReferentialAction_DefaultAction:
+		return sql.ForeignKeyReferentialAction_DefaultAction
+	case doltdb.ForeignKeyReferentialAction_Cascade:
+		return sql.ForeignKeyReferentialAction_Cascade
+	case doltdb.ForeignKeyReferentialAction_NoAction:
+		return sql.ForeignKeyReferentialAction_NoAction
+	case doltdb.ForeignKeyReferentialAction_Restrict:
+		return sql.ForeignKeyReferentialAction_Restrict
+	case doltdb.ForeignKeyReferentialAction_SetNull:
+		return sql.ForeignKeyReferentialAction_SetNull
 	default:
-		panic(fmt.Sprintf("Unhandled foreign key reference option %v", opt))
+		panic(fmt.Sprintf("Unhandled foreign key referential action %v", opt))
 	}
 }
 
-func parseFkReferenceOption(refOp sql.ForeignKeyReferenceOption) (doltdb.ForeignKeyReferenceOption, error) {
+func parseFkReferentialAction(refOp sql.ForeignKeyReferentialAction) (doltdb.ForeignKeyReferentialAction, error) {
 	switch refOp {
-	case sql.ForeignKeyReferenceOption_DefaultAction:
-		return doltdb.ForeignKeyReferenceOption_DefaultAction, nil
-	case sql.ForeignKeyReferenceOption_Restrict:
-		return doltdb.ForeignKeyReferenceOption_Restrict, nil
-	case sql.ForeignKeyReferenceOption_Cascade:
-		return doltdb.ForeignKeyReferenceOption_Cascade, nil
-	case sql.ForeignKeyReferenceOption_NoAction:
-		return doltdb.ForeignKeyReferenceOption_NoAction, nil
-	case sql.ForeignKeyReferenceOption_SetNull:
-		return doltdb.ForeignKeyReferenceOption_SetNull, nil
-	case sql.ForeignKeyReferenceOption_SetDefault:
-		return doltdb.ForeignKeyReferenceOption_DefaultAction, fmt.Errorf(`"SET DEFAULT" is not supported`)
+	case sql.ForeignKeyReferentialAction_DefaultAction:
+		return doltdb.ForeignKeyReferentialAction_DefaultAction, nil
+	case sql.ForeignKeyReferentialAction_Restrict:
+		return doltdb.ForeignKeyReferentialAction_Restrict, nil
+	case sql.ForeignKeyReferentialAction_Cascade:
+		return doltdb.ForeignKeyReferentialAction_Cascade, nil
+	case sql.ForeignKeyReferentialAction_NoAction:
+		return doltdb.ForeignKeyReferentialAction_NoAction, nil
+	case sql.ForeignKeyReferentialAction_SetNull:
+		return doltdb.ForeignKeyReferentialAction_SetNull, nil
+	case sql.ForeignKeyReferentialAction_SetDefault:
+		return doltdb.ForeignKeyReferentialAction_DefaultAction, sql.ErrForeignKeySetDefault.New()
 	default:
-		return doltdb.ForeignKeyReferenceOption_DefaultAction, fmt.Errorf("unknown foreign key reference option: %v", refOp)
+		return doltdb.ForeignKeyReferentialAction_DefaultAction, fmt.Errorf("unknown foreign key referential action: %v", refOp)
 	}
 }
 
@@ -1676,7 +2027,7 @@ func (t *AlterableDoltTable) generateCheckName(ctx *sql.Context, check *sql.Chec
 }
 
 func (t *AlterableDoltTable) constraintNameExists(ctx *sql.Context, name string) (bool, error) {
-	keys, err := t.GetForeignKeys(ctx)
+	keys, err := t.GetDeclaredForeignKeys(ctx)
 	if err != nil {
 		return false, err
 	}
@@ -1885,4 +2236,86 @@ func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *d
 		}
 	}
 	return fkUpdates, nil
+}
+
+func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
+	type idxWithLen struct {
+		schema.Index
+		colLen int
+	}
+
+	prefixCols = lowercaseSlice(prefixCols)
+	indexes := sch.Indexes().AllIndexes()
+	colLen := len(prefixCols)
+	var indexesWithLen []idxWithLen
+	for _, idx := range indexes {
+		idxCols := lowercaseSlice(idx.ColumnNames())
+		if ok, prefixCount := colsAreIndexSubset(prefixCols, idxCols); ok && prefixCount == colLen {
+			indexesWithLen = append(indexesWithLen, idxWithLen{idx, len(idxCols)})
+		}
+	}
+	if len(indexesWithLen) == 0 {
+		return nil, false, nil
+	}
+
+	sort.Slice(indexesWithLen, func(i, j int) bool {
+		idxI := indexesWithLen[i]
+		idxJ := indexesWithLen[j]
+		if idxI.colLen == colLen && idxJ.colLen != colLen {
+			return true
+		} else if idxI.colLen != colLen && idxJ.colLen == colLen {
+			return false
+		} else if idxI.colLen != idxJ.colLen {
+			return idxI.colLen > idxJ.colLen
+		} else {
+			return idxI.Index.Name() < idxJ.Index.Name()
+		}
+	})
+	sortedIndexes := make([]schema.Index, len(indexesWithLen))
+	for i := 0; i < len(sortedIndexes); i++ {
+		sortedIndexes[i] = indexesWithLen[i].Index
+	}
+	return sortedIndexes[0], true, nil
+}
+
+func colsAreIndexSubset(cols, indexCols []string) (ok bool, prefixCount int) {
+	if len(cols) > len(indexCols) {
+		return false, 0
+	}
+
+	visitedIndexCols := make([]bool, len(indexCols))
+	for _, expr := range cols {
+		found := false
+		for j, indexExpr := range indexCols {
+			if visitedIndexCols[j] {
+				continue
+			}
+			if expr == indexExpr {
+				visitedIndexCols[j] = true
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false, 0
+		}
+	}
+
+	// This checks the length of the prefix by checking how many true booleans are encountered before the first false
+	for i, visitedCol := range visitedIndexCols {
+		if visitedCol {
+			continue
+		}
+		return true, i
+	}
+
+	return true, len(cols)
+}
+
+func lowercaseSlice(strs []string) []string {
+	newStrs := make([]string, len(strs))
+	for i, str := range strs {
+		newStrs[i] = strings.ToLower(str)
+	}
+	return newStrs
 }
