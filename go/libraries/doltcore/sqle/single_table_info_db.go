@@ -92,24 +92,32 @@ func (db *SingleTableInfoDatabase) PartitionRows2(ctx *sql.Context, part sql.Par
 	return nil, fmt.Errorf("cannot get partition rows of a single table information database")
 }
 
-// GetForeignKeys implements sql.ForeignKeyTable.
-func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+// CreateIndexForForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) CreateIndexForForeignKey(ctx *sql.Context, indexName string, using sql.IndexUsing, constraint sql.IndexConstraint, columns []sql.IndexColumn) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// GetDeclaredForeignKeys implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
 	fks := make([]sql.ForeignKeyConstraint, len(db.foreignKeys))
 	for i, fk := range db.foreignKeys {
 		if !fk.IsResolved() {
 			fks[i] = sql.ForeignKeyConstraint{
-				Name:              fk.Name,
-				Columns:           fk.UnresolvedFKDetails.TableColumns,
-				ReferencedTable:   fk.ReferencedTableName,
-				ReferencedColumns: fk.UnresolvedFKDetails.ReferencedTableColumns,
-				OnUpdate:          toReferenceOption(fk.OnUpdate),
-				OnDelete:          toReferenceOption(fk.OnDelete),
+				Name:           fk.Name,
+				Database:       ctx.GetCurrentDatabase(),
+				Table:          fk.TableName,
+				Columns:        fk.UnresolvedFKDetails.TableColumns,
+				ParentDatabase: ctx.GetCurrentDatabase(),
+				ParentTable:    fk.ReferencedTableName,
+				ParentColumns:  fk.UnresolvedFKDetails.ReferencedTableColumns,
+				OnUpdate:       toReferentialAction(fk.OnUpdate),
+				OnDelete:       toReferentialAction(fk.OnDelete),
 			}
 			continue
 		}
 		if parentSch, ok := db.parentSchs[fk.ReferencedTableName]; ok {
 			var err error
-			fks[i], err = toForeignKeyConstraint(fk, db.sch, parentSch)
+			fks[i], err = toForeignKeyConstraint(fk, ctx.GetCurrentDatabase(), db.sch, parentSch)
 			if err != nil {
 				return nil, err
 			}
@@ -119,6 +127,31 @@ func (db *SingleTableInfoDatabase) GetForeignKeys(ctx *sql.Context) ([]sql.Forei
 		}
 	}
 	return fks, nil
+}
+
+// GetReferencedForeignKeys implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
+	return nil, nil
+}
+
+// AddForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) AddForeignKey(ctx *sql.Context, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// DropForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) DropForeignKey(ctx *sql.Context, fkName string) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// UpdateForeignKey implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) UpdateForeignKey(ctx *sql.Context, fkName string, fk sql.ForeignKeyConstraint) error {
+	return fmt.Errorf("cannot create foreign keys on a single table information database")
+}
+
+// GetForeignKeyUpdater implements sql.ForeignKeyTable.
+func (db *SingleTableInfoDatabase) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater {
+	return nil
 }
 
 // WithIndexLookup implements sql.IndexedTable.

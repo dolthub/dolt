@@ -93,7 +93,7 @@ func MoveTablesFromHeadToWorking(ctx context.Context, roots doltdb.Roots, tbls [
 			return doltdb.Roots{}, err
 		}
 
-		roots.Working, err = roots.Working.RemoveTables(ctx, false, unknownTbls...)
+		roots.Working, err = roots.Working.RemoveTables(ctx, false, false, unknownTbls...)
 
 		if err != nil {
 			return doltdb.Roots{}, err

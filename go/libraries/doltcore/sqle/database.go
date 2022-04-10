@@ -623,15 +623,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
-	allowDroppingFKReferenced := false
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-	if fkChecks.(int8) == 0 {
-		allowDroppingFKReferenced = true
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -652,7 +643,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
+	newRoot, err := root.RemoveTables(ctx, true, false, tableName)
 	if err != nil {
 		return err
 	}

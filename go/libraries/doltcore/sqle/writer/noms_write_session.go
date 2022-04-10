@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -103,6 +104,10 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 	if err != nil {
 		return nil, err
 	}
+	sqlSch, err := sqlutil.FromDoltSchema(table, sch)
+	if err != nil {
+		return nil, err
+	}
 
 	te, err := s.getTableEditor(ctx, table, sch)
 	if err != nil {
@@ -115,6 +120,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		tableName:   table,
 		dbName:      db,
 		sch:         sch,
+		sqlSch:      sqlSch.Schema,
 		vrw:         vrw,
 		kvToSQLRow:  conv,
 		tableEditor: te,
@@ -229,15 +235,10 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 		} else if schema.SchemasAreEqual(tableSch, localTableEditor.tableEditor.Schema()) {
 			return localTableEditor, nil
 		}
-		// Any existing references to this localTableEditor should be preserved, so we just change the underlying values
-		localTableEditor.referencedTables = nil
-		localTableEditor.referencingTables = nil
 	} else {
 		localTableEditor = &sessionedTableEditor{
-			tableEditSession:  s,
-			tableEditor:       nil,
-			referencedTables:  nil,
-			referencingTables: nil,
+			tableEditSession: s,
+			tableEditor:      nil,
 		}
 		s.tables[tableName] = localTableEditor
 	}
@@ -265,46 +266,7 @@ func (s *nomsWriteSession) getTableEditor(ctx context.Context, tableName string,
 
 	localTableEditor.tableEditor = tableEditor
 
-	if s.opts.ForeignKeyChecksDisabled {
-		return localTableEditor, nil
-	}
-
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-	localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-	err = s.loadForeignKeys(ctx, localTableEditor)
-	if err != nil {
-		return nil, err
-	}
-
 	return localTableEditor, nil
-}
-
-// loadForeignKeys loads all tables mentioned in foreign keys for the given editor
-func (s *nomsWriteSession) loadForeignKeys(ctx context.Context, localTableEditor *sessionedTableEditor) error {
-	// these are the tables that reference us, so we need to update them
-	for _, foreignKey := range localTableEditor.referencingTables {
-		if !foreignKey.IsResolved() {
-			continue
-		}
-		_, err := s.getTableEditor(ctx, foreignKey.TableName, nil)
-		if err != nil {
-			return err
-		}
-	}
-	// these are the tables that we reference, so we need to refer to them
-	for _, foreignKey := range localTableEditor.referencedTables {
-		if !foreignKey.IsResolved() {
-			continue
-		}
-		_, err := s.getTableEditor(ctx, foreignKey.ReferencedTableName, nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
@@ -318,12 +280,7 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 	s.workingSet = ws
 
 	root := ws.WorkingRoot()
-	fkCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return err
-	}
-
-	if err = s.updateAutoIncrementSequences(ctx, root); err != nil {
+	if err := s.updateAutoIncrementSequences(ctx, root); err != nil {
 		return err
 	}
 
@@ -352,13 +309,6 @@ func (s *nomsWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.Working
 			return err
 		}
 		localTableEditor.tableEditor = newTableEditor
-		localTableEditor.referencedTables, localTableEditor.referencingTables = fkCollection.KeysForTable(tableName)
-		if !s.opts.ForeignKeyChecksDisabled {
-			err = s.loadForeignKeys(ctx, localTableEditor)
-			if err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
