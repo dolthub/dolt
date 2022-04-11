@@ -89,7 +89,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 
 func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (refmap, error) {
 	if rootHash == (hash.Hash{}) {
-		return refmap{}, nil
+		return empty_refmap(), nil
 	}
 
 	val, err := db.ReadValue(ctx, rootHash)
@@ -244,12 +244,15 @@ type refmapDatasetsMap struct {
 }
 
 func (m refmapDatasetsMap) Len() uint64 {
-	return uint64(len(m.rm.entries))
+	return m.rm.len()
 }
 
 func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
-	for _, e := range m.rm.entries {
-		if err := cb(e.name, e.addr); err != nil {
+	addrs := m.rm.RefMap.RefArrayBytes()
+	for i := 0; i < m.rm.RefMap.NamesLength(); i++ {
+		name := string(m.rm.RefMap.Names(i))
+		addr := hash.New(addrs[i*20 : i*20+20])
+		if err := cb(name, addr); err != nil {
 			return err
 		}
 	}
@@ -445,8 +448,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 				return refmap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
 			}
 		}
-		rm.set(ds.ID(), ref.TargetHash())
-		return rm, nil
+		return rm.set(ds.ID(), ref.TargetHash()), nil
 	})
 }
 
@@ -574,8 +576,7 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 				return refmap{}, ErrAlreadyCommitted
 			}
 		}
-		rm.set(datasetID, newCommitValueRef.TargetHash())
-		return rm, nil
+		return rm.set(datasetID, newCommitValueRef.TargetHash()), nil
 	})
 }
 
@@ -615,8 +616,7 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 		if curr != (hash.Hash{}) {
 			return refmap{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
 		}
-		rm.set(datasetID, tagAddr)
-		return rm, nil
+		return rm.set(datasetID, tagAddr), nil
 	})
 }
 
@@ -655,8 +655,7 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, ad
 		if curr != currHash {
 			return refmap{}, ErrOptimisticLockFailed
 		}
-		rm.set(datasetID, addr)
-		return rm, nil
+		return rm.set(datasetID, addr), nil
 	})
 }
 
@@ -744,8 +743,10 @@ func (db *database) CommitWithWorkingSet(
 		if currDS != currDSHash {
 			return refmap{}, ErrMergeNeeded
 		}
-		rm.set(commitDS.ID(), commitValRef.TargetHash())
-		rm.set(workingSetDS.ID(), wsAddr)
+		rm = rm.edit([]rmedit{
+			{commitDS.ID(), commitValRef.TargetHash()},
+			{workingSetDS.ID(), wsAddr},
+		})
 		return rm, nil
 	})
 
@@ -864,8 +865,7 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 		if curr != firstHash {
 			return refmap{}, ErrMergeNeeded
 		}
-		rm.delete(datasetIDstr)
-		return rm, nil
+		return rm.delete(datasetIDstr), nil
 	})
 }
 

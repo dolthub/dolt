@@ -91,7 +91,7 @@ jobs:
         run: expect -v
       - name: Test all Unix
         env:
-          DOLT_FMT: ${{ maxtrix.dolt_fmt }}
+          DOLT_FMT: ${{ matrix.dolt_fmt }}
         run: |
           if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
           bats --tap .

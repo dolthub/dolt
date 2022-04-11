@@ -229,6 +229,15 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		if !exists {
 			return nil, errhand.BuildDError("The following table could not be found: %s", tableName).Build()
 		}
+		fkc, err := root.GetForeignKeyCollection(ctx)
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+		decFks, refFks := fkc.KeysForTable(tableName)
+		if len(decFks) > 0 || len(refFks) > 0 {
+			return nil, errhand.BuildDError("The following table is used in a foreign key and does not work "+
+				"with import: %s\nThe recommended alternative is LOAD DATA", tableName).Build()
+		}
 	}
 
 	return &importOptions{

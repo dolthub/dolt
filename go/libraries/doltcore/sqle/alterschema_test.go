@@ -126,7 +126,7 @@ func TestAddColumnToTable(t *testing.T) {
 		colKind        types.NomsKind
 		nullable       Nullable
 		defaultVal     *sql.ColumnDefaultValue
-		order          *columnOrder
+		order          *sql.ColumnOrder
 		expectedSchema schema.Schema
 		expectedRows   []row.Row
 		expectedErr    string
@@ -169,7 +169,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.IntKind,
 			nullable:   Null,
 			defaultVal: mustStringToColumnDefault("42"),
-			order:      &columnOrder{First: true},
+			order:      &sql.ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -187,7 +187,7 @@ func TestAddColumnToTable(t *testing.T) {
 			colKind:    types.IntKind,
 			nullable:   Null,
 			defaultVal: mustStringToColumnDefault("42"),
-			order:      &columnOrder{After: "age"},
+			order:      &sql.ColumnOrder{AfterColumn: "age"},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
@@ -326,7 +326,7 @@ func TestDropColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			require.NoError(t, err)
 
-			updatedTable, err := dropColumn(ctx, tbl, tt.colName, nil)
+			updatedTable, err := dropColumn(ctx, tbl, tt.colName)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -402,7 +402,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			require.NoError(t, err)
 
-			updatedTable, err := dropColumn(ctx, tbl, tt.colName, nil)
+			updatedTable, err := dropColumn(ctx, tbl, tt.colName)
 			require.NoError(t, err)
 
 			sch, err := updatedTable.GetSchema(ctx)
@@ -802,7 +802,7 @@ func TestModifyColumn(t *testing.T) {
 		name           string
 		existingColumn schema.Column
 		newColumn      schema.Column
-		order          *columnOrder
+		order          *sql.ColumnOrder
 		expectedSchema schema.Schema
 		expectedRows   []row.Row
 		expectedErr    string
@@ -837,7 +837,7 @@ func TestModifyColumn(t *testing.T) {
 			name:           "reorder first",
 			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			order:          &columnOrder{First: true},
+			order:          &sql.ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
@@ -851,7 +851,7 @@ func TestModifyColumn(t *testing.T) {
 			name:           "reorder middle",
 			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			order:          &columnOrder{After: "is_married"},
+			order:          &sql.ColumnOrder{AfterColumn: "is_married"},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
