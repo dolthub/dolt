@@ -887,7 +887,7 @@ func TestModifyColumnType(t *testing.T) {
 	}
 }
 
-func TestDropColumn(t *testing.T) {
+func TestDropColumnStatements(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string
@@ -1086,7 +1086,7 @@ func TestRenameColumn(t *testing.T) {
 	}
 }
 
-func TestRenameTable(t *testing.T) {
+func TestRenameTableStatements(t *testing.T) {
 	tests := []struct {
 		name           string
 		query          string

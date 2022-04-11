@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -911,12 +910,12 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 		return errors.New("adding primary keys is not supported")
 	}
 
-	nullable := alterschema.NotNull
+	nullable := NotNull
 	if col.IsNullable() {
-		nullable = alterschema.Null
+		nullable = Null
 	}
 
-	updatedTable, err := alterschema.AddColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, orderToOrder(order))
+	updatedTable, err := addColumnToTable(ctx, root, table, t.tableName, col.Tag, col.Name, col.TypeInfo, nullable, column.Default, col.Comment, order)
 	if err != nil {
 		return err
 	}
@@ -944,16 +943,6 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
-}
-
-func orderToOrder(order *sql.ColumnOrder) *alterschema.ColumnOrder {
-	if order == nil {
-		return nil
-	}
-	return &alterschema.ColumnOrder{
-		First: order.First,
-		After: order.AfterColumn,
-	}
 }
 
 // DropColumn implements sql.AlterableTable
@@ -988,7 +977,7 @@ func (t *AlterableDoltTable) DropColumn(ctx *sql.Context, columnName string) err
 		}
 	}
 
-	updatedTable, err = alterschema.DropColumn(ctx, updatedTable, columnName)
+	updatedTable, err = dropColumn(ctx, updatedTable, columnName)
 	if err != nil {
 		return err
 	}
@@ -1071,7 +1060,7 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
-// ModifyColumn implements sql.AlterableTable
+// modifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil
@@ -1116,7 +1105,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := alterschema.ModifyColumn(ctx, table, existingCol, col, orderToOrder(order), t.opts)
+	updatedTable, err := modifyColumn(ctx, table, existingCol, col, order, t.opts)
 	if err != nil {
 		return err
 	}
@@ -2062,7 +2051,7 @@ func (t *AlterableDoltTable) CreatePrimaryKey(ctx *sql.Context, columns []sql.In
 		return err
 	}
 
-	table, err = alterschema.AddPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
+	table, err = addPrimaryKeyToTable(ctx, table, t.tableName, t.nbf, columns, t.opts)
 	if err != nil {
 		return err
 	}
@@ -2116,7 +2105,7 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	table, err = alterschema.DropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
+	table, err = dropPrimaryKeyFromTable(ctx, table, t.nbf, t.opts)
 	if err != nil {
 		return err
 	}
