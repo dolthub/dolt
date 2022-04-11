@@ -33,7 +33,7 @@ type GenerationalNBS struct {
 }
 
 func NewGenerationalCS(oldGen, newGen *NomsBlockStore) *GenerationalNBS {
-	if oldGen.Version() != newGen.Version() {
+	if oldGen.Version() != "" && oldGen.Version() != newGen.Version() {
 		panic("oldgen and newgen chunkstore versions vary")
 	}
 
