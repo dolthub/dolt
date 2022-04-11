@@ -537,7 +537,7 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
-    [[ "$output" =~ 'v1,YES,"greatest(pk, 2)"' ]] || false
+    [[ "$output" =~ 'v1,YES,"GREATEST(pk, 2)"' ]] || false
 }
 
 @test "default-values: Additional test with function defaults" {
@@ -550,9 +550,9 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,column_default" ]] || false
     [[ "$output" =~ "pk," ]] || false
-    [[ "$output" =~ 'col2,"length(""hello"")"' ]] || false
-    [[ "$output" =~ 'col3,"round(-1.58, 0)"' ]] || false
-    [[ "$output" =~ 'col4,rand()' ]] || false
+    [[ "$output" =~ 'col2,"LENGTH(""hello"")"' ]] || false
+    [[ "$output" =~ 'col3,"ROUND(-1.58, 0)"' ]] || false
+    [[ "$output" =~ 'col4,RAND()' ]] || false
 }
 
 @test "default-values: Outputting the string version of a more complex default value works" {
@@ -564,6 +564,6 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,column_default" ]] || false
     [[ "$output" =~ "pk," ]] || false
-    [[ "$output" =~ "col2,(rand() + rand())" ]] || false
+    [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
     [[ "$output" =~ "col3,CASE pk WHEN 1 THEN false ELSE true END" ]] || false
 }
