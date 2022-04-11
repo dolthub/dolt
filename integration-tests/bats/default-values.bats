@@ -537,7 +537,7 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
-    [[ "$output" =~ 'v1,YES,"(greatest(pk, 2))"' ]] || false
+    [[ "$output" =~ 'v1,YES,"greatest(pk, 2)"' ]] || false
 }
 
 @test "default-values: Additional test with function defaults" {
@@ -556,9 +556,7 @@ DELIM
 }
 
 @test "default-values: Outputting the string version of a more complex default value works" {
-    skip "dolt does a bad job with parentheses and expressions"
-
-  	dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20))"
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20))"
 		dolt sql -q "ALTER TABLE test_table CHANGE fname col2 INT NULL DEFAULT (RAND()+RAND());"
 		dolt sql -q "ALTER TABLE test_table CHANGE lname col3 BOOLEAN NULL DEFAULT (CASE pk WHEN 1 THEN false ELSE true END);"
 
@@ -566,6 +564,6 @@ DELIM
     [ "$status" -eq "0" ]
     [[ "$output" =~ "column_name,column_default" ]] || false
     [[ "$output" =~ "pk," ]] || false
-    [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
-    [[ "$output" =~ "col3,(CASE `pk` WHEN 1 THEN false ELSE true END)" ]] || false
+    [[ "$output" =~ "col2,(rand() + rand())" ]] || false
+    [[ "$output" =~ "col3,CASE pk WHEN 1 THEN false ELSE true END" ]] || false
 }
