@@ -18,7 +18,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +25,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
@@ -746,11 +746,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 					},
 				},
 			},
@@ -795,12 +795,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  PRIMARY KEY (`id`),\n" +
-								"  KEY `c1_idx` (`c1`),\n" +
-								"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  PRIMARY KEY (`id`),\n" +
+							"  KEY `c1_idx` (`c1`),\n" +
+							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 					},
 				},
 			},
@@ -838,7 +838,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
+					Query:          "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
 					ExpectedErrStr: "primary key cannot have NULL values",
 				},
 			},
@@ -861,10 +861,10 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 					Query: "show create table test",
 					Expected: []sql.Row{
 						{"test", "CREATE TABLE `test` (\n" +
-								"  `id` int NOT NULL,\n" +
-								"  `c1` int,\n" +
-								"  KEY `c1_idx` (`c1`)\n" +
-								") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							"  `id` int NOT NULL,\n" +
+							"  `c1` int,\n" +
+							"  KEY `c1_idx` (`c1`)\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 					},
 				},
 			},

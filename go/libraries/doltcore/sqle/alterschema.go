@@ -20,13 +20,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // renameTable renames a table with in a RootValue and returns the updated root.
@@ -42,6 +43,7 @@ func renameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName s
 
 // Nullable represents whether a column can have a null value.
 type Nullable bool
+
 const (
 	NotNull Nullable = false
 	Null    Nullable = true
@@ -53,17 +55,17 @@ const (
 //
 // Returns an error if the column added conflicts with the existing schema in tag or name.
 func addColumnToTable(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		tbl *doltdb.Table,
-		tblName string,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
-		nullable Nullable,
-		defaultVal *sql.ColumnDefaultValue,
-		comment string,
-		order *sql.ColumnOrder,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tbl *doltdb.Table,
+	tblName string,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
+	nullable Nullable,
+	defaultVal *sql.ColumnDefaultValue,
+	comment string,
+	order *sql.ColumnOrder,
 ) (*doltdb.Table, error) {
 	oldSchema, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -88,14 +90,14 @@ func addColumnToTable(
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
 func addColumnToSchema(
-		sch schema.Schema,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
-		nullable Nullable,
-		order *sql.ColumnOrder,
-		defaultVal sql.Expression,
-		comment string,
+	sch schema.Schema,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
+	nullable Nullable,
+	order *sql.ColumnOrder,
+	defaultVal sql.Expression,
+	comment string,
 ) (schema.Schema, error) {
 	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
 	if err != nil {
@@ -159,13 +161,13 @@ func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typ
 
 // ValidateNewColumn returns an error if the column as specified cannot be added to the schema given.
 func validateNewColumn(
-		ctx context.Context,
-		root *doltdb.RootValue,
-		tbl *doltdb.Table,
-		tblName string,
-		tag uint64,
-		newColName string,
-		typeInfo typeinfo.TypeInfo,
+	ctx context.Context,
+	root *doltdb.RootValue,
+	tbl *doltdb.Table,
+	tblName string,
+	tag uint64,
+	newColName string,
+	typeInfo typeinfo.TypeInfo,
 ) error {
 	if typeInfo == nil {
 		return fmt.Errorf(`typeinfo may not be nil`)
@@ -208,12 +210,12 @@ var ErrPrimaryKeySetsIncompatible = errors.New("primary key sets incompatible")
 // modifyColumn modifies the column with the name given, replacing it with the new definition provided. A column with
 // the name given must exist in the schema of the table.
 func modifyColumn(
-		ctx context.Context,
-		tbl *doltdb.Table,
-		existingCol schema.Column,
-		newCol schema.Column,
-		order *sql.ColumnOrder,
-		opts editor.Options,
+	ctx context.Context,
+	tbl *doltdb.Table,
+	existingCol schema.Column,
+	newCol schema.Column,
+	order *sql.ColumnOrder,
+	opts editor.Options,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -370,11 +372,11 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 
 // updateRowDataWithNewType returns a new map of row data containing the updated rows from the changed schema column type.
 func updateRowDataWithNewType(
-		ctx context.Context,
-		rowData types.Map,
-		vrw types.ValueReadWriter,
-		oldSch, newSch schema.Schema,
-		oldCol, newCol schema.Column,
+	ctx context.Context,
+	rowData types.Map,
+	vrw types.ValueReadWriter,
+	oldSch, newSch schema.Schema,
+	oldCol, newCol schema.Column,
 ) (types.Map, error) {
 	// If there are no rows then we can immediately return. All type conversions are valid for tables without rows, but
 	// when rows are present then it is no longer true. GetTypeConverter assumes that there are rows present, so it
