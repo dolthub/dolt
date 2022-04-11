@@ -375,6 +375,11 @@ func TestDropForeignKeys(t *testing.T) {
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
+func TestForeignKeys(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestForeignKeys(t, newDoltHarness(t))
+}
+
 func TestCreateCheckConstraints(t *testing.T) {
 	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))

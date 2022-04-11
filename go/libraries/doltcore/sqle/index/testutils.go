@@ -204,3 +204,7 @@ func ReadRangesEqual(nr1, nr2 *noms.ReadRange) bool {
 func ReadRangesFromIndexLookup(lookup sql.IndexLookup) []*noms.ReadRange {
 	return lookup.(*doltIndexLookup).nomsRanges
 }
+
+func IndexFromIndexLookup(lookup sql.IndexLookup) DoltIndex {
+	return lookup.(*doltIndexLookup).idx
+}

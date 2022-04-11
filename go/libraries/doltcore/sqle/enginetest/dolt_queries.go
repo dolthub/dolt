@@ -184,7 +184,7 @@ var DoltScripts = []enginetest.ScriptTest{
 						"  `c` int NOT NULL,\n" +
 						"  `d` varchar(10),\n" +
 						"  PRIMARY KEY (`c`),\n" +
-						"  UNIQUE KEY `d_1` (`d`),\n" +
+						"  UNIQUE KEY `d_0` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
 				},

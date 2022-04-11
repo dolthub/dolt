@@ -69,7 +69,7 @@ func TestDropColumn(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			require.NoError(t, err)
 
-			updatedTable, err := DropColumn(ctx, tbl, tt.colName, nil)
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
@@ -145,7 +145,7 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 			tbl, _, err := root.GetTable(ctx, tableName)
 			require.NoError(t, err)
 
-			updatedTable, err := DropColumn(ctx, tbl, tt.colName, nil)
+			updatedTable, err := DropColumn(ctx, tbl, tt.colName)
 			require.NoError(t, err)
 
 			sch, err := updatedTable.GetSchema(ctx)

@@ -15,8 +15,6 @@
 package writer
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -25,7 +23,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -34,6 +31,7 @@ type TableWriter interface {
 	sql.RowUpdater
 	sql.RowInserter
 	sql.RowDeleter
+	sql.ForeignKeyUpdater
 	sql.AutoIncrementSetter
 	GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error)
 }
@@ -55,6 +53,7 @@ type nomsTableWriter struct {
 	tableName   string
 	dbName      string
 	sch         schema.Schema
+	sqlSch      sql.Schema
 	vrw         types.ValueReadWriter
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
@@ -83,27 +82,13 @@ func (te *nomsTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 		if err != nil {
 			return err
 		}
-		err = te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
-		if sql.ErrForeignKeyNotResolved.Is(err) {
-			if err = te.resolveFks(ctx); err != nil {
-				return err
-			}
-			return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
-		}
-		return err
+		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 	}
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
-	err = te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
-	if sql.ErrForeignKeyNotResolved.Is(err) {
-		if err = te.resolveFks(ctx); err != nil {
-			return err
-		}
-		return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
-	}
-	return err
+	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
 }
 
 func (te *nomsTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -112,28 +97,13 @@ func (te *nomsTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 		if err != nil {
 			return err
 		}
-
-		err = te.tableEditor.DeleteByKey(ctx, k, tagToVal)
-		if sql.ErrForeignKeyNotResolved.Is(err) {
-			if err = te.resolveFks(ctx); err != nil {
-				return err
-			}
-			return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
-		}
-		return err
+		return te.tableEditor.DeleteByKey(ctx, k, tagToVal)
 	} else {
 		dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 		if err != nil {
 			return err
 		}
-		err = te.tableEditor.DeleteRow(ctx, dRow)
-		if sql.ErrForeignKeyNotResolved.Is(err) {
-			if err = te.resolveFks(ctx); err != nil {
-				return err
-			}
-			return te.tableEditor.DeleteRow(ctx, dRow)
-		}
-		return err
+		return te.tableEditor.DeleteRow(ctx, dRow)
 	}
 }
 
@@ -147,14 +117,7 @@ func (te *nomsTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.R
 		return err
 	}
 
-	err = te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
-	if sql.ErrForeignKeyNotResolved.Is(err) {
-		if err = te.resolveFks(ctx); err != nil {
-			return err
-		}
-		return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
-	}
-	return err
+	return te.tableEditor.UpdateRow(ctx, dOldRow, dNewRow, te.duplicateKeyErrFunc)
 }
 
 func (te *nomsTableWriter) GetNextAutoIncrementValue(ctx *sql.Context, insertVal interface{}) (uint64, error) {
@@ -170,6 +133,16 @@ func (te *nomsTableWriter) SetAutoIncrementValue(ctx *sql.Context, val uint64) e
 	te.tableEditor.MarkDirty()
 
 	return te.flush(ctx)
+}
+
+func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	idx := index.IndexFromIndexLookup(lookup)
+	return nomsFkIndexer{
+		writer:  te,
+		idxName: idx.ID(),
+		idxSch:  idx.IndexSchema(),
+		nrr:     index.ReadRangesFromIndexLookup(lookup)[0],
+	}
 }
 
 // Close implements Closer
@@ -203,28 +176,6 @@ func (te *nomsTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	return te.setter(ctx, te.dbName, ws.WorkingRoot())
-}
-
-func (te *nomsTableWriter) resolveFks(ctx *sql.Context) error {
-	tbl, err := te.tableEditor.Table(ctx)
-	if err != nil {
-		return err
-	}
-
-	return te.sess.UpdateWorkingSet(ctx, func(ctx context.Context, ws *doltdb.WorkingSet) (*doltdb.WorkingSet, error) {
-		root := ws.WorkingRoot()
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, err
-		}
-		for _, foreignKey := range fkc.UnresolvedForeignKeys() {
-			newRoot, _, err := creation.ResolveForeignKey(ctx, root, tbl, foreignKey, te.sess.GetOptions())
-			if err == nil {
-				root = newRoot
-			}
-		}
-		return ws.WithWorkingRoot(root), nil
-	})
 }
 
 func autoIncrementColFromSchema(sch schema.Schema) schema.Column {

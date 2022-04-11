@@ -95,7 +95,7 @@ func MoveTablesBetweenRoots(ctx context.Context, tbls []string, src, dest *doltd
 	}
 
 	// RemoveTables also removes that table's ForeignKeys
-	dest, err = dest.RemoveTables(ctx, false, tblsToDrop.AsSlice()...)
+	dest, err = dest.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
 	if err != nil {
 		return nil, err
 	}
