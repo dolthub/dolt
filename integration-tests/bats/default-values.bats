@@ -540,6 +540,21 @@ DELIM
     [[ "$output" =~ 'v1,YES,"(greatest(pk, 2))"' ]] || false
 }
 
+@test "default-values: Additional test with function defaults" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20), height int)"
+    dolt sql -q "ALTER TABLE test_table CHANGE fname col2 float NOT NULL DEFAULT length('hello')"
+    dolt sql -q "ALTER TABLE test_table CHANGE lname col3 double NOT NULL DEFAULT ROUND(-1.58)"
+    dolt sql -q "ALTER TABLE test_table CHANGE height col4 float NULL DEFAULT RAND()"
+
+    run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'test_table'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,column_default" ]] || false
+    [[ "$output" =~ "pk," ]] || false
+    [[ "$output" =~ 'col2,"length(""hello"")"' ]] || false
+    [[ "$output" =~ 'col3,"round(-1.58, 0)"' ]] || false
+    [[ "$output" =~ 'col4,rand()' ]] || false
+}
+
 @test "default-values: Outputting the string version of a more complex default value works" {
     skip "dolt does a bad job with parentheses and expressions"
 
