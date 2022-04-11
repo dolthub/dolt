@@ -725,6 +725,7 @@ func TestPersist(t *testing.T) {
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {
+	skipNewFormat(t)
 	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
 		harness := newDoltHarness(t)
 		addPkScript := enginetest.ScriptTest{
