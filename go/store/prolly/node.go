@@ -73,17 +73,21 @@ func (nd Node) hashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
-func (nd Node) getKey(i int) nodeItem {
+func (nd Node) GetKey(i int) nodeItem {
 	return nd.keys.GetSlice(i)
 }
 
-func (nd Node) getValue(i int) nodeItem {
+func (nd Node) GetValue(i int) nodeItem {
 	if nd.leafNode() {
 		return nd.values.GetSlice(i)
 	} else {
 		r := nd.getRef(i)
 		return r[:]
 	}
+}
+
+func (nd Node) Size() int {
+	return nd.keys.Len()
 }
 
 func (nd Node) getRef(i int) hash.Hash {

@@ -207,11 +207,11 @@ func (cur *nodeCursor) invalidate() {
 }
 
 func (cur *nodeCursor) currentKey() nodeItem {
-	return cur.nd.getKey(cur.idx)
+	return cur.nd.GetKey(cur.idx)
 }
 
 func (cur *nodeCursor) currentValue() nodeItem {
-	return cur.nd.getValue(cur.idx)
+	return cur.nd.GetValue(cur.idx)
 }
 
 func (cur *nodeCursor) currentRef() hash.Hash {
@@ -219,12 +219,12 @@ func (cur *nodeCursor) currentRef() hash.Hash {
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
-	return cur.nd.getKey(0)
+	return cur.nd.GetKey(0)
 }
 
 func (cur *nodeCursor) lastKey() nodeItem {
 	lastKeyIdx := int(cur.nd.count - 1)
-	return cur.nd.getKey(lastKeyIdx)
+	return cur.nd.GetKey(lastKeyIdx)
 }
 
 func (cur *nodeCursor) skipToNodeStart() {
@@ -294,7 +294,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 // index of the nextMutation greatest element if it is not present.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
-		return cb(item, cur.nd.getKey(i)) <= 0
+		return cb(item, cur.nd.GetKey(i)) <= 0
 	})
 
 	return idx

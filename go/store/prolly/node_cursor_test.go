@@ -84,7 +84,7 @@ var valDesc = val.NewTupleDescriptor(
 
 func searchTestTree(item nodeItem, nd Node) int {
 	return sort.Search(int(nd.count), func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getKey(i))
+		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
 		return keyDesc.Compare(l, r) <= 0
 	})
 }

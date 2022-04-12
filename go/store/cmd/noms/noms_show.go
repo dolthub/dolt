@@ -28,6 +28,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
@@ -102,15 +104,50 @@ func runShow(ctx context.Context, args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(ctx, pgr.Writer, value)
+		outputEncodedValue(ctx, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
 		t, err := types.TypeOf(value)
 		util.CheckError(err)
 		fmt.Fprint(os.Stdout, t.HumanReadableString(), " - ")
 
-		types.WriteEncodedValue(ctx, os.Stdout, value)
+		outputEncodedValue(ctx, os.Stdout, value)
 	}
 
 	return 0
+}
+
+func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {
+	switch value := value.(type) {
+	case types.TupleRowStorage:
+		w.Write([]byte("["))
+		node := prolly.NodeFromValue(value)
+		for i := 0; i < node.Size(); i++ {
+			k, v := node.GetKey(i), node.GetValue(i)
+			kt, vt := val.Tuple(k), val.Tuple(v)
+
+			w.Write([]byte("\n    { key: "))
+			for j := 0; j < kt.Count(); j++ {
+				if j > 0 {
+					w.Write([]byte(", "))
+				}
+				w.Write([]byte(hexStr(kt.GetField(j))))
+			}
+
+			w.Write([]byte(" value: "))
+			for j := 0; j < vt.Count(); j++ {
+				if j > 0 {
+					w.Write([]byte(", "))
+				}
+				w.Write([]byte(hexStr(vt.GetField(j))))
+			}
+
+			w.Write([]byte(" }"))
+		}
+
+		w.Write([]byte("\n]\n"))
+		return nil
+	default:
+		return types.WriteEncodedValue(ctx, w, value)
+	}
 }
