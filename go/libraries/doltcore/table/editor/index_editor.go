@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const rebuildIndexFlushInterval = 1 << 25
+
 var _ error = (*uniqueKeyErr)(nil)
 
 // uniqueKeyErr is an error that is returned when a unique constraint has been violated. It contains the index key
@@ -344,6 +346,8 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 	if err != nil {
 		return types.EmptyMap, err
 	}
+
+	var rowNumber int64
 	indexEditor := NewIndexEditor(ctx, index, emptyIndexMap, sch, opts)
 	err = tblRowData.IterAll(ctx, func(key, value types.Value) error {
 		dRow, err := row.FromNoms(sch, key.(types.Tuple), value.(types.Tuple))
@@ -361,8 +365,19 @@ func rebuildIndexRowData(ctx context.Context, vrw types.ValueReadWriter, sch sch
 			return err
 		}
 
+		rowNumber++
+		if rowNumber%rebuildIndexFlushInterval == 0 {
+			rebuiltIndexMap, err := indexEditor.Map(ctx)
+			if err != nil {
+				return err
+			}
+
+			indexEditor = NewIndexEditor(ctx, index, rebuiltIndexMap, sch, opts)
+		}
+
 		return nil
 	})
+
 	if err != nil {
 		return types.EmptyMap, err
 	}
