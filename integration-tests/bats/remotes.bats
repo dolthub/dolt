@@ -1463,3 +1463,24 @@ setup_ref_test() {
     dolt push --set-upstream origin feature
     dolt push
 }
+
+@test "remotes: clone local repo and push" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -am "commit from repo1"
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]]
+
+    dolt commit --allow-empty -am "commit from repo2"
+    dolt push
+
+    cd ../repo1
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]]
+    [[ "$output" =~ "commit from repo2" ]]
+}
