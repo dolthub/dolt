@@ -91,9 +91,11 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// TODO: before or after? do I handle error codes?
-	// Call fetch
-	FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
+	// Call fetch, pass along error if there is one
+	exitCode := FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
+	if exitCode != 0 {
+		return exitCode
+	}
 
 	err = pullHelper(ctx, dEnv, pullSpec)
 	if err != nil {
