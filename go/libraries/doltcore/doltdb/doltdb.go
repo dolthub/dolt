@@ -77,7 +77,7 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 }
 
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
-	if urlStr == LocalDirDoltDB {
+	if urlStr == LocalDirDoltDB || urlStr[:8] == "file:///" {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 
 		if !exists {
@@ -1177,7 +1177,9 @@ func (ddb *DoltDB) PullChunks(ctx context.Context, tempDir string, srcDB *DoltDB
 }
 
 func (ddb *DoltDB) Clone(ctx context.Context, destDB *DoltDB, eventCh chan<- pull.TableFileEvent) error {
-	return pull.Clone(ctx, datas.ChunkStoreFromDatabase(ddb.db), datas.ChunkStoreFromDatabase(destDB.db), eventCh)
+	a := datas.ChunkStoreFromDatabase(ddb.db)
+	b := datas.ChunkStoreFromDatabase(destDB.db)
+	return pull.Clone(ctx, a, b, eventCh)
 }
 
 func (ddb *DoltDB) SetCommitHooks(ctx context.Context, postHooks []CommitHook) *DoltDB {
