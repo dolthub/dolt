@@ -1479,6 +1479,6 @@ setup_ref_test() {
     dolt remote add origin file://./remote
     dolt pull
     run dolt branch -va
-    [[ "$output" =~ "main ]]
+    [[ "$output" =~ "main" ]]
     [[ "$output" =~ "other" ]]
 }
