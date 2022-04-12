@@ -264,8 +264,12 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return err
 	}
 
-	// TODO: working set has no address/hash how are you supposed to get one??
-	ws := doltdb.EmptyWorkingSet(wsRef)
+	// Retrieve working set from srcDB
+	ws, err := srcDB.ResolveWorkingSet(ctx, wsRef)
+	if err != nil {
+		return err
+	}
+	// Update to use current Working and Staged root
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
 	if err != nil {
 		return err
