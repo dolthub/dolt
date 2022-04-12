@@ -77,7 +77,7 @@ func LoadDoltDB(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs
 }
 
 func LoadDoltDBWithParams(ctx context.Context, nbf *types.NomsBinFormat, urlStr string, fs filesys.Filesys, params map[string]interface{}) (*DoltDB, error) {
-	if urlStr == LocalDirDoltDB || urlStr[:8] == "file:///" {
+	if urlStr == LocalDirDoltDB {
 		exists, isDir := fs.Exists(dbfactory.DoltDataDir)
 
 		if !exists {
