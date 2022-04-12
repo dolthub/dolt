@@ -82,6 +82,9 @@ USE test;
 -- Dump completed on 2022-04-12 14:00:34
 SQL
     [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW DATABASES"
+    [[ "$output" =~ "test" ]] || false
 }
 
 @test "import-mysqldump: import a simple database" {
