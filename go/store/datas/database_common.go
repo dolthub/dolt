@@ -816,7 +816,6 @@ func (db *database) update(ctx context.Context,
 				return err
 			}
 
-			// TODO: this needs a hash
 			datasets, err = edit(ctx, datasets)
 			if err != nil {
 				return err
