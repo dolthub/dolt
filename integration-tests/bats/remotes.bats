@@ -1463,3 +1463,22 @@ setup_ref_test() {
     dolt push --set-upstream origin feature
     dolt push
 }
+
+@test "remotes: pull also fetches" {
+    mkdir remote
+
+    rm -rf ./.dolt
+    dolt init
+    dolt remote add origin file://./remote
+    dolt push origin main
+    dolt checkout other
+    dolt push origin other
+
+    rm -rf ./.dolt
+    dolt init
+    dolt remote add origin file://./remote
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main ]]
+    [[ "$output" =~ "other" ]]
+}
