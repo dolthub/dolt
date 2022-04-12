@@ -71,7 +71,6 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
-
 	ap := cli.CreatePullArgParser()
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 
@@ -91,6 +90,10 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	// TODO: before or after? do I handle error codes?
+	// Call fetch
+	FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
 
 	err = pullHelper(ctx, dEnv, pullSpec)
 	if err != nil {
