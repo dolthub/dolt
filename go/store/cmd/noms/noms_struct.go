@@ -112,7 +112,7 @@ func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal ty
 	if err != nil {
 		panic(err)
 	}
-	
+
 	if rootVal == nil {
 		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return

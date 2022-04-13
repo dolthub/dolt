@@ -41,7 +41,7 @@ type Node struct {
 	count        uint16
 }
 
-func mapNodeFromBytes(bb []byte) Node {
+func MapNodeFromBytes(bb []byte) Node {
 	buf := serial.GetRootAsTupleMap(bb, 0)
 	return mapNodeFromFlatbuffer(*buf)
 }

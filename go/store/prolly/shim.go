@@ -27,7 +27,7 @@ import (
 )
 
 func NodeFromValue(v types.Value) Node {
-	return mapNodeFromBytes(v.(types.TupleRowStorage))
+	return MapNodeFromBytes(v.(types.TupleRowStorage))
 }
 
 func ValueFromMap(m Map) types.Value {

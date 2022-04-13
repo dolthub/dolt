@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
@@ -69,8 +70,26 @@ func setupShowFlags() *flag.FlagSet {
 
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
+
+	var value interface{}
 	database, vrw, value, err := cfg.GetPath(ctx, args[0])
-	util.CheckErrorNoUsage(err)
+
+	if err != nil && strings.Contains(err.Error(), "unknown type") {
+		// If noms can't decode a value but it does exist, we'll assume it's a prolly node and treat it as such
+		sp, err := cfg.GetDatabaseSpecForPath(ctx, args[0])
+		util.CheckErrorNoUsage(err)
+
+		database = sp.GetDatabase(ctx)
+		vrw = sp.GetVRW(ctx)
+		cs := sp.NewChunkStore(ctx)
+		chunk, err := cs.Get(ctx, sp.Path.Hash)
+		util.CheckErrorNoUsage(err)
+
+		value = prolly.MapNodeFromBytes(chunk.Data())
+	} else {
+		util.CheckErrorNoUsage(err)
+	}
+
 	defer database.Close()
 
 	if value == nil {
@@ -84,7 +103,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showRaw {
-		ch, err := types.EncodeValue(value, vrw.Format())
+		ch, err := types.EncodeValue(value.(types.Value), vrw.Format())
 		util.CheckError(err)
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
@@ -93,7 +112,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(ctx, os.Stdout, value, vrw)
+		types.WriteValueStats(ctx, os.Stdout, value.(types.Value), vrw)
 		return 0
 	}
 
@@ -107,58 +126,79 @@ func runShow(ctx context.Context, args []string) int {
 		outputEncodedValue(ctx, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		t, err := types.TypeOf(value)
-		util.CheckError(err)
-		fmt.Fprint(os.Stdout, t.HumanReadableString(), " - ")
-
+		outputType(value)
 		outputEncodedValue(ctx, os.Stdout, value)
 	}
 
 	return 0
 }
 
-func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {
+func outputType(value interface{}) {
+	var typeString string
+	switch value := value.(type) {
+	case prolly.Node:
+		typeString = "prolly.Node"
+	case types.Value:
+		t, err := types.TypeOf(value)
+		typeString = t.HumanReadableString()
+		util.CheckError(err)
+	default:
+		typeString = fmt.Sprintf("unknown type %T", value)
+	}
+	fmt.Fprint(os.Stdout, typeString, " - ")
+}
+
+func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) error {
 	switch value := value.(type) {
 	case types.TupleRowStorage:
-		w.Write([]byte("["))
 		node := prolly.NodeFromValue(value)
-		for i := 0; i < node.Size(); i++ {
-			k := node.GetKey(i)
-			kt := val.Tuple(k)
+		return outputProllyNode(w, node)
+	case prolly.Node:
+		return outputProllyNode(w, value)
+	case types.Value:
+		return types.WriteEncodedValue(ctx, w, value)
+	default:
+		_, err := w.Write([]byte(fmt.Sprintf("unknown value type %T: %v", value, value)))
+		return err
+	}
+}
 
-			w.Write([]byte("\n    { key: "))
-			for j := 0; j < kt.Count(); j++ {
+func outputProllyNode(w io.Writer, node prolly.Node) error {
+	w.Write([]byte("["))
+	for i := 0; i < node.Size(); i++ {
+		k := node.GetKey(i)
+		kt := val.Tuple(k)
+
+		w.Write([]byte("\n    { key: "))
+		for j := 0; j < kt.Count(); j++ {
+			if j > 0 {
+				w.Write([]byte(", "))
+			}
+			w.Write([]byte(hexStr(kt.GetField(j))))
+		}
+
+		if node.LeafNode() {
+			v := node.GetValue(i)
+			vt := val.Tuple(v)
+
+			w.Write([]byte(" value: "))
+			for j := 0; j < vt.Count(); j++ {
 				if j > 0 {
 					w.Write([]byte(", "))
 				}
-				w.Write([]byte(hexStr(kt.GetField(j))))
+				w.Write([]byte(hexStr(vt.GetField(j))))
 			}
 
-			if node.LeafNode() {
-				v := node.GetValue(i)
-				vt := val.Tuple(v)
+			w.Write([]byte(" }"))
+		} else {
+			ref := node.GetRef(i)
 
-				w.Write([]byte(" value: "))
-				for j := 0; j < vt.Count(); j++ {
-					if j > 0 {
-						w.Write([]byte(", "))
-					}
-					w.Write([]byte(hexStr(vt.GetField(j))))
-				}
-
-				w.Write([]byte(" }"))
-			} else {
-				ref := node.GetRef(i)
-
-				w.Write([]byte(" ref: #"))
-				w.Write([]byte(ref.String()))
-				w.Write([]byte(" }"))
-			}
+			w.Write([]byte(" ref: #"))
+			w.Write([]byte(ref.String()))
+			w.Write([]byte(" }"))
 		}
-
-		w.Write([]byte("\n]\n"))
-		return nil
-	default:
-		return types.WriteEncodedValue(ctx, w, value)
 	}
+
+	w.Write([]byte("\n]\n"))
+	return nil
 }
