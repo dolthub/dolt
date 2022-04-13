@@ -39,8 +39,8 @@ teardown() {
 
     cd repo2
     run dolt branch -va
-    [[ "$output" =~ "main" ]]
-    [[ ! "$output" =~ "other" ]]
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
 
     cd ../repo1
     dolt checkout -b other
@@ -49,8 +49,8 @@ teardown() {
     cd ../repo2
     dolt pull
     run dolt branch -va
-    [[ "$output" =~ "main" ]]
-    [[ "$output" =~ "other" ]]
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
 }
 
 @test "remotes: add a remote using dolt remote" {

@@ -92,7 +92,7 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	// Call fetch, pass along error if there is one
-	exitCode := FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
+	exitCode := FetchCmd{}.Exec(ctx, "fetch", []string{remoteName}, dEnv)
 	if exitCode != 0 {
 		return exitCode
 	}
