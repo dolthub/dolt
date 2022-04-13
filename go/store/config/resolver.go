@@ -170,5 +170,10 @@ func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, typ
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetValue(ctx), nil
+	value, err := sp.GetValue(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), value, nil
 }
