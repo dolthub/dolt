@@ -96,35 +96,45 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func loadTableIndex(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, getBytesFromEnd func(n int64) ([]byte, error)) (onHeapTableIndex, error) {
-	size := indexSize(chunkCount) + footerSize
-	t1 := time.Now()
-	bytes, err := getBytesFromEnd(int64(size))
+func loadTableIndexWithMmap(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+	ti, err := newMmapTableIndex(chunkCount)
 	if err != nil {
+		return nil, err
+	}
+
+	t1 := time.Now()
+	err = loadIndexBytes(ti.indexDataBuff)
+	if err != nil {
+		_ = ti.mmapped.Unmap()
 		return onHeapTableIndex{}, err
 	}
 	stats.IndexReadLatency.SampleTimeSince(t1)
-	stats.IndexBytesPerRead.Sample(uint64(len(bytes)))
+	stats.IndexBytesPerRead.Sample(uint64(len(ti.indexDataBuff)))
 
-	return parseTableIndex(bytes, q)
+	err = ti.parseIndexBuffer(q)
+	if err != nil {
+		_ = ti.mmapped.Unmap()
+		return nil, err
+	}
+
+	return ti, nil
 }
 
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, err := loadTableIndex(stats, chunkCount, q, func(size int64) ([]byte, error) {
-		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-size, 0))
+	index, err := loadTableIndexWithMmap(stats, chunkCount, q, func(p []byte) error {
+		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer rc.Close()
 
-		buff := make([]byte, size)
-		_, err = io.ReadFull(rc, buff)
+		_, err = io.ReadFull(rc, p)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return buff, nil
+		return nil
 	})
 	if err != nil {
 		return nil, err

@@ -30,12 +30,12 @@ import (
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, tra, err := func() (onHeapTableIndex, tableReaderAt, error) {
+	index, tra, err := func() (tableIndex, tableReaderAt, error) {
 		if al.tableMayBeInDynamo(chunkCount) {
 			t1 := time.Now()
 			data, err := ddb.ReadTable(ctx, name, stats)
 			if data == nil && err == nil { // There MUST be either data or an error
-				return onHeapTableIndex{}, &dynamoTableReaderAt{}, errors.New("no data available")
+				return nil, &dynamoTableReaderAt{}, errors.New("no data available")
 			}
 			if data != nil {
 				stats.IndexReadLatency.SampleTimeSince(t1)
@@ -51,16 +51,15 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 			}
 		}
 
-		index, err := loadTableIndex(stats, chunkCount, q, func(bytesFromEnd int64) ([]byte, error) {
-			buff := make([]byte, bytesFromEnd)
-			n, _, err := s3.ReadFromEnd(ctx, name, buff, stats)
+		index, err := loadTableIndexWithMmap(stats, chunkCount, q, func(p []byte) error {
+			n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
 			if err != nil {
-				return nil, err
+				return err
 			}
-			if bytesFromEnd != int64(n) {
-				return nil, errors.New("failed to read all data")
+			if len(p) != n {
+				return errors.New("failed to read all data")
 			}
-			return buff, nil
+			return nil
 		})
 		if err != nil {
 			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err

@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/mmap-go"
 )
 
 var (
@@ -99,6 +100,76 @@ func indexMemSize(chunkCount uint32) uint64 {
 	return is
 }
 
+type mmapTableIndex struct {
+	q MemoryQuotaProvider
+	onHeapTableIndex
+	mmapped         mmap.MMap
+	indexDataBuff   []byte
+	offset1DataBuff []byte
+}
+
+func (ti *mmapTableIndex) Close() error {
+	chunkCount := ti.chunkCount
+	// mmapTableIndex sets the quota provider for onHeapTableIndex to a noopQuotaProvider
+	err := ti.onHeapTableIndex.Close()
+	if err != nil {
+		return err
+	}
+
+	ti.indexDataBuff = nil
+	ti.offset1DataBuff = nil
+	err = ti.mmapped.Unmap()
+	if err != nil {
+		return err
+	}
+	ti.mmapped = nil
+
+	err = ti.q.ReleaseQuota(indexMemSize(chunkCount))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Allocates mempory for a mmap table index of size |chunkCount|
+func newMmapTableIndex(chunkCount uint32) (*mmapTableIndex, error) {
+	indexSize := int(indexSize(chunkCount) + footerSize)
+
+	chunks2 := chunkCount / 2
+	chunks1 := chunkCount - chunks2
+	offsets1Size := int(chunks1 * offsetSize)
+
+	mmapped, err := mmap.MapRegion(nil, indexSize+offsets1Size, mmap.RDWR, mmap.ANON, 0)
+	if err != nil {
+		return nil, err
+	}
+	indexBytesBuff := mmapped[:indexSize]
+	offsets1Buff := mmapped[indexSize : indexSize+offsets1Size]
+
+	return &mmapTableIndex{mmapped: mmapped, indexDataBuff: indexBytesBuff, offset1DataBuff: offsets1Buff}, nil
+}
+
+func (ti *mmapTableIndex) parseIndexBuffer(q MemoryQuotaProvider) (err error) {
+	ti.onHeapTableIndex, err = parseTableIndexWithOffsetBuff(ti.indexDataBuff, ti.offset1DataBuff, &noopQuotaProvider{})
+	ti.q = q
+	return err
+}
+
+func parseTableIndexWithOffsetBuff(buff []byte, offsets1Buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+	iS := indexSize(chunkCount) + footerSize
+	if uint64(len(buff)) != iS {
+		return onHeapTableIndex{}, ErrWrongBufferSize
+	}
+	buff = buff[:len(buff)-footerSize]
+
+	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
+}
+
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
 // and footer and its length and capacity must match the expected indexSize for the chunkCount specified in the footer.
 // Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
@@ -108,11 +179,16 @@ func parseTableIndex(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, erro
 		return onHeapTableIndex{}, err
 	}
 	iS := indexSize(chunkCount) + footerSize
-	if uint64(len(buff)) != iS || uint64(cap(buff)) != iS {
+	if uint64(len(buff)) != iS {
 		return onHeapTableIndex{}, ErrWrongBufferSize
 	}
 	buff = buff[:len(buff)-footerSize]
-	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData, q)
+
+	chunks2 := chunkCount / 2
+	chunks1 := chunkCount - chunks2
+	offsets1Buff := make([]byte, chunks1*offsetSize)
+
+	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
 }
 
 // parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
@@ -140,7 +216,11 @@ func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableI
 		return onHeapTableIndex{}, err
 	}
 
-	return NewOnHeapTableIndex(buff, chunkCount, totalUncompressedData, q)
+	chunks2 := chunkCount / 2
+	chunks1 := chunkCount - chunks2
+	offsets1Buff := make([]byte, chunks1*offsetSize)
+
+	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
 }
 
 type onHeapTableIndex struct {
@@ -161,19 +241,16 @@ type onHeapTableIndex struct {
 var _ tableIndex = &onHeapTableIndex{}
 
 // NewOnHeapTableIndex creates a table index given a buffer of just the table index (no footer)
-func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
-	tuples := b[:prefixTupleSize*chunkCount]
-	lengths := b[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
-	suffixes := b[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
+func NewOnHeapTableIndex(indexBuff []byte, offset1Buff []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	tuples := indexBuff[:prefixTupleSize*chunkCount]
+	lengths := indexBuff[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
+	suffixes := indexBuff[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
 
 	chunks2 := chunkCount / 2
-	chunks1 := chunkCount - chunks2
-
-	offsets1 := make([]byte, chunks1*offsetSize)
 
 	lR := bytes.NewReader(lengths)
 	r := NewOffsetsReader(lR)
-	_, err := io.ReadFull(r, offsets1)
+	_, err := io.ReadFull(r, offset1Buff)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
@@ -194,7 +271,7 @@ func NewOnHeapTableIndex(b []byte, chunkCount uint32, totalUncompressedData uint
 		refCnt:                refCnt,
 		q:                     q,
 		tupleB:                tuples,
-		offsetB1:              offsets1,
+		offsetB1:              offset1Buff,
 		offsetB2:              offsets2,
 		suffixB:               suffixes,
 		chunkCount:            chunkCount,
