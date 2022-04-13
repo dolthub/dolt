@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -492,6 +493,9 @@ OUTER:
 	var rp atomic.Value
 	group, ctx := errgroup.WithContext(ctx)
 
+	mu := sync.Mutex{}
+	var opened []chunkSource
+
 	for _, op := range openOps {
 		idx, spec := op.idx, op.spec
 		group.Go(
@@ -502,10 +506,14 @@ OUTER:
 						err = errors.New("panicked")
 					}
 				}()
-				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
+				cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
 				if err != nil {
 					return err
 				}
+				merged.upstream[idx] = cs
+				mu.Lock()
+				opened = append(opened, cs)
+				mu.Unlock()
 				return nil
 			},
 		)
@@ -513,6 +521,11 @@ OUTER:
 
 	err = group.Wait()
 	if err != nil {
+		// Close any opened chunkSources
+		for _, cs := range opened {
+			_ = cs.Close()
+		}
+
 		if r := rp.Load(); r != nil {
 			panic(r)
 		}
