@@ -984,3 +984,67 @@ SQL
     [[ "$output" =~ "i" ]] || false
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "keyless: insert into keyless table with unique index" {
+    dolt sql -q "CREATE TABLE mytable (pk int UNIQUE)";
+
+    run dolt sql -q "INSERT INTO mytable values (1),(2),(3),(4)"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM mytable order by pk"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+    [[ "${lines[2]}" = "2" ]] || false
+    [[ "${lines[3]}" = "3" ]] || false
+    [[ "${lines[4]}" = "4" ]] || false
+
+    run dolt sql -q "INSERT INTO mytable VALUES (1)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [1]" ]] || false
+
+    # Make sure nothing in the faulty transaction was persisted.
+    run dolt sql -q "INSERT INTO mytable VALUES (3), (5)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [3]" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM mytable where pk = 5"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "0" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM mytable"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "4" ]] || false
+}
+
+@test "keyless: insert into keyless table with unique index and auto increment" {
+    dolt sql -q "CREATE TABLE gis (pk INT UNIQUE NOT NULL AUTO_INCREMENT, shape GEOMETRY NOT NULL)"
+    dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
+
+    run dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [1]" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM gis where pk = 1"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+
+    run dolt sql -q "INSERT INTO gis VALUES (NULL, POINT(1,1))"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT count(*) FROM gis where pk = 2"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+}
+
+@test "keyless: string type unique key index" {
+    dolt sql -q "CREATE TABLE mytable (pk int, val varchar(6) UNIQUE)"
+    dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
+
+    run dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "UNIQUE constraint violation on index 'val': [\"nekter\"]" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) from mytable where pk = 1"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+}
