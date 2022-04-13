@@ -423,11 +423,10 @@ func (ts tableSet) Flatten(ctx context.Context) (tableSet, error) {
 // those specified by |specs|.
 func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
 	merged := tableSet{
-		novel:    make(chunkSources, 0, len(ts.novel)),
-		upstream: make(chunkSources, len(specs)),
-		p:        ts.p,
-		q:        ts.q,
-		rl:       ts.rl,
+		novel: make(chunkSources, 0, len(ts.novel)),
+		p:     ts.p,
+		q:     ts.q,
+		rl:    ts.rl,
 	}
 
 	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
@@ -456,6 +455,8 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 			presents[spec.name] = spec
 		}
 	}
+
+	merged.upstream = make([]chunkSource, len(tablesToOpen))
 
 	type openOp struct {
 		idx  int

@@ -142,6 +142,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 
 	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
 	if err != nil {
+		_ = index.Close()
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil

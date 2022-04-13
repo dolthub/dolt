@@ -73,6 +73,7 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 
 	tr, err := newTableReader(index, tra, s3BlockSize)
 	if err != nil {
+		_ = index.Close()
 		return &chunkSourceAdapter{}, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil
