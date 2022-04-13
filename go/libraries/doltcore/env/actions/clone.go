@@ -264,11 +264,15 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return err
 	}
 
-	// Ensure there is no working set for remote
-	srcDB.DeleteWorkingSet(ctx, wsRef)
+	// Retrieve existing working set
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
+	if ws != nil {
+		dEnv.DoltDB.DeleteWorkingSet(ctx, wsRef)
+	}
+	ws = doltdb.EmptyWorkingSet(wsRef)
 
-	// Create new WorkingSet
-	ws := doltdb.EmptyWorkingSet(wsRef)
+	// TODO: this might be where the actual working set is
+	//dEnv.DoltDB.ResolveWorkingSet()
 
 	// Update to use current Working and Staged root
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
