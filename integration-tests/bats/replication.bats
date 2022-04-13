@@ -397,7 +397,6 @@ teardown() {
 @test "replication: local clone" {
     run dolt clone file://./repo1/.dolt/noms repo2
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "chunks complete. 0 chunks being downloaded currently." ]] || false
     cd repo2
     run dolt ls
     [ "$status" -eq 0 ]
