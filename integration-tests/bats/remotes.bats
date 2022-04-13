@@ -1527,7 +1527,7 @@ setup_ref_test() {
     cd repo2
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
 @test "remotes: local clone pushes to other branch" {
