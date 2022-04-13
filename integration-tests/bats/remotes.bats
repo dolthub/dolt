@@ -1496,7 +1496,7 @@ setup_ref_test() {
     dolt commit --allow-empty -am "commit from repo1"
 
     cd ..
-    dolt clone file://$(pwd)/foo/.dolt/noms repo2
+    dolt clone file://$(pwd)/repo1/.dolt/noms repo2
     cd repo2
     run dolt log
     [[ "$output" =~ "commit from repo1" ]] || false
