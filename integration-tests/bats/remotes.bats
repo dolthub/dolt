@@ -1477,7 +1477,7 @@ setup_ref_test() {
     [[ "$output" =~ "commit from repo1" ]] || false
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt commit --allow-empty -am "commit from repo2"
     dolt push
@@ -1502,7 +1502,7 @@ setup_ref_test() {
     [[ "$output" =~ "commit from repo1" ]] || false
 
     run dolt status
-    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 
     dolt commit --allow-empty -am "commit from repo2"
     dolt push
