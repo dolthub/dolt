@@ -951,7 +951,7 @@ SQL
     [ "$status" -ne 0 ]
     run dolt fetch -f test-remote
     [ "$status" -eq 0 ]
-    dolt pull test-remote
+    dolt pull
     [ "$status" -eq 0 ]
 }
 

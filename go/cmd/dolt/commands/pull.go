@@ -91,13 +91,8 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Call fetch; pass in remote name depending on if remoteName is provided
-	var fetchExitCode int
-	if remoteName == "" {
-		fetchExitCode = FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
-	} else {
-		fetchExitCode = FetchCmd{}.Exec(ctx, "fetch", []string{remoteName}, dEnv)
-	}
+	// Call fetch; pass in remote name from pull spec
+	fetchExitCode := FetchCmd{}.Exec(ctx, "fetch", []string{pullSpec.Remote.Name}, dEnv)
 
 	// Pass along error from fetch if there is one
 	if fetchExitCode != 0 {
