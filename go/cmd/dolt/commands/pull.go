@@ -92,11 +92,10 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	// Call fetch, pass along error if there is one
-	//cli.PrintErrln("calling fetch!")
-	//exitCode := FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
-	//if exitCode != 0 {
-	//	return exitCode
-	//}
+	exitCode := FetchCmd{}.Exec(ctx, "fetch", []string{}, dEnv)
+	if exitCode != 0 {
+		return exitCode
+	}
 
 	err = pullHelper(ctx, dEnv, pullSpec)
 	if err != nil {

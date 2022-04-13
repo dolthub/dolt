@@ -25,6 +25,34 @@ teardown() {
     ps -p $remotesrv_pid | grep remotesrv
 }
 
+@test "remotes: pull also fetches" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]]
+    [[ ! "$output" =~ "other" ]]
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]]
+    [[ "$output" =~ "other" ]]
+}
+
 @test "remotes: add a remote using dolt remote" {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
@@ -1462,23 +1490,4 @@ setup_ref_test() {
     [ "$status" -eq 1 ]
     dolt push --set-upstream origin feature
     dolt push
-}
-
-@test "remotes: pull also fetches" {
-    mkdir remote
-
-    rm -rf ./.dolt
-    dolt init
-    dolt remote add origin file://./remote
-    dolt push origin main
-    dolt checkout other
-    dolt push origin other
-
-    rm -rf ./.dolt
-    dolt init
-    dolt remote add origin file://./remote
-    dolt pull
-    run dolt branch -va
-    [[ "$output" =~ "main" ]]
-    [[ "$output" =~ "other" ]]
 }
