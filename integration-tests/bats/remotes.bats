@@ -1464,7 +1464,7 @@ setup_ref_test() {
     dolt push
 }
 
-@test "remotes: clone local repo and push" {
+@test "remotes: clone local repo with file url" {
     mkdir repo1
     cd repo1
     dolt init
@@ -1474,7 +1474,10 @@ setup_ref_test() {
     dolt clone file://./repo1/.dolt/noms repo2
     cd repo2
     run dolt log
-    [[ "$output" =~ "commit from repo1" ]]
+    [[ "$output" =~ "commit from repo1" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
 
     dolt commit --allow-empty -am "commit from repo2"
     dolt push
@@ -1483,4 +1486,65 @@ setup_ref_test() {
     run dolt log
     [[ "$output" =~ "commit from repo1" ]]
     [[ "$output" =~ "commit from repo2" ]]
+}
+
+@test "remotes: clone local repo with absolute file path" {
+    skiponwindows "absolute paths don't work on windows"
+    mkdir repo1
+    cd repo1
+    dolt init
+    dolt commit --allow-empty -am "commit from repo1"
+
+    cd ..
+    dolt clone file://$(pwd)/foo/.dolt/noms repo2
+    cd repo2
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
+
+    dolt commit --allow-empty -am "commit from repo2"
+    dolt push
+
+    cd ../repo1
+    run dolt log
+    [[ "$output" =~ "commit from repo1" ]]
+    [[ "$output" =~ "commit from repo2" ]]
+}
+
+@test "remotes: local clone does not contain working set changes" {
+    mkdir repo1
+    cd repo1
+    dolt init
+    run dolt sql -q "create table t (i int)"
+    [ "$status" -eq 0 ]
+    run dolt status
+    [[ "$output" =~ "new table:" ]] || false
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clear" ]] || false
+}
+
+@test "remotes: local clone pushes to other branch" {
+    mkdir repo1
+    cd repo1
+    dolt init
+
+    cd ..
+    dolt clone file://./repo1/.dolt/noms repo2
+    cd repo2
+    dolt checkout -b other
+    dolt sql -q "create table t (i int)"
+    dolt commit -am "adding table from other"
+    dolt push origin other
+
+    cd ../repo1
+    dolt checkout other
+    run dolt log
+    [[ "$output" =~ "adding table from other" ]]
 }
