@@ -19,6 +19,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"os"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -100,10 +102,60 @@ func indexMemSize(chunkCount uint32) uint64 {
 	return is
 }
 
+type notifyFunc func(n uint64, total uint64)
+
+var noOpNotify = func(uint64, uint64) {}
+
+type mmapStats struct {
+	mu        sync.Mutex
+	totalUsed uint64
+	WillMmap  notifyFunc
+	Mmapped   notifyFunc
+	UnMapped  notifyFunc
+}
+
+var GlobalMmapStats = &mmapStats{
+	sync.Mutex{},
+	0,
+	noOpNotify,
+	noOpNotify,
+	noOpNotify,
+}
+
+type mmapWStat struct {
+	m    mmap.MMap
+	used uint64
+}
+
+func mmapWithStats(f *os.File, length int, prot, flags int, offset int64) (mmapWStat, error) {
+	GlobalMmapStats.mu.Lock()
+	GlobalMmapStats.WillMmap(uint64(length), GlobalMmapStats.totalUsed)
+	mmap, err := mmap.MapRegion(f, length, prot, flags, offset)
+	if err != nil {
+		return mmapWStat{}, err
+	}
+	GlobalMmapStats.totalUsed += uint64(length)
+	GlobalMmapStats.Mmapped(uint64(length), GlobalMmapStats.totalUsed)
+	GlobalMmapStats.mu.Unlock()
+	return mmapWStat{mmap, uint64(length)}, nil
+}
+
+func (m mmapWStat) Unmap() error {
+	GlobalMmapStats.mu.Lock()
+	err := m.m.Unmap()
+	if err != nil {
+		return err
+	}
+	GlobalMmapStats.totalUsed -= m.used
+	GlobalMmapStats.UnMapped(m.used, GlobalMmapStats.totalUsed)
+	GlobalMmapStats.mu.Unlock()
+	return nil
+}
+
 type mmapTableIndex struct {
 	q MemoryQuotaProvider
 	onHeapTableIndex
-	mmapped         mmap.MMap
+	mmapped         mmapWStat
 	indexDataBuff   []byte
 	offset1DataBuff []byte
 }
@@ -122,7 +174,6 @@ func (ti *mmapTableIndex) Close() error {
 	if err != nil {
 		return err
 	}
-	ti.mmapped = nil
 
 	err = ti.q.ReleaseQuota(indexMemSize(chunkCount))
 	if err != nil {
@@ -140,12 +191,12 @@ func newMmapTableIndex(chunkCount uint32) (*mmapTableIndex, error) {
 	chunks1 := chunkCount - chunks2
 	offsets1Size := int(chunks1 * offsetSize)
 
-	mmapped, err := mmap.MapRegion(nil, indexSize+offsets1Size, mmap.RDWR, mmap.ANON, 0)
+	mmapped, err := mmapWithStats(nil, indexSize+offsets1Size, mmap.RDWR, mmap.ANON, 0)
 	if err != nil {
 		return nil, err
 	}
-	indexBytesBuff := mmapped[:indexSize]
-	offsets1Buff := mmapped[indexSize : indexSize+offsets1Size]
+	indexBytesBuff := mmapped.m[:indexSize]
+	offsets1Buff := mmapped.m[indexSize : indexSize+offsets1Size]
 
 	return &mmapTableIndex{mmapped: mmapped, indexDataBuff: indexBytesBuff, offset1DataBuff: offsets1Buff}, nil
 }
