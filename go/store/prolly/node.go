@@ -73,24 +73,28 @@ func (nd Node) hashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
+// GetKey returns the |ith| key of this node
 func (nd Node) GetKey(i int) nodeItem {
 	return nd.keys.GetSlice(i)
 }
 
+// GetValue returns the |ith| value of this node. Only valid for leaf nodes.
 func (nd Node) GetValue(i int) nodeItem {
-	if nd.leafNode() {
+	if nd.LeafNode() {
 		return nd.values.GetSlice(i)
 	} else {
-		r := nd.getRef(i)
+		r := nd.GetRef(i)
 		return r[:]
 	}
 }
 
+// Size returns the number of keys in this node
 func (nd Node) Size() int {
 	return nd.keys.Len()
 }
 
-func (nd Node) getRef(i int) hash.Hash {
+// GetRef returns the |ith| ref in this node. Only valid for internal nodes.
+func (nd Node) GetRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
 	start, stop := i*refSize, (i+1)*refSize
 	return hash.New(refs[start:stop])
@@ -105,12 +109,14 @@ func (nd Node) getSubtreeCounts() subtreeCounts {
 	return readSubtreeCounts(int(nd.count), buf)
 }
 
-func (nd Node) level() int {
+// Level returns the tree level for this node
+func (nd Node) Level() int {
 	return int(nd.buf.TreeLevel())
 }
 
-func (nd Node) leafNode() bool {
-	return nd.level() == 0
+// LeafNode returns whether this node is a leaf
+func (nd Node) LeafNode() bool {
+	return nd.Level() == 0
 }
 
 func (nd Node) empty() bool {

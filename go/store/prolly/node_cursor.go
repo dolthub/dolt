@@ -23,6 +23,7 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 
@@ -106,7 +107,7 @@ func newCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64)
 
 	distance := int64(ord)
 	return newCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
-		if nd.leafNode() {
+		if nd.LeafNode() {
 			return int(distance)
 		}
 
@@ -215,7 +216,7 @@ func (cur *nodeCursor) currentValue() nodeItem {
 }
 
 func (cur *nodeCursor) currentRef() hash.Hash {
-	return cur.nd.getRef(cur.idx)
+	return cur.nd.GetRef(cur.idx)
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
@@ -260,7 +261,7 @@ func (cur *nodeCursor) isLeaf() bool {
 }
 
 func (cur *nodeCursor) level() uint64 {
-	return uint64(cur.nd.level())
+	return uint64(cur.nd.Level())
 }
 
 func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (err error) {
@@ -458,6 +459,8 @@ func compareCursors(left, right *nodeCursor) (diff int) {
 
 func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
 	// todo(andy) handle nil Node, dangling ref
+	h := ref.String()
+	fmt.Println(h)
 	return ns.Read(ctx, ref)
 }
 

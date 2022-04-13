@@ -877,12 +877,7 @@ var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
 
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	root, err := t.getRoot(ctx)
-
 	if err != nil {
 		return err
 	}

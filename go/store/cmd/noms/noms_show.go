@@ -123,8 +123,8 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 		w.Write([]byte("["))
 		node := prolly.NodeFromValue(value)
 		for i := 0; i < node.Size(); i++ {
-			k, v := node.GetKey(i), node.GetValue(i)
-			kt, vt := val.Tuple(k), val.Tuple(v)
+			k := node.GetKey(i)
+			kt := val.Tuple(k)
 
 			w.Write([]byte("\n    { key: "))
 			for j := 0; j < kt.Count(); j++ {
@@ -134,15 +134,26 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) err
 				w.Write([]byte(hexStr(kt.GetField(j))))
 			}
 
-			w.Write([]byte(" value: "))
-			for j := 0; j < vt.Count(); j++ {
-				if j > 0 {
-					w.Write([]byte(", "))
-				}
-				w.Write([]byte(hexStr(vt.GetField(j))))
-			}
+			if node.LeafNode() {
+				v := node.GetValue(i)
+				vt := val.Tuple(v)
 
-			w.Write([]byte(" }"))
+				w.Write([]byte(" value: "))
+				for j := 0; j < vt.Count(); j++ {
+					if j > 0 {
+						w.Write([]byte(", "))
+					}
+					w.Write([]byte(hexStr(vt.GetField(j))))
+				}
+
+				w.Write([]byte(" }"))
+			} else {
+				ref := node.GetRef(i)
+
+				w.Write([]byte(" ref: #"))
+				w.Write([]byte(ref.String()))
+				w.Write([]byte(" }"))
+			}
 		}
 
 		w.Write([]byte("\n]\n"))

@@ -39,7 +39,7 @@ func TestRoundTripInts(t *testing.T) {
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
 
 	nd := newTupleLeafNode(keys, values)
-	assert.True(t, nd.leafNode())
+	assert.True(t, nd.LeafNode())
 	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
 		assert.Equal(t, keys[i], val.Tuple(nd.GetKey(i)))
@@ -53,7 +53,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
 
 		nd := newLeafNode(keys, values)
-		assert.True(t, nd.leafNode())
+		assert.True(t, nd.LeafNode())
 		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
 			assert.Equal(t, keys[i], nd.GetKey(i))
