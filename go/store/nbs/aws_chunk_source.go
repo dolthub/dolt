@@ -29,44 +29,37 @@ import (
 )
 
 func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectReader, al awsLimits, name addr, chunkCount uint32, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
-
-	index, tra, err := func() (tableIndex, tableReaderAt, error) {
+	var tra tableReaderAt
+	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
 		if al.tableMayBeInDynamo(chunkCount) {
-			t1 := time.Now()
 			data, err := ddb.ReadTable(ctx, name, stats)
 			if data == nil && err == nil { // There MUST be either data or an error
-				return nil, &dynamoTableReaderAt{}, errors.New("no data available")
+				return errors.New("no data available")
 			}
 			if data != nil {
-				stats.IndexReadLatency.SampleTimeSince(t1)
-				stats.IndexBytesPerRead.Sample(uint64(len(data)))
-				ind, err := parseTableIndexByCopy(data, q)
-				if err != nil {
-					return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
+				if len(p) > len(data) {
+					return errors.New("not enough data for chunk count")
 				}
-				return ind, &dynamoTableReaderAt{ddb: ddb, h: name}, nil
+				indexBytes := data[len(data)-len(p):]
+				copy(p, indexBytes)
+				tra = &dynamoTableReaderAt{ddb: ddb, h: name}
+				return nil
 			}
 			if _, ok := err.(tableNotInDynamoErr); !ok {
-				return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
-			}
-		}
-
-		index, err := loadTableIndexWithMmap(stats, chunkCount, q, func(p []byte) error {
-			n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
-			if err != nil {
 				return err
 			}
-			if len(p) != n {
-				return errors.New("failed to read all data")
-			}
-			return nil
-		})
-		if err != nil {
-			return onHeapTableIndex{}, &dynamoTableReaderAt{}, err
 		}
 
-		return index, &s3TableReaderAt{h: name, s3: s3}, nil
-	}()
+		n, _, err := s3.ReadFromEnd(ctx, name, p, stats)
+		if err != nil {
+			return err
+		}
+		if len(p) != n {
+			return errors.New("failed to read all data")
+		}
+		tra = &s3TableReaderAt{h: name, s3: s3}
+		return nil
+	})
 	if err != nil {
 		return &chunkSourceAdapter{}, err
 	}
@@ -77,6 +70,30 @@ func newAWSChunkSource(ctx context.Context, ddb *ddbTableStore, s3 *s3ObjectRead
 		return &chunkSourceAdapter{}, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil
+}
+
+func loadTableIndex(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
+	ti, err := newMmapTableIndex(chunkCount)
+	if err != nil {
+		return nil, err
+	}
+
+	t1 := time.Now()
+	err = loadIndexBytes(ti.indexDataBuff)
+	if err != nil {
+		_ = ti.mmapped.Unmap()
+		return onHeapTableIndex{}, err
+	}
+	stats.IndexReadLatency.SampleTimeSince(t1)
+	stats.IndexBytesPerRead.Sample(uint64(len(ti.indexDataBuff)))
+
+	err = ti.parseIndexBuffer(q)
+	if err != nil {
+		_ = ti.mmapped.Unmap()
+		return nil, err
+	}
+
+	return ti, nil
 }
 
 type awsTableReaderAt struct {

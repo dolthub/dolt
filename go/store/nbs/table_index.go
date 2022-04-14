@@ -23,10 +23,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dolthub/mmap-go"
-
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/mmap-go"
 )
 
 var (
@@ -98,149 +97,56 @@ func ReadTableFooter(rd io.ReadSeeker) (chunkCount uint32, totalUncompressedData
 
 func indexMemSize(chunkCount uint32) uint64 {
 	is := indexSize(chunkCount) + footerSize
-	// leftover offsets that don't fit into lengths, see NewOnHeapTableIndex
-	is += uint64(offsetSize * chunkCount / 2)
+	// Extra required space for offsets that don't fit into the region where lengths were previously stored, see
+	// newOnHeapTableIndex
+	is += uint64(offsetSize * (chunkCount - chunkCount/2))
 	return is
 }
 
-type notifyFunc func(n uint64, total uint64)
-
-var noOpNotify = func(uint64, uint64) {}
-
-type mmapStats struct {
-	mu        sync.Mutex
-	totalUsed uint64
-	WillMmap  notifyFunc
-	Mmapped   notifyFunc
-	UnMapped  notifyFunc
-}
-
-var GlobalMmapStats = &mmapStats{
-	sync.Mutex{},
-	0,
-	noOpNotify,
-	noOpNotify,
-	noOpNotify,
-}
-
-type mmapWStat struct {
-	m    mmap.MMap
-	used uint64
-}
-
-func mmapWithStats(f *os.File, length int, prot, flags int, offset int64) (mmapWStat, error) {
-	GlobalMmapStats.mu.Lock()
-	GlobalMmapStats.WillMmap(uint64(length), GlobalMmapStats.totalUsed)
-	mmap, err := mmap.MapRegion(f, length, prot, flags, offset)
-	if err != nil {
-		return mmapWStat{}, err
-	}
-	GlobalMmapStats.totalUsed += uint64(length)
-	GlobalMmapStats.Mmapped(uint64(length), GlobalMmapStats.totalUsed)
-	GlobalMmapStats.mu.Unlock()
-	return mmapWStat{mmap, uint64(length)}, nil
-}
-
-func (m mmapWStat) Unmap() error {
-	GlobalMmapStats.mu.Lock()
-	err := m.m.Unmap()
-	if err != nil {
-		return err
-	}
-	GlobalMmapStats.totalUsed -= m.used
-	GlobalMmapStats.UnMapped(m.used, GlobalMmapStats.totalUsed)
-	GlobalMmapStats.mu.Unlock()
-	return nil
-}
-
-type mmapTableIndex struct {
-	q MemoryQuotaProvider
-	onHeapTableIndex
-	mmapped         mmapWStat
-	indexDataBuff   []byte
-	offset1DataBuff []byte
-}
-
-func (ti *mmapTableIndex) Close() error {
-	chunkCount := ti.chunkCount
-	// mmapTableIndex sets the quota provider for onHeapTableIndex to a noopQuotaProvider
-	err := ti.onHeapTableIndex.Close()
-	if err != nil {
-		return err
-	}
-
-	ti.indexDataBuff = nil
-	ti.offset1DataBuff = nil
-	err = ti.mmapped.Unmap()
-	if err != nil {
-		return err
-	}
-
-	err = ti.q.ReleaseQuota(indexMemSize(chunkCount))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Allocates mempory for a mmap table index of size |chunkCount|
-func newMmapTableIndex(chunkCount uint32) (*mmapTableIndex, error) {
-	indexSize := int(indexSize(chunkCount) + footerSize)
-
-	chunks2 := chunkCount / 2
-	chunks1 := chunkCount - chunks2
-	offsets1Size := int(chunks1 * offsetSize)
-
-	mmapped, err := mmapWithStats(nil, indexSize+offsets1Size, mmap.RDWR, mmap.ANON, 0)
-	if err != nil {
-		return nil, err
-	}
-	indexBytesBuff := mmapped.m[:indexSize]
-	offsets1Buff := mmapped.m[indexSize : indexSize+offsets1Size]
-
-	return &mmapTableIndex{mmapped: mmapped, indexDataBuff: indexBytesBuff, offset1DataBuff: offsets1Buff}, nil
-}
-
-func (ti *mmapTableIndex) parseIndexBuffer(q MemoryQuotaProvider) (err error) {
-	ti.onHeapTableIndex, err = parseTableIndexWithOffsetBuff(ti.indexDataBuff, ti.offset1DataBuff, &noopQuotaProvider{})
-	ti.q = q
-	return err
-}
-
-func parseTableIndexWithOffsetBuff(buff []byte, offsets1Buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
-	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-	iS := indexSize(chunkCount) + footerSize
-	if uint64(len(buff)) != iS {
-		return onHeapTableIndex{}, ErrWrongBufferSize
-	}
-	buff = buff[:len(buff)-footerSize]
-
-	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
-}
-
 // parses a valid nbs tableIndex from a byte stream. |buff| must end with an NBS index
-// and footer and its length and capacity must match the expected indexSize for the chunkCount specified in the footer.
+// and footer and its length must match the expected indexSize for the chunkCount specified in the footer.
 // Retains the buffer and does not allocate new memory except for offsets, computes on buff in place.
 func parseTableIndex(buff []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
-	iS := indexSize(chunkCount) + footerSize
-	if uint64(len(buff)) != iS {
-		return onHeapTableIndex{}, ErrWrongBufferSize
+
+	buff, err = removeFooter(buff, chunkCount)
+	if err != nil {
+		return onHeapTableIndex{}, err
 	}
-	buff = buff[:len(buff)-footerSize]
 
 	chunks2 := chunkCount / 2
 	chunks1 := chunkCount - chunks2
-	offsets1Buff := make([]byte, chunks1*offsetSize)
+	offsetsBuff1 := make([]byte, chunks1*offsetSize)
 
-	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
+	return newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
+}
+
+// similar to parseTableIndex except that it uses the given |offsetsBuff1|
+// instead of allocating the additional space.
+func parseTableIndexWithOffsetBuff(buff []byte, offsetsBuff1 []byte, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+	chunkCount, totalUncompressedData, err := ReadTableFooter(bytes.NewReader(buff))
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+
+	buff, err = removeFooter(buff, chunkCount)
+	if err != nil {
+		return onHeapTableIndex{}, err
+	}
+
+	return newOnHeapTableIndex(buff, offsetsBuff1, chunkCount, totalUncompressedData, q)
+}
+
+func removeFooter(p []byte, chunkCount uint32) (out []byte, err error) {
+	iS := indexSize(chunkCount) + footerSize
+	if uint64(len(p)) != iS {
+		return nil, ErrWrongBufferSize
+	}
+	out = p[:len(p)-footerSize]
+	return
 }
 
 // parseTableIndexByCopy reads the footer, copies indexSize(chunkCount) bytes, and parses an on heap table index.
@@ -260,7 +166,7 @@ func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableI
 	iS := int64(indexSize(chunkCount))
 	_, err = rd.Seek(-(iS + footerSize), io.SeekEnd)
 	if err != nil {
-		return onHeapTableIndex{}, ErrInvalidTableFile
+		return onHeapTableIndex{}, err
 	}
 	buff := make([]byte, iS)
 	_, err = io.ReadFull(rd, buff)
@@ -272,7 +178,7 @@ func ReadTableIndexByCopy(rd io.ReadSeeker, q MemoryQuotaProvider) (onHeapTableI
 	chunks1 := chunkCount - chunks2
 	offsets1Buff := make([]byte, chunks1*offsetSize)
 
-	return NewOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
+	return newOnHeapTableIndex(buff, offsets1Buff, chunkCount, totalUncompressedData, q)
 }
 
 type onHeapTableIndex struct {
@@ -292,8 +198,14 @@ type onHeapTableIndex struct {
 
 var _ tableIndex = &onHeapTableIndex{}
 
-// NewOnHeapTableIndex creates a table index given a buffer of just the table index (no footer)
-func NewOnHeapTableIndex(indexBuff []byte, offset1Buff []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
+// newOnHeapTableIndex converts a table file index with stored lengths on
+// |indexBuff| into an index with stored offsets. Since offsets are twice the
+// size of a length, we need to allocate additional space to store all the
+// offsets. It stores the first n - n/2 offsets in |offsetsBuff1| (the
+// additional space) and the rest into the region of |indexBuff| previously
+// occupied by lengths. |onHeapTableIndex| computes directly on the given
+// |indexBuff| and |offsetsBuff1| buffers.
+func newOnHeapTableIndex(indexBuff []byte, offsetsBuff1 []byte, chunkCount uint32, totalUncompressedData uint64, q MemoryQuotaProvider) (onHeapTableIndex, error) {
 	tuples := indexBuff[:prefixTupleSize*chunkCount]
 	lengths := indexBuff[prefixTupleSize*chunkCount : prefixTupleSize*chunkCount+lengthSize*chunkCount]
 	suffixes := indexBuff[prefixTupleSize*chunkCount+lengthSize*chunkCount:]
@@ -302,15 +214,15 @@ func NewOnHeapTableIndex(indexBuff []byte, offset1Buff []byte, chunkCount uint32
 
 	lR := bytes.NewReader(lengths)
 	r := NewOffsetsReader(lR)
-	_, err := io.ReadFull(r, offset1Buff)
+	_, err := io.ReadFull(r, offsetsBuff1)
 	if err != nil {
 		return onHeapTableIndex{}, err
 	}
 
-	var offsets2 []byte
+	var offsetsBuff2 []byte
 	if chunks2 > 0 {
-		offsets2 = lengths[:chunks2*offsetSize]
-		_, err = io.ReadFull(r, offsets2)
+		offsetsBuff2 = lengths[:chunks2*offsetSize]
+		_, err = io.ReadFull(r, offsetsBuff2)
 		if err != nil {
 			return onHeapTableIndex{}, err
 		}
@@ -323,8 +235,8 @@ func NewOnHeapTableIndex(indexBuff []byte, offset1Buff []byte, chunkCount uint32
 		refCnt:                refCnt,
 		q:                     q,
 		tupleB:                tuples,
-		offsetB1:              offset1Buff,
-		offsetB2:              offsets2,
+		offsetB1:              offsetsBuff1,
+		offsetB2:              offsetsBuff2,
 		suffixB:               suffixes,
 		chunkCount:            chunkCount,
 		totalUncompressedData: totalUncompressedData,
@@ -444,6 +356,7 @@ func (ti onHeapTableIndex) ordinalAt(idx uint32) uint32 {
 	return binary.BigEndian.Uint32(b)
 }
 
+// the first n - n/2 offsets are stored in offsetsB1 and the rest in offsetsB2
 func (ti onHeapTableIndex) offsetAt(ord uint32) uint64 {
 	chunks1 := ti.chunkCount - ti.chunkCount/2
 	var b []byte
@@ -640,4 +553,140 @@ func (ti onHeapTableIndex) Clone() (tableIndex, error) {
 		panic("Clone() called after last Close(). This index is no longer valid.")
 	}
 	return ti, nil
+}
+
+// mmapTableIndex is an onHeapTableIndex but creates all of its slice buffers
+// from mmap. It overrides Clone and Close of mmapTableIndex so that it can
+// count references and release mmapped regions appropriately.
+type mmapTableIndex struct {
+	onHeapTableIndex
+	refCnt          *int32
+	q               MemoryQuotaProvider
+	mmapped         mmapWStat
+	indexDataBuff   []byte
+	offset1DataBuff []byte
+}
+
+// newMmapTableIndex mmaps a region of memory large enough to store a fully
+// parsed onHeapTableIndex. After creating the mmapTableIndex, index data should
+// be loaded into |indexDataBuff| and then parsed with parseIndexBuffer.
+func newMmapTableIndex(chunkCount uint32) (*mmapTableIndex, error) {
+	indexSize := int(indexSize(chunkCount) + footerSize)
+
+	chunks2 := chunkCount / 2
+	chunks1 := chunkCount - chunks2
+	offsets1Size := int(chunks1 * offsetSize)
+
+	mmapped, err := mmapWithStats(nil, indexSize+offsets1Size, mmap.RDWR, mmap.ANON, 0)
+	if err != nil {
+		return nil, err
+	}
+	indexBytesBuff := mmapped.m[:indexSize]
+	offsets1Buff := mmapped.m[indexSize : indexSize+offsets1Size]
+
+	refCnt := new(int32)
+	*refCnt = 1
+
+	return &mmapTableIndex{
+		refCnt:          refCnt,
+		mmapped:         mmapped,
+		indexDataBuff:   indexBytesBuff,
+		offset1DataBuff: offsets1Buff}, nil
+}
+
+func (ti *mmapTableIndex) Clone() (tableIndex, error) {
+	cnt := atomic.AddInt32(ti.refCnt, 1)
+	if cnt == 1 {
+		panic("Clone() called after last Close(). This index is no longer valid.")
+	}
+	return ti, nil
+}
+
+// Close closes the underlying onHeapTableIndex and then unmaps the memory
+// region.
+func (ti *mmapTableIndex) Close() error {
+	cnt := atomic.AddInt32(ti.refCnt, -1)
+	if cnt == 0 {
+		chunkCount := ti.chunkCount
+		// mmapTableIndex sets the quota provider for onHeapTableIndex to a
+		// noopQuotaProvider, so that we can release quota after the memory region
+		// is unmapped.
+		err := ti.onHeapTableIndex.Close()
+		if err != nil {
+			return err
+		}
+
+		ti.indexDataBuff = nil
+		ti.offset1DataBuff = nil
+		err = ti.mmapped.Unmap()
+		if err != nil {
+			return err
+		}
+
+		err = ti.q.ReleaseQuota(indexMemSize(chunkCount))
+		if err != nil {
+			return err
+		}
+	}
+	if cnt < 0 {
+		panic("Close() called and reduced ref count to < 0.")
+	}
+
+	return nil
+}
+
+func (ti *mmapTableIndex) parseIndexBuffer(q MemoryQuotaProvider) (err error) {
+	ti.onHeapTableIndex, err = parseTableIndexWithOffsetBuff(ti.indexDataBuff, ti.offset1DataBuff, &noopQuotaProvider{})
+	ti.q = q
+	return err
+}
+
+type notifyFunc func(n uint64, total uint64)
+
+var noOpNotify = func(uint64, uint64) {}
+
+type mmapStats struct {
+	mu        sync.Mutex
+	totalUsed uint64
+	WillMmap  notifyFunc
+	Mmapped   notifyFunc
+	UnMapped  notifyFunc
+}
+
+var GlobalMmapStats = &mmapStats{
+	sync.Mutex{},
+	0,
+	noOpNotify,
+	noOpNotify,
+	noOpNotify,
+}
+
+type mmapWStat struct {
+	m    mmap.MMap
+	used uint64
+}
+
+func mmapWithStats(f *os.File, length int, prot, flags int, offset int64) (mmapWStat, error) {
+	GlobalMmapStats.mu.Lock()
+	GlobalMmapStats.WillMmap(uint64(length), GlobalMmapStats.totalUsed)
+	mmap, err := mmap.MapRegion(f, length, prot, flags, offset)
+	if err != nil {
+		return mmapWStat{}, err
+	}
+	GlobalMmapStats.totalUsed += uint64(length)
+	GlobalMmapStats.Mmapped(uint64(length), GlobalMmapStats.totalUsed)
+	GlobalMmapStats.mu.Unlock()
+	return mmapWStat{mmap, uint64(length)}, nil
+}
+
+func (m mmapWStat) Unmap() error {
+	GlobalMmapStats.mu.Lock()
+	err := m.m.Unmap()
+	if err != nil {
+		return err
+	}
+	GlobalMmapStats.totalUsed -= m.used
+	GlobalMmapStats.UnMapped(m.used, GlobalMmapStats.totalUsed)
+	GlobalMmapStats.mu.Unlock()
+	return nil
 }

@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -96,33 +95,9 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func loadTableIndexWithMmap(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, loadIndexBytes func(p []byte) error) (tableIndex, error) {
-	ti, err := newMmapTableIndex(chunkCount)
-	if err != nil {
-		return nil, err
-	}
-
-	t1 := time.Now()
-	err = loadIndexBytes(ti.indexDataBuff)
-	if err != nil {
-		_ = ti.mmapped.Unmap()
-		return onHeapTableIndex{}, err
-	}
-	stats.IndexReadLatency.SampleTimeSince(t1)
-	stats.IndexBytesPerRead.Sample(uint64(len(ti.indexDataBuff)))
-
-	err = ti.parseIndexBuffer(q)
-	if err != nil {
-		_ = ti.mmapped.Unmap()
-		return nil, err
-	}
-
-	return ti, nil
-}
-
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, err := loadTableIndexWithMmap(stats, chunkCount, q, func(p []byte) error {
+	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
 		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
 			return err

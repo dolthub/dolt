@@ -40,7 +40,7 @@ const (
 	fileBlockSize = 1 << 12
 )
 
-func newMmapTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func fileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	index, err := func() (ti onHeapTableIndex, err error) {
