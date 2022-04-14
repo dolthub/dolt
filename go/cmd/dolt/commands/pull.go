@@ -192,7 +192,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 		return err
 	}
 
-	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
+	err = actions.FetchFollowTags(ctx, dEnv.DbData().Rsw.TempTableFilesDir(), srcDB, dEnv.DbData().Ddb, buildProgStarter(downloadLanguage), stopProgFuncs)
 	if err != nil {
 		return err
 	}
