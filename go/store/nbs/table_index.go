@@ -23,9 +23,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/mmap-go"
+
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/mmap-go"
 )
 
 var (
