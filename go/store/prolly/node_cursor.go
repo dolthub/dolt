@@ -23,7 +23,6 @@ package prolly
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sort"
 
@@ -459,8 +458,6 @@ func compareCursors(left, right *nodeCursor) (diff int) {
 
 func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) {
 	// todo(andy) handle nil Node, dangling ref
-	h := ref.String()
-	fmt.Println(h)
 	return ns.Read(ctx, ref)
 }
 
