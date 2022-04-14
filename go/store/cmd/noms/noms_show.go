@@ -29,16 +29,16 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/datetime"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/dolt/go/store/util/verbose"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var nomsShow = &util.Command{

@@ -106,4 +106,3 @@ func (v TupleRowStorage) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 func (v TupleRowStorage) HumanReadableString() string {
 	return strings.ToUpper(hex.EncodeToString(v))
 }
-
