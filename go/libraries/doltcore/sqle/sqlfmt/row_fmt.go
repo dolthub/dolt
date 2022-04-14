@@ -147,6 +147,35 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 	return b.String(), nil
 }
 
+// SqlRowAsCreateProcStmt Converts a Row into either a CREATE PROCEDURE statement
+func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
+	var b strings.Builder
+
+	// Write create procedure
+	prefix := "CREATE PROCEDURE "
+	b.WriteString(prefix)
+
+	// Write procedure name
+	nameStr := r[0].(string)
+	b.WriteString(QuoteIdentifier(nameStr))
+	b.WriteString(" ") // add a space
+
+	// Write definition
+	defStr := r[1].(string)
+	offset := len(prefix)
+	// TODO: this doesn't always work because we don't trim spaces
+	// check for backquotes
+	if defStr[offset] == '`' {
+		defStr = defStr[offset+len(nameStr)+3:]
+	} else {
+		defStr = defStr[offset+len(nameStr)+1:]
+	}
+	b.WriteString(defStr)
+
+	b.WriteString(";")
+	return b.String(), nil
+}
+
 // SqlRowAsCreateFragStmt Converts a Row into either a CREATE TRIGGER or CREATE VIEW statement
 func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	var b strings.Builder

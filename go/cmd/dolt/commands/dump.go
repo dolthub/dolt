@@ -122,13 +122,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
-	// Check if schemas table exists
+	// Look for schemas and procedures table
 	hasSchemasTable := false
+	hasProceduresTable := false
 	sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
 	for _, tblName := range sysTblNames {
-		if tblName == doltdb.SchemasTableName {
+		switch tblName {
+		case doltdb.SchemasTableName:
 			hasSchemasTable = true
-			break
+		case doltdb.ProceduresTableName:
+			hasProceduresTable = true
 		}
 	}
 
@@ -169,8 +172,15 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		// Dump dolt system table
 		if hasSchemasTable {
 			tblOpts := newTableArgs(doltdb.SchemasTableName, dumpOpts.dest, apr.Contains(batchFlag))
+			err = dumpTable(ctx, dEnv, tblOpts, fPath)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
+		}
 
-			// TODO: helper method dumpFragment (trigger/view definition)
+		// Dump dolt procedures table
+		if hasProceduresTable {
+			tblOpts := newTableArgs(doltdb.ProceduresTableName, dumpOpts.dest, apr.Contains(batchFlag))
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)

@@ -95,9 +95,18 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return nil
 	}
 
-	// TODO: something completely different if table name is doltdb.SchemasTableName
+	// Special case for schemas table
 	if w.tableName == doltdb.SchemasTableName {
 		stmt, err := sqlfmt.SqlRowAsCreateFragStmt(r)
+		if err != nil {
+			return err
+		}
+		return iohelp.WriteLine(w.wr, stmt)
+	}
+
+	// Special case for procedures table
+	if w.tableName == doltdb.ProceduresTableName {
+		stmt, err := sqlfmt.SqlRowAsCreateProcStmt(r)
 		if err != nil {
 			return err
 		}
