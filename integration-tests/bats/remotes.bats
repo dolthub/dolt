@@ -202,7 +202,7 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "remotes: tags are only pulled if their commit is pulled" {
+@test "remotes: tags are fetched when pulling" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -227,11 +227,6 @@ SQL
     cd dolt-repo-clones/test-repo
     run dolt pull
     [ "$status" -eq 0 ]
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ ! "$output" =~ "other_tag" ]] || false
-    dolt fetch
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
