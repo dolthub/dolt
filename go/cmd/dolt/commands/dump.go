@@ -155,6 +155,17 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 				return HandleVErrAndExitCode(err, usage)
 			}
 		}
+
+		// Dump dolt system table
+		// TODO: don't actually do this; just checking if I can access information
+		tblOpts := newTableArgs(doltdb.SchemasTableName, dumpOpts.dest, apr.Contains(batchFlag))
+
+		// TODO: helper method dumpFragment (trigger/view definition)
+		err = dumpTable(ctx, dEnv, tblOpts, fPath)
+		if err != nil {
+			return HandleVErrAndExitCode(err, usage)
+		}
+
 	case csvFileExt:
 		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false)
 		if err != nil {

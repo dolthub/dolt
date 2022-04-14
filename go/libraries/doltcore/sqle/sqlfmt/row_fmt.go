@@ -147,6 +147,44 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 	return b.String(), nil
 }
 
+// SqlRowAsCreateFragStmt Converts a Row into either a CREATE TRIGGER or CREATE VIEW statement
+func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
+	var b strings.Builder
+
+	// TODO: the view statements should have CREATE VIEW <VIEW_NAME> in the fragment
+	// TODO: should this stuff be hardcoded?
+	// Write create
+	b.WriteString("CREATE ")
+
+	// Write type
+	typeStr := strings.ToUpper(r[0].(string))
+	b.WriteString(typeStr)
+	b.WriteString(" ") // add a space
+
+	// Write view/trigger name
+	nameStr := r[1].(string)
+	b.WriteString(QuoteIdentifier(nameStr))
+	b.WriteString(" ") // add a space
+
+	// TODO: consider parsing it?
+	// Write definition (unable to quote identifiers because our View and Trigger definitions are too simple)
+	defStr := r[2].(string)
+	if typeStr == "TRIGGER" { // triggers need the create trigger <trig_name> to be cut off
+		// check for backquotes
+		if defStr[len("CREATE TRIGGER ")] == '`' {
+			defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+3:]
+		} else {
+			defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
+		}
+	} else { // views need the prefixed with "AS"
+		defStr = "AS " + defStr
+	}
+	b.WriteString(defStr)
+
+	b.WriteString(";")
+	return b.String(), nil
+}
+
 func SqlRowAsInsertStmt(ctx context.Context, r sql.Row, tableName string, tableSch schema.Schema) (string, error) {
 	var b strings.Builder
 

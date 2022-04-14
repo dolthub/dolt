@@ -95,6 +95,15 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return nil
 	}
 
+	// TODO: something completely different if table name is doltdb.SchemasTableName
+	if w.tableName == doltdb.SchemasTableName {
+		stmt, err := sqlfmt.SqlRowAsCreateFragStmt(r)
+		if err != nil {
+			return err
+		}
+		return iohelp.WriteLine(w.wr, stmt)
+	}
+
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
 	}
@@ -108,6 +117,10 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 }
 
 func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
+	// Never write create table for DoltSchemasTable
+	if w.tableName == doltdb.SchemasTableName {
+		return nil
+	}
 	if !w.writtenFirstRow {
 		var b strings.Builder
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
