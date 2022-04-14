@@ -122,6 +122,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
+	// Check if schemas table exists
+	hasSchemasTable := false
+	sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
+	for _, tblName := range sysTblNames {
+		if tblName == doltdb.SchemasTableName {
+			hasSchemasTable = true
+			break
+		}
+	}
+
 	force := apr.Contains(forceParam)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
@@ -157,15 +167,15 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		}
 
 		// Dump dolt system table
-		// TODO: don't actually do this; just checking if I can access information
-		tblOpts := newTableArgs(doltdb.SchemasTableName, dumpOpts.dest, apr.Contains(batchFlag))
+		if hasSchemasTable {
+			tblOpts := newTableArgs(doltdb.SchemasTableName, dumpOpts.dest, apr.Contains(batchFlag))
 
-		// TODO: helper method dumpFragment (trigger/view definition)
-		err = dumpTable(ctx, dEnv, tblOpts, fPath)
-		if err != nil {
-			return HandleVErrAndExitCode(err, usage)
+			// TODO: helper method dumpFragment (trigger/view definition)
+			err = dumpTable(ctx, dEnv, tblOpts, fPath)
+			if err != nil {
+				return HandleVErrAndExitCode(err, usage)
+			}
 		}
-
 	case csvFileExt:
 		err = dumpTables(ctx, root, dEnv, force, tblNames, csvFileExt, name, false)
 		if err != nil {
