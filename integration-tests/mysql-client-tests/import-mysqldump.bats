@@ -14,13 +14,6 @@ teardown() {
 }
 
 @test "import mysqldump: empty database dump" {
-    run systemctl status mysql
-    if [[ ! $output =~ "active (running)" ]]; then
-        systemctl restart mysql
-        # Give the server a chance to restart
-        sleep 1
-    fi
-
     mysql <<SQL
 CREATE DATABASE testdb;
 SQL
@@ -42,13 +35,6 @@ SQL
 }
 
 @test "import mysqldump: a simple table dump" {
-    run systemctl status mysql
-    if [[ ! $output =~ "active (running)" ]]; then
-        systemctl restart mysql
-        # Give the server a chance to restart
-        sleep 1
-    fi
-
     mysql <<SQL
 CREATE DATABASE testdb;
 USE testdb;
