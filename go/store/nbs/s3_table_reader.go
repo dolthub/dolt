@@ -178,8 +178,8 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 				}
 			}
 		}
-		cancelableReader := NewCancelableReader(ctx, result.Body)
-		n, err = io.ReadFull(cancelableReader, p)
+		//cancelableReader := NewCancelableReader(ctx, result.Body)
+		n, err = io.ReadFull(result.Body, p)
 		return n, sz, err
 	}
 
