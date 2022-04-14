@@ -17,6 +17,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/store/datas"
 	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -24,9 +27,7 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/datas"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -91,14 +92,6 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	// Call fetch; pass in remote name from pull spec
-	fetchExitCode := FetchCmd{}.Exec(ctx, "fetch", []string{pullSpec.Remote.Name}, dEnv)
-
-	// Pass along error from fetch if there is one
-	if fetchExitCode != 0 {
-		return fetchExitCode
-	}
-
 	err = pullHelper(ctx, dEnv, pullSpec)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
@@ -109,15 +102,25 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 // pullHelper splits pull into fetch, prepare merge, and merge to interleave printing
 func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) error {
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dEnv.DoltDB.ValueReadWriter().Format())
-
 	if err != nil {
 		return fmt.Errorf("failed to get remote db; %w", err)
 	}
-	for _, refSpec := range pullSpec.RefSpecs {
-		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 
-		if remoteTrackRef != nil {
+	// Fetch all references
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return env.ErrFailedToReadDb
+	}
 
+	// Go through every reference and every branch in each reference
+	for _, rs := range pullSpec.RefSpecs {
+		rsSeen := false // track invalid refSpecs
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := rs.DestRef(branchRef)
+			if remoteTrackRef == nil {
+				continue
+			}
+			rsSeen = true
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), pullSpec.Remote, srcDB, dEnv.DoltDB, pullSpec.Branch, buildProgStarter(downloadLanguage), stopProgFuncs)
 			if err != nil {
 				return err
@@ -179,15 +182,19 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			// TODO: We should add functionality to create a commit from a no-ff/normal merge operation instead of
 			// leaving the branch in a merged state.
 		}
+		if !rsSeen {
+			return fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, rs.GetRemRefToLocal())
+		}
 	}
 
 	if err != nil {
 		return err
 	}
+
 	err = actions.FetchFollowTags(ctx, dEnv.TempTableFilesDir(), srcDB, dEnv.DoltDB, buildProgStarter(downloadLanguage), stopProgFuncs)
-
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
