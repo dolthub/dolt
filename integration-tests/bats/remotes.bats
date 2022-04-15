@@ -25,6 +25,34 @@ teardown() {
     ps -p $remotesrv_pid | grep remotesrv
 }
 
+@test "remotes: pull also fetches" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ ! "$output" =~ "other" ]] || false
+
+    cd ../repo1
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ../repo2
+    dolt pull
+    run dolt branch -va
+    [[ "$output" =~ "main" ]] || false
+    [[ "$output" =~ "other" ]] || false
+}
+
 @test "remotes: add a remote using dolt remote" {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
@@ -174,7 +202,7 @@ SQL
     [[ "$output" =~ "v1" ]] || false
 }
 
-@test "remotes: tags are only pulled if their commit is pulled" {
+@test "remotes: tags are fetched when pulling" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
@@ -199,11 +227,6 @@ SQL
     cd dolt-repo-clones/test-repo
     run dolt pull
     [ "$status" -eq 0 ]
-    run dolt tag
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "v1" ]] || false
-    [[ ! "$output" =~ "other_tag" ]] || false
-    dolt fetch
     run dolt tag -v
     [ "$status" -eq 0 ]
     [[ "$output" =~ "v1" ]] || false
