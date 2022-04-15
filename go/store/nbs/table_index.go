@@ -669,6 +669,7 @@ type mmapWStat struct {
 
 func mmapWithStats(f *os.File, length int, prot, flags int, offset int64) (mmapWStat, error) {
 	GlobalMmapStats.mu.Lock()
+	defer GlobalMmapStats.mu.Unlock()
 	GlobalMmapStats.WillMmap(uint64(length), GlobalMmapStats.totalUsed)
 	mmap, err := mmap.MapRegion(f, length, prot, flags, offset)
 	if err != nil {
@@ -676,18 +677,17 @@ func mmapWithStats(f *os.File, length int, prot, flags int, offset int64) (mmapW
 	}
 	GlobalMmapStats.totalUsed += uint64(length)
 	GlobalMmapStats.Mmapped(uint64(length), GlobalMmapStats.totalUsed)
-	GlobalMmapStats.mu.Unlock()
 	return mmapWStat{mmap, uint64(length)}, nil
 }
 
 func (m mmapWStat) Unmap() error {
 	GlobalMmapStats.mu.Lock()
+	defer GlobalMmapStats.mu.Unlock()
 	err := m.m.Unmap()
 	if err != nil {
 		return err
 	}
 	GlobalMmapStats.totalUsed -= m.used
 	GlobalMmapStats.UnMapped(m.used, GlobalMmapStats.totalUsed)
-	GlobalMmapStats.mu.Unlock()
 	return nil
 }
