@@ -24,6 +24,7 @@ package nbs
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -44,9 +45,37 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 	path := filepath.Join(dir, h.String())
 
 	index, err := func() (ti onHeapTableIndex, err error) {
+
+		// Be careful with how |f| is used below. |RefFile| returns a cached
+		// os.File pointer so the code needs to use f in a concurrency-safe
+		// manner. Moving the file offset is BAD.
 		var f *os.File
 		f, err = fc.RefFile(path)
+		if err != nil {
+			return
+		}
 
+		// Since we can't move the file offset, get the size of the file and use
+		// ReadAt to load the index instead.
+		var fi os.FileInfo
+		fi, err = f.Stat()
+
+		if err != nil {
+			return
+		}
+
+		if fi.Size() < 0 {
+			// Size returns the number of bytes for regular files and is system dependant for others (Some of which can be negative).
+			err = fmt.Errorf("%s has invalid size: %d", path, fi.Size())
+			return
+		}
+
+		indexSize := int64(indexSize(chunkCount) + footerSize)
+		indexOffset := fi.Size() - indexSize
+		r := io.NewSectionReader(f, indexOffset, indexSize)
+		b := make([]byte, indexSize)
+
+		_, err = io.ReadFull(r, b)
 		if err != nil {
 			return
 		}
@@ -59,7 +88,7 @@ func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 			}
 		}()
 
-		ti, err = ReadTableIndexByCopy(f, q)
+		ti, err = parseTableIndex(b, q)
 		if err != nil {
 			return
 		}
