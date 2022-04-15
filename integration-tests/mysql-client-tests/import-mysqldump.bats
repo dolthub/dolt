@@ -14,7 +14,9 @@ teardown() {
 }
 
 @test "import mysqldump: empty database dump" {
-    mysql <<SQL
+    systemctl status mysql
+
+    mysql -u root <<SQL
 CREATE DATABASE testdb;
 SQL
 
@@ -35,6 +37,8 @@ SQL
 }
 
 @test "import mysqldump: a simple table dump" {
+    systemctl status mysqld
+
     mysql <<SQL
 CREATE DATABASE testdb;
 USE testdb;
