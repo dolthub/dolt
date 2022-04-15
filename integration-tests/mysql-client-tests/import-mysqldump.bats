@@ -14,7 +14,7 @@ teardown() {
 }
 
 @test "import mysqldump: empty database dump" {
-    mysql -h 127.0.0.1 -p 3306 -u root <<SQL
+    usr/bin/mysql -u root <<SQL
 CREATE DATABASE testdb;
 SQL
 
@@ -27,7 +27,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
 
-    mysql -h 127.0.0.1 -p 3306 -u root <<SQL
+    usr/bin/mysql -u root <<SQL
 DROP DATABASE testdb;
 SQL
     # Give the server a chance to drop the database
@@ -35,7 +35,7 @@ SQL
 }
 
 @test "import mysqldump: a simple table dump" {
-    mysql <<SQL
+    usr/bin/mysql -u root <<SQL
 CREATE DATABASE testdb;
 USE testdb;
 CREATE TABLE mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL);
@@ -54,7 +54,7 @@ SQL
 0,one
 1,two" ]] || false
 
-    mysql <<SQL
+    usr/bin/mysql -u root <<SQL
 DROP DATABASE testdb;
 SQL
     # Give the server a chance to drop the database
