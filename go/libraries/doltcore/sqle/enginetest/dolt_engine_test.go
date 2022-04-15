@@ -16,7 +16,6 @@ package enginetest
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"testing"
 
@@ -124,7 +123,6 @@ func TestSingleQueryPrepared(t *testing.T) {
 		},
 	}
 
-	fmt.Sprintf("%v", test)
 	harness := newDoltHarness(t)
 	//engine := enginetest.NewEngine(t, harness)
 	//enginetest.CreateIndexes(t, harness, engine)
