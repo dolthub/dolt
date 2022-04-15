@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-type mmapTableReader struct {
+type fileTableReader struct {
 	tableReader
 	fc *fdCache
 	h  addr
@@ -40,7 +40,7 @@ const (
 	fileBlockSize = 1 << 12
 )
 
-func fileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	index, err := func() (ti onHeapTableIndex, err error) {
@@ -78,27 +78,27 @@ func fileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvide
 	if err != nil {
 		return nil, err
 	}
-	return &mmapTableReader{
+	return &fileTableReader{
 		tr,
 		fc,
 		h,
 	}, nil
 }
 
-func (mmtr *mmapTableReader) hash() (addr, error) {
+func (mmtr *fileTableReader) hash() (addr, error) {
 	return mmtr.h, nil
 }
 
-func (mmtr *mmapTableReader) Close() error {
+func (mmtr *fileTableReader) Close() error {
 	return mmtr.tableReader.Close()
 }
 
-func (mmtr *mmapTableReader) Clone() (chunkSource, error) {
+func (mmtr *fileTableReader) Clone() (chunkSource, error) {
 	tr, err := mmtr.tableReader.Clone()
 	if err != nil {
-		return &mmapTableReader{}, err
+		return &fileTableReader{}, err
 	}
-	return &mmapTableReader{tr, mmtr.fc, mmtr.h}, nil
+	return &fileTableReader{tr, mmtr.fc, mmtr.h}, nil
 }
 
 type cacheReaderAt struct {

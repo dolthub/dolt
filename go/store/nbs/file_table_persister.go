@@ -50,7 +50,7 @@ type fsTablePersister struct {
 }
 
 func (ftp *fsTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	return fileTableReader(ftp.dir, name, chunkCount, ftp.q, ftp.fc)
+	return newFileTableReader(ftp.dir, name, chunkCount, ftp.q, ftp.fc)
 }
 
 func (ftp *fsTablePersister) Persist(ctx context.Context, mt *memTable, haver chunkReader, stats *Stats) (chunkSource, error) {
