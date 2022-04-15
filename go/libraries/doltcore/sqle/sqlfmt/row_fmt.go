@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -161,15 +162,12 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 	b.WriteString(" ") // add a space
 
 	// Write definition
-	defStr := r[1].(string)
-	offset := len(prefix)
-	// TODO: this doesn't always work because we don't trim spaces
-	// check for backquotes
-	if defStr[offset] == '`' {
-		defStr = defStr[offset+len(nameStr)+3:]
-	} else {
-		defStr = defStr[offset+len(nameStr)+1:]
+	defStmt, err := sqlparser.Parse(r[1].(string))
+	if err != nil {
+		return "", err
 	}
+	defStr := sqlparser.String(defStmt)
+	defStr = defStr[len(prefix)+len(nameStr)+1:]
 	b.WriteString(defStr)
 
 	b.WriteString(";")
@@ -180,8 +178,6 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	var b strings.Builder
 
-	// TODO: the view statements should have CREATE VIEW <VIEW_NAME> in the fragment
-	// TODO: should this stuff be hardcoded?
 	// Write create
 	b.WriteString("CREATE ")
 
@@ -195,16 +191,14 @@ func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	b.WriteString(QuoteIdentifier(nameStr))
 	b.WriteString(" ") // add a space
 
-	// TODO: consider parsing it?
-	// Write definition (unable to quote identifiers because our View and Trigger definitions are too simple)
-	defStr := r[2].(string)
+	// Parse statement to extract definition (and remove any weird whitespace issues)
+	defStmt, err := sqlparser.Parse(r[2].(string))
+	if err != nil {
+		return "", err
+	}
+	defStr := sqlparser.String(defStmt)
 	if typeStr == "TRIGGER" { // triggers need the create trigger <trig_name> to be cut off
-		// check for backquotes
-		if defStr[len("CREATE TRIGGER ")] == '`' {
-			defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+3:]
-		} else {
-			defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
-		}
+		defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
 	} else { // views need the prefixed with "AS"
 		defStr = "AS " + defStr
 	}

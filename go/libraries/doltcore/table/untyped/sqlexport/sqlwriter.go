@@ -127,7 +127,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 
 func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	// Never write create table for DoltSchemasTable
-	if w.tableName == doltdb.SchemasTableName {
+	if w.tableName == doltdb.SchemasTableName || w.tableName == doltdb.ProceduresTableName {
 		return nil
 	}
 	if !w.writtenFirstRow {
