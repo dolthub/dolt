@@ -14,9 +14,7 @@ teardown() {
 }
 
 @test "import mysqldump: empty database dump" {
-    systemctl status mysql
-
-    mysql -u root <<SQL
+    mysql -h 127.0.0.1 -p 3306 -u root <<SQL
 CREATE DATABASE testdb;
 SQL
 
@@ -29,7 +27,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
 
-    mysql <<SQL
+    mysql -h 127.0.0.1 -p 3306 -u root <<SQL
 DROP DATABASE testdb;
 SQL
     # Give the server a chance to drop the database
@@ -37,8 +35,6 @@ SQL
 }
 
 @test "import mysqldump: a simple table dump" {
-    systemctl status mysqld
-
     mysql <<SQL
 CREATE DATABASE testdb;
 USE testdb;
