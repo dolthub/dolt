@@ -122,19 +122,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 0
 	}
 
-	// Look for schemas and procedures table
-	hasSchemasTable := false
-	hasProceduresTable := false
-	sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
-	for _, tblName := range sysTblNames {
-		switch tblName {
-		case doltdb.SchemasTableName:
-			hasSchemasTable = true
-		case doltdb.ProceduresTableName:
-			hasProceduresTable = true
-		}
-	}
-
 	force := apr.Contains(forceParam)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
@@ -142,6 +129,22 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	name, vErr := validateArgs(apr)
 	if vErr != nil {
 		return HandleVErrAndExitCode(vErr, usage)
+	}
+
+	// Look for schemas and procedures table, and add to tblNames only for sql dumps
+	if resFormat == emptyFileExt || resFormat == sqlFileExt {
+		sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		for _, tblName := range sysTblNames {
+			switch tblName {
+			case doltdb.SchemasTableName:
+				tblNames = append(tblNames, doltdb.SchemasTableName)
+			case doltdb.ProceduresTableName:
+				tblNames = append(tblNames, doltdb.ProceduresTableName)
+			}
+		}
 	}
 
 	switch resFormat {
@@ -162,25 +165,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 		for _, tbl := range tblNames {
 			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag))
-
-			err = dumpTable(ctx, dEnv, tblOpts, fPath)
-			if err != nil {
-				return HandleVErrAndExitCode(err, usage)
-			}
-		}
-
-		// Dump dolt system table
-		if hasSchemasTable {
-			tblOpts := newTableArgs(doltdb.SchemasTableName, dumpOpts.dest, apr.Contains(batchFlag))
-			err = dumpTable(ctx, dEnv, tblOpts, fPath)
-			if err != nil {
-				return HandleVErrAndExitCode(err, usage)
-			}
-		}
-
-		// Dump dolt procedures table
-		if hasProceduresTable {
-			tblOpts := newTableArgs(doltdb.ProceduresTableName, dumpOpts.dest, apr.Contains(batchFlag))
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
