@@ -29,7 +29,6 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/chunks"
 )
 
@@ -424,11 +423,10 @@ func (ts tableSet) Flatten(ctx context.Context) (tableSet, error) {
 // those specified by |specs|.
 func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) (tableSet, error) {
 	merged := tableSet{
-		novel:    make(chunkSources, 0, len(ts.novel)),
-		upstream: make(chunkSources, 0, len(specs)),
-		p:        ts.p,
-		q:        ts.q,
-		rl:       ts.rl,
+		novel: make(chunkSources, 0, len(ts.novel)),
+		p:     ts.p,
+		q:     ts.q,
+		rl:    ts.rl,
 	}
 
 	// Rebase the novel tables, skipping those that are actually empty (usually due to de-duping during table compaction)
@@ -458,54 +456,80 @@ func (ts tableSet) Rebase(ctx context.Context, specs []tableSpec, stats *Stats) 
 		}
 	}
 
-	// Open all the new upstream tables concurrently
-	var rp atomic.Value
-	ae := atomicerr.New()
-	merged.upstream = make(chunkSources, len(tablesToOpen))
-	wg := &sync.WaitGroup{}
-	wg.Add(len(tablesToOpen))
-	for i, spec := range tablesToOpen {
-		go func(idx int, spec tableSpec) {
-			defer wg.Done()
-			defer func() {
-				if r := recover(); r != nil {
-					rp.Store(r)
-				}
-			}()
-			if !ae.IsSet() {
-				for _, existing := range ts.upstream {
-					h, err := existing.hash()
-					if err != nil {
-						ae.SetIfError(err)
-						return
-					}
-					if spec.name == h {
-						c, err := existing.Clone()
-						if err != nil {
-							ae.SetIfError(err)
-							return
-						}
-						merged.upstream[idx] = c
-						return
-					}
-				}
-				err := ts.q.AcquireQuota(ctx, spec.GetMemorySize())
-				if err != nil {
-					ae.SetIfError(err)
-					return
-				}
-				merged.upstream[idx], err = ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
-				ae.SetIfError(err)
+	merged.upstream = make([]chunkSource, len(tablesToOpen))
+
+	type openOp struct {
+		idx  int
+		spec tableSpec
+	}
+	var openOps []openOp
+	var memoryNeeded uint64
+
+	// Clone tables that we have already opened
+OUTER:
+	for idx, spec := range tablesToOpen {
+		for _, existing := range ts.upstream {
+			h, err := existing.hash()
+			if err != nil {
+				return tableSet{}, err
 			}
-		}(i, spec)
+			if spec.name == h {
+				c, err := existing.Clone()
+				if err != nil {
+					return tableSet{}, err
+				}
+				merged.upstream[idx] = c
+				continue OUTER
+			}
+		}
+		openOps = append(openOps, openOp{idx, spec})
+		memoryNeeded += indexMemSize(spec.chunkCount)
 	}
-	wg.Wait()
 
-	if r := rp.Load(); r != nil {
-		panic(r)
+	err := ts.q.AcquireQuota(ctx, memoryNeeded)
+	if err != nil {
+		return tableSet{}, err
 	}
 
-	if err := ae.Get(); err != nil {
+	var rp atomic.Value
+	group, ctx := errgroup.WithContext(ctx)
+
+	mu := sync.Mutex{}
+	var opened []chunkSource
+
+	for _, op := range openOps {
+		idx, spec := op.idx, op.spec
+		group.Go(
+			func() (err error) {
+				defer func() {
+					if r := recover(); r != nil {
+						rp.Store(r)
+						err = errors.New("panicked")
+					}
+				}()
+				cs, err := ts.p.Open(ctx, spec.name, spec.chunkCount, stats)
+				if err != nil {
+					return err
+				}
+				merged.upstream[idx] = cs
+				mu.Lock()
+				opened = append(opened, cs)
+				mu.Unlock()
+				return nil
+			},
+		)
+	}
+
+	err = group.Wait()
+	if err != nil {
+		// Close any opened chunkSources
+		for _, cs := range opened {
+			_ = cs.Close()
+		}
+
+		if r := rp.Load(); r != nil {
+			panic(r)
+		}
 		return tableSet{}, err
 	}
 

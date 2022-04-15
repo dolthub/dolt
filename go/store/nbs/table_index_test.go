@@ -59,9 +59,13 @@ func TestMMapIndex(t *testing.T) {
 	idx, err := parseTableIndexByCopy(bs, &noopQuotaProvider{})
 	require.NoError(t, err)
 	defer idx.Close()
-	mmidx, err := newMmapTableIndex(idx, nil)
+	mmidx, err := newMmapTableIndex(idx.chunkCount)
+	require.NoError(t, err)
+	copy(mmidx.indexDataBuff, bs)
+	err = mmidx.parseIndexBuffer(&noopQuotaProvider{})
 	require.NoError(t, err)
 	defer mmidx.Close()
+
 	assert.Equal(t, idx.ChunkCount(), mmidx.ChunkCount())
 	seen := make(map[addr]bool)
 	for i := uint32(0); i < idx.ChunkCount(); i++ {
