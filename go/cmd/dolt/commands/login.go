@@ -46,7 +46,7 @@ var loginDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Login to DoltHub or DoltLab",
 	LongDesc: `Login into DoltHub or DoltLab using the email in your config so you can pull from private repos and push to those you have permission to.
 `,
-	Synopsis: []string{"[{{.LessThan}}creds{{.GreaterThan}}]"},
+	Synopsis: []string{"[--auth-endpoint <endpoint>] [--login-url <url>] [-i | --insecure] [{{.LessThan}}creds{{.GreaterThan}}]"},
 }
 
 // The LoginCmd doesn't handle its own signals, but should stop cancel global context when receiving SIGINT signal
@@ -85,7 +85,7 @@ func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(authEndpointParam, "e", "hostname:port", fmt.Sprintf("Specify the endpoint used to authenticate this client. Must be used with --%s OR set in the configuration file as `%s`", loginURLParam, env.AddCredsUrlKey))
 	ap.SupportsString(loginURLParam, "url", "url", "Specify the login url where the browser will add credentials.")
 	ap.SupportsFlag(insecureParam, "i", "If set, makes insecure connection to remote authentication server")
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login. If omitted, new credentials will be generated."})
 	return ap
 }
 
