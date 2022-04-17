@@ -1161,12 +1161,14 @@ SQL
 }
 
 @test "keyless: batch import into the unique key correctly works" {
-    skip "weird bug where error is not returned concurrently"
+    skip "index error handling does not work with bulk import"
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
-    dolt sql -q "INSERT INTO mytable valui"
+    dolt sql -q "INSERT into mytable values (1, 1, 1), (2, 2, 2)"
 
-    touch x.csv
-    echo ""
-
+    echo "pk,v1,v2" >> x.csv
+    echo "3,1,1" >> x.csv
+    echo "4,2,2" >> x.csv
+    run dolt table import -u mytable x.csv
+    [ $status -eq 0 ]
 }
