@@ -1007,7 +1007,7 @@ SQL
     [ $status -eq 1 ]
     [[ "$output" =~ "duplicate unique key given: [3]" ]] || false
 
-    run dolt sql -r csv -q "SELECT count(*) FROM mytable where pk = 5"
+    run dolt sql -r csv -q "SELECT count(*) FROM mytable where pk in (500000,5000001)"
     [ $status -eq 0 ]
     [[ "${lines[1]}" = "0" ]] || false
 
