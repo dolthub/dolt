@@ -497,7 +497,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 		err = func(k, v types.Tuple) (localErr error) {
 			indexOpsToUndo := make([]int, len(indexEds))
 			defer func() {
-				if retErr != nil {
+				if localErr != nil {
 					for i, opsToUndo := range indexOpsToUndo {
 						for undone := 0; undone < opsToUndo; undone++ {
 							indexEds[i].Undo(ctx)

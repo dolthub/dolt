@@ -1000,12 +1000,12 @@ SQL
 
     run dolt sql -q "INSERT INTO mytable VALUES (1)"
     [ $status -eq 1 ]
-    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [1]" ]] || false
+    [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
 
     # Make sure nothing in the faulty transaction was persisted.
     run dolt sql -q "INSERT INTO mytable VALUES (500000), (5000001), (3)"
     [ $status -eq 1 ]
-    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [3]" ]] || false
+    [[ "$output" =~ "duplicate unique key given: [3]" ]] || false
 
     run dolt sql -r csv -q "SELECT count(*) FROM mytable where pk = 5"
     [ $status -eq 0 ]
@@ -1031,7 +1031,7 @@ SQL
 
     run dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
     [ $status -eq 1 ]
-    [[ "$output" =~ "UNIQUE constraint violation on index 'pk': [1]" ]] || false
+    [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
 
     run dolt sql -r csv -q "SELECT count(*) FROM gis where pk = 1"
     [ $status -eq 0 ]
@@ -1051,7 +1051,7 @@ SQL
 
     run dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
     [ $status -eq 1 ]
-    [[ "$output" =~ "UNIQUE constraint violation on index 'val': [\"nekter\"]" ]] || false
+    [[ "$output" =~ 'duplicate unique key given: ["nekter"]' ]] || false
 
     run dolt sql -r csv -q "SELECT count(*) from mytable where pk = 1"
     [ $status -eq 0 ]
@@ -1070,7 +1070,7 @@ SQL
 
     run dolt sql -q "INSERT INTO mytable values (1, 2, 2)"
     [ $status -eq 1 ]
-    [[ "$output" =~ "UNIQUE constraint violation on index 'v1v2': [2,2]" ]] || false
+    [[ "$output" =~ "duplicate unique key given: [2,2]" ]] || false
 
     run dolt sql -r csv -q "SELECT COUNT(*) as count FROM mytable where pk = 1"
     [ $status -eq 0 ]
