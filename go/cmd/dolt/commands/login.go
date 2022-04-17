@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/skratchdot/open-golang/open"
@@ -36,13 +37,16 @@ import (
 
 const (
 	loginRetryInterval = 5
+	authEndpointParam  = "auth-endpoint"
+	loginURLParam      = "login-url"
+	insecureParam      = "insecure"
 )
 
 var loginDocs = cli.CommandDocumentationContent{
-	ShortDesc: "Login to DoltHub",
-	LongDesc: `Login into DoltHub using the email in your config so you can pull from private repos and push to those you have permission to.
+	ShortDesc: "Login to DoltHub or DoltLab",
+	LongDesc: `Login into DoltHub or DoltLab using the email in your config so you can pull from private repos and push to those you have permission to.
 `,
-	Synopsis: []string{"[{{.LessThan}}creds{{.GreaterThan}}]"},
+	Synopsis: []string{"[--auth-endpoint <endpoint>] [--login-url <url>] [-i | --insecure] [{{.LessThan}}creds{{.GreaterThan}}]"},
 }
 
 // The LoginCmd doesn't handle its own signals, but should stop cancel global context when receiving SIGINT signal
@@ -78,7 +82,10 @@ func (cmd LoginCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 
 func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login."})
+	ap.SupportsString(authEndpointParam, "e", "hostname:port", fmt.Sprintf("Specify the endpoint used to authenticate this client. Must be used with --%s OR set in the configuration file as `%s`", loginURLParam, env.AddCredsUrlKey))
+	ap.SupportsString(loginURLParam, "url", "url", "Specify the login url where the browser will add credentials.")
+	ap.SupportsFlag(insecureParam, "i", "If set, makes insecure connection to remote authentication server")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds", "A specific credential to use for login. If omitted, new credentials will be generated."})
 	return ap
 }
 
@@ -93,11 +100,39 @@ func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, 
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, loginDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
+	// use config values over defaults, flag values over config values
+	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
+	loginUrl = apr.GetValueOrDefault(loginURLParam, loginUrl)
+
+	authHost := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
+	authPort := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+
+	authEndpoint := apr.GetValueOrDefault(authEndpointParam, fmt.Sprintf("%s:%s", authHost, authPort))
+
+	// handle args supplied with empty strings
+	if loginUrl == "" {
+		loginUrl = env.DefaultLoginUrl
+	}
+	if authEndpoint == "" {
+		authEndpoint = fmt.Sprintf("%s:%s", authHost, authPort)
+	}
+
+	insecure := apr.Contains(insecureParam)
+
+	var err error
+	if !insecure {
+		insecureStr := dEnv.Config.GetStringOrDefault(env.DoltLabInsecureKey, "false")
+		insecure, err = strconv.ParseBool(insecureStr)
+		if err != nil {
+			HandleVErrAndExitCode(errhand.BuildDError(fmt.Sprintf("The config value of '%s' is '%s' which is not a valid true/false value", env.DoltLabInsecureKey, insecureStr)).Build(), usage)
+		}
+	}
+
 	var verr errhand.VerboseError
 	if apr.NArg() == 0 {
-		verr = loginWithNewCreds(ctx, dEnv)
+		verr = loginWithNewCreds(ctx, dEnv, authEndpoint, loginUrl, insecure)
 	} else if apr.NArg() == 1 {
-		verr = loginWithExistingCreds(ctx, dEnv, apr.Arg(0))
+		verr = loginWithExistingCreds(ctx, dEnv, apr.Arg(0), authEndpoint, loginUrl, insecure)
 	} else {
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
 	}
@@ -116,7 +151,7 @@ var openBrowserFirst loginBehavior = 1
 // with an account on the server. Check first before opening a browser.
 var checkCredentialsThenOpenBrowser loginBehavior = 2
 
-func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseError {
+func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv, authEndpoint, loginUrl string, insecure bool) errhand.VerboseError {
 	path, dc, err := actions.NewCredsFile(dEnv)
 
 	if err != nil {
@@ -128,10 +163,10 @@ func loginWithNewCreds(ctx context.Context, dEnv *env.DoltEnv) errhand.VerboseEr
 
 	cli.Println(path)
 
-	return loginWithCreds(ctx, dEnv, dc, openBrowserFirst)
+	return loginWithCreds(ctx, dEnv, dc, openBrowserFirst, authEndpoint, loginUrl, insecure)
 }
 
-func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey string) errhand.VerboseError {
+func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey, authEndpoint, credsEndpoint string, insecure bool) errhand.VerboseError {
 	credsDir, err := dEnv.CredsDir()
 
 	if err != nil {
@@ -150,11 +185,11 @@ func loginWithExistingCreds(ctx context.Context, dEnv *env.DoltEnv, idOrPubKey s
 		return errhand.BuildDError("error: failed to load creds from file").AddCause(err).Build()
 	}
 
-	return loginWithCreds(ctx, dEnv, dc, checkCredentialsThenOpenBrowser)
+	return loginWithCreds(ctx, dEnv, dc, checkCredentialsThenOpenBrowser, authEndpoint, credsEndpoint, insecure)
 }
 
-func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, behavior loginBehavior) errhand.VerboseError {
-	grpcClient, verr := getCredentialsClient(dEnv, dc)
+func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, behavior loginBehavior, authEndpoint, loginUrl string, insecure bool) errhand.VerboseError {
+	grpcClient, verr := getCredentialsClient(dEnv, dc, authEndpoint, insecure)
 	if verr != nil {
 		return verr
 	}
@@ -166,7 +201,7 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 	}
 
 	if whoAmI == nil {
-		openBrowserForCredsAdd(dEnv, dc)
+		openBrowserForCredsAdd(dc, loginUrl)
 		cli.Println("Checking remote server looking for key association.")
 	}
 
@@ -198,19 +233,17 @@ func loginWithCreds(ctx context.Context, dEnv *env.DoltEnv, dc creds.DoltCreds, 
 	return nil
 }
 
-func openBrowserForCredsAdd(dEnv *env.DoltEnv, dc creds.DoltCreds) {
-	loginUrl := dEnv.Config.GetStringOrDefault(env.AddCredsUrlKey, env.DefaultLoginUrl)
+func openBrowserForCredsAdd(dc creds.DoltCreds, loginUrl string) {
 	url := fmt.Sprintf("%s#%s", loginUrl, dc.PubKeyBase32Str())
 	cli.Printf("Opening a browser to:\n\t%s\nPlease associate your key with your account.\n", url)
 	open.Start(url)
 }
 
-func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds) (remotesapi.CredentialsServiceClient, errhand.VerboseError) {
-	host := dEnv.Config.GetStringOrDefault(env.RemotesApiHostKey, env.DefaultRemotesApiHost)
-	port := dEnv.Config.GetStringOrDefault(env.RemotesApiHostPortKey, env.DefaultRemotesApiPort)
+func getCredentialsClient(dEnv *env.DoltEnv, dc creds.DoltCreds, authEndpoint string, insecure bool) (remotesapi.CredentialsServiceClient, errhand.VerboseError) {
 	endpoint, opts, err := dEnv.GetGRPCDialParams(grpcendpoint.Config{
-		Endpoint: fmt.Sprintf("%s:%s", host, port),
+		Endpoint: authEndpoint,
 		Creds:    dc,
+		Insecure: insecure,
 	})
 	if err != nil {
 		return nil, errhand.BuildDError("error: unable to build dial options for connecting to server with credentials.").AddCause(err).Build()

@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -492,17 +493,19 @@ func (fm *fakeManifest) set(version string, lock addr, root hash.Hash, specs, ap
 }
 
 func newFakeTableSet(q MemoryQuotaProvider) tableSet {
-	return tableSet{p: newFakeTablePersister(q), q: NewUnlimitedMemQuotaProvider(), rl: make(chan struct{}, 1)}
+	return tableSet{p: newFakeTablePersister(q), q: q, rl: make(chan struct{}, 1)}
 }
 
-func newFakeTablePersister(q MemoryQuotaProvider) tablePersister {
-	return fakeTablePersister{q, map[addr]tableReader{}, &sync.RWMutex{}}
+func newFakeTablePersister(q MemoryQuotaProvider) fakeTablePersister {
+	return fakeTablePersister{q, map[addr]tableReader{}, map[addr]bool{}, map[addr]bool{}, &sync.RWMutex{}}
 }
 
 type fakeTablePersister struct {
-	q       MemoryQuotaProvider
-	sources map[addr]tableReader
-	mu      *sync.RWMutex
+	q             MemoryQuotaProvider
+	sources       map[addr]tableReader
+	sourcesToFail map[addr]bool
+	opened        map[addr]bool
+	mu            *sync.RWMutex
 }
 
 var _ tablePersister = fakeTablePersister{}
@@ -610,8 +613,12 @@ func compactSourcesToBuffer(sources chunkSources) (name addr, data []byte, chunk
 }
 
 func (ftp fakeTablePersister) Open(ctx context.Context, name addr, chunkCount uint32, stats *Stats) (chunkSource, error) {
-	ftp.mu.RLock()
-	defer ftp.mu.RUnlock()
+	ftp.mu.Lock()
+	defer ftp.mu.Unlock()
+	if _, ok := ftp.sourcesToFail[name]; ok {
+		return nil, errors.New("intentional failure")
+	}
+	ftp.opened[name] = true
 	return chunkSourceAdapter{ftp.sources[name], name}, nil
 }
 
