@@ -17,6 +17,7 @@ package editor
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 	"sync"
 
@@ -493,7 +494,7 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		err = func(k, v types.Tuple) error {
+		err = func(k, v types.Tuple) (localErr error) {
 			indexOpsToUndo := make([]int, len(indexEds))
 			defer func() {
 				if retErr != nil {
@@ -528,6 +529,11 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				} else {
 					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 					if err != nil {
+						if uke, ok := err.(*uniqueKeyErr); ok {
+							keyStr, _ := formatKey(ctx, uke.IndexTuple)
+							return sql.NewUniqueKeyErr(keyStr, false, nil)
+						}
+
 						return err
 					}
 				}
