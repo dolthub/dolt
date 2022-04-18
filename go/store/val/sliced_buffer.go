@@ -36,6 +36,11 @@ func (sb SlicedBuffer) GetSlice(i int) []byte {
 	return sb.Buf[start:stop]
 }
 
+func (sb SlicedBuffer) Len() int {
+	// offsets stored as uint16s with first offset omitted
+	return len(sb.Offs)/2 + 1
+}
+
 type offsets []byte
 
 // offsetsSize returns the number of bytes needed to

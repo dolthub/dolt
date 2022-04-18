@@ -110,15 +110,11 @@ func runLog(ctx context.Context, args []string) int {
 		path = types.MustParsePath(".value")
 	}
 
-	origCommitVal, err := vrw.ReadValue(ctx, absPath.Hash)
+	origCommit, err := vrw.ReadValue(ctx, absPath.Hash)
 	d.PanicIfError(err)
-	origCommit, ok := origCommitVal.(types.Struct)
 
-	isCm := false
-	if ok {
-		isCm, err = datas.IsCommit(origCommit)
-		d.PanicIfError(err)
-	}
+	isCm, err := datas.IsCommit(origCommit)
+	d.PanicIfError(err)
 
 	if !isCm {
 		util.CheckError(fmt.Errorf("%s does not reference a Commit object", args[0]))
@@ -186,12 +182,12 @@ func printCommit(ctx context.Context, node LogNode, path types.Path, w io.Writer
 	if len(parents) > 1 {
 		pstrings := make([]string, len(parents))
 		for i, p := range parents {
-			pstrings[i] = p.TargetHash().String()
+			pstrings[i] = p.Addr().String()
 		}
 		parentLabel = "Merge"
 		parentValue = strings.Join(pstrings, " ")
 	} else if len(parents) == 1 {
-		parentValue = parents[0].TargetHash().String()
+		parentValue = parents[0].Addr().String()
 	}
 
 	if oneline {
@@ -349,9 +345,8 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types
 
 	parent := parents[0]
 
-	val, err := parent.TargetValue(ctx, vr)
-	parentCommit := val.(types.Struct)
-	d.PanicIfError(err)
+	val := parent.NomsValue()
+	parentCommit := val
 
 	var old, neu types.Value
 	err = functions.All(
@@ -371,12 +366,12 @@ func writeDiffLines(ctx context.Context, node LogNode, path types.Path, vr types
 	// TODO: It would be better to treat this as an add or remove, but that requires generalization
 	// of some of the code in PrintDiff() because it cannot tolerate nil parameters.
 	if neu == nil {
-		h, err := node.commit.Hash(node.commit.Format())
+		h, err := node.commit.Hash(vr.Format())
 		d.PanicIfError(err)
 		fmt.Fprintf(pw, "new (#%s%s) not found\n", h.String(), path.String())
 	}
 	if old == nil {
-		h, err := parentCommit.Hash(parentCommit.Format())
+		h, err := parentCommit.Hash(vr.Format())
 		d.PanicIfError(err)
 		fmt.Fprintf(pw, "old (#%s%s) not found\n", h.String(), path.String())
 	}

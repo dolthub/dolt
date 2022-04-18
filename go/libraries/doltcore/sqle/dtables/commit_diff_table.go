@@ -237,13 +237,13 @@ func (dt *CommitDiffTable) rootValForFilter(ctx *sql.Context, eqFilter *expressi
 			return nil, "", nil, err
 		}
 
-		root, err = cm.GetRootValue()
+		root, err = cm.GetRootValue(ctx)
 
 		if err != nil {
 			return nil, "", nil, err
 		}
 
-		meta, err := cm.GetCommitMeta()
+		meta, err := cm.GetCommitMeta(ctx)
 
 		if err != nil {
 			return nil, "", nil, err

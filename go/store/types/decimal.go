@@ -56,7 +56,7 @@ func (v Decimal) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
-func (v Decimal) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Decimal) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

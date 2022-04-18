@@ -87,14 +87,14 @@ func TestPushOnWriteHook(t *testing.T) {
 		t.Fatal("Couldn't find commit")
 	}
 
-	meta, err := commit.GetCommitMeta()
+	meta, err := commit.GetCommitMeta(context.Background())
 	assert.NoError(t, err)
 
 	if meta.Name != committerName || meta.Email != committerEmail {
 		t.Error("Unexpected metadata")
 	}
 
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(context.Background())
 
 	assert.NoError(t, err)
 
@@ -230,14 +230,14 @@ func TestAsyncPushOnWrite(t *testing.T) {
 				t.Fatal("Couldn't find commit")
 			}
 
-			meta, err := commit.GetCommitMeta()
+			meta, err := commit.GetCommitMeta(context.Background())
 			assert.NoError(t, err)
 
 			if meta.Name != committerName || meta.Email != committerEmail {
 				t.Error("Unexpected metadata")
 			}
 
-			root, err := commit.GetRootValue()
+			root, err := commit.GetRootValue(context.Background())
 
 			assert.NoError(t, err)
 

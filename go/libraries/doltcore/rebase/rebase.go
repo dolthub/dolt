@@ -74,17 +74,17 @@ type ReplayCommitFn func(ctx context.Context, commit, parent, rebasedParent *dol
 // wrapReplayRootFn converts a |ReplayRootFn| to a |ReplayCommitFn|
 func wrapReplayRootFn(fn ReplayRootFn) ReplayCommitFn {
 	return func(ctx context.Context, commit, parent, rebasedParent *doltdb.Commit) (rebaseRoot *doltdb.RootValue, err error) {
-		root, err := commit.GetRootValue()
+		root, err := commit.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		parentRoot, err := parent.GetRootValue()
+		parentRoot, err := parent.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		rebasedParentRoot, err := rebasedParent.GetRootValue()
+		rebasedParentRoot, err := rebasedParent.GetRootValue(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -173,7 +173,7 @@ func rebaseRefs(ctx context.Context, dbData env.DbData, replay ReplayCommitFn, n
 		return err
 	}
 
-	r, err := cm.GetRootValue()
+	r, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -258,7 +258,7 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		return nil, err
 	}
 
-	oldMeta, err := commit.GetCommitMeta()
+	oldMeta, err := commit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -175,7 +175,7 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, ErrCorruptNVF
 	}
 
-	rootVal, err := datas.GetCommitValue(ctx, vrw, commitSt)
+	rootVal, err := datas.GetCommittedValue(ctx, vrw, commitSt)
 	if err != nil {
 		return nil, err
 	}

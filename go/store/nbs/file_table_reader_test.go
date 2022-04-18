@@ -19,29 +19,40 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package types
+package nbs
 
-// HeightOrder returns true if a is 'higher than' b, generally if its ref-height is greater. If the two are of the same height, fall back to sorting by TargetHash.
-func HeightOrder(a, b Ref) bool {
-	if a.Height() == b.Height() {
-		return a.TargetHash().Less(b.TargetHash())
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/file"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestMmapTableReader(t *testing.T) {
+	assert := assert.New(t)
+	dir, err := os.MkdirTemp("", "")
+	require.NoError(t, err)
+	defer file.RemoveAll(dir)
+
+	fc := newFDCache(1)
+	defer fc.Drop()
+
+	chunks := [][]byte{
+		[]byte("hello2"),
+		[]byte("goodbye2"),
+		[]byte("badbye2"),
 	}
-	// > because we want the larger heights to be at the start of the queue.
-	return a.Height() > b.Height()
 
-}
+	tableData, h, err := buildTable(chunks)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(dir, h.String()), tableData, 0666)
+	require.NoError(t, err)
 
-// RefSlice implements sort.Interface to order by target ref.
-type RefSlice []Ref
-
-func (s RefSlice) Len() int {
-	return len(s)
-}
-
-func (s RefSlice) Less(i, j int) bool {
-	return s[i].TargetHash().Less(s[j].TargetHash())
-}
-
-func (s RefSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
+	trc, err := newFileTableReader(dir, h, uint32(len(chunks)), &noopQuotaProvider{}, fc)
+	require.NoError(t, err)
+	assertChunksInReader(chunks, trc, assert)
 }

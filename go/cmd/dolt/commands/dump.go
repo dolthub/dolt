@@ -131,6 +131,22 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(vErr, usage)
 	}
 
+	// Look for schemas and procedures table, and add to tblNames only for sql dumps
+	if resFormat == emptyFileExt || resFormat == sqlFileExt {
+		sysTblNames, err := doltdb.GetSystemTableNames(ctx, root)
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+		for _, tblName := range sysTblNames {
+			switch tblName {
+			case doltdb.SchemasTableName:
+				tblNames = append(tblNames, doltdb.SchemasTableName)
+			case doltdb.ProceduresTableName:
+				tblNames = append(tblNames, doltdb.ProceduresTableName)
+			}
+		}
+	}
+
 	switch resFormat {
 	case emptyFileExt, sqlFileExt:
 		if name == emptyStr {
@@ -149,7 +165,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 
 		for _, tbl := range tblNames {
 			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag))
-
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)

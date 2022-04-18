@@ -107,7 +107,7 @@ func (v Polygon) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return nil
 }
 
-func (v Polygon) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Polygon) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

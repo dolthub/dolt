@@ -228,7 +228,7 @@ func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSet
 		return nil, err
 	}
 
-	headRoot, err := headCommit.GetRootValue()
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -608,7 +608,7 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	}
 	sessionState.headCommit = cm
 
-	headRoot, err := cm.GetRootValue()
+	headRoot, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -678,7 +678,7 @@ func (sess *Session) SwitchWorkingSet(
 	}
 
 	sessionState.headCommit = cm
-	sessionState.headRoot, err = cm.GetRootValue()
+	sessionState.headRoot, err = cm.GetRootValue(ctx)
 	if err != nil {
 		return err
 	}
@@ -857,7 +857,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 		}
 
 	} else {
-		headRoot, err := dbState.HeadCommit.GetRootValue()
+		headRoot, err := dbState.HeadCommit.GetRootValue(ctx)
 		if err != nil {
 			return err
 		}

@@ -131,7 +131,9 @@ func TestMemHashPathSpec(t *testing.T) {
 	// assert.Nil(spec.GetValue())
 
 	spec.GetVRW(context.Background()).WriteValue(context.Background(), s)
-	assert.Equal(s, spec.GetValue(context.Background()))
+	value, err := spec.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(s, value)
 }
 
 func TestMemDatasetPathSpec(t *testing.T) {
@@ -153,7 +155,9 @@ func TestMemDatasetPathSpec(t *testing.T) {
 	_, err = datas.CommitValue(context.Background(), db, ds, mustList(types.NewList(context.Background(), spec.GetVRW(context.Background()), types.Float(42))))
 	assert.NoError(err)
 
-	assert.Equal(types.Float(42), spec.GetValue(context.Background()))
+	value, err := spec.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), value)
 }
 
 func TestNBSDatabaseSpec(t *testing.T) {
@@ -428,15 +432,23 @@ func TestPinPathSpec(t *testing.T) {
 
 	assert.Equal(mustHash(head.Hash(types.Format_7_18)), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s.value", mustHash(head.Hash(types.Format_7_18)).String()), pinned.String())
-	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
-	assert.Equal(types.Float(42), unpinned.GetValue(context.Background()))
+	pinnedValue, err := pinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), pinnedValue)
+	unpinnedValue, err := unpinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), unpinnedValue)
 
 	ds, err = db.GetDataset(context.Background(), "foo")
 	assert.NoError(err)
 	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(43))
 	assert.NoError(err)
-	assert.Equal(types.Float(42), pinned.GetValue(context.Background()))
-	assert.Equal(types.Float(43), unpinned.GetValue(context.Background()))
+	pinnedValue, err = pinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), pinnedValue)
+	unpinnedValue, err = unpinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(43), unpinnedValue)
 }
 
 func TestPinDatasetSpec(t *testing.T) {
@@ -464,7 +476,7 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.True(ok)
 
 	commitValue := func(val types.Value) types.Value {
-		v, err := datas.GetCommitValue(context.Background(), vrw, val)
+		v, err := datas.GetCommittedValue(context.Background(), vrw, val)
 		d.PanicIfError(err)
 		d.PanicIfFalse(v != nil)
 		return v
@@ -472,7 +484,9 @@ func TestPinDatasetSpec(t *testing.T) {
 
 	assert.Equal(mustHash(head.Hash(types.Format_7_18)), pinned.Path.Hash)
 	assert.Equal(fmt.Sprintf("mem::#%s", mustHash(head.Hash(types.Format_7_18)).String()), pinned.String())
-	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
+	pinnedValue, err := pinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), commitValue(pinnedValue))
 	headVal, ok, err := unpinned.GetDataset(context.Background()).MaybeHeadValue()
 	assert.NoError(err)
 	assert.True(ok)
@@ -482,7 +496,9 @@ func TestPinDatasetSpec(t *testing.T) {
 	assert.NoError(err)
 	_, err = datas.CommitValue(context.Background(), db, ds, types.Float(43))
 	assert.NoError(err)
-	assert.Equal(types.Float(42), commitValue(pinned.GetValue(context.Background())))
+	pinnedValue, err = pinned.GetValue(context.Background())
+	assert.NoError(err)
+	assert.Equal(types.Float(42), commitValue(pinnedValue))
 	headVal, ok, err = unpinned.GetDataset(context.Background()).MaybeHeadValue()
 	assert.NoError(err)
 	assert.True(ok)

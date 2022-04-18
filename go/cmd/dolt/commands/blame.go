@@ -247,7 +247,7 @@ ROWLOOP:
 
 			// if so, mark the commit as the blame origin
 			if changed {
-				blameGraph.AssignBlame(node.Key, nbf, blameInput.Commit)
+				blameGraph.AssignBlame(ctx, node.Key, nbf, blameInput.Commit)
 				continue ROWLOOP
 			}
 		}
@@ -324,7 +324,7 @@ func blameInputsFromCommits(ctx context.Context, dEnv *env.DoltEnv, tableName st
 
 // rowsFromCommit returns the row data of the table with the given name at the given commit
 func rowsFromCommit(ctx context.Context, commit *doltdb.Commit, tableName string) (types.Map, error) {
-	root, err := commit.GetRootValue()
+	root, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return types.EmptyMap, err
 	}
@@ -359,7 +359,7 @@ func getCommitHashes(old, new *doltdb.Commit) (string, string, error) {
 
 // maybeTableFromCommit takes a commit and a table name and returns a (possibly nil) pointer to a table
 func maybeTableFromCommit(ctx context.Context, c *doltdb.Commit, tableName string) (*doltdb.Table, error) {
-	root, err := c.GetRootValue()
+	root, err := c.GetRootValue(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error getting root value of commit: %v", err)
 	}
@@ -479,13 +479,13 @@ func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows type
 
 // AssignBlame updates the blame graph to contain blame information from the given commit
 // for the row identified by the given primary key
-func (bg *blameGraph) AssignBlame(rowPK types.Value, nbf *types.NomsBinFormat, c *doltdb.Commit) error {
+func (bg *blameGraph) AssignBlame(ctx context.Context, rowPK types.Value, nbf *types.NomsBinFormat, c *doltdb.Commit) error {
 	commitHash, err := c.HashOf()
 	if err != nil {
 		return fmt.Errorf("error getting commit hash: %v", err)
 	}
 
-	meta, err := c.GetCommitMeta()
+	meta, err := c.GetCommitMeta(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting metadata for commit %s: %v", commitHash.String(), err)
 	}

@@ -52,11 +52,10 @@ func SortRanges(ranges ...Range) []Range {
 	return ranges
 }
 
-// Range defines a contiguous range of Tuples starting from the
-// lexicographically least Tuple that satisfies all RangeCut
-// predicates, and ending at the greatest Tuple that satisfies
-// all predicates. Tuples inside the Range need not satisfy
-// all predicates, as long as they are in bounds.
+// Range defines a contiguous set of Tuples bounded by
+// RangeCut predicates. Tuples satisfying all predicates
+// must be included in the Range, but not all Tuples within
+// a Range will satisfy all predicates.
 type Range struct {
 	Start, Stop []RangeCut
 	Desc        val.TupleDesc

@@ -47,6 +47,7 @@ type prollyIndexIter struct {
 }
 
 var _ sql.RowIter = prollyIndexIter{}
+var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
 func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyIndexIter, error) {
@@ -103,6 +104,10 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
 	}
 
 	return nil, io.EOF
+}
+
+func (p prollyIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
+	panic("unimplemented")
 }
 
 func (p prollyIndexIter) queueRows(ctx context.Context) error {
@@ -206,6 +211,7 @@ type prollyCoveringIndexIter struct {
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
+var _ sql.RowIter2 = prollyCoveringIndexIter{}
 
 func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema) (prollyCoveringIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
@@ -239,9 +245,6 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 // Next returns the next row from the iterator.
 func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	k, v, err := p.indexIter.Next(ctx)
-	if err == io.EOF {
-		return nil, io.EOF
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +255,15 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	return r, nil
+}
+
+func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {
+	k, v, err := p.indexIter.Next(ctx)
+	if err != nil {
+		return err
+	}
+
+	return p.writeRow2FromTuples(k, v, f)
 }
 
 func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.Row) (err error) {
@@ -275,6 +287,38 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.
 		if err != nil {
 			return err
 		}
+	}
+
+	return
+}
+
+func (p prollyCoveringIndexIter) writeRow2FromTuples(key, value val.Tuple, f *sql.RowFrame) (err error) {
+
+	// TODO: handle out of order projections
+	for to := range p.keyMap {
+		from := p.keyMap.MapOrdinal(to)
+		if from == -1 {
+			continue
+		}
+
+		enc := p.keyDesc.Types[from].Enc
+		f.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: p.keyDesc.GetField(from, key),
+		})
+	}
+
+	for to := range p.valMap {
+		from := p.valMap.MapOrdinal(to)
+		if from == -1 {
+			continue
+		}
+
+		enc := p.valDesc.Types[from].Enc
+		f.Append(sql.Value{
+			Typ: encodingToType[enc],
+			Val: p.valDesc.GetField(from, value),
+		})
 	}
 
 	return

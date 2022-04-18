@@ -178,7 +178,6 @@ func (s3or *s3ObjectReader) readRange(ctx context.Context, name addr, p []byte, 
 				}
 			}
 		}
-
 		n, err = io.ReadFull(result.Body, p)
 		return n, sz, err
 	}

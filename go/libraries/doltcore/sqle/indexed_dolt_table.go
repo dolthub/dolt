@@ -61,6 +61,10 @@ func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition)
 	return index.RowIterForIndexLookup(ctx, idt.indexLookup, idt.table.sqlSch, nil)
 }
 
+func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
+	return index.RowIterForIndexLookup(ctx, idt.indexLookup, idt.table.sqlSch, nil)
+}
+
 func (idt *IndexedDoltTable) IsTemporary() bool {
 	return idt.table.IsTemporary()
 }
@@ -70,11 +74,14 @@ var _ sql.UpdatableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.DeletableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.ReplaceableTable = (*WritableIndexedDoltTable)(nil)
 var _ sql.StatisticsTable = (*WritableIndexedDoltTable)(nil)
+var _ sql.ProjectedTable = (*WritableIndexedDoltTable)(nil)
 
 type WritableIndexedDoltTable struct {
 	*WritableDoltTable
 	indexLookup sql.IndexLookup
 }
+
+var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
 
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	return index.NewRangePartitionIter(t.indexLookup), nil
@@ -84,9 +91,24 @@ func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Part
 	return index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
 }
 
-func (t *WritableIndexedDoltTable) WithProjection(colNames []string) sql.Table {
+func (t *WritableIndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
+	iter, err := index.PartitionIndexedTableRows(ctx, t.indexLookup.Index(), part, t.sqlSch, t.projectedCols)
+	if err != nil {
+		return nil, err
+	}
+
+	return iter.(sql.RowIter2), nil
+}
+
+// WithProjections implements sql.ProjectedTable
+func (t *WritableIndexedDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableIndexedDoltTable{
-		WritableDoltTable: t.WithProjection(colNames).(*WritableDoltTable),
+		WritableDoltTable: t.WithProjections(colNames).(*WritableDoltTable),
 		indexLookup:       t.indexLookup,
 	}
+}
+
+// Projections implements sql.ProjectedTable
+func (t *WritableIndexedDoltTable) Projections() []string {
+	return t.projectedCols
 }

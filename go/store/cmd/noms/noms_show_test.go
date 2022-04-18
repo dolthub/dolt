@@ -30,6 +30,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/clienttest"
@@ -72,6 +73,9 @@ func (s *nomsShowTestSuite) writeTestData(str string, value types.Value) types.R
 }
 
 func (s *nomsShowTestSuite) TestNomsShow() {
+	if types.Format_Default == types.Format_DOLT_DEV {
+		s.T().Skip()
+	}
 	datasetName := "dsTest"
 	str := spec.CreateValueSpecString("nbs", s.DBDir, datasetName)
 
@@ -148,10 +152,10 @@ func (s *nomsShowTestSuite) TestNomsShowRaw() {
 	s.NoError(err)
 
 	numChildChunks := 0
-	_ = l.WalkRefs(vrw.Format(), func(r types.Ref) error {
+	err = types.WalkAddrs(l, vrw.Format(), func(_ hash.Hash, _ bool) {
 		numChildChunks++
-		return nil
 	})
+	s.NoError(err)
 	s.True(numChildChunks > 0)
 	test(l)
 }

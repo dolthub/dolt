@@ -171,9 +171,9 @@ type BulkImportIEA struct {
 
 	// opCount contains the number of edits that would be applied in materializing the edits
 	opCount     int64
-	adds        map[hash.Hash]bool
-	deletes     map[hash.Hash]bool
-	partialAdds map[hash.Hash]map[hash.Hash]types.Tuple
+	adds        map[hash.Hash]struct{}
+	deletes     map[hash.Hash]struct{}
+	partialAdds map[hash.Hash]hashedTuple
 }
 
 // Delete adds a row to be deleted when these edits are eventually applied.
@@ -186,9 +186,9 @@ func (iea *BulkImportIEA) Delete(ctx context.Context, keyHash, partialKeyHash ha
 	iea.opCount++
 	iea.ea.AddEdit(key, nil)
 
-	iea.deletes[keyHash] = true
+	iea.deletes[keyHash] = struct{}{}
 	delete(iea.adds, keyHash)
-	delete(iea.partialAdds[partialKeyHash], keyHash)
+	delete(iea.partialAdds, keyHash)
 
 	return nil
 }
@@ -205,13 +205,11 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 	iea.opCount++
 	iea.ea.AddEdit(key, val)
 
-	iea.adds[keyHash] = true
+	iea.adds[keyHash] = struct{}{}
 	delete(iea.deletes, keyHash)
 
-	if matchingMap, ok := iea.partialAdds[partialKeyHash]; ok {
-		matchingMap[keyHash] = key
-	} else {
-		iea.partialAdds[partialKeyHash] = map[hash.Hash]types.Tuple{keyHash: key}
+	if _, ok := iea.partialAdds[partialKeyHash]; !ok {
+		iea.partialAdds[partialKeyHash] = hashedTuple{key, iea.emptyTuple, keyHash}
 	}
 
 	return nil
@@ -219,11 +217,11 @@ func (iea *BulkImportIEA) Insert(ctx context.Context, keyHash, partialKeyHash ha
 
 // Has returns true if the current TableEditAccumulator contains the given key, or it exists in the row data.
 func (iea *BulkImportIEA) Has(ctx context.Context, keyHash hash.Hash, key types.Tuple) (bool, error) {
-	if iea.deletes[keyHash] {
+	if _, ok := iea.deletes[keyHash]; ok {
 		return false, nil
 	}
 
-	if iea.adds[keyHash] {
+	if _, ok := iea.adds[keyHash]; ok {
 		return true, nil
 	}
 
@@ -281,8 +279,9 @@ func (iea *BulkImportIEA) HasPartial(ctx context.Context, idxSch schema.Schema, 
 			matches = matches[:len(matches)-1]
 		}
 	}
-	for addedHash, addedTpl := range iea.partialAdds[partialKeyHash] {
-		matches = append(matches, hashedTuple{addedTpl, types.EmptyTuple(addedTpl.Format()), addedHash})
+	match, ok := iea.partialAdds[partialKeyHash]
+	if ok {
+		matches = append(matches, match)
 	}
 	return matches, nil
 }
@@ -367,9 +366,9 @@ func (b *BulkImportTEAFactory) NewIndexEA(ctx context.Context, rowData types.Map
 		capMon:      uncapped{},
 		rowData:     rowData,
 		ea:          ea,
-		adds:        make(map[hash.Hash]bool),
-		deletes:     make(map[hash.Hash]bool),
-		partialAdds: make(map[hash.Hash]map[hash.Hash]types.Tuple),
+		adds:        make(map[hash.Hash]struct{}),
+		deletes:     make(map[hash.Hash]struct{}),
+		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(b.nbf),
 	}
 }
@@ -416,9 +415,9 @@ func (i *InMemDEAF) NewIndexEA(ctx context.Context, rowData types.Map) IndexEdit
 		capMon:      i.capMon,
 		rowData:     rowData,
 		ea:          ea,
-		adds:        make(map[hash.Hash]bool),
-		deletes:     make(map[hash.Hash]bool),
-		partialAdds: make(map[hash.Hash]map[hash.Hash]types.Tuple),
+		adds:        make(map[hash.Hash]struct{}),
+		deletes:     make(map[hash.Hash]struct{}),
+		partialAdds: make(map[hash.Hash]hashedTuple),
 		emptyTuple:  types.EmptyTuple(i.nbf),
 	}
 }

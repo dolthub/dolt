@@ -74,7 +74,9 @@ func runCommit(ctx context.Context, args []string) int {
 	absPath, err := spec.NewAbsolutePath(path)
 	util.CheckError(err)
 
-	value := absPath.Resolve(ctx, db, vrw)
+	value, err := absPath.Resolve(ctx, db, vrw)
+	util.CheckError(err)
+
 	if value == nil {
 		util.CheckErrorNoUsage(errors.New(fmt.Sprintf("Error resolving value: %s", path)))
 	}

@@ -54,9 +54,9 @@ func (s *nomsRootTestSuite) TestBasic() {
 
 	goldenHello := "u8g2r4qg97kkqn42lvao77st2mv3bpl0\n"
 	goldenGoodbye := "70b9adi6amrab3a5t4hcibdob0cq49m0\n"
-	if datas.ChunkStoreFromDatabase(db).Version() == types.Format_DOLT_DEV.VersionString() {
-		goldenHello = "jogtfvk340j8mqjh2usmgqvlfv1pck2h\n"
-		goldenGoodbye = "jcnq0q0hfsotlkmivhqo37adol0sbhni\n"
+	if types.Format_Default == types.Format_DOLT_DEV {
+		goldenHello = "bu6q8qir2vfq6lliqrko4jqls0rjga0h\n"
+		goldenGoodbye = "79a0kfbq40fl8s359e8ssitevt76jsnv\n"
 	}
 
 	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))

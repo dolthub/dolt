@@ -90,7 +90,7 @@ func (itr CommitsRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

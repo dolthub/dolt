@@ -149,8 +149,7 @@ teardown() {
     [ "$status" -eq 0 ]
 }
 
-@test "dump: SQL type - with views/trigger" {
-    skip "dolt dump views/trigger NOT implemented"
+@test "dump: SQL type - with views/triggers and procedures" {
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
     dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v1 = -new.v1;"
     dolt sql -q "CREATE VIEW view1 AS SELECT v1 FROM test;"
@@ -160,6 +159,71 @@ teardown() {
     dolt sql -q "CREATE VIEW view2 AS SELECT y FROM b;"
     dolt sql -q "CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "INSERT INTO a VALUES (2);"
+    dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2);"
+    dolt sql -q "CREATE TRIGGER trigger4 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
+    dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
+
+    dolt add .
+    dolt commit -m "create tables"
+
+    run dolt dump
+    [ "$status" -eq 0 ]
+    [ -f doltdump.sql ]
+
+    rm -rf ./.dolt
+    dolt init
+
+    run dolt sql < doltdump.sql
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * from test"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "-1" ]] || false
+
+    run dolt sql -q "SELECT * from a"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    run dolt sql -q "SELECT * from b"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -q "select * from view1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "-1" ]] || false
+
+    run dolt sql -q "select * from view2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+
+    run dolt sql -q "show create view view1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE VIEW `view1` AS select v1 from test' ]] || false
+
+    run dolt sql -q "show create view view2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE VIEW `view2` AS select y from b' ]] || false
+
+    run dolt sql -q "show create trigger trigger1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE TRIGGER `trigger1` before insert on test for each row set new.v1 = -new.v1' ]] || false
+
+    run dolt sql -q "show create trigger trigger2"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE TRIGGER `trigger2` after insert on a for each row insert into b values (new.x * 2)' ]] || false
+
+    run dolt sql -q "show create trigger trigger3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE TRIGGER `trigger3` after insert on a for each row follows trigger2 insert into b values (new.x * 2)' ]] || false
+
+    run dolt sql -q "show create trigger trigger4"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE TRIGGER `trigger4` after insert on a for each row precedes trigger3 insert into b values (new.x * 2)' ]] || false
+
+    run dolt sql -q "show create procedure p1"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE PROCEDURE `p1` (in x int) select x from dual' ]] || false
 }
 
 @test "dump: SQL type - with keyless tables" {

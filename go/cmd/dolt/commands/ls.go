@@ -128,7 +128,7 @@ func getRootForCommitSpecStr(ctx context.Context, csStr string, dEnv *env.DoltEn
 		return "", nil, errhand.BuildDError(`Unable to resolve "%s"`, csStr).AddCause(err).Build()
 	}
 
-	r, err := cm.GetRootValue()
+	r, err := cm.GetRootValue(ctx)
 
 	if err != nil {
 		return "", nil, errhand.BuildDError("error: failed to get root").AddCause(err).Build()
@@ -249,7 +249,7 @@ func printSysTablesNotInWorkingSet(ctx context.Context, ddb *doltdb.DoltDB, root
 			return errhand.BuildDError("error: failed to iterate through history").AddCause(err).Build()
 		}
 
-		currRoot, err := cm.GetRootValue()
+		currRoot, err := cm.GetRootValue(ctx)
 
 		if err != nil {
 			return errhand.BuildDError("error: failed to read root from db.").AddCause(err).Build()

@@ -20,7 +20,6 @@ table Commit {
   height:uint64;
 
   parent_addrs:[ubyte] (required);
-  parent_heights:[uint64] (required);
 
   parent_closure:[ubyte];
 

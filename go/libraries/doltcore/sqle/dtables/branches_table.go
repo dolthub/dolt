@@ -108,7 +108,7 @@ func NewBranchItr(sqlCtx *sql.Context, ddb *doltdb.DoltDB) (*BranchItr, error) {
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
-func (itr *BranchItr) Next(*sql.Context) (sql.Row, error) {
+func (itr *BranchItr) Next(ctx *sql.Context) (sql.Row, error) {
 	if itr.idx >= len(itr.commits) {
 		return nil, io.EOF
 	}
@@ -119,7 +119,7 @@ func (itr *BranchItr) Next(*sql.Context) (sql.Row, error) {
 
 	name := itr.branches[itr.idx]
 	cm := itr.commits[itr.idx]
-	meta, err := cm.GetCommitMeta()
+	meta, err := cm.GetCommitMeta(ctx)
 
 	if err != nil {
 		return nil, err

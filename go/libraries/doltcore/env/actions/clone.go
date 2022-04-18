@@ -213,7 +213,7 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 
 	}
 
-	rootVal, err := cm.GetRootValue()
+	rootVal, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %s; %s", ErrFailedToGetRootValue, branch, err.Error())
 	}
@@ -264,7 +264,14 @@ func CloneRemote(ctx context.Context, srcDB *doltdb.DoltDB, remoteName, branch s
 		return err
 	}
 
-	ws := doltdb.EmptyWorkingSet(wsRef)
+	// Retrieve existing working set, delete if it exists
+	ws, err := dEnv.DoltDB.ResolveWorkingSet(ctx, wsRef)
+	if ws != nil {
+		dEnv.DoltDB.DeleteWorkingSet(ctx, wsRef)
+	}
+	ws = doltdb.EmptyWorkingSet(wsRef)
+
+	// Update to use current Working and Staged root
 	err = dEnv.UpdateWorkingSet(ctx, ws.WithWorkingRoot(rootVal).WithStagedRoot(rootVal))
 	if err != nil {
 		return err

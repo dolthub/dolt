@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"strings"
 
 	fb "github.com/google/flatbuffers/go"
 
@@ -33,7 +34,7 @@ const (
 
 type novelNode struct {
 	node      Node
-	ref       hash.Hash
+	addr      hash.Hash
 	lastKey   nodeItem
 	treeCount uint64
 }
@@ -41,7 +42,7 @@ type novelNode struct {
 func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNode, error) {
 	node := bld.build(ns.Pool())
 
-	ref, err := ns.Write(ctx, node)
+	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
 	}
@@ -55,7 +56,7 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 	treeCount := uint64(node.treeCount())
 
 	return novelNode{
-		ref:       ref,
+		addr:      addr,
 		node:      node,
 		lastKey:   nodeItem(lastKey),
 		treeCount: treeCount,
@@ -142,7 +143,7 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	b.Finish(serial.TupleMapEnd(b))
 
 	buf := b.FinishedBytes()
-	return mapNodeFromBytes(buf)
+	return MapNodeFromBytes(buf)
 }
 
 func newSubtreeCounts(count int) subtreeCounts {
@@ -189,7 +190,8 @@ func newNodeBuilder(level int) *nodeBuilder {
 
 func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	b = fb.NewBuilder(0)
-	b.Bytes = pool.Get(uint64(sz))
+	buf := pool.Get(uint64(sz))
+	b.Bytes = buf[:0]
 	return
 }
 
@@ -247,4 +249,24 @@ func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
 	// todo(andy) write without copy
 	arr := writeSubtreeCounts(sc)
 	return b.CreateByteVector(arr)
+}
+
+func formatCompletedNode(addr hash.Hash, bld *nodeBuilder, kd, vd val.TupleDesc) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Novel Node (level %d) #%s { \n", bld.level, addr.String()))
+	for i := range bld.keys {
+		k, v := bld.keys[i], bld.values[i]
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(val.Tuple(k)))
+		sb.WriteString(": ")
+		if bld.level == 0 {
+			sb.WriteString(vd.Format(val.Tuple(v)))
+		} else {
+			sb.WriteString("#")
+			sb.WriteString(hash.New(v).String())
+		}
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("} ")
+	return sb.String()
 }

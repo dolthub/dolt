@@ -81,7 +81,8 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo := func(exp types.Value, str string) {
 		p, err := NewAbsolutePath(str)
 		assert.NoError(err)
-		act := p.Resolve(context.Background(), db, vs)
+		act, err := p.Resolve(context.Background(), db, vs)
+		assert.NoError(err)
 		if exp == nil {
 			assert.Nil(act)
 		} else {
