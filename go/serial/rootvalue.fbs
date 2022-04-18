@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "prolly.fbs";
+
 namespace serial;
 
 table RootValue {
   feature_version:int64;
 
-  tables_addr:[ubyte];
+  tables:RefMap (required);
   foreign_key_addr:[ubyte];
   super_schemas_addr:[ubyte];
 }

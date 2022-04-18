@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -55,17 +56,38 @@ type RootValue struct {
 	fkc     *ForeignKeyCollection // cache the first load
 }
 
+type tableEdit struct {
+	name string
+	ref  *types.Ref
+
+	// Used for rename.
+	old_name string
+}
+
+type tableMap interface {
+	Get(ctx context.Context, name string) (hash.Hash, error)
+	Iter(ctx context.Context, cb func(name string, addr hash.Hash) (bool, error)) error
+}
+
+func tmIterAll(ctx context.Context, tm tableMap, cb func(name string, addr hash.Hash)) error {
+	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
+		cb(name, addr)
+		return false, nil
+	})
+}
+
 type rvStorage interface {
 	GetFeatureVersion() (FeatureVersion, bool, error)
 
-	GetTablesMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
+	GetTablesMap(ctx context.Context, vr types.ValueReader) (tableMap, error)
 	GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 	GetForeignKeyMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 
 	SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
-	SetTablesMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
 	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
+
+	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error)
 
 	DebugString(ctx context.Context) string
 	nomsValue() types.Value
@@ -87,16 +109,40 @@ func (r nomsRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	}
 }
 
-func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReader) (types.Map, bool, error) {
+func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReader) (tableMap, error) {
 	v, found, err := r.valueSt.MaybeGet(tablesKey)
 	if err != nil {
-		return types.Map{}, false, err
+		return nil, err
 	}
 	if !found {
-		return types.Map{}, false, nil
+		return nomsTableMap{types.EmptyMap}, nil
 	}
-	return v.(types.Map), true, nil
+	return nomsTableMap{v.(types.Map)}, nil
 }
+
+type nomsTableMap struct {
+	types.Map
+}
+
+func (ntm nomsTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
+	v, f, err := ntm.MaybeGet(ctx, types.String(name))
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	if !f {
+		return hash.Hash{}, nil
+	}
+	return v.(types.Ref).TargetHash(), nil
+}
+
+func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash.Hash) (bool, error)) error {
+	return ntm.Map.Iter(ctx, func(k, v types.Value) (bool, error) {
+		name := string(k.(types.String))
+		addr := v.(types.Ref).TargetHash()
+		return cb(name, addr)
+	})
+}
+
 
 func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (types.Map, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(superSchemasKey)
@@ -128,10 +174,48 @@ func (r nomsRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueRea
 	return nomsRvStorage{st}, nil
 }
 
-func (r nomsRvStorage) SetTablesMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	st, err := r.valueSt.Set(tablesKey, m)
+func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error) {
+	m, err := r.GetTablesMap(ctx, vrw)
 	if err != nil {
-		return nomsRvStorage{}, err
+		return nil, err
+	}
+	nm := m.(nomsTableMap).Map
+
+	me := nm.Edit()
+	for _, e := range edits {
+		if e.old_name != "" {
+			old, f, err := nm.MaybeGet(ctx, types.String(e.old_name))
+			if err != nil {
+				return nil, err
+			}
+			if !f {
+				return nil, ErrTableNotFound
+			}
+			_, f, err = nm.MaybeGet(ctx, types.String(e.name))
+			if err != nil {
+				return nil, err
+			}
+			if f {
+				return nil, ErrTableExists
+			}
+			me = me.Remove(types.String(e.old_name)).Set(types.String(e.name), old)
+		} else {
+			if e.ref == nil {
+				me = me.Remove(types.String(e.name))
+			} else {
+				me = me.Set(types.String(e.name), *e.ref)
+			}
+		}
+	}
+
+	nm, err = me.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	st, err := r.valueSt.Set(tablesKey, nm)
+	if err != nil {
+		return nil, err
 	}
 	return nomsRvStorage{st}, nil
 }
@@ -212,12 +296,13 @@ func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue,
 	if vrw.Format() == types.Format_DOLT_DEV {
 		builder := flatbuffers.NewBuilder(80)
 		var empty hash.Hash
-		tablesoff := builder.CreateByteVector(empty[:])
+		serial.RefMapStart(builder)
+		tablesoff := serial.RefMapEnd(builder)
 		fkoff := builder.CreateByteVector(empty[:])
 		ssoff := builder.CreateByteVector(empty[:])
 		serial.RootValueStart(builder)
 		serial.RootValueAddFeatureVersion(builder, int64(DoltFeatureVersion))
-		serial.RootValueAddTablesAddr(builder, tablesoff)
+		serial.RootValueAddTables(builder, tablesoff)
 		serial.RootValueAddForeignKeyAddr(builder, fkoff)
 		serial.RootValueAddSuperSchemasAddr(builder, ssoff)
 		builder.FinishWithFileIdentifier(serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
@@ -263,14 +348,15 @@ func (root *RootValue) setFeatureVersion(v FeatureVersion) (*RootValue, error) {
 }
 
 func (root *RootValue) HasTable(ctx context.Context, tName string) (bool, error) {
-	tableMap, found, err := root.st.GetTablesMap(ctx, root.vrw)
+	tableMap, err := root.st.GetTablesMap(ctx, root.vrw)
 	if err != nil {
 		return false, err
 	}
-	if !found {
-		return false, nil
+	a, err := tableMap.Get(ctx, tName)
+	if err != nil {
+		return false, err
 	}
-	return tableMap.Has(ctx, types.String(tName))
+	return !a.IsEmpty(), nil
 }
 
 // GetSuperSchema returns the SuperSchema for the table name specified if that table exists.
@@ -485,17 +571,12 @@ func (root *RootValue) GetTableHash(ctx context.Context, tName string) (hash.Has
 		return hash.Hash{}, false, err
 	}
 
-	tVal, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	tVal, err := tableMap.Get(ctx, tName)
 	if err != nil {
 		return hash.Hash{}, false, err
 	}
 
-	if tVal == nil || !found {
-		return hash.Hash{}, false, nil
-	}
-
-	tValRef := tVal.(types.Ref)
-	return tValRef.TargetHash(), true, nil
+	return tVal, !tVal.IsEmpty(), nil
 }
 
 func (root *RootValue) SetTableHash(ctx context.Context, tName string, h hash.Hash) (*RootValue, error) {
@@ -521,23 +602,22 @@ func (root *RootValue) ResolveTableName(ctx context.Context, tName string) (stri
 	if err != nil {
 		return "", false, err
 	}
-	if ok, err := tableMap.Has(ctx, types.String(tName)); err != nil {
+
+	a, err := tableMap.Get(ctx, tName)
+	if err != nil {
 		return "", false, err
-	} else if ok {
+	}
+	if !a.IsEmpty() {
 		return tName, true, nil
 	}
 
 	found := false
 	lwrName := strings.ToLower(tName)
-	err = tableMap.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		keyStr := string(key.(types.String))
-		if lwrName == strings.ToLower(keyStr) {
-			tName = keyStr
+	err = tmIterAll(ctx, tableMap, func(name string, addr hash.Hash) {
+		if found == false && lwrName == strings.ToLower(name) {
+			tName = name
 			found = true
-			return true, nil
 		}
-
-		return false, nil
 	})
 	if err != nil {
 		return "", false, nil
@@ -553,15 +633,15 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 		return nil, false, err
 	}
 
-	r, found, err := tableMap.MaybeGet(ctx, types.String(tName))
+	addr, err := tableMap.Get(ctx, tName)
 	if err != nil {
 		return nil, false, err
 	}
-	if r == nil || !found {
+	if addr.IsEmpty() {
 		return nil, false, nil
 	}
 
-	table, err := durable.NomsTableFromAddr(ctx, root.VRW(), r.(types.Ref).TargetHash())
+	table, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
 	if err != nil {
 		return nil, false, err
 	}
@@ -619,19 +699,14 @@ func (root *RootValue) GetTableByColTag(ctx context.Context, tag uint64) (tbl *T
 // GetTableNames retrieves the lists of all tables for a RootValue
 func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
 	tableMap, err := root.getTableMap(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	numTables := int(tableMap.Len())
-	names := make([]string, 0, numTables)
-
-	err = tableMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-		names = append(names, string(key.(types.String)))
-		return false, nil
+	var names []string
+	err = tmIterAll(ctx, tableMap, func(name string, _ hash.Hash) {
+		names = append(names, name)
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -639,15 +714,8 @@ func (root *RootValue) GetTableNames(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (root *RootValue) getTableMap(ctx context.Context) (types.Map, error) {
-	m, found, err := root.st.GetTablesMap(ctx, root.vrw)
-	if err != nil {
-		return types.Map{}, err
-	}
-	if !found {
-		return types.NewMap(ctx, root.vrw)
-	}
-	return m, nil
+func (root *RootValue) getTableMap(ctx context.Context) (tableMap, error) {
+	return root.st.GetTablesMap(ctx, root.vrw)
 }
 
 func (root *RootValue) TablesInConflict(ctx context.Context) ([]string, error) {
@@ -724,42 +792,24 @@ func (root *RootValue) HasConstraintViolations(ctx context.Context) (bool, error
 // IterTables calls the callback function cb on each table in this RootValue.
 func (root *RootValue) IterTables(ctx context.Context, cb func(name string, table *Table, sch schema.Schema) (stop bool, err error)) error {
 	tm, err := root.getTableMap(ctx)
-
 	if err != nil {
 		return err
 	}
 
-	itr, err := tm.Iterator(ctx)
-
-	if err != nil {
-		return err
-	}
-
-	for {
-		nm, tableRef, err := itr.Next(ctx)
-
-		if err != nil || nm == nil || tableRef == nil {
-			return err
-		}
-
-		name := string(nm.(types.String))
-		nt, err := durable.NomsTableFromAddr(ctx, root.VRW(), tableRef.(types.Ref).TargetHash())
+	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
+		nt, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
 		if err != nil {
-			return err
+			return true, err
 		}
 		tbl := &Table{table: nt}
 
 		sch, err := tbl.GetSchema(ctx)
 		if err != nil {
-			return err
+			return true, err
 		}
 
-		stop, err := cb(name, tbl, sch)
-
-		if err != nil || stop {
-			return err
-		}
-	}
+		return cb(name, tbl, sch)
+	})
 }
 
 func (root *RootValue) iterSuperSchemas(ctx context.Context, cb func(name string, ss *schema.SuperSchema) (stop bool, err error)) error {
@@ -838,27 +888,12 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 	return putTable(ctx, root, tName, tableRef)
 }
 
-func putTable(ctx context.Context, root *RootValue, tName string, tableRef types.Ref) (*RootValue, error) {
+func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref) (*RootValue, error) {
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	tableMap, err := root.getTableMap(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	tMapEditor := tableMap.Edit()
-	tMapEditor = tMapEditor.Set(types.String(tName), tableRef)
-
-	m, err := tMapEditor.Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newStorage, err := root.st.SetTablesMap(ctx, root.vrw, m)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{ { name: tName, ref: &ref } })
 	if err != nil {
 		return nil, err
 	}
@@ -974,35 +1009,8 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 // RenameTable renames a table by changing its string key in the RootValue's table map. In order to preserve
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
-	tableMap, err := root.getTableMap(ctx)
-	if err != nil {
-		return nil, err
-	}
 
-	tv, found, err := tableMap.MaybeGet(ctx, types.String(oldName))
-	if err != nil {
-		return nil, err
-	}
-	if !found {
-		return nil, ErrTableNotFound
-	}
-
-	_, found, err = tableMap.MaybeGet(ctx, types.String(newName))
-	if err != nil {
-		return nil, err
-	}
-	if found {
-		return nil, ErrTableExists
-	}
-
-	tme := tableMap.Edit().Remove(types.String(oldName))
-	tme = tme.Set(types.String(newName), tv)
-	tableMap, err = tme.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newStorage, err := root.st.SetTablesMap(ctx, root.vrw, tableMap)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{ { old_name: oldName, name: newName } })
 	if err != nil {
 		return nil, err
 	}
@@ -1035,31 +1043,23 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 
 func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (*RootValue, error) {
 	tableMap, err := root.getTableMap(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	me := tableMap.Edit()
-	for _, tbl := range tables {
-		key := types.String(tbl)
-
-		if has, err := tableMap.Has(ctx, key); err != nil {
+	edits := make([]tableEdit, len(tables))
+	for i, name := range tables {
+		a, err := tableMap.Get(ctx, name)
+		if err != nil {
 			return nil, err
-		} else if has {
-			me = me.Remove(key)
-		} else {
+		}
+		if a.IsEmpty() {
 			return nil, ErrTableNotFound
 		}
+		edits[i].name = name
 	}
 
-	m, err := me.Map(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	newStorage, err := root.st.SetTablesMap(ctx, root.vrw, m)
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, edits)
 	if err != nil {
 		return nil, err
 	}
@@ -1225,20 +1225,7 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 	}
 
 	// super schemas are only persisted on commit, so add in working schemas
-	tblMap, err := root.getTableMap(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	err = tblMap.Iter(ctx, func(key, _ types.Value) (stop bool, err error) {
-		tbl, _, err := root.GetTable(ctx, string(key.(types.String)))
-		if err != nil {
-			return true, err
-		}
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return true, err
-		}
+	err = root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 		err = rootSuperSchema.AddSchemas(sch)
 		if err != nil {
 			return true, err
@@ -1381,16 +1368,33 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	return FeatureVersion(r.srv.FeatureVersion()), true, nil
 }
 
-func (r fbRvStorage) GetTablesMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error) {
-	addr := hash.New(r.srv.TablesAddrBytes())
-	if addr.IsEmpty() {
-		return types.Map{}, false, nil
+func (r fbRvStorage) GetTablesMap(ctx context.Context, vr types.ValueReader) (tableMap, error) {
+	return fbTableMap{r.srv.Tables(nil)}, nil
+}
+
+type fbTableMap struct {
+	*serial.RefMap
+}
+
+func (m fbTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
+	return datas.RefMapLookup(m.RefMap, name), nil
+}
+
+func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, error)) error {
+	refs := m.RefArrayBytes()
+	for i := 0; i < m.NamesLength(); i++ {
+		off := i * 20
+		addr := hash.New(refs[off : off+20])
+		name := string(m.Names(i))
+		stop, err := cb(name, addr)
+		if err != nil {
+			return err
+		}
+		if stop {
+			return nil
+		}
 	}
-	v, err := vr.ReadValue(ctx, addr)
-	if err != nil {
-		return types.Map{}, false, err
-	}
-	return v.(types.Map), true, nil
+	return nil
 }
 
 func (r fbRvStorage) GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error) {
@@ -1431,18 +1435,44 @@ func (r fbRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadW
 	return ret, nil
 }
 
-func (r fbRvStorage) SetTablesMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	var h hash.Hash
-	if !m.Empty() {
-		ref, err := vrw.WriteValue(ctx, m)
-		if err != nil {
-			return nil, err
+func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error) {
+	builder := flatbuffers.NewBuilder(80)
+
+	tables := r.srv.Tables(nil)
+
+	var rmedits []datas.RefMapEdit
+	for _, e := range edits {
+		if e.old_name != "" {
+			oldaddr := datas.RefMapLookup(tables, e.old_name)
+			newaddr := datas.RefMapLookup(tables, e.name)
+			if oldaddr.IsEmpty() {
+				return nil, ErrTableNotFound
+			}
+			if !newaddr.IsEmpty() {
+				return nil, ErrTableExists
+			}
+			rmedits = append(rmedits, datas.RefMapEdit{Name: e.old_name})
+			rmedits = append(rmedits, datas.RefMapEdit{Name: e.name, Addr: oldaddr})
+		} else {
+			if e.ref == nil {
+				rmedits = append(rmedits, datas.RefMapEdit{Name: e.name})
+			} else {
+				rmedits = append(rmedits, datas.RefMapEdit{Name: e.name, Addr: e.ref.TargetHash()})
+			}
 		}
-		h = ref.TargetHash()
 	}
-	ret := r.clone()
-	copy(ret.srv.TablesAddrBytes(), h[:])
-	return ret, nil
+	tablesoff := datas.RefMapApplyEdits(tables, builder, rmedits)
+
+	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
+	ssoff := builder.CreateByteVector(r.srv.SuperSchemasAddrBytes())
+	serial.RootValueStart(builder)
+	serial.RootValueAddFeatureVersion(builder, r.srv.FeatureVersion())
+	serial.RootValueAddTables(builder, tablesoff)
+	serial.RootValueAddForeignKeyAddr(builder, fkoff)
+	serial.RootValueAddSuperSchemasAddr(builder, ssoff)
+	builder.FinishWithFileIdentifier(serial.RootValueEnd(builder), []byte(serial.RootValueFileID))
+	bs := builder.FinishedBytes()
+	return fbRvStorage{serial.GetRootAsRootValue(bs, 0)}, nil
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
@@ -1476,7 +1506,7 @@ func (r fbRvStorage) clone() fbRvStorage {
 func (r fbRvStorage) DebugString(ctx context.Context) string {
 	return fmt.Sprintf("fbRvStorage[%d, %s, %s, %s]",
 		r.srv.FeatureVersion(),
-		hash.New(r.srv.TablesAddrBytes()).String(),
+		"...", // TODO: Print out tables map
 		hash.New(r.srv.ForeignKeyAddrBytes()).String(),
 		hash.New(r.srv.SuperSchemasAddrBytes()).String())
 	return "fbRvStorage ["

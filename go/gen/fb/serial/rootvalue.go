@@ -59,38 +59,17 @@ func (rcv *RootValue) MutateFeatureVersion(n int64) bool {
 	return rcv._tab.MutateInt64Slot(4, n)
 }
 
-func (rcv *RootValue) TablesAddr(j int) byte {
+func (rcv *RootValue) Tables(obj *RefMap) *RefMap {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *RootValue) TablesAddrLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *RootValue) TablesAddrBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(RefMap)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
 	}
 	return nil
-}
-
-func (rcv *RootValue) MutateTablesAddr(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
 }
 
 func (rcv *RootValue) ForeignKeyAddr(j int) byte {
@@ -167,11 +146,8 @@ func RootValueStart(builder *flatbuffers.Builder) {
 func RootValueAddFeatureVersion(builder *flatbuffers.Builder, featureVersion int64) {
 	builder.PrependInt64Slot(0, featureVersion, 0)
 }
-func RootValueAddTablesAddr(builder *flatbuffers.Builder, tablesAddr flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(tablesAddr), 0)
-}
-func RootValueStartTablesAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
+func RootValueAddTables(builder *flatbuffers.Builder, tables flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(tables), 0)
 }
 func RootValueAddForeignKeyAddr(builder *flatbuffers.Builder, foreignKeyAddr flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(foreignKeyAddr), 0)
