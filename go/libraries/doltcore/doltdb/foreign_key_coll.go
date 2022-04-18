@@ -66,11 +66,21 @@ func (f *ForeignKeyViolationError) Error() string {
 		sb.WriteRune('\n')
 		sb.WriteString(str)
 	}
+
+	var refCols []string
+	for _, tct := range f.ForeignKey.TableColumns {
+		col, _ := f.Schema.GetAllCols().GetByTag(tct)
+		refCols = append(refCols, col.Name)
+	}
+
+	fKeyErrorMsg := fmt.Sprintf("a foreign key fails (CONSTRAINT `%s` FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`))", f.ForeignKey.Name, strings.Join(refCols, ", "), f.ForeignKey.ReferencedTableName, f.ForeignKey.ReferencedTableIndex)
+	//fKeyErrorMsg = fmt.Sprintf("%s on:%s", fKeyErrorMsg, sb.String())
+
 	if terminatedEarly {
-		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s\n%d more violations are not being displayed",
-			f.ForeignKey.Name, f.ForeignKey.TableName, sb.String(), len(f.ViolationRows)-earlyTerminationLimit)
+		return fmt.Sprintf("%s\n%d more violations are not being displayed",
+			fKeyErrorMsg, len(f.ViolationRows)-earlyTerminationLimit)
 	} else {
-		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s", f.ForeignKey.Name, f.ForeignKey.TableName, sb.String())
+		return fKeyErrorMsg
 	}
 }
 
@@ -83,12 +93,7 @@ func getRowValuesAsString(key types.Value, val types.Value) string {
 	var rowVals []string
 	for i, s := range allSlice {
 		if i%2 == 1 {
-			switch v := s.(type) {
-			case types.Blob:
-				rowVals = append(rowVals, v.DebugText())
-			default:
-				rowVals = append(rowVals, v.HumanReadableString())
-			}
+			rowVals = append(rowVals, s.HumanReadableString())
 		}
 	}
 
