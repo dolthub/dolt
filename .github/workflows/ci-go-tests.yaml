@@ -48,9 +48,9 @@ jobs:
           echo "Testing Package: ${file_arr[$i]}"
           if [ "$MATRIX_OS" == 'ubuntu-18.04' ]
           then
-            go test -timeout 30m -race "${file_arr[$i]}"
+            go test -timeout 45m -race "${file_arr[$i]}"
           else
-            go test -timeout 30m "${file_arr[$i]}"
+            go test -timeout 45m "${file_arr[$i]}"
           fi
           succeeded=$(echo "$?")
           if [ "$succeeded" -ne 0 ]; then

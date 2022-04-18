@@ -56,6 +56,8 @@ type StaticErrorEditor struct {
 	err error
 }
 
+var _ sql.ForeignKeyUpdater = (*StaticErrorEditor)(nil)
+
 func NewStaticErrorEditor(err error) *StaticErrorEditor {
 	return &StaticErrorEditor{err}
 }
@@ -84,6 +86,10 @@ func (e *StaticErrorEditor) DiscardChanges(ctx *sql.Context, errorEncountered er
 
 func (e *StaticErrorEditor) StatementComplete(ctx *sql.Context) error {
 	return nil
+}
+
+func (e *StaticErrorEditor) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	return &StaticErrorTable{nil, e.err}
 }
 
 func (e *StaticErrorEditor) Close(*sql.Context) error {

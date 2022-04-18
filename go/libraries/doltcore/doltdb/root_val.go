@@ -46,7 +46,7 @@ type FeatureVersion int64
 
 // DoltFeatureVersion is described in feature_version.md.
 // only variable for testing.
-var DoltFeatureVersion FeatureVersion = 2 // last bumped when changing TEXT types to use noms Blobs
+var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation time for triggers
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
@@ -1007,20 +1007,6 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 		return nil, err
 	}
 
-	foreignKeyCollection, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-	foreignKeyCollection.RenameTable(oldName, newName)
-	fkMap, err := foreignKeyCollection.Map(ctx, root.vrw)
-	if err != nil {
-		return nil, err
-	}
-	newStorage, err = newStorage.SetForeignKeyMap(ctx, root.vrw, fkMap)
-	if err != nil {
-		return nil, err
-	}
-
 	ssMap, err := root.getOrCreateSuperSchemaMap(ctx)
 	if err != nil {
 		return nil, err
@@ -1047,7 +1033,7 @@ func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string)
 	return root.withStorage(newStorage), nil
 }
 
-func (root *RootValue) RemoveTables(ctx context.Context, allowDroppingFKReferenced bool, tables ...string) (*RootValue, error) {
+func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, allowDroppingFKReferenced bool, tables ...string) (*RootValue, error) {
 	tableMap, err := root.getTableMap(ctx)
 
 	if err != nil {
@@ -1079,6 +1065,9 @@ func (root *RootValue) RemoveTables(ctx context.Context, allowDroppingFKReferenc
 	}
 
 	newRoot := root.withStorage(newStorage)
+	if skipFKHandling {
+		return newRoot, nil
+	}
 
 	fkc, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
@@ -1190,9 +1179,8 @@ func (root *RootValue) ValidateForeignKeysOnSchemas(ctx context.Context) (*RootV
 				return nil, err
 			}
 		} else {
-			err := fkCollection.RemoveKeyByName(foreignKey.Name)
-			if err != nil {
-				return nil, err
+			if !fkCollection.RemoveKeyByName(foreignKey.Name) {
+				return nil, fmt.Errorf("`%s` does not exist as a foreign key", foreignKey.Name)
 			}
 		}
 	}

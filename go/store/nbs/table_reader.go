@@ -132,7 +132,6 @@ type tableReaderAt interface {
 // more chunks together into a single read request to backing storage.
 type tableReader struct {
 	tableIndex
-	prefixes              []uint64
 	chunkCount            uint32
 	totalUncompressedData uint64
 	r                     tableReaderAt
@@ -143,18 +142,17 @@ type tableReader struct {
 // and footer, though it may contain an unspecified number of bytes before that data. r should allow
 // retrieving any desired range of bytes from the table.
 func newTableReader(index tableIndex, r tableReaderAt, blockSize uint64) (tableReader, error) {
-	p, err := index.Prefixes()
-	if err != nil {
-		return tableReader{}, err
-	}
 	return tableReader{
 		index,
-		p,
 		index.ChunkCount(),
 		index.TotalUncompressedData(),
 		r,
 		blockSize,
 	}, nil
+}
+
+func (tr tableReader) prefixAt(idx uint32) uint64 {
+	return tr.tableIndex.PrefixAt(idx)
 }
 
 // Scan across (logically) two ordered slices of address prefixes.
@@ -170,7 +168,7 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 			continue
 		}
 
-		for filterIdx < filterLen && addr.prefix > tr.prefixes[filterIdx] {
+		for filterIdx < filterLen && addr.prefix > tr.prefixAt(filterIdx) {
 			filterIdx++
 		}
 
@@ -178,13 +176,13 @@ func (tr tableReader) hasMany(addrs []hasRecord) (bool, error) {
 			return true, nil
 		}
 
-		if addr.prefix != tr.prefixes[filterIdx] {
+		if addr.prefix != tr.prefixAt(filterIdx) {
 			remaining = true
 			continue
 		}
 
 		// prefixes are equal, so locate and compare against the corresponding suffix
-		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixes[j]; j++ {
+		for j := filterIdx; j < filterLen && addr.prefix == tr.prefixAt(j); j++ {
 			m, err := tr.EntrySuffixMatches(j, addr.a)
 			if err != nil {
 				return false, err
@@ -483,7 +481,7 @@ func (tr tableReader) getManyAtOffsetsWithReadFunc(
 // order.
 func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaining bool, err error) {
 	filterIdx := uint32(0)
-	filterLen := uint32(len(tr.prefixes))
+	filterLen := tr.chunkCount
 	ors = make(offsetRecSlice, 0, len(reqs))
 
 	// Iterate over |reqs| and |tr.prefixes| (both sorted by address) and build the set
@@ -494,7 +492,7 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 		}
 
 		// advance within the prefixes until we reach one which is >= req.prefix
-		for filterIdx < filterLen && tr.prefixes[filterIdx] < req.prefix {
+		for filterIdx < filterLen && tr.prefixAt(filterIdx) < req.prefix {
 			filterIdx++
 		}
 
@@ -503,13 +501,13 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 			break
 		}
 
-		if req.prefix != tr.prefixes[filterIdx] {
+		if req.prefix != tr.prefixAt(filterIdx) {
 			remaining = true
 			continue
 		}
 
 		// record all offsets within the table which contain the data required.
-		for j := filterIdx; j < filterLen && req.prefix == tr.prefixes[j]; j++ {
+		for j := filterIdx; j < filterLen && req.prefix == tr.prefixAt(j); j++ {
 			m, err := tr.EntrySuffixMatches(j, req.a)
 			if err != nil {
 				return nil, false, err
@@ -660,7 +658,7 @@ func (tr tableReader) Clone() (tableReader, error) {
 	if err != nil {
 		return tableReader{}, err
 	}
-	return tableReader{ti, tr.prefixes, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}, nil
+	return tableReader{ti, tr.chunkCount, tr.totalUncompressedData, tr.r, tr.blockSize}, nil
 }
 
 type readerAdapter struct {

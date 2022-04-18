@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -623,15 +622,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
-	allowDroppingFKReferenced := false
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-	if fkChecks.(int8) == 0 {
-		allowDroppingFKReferenced = true
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -652,7 +642,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
+	newRoot, err := root.RemoveTables(ctx, true, false, tableName)
 	if err != nil {
 		return err
 	}
@@ -789,7 +779,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	return nil
 }
 
-// RenameTable implements sql.TableRenamer
+// renameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
 	root, err := db.GetRoot(ctx)
 
@@ -813,7 +803,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return sql.ErrTableAlreadyExists.New(newName)
 	}
 
-	newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
+	newRoot, err := renameTable(ctx, root, oldName, newName)
 
 	if err != nil {
 		return err
@@ -912,14 +902,16 @@ func (db Database) AllViews(ctx *sql.Context) ([]sql.ViewDefinition, error) {
 // it can exist in a sql session later. Returns sql.ErrExistingView if a view
 // with that name already exists.
 func (db Database) CreateView(ctx *sql.Context, name string, definition string) error {
-	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), sql.ErrExistingView.New(name))
+	err := sql.ErrExistingView.New(db.name, name)
+	return db.addFragToSchemasTable(ctx, "view", name, definition, time.Unix(0, 0).UTC(), err)
 }
 
 // DropView implements sql.ViewDropper. Removes a view from persistence in the
 // dolt database. Returns sql.ErrNonExistingView if the view did not
 // exist.
 func (db Database) DropView(ctx *sql.Context, name string) error {
-	return db.dropFragFromSchemasTable(ctx, "view", name, sql.ErrViewDoesNotExist.New(name))
+	err := sql.ErrViewDoesNotExist.New(db.name, name)
+	return db.dropFragFromSchemasTable(ctx, "view", name, err)
 }
 
 // GetTriggers implements sql.TriggerDatabase.

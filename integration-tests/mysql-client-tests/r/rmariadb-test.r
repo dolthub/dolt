@@ -49,10 +49,10 @@ if (rowsAff != 1) {
 }
 
 got <- dbGetQuery(conn, "select * from test where pk = 1")
-want = data.frame(pk = c(1), value = c(1))
+want = data.frame(pk = c(0, 1), value = c(0, 1))
 if (!isTRUE(all.equal(want, got))) {
     print("unexpected prepared statement result")
-    print(rows)
+    print(got)
     quit(1)
 }
 

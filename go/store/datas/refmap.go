@@ -124,13 +124,15 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 	return serial.RefMapEnd(builder)
 }
 
-type rmentry struct {
-	name string
-	addr hash.Hash
-}
-
 type refmap struct {
 	*serial.RefMap
+}
+
+func empty_refmap() refmap {
+	builder := flatbuffers.NewBuilder(24)
+	serial.RefMapStart(builder)
+	builder.Finish(serial.RefMapEnd(builder))
+	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
 }
 
 func (rm refmap) len() uint64 {
@@ -138,9 +140,9 @@ func (rm refmap) len() uint64 {
 }
 
 func (rm refmap) edit(edits []rmedit) refmap {
-        builder := flatbuffers.NewBuilder(1024)
-        builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
-        return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+	builder := flatbuffers.NewBuilder(1024)
+	builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
+	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
 }
 
 func (rm refmap) lookup(key string) hash.Hash {

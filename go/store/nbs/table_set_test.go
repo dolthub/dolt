@@ -23,6 +23,7 @@ package nbs
 
 import (
 	"context"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -144,6 +145,15 @@ func TestTableSetExtract(t *testing.T) {
 	}
 }
 
+func persist(t *testing.T, p tablePersister, chunks ...[]byte) {
+	for _, c := range chunks {
+		mt := newMemTable(testMemTableSize)
+		mt.addChunk(computeAddr(c), c)
+		_, err := p.Persist(context.Background(), mt, nil, &Stats{})
+		require.NoError(t, err)
+	}
+}
+
 func TestTableSetRebase(t *testing.T) {
 	assert := assert.New(t)
 	q := NewUnlimitedMemQuotaProvider()
@@ -207,4 +217,35 @@ func TestTableSetPhysicalLen(t *testing.T) {
 	ts = ts.Prepend(context.Background(), mt, &Stats{})
 
 	assert.True(mustUint64(ts.physicalLen()) > indexSize(mustUint32(ts.count())))
+}
+
+func TestTableSetClosesOpenedChunkSourcesOnErr(t *testing.T) {
+	q := NewUnlimitedMemQuotaProvider()
+	p := newFakeTablePersister(q)
+	persist(t, p, testChunks...)
+
+	var mem uint64 = 0
+	var sources []addr
+	for addr := range p.sources {
+		sources = append(sources, addr)
+		mem += indexMemSize(1)
+	}
+
+	idx := rand.Intn(len(testChunks))
+	addrToFail := sources[idx]
+	p.sourcesToFail[addrToFail] = true
+
+	var specs []tableSpec
+	for _, addr := range sources {
+		specs = append(specs, tableSpec{addr, 1})
+	}
+
+	ts := tableSet{p: p, q: q, rl: make(chan struct{}, 1)}
+	_, err := ts.Rebase(context.Background(), specs, &Stats{})
+	require.Error(t, err)
+
+	for _ = range p.opened {
+		mem -= indexMemSize(1)
+	}
+	require.EqualValues(t, mem, q.Usage())
 }

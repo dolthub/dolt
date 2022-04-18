@@ -24,15 +24,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func empty_refmap() *serial.RefMap {
-	builder := flatbuffers.NewBuilder(64)
-	serial.RefMapStart(builder)
-	builder.Finish(serial.RefMapEnd(builder))
-	return serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
-}
-
 func TestRefMapLookupEmpty(t *testing.T) {
-	rm := empty_refmap()
+	rm := empty_refmap().RefMap
 	assert.Equal(t, rm.NamesLength(), 0)
 	assert.Equal(t, RefMapLookup(rm, ""), hash.Hash{})
 	assert.Equal(t, RefMapLookup(rm, "doesnotexist"), hash.Hash{})
@@ -45,7 +38,7 @@ func edit_refmap(rm *serial.RefMap, edits []rmedit) *serial.RefMap {
 }
 
 func TestRefMapEditInserts(t *testing.T) {
-	empty := empty_refmap()
+	empty := empty_refmap().RefMap
 	a_hash := hash.Parse("3i50gcjrl9m2pgolrkc22kq46sj4p96o")
 	with_a := edit_refmap(empty, []rmedit{rmedit{"a", a_hash}})
 	assert.Equal(t, RefMapLookup(with_a, "a"), a_hash)
@@ -63,7 +56,7 @@ func TestRefMapEditInserts(t *testing.T) {
 }
 
 func TestRefMapEditDeletes(t *testing.T) {
-	empty := empty_refmap()
+	empty := empty_refmap().RefMap
 	a_hash := hash.Parse("3i50gcjrl9m2pgolrkc22kq46sj4p96o")
 	b_hash := hash.Parse("7mm15d7prjlurr8g4u51n7dfg6bemt7p")
 	with_ab := edit_refmap(empty, []rmedit{rmedit{"b", b_hash}, rmedit{"a", a_hash}})
