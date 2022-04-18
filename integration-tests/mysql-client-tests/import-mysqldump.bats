@@ -14,7 +14,9 @@ teardown() {
 }
 
 @test "import mysqldump: empty database dump" {
-    usr/bin/mysql -u root <<SQL
+    service mysql start
+
+    mysql <<SQL
 CREATE DATABASE testdb;
 SQL
 
@@ -35,7 +37,9 @@ SQL
 }
 
 @test "import mysqldump: a simple table dump" {
-    usr/bin/mysql -u root <<SQL
+    service mysql start
+
+    mysql <<SQL
 CREATE DATABASE testdb;
 USE testdb;
 CREATE TABLE mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL);
