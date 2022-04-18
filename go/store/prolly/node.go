@@ -192,4 +192,3 @@ func OutputProllyNode(w io.Writer, node Node) error {
 	w.Write([]byte("\n]\n"))
 	return nil
 }
-
