@@ -592,21 +592,3 @@ func (b Blob) HumanReadableString() string {
 
 	return string(data[:n])
 }
-
-func (b Blob) DebugText() string {
-	ctx := context.Background()
-	bLen := b.Len()
-	bRd := b.Reader(ctx)
-	if bLen > 128 {
-		bLen = 128
-	}
-
-	data := make([]byte, bLen)
-	n, err := bRd.Read(data)
-
-	if err != nil && err != io.EOF {
-		return err.Error()
-	}
-
-	return string(data[:n])
-}

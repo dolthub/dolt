@@ -73,8 +73,7 @@ func (f *ForeignKeyViolationError) Error() string {
 		refCols = append(refCols, col.Name)
 	}
 
-	fKeyErrorMsg := fmt.Sprintf("a foreign key fails (CONSTRAINT `%s` FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`))", f.ForeignKey.Name, strings.Join(refCols, ", "), f.ForeignKey.ReferencedTableName, f.ForeignKey.ReferencedTableIndex)
-	//fKeyErrorMsg = fmt.Sprintf("%s on:%s", fKeyErrorMsg, sb.String())
+	fKeyErrorMsg := fmt.Sprintf("a foreign key constraint fails (CONSTRAINT `%s` FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`)) on:%s", f.ForeignKey.Name, strings.Join(refCols, ", "), f.ForeignKey.ReferencedTableName, f.ForeignKey.ReferencedTableIndex, sb.String())
 
 	if terminatedEarly {
 		return fmt.Sprintf("%s\n%d more violations are not being displayed",
@@ -85,7 +84,7 @@ func (f *ForeignKeyViolationError) Error() string {
 }
 
 // getRowValuesAsString returns row values as string format.
-// Variables key and val have tags in them, so tags are removed, and blobs are converted appropriately
+// Variables 'key' and 'val' have both 'tags and values' added in them, so tags are removed
 func getRowValuesAsString(key types.Value, val types.Value) string {
 	valSlice, _ := val.(types.Tuple).AsSlice()
 	all, _ := key.(types.Tuple).Append(valSlice...)
@@ -96,7 +95,6 @@ func getRowValuesAsString(key types.Value, val types.Value) string {
 			rowVals = append(rowVals, s.HumanReadableString())
 		}
 	}
-
 	return fmt.Sprintf("(%s)", strings.Join(rowVals, ", "))
 }
 
