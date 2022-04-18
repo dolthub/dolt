@@ -106,7 +106,7 @@ func newCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64)
 
 	distance := int64(ord)
 	return newCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
-		if nd.LeafNode() {
+		if nd.leafNode() {
 			return int(distance)
 		}
 
@@ -207,24 +207,24 @@ func (cur *nodeCursor) invalidate() {
 }
 
 func (cur *nodeCursor) currentKey() nodeItem {
-	return cur.nd.GetKey(cur.idx)
+	return cur.nd.getKey(cur.idx)
 }
 
 func (cur *nodeCursor) currentValue() nodeItem {
-	return cur.nd.GetValue(cur.idx)
+	return cur.nd.getValue(cur.idx)
 }
 
 func (cur *nodeCursor) currentRef() hash.Hash {
-	return cur.nd.GetRef(cur.idx)
+	return cur.nd.getRef(cur.idx)
 }
 
 func (cur *nodeCursor) firstKey() nodeItem {
-	return cur.nd.GetKey(0)
+	return cur.nd.getKey(0)
 }
 
 func (cur *nodeCursor) lastKey() nodeItem {
 	lastKeyIdx := int(cur.nd.count - 1)
-	return cur.nd.GetKey(lastKeyIdx)
+	return cur.nd.getKey(lastKeyIdx)
 }
 
 func (cur *nodeCursor) skipToNodeStart() {
@@ -260,7 +260,7 @@ func (cur *nodeCursor) isLeaf() bool {
 }
 
 func (cur *nodeCursor) level() uint64 {
-	return uint64(cur.nd.Level())
+	return uint64(cur.nd.level())
 }
 
 func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (err error) {
@@ -294,7 +294,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 // index of the nextMutation greatest element if it is not present.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
-		return cb(item, cur.nd.GetKey(i)) <= 0
+		return cb(item, cur.nd.getKey(i)) <= 0
 	})
 
 	return idx

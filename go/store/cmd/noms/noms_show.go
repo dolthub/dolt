@@ -38,7 +38,6 @@ import (
 	"github.com/dolthub/dolt/go/store/util/datetime"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
 	"github.com/dolthub/dolt/go/store/util/verbose"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var nomsShow = &util.Command{
@@ -152,9 +151,9 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 	switch value := value.(type) {
 	case types.TupleRowStorage:
 		node := prolly.NodeFromValue(value)
-		return outputProllyNode(w, node)
+		return prolly.OutputProllyNode(w, node)
 	case prolly.Node:
-		return outputProllyNode(w, value)
+		return prolly.OutputProllyNode(w, value)
 	case types.Value:
 		return types.WriteEncodedValue(ctx, w, value)
 	default:
@@ -163,42 +162,3 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 	}
 }
 
-func outputProllyNode(w io.Writer, node prolly.Node) error {
-	w.Write([]byte("["))
-	for i := 0; i < node.Size(); i++ {
-		k := node.GetKey(i)
-		kt := val.Tuple(k)
-
-		w.Write([]byte("\n    { key: "))
-		for j := 0; j < kt.Count(); j++ {
-			if j > 0 {
-				w.Write([]byte(", "))
-			}
-			w.Write([]byte(hexStr(kt.GetField(j))))
-		}
-
-		if node.LeafNode() {
-			v := node.GetValue(i)
-			vt := val.Tuple(v)
-
-			w.Write([]byte(" value: "))
-			for j := 0; j < vt.Count(); j++ {
-				if j > 0 {
-					w.Write([]byte(", "))
-				}
-				w.Write([]byte(hexStr(vt.GetField(j))))
-			}
-
-			w.Write([]byte(" }"))
-		} else {
-			ref := node.GetRef(i)
-
-			w.Write([]byte(" ref: #"))
-			w.Write([]byte(ref.String()))
-			w.Write([]byte(" }"))
-		}
-	}
-
-	w.Write([]byte("\n]\n"))
-	return nil
-}

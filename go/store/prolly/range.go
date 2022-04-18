@@ -249,7 +249,7 @@ func rangeStartSearchFn(rng Range) searchFn {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
-			tup := val.Tuple(nd.GetKey(i))
+			tup := val.Tuple(nd.getKey(i))
 			in = rng.AboveStart(tup)
 			return
 		})
@@ -261,7 +261,7 @@ func rangeStopSearchFn(rng Range) searchFn {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false
-			tup := val.Tuple(nd.GetKey(i))
+			tup := val.Tuple(nd.getKey(i))
 			out = !rng.BelowStop(tup)
 			return
 		})
@@ -272,7 +272,7 @@ func pointLookupSearchFn(rng Range) searchFn {
 	return func(nd Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
-			tup := val.Tuple(nd.GetKey(i))
+			tup := val.Tuple(nd.getKey(i))
 			// |rng.Start| <= |tup|
 			return compareBound(rng.Start, tup, rng.Desc) <= 0
 		})

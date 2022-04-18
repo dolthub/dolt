@@ -272,7 +272,7 @@ func (m Map) searchNode(query nodeItem, nd Node) int {
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := m.compareItems(query, nd.GetKey(h)) <= 0
+		less := m.compareItems(query, nd.getKey(h)) <= 0
 		// i ≤ h < j
 		if !less {
 			i = h + 1 // preserves f(i-1) == false

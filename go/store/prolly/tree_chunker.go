@@ -402,11 +402,11 @@ func (tc *treeChunker) Done(ctx context.Context) (Node, error) {
 			return Node{}, err
 		}
 
-		if child.LeafNode() || child.count > 1 {
+		if child.leafNode() || child.count > 1 {
 			return child, nil
 		}
 
-		mt = child.GetRef(0)
+		mt = child.getRef(0)
 	}
 }
 
