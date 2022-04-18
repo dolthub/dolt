@@ -28,6 +28,8 @@ import (
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -51,6 +53,14 @@ func TestKeySplitterDistribution(t *testing.T) {
 			fmt.Println()
 		}
 	})
+}
+
+func TestRoundLog2(t *testing.T) {
+	for i := 1; i < 16384; i++ {
+		exp := int(math.Round(math.Log2(float64(i))))
+		act := int(roundLog2(uint32(i)))
+		assert.Equal(t, exp, act)
+	}
 }
 
 func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, keySz, valSz int) (nd Node, ns NodeStore) {

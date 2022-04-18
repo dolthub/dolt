@@ -23,23 +23,21 @@ package prolly
 
 import (
 	"fmt"
-	"math"
+	"math/bits"
 
 	"github.com/kch42/buzhash"
 	"github.com/zeebo/xxh3"
 )
 
 const (
-	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data
-	// (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows
-	// for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing
-	// has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off. The
-	// choice of a prime number provides better distribution for repeating input.
-	chunkWindow = uint32(67)
-
 	minChunkSize = 1 << 9
 	maxChunkSize = 1 << 14
 )
+
+//  splitterFactory makes a nodeSplitter.
+type splitterFactory func(level uint8) nodeSplitter
+
+var defaultSplitterFactory splitterFactory = newRollingHashSplitter
 
 // nodeSplitter decides where nodeItem streams should be split into chunks.
 type nodeSplitter interface {
@@ -56,17 +54,15 @@ type nodeSplitter interface {
 	Reset()
 }
 
-//  splitterFactory makes a nodeSplitter.
-type splitterFactory func(level uint8) nodeSplitter
-
-var defaultSplitterFactory splitterFactory = newSmoothRollingHasher
-
-// dynamicNodeSplitter is a nodeSplitter designed to constrain the chunk size
-// distribution by reducing the likelihood of forming very large or very small chunks.
-// As the size of the current chunk grows, dynamicNodeSplitter changes the target
-// pattern to make it easier to match. The result is a chunk size distribution
+// rollingHashSplitter is a nodeSplitter that makes chunk boundary decisions using
+// a rolling value hasher that processes nodeItem pairs in a byte-wise fashion.
+//
+// rollingHashSplitter uses a dynamic hash pattern designed to constrain the chunk
+// size distribution by reducing the likelihood of forming very large or very small
+// chunks. As the size of the current chunk grows, rollingHashSplitter changes the
+// target pattern to make it easier to match. The result is a chunk size distribution
 // that is closer to a binomial distribution, rather than geometric.
-type dynamicNodeSplitter struct {
+type rollingHashSplitter struct {
 	bz     *buzhash.BuzHash
 	offset uint32
 	window uint32
@@ -75,20 +71,29 @@ type dynamicNodeSplitter struct {
 	crossedBoundary bool
 }
 
-var _ nodeSplitter = &dynamicNodeSplitter{}
+const (
+	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data
+	// (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows
+	// for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing
+	// has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off. The
+	// choice of a prime number provides better distribution for repeating input.
+	rollingHashWindow = uint32(67)
+)
 
-func newSmoothRollingHasher(salt uint8) nodeSplitter {
-	return &dynamicNodeSplitter{
-		bz:     buzhash.NewBuzHash(chunkWindow),
-		window: chunkWindow,
+var _ nodeSplitter = &rollingHashSplitter{}
+
+func newRollingHashSplitter(salt uint8) nodeSplitter {
+	return &rollingHashSplitter{
+		bz:     buzhash.NewBuzHash(rollingHashWindow),
+		window: rollingHashWindow,
 		salt:   byte(salt),
 	}
 }
 
-var _ splitterFactory = newSmoothRollingHasher
+var _ splitterFactory = newRollingHashSplitter
 
 // Append implements NodeSplitter
-func (sns *dynamicNodeSplitter) Append(items ...nodeItem) (err error) {
+func (sns *rollingHashSplitter) Append(items ...nodeItem) (err error) {
 	for _, it := range items {
 		for _, byt := range it {
 			_ = sns.hashByte(byt)
@@ -97,7 +102,7 @@ func (sns *dynamicNodeSplitter) Append(items ...nodeItem) (err error) {
 	return nil
 }
 
-func (sns *dynamicNodeSplitter) hashByte(b byte) bool {
+func (sns *rollingHashSplitter) hashByte(b byte) bool {
 	sns.offset++
 
 	if sns.crossedBoundary {
@@ -115,35 +120,52 @@ func (sns *dynamicNodeSplitter) hashByte(b byte) bool {
 	}
 
 	hash := sns.bz.Sum32()
-	patt := patternFromOffset(sns.offset)
+	patt := rollingHashPattern(sns.offset)
 	sns.crossedBoundary = hash&patt == patt
 
 	return sns.crossedBoundary
 }
 
 // CrossedBoundary implements NodeSplitter
-func (sns *dynamicNodeSplitter) CrossedBoundary() bool {
+func (sns *rollingHashSplitter) CrossedBoundary() bool {
 	return sns.crossedBoundary
 }
 
 // Reset implements NodeSplitter
-func (sns *dynamicNodeSplitter) Reset() {
+func (sns *rollingHashSplitter) Reset() {
 	sns.crossedBoundary = false
 	sns.offset = 0
 	sns.bz = buzhash.NewBuzHash(sns.window)
 }
 
-func patternFromOffset(offset uint32) uint32 {
+func rollingHashPattern(offset uint32) uint32 {
 	shift := 15 - (offset >> 10)
 	return 1<<shift - 1
 }
 
+// keySplitter is a nodeSplitter that makes chunk boundary decisions on the hash of
+// the key of a nodeItem pair. In contrast to the rollingHashSplitter, keySplitter
+// tries to create chunks that have an average number of nodeItem pairs, rather than
+// an average number of bytes. However, because the target number of nodeItem pairs
+// is computed directly from the chunk size and count, the practical difference in
+// the distribution of chunk sizes is minimal.
+//
+// keySplitter uses a dynamic hash pattern designed to constrain the chunk size
+// distribution by reducing the likelihood of forming very large or very small chunks.
+// As the size of the current chunk grows, keySplitter changes the target pattern to
+// make it easier to match. The result is a chunk size distribution that is closer to
+// a binomial distribution, rather than geometric.
 type keySplitter struct {
 	count, size     uint32
 	crossedBoundary bool
 
 	salt uint32
 }
+
+const (
+	// log2MidPoint is 2^31.5
+	log2MidPoint = 0b10110101000001001111001100110011
+)
 
 func newKeySplitter(level uint8) nodeSplitter {
 	return &keySplitter{
@@ -180,23 +202,32 @@ func (ks *keySplitter) CrossedBoundary() bool {
 }
 
 func (ks *keySplitter) Reset() {
-	ks.count = 0
-	ks.size = 0
+	ks.count, ks.size = 0, 0
 	ks.crossedBoundary = false
 }
 
+// getPattern computes the target pattern for the keySplitter
+// from its current state, taking into consideration the
+// number of nodeItem pairs and their average size.
+// The computed pattern becomes easier to match as the total
+// size of the current node/chunk increases.
 func (ks *keySplitter) getPattern() uint32 {
-	avgSz := float64(ks.size) / float64(ks.count)
+	avgSz := ks.size / ks.count
 	hi := 16 - roundLog2(avgSz)
 	lo := 10 - roundLog2(avgSz)
 	shift := hi - (ks.count >> lo)
 	return 1<<shift - 1
 }
 
-func roundLog2(sz float64) uint32 {
+// roundLog2 is an optimized version of
+// uint32(math.Round(math.Log2(sz)))
+func roundLog2(sz uint32) (lg uint32) {
 	// invariant: |sz| > 1
-	lg2 := math.Log2(sz)
-	return uint32(math.Round(lg2))
+	lg = uint32(bits.Len32(sz) - 1)
+	if sz > (log2MidPoint >> (31 - lg)) {
+		lg++
+	}
+	return
 }
 
 func xxHash32(b []byte, salt uint32) uint32 {

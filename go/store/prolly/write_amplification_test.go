@@ -63,7 +63,7 @@ func TestWriteAmplification(t *testing.T) {
 		testWriteAmpWithSplitter(t, newKeySplitter)
 	})
 	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
-		testWriteAmpWithSplitter(t, newSmoothRollingHasher)
+		testWriteAmpWithSplitter(t, newRollingHashSplitter)
 	})
 }
 
@@ -83,7 +83,7 @@ func TestNodeSplitterMetrics(t *testing.T) {
 		})
 	})
 	t.Run("Smooth Rolling Hasher", func(t *testing.T) {
-		defaultSplitterFactory = newSmoothRollingHasher
+		defaultSplitterFactory = newRollingHashSplitter
 		t.Run("Random Uints", func(t *testing.T) {
 			pm, _ := makeProllyMap(t, scale)
 			before := pm.(Map)
