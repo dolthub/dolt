@@ -345,7 +345,6 @@ func TestRenameColumn(t *testing.T) {
 }
 
 func TestAddColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 

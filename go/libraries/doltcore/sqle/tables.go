@@ -1055,7 +1055,7 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
-// modifyColumn implements sql.AlterableTable
+// ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil
