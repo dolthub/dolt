@@ -157,9 +157,10 @@ teardown() {
     dolt sql -q "CREATE TABLE b (y INT PRIMARY KEY);"
     dolt sql -q "INSERT INTO test VALUES (1, 1);"
     dolt sql -q "CREATE VIEW view2 AS SELECT y FROM b;"
-    dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger1 INSERT INTO b VALUES (new.x * 2);"
-    dolt sql -q "CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
+    dolt sql -q "CREATE TRIGGER trigger2 AFTER INSERT ON a FOR EACH ROW INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "INSERT INTO a VALUES (2);"
+    dolt sql -q "CREATE TRIGGER trigger3 AFTER INSERT ON a FOR EACH ROW FOLLOWS trigger2 INSERT INTO b VALUES (new.x * 2);"
+    dolt sql -q "CREATE TRIGGER trigger4 AFTER INSERT ON a FOR EACH ROW PRECEDES trigger3 INSERT INTO b VALUES (new.x * 2);"
     dolt sql -q "CREATE PROCEDURE p1 (in x int) select x from dual"
 
     dolt add .
@@ -210,11 +211,15 @@ teardown() {
 
     run dolt sql -q "show create trigger trigger2"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger2` after insert on a for each row precedes trigger3 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'CREATE TRIGGER `trigger2` after insert on a for each row insert into b values (new.x * 2)' ]] || false
 
     run dolt sql -q "show create trigger trigger3"
     [ "$status" -eq 0 ]
-    [[ "$output" =~ 'CREATE TRIGGER `trigger3` after insert on a for each row follows trigger1 insert into b values (new.x * 2)' ]] || false
+    [[ "$output" =~ 'CREATE TRIGGER `trigger3` after insert on a for each row follows trigger2 insert into b values (new.x * 2)' ]] || false
+
+    run dolt sql -q "show create trigger trigger4"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ 'CREATE TRIGGER `trigger4` after insert on a for each row precedes trigger3 insert into b values (new.x * 2)' ]] || false
 
     run dolt sql -q "show create procedure p1"
     [ "$status" -eq 0 ]
