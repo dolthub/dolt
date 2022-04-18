@@ -149,6 +149,7 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 }
 
 // SqlRowAsCreateProcStmt Converts a Row into either a CREATE PROCEDURE statement
+// This function expects a row from the dolt_procedures table.
 func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 	var b strings.Builder
 
@@ -175,6 +176,7 @@ func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
 }
 
 // SqlRowAsCreateFragStmt Converts a Row into either a CREATE TRIGGER or CREATE VIEW statement
+// This function expects a row from the dolt_schemas table
 func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
 	var b strings.Builder
 
