@@ -15,7 +15,6 @@ teardown() {
 
 @test "import mysqldump: empty database dump" {
     service mysql start
-
     mysql <<SQL
 CREATE DATABASE testdb;
 SQL
@@ -29,16 +28,16 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "testdb" ]] || false
 
-    usr/bin/mysql -u root <<SQL
+    mysql <<SQL
 DROP DATABASE testdb;
 SQL
     # Give the server a chance to drop the database
     sleep 1
+    service mysql stop
 }
 
 @test "import mysqldump: a simple table dump" {
     service mysql start
-
     mysql <<SQL
 CREATE DATABASE testdb;
 USE testdb;
@@ -58,11 +57,12 @@ SQL
 0,one
 1,two" ]] || false
 
-    usr/bin/mysql -u root <<SQL
+    mysql <<SQL
 DROP DATABASE testdb;
 SQL
     # Give the server a chance to drop the database
     sleep 1
+    service mysql stop
 }
 
 @test "import mysqldump: database with view" {
