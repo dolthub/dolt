@@ -27,11 +27,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/datetime"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -67,8 +69,26 @@ func setupShowFlags() *flag.FlagSet {
 
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
+
+	var value interface{}
 	database, vrw, value, err := cfg.GetPath(ctx, args[0])
-	util.CheckErrorNoUsage(err)
+
+	if err != nil && strings.Contains(err.Error(), "unknown type") {
+		// If noms can't decode a value but it does exist, we'll assume it's a prolly node and treat it as such
+		sp, err := cfg.GetDatabaseSpecForPath(ctx, args[0])
+		util.CheckErrorNoUsage(err)
+
+		database = sp.GetDatabase(ctx)
+		vrw = sp.GetVRW(ctx)
+		cs := sp.NewChunkStore(ctx)
+		chunk, err := cs.Get(ctx, sp.Path.Hash)
+		util.CheckErrorNoUsage(err)
+
+		value = prolly.MapNodeFromBytes(chunk.Data())
+	} else {
+		util.CheckErrorNoUsage(err)
+	}
+
 	defer database.Close()
 
 	if value == nil {
@@ -82,7 +102,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showRaw {
-		ch, err := types.EncodeValue(value, vrw.Format())
+		ch, err := types.EncodeValue(value.(types.Value), vrw.Format())
 		util.CheckError(err)
 		buf := bytes.NewBuffer(ch.Data())
 		_, err = io.Copy(os.Stdout, buf)
@@ -91,7 +111,7 @@ func runShow(ctx context.Context, args []string) int {
 	}
 
 	if showStats {
-		types.WriteValueStats(ctx, os.Stdout, value, vrw)
+		types.WriteValueStats(ctx, os.Stdout, value.(types.Value), vrw)
 		return 0
 	}
 
@@ -102,15 +122,42 @@ func runShow(ctx context.Context, args []string) int {
 		pgr := outputpager.Start()
 		defer pgr.Stop()
 
-		types.WriteEncodedValue(ctx, pgr.Writer, value)
+		outputEncodedValue(ctx, pgr.Writer, value)
 		fmt.Fprintln(pgr.Writer)
 	} else {
-		t, err := types.TypeOf(value)
-		util.CheckError(err)
-		fmt.Fprint(os.Stdout, t.HumanReadableString(), " - ")
-
-		types.WriteEncodedValue(ctx, os.Stdout, value)
+		outputType(value)
+		outputEncodedValue(ctx, os.Stdout, value)
 	}
 
 	return 0
+}
+
+func outputType(value interface{}) {
+	var typeString string
+	switch value := value.(type) {
+	case prolly.Node:
+		typeString = "prolly.Node"
+	case types.Value:
+		t, err := types.TypeOf(value)
+		typeString = t.HumanReadableString()
+		util.CheckError(err)
+	default:
+		typeString = fmt.Sprintf("unknown type %T", value)
+	}
+	fmt.Fprint(os.Stdout, typeString, " - ")
+}
+
+func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) error {
+	switch value := value.(type) {
+	case types.TupleRowStorage:
+		node := prolly.NodeFromValue(value)
+		return prolly.OutputProllyNode(w, node)
+	case prolly.Node:
+		return prolly.OutputProllyNode(w, value)
+	case types.Value:
+		return types.WriteEncodedValue(ctx, w, value)
+	default:
+		_, err := w.Write([]byte(fmt.Sprintf("unknown value type %T: %v", value, value)))
+		return err
+	}
 }
