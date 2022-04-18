@@ -21,17 +21,17 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // renameTable renames a table with in a RootValue and returns the updated root.
@@ -104,10 +104,10 @@ var sharePool = pool.NewBuffPool()
 // Adding a column anywhere in the middle of the schema, or a non-nullable column, rewrites the table.
 // TODO: we do a second pass in the engine to set the defaults. We should only do a single table scan.
 func rewriteTableDataForNewColumn(
-		ctx context.Context,
-		table *doltdb.Table,
-		newCol string,
-		newSchema schema.Schema,
+	ctx context.Context,
+	table *doltdb.Table,
+	newCol string,
+	newSchema schema.Schema,
 ) (*doltdb.Table, error) {
 	if !types.IsFormat_DOLT_1(table.Format()) {
 		return table, nil
