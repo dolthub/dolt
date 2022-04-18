@@ -161,4 +161,3 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 		return err
 	}
 }
-
