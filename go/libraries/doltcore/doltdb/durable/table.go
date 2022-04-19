@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -96,6 +97,8 @@ type nomsTable struct {
 	vrw         types.ValueReadWriter
 	tableStruct types.Struct
 }
+
+var sharePool = pool.NewBuffPool()
 
 var _ Table = nomsTable{}
 

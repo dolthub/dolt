@@ -31,45 +31,44 @@ const DoltCommitFuncName = "dolt_commit"
 var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
 
 // DoltCommitFunc runs a `dolt commit` in the SQL context, committing staged changes to head.
+// Deprecated: please use the version in the dprocedures package
 type DoltCommitFunc struct {
 	children []sql.Expression
 }
 
 // NewDoltCommitFunc creates a new DoltCommitFunc expression whose children represents the args passed in DOLT_COMMIT.
+// Deprecated: please use the version in the dprocedures package
 func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCommitFunc{children: args}, nil
 }
 
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return doDoltCommit(ctx, row, d.Children())
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltCommit(ctx, args)
 }
 
-func doDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
+func DoDoltCommit(ctx *sql.Context, args []string) (string, error) {
 	// Get the information for the sql context.
 	dbName := ctx.GetCurrentDatabase()
-	ap := cli.CreateCommitArgParser()
 
-	// Get the args for DOLT_COMMIT.
-	args, err := getDoltArgs(ctx, row, exprs)
+	apr, err := cli.CreateCommitArgParser().Parse(args)
 	if err != nil {
-		return nil, err
-	}
-
-	apr, err := ap.Parse(args)
-	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
 	roots, ok := dSess.GetRoots(ctx, dbName)
 	if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
+		return "", fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	if apr.Contains(cli.AllFlag) {
 		roots, err = actions.StageAllTablesNoDocs(ctx, roots)
 		if err != nil {
-			return nil, fmt.Errorf(err.Error())
+			return "", fmt.Errorf(err.Error())
 		}
 	}
 
@@ -77,7 +76,7 @@ func doDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interf
 	if authorStr, ok := apr.GetValue(cli.AuthorParam); ok {
 		name, email, err = cli.ParseAuthor(authorStr)
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	} else {
 		name = dSess.Username()
@@ -86,7 +85,7 @@ func doDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interf
 
 	msg, msgOk := apr.GetValue(cli.CommitMessageArg)
 	if !msgOk {
-		return nil, fmt.Errorf("Must provide commit message.")
+		return "", fmt.Errorf("Must provide commit message.")
 	}
 
 	t := ctx.QueryTime()
@@ -95,7 +94,7 @@ func doDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interf
 		t, err = cli.ParseDate(commitTimeStr)
 
 		if err != nil {
-			return nil, fmt.Errorf(err.Error())
+			return "", fmt.Errorf(err.Error())
 		}
 	}
 
@@ -108,22 +107,22 @@ func doDoltCommit(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interf
 		Email:      email,
 	})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Nothing to commit, and we didn't pass --allowEmpty
 	if pendingCommit == nil {
-		return nil, errors.New("nothing to commit")
+		return "", errors.New("nothing to commit")
 	}
 
 	newCommit, err := dSess.DoltCommit(ctx, dbName, dSess.GetTransaction(), pendingCommit)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	h, err := newCommit.HashOf()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	return h.String(), nil
