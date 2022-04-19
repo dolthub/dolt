@@ -34,11 +34,13 @@ import (
 
 const DoltPullFuncName = "dolt_pull"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltPullFunc struct {
 	expression.NaryExpression
 }
 
 // NewPullFunc creates a new PullFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewPullFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -62,6 +64,14 @@ func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltPull(ctx, args)
+}
+
+func DoDoltPull(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -74,10 +84,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ap := cli.CreatePullArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreatePullArgParser().Parse(args)
 	if err != nil {
 		return noConflicts, err
 	}
@@ -106,7 +113,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return noConflicts, err
 	}
 
-	var conflicts interface{}
+	var conflicts int
 	for _, refSpec := range pullSpec.RefSpecs {
 		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 

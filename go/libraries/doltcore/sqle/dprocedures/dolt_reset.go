@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package alterschema
+package dprocedures
 
 import (
-	"context"
+	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// RenameTable renames a table with in a RootValue and returns the updated root.
-func RenameTable(ctx context.Context, root *doltdb.RootValue, oldName, newName string) (*doltdb.RootValue, error) {
-	if newName == oldName {
-		return root, nil
-	} else if root == nil {
-		panic("invalid parameters")
+// dolt_reset is the stored procedure version of the function `dolt_reset`.
+func dolt_reset(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	res, err := dfunctions.DoDoltReset(ctx, args)
+	if err != nil {
+		return nil, err
 	}
-
-	return root.RenameTable(ctx, oldName, newName)
+	return rowToIter(int64(res)), nil
 }

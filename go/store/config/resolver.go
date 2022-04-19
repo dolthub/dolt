@@ -170,5 +170,16 @@ func (r *Resolver) GetPath(ctx context.Context, str string) (datas.Database, typ
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	return sp.GetDatabase(ctx), sp.GetVRW(ctx), sp.GetValue(ctx), nil
+	value, err := sp.GetValue(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return sp.GetDatabase(ctx), sp.GetVRW(ctx), value, nil
+}
+
+// GetDatabaseForPath returns the database and a VRW for the path given, but does not attempt to load a value
+func (r *Resolver) GetDatabaseSpecForPath(ctx context.Context, str string) (spec.Spec, error) {
+	specStr, dbc := r.ResolvePathSpecAndGetDbConfig(str)
+	return spec.ForPathOpts(r.verbose(ctx, str, specStr), specOptsForConfig(r.config, dbc))
 }

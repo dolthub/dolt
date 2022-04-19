@@ -43,7 +43,8 @@ const (
 	RemotesApiHostKey     = "remotes.default_host"
 	RemotesApiHostPortKey = "remotes.default_port"
 
-	AddCredsUrlKey = "creds.add_url"
+	AddCredsUrlKey     = "creds.add_url"
+	DoltLabInsecureKey = "doltlab.insecure"
 
 	MetricsDisabled = "metrics.disabled"
 	MetricsHost     = "metrics.host"

@@ -31,7 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/alterschema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -163,6 +163,7 @@ var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
+var _ sql.ExternalStoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 
@@ -623,15 +624,6 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return ErrSystemTableAlter.New(tableName)
 	}
 
-	allowDroppingFKReferenced := false
-	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	if err != nil {
-		return err
-	}
-	if fkChecks.(int8) == 0 {
-		allowDroppingFKReferenced = true
-	}
-
 	ds := dsess.DSessFromSess(ctx.Session)
 	if _, ok := ds.GetTemporaryTable(ctx, db.Name(), tableName); ok {
 		ds.DropTemporaryTable(ctx, db.Name(), tableName)
@@ -652,7 +644,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	newRoot, err := root.RemoveTables(ctx, allowDroppingFKReferenced, tableName)
+	newRoot, err := root.RemoveTables(ctx, true, false, tableName)
 	if err != nil {
 		return err
 	}
@@ -789,7 +781,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	return nil
 }
 
-// RenameTable implements sql.TableRenamer
+// renameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
 	root, err := db.GetRoot(ctx)
 
@@ -813,7 +805,7 @@ func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error 
 		return sql.ErrTableAlreadyExists.New(newName)
 	}
 
-	newRoot, err := alterschema.RenameTable(ctx, root, oldName, newName)
+	newRoot, err := renameTable(ctx, root, oldName, newName)
 
 	if err != nil {
 		return err
@@ -984,6 +976,11 @@ func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedure
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return DoltProceduresDropProcedure(ctx, db, name)
+}
+
+// GetExternalStoredProcedures implements sql.ExternalStoredProcedureDatabase.
+func (db Database) GetExternalStoredProcedures(ctx *sql.Context) ([]sql.ExternalStoredProcedureDetails, error) {
+	return dprocedures.DoltProcedures, nil
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (retErr error) {

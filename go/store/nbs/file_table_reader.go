@@ -26,16 +26,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
-
-	"github.com/dolthub/mmap-go"
 )
 
-type mmapTableReader struct {
+type fileTableReader struct {
 	tableReader
 	fc *fdCache
 	h  addr
@@ -45,35 +41,22 @@ const (
 	fileBlockSize = 1 << 12
 )
 
-var (
-	maxInt = int64(math.MaxInt64)
-)
-
-func init() {
-	if strconv.IntSize == 32 {
-		maxInt = math.MaxInt32
-	}
-}
-
-func newMmapTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
+func newFileTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProvider, fc *fdCache) (cs chunkSource, err error) {
 	path := filepath.Join(dir, h.String())
 
 	index, err := func() (ti onHeapTableIndex, err error) {
+
+		// Be careful with how |f| is used below. |RefFile| returns a cached
+		// os.File pointer so the code needs to use f in a concurrency-safe
+		// manner. Moving the file offset is BAD.
 		var f *os.File
 		f, err = fc.RefFile(path)
-
 		if err != nil {
 			return
 		}
 
-		defer func() {
-			unrefErr := fc.UnrefFile(path)
-
-			if unrefErr != nil {
-				err = unrefErr
-			}
-		}()
-
+		// Since we can't move the file offset, get the size of the file and use
+		// ReadAt to load the index instead.
 		var fi os.FileInfo
 		fi, err = f.Stat()
 
@@ -87,40 +70,25 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 			return
 		}
 
-		// index. Mmap won't take an offset that's not page-aligned, so find the nearest page boundary preceding the index.
-		indexOffset := fi.Size() - int64(footerSize) - int64(indexSize(chunkCount))
-		aligned := indexOffset / mmapAlignment * mmapAlignment // Thanks, integer arithmetic!
-		length := int(fi.Size() - aligned)
+		indexSize := int64(indexSize(chunkCount) + footerSize)
+		indexOffset := fi.Size() - indexSize
+		r := io.NewSectionReader(f, indexOffset, indexSize)
+		b := make([]byte, indexSize)
 
-		if fi.Size()-aligned > maxInt {
-			err = fmt.Errorf("%s - size: %d alignment: %d> maxInt: %d", path, fi.Size(), aligned, maxInt)
+		_, err = io.ReadFull(r, b)
+		if err != nil {
 			return
 		}
 
-		buff := make([]byte, indexSize(chunkCount)+footerSize)
-		// TODO: Don't use mmap here.
-		func() {
-			var mm mmap.MMap
-			mm, err = mmap.MapRegion(f, length, mmap.RDONLY, 0, aligned)
-			if err != nil {
-				return
+		defer func() {
+			unrefErr := fc.UnrefFile(path)
+
+			if unrefErr != nil {
+				err = unrefErr
 			}
-
-			defer func() {
-				unmapErr := mm.Unmap()
-
-				if unmapErr != nil {
-					err = unmapErr
-				}
-			}()
-			copy(buff, mm[indexOffset-aligned:])
 		}()
-		if err != nil {
-			return onHeapTableIndex{}, err
-		}
 
-		ti, err = parseTableIndex(buff, q)
-
+		ti, err = parseTableIndex(b, q)
 		if err != nil {
 			return
 		}
@@ -139,27 +107,27 @@ func newMmapTableReader(dir string, h addr, chunkCount uint32, q MemoryQuotaProv
 	if err != nil {
 		return nil, err
 	}
-	return &mmapTableReader{
+	return &fileTableReader{
 		tr,
 		fc,
 		h,
 	}, nil
 }
 
-func (mmtr *mmapTableReader) hash() (addr, error) {
+func (mmtr *fileTableReader) hash() (addr, error) {
 	return mmtr.h, nil
 }
 
-func (mmtr *mmapTableReader) Close() error {
+func (mmtr *fileTableReader) Close() error {
 	return mmtr.tableReader.Close()
 }
 
-func (mmtr *mmapTableReader) Clone() (chunkSource, error) {
+func (mmtr *fileTableReader) Clone() (chunkSource, error) {
 	tr, err := mmtr.tableReader.Clone()
 	if err != nil {
-		return &mmapTableReader{}, err
+		return &fileTableReader{}, err
 	}
-	return &mmapTableReader{tr, mmtr.fc, mmtr.h}, nil
+	return &fileTableReader{tr, mmtr.fc, mmtr.h}, nil
 }
 
 type cacheReaderAt struct {
