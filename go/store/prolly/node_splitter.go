@@ -170,11 +170,10 @@ func rollingHashPattern(offset uint32) uint32 {
 // is computed directly from the chunk size and count, the practical difference in
 // the distribution of chunk sizes is minimal.
 //
-// keySplitter uses a dynamic hash pattern designed to constrain the chunk size
-// distribution by reducing the likelihood of forming very large or very small chunks.
-// As the size of the current chunk grows, keySplitter changes the target pattern to
-// make it easier to match. The result is a chunk size distribution that is closer to
-// a binomial distribution, rather than geometric.
+// keySplitter uses a dynamic threshold modeled on a weibull distribution
+// (https://en.wikipedia.org/wiki/Weibull_distribution). As the size of the current
+// trunk increases, it becomes easier to pass the threshold, reducing the likelihood
+// of forming very large or very small chunks.
 type keySplitter struct {
 	count, size     uint32
 	crossedBoundary bool

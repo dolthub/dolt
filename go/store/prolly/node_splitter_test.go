@@ -37,6 +37,37 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
+func init() {
+	benchData = make([][24]byte, 100_000)
+	buf := make([]byte, 24*100_000)
+	rand.Read(buf)
+	for i := range benchData {
+		start, stop := i*24, (i+1)*24
+		copy(benchData[i][:], buf[start:stop])
+	}
+}
+
+var benchData [][24]byte
+
+func BenchmarkRollingHashSplitter(b *testing.B) {
+	benchmarkNodeSplitter(b, newRollingHashSplitter(0))
+}
+
+func BenchmarkKeySplitter(b *testing.B) {
+	benchmarkNodeSplitter(b, newKeySplitter(0))
+}
+
+func benchmarkNodeSplitter(b *testing.B, split nodeSplitter) {
+	for i := 0; i < b.N; i++ {
+		j := i % len(benchData)
+		err := split.Append(benchData[j][:8], benchData[j][8:])
+		assert.NoError(b, err)
+		if split.CrossedBoundary() {
+			split.Reset()
+		}
+	}
+}
+
 func TestKeySplitterDistribution(t *testing.T) {
 	t.Skip("unskip for metrics")
 
