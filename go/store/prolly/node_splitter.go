@@ -22,8 +22,10 @@
 package prolly
 
 import (
+	"crypto/sha512"
+	"encoding/binary"
 	"fmt"
-	"math/bits"
+	"math"
 
 	"github.com/kch42/buzhash"
 	"github.com/zeebo/xxh3"
@@ -33,6 +35,24 @@ const (
 	minChunkSize = 1 << 9
 	maxChunkSize = 1 << 14
 )
+
+var levelSalt = [...]uint64{
+	saltFromLevel(1),
+	saltFromLevel(2),
+	saltFromLevel(3),
+	saltFromLevel(4),
+	saltFromLevel(5),
+	saltFromLevel(6),
+	saltFromLevel(7),
+	saltFromLevel(8),
+	saltFromLevel(9),
+	saltFromLevel(10),
+	saltFromLevel(11),
+	saltFromLevel(12),
+	saltFromLevel(13),
+	saltFromLevel(14),
+	saltFromLevel(15),
+}
 
 //  splitterFactory makes a nodeSplitter.
 type splitterFactory func(level uint8) nodeSplitter
@@ -159,17 +179,22 @@ type keySplitter struct {
 	count, size     uint32
 	crossedBoundary bool
 
-	salt uint32
+	salt uint64
 }
 
 const (
-	// log2MidPoint is 2^31.5
-	log2MidPoint = 0b10110101000001001111001100110011
+	targetSize float64 = 4096
+	maxUint32  float64 = math.MaxUint32
+
+	// weibull params
+	K  = 5.0
+	B  = 2.0 / (3.0 * targetSize)
+	KB = K * B
 )
 
 func newKeySplitter(level uint8) nodeSplitter {
 	return &keySplitter{
-		salt: xxHash32([]byte{level}, 0),
+		salt: levelSalt[level],
 	}
 }
 
@@ -191,9 +216,9 @@ func (ks *keySplitter) Append(items ...nodeItem) error {
 		return nil
 	}
 
-	p := ks.getPattern()
+	t := ks.getThreshold()
 	h := xxHash32(items[0], ks.salt)
-	ks.crossedBoundary = h&p == p
+	ks.crossedBoundary = h < t
 	return nil
 }
 
@@ -206,30 +231,23 @@ func (ks *keySplitter) Reset() {
 	ks.crossedBoundary = false
 }
 
-// getPattern computes the target pattern for the keySplitter
-// from its current state, taking into consideration the
-// number of nodeItem pairs and their average size.
-// The computed pattern becomes easier to match as the total
-// size of the current node/chunk increases.
-func (ks *keySplitter) getPattern() uint32 {
-	avgSz := ks.size / ks.count
-	hi := 16 - roundLog2(avgSz)
-	lo := 10 - roundLog2(avgSz)
-	shift := hi - (ks.count >> lo)
-	return 1<<shift - 1
+// getThreshold computes the current probability threshold using the weibull distribution.
+// see: https://en.wikipedia.org/wiki/Weibull_distribution#Alternative_parameterizations
+func (ks *keySplitter) getThreshold() uint32 {
+	avgSz := float64(ks.size) / float64(ks.count)
+	x := float64(ks.size) / targetSize
+
+	x4 := x * x * x * x // x ^ (K-1)
+	x5 := x * x4        // x ^  K
+	p := KB * x4 * math.Exp(-B*x5)
+	return uint32(p * maxUint32 * avgSz)
 }
 
-// roundLog2 is an optimized version of
-// uint32(math.Round(math.Log2(sz)))
-func roundLog2(sz uint32) (lg uint32) {
-	// invariant: |sz| > 1
-	lg = uint32(bits.Len32(sz) - 1)
-	if sz > (log2MidPoint >> (31 - lg)) {
-		lg++
-	}
-	return
+func xxHash32(b []byte, salt uint64) uint32 {
+	return uint32(xxh3.HashSeed(b, salt))
 }
 
-func xxHash32(b []byte, salt uint32) uint32 {
-	return uint32(xxh3.Hash(b)) ^ salt
+func saltFromLevel(level uint8) (salt uint64) {
+	full := sha512.Sum512([]byte{level})
+	return binary.LittleEndian.Uint64(full[:8])
 }

@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/bits"
 	"math/rand"
 	"testing"
 
@@ -36,34 +37,25 @@ import (
 	"gonum.org/v1/plot/vg"
 )
 
-const keySplitterScale = 100_000
-
 func TestKeySplitterDistribution(t *testing.T) {
 	factory := newKeySplitter
 	t.Run("24", func(t *testing.T) {
-		nd, ns := makeProllyTreeWithSizes(t, factory, 8, 16)
+		scale := 1_000_000
+		nd, ns := makeProllyTreeWithSizes(t, factory, scale, 8, 16)
 		printTreeSummaryByLevel(t, nd, ns)
 		//plotNodeSizeDistribution(t, "prolly_8_16.png", nd, ns)
 	})
 	t.Run("sizes (8,54)", func(t *testing.T) {
 		for sz := 8; sz <= 54; sz++ {
 			fmt.Println(fmt.Sprintf("summary for map size %d", sz))
-			nd, ns := makeProllyTreeWithSizes(t, factory, sz, 0)
+			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
 			printTreeSummaryByLevel(t, nd, ns)
 			fmt.Println()
 		}
 	})
 }
 
-func TestRoundLog2(t *testing.T) {
-	for i := 1; i < 16384; i++ {
-		exp := int(math.Round(math.Log2(float64(i))))
-		act := int(roundLog2(uint32(i)))
-		assert.Equal(t, exp, act)
-	}
-}
-
-func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, keySz, valSz int) (nd Node, ns NodeStore) {
+func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, valSz int) (nd Node, ns NodeStore) {
 	pro := gaussianItems{
 		keyMean: float64(keySz),
 		keyStd:  float64(keySz) / 4,
@@ -77,7 +69,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, keySz, valSz in
 	chunker, err := newEmptyTreeChunker(ctx, ns, fact)
 	require.NoError(t, err)
 
-	for i := 0; i < keySplitterScale; i++ {
+	for i := 0; i < scale; i++ {
 		k, v := pro.Next()
 		_, err = chunker.append(ctx, k, v, 1)
 		require.NoError(t, err)
@@ -133,7 +125,7 @@ func plotIntHistogram(name string, data []int) {
 	p := plot.New()
 	p.Title.Text = "histogram plot"
 
-	hist, err := plotter.NewHist(values, 100)
+	hist, err := plotter.NewHist(values, 50)
 	if err != nil {
 		panic(err)
 	}
@@ -166,6 +158,43 @@ func (g gaussianItems) sample(mean, std float64) (s int) {
 	s = int(math.Round(g.r.NormFloat64()*std + mean))
 	if s < 0 {
 		s = 0
+	}
+	return
+}
+
+type staticItems struct {
+	key, value int
+}
+
+func (s staticItems) Next() (key, value nodeItem) {
+	key = make(nodeItem, s.key)
+	value = make(nodeItem, s.value)
+	rand.Read(key)
+	rand.Read(value)
+	return
+}
+
+func TestRoundLog2(t *testing.T) {
+	for i := 1; i < 16384; i++ {
+		exp := int(math.Round(math.Log2(float64(i))))
+		act := int(roundLog2(uint32(i)))
+		assert.Equal(t, exp, act)
+	}
+}
+
+const (
+	// log2MidPoint is 2^31.5
+	log2MidPoint = 0b10110101000001001111001100110011
+)
+
+// roundLog2 is an optimized version of
+// uint32(math.Round(math.Log2(sz)))
+// note: not currently used in any splitter
+func roundLog2(sz uint32) (lg uint32) {
+	// invariant: |sz| > 1
+	lg = uint32(bits.Len32(sz) - 1)
+	if sz > (log2MidPoint >> (31 - lg)) {
+		lg++
 	}
 	return
 }
