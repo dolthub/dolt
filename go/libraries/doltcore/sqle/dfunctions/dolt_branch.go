@@ -35,10 +35,12 @@ const DoltBranchFuncName = "dolt_branch"
 var EmptyBranchNameErr = errors.New("error: cannot branch empty string")
 var InvalidArgErr = errors.New("error: invalid usage")
 
+// Deprecated: please use the version in the dprocedures package
 type DoltBranchFunc struct {
 	expression.NaryExpression
 }
 
+// Deprecated: please use the version in the dprocedures package
 func NewDoltBranchFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltBranchFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -62,20 +64,21 @@ func (d DoltBranchFunc) WithChildren(children ...sql.Expression) (sql.Expression
 }
 
 func (d DoltBranchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return 1, err
+	}
+	return DoDoltBranch(ctx, args)
+}
+
+func DoDoltBranch(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	ap := cli.CreateBranchArgParser()
-
-	args, err := getDoltArgs(ctx, row, d.Children())
-	if err != nil {
-		return 1, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateBranchArgParser().Parse(args)
 	if err != nil {
 		return 1, err
 	}

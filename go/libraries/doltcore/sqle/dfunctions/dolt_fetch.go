@@ -35,11 +35,13 @@ const (
 	cmdSuccess = 1
 )
 
+// Deprecated: please use the version in the dprocedures package
 type DoltFetchFunc struct {
 	expression.NaryExpression
 }
 
 // NewFetchFunc creates a new FetchFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewFetchFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltFetchFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -63,6 +65,14 @@ func (d DoltFetchFunc) WithChildren(children ...sql.Expression) (sql.Expression,
 }
 
 func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return cmdFailure, err
+	}
+	return DoDoltFetch(ctx, args)
+}
+
+func DoDoltFetch(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -75,13 +85,7 @@ func (d DoltFetchFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) 
 		return cmdFailure, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	ap := cli.CreateFetchArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-	if err != nil {
-		return cmdFailure, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateFetchArgParser().Parse(args)
 	if err != nil {
 		return cmdFailure, err
 	}
