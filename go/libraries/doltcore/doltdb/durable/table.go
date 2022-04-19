@@ -18,12 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -90,12 +94,18 @@ type Table interface {
 	GetAutoIncrement(ctx context.Context) (uint64, error)
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
 	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
+
+	// AddColumnToRows adds the column given to the rows data and returns the resulting table.
+	// The |newCol| is present in |newSchema|.
+	AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Table, error)
 }
 
 type nomsTable struct {
 	vrw         types.ValueReadWriter
 	tableStruct types.Struct
 }
+
+var sharePool = pool.NewBuffPool()
 
 var _ Table = nomsTable{}
 
@@ -491,6 +501,79 @@ func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 		return nil, err
 	}
 	return nomsTable{t.vrw, st}, nil
+}
+
+func (t nomsTable) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Table, error){
+	// The old storage format never needs to rewrite table rows when adding a column
+	if !types.IsFormat_DOLT_1(t.Format()) {
+		return t, nil
+	}
+
+	var last bool
+	colIdx, i := 0, 0
+	newSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		last = false
+		if strings.ToLower(col.Name) == strings.ToLower(newCol) {
+			last = true
+			colIdx = i
+		}
+		i++
+		return false, nil
+	})
+
+	// If the column we added was last among non-primary key columns we can skip this step
+	if last {
+		return t, nil
+	}
+
+	// If not, then we have to iterate over this table's rows and update all the offsets for the new column
+	rows, err := t.GetTableRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rowMap := ProllyMapFromIndex(rows)
+	mutator := rowMap.Mutate()
+
+	iter, err := mutator.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-write all the rows, inserting a zero-byte field in every value tuple
+	_, valDesc := rowMap.Descriptors()
+	b := val.NewTupleBuilder(valDesc)
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			b.Recycle()
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		for i := 0; i < colIdx; i++ {
+			b.PutRaw(i, v.GetField(i))
+		}
+		b.PutRaw(colIdx, nil)
+		for i := colIdx; i < v.Count(); i++ {
+			b.PutRaw(i+1, v.GetField(i))
+		}
+
+		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool))
+		if err != nil {
+			return nil, err
+		}
+
+		b.Recycle()
+	}
+
+	newRowData, err := mutator.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return t.SetTableRows(ctx, IndexFromProllyMap(newRowData))
 }
 
 func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

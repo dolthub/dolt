@@ -18,12 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -94,90 +90,8 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	return rewriteTableDataForNewColumn(ctx, newTable, newColName, newSchema)
-}
-
-var sharePool = pool.NewBuffPool()
-
-// rewriteTableDataForNewColumn updates the table data with the new column, as required. This is only necessary on some
-// storage formats. Rewriting the rows of the table is necessary except when the column added is last and nullable.
-// Adding a column anywhere in the middle of the schema, or a non-nullable column, rewrites the table.
-// TODO: we do a second pass in the engine to set the defaults. We should only do a single table scan.
-func rewriteTableDataForNewColumn(
-		ctx context.Context,
-		table *doltdb.Table,
-		newCol string,
-		newSchema schema.Schema,
-) (*doltdb.Table, error) {
-	if !types.IsFormat_DOLT_1(table.Format()) {
-		return table, nil
-	}
-
-	var last bool
-	colIdx, i := 0, 0
-	newSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		last = false
-		if strings.ToLower(col.Name) == strings.ToLower(newCol) {
-			last = true
-			colIdx = i
-		}
-		i++
-		return false, nil
-	})
-
-	// If the column we added was last among non-primary key columns we can skip this step
-	if last {
-		return table, nil
-	}
-
-	// If not, then we have to iterate over this table's rows and update all the offsets for the new column
-	rows, err := table.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	rowMap := durable.ProllyMapFromIndex(rows)
-	mutator := rowMap.Mutate()
-
-	iter, err := mutator.IterAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Re-write all the rows, inserting a zero-byte field in every value tuple
-	_, valDesc := rowMap.Descriptors()
-	b := val.NewTupleBuilder(valDesc)
-	for {
-		k, v, err := iter.Next(ctx)
-		if err == io.EOF {
-			b.Recycle()
-			break
-		} else if err != nil {
-			return nil, err
-		}
-
-		for i := 0; i < colIdx; i++ {
-			b.PutRaw(i, v.GetField(i))
-		}
-		b.PutRaw(colIdx, nil)
-		for i := colIdx; i < v.Count(); i++ {
-			b.PutRaw(i+1, v.GetField(i))
-		}
-
-		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool))
-		if err != nil {
-			return nil, err
-		}
-
-		b.Recycle()
-	}
-
-	newRowData, err := mutator.Map(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return table.UpdateRows(ctx, durable.IndexFromProllyMap(newRowData))
+	// TODO: we do a second pass in the engine to set a default if there is one. We should only do a single table scan.
+	return newTable.AddColumnToRows(ctx, newColName, newSchema)
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
