@@ -371,6 +371,7 @@ type doltTableInterface interface {
 	sql.ReplaceableTable
 	sql.AutoIncrementTable
 	sql.TruncateableTable
+	sql.ProjectedTable
 }
 
 func (t *WritableDoltTable) setRoot(ctx *sql.Context, newRoot *doltdb.RootValue) error {
@@ -384,9 +385,10 @@ func (t *WritableDoltTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 	}
 }
 
-func (t *WritableDoltTable) WithProjection(colNames []string) sql.Table {
+// WithProjections implements sql.ProjectedTable
+func (t *WritableDoltTable) WithProjections(colNames []string) sql.Table {
 	return &WritableDoltTable{
-		DoltTable: t.DoltTable.WithProjection(colNames).(*DoltTable),
+		DoltTable: t.DoltTable.WithProjections(colNames).(*DoltTable),
 		db:        t.db,
 		ed:        t.ed,
 	}
@@ -714,13 +716,16 @@ func (t DoltTable) GetForeignKeyUpdater(ctx *sql.Context) sql.ForeignKeyUpdater 
 	return nil
 }
 
-func (t *DoltTable) Projection() []string {
+// Projections implements sql.ProjectedTable
+func (t *DoltTable) Projections() []string {
 	return t.projectedCols
 }
 
-func (t DoltTable) WithProjection(colNames []string) sql.Table {
-	t.projectedCols = colNames
-	return &t
+// WithProjections implements sql.ProjectedTable
+func (t *DoltTable) WithProjections(colNames []string) sql.Table {
+	nt := *t
+	nt.projectedCols = colNames
+	return &nt
 }
 
 var _ sql.PartitionIter = (*doltTablePartitionIter)(nil)
@@ -871,18 +876,18 @@ type doltAlterableTableInterface interface {
 	sql.ForeignKeyTable
 	sql.CheckAlterableTable
 	sql.PrimaryKeyAlterableTable
+	sql.ProjectedTable
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
 
+func (t *AlterableDoltTable) WithProjections(colNames []string) sql.Table {
+	return &AlterableDoltTable{WritableDoltTable: *t.WritableDoltTable.WithProjections(colNames).(*WritableDoltTable)}
+}
+
 // AddColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, order *sql.ColumnOrder) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	root, err := t.getRoot(ctx)
-
 	if err != nil {
 		return err
 	}

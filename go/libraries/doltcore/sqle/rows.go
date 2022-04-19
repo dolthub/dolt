@@ -186,7 +186,7 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 	return index.NewProllyRowIter(ctx, sch, rows, iter, projections)
 }
 
-// Returns a |sql.RowIter| for a full table scan for the given |table|. If
+// TableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
 // |columns| is not empty, only columns with names appearing in |columns| will
 // have non-|nil| values in the resulting |sql.Row|s. If |columns| is empty,
 // values for all columns in the table are populated in each returned Row. The

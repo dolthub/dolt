@@ -85,10 +85,20 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	return tbl.UpdateSchema(ctx, newSchema)
+	// if types.IsFormat_DOLT_1(t.nbf) {
+	// 	return nil
+	// }
+
+	newTable, err := tbl.UpdateSchema(ctx, newSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return newTable, nil
 }
 
 // addColumnToSchema creates a new schema with a column as specified by the params.
+// TODO: make this a schema operation, not in this package
 func addColumnToSchema(
 	sch schema.Schema,
 	tag uint64,

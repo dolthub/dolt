@@ -161,7 +161,9 @@ func argumentToValue(ctx context.Context, arg string, db datas.Database, vrw typ
 	if arg[0] == '@' {
 		p, err := spec.NewAbsolutePath(arg[1:])
 		d.PanicIfError(err)
-		return p.Resolve(ctx, db, vrw), nil
+		resolve, err := p.Resolve(ctx, db, vrw)
+		d.PanicIfError(err)
+		return resolve, nil
 	}
 	if n, err := strconv.ParseFloat(arg, 64); err == nil {
 		return types.Float(n), nil

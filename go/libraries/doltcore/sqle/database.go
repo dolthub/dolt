@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dprocedures"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
@@ -162,6 +163,7 @@ var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TableRenamer = Database{}
 var _ sql.TriggerDatabase = Database{}
 var _ sql.StoredProcedureDatabase = Database{}
+var _ sql.ExternalStoredProcedureDatabase = Database{}
 var _ sql.TransactionDatabase = Database{}
 var _ globalstate.StateProvider = Database{}
 
@@ -974,6 +976,11 @@ func (db Database) SaveStoredProcedure(ctx *sql.Context, spd sql.StoredProcedure
 // DropStoredProcedure implements sql.StoredProcedureDatabase.
 func (db Database) DropStoredProcedure(ctx *sql.Context, name string) error {
 	return DoltProceduresDropProcedure(ctx, db, name)
+}
+
+// GetExternalStoredProcedures implements sql.ExternalStoredProcedureDatabase.
+func (db Database) GetExternalStoredProcedures(ctx *sql.Context) ([]sql.ExternalStoredProcedureDetails, error) {
+	return dprocedures.DoltProcedures, nil
 }
 
 func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (retErr error) {

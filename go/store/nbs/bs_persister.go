@@ -17,7 +17,6 @@ package nbs
 import (
 	"context"
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/store/blobstore"
 	"github.com/dolthub/dolt/go/store/chunks"
@@ -96,35 +95,21 @@ func (bsTRA *bsTableReaderAt) ReadAtWithStats(ctx context.Context, p []byte, off
 	return totalRead, nil
 }
 
-func loadTableIndex(stats *Stats, chunkCount uint32, q MemoryQuotaProvider, getBytesFromEnd func(n int64) ([]byte, error)) (onHeapTableIndex, error) {
-	size := indexSize(chunkCount) + footerSize
-	t1 := time.Now()
-	bytes, err := getBytesFromEnd(int64(size))
-	if err != nil {
-		return onHeapTableIndex{}, err
-	}
-	stats.IndexReadLatency.SampleTimeSince(t1)
-	stats.IndexBytesPerRead.Sample(uint64(len(bytes)))
-
-	return parseTableIndex(bytes, q)
-}
-
 func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, chunkCount uint32, blockSize uint64, q MemoryQuotaProvider, stats *Stats) (cs chunkSource, err error) {
 
-	index, err := loadTableIndex(stats, chunkCount, q, func(size int64) ([]byte, error) {
-		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-size, 0))
+	index, err := loadTableIndex(stats, chunkCount, q, func(p []byte) error {
+		rc, _, err := bs.Get(ctx, name.String(), blobstore.NewBlobRange(-int64(len(p)), 0))
 		if err != nil {
-			return nil, err
+			return err
 		}
 		defer rc.Close()
 
-		buff := make([]byte, size)
-		_, err = io.ReadFull(rc, buff)
+		_, err = io.ReadFull(rc, p)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return buff, nil
+		return nil
 	})
 	if err != nil {
 		return nil, err
@@ -132,6 +117,7 @@ func newBSChunkSource(ctx context.Context, bs blobstore.Blobstore, name addr, ch
 
 	tr, err := newTableReader(index, &bsTableReaderAt{name.String(), bs}, s3BlockSize)
 	if err != nil {
+		_ = index.Close()
 		return nil, err
 	}
 	return &chunkSourceAdapter{tr, name}, nil

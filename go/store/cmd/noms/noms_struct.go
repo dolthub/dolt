@@ -107,7 +107,12 @@ func nomsStructDel(ctx context.Context, specStr string, args []string) int {
 func splitPath(ctx context.Context, db datas.Database, sp spec.Spec) (rootVal types.Value, basePath types.Path) {
 	rootPath := sp.Path
 	rootPath.Path = types.Path{}
-	rootVal = rootPath.Resolve(ctx, db, sp.GetVRW(ctx))
+	var err error
+	rootVal, err = rootPath.Resolve(ctx, db, sp.GetVRW(ctx))
+	if err != nil {
+		panic(err)
+	}
+
 	if rootVal == nil {
 		util.CheckError(fmt.Errorf("Invalid path: %s", sp.String()))
 		return
