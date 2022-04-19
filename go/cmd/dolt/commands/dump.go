@@ -43,7 +43,6 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 	batchFlag     = "batch"
-	hexBlobFlag   = "hex-blob"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -87,7 +86,6 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
-	ap.SupportsFlag(hexBlobFlag, "f", "Dump binary columns using hexadecimal notation The affected data types are BINARY, VARBINARY, BLOB types, BIT, all spatial data types, and other non-binary data types when used with the binary character set")
 	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv, json and parquet.")
 	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
 	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
