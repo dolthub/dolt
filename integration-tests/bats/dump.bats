@@ -10,6 +10,10 @@ teardown() {
     teardown_common
 }
 
+@test "dump: read mysqldump with spatial types using --hex-blob" {
+      dolt sql < $BATS_TEST_DIRNAME/helper/spatial-mysqldump-hex-blob.sql
+}
+
 @test "dump: no tables" {
     run dolt dump
     [ "$status" -eq 0 ]
