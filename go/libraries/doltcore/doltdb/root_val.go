@@ -1507,7 +1507,6 @@ func (r fbRvStorage) DebugString(ctx context.Context) string {
 		"...", // TODO: Print out tables map
 		hash.New(r.srv.ForeignKeyAddrBytes()).String(),
 		hash.New(r.srv.SuperSchemasAddrBytes()).String())
-	return "fbRvStorage ["
 }
 
 func (r fbRvStorage) nomsValue() types.Value {
