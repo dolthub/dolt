@@ -591,7 +591,7 @@ func (es emptySequence) format() *NomsBinFormat {
 	return es.nbf
 }
 
-func (es emptySequence) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (es emptySequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

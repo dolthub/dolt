@@ -294,7 +294,7 @@ func (tc *treeChunker) appendToParent(ctx context.Context, novel novelNode) (boo
 		}
 	}
 
-	return tc.parent.append(ctx, novel.lastKey, novel.ref[:], novel.treeCount)
+	return tc.parent.append(ctx, novel.lastKey, novel.addr[:], novel.treeCount)
 }
 
 func (tc *treeChunker) handleChunkBoundary(ctx context.Context) error {

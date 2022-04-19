@@ -135,7 +135,7 @@ func (q *q) Get(ctx context.Context, ddb *doltdb.DoltDB, id hash.Hash) (*c, erro
 	if err != nil {
 		return nil, err
 	}
-	meta, err := l.GetCommitMeta()
+	meta, err := l.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}

@@ -174,6 +174,9 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 	if err != nil {
 		return nil, err
 	}
+	if partition.end > uint64(rows.Count()) {
+		partition.end = uint64(rows.Count())
+	}
 
 	iter, err := rows.IterOrdinalRange(ctx, partition.start, partition.end)
 	if err != nil {
@@ -183,7 +186,7 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 	return index.NewProllyRowIter(ctx, sch, rows, iter, projections)
 }
 
-// Returns a |sql.RowIter| for a full table scan for the given |table|. If
+// TableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
 // |columns| is not empty, only columns with names appearing in |columns| will
 // have non-|nil| values in the resulting |sql.Row|s. If |columns| is empty,
 // values for all columns in the table are populated in each returned Row. The
@@ -195,6 +198,7 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 	if err != nil {
 		return nil, err
 	}
+
 	data, err := t.GetRowData(ctx)
 	if err != nil {
 		return nil, err

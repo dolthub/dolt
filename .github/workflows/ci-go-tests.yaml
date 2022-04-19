@@ -18,6 +18,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-latest]
+        dolt_fmt: [ "" ]
+        include:
+          - os: "ubuntu-18.04"
+            dolt_fmt: "__DOLT_DEV__"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -28,6 +32,7 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: |
+        if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
         files=$(go list ./...)
 
         SAVEIFS=$IFS
@@ -43,9 +48,9 @@ jobs:
           echo "Testing Package: ${file_arr[$i]}"
           if [ "$MATRIX_OS" == 'ubuntu-18.04' ]
           then
-            go test -timeout 30m -race "${file_arr[$i]}"
+            go test -timeout 45m -race "${file_arr[$i]}"
           else
-            go test -timeout 30m "${file_arr[$i]}"
+            go test -timeout 45m "${file_arr[$i]}"
           fi
           succeeded=$(echo "$?")
           if [ "$succeeded" -ne 0 ]; then
@@ -55,6 +60,7 @@ jobs:
         done
       env:
         MATRIX_OS: ${{ matrix.os }}
+        DOLT_FMT: ${{ matrix.dolt_fmt }}
   noracetest:
     name: Go tests - no race
     defaults:
@@ -65,6 +71,10 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-latest]
+        dolt_fmt: [ "" ]
+        include:
+          - os: "ubuntu-18.04"
+            dolt_fmt: "__DOLT_DEV__"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -75,8 +85,10 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: |
+        if [ -n "$DOLT_FMT" ]; then export DOLT_DEFAULT_BIN_FORMAT="$DOLT_FMT"; fi
         go test -timeout 30m ./libraries/doltcore/sqle/altertests
         go test -timeout 30m ./libraries/doltcore/sqle/integration_test
       env:
+        DOLT_FMT: ${{ matrix.dolt_fmt }}
         MATRIX_OS: ${{ matrix.os }}
         DOLT_TEST_RUN_NON_RACE_TESTS: "true"

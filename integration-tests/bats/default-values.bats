@@ -487,3 +487,83 @@ DELIM
     [[ "$output" =~ "Bad Row: [5,<nil>,5]" ]] || false
     [[ "$output" =~ "column name 'v1' is non-nullable but attempted to set a value of null" ]] || false
 }
+
+@test "default-values: Defining literal default value to NULL or EMPTY value in ALTER TABLE" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT, c3 INT)"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,YES," ]] || false
+    [[ "$output" =~ "c2,YES," ]] || false
+    [[ "$output" =~ "c3,YES," ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 INT NULL DEFAULT NULL"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 varchar(4) NOT NULL DEFAULT ''"
+    dolt sql -q "ALTER TABLE test CHANGE c3 c3 varchar(4) NOT NULL DEFAULT 'ln'"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,YES," ]] || false
+    [[ "$output" =~ "c2,NO," ]] || false
+    [[ "$output" =~ "c3,NO,ln" ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 FLOAT NOT NULL DEFAULT '4.44'"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 DOUBLE NOT NULL DEFAULT '3.333'"
+    dolt sql -q "ALTER TABLE test CHANGE c3 c3 BOOLEAN NULL DEFAULT FALSE"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,NO,4.44" ]] || false
+    [[ "$output" =~ "c2,NO,3.333" ]] || false
+    [[ "$output" =~ "c3,YES,false" ]] || false
+
+    dolt sql -q "ALTER TABLE test CHANGE c1 c1 DATETIME NOT NULL DEFAULT '2020-04-01 16:16:16'"
+    dolt sql -q "ALTER TABLE test CHANGE c2 c2 TIMESTAMP NULL DEFAULT '2008-04-22 16:16:16'"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ "c1,NO,2020-04-01 16:16:16" ]] || false
+    [[ "$output" =~ "c2,YES,2008-04-22 16:16:16" ]] || false
+    [[ "$output" =~ "c3,YES,false" ]] || false
+}
+
+@test "default-values: Function default values are correctly represented in the information_schema.columns table" {
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 SMALLINT DEFAULT (GREATEST(pk, 2)))"
+    run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "pk,NO," ]] || false
+    [[ "$output" =~ 'v1,YES,"GREATEST(pk, 2)"' ]] || false
+}
+
+@test "default-values: Additional test with function defaults" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20), height int)"
+    dolt sql -q "ALTER TABLE test_table CHANGE fname col2 float NOT NULL DEFAULT length('hello')"
+    dolt sql -q "ALTER TABLE test_table CHANGE lname col3 double NOT NULL DEFAULT ROUND(-1.58)"
+    dolt sql -q "ALTER TABLE test_table CHANGE height col4 float NULL DEFAULT RAND()"
+
+    run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns WHERE table_name = 'test_table'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,column_default" ]] || false
+    [[ "$output" =~ "pk," ]] || false
+    [[ "$output" =~ 'col2,"LENGTH(""hello"")"' ]] || false
+    [[ "$output" =~ 'col3,"ROUND(-1.58, 0)"' ]] || false
+    [[ "$output" =~ 'col4,RAND()' ]] || false
+}
+
+@test "default-values: Outputting the string version of a more complex default value works" {
+    dolt sql -q "CREATE TABLE test_table (pk int primary key, fname varchar(20), lname varchar(20))"
+		dolt sql -q "ALTER TABLE test_table CHANGE fname col2 INT NULL DEFAULT (RAND()+RAND());"
+		dolt sql -q "ALTER TABLE test_table CHANGE lname col3 BOOLEAN NULL DEFAULT (CASE pk WHEN 1 THEN false ELSE true END);"
+
+    run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns where table_name='test_table'" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,column_default" ]] || false
+    [[ "$output" =~ "pk," ]] || false
+    [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
+    [[ "$output" =~ "col3,CASE pk WHEN 1 THEN false ELSE true END" ]] || false
+}

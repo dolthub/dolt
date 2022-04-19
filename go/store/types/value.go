@@ -106,12 +106,12 @@ type Value interface {
 	// Type()
 	WalkValues(context.Context, ValueCallback) error
 
-	// WalkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
-	// chunked then this will return the refs of th sub trees of the prolly-tree.
-	WalkRefs(*NomsBinFormat, RefCallback) error
-
 	// HumanReadableString returns a human-readable string version of this Value (not meant for re-parsing)
 	HumanReadableString() string
+
+	// walkRefs iterates over the refs to the underlying chunks. If this value is a collection that has been
+	// chunked then this will return the refs of th sub trees of the prolly-tree.
+	walkRefs(*NomsBinFormat, RefCallback) error
 
 	// typeOf is the internal implementation of types.TypeOf. It is not normalized
 	// and unions might have a single element, duplicates and be in the wrong
@@ -293,7 +293,7 @@ func (v valueImpl) Compare(nbf *NomsBinFormat, other LesserValuable) (int, error
 	return valueCompare(nbf, v, other.(Value))
 }
 
-func (v valueImpl) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v valueImpl) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	w := binaryNomsWriter{make([]byte, len(v.buff)+1), 0}
 	err := v.writeTo(&w, nbf)
 

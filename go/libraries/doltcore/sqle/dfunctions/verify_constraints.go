@@ -33,6 +33,7 @@ const (
 )
 
 // ConstraintsVerifyFunc represents the sql functions "verify_constraints" and "verify_constraints_all".
+// Deprecated: please use the version in the dprocedures package
 type ConstraintsVerifyFunc struct {
 	expression.NaryExpression
 	isAll bool
@@ -41,71 +42,81 @@ type ConstraintsVerifyFunc struct {
 var _ sql.Expression = (*ConstraintsVerifyFunc)(nil)
 
 // NewConstraintsVerifyFunc creates a new ConstraintsVerifyFunc expression that verifies the diff.
+// Deprecated: please use the version in the dprocedures package
 func NewConstraintsVerifyFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &ConstraintsVerifyFunc{expression.NaryExpression{ChildExpressions: args}, false}, nil
 }
 
 // NewConstraintsVerifyAllFunc creates a new ConstraintsVerifyFunc expression that verifies all rows.
+// Deprecated: please use the version in the dprocedures package
 func NewConstraintsVerifyAllFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &ConstraintsVerifyFunc{expression.NaryExpression{ChildExpressions: args}, true}, nil
 }
 
 // Eval implements the Expression interface.
 func (vc *ConstraintsVerifyFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	vals := make([]string, len(vc.ChildExpressions))
+	for i, expr := range vc.ChildExpressions {
+		evaluatedVal, err := expr.Eval(ctx, row)
+		if err != nil {
+			return 1, err
+		}
+		val, ok := evaluatedVal.(string)
+		if !ok {
+			return 1, sql.ErrUnexpectedType.New(i, reflect.TypeOf(evaluatedVal))
+		}
+		vals[i] = val
+	}
+	return DoDoltConstraintsVerify(ctx, vc.isAll, vals)
+}
+
+func DoDoltConstraintsVerify(ctx *sql.Context, isAll bool, vals []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	workingRoot := workingSet.WorkingRoot()
 	var comparingRoot *doltdb.RootValue
-	if vc.isAll {
+	if isAll {
 		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW())
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 	} else {
 		headCommit, err := dSess.GetHeadCommit(ctx, dbName)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
-		comparingRoot, err = headCommit.GetRootValue()
+		comparingRoot, err = headCommit.GetRootValue(ctx)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 	}
 
 	tableSet := set.NewStrSet(nil)
-	for i, expr := range vc.ChildExpressions {
-		evaluatedVal, err := expr.Eval(ctx, row)
-		if err != nil {
-			return nil, err
-		}
-		val, ok := evaluatedVal.(string)
-		if !ok {
-			return nil, sql.ErrUnexpectedType.New(i, reflect.TypeOf(evaluatedVal))
-		}
+	for _, val := range vals {
 		_, tableName, ok, err := workingRoot.GetTableInsensitive(ctx, val)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		if !ok {
-			return nil, sql.ErrTableNotFound.New(tableName)
+			return 1, sql.ErrTableNotFound.New(tableName)
 		}
 		tableSet.Add(tableName)
 	}
 
 	newRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, workingRoot, comparingRoot, tableSet)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	if tablesWithViolations.Size() == 0 {
 		return 1, nil
 	} else {
 		err = dSess.SetRoot(ctx, dbName, newRoot)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		return 0, nil
 	}

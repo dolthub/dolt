@@ -15,7 +15,6 @@
 package prolly
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/dolthub/vitess/go/vt/proto/query"
@@ -27,33 +26,12 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NewEmptyMap(sch schema.Schema) Map {
-	return Map{
-		root:    newNodeBuilder(0).build(sharedPool),
-		keyDesc: KeyDescriptorFromSchema(sch),
-		valDesc: ValueDescriptorFromSchema(sch),
-	}
-}
-
-// PartitionKeysFromMap naively divides the map by its top-level keys.
-func PartitionKeysFromMap(m Map) (keys []val.Tuple) {
-	keys = make([]val.Tuple, m.root.count)
-	for i := range keys {
-		keys[i] = val.Tuple(m.root.getKey(i))
-	}
-	return
-}
-
-func ValueFromNode(nd Node) types.Value {
-	return types.InlineBlob(nd.bytes())
-}
-
 func NodeFromValue(v types.Value) Node {
-	return mapNodeFromBytes(v.(types.InlineBlob))
+	return MapNodeFromBytes(v.(types.TupleRowStorage))
 }
 
 func ValueFromMap(m Map) types.Value {
-	return types.InlineBlob(m.root.bytes())
+	return types.TupleRowStorage(m.root.bytes())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
@@ -73,14 +51,6 @@ func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 		return x.ChunkStore()
 	}
 	panic("unknown ValueReadWriter")
-}
-
-func EmptyTreeChunkerFromMap(ctx context.Context, m Map) *treeChunker {
-	ch, err := newEmptyTreeChunker(ctx, m.ns, defaultSplitterFactory)
-	if err != nil {
-		panic(err)
-	}
-	return ch
 }
 
 func MapDescriptorsFromScheam(sch schema.Schema) (kd, vd val.TupleDesc) {
@@ -122,6 +92,7 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	return val.NewTupleDescriptor(tt...)
 }
 
+// todo(andy): move this to typeinfo
 func encodingFromSqlType(typ query.Type) val.Encoding {
 	// todo(andy): replace temp encodings
 	switch typ {

@@ -55,7 +55,7 @@ type sequence interface {
 	valueReadWriter() ValueReadWriter
 	valuesSlice(from, to uint64) ([]Value, error)
 	kvTuples(from, to uint64, dest []Tuple) ([]Tuple, error)
-	WalkRefs(nbf *NomsBinFormat, cb RefCallback) error
+	walkRefs(nbf *NomsBinFormat, cb RefCallback) error
 	writeTo(nomsWriter, *NomsBinFormat) error
 }
 

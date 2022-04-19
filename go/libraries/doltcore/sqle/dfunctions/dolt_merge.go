@@ -32,12 +32,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+// Deprecated: please use the version in the dprocedures package
 func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
 const DoltMergeFuncName = "dolt_merge"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltMergeFunc struct {
 	expression.NaryExpression
 }
@@ -50,10 +52,14 @@ const (
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return doDoltMerge(ctx, row, d.Children())
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltMerge(ctx, args)
 }
 
-func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
+func DoDoltMerge(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -62,14 +68,7 @@ func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interfa
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	ap := cli.CreateMergeArgParser()
-	args, err := getDoltArgs(ctx, row, exprs)
-
-	if err != nil {
-		return noConflicts, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateMergeArgParser().Parse(args)
 	if err != nil {
 		return noConflicts, err
 	}
@@ -253,7 +252,7 @@ func executeMerge(ctx *sql.Context, squash bool, head, cm *doltdb.Commit, ws *do
 }
 
 func executeFFMerge(ctx *sql.Context, dbName string, squash bool, ws *doltdb.WorkingSet, dbData env.DbData, cm2 *doltdb.Commit) (*doltdb.WorkingSet, error) {
-	rv, err := cm2.GetRootValue()
+	rv, err := cm2.GetRootValue(ctx)
 	if err != nil {
 		return ws, err
 	}
@@ -298,7 +297,7 @@ func executeNoFFMerge(
 	dbData env.DbData,
 	//headCommit, mergeCommit *doltdb.Commit,
 ) (*doltdb.WorkingSet, error) {
-	mergeRoot, err := spec.MergeC.GetRootValue()
+	mergeRoot, err := spec.MergeC.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}

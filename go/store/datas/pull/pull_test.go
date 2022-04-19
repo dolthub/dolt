@@ -172,16 +172,16 @@ func (suite *PullSuite) TestPullEverything() {
 	sourceAddr := suite.commitToSource(l, nil)
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
 	pt.Validate(suite)
 
 	v := mustValue(suite.sinkVRW.ReadValue(context.Background(), sourceAddr)).(types.Struct)
 	suite.NotNil(v)
-	suite.True(l.Equals(mustGetCommitValue(suite.sinkVRW, v)))
+	suite.True(l.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C3(L5) -1-> N
@@ -217,9 +217,9 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
@@ -228,7 +228,7 @@ func (suite *PullSuite) TestPullMultiGeneration() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
+	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C2(L5) -1-> N
@@ -270,9 +270,9 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(preReads-suite.sinkCS.Reads() <= suite.commitReads)
@@ -281,7 +281,7 @@ func (suite *PullSuite) TestPullDivergentHistory() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
+	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
 // Source: -6-> C2(L4) -1-> N
@@ -322,9 +322,9 @@ func (suite *PullSuite) TestPullUpdates() {
 
 	pt := startProgressTracker()
 
-	wrf, err := types.WalkRefsForChunkStore(suite.sourceCS)
+	waf, err := types.WalkAddrsForChunkStore(suite.sourceCS)
 	suite.NoError(err)
-	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, wrf, sourceAddr, pt.Ch)
+	err = Pull(context.Background(), suite.sourceCS, suite.sinkCS, waf, sourceAddr, pt.Ch)
 	suite.NoError(err)
 
 	suite.True(expectedReads-suite.sinkCS.Reads() <= suite.commitReads)
@@ -333,7 +333,7 @@ func (suite *PullSuite) TestPullUpdates() {
 	v, err := suite.sinkVRW.ReadValue(context.Background(), sourceAddr)
 	suite.NoError(err)
 	suite.NotNil(v)
-	suite.True(srcL.Equals(mustGetCommitValue(suite.sinkVRW, v)))
+	suite.True(srcL.Equals(mustGetCommittedValue(suite.sinkVRW, v)))
 }
 
 func (suite *PullSuite) commitToSource(v types.Value, p []hash.Hash) hash.Hash {
@@ -590,8 +590,8 @@ func mustValue(val types.Value, err error) types.Value {
 	return val
 }
 
-func mustGetCommitValue(vr types.ValueReader, c types.Value) types.Value {
-	v, err := datas.GetCommitValue(context.Background(), vr, c)
+func mustGetCommittedValue(vr types.ValueReader, c types.Value) types.Value {
+	v, err := datas.GetCommittedValue(context.Background(), vr, c)
 	d.PanicIfError(err)
 	d.PanicIfFalse(v != nil)
 	return v

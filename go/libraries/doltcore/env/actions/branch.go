@@ -347,7 +347,7 @@ func BranchRoot(ctx context.Context, db *doltdb.DoltDB, brName string) (*doltdb.
 		return nil, doltdb.RootValueUnreadable{RootType: doltdb.HeadRoot, Cause: err}
 	}
 
-	branchRoot, err := cm.GetRootValue()
+	branchRoot, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +441,7 @@ func overwriteRoot(ctx context.Context, head *doltdb.RootValue, tblHashes map[st
 		}
 	}
 
-	head, err = head.RemoveTables(ctx, false, toDrop...)
+	head, err = head.RemoveTables(ctx, false, false, toDrop...)
 	if err != nil {
 		return nil, err
 	}

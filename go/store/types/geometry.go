@@ -60,7 +60,7 @@ func (v Geometry) WalkValues(ctx context.Context, cb ValueCallback) error {
 	return cb(v)
 }
 
-func (v Geometry) WalkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v Geometry) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 

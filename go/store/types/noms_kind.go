@@ -62,6 +62,7 @@ const (
 	PolygonKind
 
 	SerialMessageKind
+	TupleRowStorageKind
 
 	UnknownKind NomsKind = 255
 )
@@ -94,6 +95,7 @@ func init() {
 	KindToType[LinestringKind] = Linestring{}
 	KindToType[PolygonKind] = Polygon{}
 	KindToType[SerialMessageKind] = SerialMessage{}
+	KindToType[TupleRowStorageKind] = TupleRowStorage{}
 
 	SupportedKinds[BlobKind] = true
 	SupportedKinds[BoolKind] = true
@@ -122,39 +124,41 @@ func init() {
 	SupportedKinds[LinestringKind] = true
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
+	SupportedKinds[TupleRowStorageKind] = true
 }
 
 var KindToTypeSlice []Value
 
 var KindToString = map[NomsKind]string{
-	UnknownKind:       "unknown",
-	BlobKind:          "Blob",
-	BoolKind:          "Bool",
-	CycleKind:         "Cycle",
-	ListKind:          "List",
-	MapKind:           "Map",
-	FloatKind:         "Float",
-	RefKind:           "Ref",
-	SetKind:           "Set",
-	StructKind:        "Struct",
-	StringKind:        "String",
-	TypeKind:          "Type",
-	UnionKind:         "Union",
-	ValueKind:         "Value",
-	UUIDKind:          "UUID",
-	IntKind:           "Int",
-	UintKind:          "Uint",
-	NullKind:          "Null",
-	TupleKind:         "Tuple",
-	InlineBlobKind:    "InlineBlob",
-	TimestampKind:     "Timestamp",
-	DecimalKind:       "Decimal",
-	JSONKind:          "JSON",
-	GeometryKind:      "Geometry",
-	PointKind:         "Point",
-	LinestringKind:    "Linestring",
-	PolygonKind:       "Polygon",
-	SerialMessageKind: "SerialMessage",
+	UnknownKind:         "unknown",
+	BlobKind:            "Blob",
+	BoolKind:            "Bool",
+	CycleKind:           "Cycle",
+	ListKind:            "List",
+	MapKind:             "Map",
+	FloatKind:           "Float",
+	RefKind:             "Ref",
+	SetKind:             "Set",
+	StructKind:          "Struct",
+	StringKind:          "String",
+	TypeKind:            "Type",
+	UnionKind:           "Union",
+	ValueKind:           "Value",
+	UUIDKind:            "UUID",
+	IntKind:             "Int",
+	UintKind:            "Uint",
+	NullKind:            "Null",
+	TupleKind:           "Tuple",
+	InlineBlobKind:      "InlineBlob",
+	TimestampKind:       "Timestamp",
+	DecimalKind:         "Decimal",
+	JSONKind:            "JSON",
+	GeometryKind:        "Geometry",
+	PointKind:           "Point",
+	LinestringKind:      "Linestring",
+	PolygonKind:         "Polygon",
+	SerialMessageKind:   "SerialMessage",
+	TupleRowStorageKind: "TupleRowStorage",
 }
 
 // String returns the name of the kind.

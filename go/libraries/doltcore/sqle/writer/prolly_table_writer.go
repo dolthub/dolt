@@ -147,6 +147,11 @@ func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
 	return nil
 }
 
+// WithIndexLookup implements TableWriter.
+func (w *prollyTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	panic("prolly table writer does not yet support index lookups")
+}
+
 func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
 	// flush primary row storage
 	m, err := w.primary.Map(ctx)

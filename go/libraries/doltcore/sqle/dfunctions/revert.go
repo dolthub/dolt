@@ -32,6 +32,7 @@ const (
 )
 
 // RevertFunc represents the dolt function "dolt revert".
+// Deprecated: please use the version in the dprocedures package
 type RevertFunc struct {
 	expression.NaryExpression
 }
@@ -39,90 +40,94 @@ type RevertFunc struct {
 var _ sql.Expression = (*RevertFunc)(nil)
 
 // NewRevertFunc creates a new RevertFunc expression that reverts commits.
+// Deprecated: please use the version in the dprocedures package
 func NewRevertFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &RevertFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
 // Eval implements the Expression interface.
 func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, r.ChildExpressions)
+	if err != nil {
+		return 1, err
+	}
+	return DoDoltRevert(ctx, row, args)
+}
+
+func DoDoltRevert(ctx *sql.Context, row sql.Row, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 	dSess := dsess.DSessFromSess(ctx.Session)
 	ddb, ok := dSess.GetDoltDB(ctx, dbName)
 	if !ok {
-		return nil, fmt.Errorf("dolt database could not be found")
+		return 1, fmt.Errorf("dolt database could not be found")
 	}
 	workingSet, err := dSess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	workingRoot := workingSet.WorkingRoot()
 	headCommit, err := dSess.GetHeadCommit(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
-	headRoot, err := headCommit.GetRootValue()
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	headHash, err := headRoot.HashOf()
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	workingHash, err := workingRoot.HashOf()
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	if !headHash.Equal(workingHash) {
-		return nil, fmt.Errorf("you must commit any changes before using revert")
+		return 1, fmt.Errorf("you must commit any changes before using revert")
 	}
 
 	headRef, err := dSess.CWBHeadRef(ctx, dbName)
 	if err != nil {
-		return nil, err
-	}
-
-	args, err := getDoltArgs(ctx, row, r.ChildExpressions)
-	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	apr, err := cli.CreateRevertArgParser().Parse(args)
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 
 	commits := make([]*doltdb.Commit, apr.NArg())
 	for i, revisionStr := range apr.Args {
 		commitSpec, err := doltdb.NewCommitSpec(revisionStr)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		commit, err := ddb.Resolve(ctx, commitSpec, headRef)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		commits[i] = commit
 	}
 
 	dbState, ok, err := dSess.LookupDbState(ctx, dbName)
 	if err != nil {
-		return nil, err
+		return 1, err
 	} else if !ok {
-		return nil, fmt.Errorf("Could not load database %s", dbName)
+		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
 	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditOpts())
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	workingHash, err = workingRoot.HashOf()
 	if err != nil {
-		return nil, err
+		return 1, err
 	}
 	if !headHash.Equal(workingHash) {
 		err = dSess.SetRoot(ctx, dbName, workingRoot)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		stringType := typeinfo.StringDefaultType.ToSqlType()
 
@@ -135,11 +140,11 @@ func (r *RevertFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 
 		commitFunc, err := NewDoltCommitFunc(expressions...)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 		_, err = commitFunc.Eval(ctx, row)
 		if err != nil {
-			return nil, err
+			return 1, err
 		}
 	}
 	return 0, nil

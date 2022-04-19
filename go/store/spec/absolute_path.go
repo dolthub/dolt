@@ -27,8 +27,6 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/dolthub/dolt/go/store/d"
-
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -103,11 +101,13 @@ func NewAbsolutePath(str string) (AbsolutePath, error) {
 }
 
 // Resolve returns the Value reachable by 'p' in 'db'.
-func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database, vrw types.ValueReadWriter) (val types.Value) {
+func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database, vrw types.ValueReadWriter) (val types.Value, err error) {
 	if len(p.Dataset) > 0 {
 		var ok bool
 		ds, err := db.GetDataset(ctx, p.Dataset)
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 
 		if val, ok = ds.MaybeHead(); !ok {
 			val = nil
@@ -115,7 +115,9 @@ func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database, vrw types.
 	} else if !p.Hash.IsEmpty() {
 		var err error
 		val, err = vrw.ReadValue(ctx, p.Hash)
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		panic("Unreachable")
 	}
@@ -123,7 +125,9 @@ func (p AbsolutePath) Resolve(ctx context.Context, db datas.Database, vrw types.
 	if val != nil && p.Path != nil {
 		var err error
 		val, err = p.Path.Resolve(ctx, val, vrw)
-		d.PanicIfError(err)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return
 }
@@ -159,7 +163,11 @@ func ReadAbsolutePaths(ctx context.Context, db datas.Database, vrw types.ValueRe
 			return nil, fmt.Errorf("invalid input path '%s'", ps)
 		}
 
-		v := p.Resolve(ctx, db, vrw)
+		v, err := p.Resolve(ctx, db, vrw)
+		if err != nil {
+			return nil, err
+		}
+
 		if v == nil {
 			return nil, fmt.Errorf("input path '%s' does not exist in database", ps)
 		}

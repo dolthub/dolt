@@ -113,7 +113,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return 1
 	}
 
-	root, err := cm.GetRootValue()
+	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return exitWithVerr(errhand.BuildDError("unable to get the root value").AddCause(err).Build())
 	}

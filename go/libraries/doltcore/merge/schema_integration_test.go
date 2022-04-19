@@ -484,7 +484,12 @@ var mergeForeignKeyTests = []mergeForeignKeyTest{
 			TableColumns:           []uint64{13001},
 			ReferencedTableName:    "test",
 			ReferencedTableIndex:   "t1_idx",
-			ReferencedTableColumns: []uint64{12111}}),
+			ReferencedTableColumns: []uint64{12111},
+			UnresolvedFKDetails: doltdb.UnresolvedFKDetails{
+				TableColumns:           []string{"q1"},
+				ReferencedTableColumns: []string{"t1"},
+			},
+		}),
 		expFKConflict: []merge.FKConflict{},
 	},
 	//{

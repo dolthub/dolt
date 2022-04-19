@@ -34,11 +34,13 @@ import (
 
 const DoltPullFuncName = "dolt_pull"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltPullFunc struct {
 	expression.NaryExpression
 }
 
 // NewPullFunc creates a new PullFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewPullFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPullFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -62,6 +64,14 @@ func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltPull(ctx, args)
+}
+
+func DoDoltPull(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -74,10 +84,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
-	ap := cli.CreatePullArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreatePullArgParser().Parse(args)
 	if err != nil {
 		return noConflicts, err
 	}
@@ -106,7 +113,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return noConflicts, err
 	}
 
-	var conflicts interface{}
+	var conflicts int
 	for _, refSpec := range pullSpec.RefSpecs {
 		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 
@@ -153,7 +160,7 @@ func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	return noConflicts, nil
 }
 
-func pullerProgFunc(ctx context.Context, pullerEventCh <-chan pull.PullerEvent) {
+func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {
 	for {
 		if ctx.Err() != nil {
 			return
@@ -161,7 +168,7 @@ func pullerProgFunc(ctx context.Context, pullerEventCh <-chan pull.PullerEvent) 
 		select {
 		case <-ctx.Done():
 			return
-		case <-pullerEventCh:
+		case <-statsCh:
 		default:
 		}
 	}
@@ -181,8 +188,8 @@ func progFunc(ctx context.Context, progChan <-chan pull.PullProgress) {
 	}
 }
 
-func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.PullerEvent) {
-	pullerEventCh := make(chan pull.PullerEvent)
+func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress, chan pull.Stats) {
+	statsCh := make(chan pull.Stats)
 	progChan := make(chan pull.PullProgress)
 	wg := &sync.WaitGroup{}
 
@@ -195,15 +202,15 @@ func runProgFuncs(ctx context.Context) (*sync.WaitGroup, chan pull.PullProgress,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pullerProgFunc(ctx, pullerEventCh)
+		pullerProgFunc(ctx, statsCh)
 	}()
 
-	return wg, progChan, pullerEventCh
+	return wg, progChan, statsCh
 }
 
-func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, pullerEventCh chan pull.PullerEvent) {
+func stopProgFuncs(cancel context.CancelFunc, wg *sync.WaitGroup, progChan chan pull.PullProgress, statsCh chan pull.Stats) {
 	cancel()
 	close(progChan)
-	close(pullerEventCh)
+	close(statsCh)
 	wg.Wait()
 }
