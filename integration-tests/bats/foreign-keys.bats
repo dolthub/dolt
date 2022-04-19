@@ -420,7 +420,7 @@ INSERT INTO child  VALUES (1, 1, 1), (2, 3, 2);
 SQL
     run dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent(v1)"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "a foreign key constraint fails" ]] || false
+    [[ "$output" =~ "foreign key constraint fails" ]] || false
     [[ "$output" =~ "fk_name" ]] || false
 }
 
@@ -2002,5 +2002,5 @@ SQL
     run dolt sql -q "ALTER TABLE b ADD CONSTRAINT fk_b_a_id_refs_a FOREIGN KEY (a_id) REFERENCES a (id)";
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic:" ]] || false
-    [[ "$output" =~ "a foreign key constraint fails (CONSTRAINT \`fk_b_a_id_refs_a\` FOREIGN KEY (\`a_id\`) REFERENCES \`a\` (\`id\`))" ]] || false
+    [[ "$output" =~ "foreign key constraint fails (CONSTRAINT \`fk_b_a_id_refs_a\` FOREIGN KEY (\`a_id\`) REFERENCES \`a\` (\`id\`))" ]] || false
 }
