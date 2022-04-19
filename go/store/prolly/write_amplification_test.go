@@ -68,6 +68,8 @@ func TestWriteAmplification(t *testing.T) {
 }
 
 func TestNodeSplitterMetrics(t *testing.T) {
+	t.Skip("unskip for metrics")
+
 	const scale = 100_000
 	t.Run("Key Splitter", func(t *testing.T) {
 		defaultSplitterFactory = newKeySplitter
@@ -138,6 +140,8 @@ func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 		counts = append(counts, c)
 		sizes = append(sizes, s)
 	}
+
+	t.Skip("unskip for metrics")
 	fmt.Println("post-edit write amplification: ")
 	fmt.Printf("\t node counts %s \n", counts.summary())
 	fmt.Printf("\t node sizes  %s \n\n", sizes.summary())

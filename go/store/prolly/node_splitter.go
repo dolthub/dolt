@@ -57,7 +57,7 @@ var levelSalt = [...]uint64{
 //  splitterFactory makes a nodeSplitter.
 type splitterFactory func(level uint8) nodeSplitter
 
-var defaultSplitterFactory splitterFactory = newRollingHashSplitter
+var defaultSplitterFactory splitterFactory = newKeySplitter
 
 // nodeSplitter decides where nodeItem streams should be split into chunks.
 type nodeSplitter interface {

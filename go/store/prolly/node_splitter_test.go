@@ -38,6 +38,8 @@ import (
 )
 
 func TestKeySplitterDistribution(t *testing.T) {
+	t.Skip("unskip for metrics")
+
 	factory := newKeySplitter
 	t.Run("24", func(t *testing.T) {
 		scale := 1_000_000
