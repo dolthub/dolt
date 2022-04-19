@@ -1949,5 +1949,5 @@ SQL
     run dolt sql -q "ALTER TABLE b ADD CONSTRAINT fk_b_a_id_refs_a FOREIGN KEY (a_id) REFERENCES a (id)";
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic:" ]] || false
-    [[ "$output" =~ "violations" ]] || false
+    [[ "$output" =~ "violation" ]] || false
 }
