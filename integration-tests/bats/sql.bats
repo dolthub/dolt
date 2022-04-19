@@ -1404,50 +1404,50 @@ CREATE PROCEDURE p2() SELECT 6*6;
 SQL
     # We're excluding timestamps in these statements
     # Initial look
-    run dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SELECT * FROM dolt_procedures" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     [[ "$output" =~ 'p1,CREATE PROCEDURE p1() SELECT 5*5' ]] || false
     [[ "$output" =~ 'p2,CREATE PROCEDURE p2() SELECT 6*6' ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-    run dolt sql -q "SHOW PROCEDURE STATUS" -r=csv
+    [[ "${#lines[@]}" = "4" ]] || false
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SHOW PROCEDURE STATUS" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Db,Name,Type,Definer,Modified,Created,Security_type,Comment,character_set_client,collation_connection,Database Collation" ]] || false
     [[ "$output" =~ ',p1,PROCEDURE,' ]] || false
     [[ "$output" =~ ',p2,PROCEDURE,' ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
     # Drop p2
     dolt sql -q "DROP PROCEDURE p2"
-    run dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SELECT * FROM dolt_procedures" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     [[ "$output" =~ 'p1,CREATE PROCEDURE p1() SELECT 5*5' ]] || false
     [[ ! "$output" =~ 'p2,CREATE PROCEDURE p2() SELECT 6*6' ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SHOW PROCEDURE STATUS" -r=csv
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SHOW PROCEDURE STATUS" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Db,Name,Type,Definer,Modified,Created,Security_type,Comment,character_set_client,collation_connection,Database Collation" ]] || false
     [[ "$output" =~ ',p1,PROCEDURE,' ]] || false
     [[ ! "$output" =~ ',p2,PROCEDURE,' ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
     # Drop p2 again and error
     run dolt sql -q "DROP PROCEDURE p2"
     [ "$status" -eq "1" ]
     [[ "$output" =~ '"p2" does not exist' ]] || false
     # Drop p1 using if exists
     dolt sql -q "DROP PROCEDURE IF EXISTS p1"
-    run dolt sql -q "SELECT * FROM dolt_procedures" -r=csv
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SELECT * FROM dolt_procedures" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "name,create_stmt,created_at,modified_at" ]] || false
     [[ ! "$output" =~ 'p1,CREATE PROCEDURE p1() SELECT 5*5' ]] || false
     [[ ! "$output" =~ 'p2,CREATE PROCEDURE p2() SELECT 6*6' ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
-    run dolt sql -q "SHOW PROCEDURE STATUS" -r=csv
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -b -q "SET @@show_external_procedures = 0;SHOW PROCEDURE STATUS" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "Db,Name,Type,Definer,Modified,Created,Security_type,Comment,character_set_client,collation_connection,Database Collation" ]] || false
     [[ ! "$output" =~ ',p1,PROCEDURE,' ]] || false
     [[ ! "$output" =~ ',p2,PROCEDURE,' ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
 }
 
 @test "sql: active_branch() func" {
