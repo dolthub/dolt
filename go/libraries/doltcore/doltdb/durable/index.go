@@ -214,6 +214,8 @@ func (i prollyIndex) Format() *types.NomsBinFormat {
 	return i.index.Format()
 }
 
+var _ Index = prollyIndex{}
+
 func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
 	var last bool
 	colIdx, iCol := 0, 0
