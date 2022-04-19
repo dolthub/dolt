@@ -336,7 +336,6 @@ func TestDropTable(t *testing.T) {
 }
 
 func TestRenameTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestRenameTable(t, newDoltHarness(t))
 }
 
