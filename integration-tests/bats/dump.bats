@@ -10,14 +10,27 @@ teardown() {
     teardown_common
 }
 
-@test "dump: read mysqldump with spatial types using --hex-blob" {
-      dolt sql < $BATS_TEST_DIRNAME/helper/spatial-mysqldump-hex-blob.sql
-}
-
 @test "dump: no tables" {
     run dolt dump
     [ "$status" -eq 0 ]
     [[ "$output" =~ "No tables to export." ]] || false
+}
+
+@test "dump: SQL type - read mysqldump with spatial types using --hex-blob" {
+    run dolt sql < $BATS_TEST_DIRNAME/helper/spatial-mysqldump-hex-blob.sql
+    [ "$status" -eq 0 ]
+    run dolt sql -q "select st_aswkt(g) from geom_table"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]]
+    run dolt sql -q "select st_aswkt(p) from point_table"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POINT(1 2)" ]]
+    run dolt sql -q "select st_aswkt(l) from line_table"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "LINESTRING(1 2,3 4)" ]]
+    run dolt sql -q "select st_aswkt(p) from poly_table"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "POLYGON((0 0,1 1,2 2,0 0))" ]]
 }
 
 @test "dump: SQL type - with multiple tables" {
