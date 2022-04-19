@@ -20,8 +20,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -287,7 +285,7 @@ func (si *schemaImpl) Checks() CheckCollection {
 	return si.checkCollection
 }
 
-func (si schemaImpl) AddColumn(newCol Column, order *sql.ColumnOrder) (Schema, error) {
+func (si schemaImpl) AddColumn(newCol Column, order *ColumnOrder) (Schema, error) {
 	if newCol.IsPartOfPK {
 		return nil, fmt.Errorf("cannot add a column with that is a primary key: %s", newCol.Name)
 	}

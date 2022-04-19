@@ -85,7 +85,7 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	newSchema, err := oldSchema.AddColumn(newCol, order)
+	newSchema, err := oldSchema.AddColumn(newCol, orderToOrder(order))
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,16 @@ func addColumnToTable(
 
 	// TODO: we do a second pass in the engine to set a default if there is one. We should only do a single table scan.
 	return newTable.AddColumnToRows(ctx, newColName, newSchema)
+}
+
+func orderToOrder(order *sql.ColumnOrder) *schema.ColumnOrder {
+	if order == nil {
+		return nil
+	}
+	return &schema.ColumnOrder{
+		First:       order.First,
+		AfterColumn: order.AfterColumn,
+	}
 }
 
 func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal, comment string) (schema.Column, error) {
