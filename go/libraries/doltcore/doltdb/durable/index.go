@@ -17,11 +17,14 @@ package durable
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 // Index represents a Table index.
@@ -37,6 +40,10 @@ type Index interface {
 
 	// Format returns the types.NomsBinFormat for this index.
 	Format() *types.NomsBinFormat
+
+	// AddColumnToRows adds the column given to the rows data and returns the resulting rows.
+	// The |newCol| is present in |newSchema|.
+	AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error)
 }
 
 // IndexSet stores a collection secondary Indexes.
@@ -125,6 +132,8 @@ type nomsIndex struct {
 	vrw   types.ValueReadWriter
 }
 
+var _ Index = nomsIndex{}
+
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
 func NomsMapFromIndex(i Index) types.Map {
 	return i.(nomsIndex).index
@@ -164,6 +173,11 @@ func (i nomsIndex) Format() *types.NomsBinFormat {
 	return i.vrw.Format()
 }
 
+func (i nomsIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
+	// no-op for noms indexes because of tag-based mapping
+	return i, nil
+}
+
 type prollyIndex struct {
 	index prolly.Map
 }
@@ -198,6 +212,69 @@ func (i prollyIndex) Empty() bool {
 // Format implements Index.
 func (i prollyIndex) Format() *types.NomsBinFormat {
 	return i.index.Format()
+}
+
+func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
+	var last bool
+	colIdx, iCol := 0, 0
+	newSchema.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		last = false
+		if strings.ToLower(col.Name) == strings.ToLower(newCol) {
+			last = true
+			colIdx = iCol
+		}
+		iCol++
+		return false, nil
+	})
+
+	// If the column we added was last among non-primary key columns we can skip this step
+	if last {
+		return i, nil
+	}
+
+	// If not, then we have to iterate over this table's rows and update all the offsets for the new column
+	rowMap := ProllyMapFromIndex(i)
+	mutator := rowMap.Mutate()
+
+	iter, err := mutator.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Re-write all the rows, inserting a zero-byte field in every value tuple
+	_, valDesc := rowMap.Descriptors()
+	b := val.NewTupleBuilder(valDesc)
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			b.Recycle()
+			break
+		} else if err != nil {
+			return nil, err
+		}
+
+		for i := 0; i < colIdx; i++ {
+			b.PutRaw(i, v.GetField(i))
+		}
+		b.PutRaw(colIdx, nil)
+		for i := colIdx; i < v.Count(); i++ {
+			b.PutRaw(i+1, v.GetField(i))
+		}
+
+		err = mutator.Put(ctx, k, b.BuildPermissive(sharePool))
+		if err != nil {
+			return nil, err
+		}
+
+		b.Recycle()
+	}
+
+	newMap, err := mutator.Map(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return IndexFromProllyMap(newMap), nil
 }
 
 // NewIndexSet returns an empty IndexSet.

@@ -473,10 +473,20 @@ func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, 
 
 // AddColumnToRows adds the column named to row data as necessary and returns the resulting table.
 func (t *Table) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (*Table, error) {
-	table, err := t.table.AddColumnToRows(ctx, newCol, newSchema)
+	idx, err := t.table.GetTableRows(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Table{table: table}, nil
+	newIdx, err := idx.AddColumnToRows(ctx, newCol, newSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err := t.table.SetTableRows(ctx, newIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{table: newTable}, nil
 }
