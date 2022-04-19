@@ -62,7 +62,7 @@ CREATE TABLE \`keyed-table\` (
   PRIMARY KEY (\`pk\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
-INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+INSERT INTO \`keyed-table\` (\`pk \`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
 CREATE TABLE \`keyless\` (
   \`pk\` int,
   \`val\` int,
@@ -121,25 +121,98 @@ teardown() {
 @test "tableplus: load data from the keyed table" {
   run dolt sql -r csv -q "SELECT * FROM \`test\`.\`keyed-table\` ORDER BY \`pk\` LIMIT 300 OFFSET 0;"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "pk,v2,v1,v4,v3,v5,v9,v8,v7,v6,v15,v12,v10,v11,v13,v16,v14,v17,v19,v29,v18,v20,v21,v23,v22,v25,v24,v26,v27,v28,v30,v31,v32,v33" ]]
-  [[ "$output" =~ "1,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]]
-  [[ "$output" =~ "2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]]
+  [[ "$output" =~ "pk,v2,v1,v4,v3,v5,v9,v8,v7,v6,v15,v12,v10,v11,v13,v16,v14,v17,v19,v29,v18,v20,v21,v23,v22,v25,v24,v26,v27,v28,v30,v31,v32,v33" ]] || false
+  [[ "$output" =~ "1,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]] || false
+  [[ "$output" =~ "2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]] || false
 
   run dolt sql -r csv -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='test' AND TABLE_NAME='keyed-table';"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "count" ]]
+  [[ "$output" =~ "count" ]] || false
 }
 
 @test "tableplus: open the schema of a table" {
   run dolt sql -r csv -q "SELECT ordinal_position as ordinal_position,column_name as column_name,column_type AS data_type,character_set_name as character_set,collation_name as collation,is_nullable as is_nullable,column_default as column_default,extra as extra,column_name AS foreign_key,column_comment AS comment FROM information_schema.columns WHERE table_schema='test' AND table_name='keyless'"
   [ "$status" -eq 0 ]
-  [[  "$output" =~ "ordinal_position,column_name,data_type,character_set,collation,is_nullable,column_default,extra,foreign_key,comment" ]]
-  [[  "$output" =~ "1,pk,int,,,YES,,"",pk," ]]
-  [[  "$output" =~  "2,val,int,,,YES,,"",val," ]]
-
+  echo $output
+  [[  "$output" =~ "ordinal_position,column_name,data_type,character_set,collation,is_nullable,column_default,extra,foreign_key,comment" ]] || false
+  [[  "$output" =~ '1,pk,int,,,YES,,"",pk,""' ]] || false
+  [[  "$output" =~  '2,val,int,,,YES,,"",val,""' ]] || false
 
   run dolt sql -r csv -q "SELECT sub_part as index_length,index_name as index_name,index_type AS index_algorithm,CASE non_unique WHEN 0 THEN'TRUE'ELSE'FALSE'END AS is_unique,column_name as column_name FROM information_schema.statistics WHERE table_schema='test' AND table_name='keyless'ORDER BY seq_in_index ASC;"
   [ "$status" -eq 0 ]
-  [[  "$output" =~ "index_length,index_name,index_algorithm,is_unique,column_name" ]]
-  [[  "$output" =~ ",myidx,BTREE,FALSE,val" ]]
+  [[  "$output" =~ "index_length,index_name,index_algorithm,is_unique,column_name" ]] || false
+  [[  "$output" =~ ",myidx,BTREE,FALSE,val" ]] || false
+}
+
+@test "tableplus: views" {
+  run dolt sql -r csv -q "SELECT VIEW_DEFINITION as create_statement FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_SCHEMA='test' AND TABLE_NAME='myview'"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "create_statement" ]] || false
+  [[ "$output" =~ "SELECT * FROM \`keyed-table\`" ]] || false
+}
+
+@test "tableplus: procedures" {
+  run dolt sql -q "CREATE PROCEDURE simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y;"
+  [ "$status" -eq 0 ]
+  run dolt sql -r csv -q "SHOW CREATE procedure simple_proc1"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "CREATE PROCEDURE simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y" ]] || false
+}
+
+@test "tableplus: foreign key relationships" {
+  # Add some foreign keys
+  dolt sql <<SQL
+    CREATE TABLE colors (
+        id INT NOT NULL,
+        color VARCHAR(32) NOT NULL,
+
+        PRIMARY KEY (id),
+        INDEX color_index(color)
+    );
+    CREATE TABLE objects (
+        id INT NOT NULL,
+        name VARCHAR(64) NOT NULL,
+        color VARCHAR(32),
+
+        PRIMARY KEY(id),
+        FOREIGN KEY (color) REFERENCES colors(color)
+    );
+    INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+    INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+  run dolt sql -r csv -q "SELECT TABLE_NAME,TABLE_SCHEMA,COLUMN_NAME,REFERENCED_TABLE_SCHEMA,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='test' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY ORDINAL_POSITION;"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "table_name,table_schema,column_name,referenced_table_schema,referenced_table_name,referenced_column_name" ]] || false
+  [[ "$output" =~ "objects,test,color,test,colors,color" ]] || false
+}
+
+@test "tableplus: index queries" {
+  dolt sql -q "alter table keyless add index (val)"
+  run dolt sql -r csv -q "SELECT ordinal_position as ordinal_position,column_name as column_name,column_type AS data_type,character_set_name as character_set,collation_name as collation,is_nullable as is_nullable,column_default as column_default,extra as extra,column_name AS foreign_key,column_comment AS comment FROM information_schema.columns WHERE table_schema='test' AND table_name='keyless';"
+  [[ "$output" =~ "ordinal_position,column_name,data_type,character_set,collation,is_nullable,column_default,extra,foreign_key,comment" ]] || false
+  [[ "$output" =~ '1,pk,int,,,YES,,"",pk,""' ]] || false
+  [[ "$output" =~ '2,val,int,,,YES,,"",val,""' ]] || false
+}
+
+@test "tableplus: trigger queries" {
+  dolt sql -q "CREATE TRIGGER ins_sum BEFORE INSERT ON keyless FOR EACH ROW SET @sum = @sum + NEW.val;"
+
+  run dolt sql -r csv -q "SELECT trigger_name as name,event_manipulation as event,action_timing as timing,action_statement as statement FROM information_schema.triggers WHERE event_object_schema='test' AND event_object_table='keyless';"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 'name,event,timing,statement' ]] || false
+  [[ "$output" =~ 'ins_sum,INSERT,BEFORE,SET @sum = @sum + NEW.val' ]] || false
+}
+
+@test "tableplus: connection queries" {
+  run dolt sql -q "select version()"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "show session status like 'ssl_version';"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "SET NAMES utf8mb4;"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "SHOW VARIABLES;"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "show databases;"
+  [ "$status" -eq 0 ]
 }
