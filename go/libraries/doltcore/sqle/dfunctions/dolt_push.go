@@ -31,11 +31,13 @@ import (
 
 const DoltPushFuncName = "dolt_push"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltPushFunc struct {
 	expression.NaryExpression
 }
 
 // NewPushFunc creates a new PushFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewPushFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltPushFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
@@ -59,6 +61,14 @@ func (d DoltPushFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 }
 
 func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return cmdFailure, err
+	}
+	return DoDoltPush(ctx, args)
+}
+
+func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -72,13 +82,7 @@ func (d DoltPushFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 		return cmdFailure, fmt.Errorf("could not load database %s", dbName)
 	}
 
-	ap := cli.CreatePushArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-	if err != nil {
-		return cmdFailure, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreatePushArgParser().Parse(args)
 	if err != nil {
 		return cmdFailure, err
 	}
