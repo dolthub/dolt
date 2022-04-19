@@ -72,19 +72,30 @@ func TestKeySplitterDistribution(t *testing.T) {
 	t.Skip("unskip for metrics")
 
 	factory := newKeySplitter
-	t.Run("24", func(t *testing.T) {
+	t.Run("plot node distribution for item size 24", func(t *testing.T) {
 		scale := 1_000_000
 		nd, ns := makeProllyTreeWithSizes(t, factory, scale, 8, 16)
 		printTreeSummaryByLevel(t, nd, ns)
-		//plotNodeSizeDistribution(t, "prolly_8_16.png", nd, ns)
+		plotNodeSizeDistribution(t, "prolly_8_16.png", nd, ns)
 	})
-	t.Run("sizes (8,54)", func(t *testing.T) {
+	t.Run("summarize node distribution for item sizes (8,54)", func(t *testing.T) {
 		for sz := 8; sz <= 54; sz++ {
 			fmt.Println(fmt.Sprintf("summary for map size %d", sz))
 			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
 			printTreeSummaryByLevel(t, nd, ns)
 			fmt.Println()
 		}
+	})
+	t.Run("plot node distribution for item sizes (8,54)", func(t *testing.T) {
+		var cumulative samples
+		for sz := 8; sz <= 54; sz++ {
+			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
+			data, err := measureTreeNodes(nd, ns)
+			require.NoError(t, err)
+			cumulative = append(cumulative, data...)
+		}
+		fmt.Println(cumulative.summary())
+		plotIntHistogram("cumulative_node_sizes_8-54.png", cumulative)
 	})
 }
 
@@ -139,14 +150,19 @@ func printTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
 }
 
 func plotNodeSizeDistribution(t *testing.T, name string, nd Node, ns NodeStore) {
+	data, err := measureTreeNodes(nd, ns)
+	require.NoError(t, err)
+	plotIntHistogram(name, data)
+}
+
+func measureTreeNodes(nd Node, ns NodeStore) (samples, error) {
 	ctx := context.Background()
-	data := make([]int, 0, 1024)
+	data := make(samples, 0, 1024)
 	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
 		data = append(data, nd.size())
 		return nil
 	})
-	require.NoError(t, err)
-	plotIntHistogram(name, data)
+	return data, err
 }
 
 func plotIntHistogram(name string, data []int) {

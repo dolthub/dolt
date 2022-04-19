@@ -204,6 +204,7 @@ func (ks *keySplitter) Append(items ...nodeItem) error {
 		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
 	}
 
+	// todo(andy): account for key/value offsets, vtable, etc.
 	ks.size += uint32(len(items[0]) + len(items[1]))
 	ks.count++
 

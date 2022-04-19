@@ -59,6 +59,8 @@ func (rk deleteSingleKey) makeMutations(ctx context.Context, leaf Node) ([]mutat
 }
 
 func TestWriteAmplification(t *testing.T) {
+	t.Skip("unskip for metrics")
+
 	t.Run("Key Splitter", func(t *testing.T) {
 		testWriteAmpWithSplitter(t, newKeySplitter)
 	})
@@ -140,8 +142,6 @@ func testWriteAmplification(t *testing.T, before Map, method mutationProvider) {
 		counts = append(counts, c)
 		sizes = append(sizes, s)
 	}
-
-	t.Skip("unskip for metrics")
 	fmt.Println("post-edit write amplification: ")
 	fmt.Printf("\t node counts %s \n", counts.summary())
 	fmt.Printf("\t node sizes  %s \n\n", sizes.summary())
