@@ -66,35 +66,26 @@ func (f *ForeignKeyViolationError) Error() string {
 		sb.WriteRune('\n')
 		sb.WriteString(str)
 	}
-
-	var refCols []string
-	for _, tct := range f.ForeignKey.TableColumns {
-		col, _ := f.Schema.GetAllCols().GetByTag(tct)
-		refCols = append(refCols, col.Name)
-	}
-
-	fKeyErrorMsg := fmt.Sprintf("a foreign key constraint fails (CONSTRAINT `%s` FOREIGN KEY (`%s`) REFERENCES `%s` (`%s`)) on:%s", f.ForeignKey.Name, strings.Join(refCols, ", "), f.ForeignKey.ReferencedTableName, f.ForeignKey.ReferencedTableIndex, sb.String())
-
 	if terminatedEarly {
-		return fmt.Sprintf("%s\n%d more violations are not being displayed",
-			fKeyErrorMsg, len(f.ViolationRows)-earlyTerminationLimit)
+		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s\n%d more violations are not being displayed",
+			f.ForeignKey.Name, f.ForeignKey.TableName, sb.String(), len(f.ViolationRows)-earlyTerminationLimit)
 	} else {
-		return fKeyErrorMsg
+		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s", f.ForeignKey.Name, f.ForeignKey.TableName, sb.String())
 	}
 }
 
 // getRowValuesAsString returns row values as string format.
 // Variables 'key' and 'val' have both 'tags and values' added in them, so tags are removed
 func getRowValuesAsString(key types.Value, val types.Value) string {
-	valSlice, _ := val.(types.Tuple).AsSlice()
-	all, _ := key.(types.Tuple).Append(valSlice...)
-	allSlice, _ := all.AsSlice()
 	var rowVals []string
-	for i, s := range allSlice {
-		if i%2 == 1 {
-			rowVals = append(rowVals, s.HumanReadableString())
-		}
-	}
+	_ = key.(types.Tuple).IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		rowVals = append(rowVals, tupleVal.HumanReadableString())
+		return false, nil
+	})
+	_ = val.(types.Tuple).IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
+		rowVals = append(rowVals, tupleVal.HumanReadableString())
+		return false, nil
+	})
 	return fmt.Sprintf("(%s)", strings.Join(rowVals, ", "))
 }
 
