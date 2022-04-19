@@ -503,7 +503,7 @@ func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 	return nomsTable{t.vrw, st}, nil
 }
 
-func (t nomsTable) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Table, error){
+func (t nomsTable) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Table, error) {
 	// The old storage format never needs to rewrite table rows when adding a column
 	if !types.IsFormat_DOLT_1(t.Format()) {
 		return t, nil
