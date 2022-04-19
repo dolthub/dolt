@@ -21,16 +21,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/flatbuffers/go"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -51,9 +50,9 @@ var DoltFeatureVersion FeatureVersion = 3 // last bumped when storing creation t
 
 // RootValue is the value of the Database and is the committed value in every Dolt commit.
 type RootValue struct {
-	vrw     types.ValueReadWriter
-	st      rvStorage
-	fkc     *ForeignKeyCollection // cache the first load
+	vrw types.ValueReadWriter
+	st  rvStorage
+	fkc *ForeignKeyCollection // cache the first load
 }
 
 type tableEdit struct {
@@ -142,7 +141,6 @@ func (ntm nomsTableMap) Iter(ctx context.Context, cb func(name string, addr hash
 		return cb(name, addr)
 	})
 }
-
 
 func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (types.Map, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(superSchemasKey)
@@ -893,7 +891,7 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{ { name: tName, ref: &ref } })
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
 		return nil, err
 	}
@@ -1010,7 +1008,7 @@ func (root *RootValue) UpdateSuperSchemasFromOther(ctx context.Context, tblNames
 // column tag information, use this method instead of a table drop + add.
 func (root *RootValue) RenameTable(ctx context.Context, oldName, newName string) (*RootValue, error) {
 
-	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{ { old_name: oldName, name: newName } })
+	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{old_name: oldName, name: newName}})
 	if err != nil {
 		return nil, err
 	}
