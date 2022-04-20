@@ -15,6 +15,8 @@
 package prolly
 
 import (
+	"encoding/hex"
+	"io"
 	"math"
 
 	fb "github.com/google/flatbuffers/go"
@@ -41,7 +43,7 @@ type Node struct {
 	count        uint16
 }
 
-func mapNodeFromBytes(bb []byte) Node {
+func MapNodeFromBytes(bb []byte) Node {
 	buf := serial.GetRootAsTupleMap(bb, 0)
 	return mapNodeFromFlatbuffer(*buf)
 }
@@ -73,10 +75,12 @@ func (nd Node) hashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
+// getKey returns the |ith| key of this node
 func (nd Node) getKey(i int) nodeItem {
 	return nd.keys.GetSlice(i)
 }
 
+// getValue returns the |ith| value of this node. Only valid for leaf nodes.
 func (nd Node) getValue(i int) nodeItem {
 	if nd.leafNode() {
 		return nd.values.GetSlice(i)
@@ -86,6 +90,12 @@ func (nd Node) getValue(i int) nodeItem {
 	}
 }
 
+// size returns the number of keys in this node
+func (nd Node) size() int {
+	return nd.keys.Len()
+}
+
+// getRef returns the |ith| ref in this node. Only valid for internal nodes.
 func (nd Node) getRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
 	start, stop := i*refSize, (i+1)*refSize
@@ -101,10 +111,12 @@ func (nd Node) getSubtreeCounts() subtreeCounts {
 	return readSubtreeCounts(int(nd.count), buf)
 }
 
+// level returns the tree level for this node
 func (nd Node) level() int {
 	return int(nd.buf.TreeLevel())
 }
 
+// leafNode returns whether this node is a leaf
 func (nd Node) leafNode() bool {
 	return nd.level() == 0
 }
@@ -135,4 +147,48 @@ func getValueOffsetsVector(buf serial.TupleMap) []byte {
 	stop := start + sz
 
 	return tab.Bytes[start:stop]
+}
+
+// OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still
+// displayed in hex-encoded byte strings, but are delineated into their fields. All nodes have keys displayed in this
+// manner. Interior nodes have their child hash references spelled out, leaf nodes have value tuples delineated like
+// the keys
+func OutputProllyNode(w io.Writer, node Node) error {
+	w.Write([]byte("["))
+	for i := 0; i < node.size(); i++ {
+		k := node.getKey(i)
+		kt := val.Tuple(k)
+
+		w.Write([]byte("\n    { key: "))
+		for j := 0; j < kt.Count(); j++ {
+			if j > 0 {
+				w.Write([]byte(", "))
+			}
+			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
+		}
+
+		if node.leafNode() {
+			v := node.getValue(i)
+			vt := val.Tuple(v)
+
+			w.Write([]byte(" value: "))
+			for j := 0; j < vt.Count(); j++ {
+				if j > 0 {
+					w.Write([]byte(", "))
+				}
+				w.Write([]byte(hex.EncodeToString(vt.GetField(j))))
+			}
+
+			w.Write([]byte(" }"))
+		} else {
+			ref := node.getRef(i)
+
+			w.Write([]byte(" ref: #"))
+			w.Write([]byte(ref.String()))
+			w.Write([]byte(" }"))
+		}
+	}
+
+	w.Write([]byte("\n]\n"))
+	return nil
 }

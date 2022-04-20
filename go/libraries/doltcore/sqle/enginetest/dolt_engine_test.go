@@ -16,10 +16,12 @@ package enginetest
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -58,7 +60,7 @@ func TestSingleQuery(t *testing.T) {
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns, test.Bindings)
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns)
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
@@ -69,42 +71,25 @@ func TestSingleScript(t *testing.T) {
 		{
 			Name: "Two column index",
 			SetUpScript: []string{
-				`CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, v2 BIGINT, INDEX (v1, v2));`,
-				`INSERT INTO test VALUES (0,0,48),(1,0,52),(2,2,4),(3,2,10),(4,3,35),(5,5,36),(6,5,60),(7,6,1),(8,6,51),
-(9,6,60),(10,6,73),(11,9,44),(12,9,97),(13,13,44),(14,14,53),(15,14,57),(16,14,98),(17,16,19),(18,16,53),(19,16,95),
-(20,18,31),(21,19,48),(22,19,75),(23,19,97),(24,24,60),(25,25,14),(26,25,31),(27,27,9),(28,27,24),(29,28,24),(30,28,83),
-(31,31,14),(32,33,39),(33,34,22),(34,34,91),(35,35,89),(36,38,20),(37,38,66),(38,39,55),(39,39,86),(40,40,97),(41,42,0),
-(42,42,82),(43,43,63),(44,44,48),(45,44,67),(46,45,22),(47,45,31),(48,45,63),(49,45,86),(50,46,46),(51,47,5),(52,48,22),
-(53,49,0),(54,50,0),(55,50,14),(56,51,35),(57,54,38),(58,56,0),(59,56,60),(60,57,29),(61,57,49),(62,58,12),(63,58,32),
-(64,59,29),(65,59,45),(66,59,54),(67,60,66),(68,61,3),(69,61,34),(70,63,19),(71,63,69),(72,65,80),(73,65,97),(74,67,95),
-(75,68,11),(76,69,34),(77,72,52),(78,74,81),(79,76,39),(80,78,0),(81,78,90),(82,79,36),(83,80,61),(84,80,88),(85,81,4),
-(86,82,16),(87,83,30),(88,83,74),(89,84,9),(90,84,45),(91,86,56),(92,86,88),(93,87,51),(94,89,3),(95,93,19),(96,93,21),
-(97,93,96),(98,98,0),(99,98,51),(100,98,61);`,
+				`CREATE TABLE a (x int primary key, y int)`,
+				`CREATE TABLE b (x int primary key, y int)`,
+				`insert into a values (0,0), (1,1)`,
+				`insert into b values (0,0), (1,1)`,
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: "SELECT * FROM test WHERE (((v1<20 AND v2<=46) OR (v1<>4 AND v2=26)) OR (v1>36 AND v2<>13));",
-					Expected: []sql.Row{
-						{58, 56, 0}, {61, 57, 49}, {72, 65, 80}, {85, 81, 4}, {3, 2, 10}, {49, 45, 86}, {5, 5, 36}, {50, 46, 46}, {62, 58, 12}, {92, 86, 88}, {47, 45, 31}, {54, 50, 0}, {55, 50, 14}, {87, 83, 30}, {91, 86, 56}, {66, 59, 54}, {76, 69, 34}, {79, 76, 39}, {46, 45, 22}, {57, 54, 38}, {68, 61, 3}, {93, 87, 51}, {4, 3, 35}, {7, 6, 1}, {45, 44, 67}, {52, 48, 22}, {2, 2, 4}, {53, 49, 0}, {69, 61, 34}, {73, 65, 97}, {90, 84, 45}, {82, 79, 36}, {11, 9, 44}, {20, 18, 31}, {41, 42, 0}, {43, 43, 63}, {65, 59, 45}, {100, 98, 61}, {95, 93, 19}, {13, 13, 44}, {56, 51, 35}, {59, 56, 60}, {67, 60, 66}, {77, 72, 52}, {89, 84, 9}, {63, 58, 32}, {83, 80, 61}, {39, 39, 86}, {17, 16, 19}, {38, 39, 55}, {40, 40, 97}, {74, 67, 95}, {78, 74, 81}, {81, 78, 90}, {88, 83, 74}, {37, 38, 66}, {48, 45, 63}, {51, 47, 5}, {64, 59, 29}, {80, 78, 0}, {86, 82, 16}, {96, 93, 21}, {98, 98, 0}, {75, 68, 11}, {84, 80, 88}, {99, 98, 51}, {44, 44, 48}, {60, 57, 29}, {70, 63, 19}, {71, 63, 69}, {36, 38, 20}, {42, 42, 82}, {94, 89, 3}, {97, 93, 96},
-					},
+					Query: `UPDATE a INNER JOIN b on a.x = b.x SET a.y = b.y + 1`,
+					Expected: []sql.Row{{sql.OkResult{
+						RowsAffected: uint64(2),
+						Info:         plan.UpdateInfo{Matched: 1, Updated: 2},
+					}}},
 				},
 				{
-					Query: "SELECT * FROM test WHERE (((v1<=52 AND v2<40) AND (v1<30) OR (v1<=75 AND v2 BETWEEN 54 AND 54)) OR (v1<>31 AND v2<>56));",
-					Expected: []sql.Row{
-						{19, 16, 95}, {58, 56, 0}, {61, 57, 49}, {72, 65, 80}, {85, 81, 4}, {3, 2, 10}, {49, 45, 86}, {5, 5, 36}, {9, 6, 60}, {50, 46, 46}, {62, 58, 12}, {92, 86, 88}, {15, 14, 57}, {47, 45, 31}, {54, 50, 0}, {55, 50, 14}, {87, 83, 30}, {16, 14, 98}, {66, 59, 54}, {76, 69, 34}, {79, 76, 39}, {21, 19, 48}, {46, 45, 22}, {57, 54, 38}, {68, 61, 3}, {93, 87, 51}, {4, 3, 35}, {7, 6, 1}, {45, 44, 67}, {52, 48, 22}, {2, 2, 4}, {12, 9, 97}, {30, 28, 83}, {53, 49, 0}, {69, 61, 34}, {73, 65, 97}, {90, 84, 45}, {82, 79, 36}, {0, 0, 48}, {10, 6, 73}, {11, 9, 44}, {20, 18, 31}, {41, 42, 0}, {43, 43, 63}, {65, 59, 45}, {100, 98, 61}, {95, 93, 19}, {1, 0, 52}, {13, 13, 44}, {56, 51, 35}, {59, 56, 60}, {67, 60, 66}, {77, 72, 52}, {89, 84, 9}, {24, 24, 60}, {33, 34, 22}, {35, 35, 89}, {63, 58, 32}, {83, 80, 61}, {39, 39, 86}, {8, 6, 51}, {14, 14, 53}, {17, 16, 19}, {23, 19, 97}, {26, 25, 31}, {29, 28, 24}, {38, 39, 55}, {40, 40, 97}, {74, 67, 95}, {78, 74, 81}, {81, 78, 90}, {88, 83, 74}, {28, 27, 24}, {37, 38, 66}, {48, 45, 63}, {51, 47, 5}, {64, 59, 29}, {80, 78, 0}, {86, 82, 16}, {96, 93, 21}, {98, 98, 0}, {25, 25, 14}, {27, 27, 9}, {32, 33, 39}, {75, 68, 11}, {84, 80, 88}, {99, 98, 51}, {6, 5, 60}, {22, 19, 75}, {44, 44, 48}, {60, 57, 29}, {70, 63, 19}, {71, 63, 69}, {18, 16, 53}, {34, 34, 91}, {36, 38, 20}, {42, 42, 82}, {94, 89, 3}, {97, 93, 96},
-					},
-				},
+					Query: "SELECT * FROM a;",
 
-				{
-					Query: "SELECT * FROM test WHERE ((v1>42 AND v2<=13) OR (v1=7));",
 					Expected: []sql.Row{
-						{58, 56, 0}, {85, 81, 4}, {62, 58, 12}, {54, 50, 0}, {68, 61, 3}, {53, 49, 0}, {89, 84, 9}, {51, 47, 5}, {80, 78, 0}, {98, 98, 0}, {75, 68, 11}, {94, 89, 3},
-					},
-				},
-				{
-					Query: "SELECT * FROM test WHERE (((((v1<71 AND v2<7) OR (v1<=21 AND v2<=48)) OR (v1=44 AND v2 BETWEEN 21 AND 83)) OR (v1<=72 AND v2<>27)) OR (v1=35 AND v2 BETWEEN 78 AND 89));",
-					Expected: []sql.Row{
-						{19, 16, 95}, {58, 56, 0}, {61, 57, 49}, {72, 65, 80}, {3, 2, 10}, {49, 45, 86}, {5, 5, 36}, {9, 6, 60}, {50, 46, 46}, {62, 58, 12}, {15, 14, 57}, {47, 45, 31}, {54, 50, 0}, {55, 50, 14}, {16, 14, 98}, {66, 59, 54}, {76, 69, 34}, {21, 19, 48}, {46, 45, 22}, {57, 54, 38}, {68, 61, 3}, {4, 3, 35}, {7, 6, 1}, {45, 44, 67}, {52, 48, 22}, {2, 2, 4}, {12, 9, 97}, {30, 28, 83}, {53, 49, 0}, {69, 61, 34}, {73, 65, 97}, {0, 0, 48}, {10, 6, 73}, {11, 9, 44}, {20, 18, 31}, {41, 42, 0}, {43, 43, 63}, {65, 59, 45}, {1, 0, 52}, {13, 13, 44}, {56, 51, 35}, {59, 56, 60}, {67, 60, 66}, {77, 72, 52}, {24, 24, 60}, {33, 34, 22}, {35, 35, 89}, {63, 58, 32}, {39, 39, 86}, {8, 6, 51}, {14, 14, 53}, {17, 16, 19}, {23, 19, 97}, {26, 25, 31}, {29, 28, 24}, {38, 39, 55}, {40, 40, 97}, {74, 67, 95}, {28, 27, 24}, {37, 38, 66}, {48, 45, 63}, {51, 47, 5}, {64, 59, 29}, {25, 25, 14}, {27, 27, 9}, {32, 33, 39}, {75, 68, 11}, {6, 5, 60}, {22, 19, 75}, {31, 31, 14}, {44, 44, 48}, {60, 57, 29}, {70, 63, 19}, {71, 63, 69}, {18, 16, 53}, {34, 34, 91}, {36, 38, 20}, {42, 42, 82},
+						{0, 1},
+						{1, 2},
 					},
 				},
 			},
@@ -116,10 +101,36 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		//engine.Analyzer.Debug = true
-		//engine.Analyzer.Verbose = true
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
+}
+
+func TestSingleQueryPrepared(t *testing.T) {
+	t.Skip()
+
+	var test enginetest.QueryTest
+	test = enginetest.QueryTest{
+		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
+		Expected: []sql.Row{
+			{sql.Point{X: 1, Y: 2}},
+			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.Point{X: 1, Y: 2}},
+			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+		},
+	}
+
+	harness := newDoltHarness(t)
+	//engine := enginetest.NewEngine(t, harness)
+	//enginetest.CreateIndexes(t, harness, engine)
+	engine := enginetest.NewSpatialEngine(t, harness)
+	engine.Analyzer.Debug = true
+	engine.Analyzer.Verbose = true
+
+	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, nil)
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -182,6 +193,11 @@ func TestInsertIntoErrors(t *testing.T) {
 	enginetest.TestInsertIntoErrors(t, newDoltHarness(t))
 }
 
+func TestSpatialQueries(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestSpatialQueries(t, newDoltHarness(t))
+}
+
 func TestReplaceInto(t *testing.T) {
 	enginetest.TestReplaceInto(t, newDoltHarness(t))
 }
@@ -191,7 +207,19 @@ func TestReplaceIntoErrors(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	enginetest.TestUpdate(t, newDoltHarness(t))
+	var skipped []string
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		// skip update ffor join
+		patternToSkip := "join"
+		skipped = make([]string, 0)
+		for _, q := range enginetest.UpdateTests {
+			if strings.Contains(strings.ToLower(q.WriteQuery), patternToSkip) {
+				skipped = append(skipped, q.WriteQuery)
+			}
+		}
+	}
+
+	enginetest.TestUpdate(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
 func TestUpdateErrors(t *testing.T) {
@@ -345,7 +373,6 @@ func TestRenameColumn(t *testing.T) {
 }
 
 func TestAddColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAddColumn(t, newDoltHarness(t))
 }
 
@@ -471,6 +498,20 @@ func TestVariables(t *testing.T) {
 
 func TestVariableErrors(t *testing.T) {
 	enginetest.TestVariableErrors(t, newDoltHarness(t))
+}
+
+func TestLoadDataPrepared(t *testing.T) {
+	t.Skip()
+	enginetest.TestLoadDataPrepared(t, newDoltHarness(t))
+}
+
+func TestLoadData(t *testing.T) {
+	t.Skip()
+	enginetest.TestLoadData(t, newDoltHarness(t))
+}
+
+func TestLoadDataErrors(t *testing.T) {
+	enginetest.TestLoadDataErrors(t, newDoltHarness(t))
 }
 
 func TestJsonScripts(t *testing.T) {
@@ -722,6 +763,125 @@ func TestPersist(t *testing.T) {
 	}
 
 	enginetest.TestPersist(t, harness, newPersistableSession)
+}
+
+func TestQueriesPrepared(t *testing.T) {
+	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestSpatialQueriesPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestVersionedQueriesPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestVersionedQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestInfoSchemaPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestInfoSchemaPrepared(t, newDoltHarness(t))
+}
+
+func TestUpdateQueriesPrepared(t *testing.T) {
+	var skipped []string
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		// skip select join for update
+		skipped = make([]string, 0)
+		for _, q := range enginetest.UpdateTests {
+			if strings.Contains(strings.ToLower(q.WriteQuery), "join") {
+				skipped = append(skipped, q.WriteQuery)
+			}
+		}
+	}
+
+	enginetest.TestUpdateQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+}
+
+func TestInsertQueriesPrepared(t *testing.T) {
+	var skipped []string
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		// skip keyless
+		skipped = make([]string, 0)
+		for _, q := range enginetest.UpdateTests {
+			if strings.Contains(strings.ToLower(q.WriteQuery), "keyless") {
+				skipped = append(skipped, q.WriteQuery)
+			}
+		}
+	}
+
+	enginetest.TestInsertQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+}
+
+func TestReplaceQueriesPrepared(t *testing.T) {
+	enginetest.TestReplaceQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestDeleteQueriesPrepared(t *testing.T) {
+	enginetest.TestDeleteQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestInsertScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestComplexIndexQueriesPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestJsonScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestInsertIgnoreScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestInsertErrorScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
+}
+
+func TestExplodePrepared(t *testing.T) {
+	t.Skip()
+	enginetest.TestExplodePrepared(t, newDoltHarness(t))
+}
+
+func TestViewsPrepared(t *testing.T) {
+	enginetest.TestViewsPrepared(t, newDoltHarness(t))
+}
+
+func TestVersionedViewsPrepared(t *testing.T) {
+	t.Skip("unsupported for prepareds")
+	enginetest.TestVersionedViewsPrepared(t, newDoltHarness(t))
+}
+
+func TestShowTableStatusPrepared(t *testing.T) {
+	enginetest.TestShowTableStatusPrepared(t, newDoltHarness(t))
+}
+
+func TestPrepared(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestPrepared(t, newDoltHarness(t))
+}
+
+func TestPreparedInsert(t *testing.T) {
+	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {

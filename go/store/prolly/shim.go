@@ -27,11 +27,11 @@ import (
 )
 
 func NodeFromValue(v types.Value) Node {
-	return mapNodeFromBytes(v.(types.InlineBlob))
+	return MapNodeFromBytes(v.(types.TupleRowStorage))
 }
 
 func ValueFromMap(m Map) types.Value {
-	return types.InlineBlob(m.root.bytes())
+	return types.TupleRowStorage(m.root.bytes())
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
