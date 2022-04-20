@@ -46,6 +46,7 @@ const (
 
 	// todo(andy): experimental encoding
 	timestampSize ByteSize = 8
+	hash128Size   ByteSize = 16
 )
 
 type Encoding uint8
@@ -69,6 +70,7 @@ const (
 	DateEnc      Encoding = 15
 	DatetimeEnc  Encoding = 16
 	YearEnc      Encoding = 17
+	Hash128Enc   Encoding = 18
 
 	sentinel Encoding = 127
 )

@@ -24,17 +24,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var sharePool = pool.NewBuffPool()
 
 type prollyTableWriter struct {
 	tableName string
 	dbName    string
 
-	primary   prollyIndexWriter
+	primary   indexWriter
 	secondary []prollyIndexWriter
 
 	tbl *doltdb.Table
@@ -49,6 +49,38 @@ type prollyTableWriter struct {
 }
 
 var _ TableWriter = &prollyTableWriter{}
+
+func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) ([]prollyIndexWriter, error) {
+	s, err := t.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	definitions := sch.Indexes().AllIndexes()
+	writers := make([]prollyIndexWriter, len(definitions))
+
+	for i, def := range definitions {
+		idxRows, err := s.GetIndex(ctx, sch, def.Name())
+		if err != nil {
+			return nil, err
+		}
+		m := durable.ProllyMapFromIndex(idxRows)
+
+		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
+		keyDesc, valDesc := m.Descriptors()
+
+		writers[i] = prollyIndexWriter{
+			name:   def.Name(),
+			mut:    m.Mutate(),
+			keyBld: val.NewTupleBuilder(keyDesc),
+			keyMap: keyMap,
+			valBld: val.NewTupleBuilder(valDesc),
+			valMap: valMap,
+		}
+	}
+
+	return writers, nil
+}
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
@@ -205,182 +237,6 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 		return err
 	}
 	return w.setter(ctx, w.dbName, ws.WorkingRoot())
-}
-
-type prollyIndexWriter struct {
-	name string
-	mut  prolly.MutableMap
-
-	keyBld *val.TupleBuilder
-	keyMap val.OrdinalMapping
-
-	valBld *val.TupleBuilder
-	valMap val.OrdinalMapping
-}
-
-func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (prollyIndexWriter, error) {
-	idx, err := t.GetRowData(ctx)
-	if err != nil {
-		return prollyIndexWriter{}, err
-	}
-
-	m := durable.ProllyMapFromIndex(idx)
-
-	keyDesc, valDesc := m.Descriptors()
-	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
-
-	return prollyIndexWriter{
-		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc),
-		keyMap: keyMap,
-		valBld: val.NewTupleBuilder(valDesc),
-		valMap: valMap,
-	}, nil
-}
-
-func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) ([]prollyIndexWriter, error) {
-	s, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	definitions := sch.Indexes().AllIndexes()
-	writers := make([]prollyIndexWriter, len(definitions))
-
-	for i, def := range definitions {
-		idxRows, err := s.GetIndex(ctx, sch, def.Name())
-		if err != nil {
-			return nil, err
-		}
-		m := durable.ProllyMapFromIndex(idxRows)
-
-		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
-		keyDesc, valDesc := m.Descriptors()
-
-		writers[i] = prollyIndexWriter{
-			name:   def.Name(),
-			mut:    m.Mutate(),
-			keyBld: val.NewTupleBuilder(keyDesc),
-			keyMap: keyMap,
-			valBld: val.NewTupleBuilder(valDesc),
-			valMap: valMap,
-		}
-	}
-
-	return writers, nil
-}
-
-var sharePool = pool.NewBuffPool()
-
-func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
-	return m.mut.Map(ctx)
-}
-
-func (m prollyIndexWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
-			return err
-		}
-	}
-	k := m.keyBld.Build(sharePool)
-
-	ok, err := m.mut.Has(ctx, k)
-	if err != nil {
-		return err
-	} else if ok {
-		return m.primaryKeyError(ctx, k)
-	}
-
-	for to := range m.valMap {
-		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(m.valBld, to, sqlRow[from]); err != nil {
-			return err
-		}
-	}
-	v := m.valBld.Build(sharePool)
-
-	return m.mut.Put(ctx, k, v)
-}
-
-func (m prollyIndexWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
-			return err
-		}
-	}
-	k := m.keyBld.Build(sharePool)
-
-	return m.mut.Delete(ctx, k)
-}
-
-func (m prollyIndexWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, oldRow[from]); err != nil {
-			return err
-		}
-	}
-	oldKey := m.keyBld.Build(sharePool)
-
-	// todo(andy): we can skip building, deleting |oldKey|
-	//  if we know the key fields are unchanged
-	if err := m.mut.Delete(ctx, oldKey); err != nil {
-		return err
-	}
-
-	for to := range m.keyMap {
-		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, newRow[from]); err != nil {
-			return err
-		}
-	}
-	newKey := m.keyBld.Build(sharePool)
-
-	ok, err := m.mut.Has(ctx, newKey)
-	if err != nil {
-		return err
-	} else if ok {
-		return m.primaryKeyError(ctx, newKey)
-	}
-
-	for to := range m.valMap {
-		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(m.valBld, to, newRow[from]); err != nil {
-			return err
-		}
-	}
-	v := m.valBld.Build(sharePool)
-
-	return m.mut.Put(ctx, newKey, v)
-}
-
-func (m prollyIndexWriter) primaryKeyError(ctx context.Context, key val.Tuple) error {
-	dupe := make(sql.Row, len(m.keyMap)+len(m.valMap))
-
-	_ = m.mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
-		kd := m.keyBld.Desc
-		for from := range m.keyMap {
-			to := m.keyMap.MapOrdinal(from)
-			if dupe[to], err = index.GetField(kd, from, key); err != nil {
-				return err
-			}
-		}
-
-		vd := m.valBld.Desc
-		for from := range m.valMap {
-			to := m.valMap.MapOrdinal(from)
-			if dupe[to], err = index.GetField(vd, from, value); err != nil {
-				return err
-			}
-		}
-		return
-	})
-
-	s := m.keyBld.Desc.Format(key)
-
-	return sql.NewUniqueKeyErr(s, true, dupe)
 }
 
 func ordinalMappingsFromSchema(from sql.Schema, to schema.Schema) (km, vm val.OrdinalMapping) {
