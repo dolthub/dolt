@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -144,6 +145,68 @@ func InsertStatementPrefix(tableName string, tableSch schema.Schema) (string, er
 	}
 
 	b.WriteString(") VALUES ")
+	return b.String(), nil
+}
+
+// SqlRowAsCreateProcStmt Converts a Row into either a CREATE PROCEDURE statement
+// This function expects a row from the dolt_procedures table.
+func SqlRowAsCreateProcStmt(r sql.Row) (string, error) {
+	var b strings.Builder
+
+	// Write create procedure
+	prefix := "CREATE PROCEDURE "
+	b.WriteString(prefix)
+
+	// Write procedure name
+	nameStr := r[0].(string)
+	b.WriteString(QuoteIdentifier(nameStr))
+	b.WriteString(" ") // add a space
+
+	// Write definition
+	defStmt, err := sqlparser.Parse(r[1].(string))
+	if err != nil {
+		return "", err
+	}
+	defStr := sqlparser.String(defStmt)
+	defStr = defStr[len(prefix)+len(nameStr)+1:]
+	b.WriteString(defStr)
+
+	b.WriteString(";")
+	return b.String(), nil
+}
+
+// SqlRowAsCreateFragStmt Converts a Row into either a CREATE TRIGGER or CREATE VIEW statement
+// This function expects a row from the dolt_schemas table
+func SqlRowAsCreateFragStmt(r sql.Row) (string, error) {
+	var b strings.Builder
+
+	// Write create
+	b.WriteString("CREATE ")
+
+	// Write type
+	typeStr := strings.ToUpper(r[0].(string))
+	b.WriteString(typeStr)
+	b.WriteString(" ") // add a space
+
+	// Write view/trigger name
+	nameStr := r[1].(string)
+	b.WriteString(QuoteIdentifier(nameStr))
+	b.WriteString(" ") // add a space
+
+	// Parse statement to extract definition (and remove any weird whitespace issues)
+	defStmt, err := sqlparser.Parse(r[2].(string))
+	if err != nil {
+		return "", err
+	}
+	defStr := sqlparser.String(defStmt)
+	if typeStr == "TRIGGER" { // triggers need the create trigger <trig_name> to be cut off
+		defStr = defStr[len("CREATE TRIGGER ")+len(nameStr)+1:]
+	} else { // views need the prefixed with "AS"
+		defStr = "AS " + defStr
+	}
+	b.WriteString(defStr)
+
+	b.WriteString(";")
 	return b.String(), nil
 }
 

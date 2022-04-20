@@ -396,9 +396,12 @@ func (sp Spec) GetDataset(ctx context.Context) (ds datas.Dataset) {
 
 // GetValue returns the Value at this Spec's Path within its Database, or nil
 // if this isn't a Path Spec or if that path isn't found.
-func (sp Spec) GetValue(ctx context.Context) (val types.Value) {
+func (sp Spec) GetValue(ctx context.Context) (val types.Value, err error) {
 	if !sp.Path.IsEmpty() {
-		val = sp.Path.Resolve(ctx, sp.GetDatabase(ctx), sp.GetVRW(ctx))
+		val, err = sp.Path.Resolve(ctx, sp.GetDatabase(ctx), sp.GetVRW(ctx))
+		if err != nil {
+			return nil, err
+		}
 	}
 	return
 }

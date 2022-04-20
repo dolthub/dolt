@@ -23,18 +23,24 @@ import (
 
 const CommitFuncName = "commit"
 
+// Deprecated: please use the version in the dprocedures package
 type CommitFunc struct {
 	children []sql.Expression
 }
 
 // NewCommitFunc creates a new CommitFunc expression.
+// Deprecated: please use the version in the dprocedures package
 func NewCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &CommitFunc{children: args}, nil
 }
 
 // Eval implements the Expression interface.
 func (cf *CommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return doDoltCommit(ctx, row, cf.Children())
+	args, err := getDoltArgs(ctx, row, cf.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltCommit(ctx, args)
 }
 
 // String implements the Stringer interface.
