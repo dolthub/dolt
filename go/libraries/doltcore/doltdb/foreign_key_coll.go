@@ -78,15 +78,31 @@ func (f *ForeignKeyViolationError) Error() string {
 // Variables 'key' and 'val' have both 'tags and values' added in them, so tags are removed
 func getRowValuesAsString(key types.Value, val types.Value) string {
 	var rowVals []string
-	_ = key.(types.Tuple).IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
-		rowVals = append(rowVals, tupleVal.HumanReadableString())
-		return false, nil
-	})
-	_ = val.(types.Tuple).IterFields(func(tupleIndex uint64, tupleVal types.Value) (stop bool, err error) {
-		rowVals = append(rowVals, tupleVal.HumanReadableString())
-		return false, nil
-	})
+
+	rowVals = getRowValuesFromTuplesAsStringArray(key)
+	rowVals = append(rowVals, getRowValuesFromTuplesAsStringArray(key)...)
+
 	return fmt.Sprintf("(%s)", strings.Join(rowVals, ", "))
+}
+
+// getRowValuesFromTuplesAsStringArray returns row values as string array from given tuples.
+func getRowValuesFromTuplesAsStringArray(t types.Value) []string {
+	var rowVals []string
+	itr, err := t.(types.Tuple).Iterator()
+	if err != nil {
+		return []string{}
+	}
+	for itr.HasMore() {
+		// ignore tags
+		_, _, _ = itr.NextUint64()
+		_, currVal, vErr := itr.Next()
+		if vErr == nil {
+			rowVals = append(rowVals, currVal.HumanReadableString())
+		} else {
+			rowVals = append(rowVals, "")
+		}
+	}
+	return rowVals
 }
 
 var _ error = (*ForeignKeyViolationError)(nil)
