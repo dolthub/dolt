@@ -62,7 +62,7 @@ CREATE TABLE \`keyed-table\` (
   PRIMARY KEY (\`pk\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
-INSERT INTO \`keyed-table\` (\`pk \`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
 CREATE TABLE \`keyless\` (
   \`pk\` int,
   \`val\` int,
