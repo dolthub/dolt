@@ -766,6 +766,11 @@ func TestPersist(t *testing.T) {
 	enginetest.TestPersist(t, harness, newPersistableSession)
 }
 
+func TestKeylessUniqueIndex(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestKeylessUniqueIndex(t, harness)
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
