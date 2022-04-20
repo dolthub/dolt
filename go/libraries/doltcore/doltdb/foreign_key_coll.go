@@ -61,8 +61,9 @@ func (f *ForeignKeyViolationError) Error() string {
 		}
 		key, _ := f.ViolationRows[i].NomsMapKey(f.Schema).Value(context.Background())
 		val, _ := f.ViolationRows[i].NomsMapValue(f.Schema).Value(context.Background())
-
-		str := getRowValuesAsString(key, val)
+		valSlice, _ := val.(types.Tuple).AsSlice()
+		all, _ := key.(types.Tuple).Append(valSlice...)
+		str, _ := types.EncodedValue(context.Background(), all)
 		sb.WriteRune('\n')
 		sb.WriteString(str)
 	}
@@ -72,37 +73,6 @@ func (f *ForeignKeyViolationError) Error() string {
 	} else {
 		return fmt.Sprintf("foreign key violations on `%s`.`%s`:%s", f.ForeignKey.Name, f.ForeignKey.TableName, sb.String())
 	}
-}
-
-// getRowValuesAsString returns row values as string format.
-// Variables 'key' and 'val' have both 'tags and values' added in them, so tags are removed
-func getRowValuesAsString(key types.Value, val types.Value) string {
-	var rowVals []string
-
-	rowVals = getRowValuesFromTuplesAsStringArray(key)
-	rowVals = append(rowVals, getRowValuesFromTuplesAsStringArray(key)...)
-
-	return fmt.Sprintf("(%s)", strings.Join(rowVals, ", "))
-}
-
-// getRowValuesFromTuplesAsStringArray returns row values as string array from given tuples.
-func getRowValuesFromTuplesAsStringArray(t types.Value) []string {
-	var rowVals []string
-	itr, err := t.(types.Tuple).Iterator()
-	if err != nil {
-		return []string{}
-	}
-	for itr.HasMore() {
-		// ignore tags
-		_, _, _ = itr.NextUint64()
-		_, currVal, vErr := itr.Next()
-		if vErr == nil {
-			rowVals = append(rowVals, currVal.HumanReadableString())
-		} else {
-			rowVals = append(rowVals, "")
-		}
-	}
-	return rowVals
 }
 
 var _ error = (*ForeignKeyViolationError)(nil)
