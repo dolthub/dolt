@@ -766,6 +766,7 @@ func TestPersist(t *testing.T) {
 }
 
 func TestKeylessUniqueIndex(t *testing.T) {
+	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
