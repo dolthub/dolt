@@ -16,7 +16,6 @@ package writer
 
 import (
 	"context"
-	"errors"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -84,9 +83,6 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if schema.IsKeyless(w.sch) {
-		return errors.New("operation unsupported")
-	}
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
 			return err
@@ -100,9 +96,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	if schema.IsKeyless(w.sch) {
-		return errors.New("operation unsupported")
-	}
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -116,9 +109,6 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
-	if schema.IsKeyless(w.sch) {
-		return errors.New("operation unsupported")
-	}
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			return err
