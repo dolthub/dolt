@@ -260,22 +260,26 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 		return types.Ref{}, types.Ref{}, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
+	var r *RootValue
+	r, workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
 		return types.Ref{}, types.Ref{}, nil, err
 	}
+	ws.workingRoot = r
 
-	stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
+	r, stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
 	if err != nil {
 		return types.Ref{}, types.Ref{}, nil, err
 	}
+	ws.stagedRoot = r
 
 	if ws.mergeState != nil {
 		var mergeStateRef types.Ref
-		preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		r, preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}
+		ws.mergeState.preMergeWorking = r
 
 		commitH, err := ws.mergeState.commit.HashOf()
 		if err != nil {
