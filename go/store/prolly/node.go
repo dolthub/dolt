@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"context"
 	"encoding/hex"
 	"io"
 	"math"
@@ -41,6 +42,56 @@ type Node struct {
 	keys, values val.SlicedBuffer
 	buf          serial.TupleMap
 	count        uint16
+}
+
+type AddressCb func(ctx context.Context, addr hash.Hash) error
+
+func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
+	if nd.leafNode() {
+		// todo(andy): ref'd values
+		return nil
+	}
+
+	for i := 0; i < int(nd.count); i++ {
+		addr := nd.getRef(i)
+
+		if err := cb(ctx, addr); err != nil {
+			return err
+		}
+
+		child, err := ns.Read(ctx, addr)
+		if err != nil {
+			return err
+		}
+
+		if err := WalkAddresses(ctx, child, ns, cb); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+type NodeCb func(ctx context.Context, nd Node) error
+
+func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
+	if err := cb(ctx, nd); err != nil {
+		return err
+	}
+	if nd.leafNode() {
+		// todo(andy): walk ref'd values?
+		return nil
+	}
+
+	for i := 0; i < int(nd.count); i++ {
+		child, err := ns.Read(ctx, nd.getRef(i))
+		if err != nil {
+			return err
+		}
+		if err := WalkNodes(ctx, child, ns, cb); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func MapNodeFromBytes(bb []byte) Node {
@@ -90,11 +141,6 @@ func (nd Node) getValue(i int) nodeItem {
 	}
 }
 
-// size returns the number of keys in this node
-func (nd Node) size() int {
-	return nd.keys.Len()
-}
-
 // getRef returns the |ith| ref in this node. Only valid for internal nodes.
 func (nd Node) getRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
@@ -129,6 +175,10 @@ func (nd Node) bytes() []byte {
 	return nd.buf.Table().Bytes
 }
 
+func (nd Node) size() int {
+	return len(nd.bytes())
+}
+
 func getKeyOffsetsVector(buf serial.TupleMap) []byte {
 	sz := buf.KeyOffsetsLength() * 2
 	tab := buf.Table()
@@ -155,7 +205,7 @@ func getValueOffsetsVector(buf serial.TupleMap) []byte {
 // the keys
 func OutputProllyNode(w io.Writer, node Node) error {
 	w.Write([]byte("["))
-	for i := 0; i < node.size(); i++ {
+	for i := 0; i < int(node.count); i++ {
 		k := node.getKey(i)
 		kt := val.Tuple(k)
 

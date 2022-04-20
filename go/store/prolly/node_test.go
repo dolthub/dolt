@@ -29,7 +29,7 @@ import (
 )
 
 func TestRoundTripInts(t *testing.T) {
-	tups, _ := ascendingUintTuples(t, 10)
+	tups, _ := ascendingUintTuples(10)
 	keys := make([]val.Tuple, len(tups))
 	values := make([]val.Tuple, len(tups))
 	for i := range tups {
@@ -146,7 +146,8 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
-func ascendingUintTuples(t *testing.T, count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
+// Map<Tuple<Uint32>,Tuple<Uint32>>
+func ascendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
 	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
 	bld := val.NewTupleBuilder(desc)
 	tuples = make([][2]val.Tuple, count)
@@ -169,6 +170,21 @@ func ascendingIntTuples(t *testing.T, count int) (tuples [][2]val.Tuple, desc va
 		bld.PutInt32(0, int32(i+count))
 		tuples[i][1] = bld.Build(sharedPool)
 	}
+	return
+}
+
+// Map<Tuple<Uint32,Uint32>,Tuple<Uint32,Uint32>>
+func ascendingCompositeIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc) {
+	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc}, val.Type{Enc: val.Uint32Enc})
+	bld := val.NewTupleBuilder(desc)
+
+	tups := make([]val.Tuple, count*2)
+	for i := range tups {
+		bld.PutUint32(0, uint32(i))
+		bld.PutUint32(1, uint32(i))
+		tups[i] = bld.Build(sharedPool)
+	}
+	keys, values = tups[:count], tups[count:]
 	return
 }
 

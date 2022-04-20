@@ -166,6 +166,7 @@ func readSubtreeCounts(n int, buf []byte) (sc subtreeCounts) {
 		sc = append(sc, count)
 		buf = buf[n:]
 	}
+	assertTrue(len(sc) == n)
 	return
 }
 

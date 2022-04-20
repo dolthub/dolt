@@ -36,12 +36,13 @@ func (i nodeItem) size() val.ByteSize {
 	return val.ByteSize(len(i))
 }
 
-// nodeCursor explores a tree of Node items.
+// nodeCursor explores a tree of Nodes.
 type nodeCursor struct {
-	nd     Node
-	idx    int
-	parent *nodeCursor
-	nrw    NodeStore
+	nd       Node
+	idx      int
+	parent   *nodeCursor
+	subtrees subtreeCounts
+	nrw      NodeStore
 }
 
 type compareFn func(left, right nodeItem) int
@@ -218,6 +219,16 @@ func (cur *nodeCursor) currentRef() hash.Hash {
 	return cur.nd.getRef(cur.idx)
 }
 
+func (cur *nodeCursor) currentSubtreeSize() uint64 {
+	if cur.isLeaf() {
+		return 1
+	}
+	if cur.subtrees == nil { // lazy load
+		cur.subtrees = cur.nd.getSubtreeCounts()
+	}
+	return cur.subtrees[cur.idx]
+}
+
 func (cur *nodeCursor) firstKey() nodeItem {
 	return cur.nd.getKey(0)
 }
@@ -256,6 +267,7 @@ func (cur *nodeCursor) atNodeEnd() bool {
 }
 
 func (cur *nodeCursor) isLeaf() bool {
+	// todo(andy): cache level
 	return cur.level() == 0
 }
 
@@ -291,7 +303,7 @@ func (cur *nodeCursor) seek(ctx context.Context, item nodeItem, cb compareFn) (e
 }
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
-// index of the nextMutation greatest element if it is not present.
+// index of the next greatest element if it's not present.
 func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
 		return cb(item, cur.nd.getKey(i)) <= 0
@@ -299,6 +311,10 @@ func (cur *nodeCursor) search(item nodeItem, cb compareFn) (idx int) {
 
 	return idx
 }
+
+// todo(andy): improve the combined interface of advance() and advanceInBounds().
+//  currently the returned boolean indicates if the cursor was able to advance,
+//  which isn't usually useful information
 
 func (cur *nodeCursor) advance(ctx context.Context) (bool, error) {
 	ok, err := cur.advanceInBounds(ctx)
@@ -341,6 +357,8 @@ func (cur *nodeCursor) advanceInBounds(ctx context.Context) (bool, error) {
 			}
 
 			cur.skipToNodeStart()
+			cur.subtrees = nil // lazy load
+
 			return true, nil
 		}
 		// if not |ok|, then every parent, grandparent, etc.,
@@ -390,6 +408,8 @@ func (cur *nodeCursor) retreatInBounds(ctx context.Context) (bool, error) {
 			}
 
 			cur.skipToNodeEnd()
+			cur.subtrees = nil // lazy load
+
 			return true, nil
 		}
 		// if not |ok|, then every parent, grandparent, etc.,
