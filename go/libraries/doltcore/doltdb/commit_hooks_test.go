@@ -115,8 +115,9 @@ func TestPushOnWriteHook(t *testing.T) {
 	root, err = root.PutTable(context.Background(), "test", tbl)
 	assert.NoError(t, err)
 
-	valHash, err := ddb.WriteRootValue(context.Background(), root)
+	r, valHash, err := ddb.WriteRootValue(context.Background(), root)
 	assert.NoError(t, err)
+	root = r
 
 	meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 	if err != nil {
@@ -252,8 +253,9 @@ func TestAsyncPushOnWrite(t *testing.T) {
 			root, err = root.PutTable(context.Background(), "test", tbl)
 			assert.NoError(t, err)
 
-			valHash, err := ddb.WriteRootValue(context.Background(), root)
+			r, valHash, err := ddb.WriteRootValue(context.Background(), root)
 			assert.NoError(t, err)
+			root = r
 
 			meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")
 			if err != nil {

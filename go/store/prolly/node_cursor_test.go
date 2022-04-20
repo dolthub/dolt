@@ -59,7 +59,7 @@ func newTestNodeStore() NodeStore {
 func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
 	ctx := context.Background()
 	ns := newTestNodeStore()
-	chunker, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count / 2)

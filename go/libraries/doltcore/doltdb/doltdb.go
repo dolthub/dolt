@@ -161,7 +161,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	_, err = ddb.WriteRootValue(ctx, rv)
+	rv, _, err = ddb.WriteRootValue(ctx, rv)
 
 	if err != nil {
 		return err
@@ -178,7 +178,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	firstCommit, err := ddb.db.Commit(ctx, ds, rv.valueSt, commitOpts)
+	firstCommit, err := ddb.db.Commit(ctx, ds, rv.nomsValue(), commitOpts)
 
 	if err != nil {
 		return err
@@ -365,30 +365,30 @@ func (ddb *DoltDB) ResolveWorkingSet(ctx context.Context, workingSetRef ref.Work
 
 // TODO: convenience method to resolve the head commit of a branch.
 
-// WriteRootValue will write a doltdb.RootValue instance to the database.  This value will not be associated with a commit
-// and can be committed by hash at a later time.  Returns the hash of the value written.
-// This method is the primary place in doltcore that handles setting the FeatureVersion of root values to the current
-// value, so all writes of RootValues should happen here.
-func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash, error) {
-	valRef, err := ddb.writeRootValue(ctx, rv)
+// WriteRootValue will write a doltdb.RootValue instance to the database.  This
+// value will not be associated with a commit and can be committed by hash at a
+// later time.  Returns an updated root value and the hash of the value
+// written.  This method is the primary place in doltcore that handles setting
+// the FeatureVersion of root values to the current value, so all writes of
+// RootValues should happen here.
+func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (*RootValue, hash.Hash, error) {
+	nrv, ref, err := ddb.writeRootValue(ctx, rv)
 	if err != nil {
-		return hash.Hash{}, err
+		return nil, hash.Hash{}, err
 	}
-	return valRef.TargetHash(), nil
+	return nrv, ref.TargetHash(), nil
 }
 
-// writeRootValue writes the root value given to the DB and returns a ref to it. Unlike WriteRootValue, this method
-// does not flush the DB to disk afterward.
-// This method is the primary place in doltcore that handles setting the FeatureVersion of root values to the current
-// value, so all writes of RootValues should happen here or via WriteRootValue.
-func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (types.Ref, error) {
-	var err error
-	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (*RootValue, types.Ref, error) {
+	rv, err := rv.setFeatureVersion(DoltFeatureVersion)
 	if err != nil {
-		return types.Ref{}, err
+		return nil, types.Ref{}, err
 	}
-
-	return ddb.vrw.WriteValue(ctx, rv.valueSt)
+	ref, err := ddb.vrw.WriteValue(ctx, rv.nomsValue())
+	if err != nil {
+		return nil, types.Ref{}, err
+	}
+	return rv, ref, nil
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
@@ -495,7 +495,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
@@ -559,7 +559,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	if err != nil {
 		return nil, err
 	}
-	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
@@ -988,7 +988,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
+	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,

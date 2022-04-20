@@ -48,7 +48,7 @@ func NewMap(node Node, ns NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 func NewMapFromTuples(ctx context.Context, ns NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
 	m := NewMap(Node{}, ns, keyDesc, valDesc)
 
-	ch, err := newEmptyTreeChunker(ctx, ns, newDefaultNodeSplitter)
+	ch, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	if err != nil {
 		return Map{}, err
 	}
@@ -100,6 +100,10 @@ func (m Map) Count() int {
 	return m.root.treeCount()
 }
 
+func (m Map) Height() int {
+	return m.root.level() + 1
+}
+
 // HashOf returns the Hash of this Map.
 func (m Map) HashOf() hash.Hash {
 	return m.root.hashOf()
@@ -113,6 +117,14 @@ func (m Map) Format() *types.NomsBinFormat {
 // Descriptors returns the TupleDesc's from this Map.
 func (m Map) Descriptors() (val.TupleDesc, val.TupleDesc) {
 	return m.keyDesc, m.valDesc
+}
+
+func (m Map) WalkAddresses(ctx context.Context, cb AddressCb) error {
+	return WalkAddresses(ctx, m.root, m.ns, cb)
+}
+
+func (m Map) WalkNodes(ctx context.Context, cb NodeCb) error {
+	return WalkNodes(ctx, m.root, m.ns, cb)
 }
 
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.

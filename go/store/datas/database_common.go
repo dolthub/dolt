@@ -743,7 +743,7 @@ func (db *database) CommitWithWorkingSet(
 		if currDS != currDSHash {
 			return refmap{}, ErrMergeNeeded
 		}
-		rm = rm.edit([]rmedit{
+		rm = rm.edit([]RefMapEdit{
 			{commitDS.ID(), commitValRef.TargetHash()},
 			{workingSetDS.ID(), wsAddr},
 		})

@@ -27,29 +27,25 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-//  newSplitterFn makes a nodeSplitter.
-type newSplitterFn func(salt byte) nodeSplitter
-
 type treeChunker struct {
-	cur      *nodeCursor
-	parent   *treeChunker
-	subtrees subtreeCounts
-	level    int
+	cur    *nodeCursor
+	parent *treeChunker
+	level  int
 
 	builder *nodeBuilder
 	done    bool
 
 	splitter nodeSplitter
-	newSplit newSplitterFn
+	factory  splitterFactory
 
 	ns NodeStore
 }
 
-func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
+func newEmptyTreeChunker(ctx context.Context, ns NodeStore, newSplit splitterFactory) (*treeChunker, error) {
 	return newTreeChunker(ctx, nil, 0, ns, newSplit)
 }
 
-func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStore, newSplit newSplitterFn) (*treeChunker, error) {
+func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStore, newSplit splitterFactory) (*treeChunker, error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
@@ -58,15 +54,13 @@ func newTreeChunker(ctx context.Context, cur *nodeCursor, level int, ns NodeStor
 		parent:   nil,
 		level:    level,
 		builder:  newNodeBuilder(level),
-		newSplit: newSplit,
-		splitter: newSplit(byte(level % 256)),
+		splitter: newSplit(uint8(level % 256)),
+		factory:  newSplit,
 		ns:       ns,
 	}
 
 	if cur != nil {
-		err := sc.resume(ctx)
-
-		if err != nil {
+		if err := sc.resume(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -81,10 +75,6 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 		}
 	}
 
-	if !tc.isLeaf() {
-		tc.subtrees = tc.cur.nd.getSubtreeCounts()
-	}
-
 	idx := tc.cur.idx
 	tc.cur.skipToNodeStart()
 
@@ -92,7 +82,7 @@ func (tc *treeChunker) resume(ctx context.Context) (err error) {
 		_, err = tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.currentSubtreeSize())
+			tc.cur.currentSubtreeSize())
 
 		// todo(andy): seek to correct chunk
 		//  currently when inserting tuples between chunks
@@ -175,7 +165,7 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 		ok, err := tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.currentSubtreeSize())
+			tc.cur.currentSubtreeSize())
 		if err != nil {
 			return err
 		}
@@ -193,7 +183,7 @@ func (tc *treeChunker) AdvanceTo(ctx context.Context, next *nodeCursor) error {
 				}
 
 				// Here we need to advance the chunker's cursor, but calling
-				// tc.cur.forward() would needlessly fetch another chunk at the
+				// tc.cur.advance() would needlessly fetch another chunk at the
 				// current level. Instead, we only advance the parent.
 				_, err := tc.cur.parent.advanceInBounds(ctx)
 				if err != nil {
@@ -336,7 +326,7 @@ func (tc *treeChunker) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = newTreeChunker(ctx, parent, tc.level+1, tc.ns, tc.newSplit)
+	tc.parent, err = newTreeChunker(ctx, parent, tc.level+1, tc.ns, tc.factory)
 	if err != nil {
 		return err
 	}
@@ -418,7 +408,7 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 		ok, err = tc.append(ctx,
 			tc.cur.currentKey(),
 			tc.cur.currentValue(),
-			tc.currentSubtreeSize())
+			tc.cur.currentSubtreeSize())
 		if err != nil {
 			return err
 		}
@@ -444,13 +434,6 @@ func (tc *treeChunker) finalizeCursor(ctx context.Context) (err error) {
 	}
 
 	return nil
-}
-
-func (tc *treeChunker) currentSubtreeSize() uint64 {
-	if tc.isLeaf() {
-		return 1
-	}
-	return tc.subtrees[tc.cur.idx]
 }
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.

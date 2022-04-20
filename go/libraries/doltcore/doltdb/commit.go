@@ -84,8 +84,7 @@ func (c *Commit) GetRootValue(ctx context.Context) (*RootValue, error) {
 	if rootV == nil {
 		return nil, errHasNoRootValue
 	}
-	// TODO: Get rid of this types.Struct assert.
-	return newRootValue(c.vrw, rootV.(types.Struct))
+	return newRootValue(c.vrw, rootV)
 }
 
 func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
@@ -211,10 +210,11 @@ func (ddb *DoltDB) NewPendingCommit(
 	parentCommits []*Commit,
 	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
-	val, err := ddb.writeRootValue(ctx, roots.Staged)
+	newstaged, val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
+	roots.Staged = newstaged
 
 	ds, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {
