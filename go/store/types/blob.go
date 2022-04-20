@@ -576,6 +576,10 @@ func (b Blob) String() string {
 }
 
 func (b Blob) HumanReadableString() string {
+	return "BLOB"
+}
+
+func (b Blob) DebugText() string {
 	ctx := context.Background()
 	bLen := b.Len()
 	bRd := b.Reader(ctx)

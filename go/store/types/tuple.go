@@ -949,7 +949,11 @@ func (t Tuple) String() string {
 		}
 		seenOne = true
 
-		b.WriteString(v.HumanReadableString())
+		if blob, ok := v.(Blob); ok {
+			b.WriteString(blob.DebugText())
+		} else {
+			b.WriteString(v.HumanReadableString())
+		}
 	}
 	b.WriteString(")")
 	return b.String()
