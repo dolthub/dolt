@@ -45,6 +45,16 @@ type Schema interface {
 
 	// SetPkOrdinals specifies a primary key column ordering
 	SetPkOrdinals([]int) error
+
+	// AddColumn adds a column to this schema in the order given and returns the resulting Schema.
+	// The new column cannot be a primary key. To alter primary keys, create a new schema with those keys.
+	AddColumn(column Column, order *ColumnOrder) (Schema, error)
+}
+
+// ColumnOrder is used in ALTER TABLE statements to change the order of inserted / modified columns.
+type ColumnOrder struct {
+	First       bool   // True if this column should come first
+	AfterColumn string // Set to the name of the column after which this column should appear
 }
 
 // ColFromTag returns a schema.Column from a schema and a tag

@@ -10,10 +10,11 @@ flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespac
   commit.fbs \
   database.fbs \
   prolly.fbs \
+  rootvalue.fbs \
   schema.fbs \
   storeroot.fbs \
-  tag.fbs \
   table.fbs \
+  tag.fbs \
   workingset.fbs
 
 # prefix files with copyright header

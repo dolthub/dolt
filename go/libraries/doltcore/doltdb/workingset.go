@@ -79,7 +79,7 @@ func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState ty
 		return nil, err
 	}
 
-	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
+	workingRoot, err := newRootValue(vrw, workingRootValSt)
 	if err != nil {
 		return nil, err
 	}
@@ -187,23 +187,23 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
-	workingRootValSt, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
+	workingRootVal, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
 	if err != nil {
 		return nil, err
 	}
-	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
+	workingRoot, err := newRootValue(vrw, workingRootVal)
 	if err != nil {
 		return nil, err
 	}
 
 	var stagedRoot *RootValue
 	if dsws.StagedAddr != nil {
-		stagedRootValSt, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
+		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
 		}
 
-		stagedRoot, err = newRootValue(vrw, stagedRootValSt.(types.Struct))
+		stagedRoot, err = newRootValue(vrw, stagedRootVal)
 		if err != nil {
 			return nil, err
 		}

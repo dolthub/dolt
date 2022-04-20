@@ -178,7 +178,7 @@ func (ddb *DoltDB) WriteEmptyRepoWithCommitTimeAndDefaultBranch(
 		return err
 	}
 
-	firstCommit, err := ddb.db.Commit(ctx, ds, rv.valueSt, commitOpts)
+	firstCommit, err := ddb.db.Commit(ctx, ds, rv.nomsValue(), commitOpts)
 
 	if err != nil {
 		return err
@@ -382,13 +382,11 @@ func (ddb *DoltDB) WriteRootValue(ctx context.Context, rv *RootValue) (hash.Hash
 // This method is the primary place in doltcore that handles setting the FeatureVersion of root values to the current
 // value, so all writes of RootValues should happen here or via WriteRootValue.
 func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (types.Ref, error) {
-	var err error
-	rv.valueSt, err = rv.valueSt.Set(featureVersKey, types.Int(DoltFeatureVersion))
+	rv, err := rv.setFeatureVersion(DoltFeatureVersion)
 	if err != nil {
 		return types.Ref{}, err
 	}
-
-	return ddb.vrw.WriteValue(ctx, rv.valueSt)
+	return ddb.vrw.WriteValue(ctx, rv.nomsValue())
 }
 
 // ReadRootValue reads the RootValue associated with the hash given and returns it. Returns an error if the value cannot
@@ -495,7 +493,7 @@ func (ddb *DoltDB) CommitWithParentCommits(ctx context.Context, valHash hash.Has
 		return nil, err
 	}
 
-	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
@@ -559,7 +557,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	if err != nil {
 		return nil, err
 	}
-	if st, ok := val.(types.Struct); !ok || st.Name() != ddbRootStructName {
+	if !isRootValue(ddb.vrw.Format(), val) {
 		return nil, errors.New("can't commit a value that is not a valid root value")
 	}
 
@@ -988,7 +986,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.valueSt, datas.WorkingSetSpec{
+	commitDataset, _, err := ddb.db.CommitWithWorkingSet(ctx, headDs, wsDs, commit.Roots.Staged.nomsValue(), datas.WorkingSetSpec{
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,

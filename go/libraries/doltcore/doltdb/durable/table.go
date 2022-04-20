@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -97,6 +98,8 @@ type nomsTable struct {
 	tableStruct types.Struct
 }
 
+var sharePool = pool.NewBuffPool()
+
 var _ Table = nomsTable{}
 
 // NewNomsTable makes a new Table.
@@ -152,9 +155,9 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 	return nomsTable{vrw, tableStruct}, nil
 }
 
-// NomsTableFromRef deserializes the table referenced by |ref|.
-func NomsTableFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (Table, error) {
-	val, err := ref.TargetValue(ctx, vrw)
+// NomsTableFromAddr deserializes the table in the chunk at |addr|.
+func NomsTableFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (Table, error) {
+	val, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

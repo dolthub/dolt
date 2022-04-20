@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-var tuples = []val.Tuple{
+var rangeTuples = []val.Tuple{
 	intTuple(1, 1),           // 0
 	intTuple(1, 2),           // 1
 	intTuple(1, 3),           // 2
@@ -141,11 +141,11 @@ func TestRangeSearch(t *testing.T) {
 		},
 	}
 
-	values := make([]val.Tuple, len(tuples))
+	values := make([]val.Tuple, len(rangeTuples))
 	for i := range values {
 		values[i] = make(val.Tuple, 0)
 	}
-	testNode := newTupleLeafNode(tuples, values)
+	testNode := newTupleLeafNode(rangeTuples, values)
 	testMap := Map{root: testNode, keyDesc: twoCol}
 
 	for _, test := range tests {
@@ -163,7 +163,7 @@ func TestRangeSearch(t *testing.T) {
 
 			iter, err := testMap.IterRange(ctx, rng)
 			require.NoError(t, err)
-			expected := tuples[test.lo:test.hi]
+			expected := rangeTuples[test.lo:test.hi]
 
 			i := 0
 			for {

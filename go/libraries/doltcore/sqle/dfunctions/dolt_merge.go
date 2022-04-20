@@ -144,7 +144,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflicts, doltdb.ErrMergeActive
 	}
 
-	err := checkForUncommittedChanges(roots.Working, roots.Head)
+	err := checkForUncommittedChanges(ctx, roots.Working, roots.Head)
 	if err != nil {
 		return ws, noConflicts, err
 	}
@@ -408,7 +408,7 @@ func mergeRootToWorking(
 	return ws, nil
 }
 
-func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
+func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
 	rh, err := root.HashOf()
 
 	if err != nil {
@@ -422,6 +422,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 	}
 
 	if rh != hrh {
+		fmt.Printf("root: %s\nheadRoot: %s\n", root.DebugString(ctx, true), headRoot.DebugString(ctx, true))
 		return ErrUncommittedChanges.New()
 	}
 	return nil
