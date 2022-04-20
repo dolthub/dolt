@@ -219,7 +219,6 @@ SQL
 }
 
 @test "import mysqldump: a table with all types with DEFAULT not-null VALUE dump" {
-    skip "charset introducer needs to be supported"
     run dolt sql <<SQL
 CREATE TABLE types_default (
   pk int NOT NULL,
@@ -269,7 +268,6 @@ SQL
 }
 
 @test "import mysqldump: a table with string literal representation in column definition" {
-    skip "charset introducer needs to be supported in LIKE filter"
     run dolt sql <<SQL
 CREATE TABLE mytable (
   pk int NOT NULL,
@@ -288,7 +286,6 @@ SQL
 }
 
 @test "import mysqldump: charset introducer in tables from mysql db" {
-    skip "utf8mb3 charset introducer needs to be supported for mysql db tables"
     run dolt sql <<SQL
 CREATE TABLE engine_cost (
   engine_name varchar(64) NOT NULL,
