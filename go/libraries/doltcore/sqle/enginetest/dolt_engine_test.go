@@ -478,7 +478,6 @@ func TestNaturalJoinDisjoint(t *testing.T) {
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 

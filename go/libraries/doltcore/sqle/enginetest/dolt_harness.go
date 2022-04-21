@@ -80,7 +80,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
 		dh = dh.WithSkippedQueries([]string{
 			"show",        // todo(andy): "show_create_table_t2"
-			"keyless",     // todo(andy)
 			"foreign key", //TODO: Daylon
 			"no_primary",
 		})
@@ -183,10 +182,6 @@ func (d *DoltHarness) SupportsForeignKeys() bool {
 }
 
 func (d *DoltHarness) SupportsKeylessTables() bool {
-	if types.IsFormat_DOLT_1(d.env.DoltDB.Format()) {
-		// todo(andy): support keyless tables
-		return false
-	}
 	return true
 }
 
