@@ -109,10 +109,6 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 
 // NewTable returns a new Table.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
-	if types.IsFormat_DOLT_1(vrw.Format()) && schema.IsKeyless(sch) {
-		return nil, errNbfUnsupported
-	}
-
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err

@@ -60,6 +60,10 @@ func MapDescriptorsFromScheam(sch schema.Schema) (kd, vd val.TupleDesc) {
 }
 
 func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
+	if schema.IsKeyless(sch) {
+		return val.KeylessTupleDesc
+	}
+
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
@@ -82,6 +86,10 @@ func columnNullable(col schema.Column) bool {
 
 func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
+	if schema.IsKeyless(sch) {
+		tt = []val.Type{val.KeylessCardType}
+	}
+
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
 			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),

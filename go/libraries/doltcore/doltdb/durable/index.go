@@ -139,10 +139,6 @@ func NomsMapFromIndex(i Index) types.Map {
 	return i.(nomsIndex).index
 }
 
-func VrwFromNomsIndex(i Index) types.ValueReadWriter {
-	return i.(nomsIndex).vrw
-}
-
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.
 func IndexFromNomsMap(m types.Map, vrw types.ValueReadWriter) Index {
 	return nomsIndex{
