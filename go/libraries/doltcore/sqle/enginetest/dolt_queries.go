@@ -1409,7 +1409,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT * from dolt_diff('t', @Commit1, 'fake-branch');",
-				ExpectedErrStr: "branch not found: fake-branch",
+				ExpectedErrStr: "branch not found: refs/remotes/fake-branch",
 			},
 			{
 				Query:       "SELECT * from dolt_diff('t', @Commit1, concat('fake', '-', 'branch'));",
