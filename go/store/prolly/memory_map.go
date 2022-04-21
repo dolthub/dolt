@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+
 	"github.com/dolthub/dolt/go/store/skip"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -33,7 +35,7 @@ func newMemoryMap(keyDesc val.TupleDesc, tups ...val.Tuple) (mm memoryMap) {
 
 	mm.keyDesc = keyDesc
 
-	// todo(andy): fix allocation for |mm.compare|
+	// todo(andy): fix allocation for |mm.Compare|
 	mm.list = skip.NewSkipList(mm.compare)
 	for i := 0; i < len(tups); i += 2 {
 		mm.list.Put(tups[i], tups[i+1])
@@ -132,7 +134,7 @@ func skipSearchFromRange(rng Range) skip.SearchFn {
 	}
 }
 
-func (mm memoryMap) mutations() mutationIter {
+func (mm memoryMap) mutations() tree.MutationIter {
 	return &memRangeIter{
 		iter: mm.list.IterAtStart(),
 		rng:  Range{Start: nil, Stop: nil, Desc: mm.keyDesc},
@@ -145,7 +147,7 @@ type memRangeIter struct {
 }
 
 var _ rangeIter = &memRangeIter{}
-var _ mutationIter = &memRangeIter{}
+var _ tree.MutationIter = &memRangeIter{}
 
 // current returns the iter's current Tuple pair, or nil Tuples
 // if the iter has exhausted its range, it will
@@ -172,15 +174,15 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 	}
 }
 
-func (it *memRangeIter) nextMutation(context.Context) (key, value val.Tuple) {
-	key, value = it.iter.Current()
-	if key == nil {
-		return
+func (it *memRangeIter) NextMutation(context.Context) (tree.NodeItem, tree.NodeItem) {
+	k, v := it.iter.Current()
+	if k == nil {
+		return nil, nil
 	}
 	it.iter.Advance()
-	return
+	return k, v
 }
 
-func (it *memRangeIter) close() error {
+func (it *memRangeIter) Close() error {
 	return nil
 }

@@ -22,16 +22,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-func NodeFromValue(v types.Value) Node {
-	return MapNodeFromBytes(v.(types.TupleRowStorage))
+func NodeFromValue(v types.Value) tree.Node {
+	return tree.MapNodeFromBytes(v.(types.TupleRowStorage))
 }
 
 func ValueFromMap(m Map) types.Value {
-	return types.TupleRowStorage(m.root.bytes())
+	return tree.ValueFromNode(m.root)
 }
 
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
@@ -39,7 +40,7 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 		root:    NodeFromValue(v),
 		keyDesc: KeyDescriptorFromSchema(sch),
 		valDesc: ValueDescriptorFromSchema(sch),
-		ns:      NewNodeStore(ChunkStoreFromVRW(vrw)),
+		ns:      tree.NewNodeStore(ChunkStoreFromVRW(vrw)),
 	}
 }
 

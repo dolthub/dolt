@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -82,7 +83,7 @@ func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
-	tuples := randomTuplePairs(count, memKeyDesc, memValueDesc)
+	tuples := tree.RandomTuplePairs(count, memKeyDesc, memValueDesc)
 	mm := newMemoryMap(memKeyDesc)
 	for _, pair := range tuples {
 		mm.Put(pair[0], pair[1])
@@ -98,7 +99,7 @@ func makeMemSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple)
 	)
 	memValueDesc := val.NewTupleDescriptor()
 
-	tuples := randomCompositeTuplePairs(count, memKeyDesc, memValueDesc)
+	tuples := tree.RandomCompositeTuplePairs(count, memKeyDesc, memValueDesc)
 
 	mm := newMemoryMap(memKeyDesc)
 	for _, pair := range tuples {
@@ -120,7 +121,7 @@ func deleteFromMemoryMap(mm memoryMap, tt [][2]val.Tuple) (memoryMap, [][2]val.T
 	// re-sort the remaining tuples
 	remaining := tt[count/4:]
 	desc := keyDescFromMap(mm)
-	sortTuplePairs(remaining, desc)
+	tree.SortTuplePairs(remaining, desc)
 
 	for _, kv := range deletes {
 		mm.Put(kv[0], nil)

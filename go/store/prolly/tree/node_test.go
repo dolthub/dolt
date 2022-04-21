@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"encoding/binary"
@@ -29,7 +29,7 @@ import (
 )
 
 func TestRoundTripInts(t *testing.T) {
-	tups, _ := ascendingUintTuples(10)
+	tups, _ := AscendingUintTuples(10)
 	keys := make([]val.Tuple, len(tups))
 	values := make([]val.Tuple, len(tups))
 	for i := range tups {
@@ -38,11 +38,11 @@ func TestRoundTripInts(t *testing.T) {
 	}
 	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
 
-	nd := newTupleLeafNode(keys, values)
-	assert.True(t, nd.leafNode())
+	nd := NewTupleLeafNode(keys, values)
+	assert.True(t, nd.IsLeaf())
 	assert.Equal(t, len(keys), int(nd.count))
 	for i := range keys {
-		assert.Equal(t, keys[i], val.Tuple(nd.getKey(i)))
+		assert.Equal(t, keys[i], val.Tuple(nd.GetKey(i)))
 		assert.Equal(t, values[i], val.Tuple(nd.getValue(i)))
 	}
 }
@@ -53,10 +53,10 @@ func TestRoundTripNodeItems(t *testing.T) {
 		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
 
 		nd := newLeafNode(keys, values)
-		assert.True(t, nd.leafNode())
+		assert.True(t, nd.IsLeaf())
 		assert.Equal(t, len(keys), int(nd.count))
 		for i := range keys {
-			assert.Equal(t, keys[i], nd.getKey(i))
+			assert.Equal(t, keys[i], nd.GetKey(i))
 			assert.Equal(t, values[i], nd.getValue(i))
 		}
 	}
@@ -107,37 +107,16 @@ func TestCountArray(t *testing.T) {
 	}
 }
 
-func newLeafNode(keys, values []nodeItem) Node {
-	b := &nodeBuilder{
-		keys:   keys,
-		values: values,
-		level:  0,
-	}
-	return b.build(sharedPool)
-}
-
-func newTupleLeafNode(keys, values []val.Tuple) Node {
-	ks := make([]nodeItem, len(keys))
-	for i := range ks {
-		ks[i] = nodeItem(keys[i])
-	}
-	vs := make([]nodeItem, len(values))
-	for i := range vs {
-		vs[i] = nodeItem(values[i])
-	}
-	return newLeafNode(ks, vs)
-}
-
-func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
-	keys = make([]nodeItem, count)
+func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
+	keys = make([]NodeItem, count)
 	for i := range keys {
 		sz := (rand.Int() % 41) + 10
-		keys[i] = make(nodeItem, sz)
+		keys[i] = make(NodeItem, sz)
 		_, err := rand.Read(keys[i])
 		assert.NoError(t, err)
 	}
 
-	values = make([]nodeItem, count)
+	values = make([]NodeItem, count)
 	copy(values, keys)
 	rand.Shuffle(len(values), func(i, j int) {
 		values[i], values[j] = values[j], values[i]
@@ -146,49 +125,7 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
 	return
 }
 
-// Map<Tuple<Uint32>,Tuple<Uint32>>
-func ascendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
-	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
-	bld := val.NewTupleBuilder(desc)
-	tuples = make([][2]val.Tuple, count)
-	for i := range tuples {
-		bld.PutUint32(0, uint32(i))
-		tuples[i][0] = bld.Build(sharedPool)
-		bld.PutUint32(0, uint32(i+count))
-		tuples[i][1] = bld.Build(sharedPool)
-	}
-	return
-}
-
-func ascendingIntTuples(t *testing.T, count int) (tuples [][2]val.Tuple, desc val.TupleDesc) {
-	desc = val.NewTupleDescriptor(val.Type{Enc: val.Int32Enc})
-	bld := val.NewTupleBuilder(desc)
-	tuples = make([][2]val.Tuple, count)
-	for i := range tuples {
-		bld.PutInt32(0, int32(i))
-		tuples[i][0] = bld.Build(sharedPool)
-		bld.PutInt32(0, int32(i+count))
-		tuples[i][1] = bld.Build(sharedPool)
-	}
-	return
-}
-
-// Map<Tuple<Uint32,Uint32>,Tuple<Uint32,Uint32>>
-func ascendingCompositeIntTuples(count int) (keys, values []val.Tuple, desc val.TupleDesc) {
-	desc = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc}, val.Type{Enc: val.Uint32Enc})
-	bld := val.NewTupleBuilder(desc)
-
-	tups := make([]val.Tuple, count*2)
-	for i := range tups {
-		bld.PutUint32(0, uint32(i))
-		bld.PutUint32(1, uint32(i))
-		tups[i] = bld.Build(sharedPool)
-	}
-	keys, values = tups[:count], tups[count:]
-	return
-}
-
-func sumSize(items []nodeItem) (sz uint64) {
+func sumSize(items []NodeItem) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}
@@ -229,4 +166,32 @@ func deserializeOffsets(buf []byte) (offs []uint16) {
 		offs[i] = binary.LittleEndian.Uint16(buf[start:stop])
 	}
 	return
+}
+
+func TestSamples(t *testing.T) {
+	tests := []struct {
+		data Samples
+		sum  float64
+		mean float64
+		std  float64
+	}{
+		{
+			data: Samples{1},
+			sum:  1.0,
+			mean: 1.0,
+			std:  0.0,
+		},
+		{
+			data: Samples{1, 2, 3, 4, 5},
+			sum:  15.0,
+			mean: 3.0,
+			std:  math.Sqrt(2),
+		},
+	}
+
+	for _, test := range tests {
+		assert.Equal(t, test.sum, test.data.sum())
+		assert.Equal(t, test.mean, test.data.mean())
+		assert.Equal(t, test.std, test.data.stdDev())
+	}
 }

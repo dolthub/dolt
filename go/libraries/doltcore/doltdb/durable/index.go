@@ -23,6 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -115,7 +116,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 
 	case types.Format_DOLT_1:
 		kd, vd := prolly.MapDescriptorsFromScheam(sch)
-		ns := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err
