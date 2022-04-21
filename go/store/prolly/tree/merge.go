@@ -24,24 +24,24 @@ import (
 
 const patchBufferSize = 1024
 
-// TupleMergeFn is a callback that handles 3-way merging of tuples.
+// CollisionFn is a callback that handles 3-way merging of NodeItems.
 // A typical implementation will attempt a cell-wise merge of the tuples,
 // or register a conflict if such a merge is not possible.
-type TupleMergeFn func(left, right Diff) (Diff, bool)
+type CollisionFn func(left, right Diff) (Diff, bool)
 
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
 // the source branch, and |left| as the destination branch. Both |left| and |right| are diff'd against
 // |base| to compute merge patches, but rather than applying both sets of patches to |base|, patches from
 // |right| are applied directly to |left|. This reduces the amount of write work and improves performance.
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
-// values, the TupleMergeFn is called to perform a cell-wise merge, or to throw a conflict.
+// values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
 func ThreeWayMerge(
 	ctx context.Context,
 	ns NodeStore,
 	left, right, base Node,
 	search ItemSearchFn,
 	compare CompareFn,
-	cb TupleMergeFn,
+	collide CollisionFn,
 ) (final Node, err error) {
 
 	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
@@ -64,7 +64,7 @@ func ThreeWayMerge(
 				err = cerr
 			}
 		}()
-		err = sendPatches(ctx, ld, rd, patches, cb)
+		err = sendPatches(ctx, ld, rd, patches, collide)
 		return
 	})
 
@@ -122,7 +122,7 @@ func (ps patchBuffer) Close() error {
 	return nil
 }
 
-func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb TupleMergeFn) (err error) {
+func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb CollisionFn) (err error) {
 	var (
 		left, right Diff
 		lok, rok    = true, true

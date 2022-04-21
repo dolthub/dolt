@@ -94,7 +94,7 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return err
 }
 
-func MergeMaps(ctx context.Context, left, right, base Map, cb tree.TupleMergeFn) (Map, error) {
+func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
 	sfn, cfn := base.searchNode, base.compareItems
 
 	merged, err := tree.ThreeWayMerge(ctx, base.ns, left.root, right.root, base.root, sfn, cfn, cb)
