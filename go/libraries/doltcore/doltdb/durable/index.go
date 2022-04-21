@@ -136,11 +136,7 @@ var _ Index = nomsIndex{}
 
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
 func NomsMapFromIndex(i Index) types.Map {
-	n, ok := i.(nomsIndex)
-	if !ok {
-		panic("here")
-	}
-	return n.index
+	return i.(nomsIndex).index
 }
 
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.

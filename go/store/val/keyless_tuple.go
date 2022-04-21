@@ -21,7 +21,6 @@ import (
 	"github.com/zeebo/xxh3"
 
 	"github.com/dolthub/dolt/go/store/pool"
-	//"github.com/zeebo/xxh3"
 )
 
 const (
