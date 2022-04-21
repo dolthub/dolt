@@ -19,7 +19,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package prolly
+package tree
 
 import (
 	"crypto/sha512"
@@ -78,9 +78,9 @@ type nodeSplitter interface {
 // a rolling value hasher that processes NodeItem pairs in a byte-wise fashion.
 //
 // rollingHashSplitter uses a dynamic hash pattern designed to constrain the chunk
-// size distribution by reducing the likelihood of forming very large or very small
-// chunks. As the size of the current chunk grows, rollingHashSplitter changes the
-// target pattern to make it easier to match. The result is a chunk size distribution
+// Size distribution by reducing the likelihood of forming very large or very small
+// chunks. As the Size of the current chunk grows, rollingHashSplitter changes the
+// target pattern to make it easier to match. The result is a chunk Size distribution
 // that is closer to a binomial distribution, rather than geometric.
 type rollingHashSplitter struct {
 	bz     *buzhash.BuzHash
@@ -92,9 +92,9 @@ type rollingHashSplitter struct {
 }
 
 const (
-	// The window size to use for computing the rolling hash. This is way more than necessary assuming random data
-	// (two bytes would be sufficient with a target chunk size of 4k). The benefit of a larger window is it allows
-	// for better distribution on input with lower entropy. At a target chunk size of 4k, any given byte changing
+	// The window Size to use for computing the rolling hash. This is way more than necessary assuming random data
+	// (two bytes would be sufficient with a target chunk Size of 4k). The benefit of a larger window is it allows
+	// for better distribution on input with lower entropy. At a target chunk Size of 4k, any given byte changing
 	// has roughly a 1.5% chance of affecting an existing boundary, which seems like an acceptable trade-off. The
 	// choice of a prime number provides better distribution for repeating input.
 	rollingHashWindow = uint32(67)

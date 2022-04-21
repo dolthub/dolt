@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -234,7 +234,7 @@ func (mc *chunkCache) shrinkToMaxSz() {
 			delete(mc.chunks, t.c.Hash())
 			mc.sz -= t.c.Size()
 		} else {
-			panic("cache is empty but cache size is > than max size")
+			panic("cache is empty but cache Size is > than max Size")
 		}
 	}
 }
@@ -254,10 +254,10 @@ func (mc *chunkCache) sanityCheck() {
 			p = p.next
 		}
 		if i != len(mc.chunks) {
-			panic(fmt.Sprintf("cache lru list has different size than cache.chunks. %d vs %d", i, len(mc.chunks)))
+			panic(fmt.Sprintf("cache lru list has different Size than cache.chunks. %d vs %d", i, len(mc.chunks)))
 		}
 		if sz != mc.sz {
-			panic("entries reachable from lru list have different size than cache.sz.")
+			panic("entries reachable from lru list have different Size than cache.sz.")
 		}
 		j := 1
 		p = mc.head.prev

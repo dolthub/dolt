@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -51,14 +50,9 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	validateTreeItems(t, ns, root, items)
 }
 
-func newTestNodeStore() NodeStore {
-	ts := &chunks.TestStorage{}
-	return NewNodeStore(ts.NewView())
-}
-
 func randomTree(t *testing.T, count int) (Node, [][2]NodeItem, NodeStore) {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := NewTestNodeStore()
 	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)
 
@@ -84,13 +78,13 @@ var valDesc = val.NewTupleDescriptor(
 
 func searchTestTree(item NodeItem, nd Node) int {
 	return sort.Search(int(nd.count), func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getKey(i))
+		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
 		return keyDesc.Compare(l, r) <= 0
 	})
 }
 
 func randomTupleItemPairs(count int) (items [][2]NodeItem) {
-	tups := randomTuplePairs(count, keyDesc, valDesc)
+	tups := RandomTuplePairs(count, keyDesc, valDesc)
 	items = make([][2]NodeItem, count)
 	if len(tups) != len(items) {
 		panic("mismatch")

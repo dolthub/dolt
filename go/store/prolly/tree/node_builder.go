@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -53,7 +53,7 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 		lastKey = val.CloneTuple(ns.Pool(), lastKey)
 	}
 
-	treeCount := uint64(node.treeCount())
+	treeCount := uint64(node.TreeCount())
 
 	return novelNode{
 		addr:      addr,
@@ -196,8 +196,8 @@ func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	return
 }
 
-// measureNodeSize returns the exact size of the tuple vectors for keys and values,
-// and an estimate of the overall size of the final flatbuffer.
+// measureNodeSize returns the exact Size of the tuple vectors for keys and values,
+// and an estimate of the overall Size of the final flatbuffer.
 func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
@@ -207,10 +207,10 @@ func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, 
 
 	// constraints enforced upstream
 	if keySz > int(maxVectorOffset) {
-		panic(fmt.Sprintf("key vector exceeds size limit ( %d > %d )", keySz, maxVectorOffset))
+		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, maxVectorOffset))
 	}
 	if valSz > int(maxVectorOffset) {
-		panic(fmt.Sprintf("value vector exceeds size limit ( %d > %d )", valSz, maxVectorOffset))
+		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, maxVectorOffset))
 	}
 
 	bufSz += keySz + valSz               // tuples
@@ -254,7 +254,7 @@ func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
 
 func formatCompletedNode(addr hash.Hash, bld *nodeBuilder, kd, vd val.TupleDesc) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Novel Node (level %d) #%s { \n", bld.level, addr.String()))
+	sb.WriteString(fmt.Sprintf("Novel Node (Level %d) #%s { \n", bld.level, addr.String()))
 	for i := range bld.keys {
 		k, v := bld.keys[i], bld.values[i]
 		sb.WriteString("\t")

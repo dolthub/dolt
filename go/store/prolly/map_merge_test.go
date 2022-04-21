@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -66,7 +67,7 @@ func testEqualMapMerge(t *testing.T, sz int) {
 	om, _ := makeProllyMap(t, sz)
 	m := om.(Map)
 	ctx := context.Background()
-	mm, err := ThreeWayMerge(ctx, m, m, m, panicOnConflict)
+	mm, err := MergeMaps(ctx, m, m, m, panicOnConflict)
 	require.NoError(t, err)
 	assert.NotNil(t, mm)
 	assert.Equal(t, m.HashOf(), mm.HashOf())
@@ -81,7 +82,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
 	right := applyMutationSet(t, base, rightEdits)
 
 	ctx := context.Background()
-	final, err := ThreeWayMerge(ctx, left, right, base, panicOnConflict)
+	final, err := MergeMaps(ctx, left, right, base, panicOnConflict)
 	assert.NoError(t, err)
 
 	for _, add := range leftEdits.adds {
@@ -140,7 +141,7 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
 
 func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int) {
 	ctx := context.Background()
-	tuples := randomTuplePairs(sz, kd, vd)
+	tuples := tree.RandomTuplePairs(sz, kd, vd)
 	om := prollyMapFromTuples(t, kd, vd, tuples)
 	base := om.(Map)
 
@@ -170,7 +171,7 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int) {
 	require.NoError(t, err)
 
 	idx := 0
-	final, err := ThreeWayMerge(ctx, leftMap, rightMap, base, func(l, r Diff) (merged Diff, ok bool) {
+	final, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
 		assert.Equal(t, l.Key, r.Key)
 		assert.Equal(t, l.From, r.From)
 
@@ -212,7 +213,7 @@ type mutationSet struct {
 func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int) (base [][2]val.Tuple, left, right mutationSet) {
 	mutSz := sz / 10
 	totalSz := sz + (mutSz * 2)
-	tuples := randomTuplePairs(totalSz, kd, vd)
+	tuples := tree.RandomTuplePairs(totalSz, kd, vd)
 
 	base = tuples[:sz]
 
@@ -267,6 +268,6 @@ func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
 	return
 }
 
-func panicOnConflict(left, right Diff) (Diff, bool) {
+func panicOnConflict(left, right tree.Diff) (tree.Diff, bool) {
 	panic("cannot merge cells")
 }

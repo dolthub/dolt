@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"bytes"
 	"context"
 	"io"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type DiffType byte
@@ -32,32 +30,32 @@ const (
 
 type Diff struct {
 	Type     DiffType
-	Key      val.Tuple
-	From, To val.Tuple
+	Key      NodeItem
+	From, To NodeItem
 }
 
 type DiffFn func(context.Context, Diff) error
 
-type treeDiffer struct {
+type Differ struct {
 	from, to *Cursor
 	cmp      CompareFn
 }
 
-func treeDifferFromMaps(ctx context.Context, from, to Map) (treeDiffer, error) {
-	fc, err := NewCursorAtStart(ctx, from.ns, from.root)
+func DifferFromRoots(ctx context.Context, ns NodeStore, from, to Node, cmp CompareFn) (Differ, error) {
+	fc, err := NewCursorAtStart(ctx, ns, from)
 	if err != nil {
-		return treeDiffer{}, err
+		return Differ{}, err
 	}
 
-	tc, err := NewCursorAtStart(ctx, to.ns, to.root)
+	tc, err := NewCursorAtStart(ctx, ns, to)
 	if err != nil {
-		return treeDiffer{}, err
+		return Differ{}, err
 	}
 
-	return treeDiffer{from: fc, to: tc, cmp: from.compareItems}, nil
+	return Differ{from: fc, to: tc, cmp: cmp}, nil
 }
 
-func (td treeDiffer) Next(ctx context.Context) (diff Diff, err error) {
+func (td Differ) Next(ctx context.Context) (diff Diff, err error) {
 	for td.from.Valid() && td.to.Valid() {
 
 		f := td.from.CurrentKey()
@@ -72,7 +70,7 @@ func (td treeDiffer) Next(ctx context.Context) (diff Diff, err error) {
 			return sendAdded(ctx, td.to)
 
 		case cmp == 0:
-			if !equalValues(td.from, td.to) {
+			if !equalCursorValues(td.from, td.to) {
 				return sendModified(ctx, td.from, td.to)
 			}
 
@@ -96,8 +94,8 @@ func (td treeDiffer) Next(ctx context.Context) (diff Diff, err error) {
 func sendRemoved(ctx context.Context, from *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: RemovedDiff,
-		Key:  val.Tuple(from.CurrentKey()),
-		From: val.Tuple(from.CurrentValue()),
+		Key:  from.CurrentKey(),
+		From: from.CurrentValue(),
 	}
 
 	if _, err = from.Advance(ctx); err != nil {
@@ -109,8 +107,8 @@ func sendRemoved(ctx context.Context, from *Cursor) (diff Diff, err error) {
 func sendAdded(ctx context.Context, to *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: AddedDiff,
-		Key:  val.Tuple(to.CurrentKey()),
-		To:   val.Tuple(to.CurrentValue()),
+		Key:  to.CurrentKey(),
+		To:   to.CurrentValue(),
 	}
 
 	if _, err = to.Advance(ctx); err != nil {
@@ -122,9 +120,9 @@ func sendAdded(ctx context.Context, to *Cursor) (diff Diff, err error) {
 func sendModified(ctx context.Context, from, to *Cursor) (diff Diff, err error) {
 	diff = Diff{
 		Type: ModifiedDiff,
-		Key:  val.Tuple(from.CurrentKey()),
-		From: val.Tuple(from.CurrentValue()),
-		To:   val.Tuple(to.CurrentValue()),
+		Key:  from.CurrentKey(),
+		From: from.CurrentValue(),
+		To:   to.CurrentValue(),
 	}
 
 	if _, err = from.Advance(ctx); err != nil {
@@ -150,7 +148,7 @@ func skipCommon(ctx context.Context, from, to *Cursor) (err error) {
 		if parentsAreNew {
 			if equalParents(from, to) {
 				// if our parents are equal, we can search for differences
-				// faster at the next highest tree level.
+				// faster at the next highest tree Level.
 				if err = skipCommonParents(ctx, from, to); err != nil {
 					return err
 				}
@@ -215,6 +213,6 @@ func equalParents(from, to *Cursor) (eq bool) {
 	return
 }
 
-func equalValues(from, to *Cursor) bool {
+func equalCursorValues(from, to *Cursor) bool {
 	return bytes.Equal(from.CurrentValue(), to.CurrentValue())
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"bytes"
@@ -20,8 +20,6 @@ import (
 	"io"
 
 	"golang.org/x/sync/errgroup"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 const patchBufferSize = 1024
@@ -37,39 +35,47 @@ type TupleMergeFn func(left, right Diff) (Diff, bool)
 // |right| are applied directly to |left|. This reduces the amount of write work and improves performance.
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the TupleMergeFn is called to perform a cell-wise merge, or to throw a conflict.
-func ThreeWayMerge(ctx context.Context, left, right, base Map, cb TupleMergeFn) (final Map, err error) {
-	ld, err := treeDifferFromMaps(ctx, base, left)
+func ThreeWayMerge(
+	ctx context.Context,
+	ns NodeStore,
+	left, right, base Node,
+	search ItemSearchFn,
+	compare CompareFn,
+	cb TupleMergeFn,
+) (final Node, err error) {
+
+	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
 	if err != nil {
-		return Map{}, err
+		return Node{}, err
 	}
 
-	rd, err := treeDifferFromMaps(ctx, base, right)
+	rd, err := DifferFromRoots(ctx, ns, base, right, compare)
 	if err != nil {
-		return Map{}, err
+		return Node{}, err
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
-	buf := newPatchBuffer(patchBufferSize)
+	patches := newPatchBuffer(patchBufferSize)
 
-	// iterate |ld| and |rd| in parallel, populating |buf|
+	// iterate |ld| and |rd| in parallel, populating |patches|
 	eg.Go(func() (err error) {
 		defer func() {
-			if cerr := buf.close(); err == nil {
+			if cerr := patches.Close(); err == nil {
 				err = cerr
 			}
 		}()
-		err = sendPatches(ctx, ld, rd, buf, cb)
+		err = sendPatches(ctx, ld, rd, patches, cb)
 		return
 	})
 
-	// consume patches from |buf| and apply them to |left|
+	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = materializeMutations(ctx, left, buf)
+		final, err = ApplyMutations(ctx, ns, left, patches, search, compare)
 		return err
 	})
 
 	if err = eg.Wait(); err != nil {
-		return Map{}, err
+		return Node{}, err
 	}
 
 	return final, nil
@@ -77,14 +83,14 @@ func ThreeWayMerge(ctx context.Context, left, right, base Map, cb TupleMergeFn) 
 
 // patchBuffer implements mutationIter. It consumes Diffs
 // from the parallel treeDiffers and transforms them into
-// patches for the treeChunker to apply.
+// patches for the chunker to apply.
 type patchBuffer struct {
 	buf chan patch
 }
 
-var _ mutationIter = patchBuffer{}
+var _ MutationIter = patchBuffer{}
 
-type patch [2]val.Tuple
+type patch [2]NodeItem
 
 func newPatchBuffer(sz int) patchBuffer {
 	return patchBuffer{buf: make(chan patch, sz)}
@@ -101,7 +107,7 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 }
 
 // nextMutation implements mutationIter.
-func (ps patchBuffer) nextMutation(ctx context.Context) (key, value val.Tuple) {
+func (ps patchBuffer) NextMutation(ctx context.Context) (NodeItem, NodeItem) {
 	var p patch
 	select {
 	case p = <-ps.buf:
@@ -111,12 +117,12 @@ func (ps patchBuffer) nextMutation(ctx context.Context) (key, value val.Tuple) {
 	}
 }
 
-func (ps patchBuffer) close() error {
+func (ps patchBuffer) Close() error {
 	close(ps.buf)
 	return nil
 }
 
-func sendPatches(ctx context.Context, l, r treeDiffer, buf patchBuffer, cb TupleMergeFn) (err error) {
+func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb TupleMergeFn) (err error) {
 	var (
 		left, right Diff
 		lok, rok    = true, true

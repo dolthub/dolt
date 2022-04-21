@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -47,7 +48,7 @@ type Node struct {
 type AddressCb func(ctx context.Context, addr hash.Hash) error
 
 func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
-	if nd.leafNode() {
+	if nd.IsLeaf() {
 		// todo(andy): ref'd values
 		return nil
 	}
@@ -77,7 +78,7 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
-	if nd.leafNode() {
+	if nd.IsLeaf() {
 		// todo(andy): walk ref'd values?
 		return nil
 	}
@@ -122,18 +123,40 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 	}
 }
 
-func (nd Node) hashOf() hash.Hash {
+func (nd Node) HashOf() hash.Hash {
 	return hash.Of(nd.bytes())
 }
 
-// getKey returns the |ith| key of this node
-func (nd Node) getKey(i int) NodeItem {
+func (nd Node) Count() int {
+	return int(nd.count)
+}
+
+func (nd Node) TreeCount() int {
+	return int(nd.buf.TreeCount())
+}
+
+func (nd Node) Size() int {
+	return len(nd.bytes())
+}
+
+// Level returns the tree Level for this node
+func (nd Node) Level() int {
+	return int(nd.buf.TreeLevel())
+}
+
+// IsLeaf returns whether this node is a leaf
+func (nd Node) IsLeaf() bool {
+	return int(nd.buf.TreeLevel()) == 0
+}
+
+// GetKey returns the |ith| key of this node
+func (nd Node) GetKey(i int) NodeItem {
 	return nd.keys.GetSlice(i)
 }
 
 // getValue returns the |ith| value of this node. Only Valid for leaf nodes.
 func (nd Node) getValue(i int) NodeItem {
-	if nd.leafNode() {
+	if nd.IsLeaf() {
 		return nd.values.GetSlice(i)
 	} else {
 		r := nd.getRef(i)
@@ -148,23 +171,9 @@ func (nd Node) getRef(i int) hash.Hash {
 	return hash.New(refs[start:stop])
 }
 
-func (nd Node) treeCount() int {
-	return int(nd.buf.TreeCount())
-}
-
 func (nd Node) getSubtreeCounts() subtreeCounts {
 	buf := nd.buf.RefCardinalitiesBytes()
 	return readSubtreeCounts(int(nd.count), buf)
-}
-
-// level returns the tree level for this node
-func (nd Node) level() int {
-	return int(nd.buf.TreeLevel())
-}
-
-// leafNode returns whether this node is a leaf
-func (nd Node) leafNode() bool {
-	return nd.level() == 0
 }
 
 func (nd Node) empty() bool {
@@ -173,10 +182,6 @@ func (nd Node) empty() bool {
 
 func (nd Node) bytes() []byte {
 	return nd.buf.Table().Bytes
-}
-
-func (nd Node) size() int {
-	return len(nd.bytes())
 }
 
 func getKeyOffsetsVector(buf serial.TupleMap) []byte {
@@ -206,7 +211,7 @@ func getValueOffsetsVector(buf serial.TupleMap) []byte {
 func OutputProllyNode(w io.Writer, node Node) error {
 	w.Write([]byte("["))
 	for i := 0; i < int(node.count); i++ {
-		k := node.getKey(i)
+		k := node.GetKey(i)
 		kt := val.Tuple(k)
 
 		w.Write([]byte("\n    { key: "))
@@ -217,7 +222,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 			w.Write([]byte(hex.EncodeToString(kt.GetField(j))))
 		}
 
-		if node.leafNode() {
+		if node.IsLeaf() {
 			v := node.getValue(i)
 			vt := val.Tuple(v)
 
@@ -241,4 +246,8 @@ func OutputProllyNode(w io.Writer, node Node) error {
 
 	w.Write([]byte("\n]\n"))
 	return nil
+}
+
+func ValueFromNode(root Node) types.Value {
+	return types.TupleRowStorage(root.bytes())
 }

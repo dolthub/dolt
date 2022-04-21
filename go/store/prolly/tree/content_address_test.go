@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -33,16 +33,16 @@ var goldenHash = hash.Hash{
 }
 
 func TestContentAddress(t *testing.T) {
-	tups, _ := ascendingUintTuples(12345)
+	tups, _ := AscendingUintTuples(12345)
 	m := makeTree(t, tups)
 	require.NotNil(t, m)
-	require.Equal(t, goldenHash, m.hashOf())
-	assert.Equal(t, 12345, m.treeCount())
+	require.Equal(t, goldenHash, m.HashOf())
+	assert.Equal(t, 12345, m.TreeCount())
 }
 
 func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := NewTestNodeStore()
 
 	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)

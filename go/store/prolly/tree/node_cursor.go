@@ -19,7 +19,7 @@
 // Licensed under the Apache License, version 2.0:
 // http://www.apache.org/licenses/LICENSE-2.0
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -101,13 +101,13 @@ func NewCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor,
 }
 
 func NewCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64) (cur *Cursor, err error) {
-	if ord >= uint64(nd.treeCount()) {
+	if ord >= uint64(nd.TreeCount()) {
 		return NewCursorPastEnd(ctx, nrw, nd)
 	}
 
 	distance := int64(ord)
 	return NewCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
-		if nd.leafNode() {
+		if nd.IsLeaf() {
 			return int(distance)
 		}
 
@@ -196,6 +196,12 @@ func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeI
 	return cur, nil
 }
 
+func CurrentCursorTuples(cur *Cursor) (key, value val.Tuple) {
+	key = cur.nd.keys.GetSlice(cur.idx)
+	value = cur.nd.values.GetSlice(cur.idx)
+	return
+}
+
 func (cur *Cursor) Valid() bool {
 	return cur.nd.count != 0 &&
 		cur.nd.bytes() != nil &&
@@ -208,7 +214,7 @@ func (cur *Cursor) Invalidate() {
 }
 
 func (cur *Cursor) CurrentKey() NodeItem {
-	return cur.nd.getKey(cur.idx)
+	return cur.nd.GetKey(cur.idx)
 }
 
 func (cur *Cursor) CurrentValue() NodeItem {
@@ -230,12 +236,12 @@ func (cur *Cursor) currentSubtreeSize() uint64 {
 }
 
 func (cur *Cursor) firstKey() NodeItem {
-	return cur.nd.getKey(0)
+	return cur.nd.GetKey(0)
 }
 
 func (cur *Cursor) lastKey() NodeItem {
 	lastKeyIdx := int(cur.nd.count - 1)
-	return cur.nd.getKey(lastKeyIdx)
+	return cur.nd.GetKey(lastKeyIdx)
 }
 
 func (cur *Cursor) skipToNodeStart() {
@@ -267,12 +273,12 @@ func (cur *Cursor) atNodeEnd() bool {
 }
 
 func (cur *Cursor) isLeaf() bool {
-	// todo(andy): cache level
+	// todo(andy): cache Level
 	return cur.level() == 0
 }
 
 func (cur *Cursor) level() uint64 {
-	return uint64(cur.nd.level())
+	return uint64(cur.nd.Level())
 }
 
 func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err error) {
@@ -306,7 +312,7 @@ func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err e
 // index of the next greatest element if it's not present.
 func (cur *Cursor) search(item NodeItem, cb CompareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
-		return cb(item, cur.nd.getKey(i)) <= 0
+		return cb(item, cur.nd.GetKey(i)) <= 0
 	})
 
 	return idx

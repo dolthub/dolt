@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -429,7 +430,7 @@ func ascendingIntMap(t *testing.T, count int) Map {
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := tree.NewTestNodeStore()
 
 	tuples := make([][2]val.Tuple, count)
 	for i := range tuples {
@@ -437,7 +438,7 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 		tuples[i][0], tuples[i][1] = makePut(v, v)
 	}
 
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	chunker, err := tree.NewEmptyChunker(ctx, ns)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
@@ -485,14 +486,14 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 
 	// ensure edits are provided in order
 	iter := mut.overlay.mutations()
-	prev, _ := iter.nextMutation(ctx)
+	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
 	for {
-		next, _ := iter.nextMutation(ctx)
+		next, _ := iter.NextMutation(ctx)
 		if next == nil {
 			break
 		}
-		cmp := mut.prolly.compareKeys(prev, next)
+		cmp := mut.prolly.compareKeys(val.Tuple(prev), val.Tuple(next))
 		assert.True(t, cmp < 0)
 		prev = next
 	}

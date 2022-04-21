@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -139,9 +141,9 @@ func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 
 type prollyRangeIter struct {
 	// current tuple location
-	curr *Cursor
+	curr *tree.Cursor
 	// non-inclusive range stop
-	stop *Cursor
+	stop *tree.Cursor
 }
 
 func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
@@ -149,8 +151,7 @@ func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err 
 		return nil, nil, io.EOF
 	}
 
-	key = it.curr.nd.keys.GetSlice(it.curr.idx)
-	value = it.curr.nd.values.GetSlice(it.curr.idx)
+	key, value = tree.CurrentCursorTuples(it.curr)
 
 	_, err = it.curr.Advance(ctx)
 	if err != nil {
@@ -167,8 +168,7 @@ func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err 
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.Valid() {
-		key = it.curr.nd.keys.GetSlice(it.curr.idx)
-		value = it.curr.nd.values.GetSlice(it.curr.idx)
+		key, value = tree.CurrentCursorTuples(it.curr)
 	}
 	return
 }
@@ -184,11 +184,5 @@ func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
 		it.curr = nil
 	}
 
-	return
-}
-
-func (it *prollyRangeIter) firstLastKeys() (first, last val.Tuple) {
-	first = val.Tuple(it.curr.CurrentKey())
-	last = val.Tuple(it.stop.CurrentKey())
 	return
 }

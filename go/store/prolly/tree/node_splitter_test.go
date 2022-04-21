@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -25,9 +25,6 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
 )
 
 func init() {
@@ -65,29 +62,29 @@ func TestKeySplitterDistribution(t *testing.T) {
 	t.Skip("unskip for metrics")
 
 	factory := newKeySplitter
-	t.Run("plot node distribution for item size 24", func(t *testing.T) {
+	t.Run("plot node distribution for item Size 24", func(t *testing.T) {
 		scale := 1_000_000
 		nd, ns := makeProllyTreeWithSizes(t, factory, scale, 8, 16)
-		printTreeSummaryByLevel(t, nd, ns)
+		PrintTreeSummaryByLevel(t, nd, ns)
 		plotNodeSizeDistribution(t, "prolly_8_16.png", nd, ns)
 	})
 	t.Run("summarize node distribution for item sizes (8,54)", func(t *testing.T) {
 		for sz := 8; sz <= 54; sz++ {
-			fmt.Println(fmt.Sprintf("summary for map size %d", sz))
+			fmt.Println(fmt.Sprintf("Summary for map Size %d", sz))
 			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
-			printTreeSummaryByLevel(t, nd, ns)
+			PrintTreeSummaryByLevel(t, nd, ns)
 			fmt.Println()
 		}
 	})
 	t.Run("plot node distribution for item sizes (8,54)", func(t *testing.T) {
-		var cumulative samples
+		var cumulative Samples
 		for sz := 8; sz <= 54; sz++ {
 			nd, ns := makeProllyTreeWithSizes(t, factory, 100_000, sz, sz)
 			data, err := measureTreeNodes(nd, ns)
 			require.NoError(t, err)
 			cumulative = append(cumulative, data...)
 		}
-		fmt.Println(cumulative.summary())
+		fmt.Println(cumulative.Summary())
 		plotIntHistogram("cumulative_node_sizes_8-54.png", cumulative)
 	})
 }
@@ -102,7 +99,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 	}
 
 	ctx := context.Background()
-	ns = newTestNodeStore()
+	ns = NewTestNodeStore()
 	chunker, err := newEmptyTreeChunker(ctx, ns, fact)
 	require.NoError(t, err)
 
@@ -115,67 +112,6 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 	nd, err = chunker.Done(ctx)
 	require.NoError(t, err)
 	return
-}
-
-func printTreeSummaryByLevel(t *testing.T, nd Node, ns NodeStore) {
-	ctx := context.Background()
-
-	sizeByLevel := make([]samples, nd.level()+1)
-	cardByLevel := make([]samples, nd.level()+1)
-	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
-		lvl := nd.level()
-		sizeByLevel[lvl] = append(sizeByLevel[lvl], nd.size())
-		cardByLevel[lvl] = append(cardByLevel[lvl], int(nd.count))
-		return nil
-	})
-	require.NoError(t, err)
-
-	fmt.Println("pre-edit map summary: ")
-	fmt.Println("| level | count | avg size \t  p50 \t  p90 \t p100 | avg card \t  p50 \t  p90 \t p100 |")
-	for i := nd.level(); i >= 0; i-- {
-		sizes, cards := sizeByLevel[i], cardByLevel[i]
-		sp50, _, sp90, _, sp100 := sizes.percentiles()
-		cp50, _, cp90, _, cp100 := cards.percentiles()
-		fmt.Printf("| %5d | %5d | %8.2f \t %4d \t %4d \t %4d | %8.2f \t %4d \t %4d \t %4d |\n",
-			i, len(cards), sizes.mean(), sp50, sp90, sp100, cards.mean(), cp50, cp90, cp100)
-	}
-	fmt.Println()
-}
-
-func plotNodeSizeDistribution(t *testing.T, name string, nd Node, ns NodeStore) {
-	data, err := measureTreeNodes(nd, ns)
-	require.NoError(t, err)
-	plotIntHistogram(name, data)
-}
-
-func measureTreeNodes(nd Node, ns NodeStore) (samples, error) {
-	ctx := context.Background()
-	data := make(samples, 0, 1024)
-	err := WalkNodes(ctx, nd, ns, func(ctx context.Context, nd Node) error {
-		data = append(data, nd.size())
-		return nil
-	})
-	return data, err
-}
-
-func plotIntHistogram(name string, data []int) {
-	var values plotter.Values
-	for _, d := range data {
-		values = append(values, float64(d))
-	}
-
-	p := plot.New()
-	p.Title.Text = "histogram plot"
-
-	hist, err := plotter.NewHist(values, 50)
-	if err != nil {
-		panic(err)
-	}
-	p.Add(hist)
-
-	if err := p.Save(3*vg.Inch, 3*vg.Inch, name); err != nil {
-		panic(err)
-	}
 }
 
 type itemProvider interface {

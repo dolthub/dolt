@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -32,28 +32,28 @@ func roundTripTreeItems(t *testing.T) {
 	root, items, ns := randomTree(t, 1000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(1000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 1000)
-	assert.Equal(t, root.treeCount()*2, 1000)
+	assert.Equal(t, root.TreeCount()*2, 1000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 10_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(10_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 10_000)
-	assert.Equal(t, root.treeCount()*2, 10_000)
+	assert.Equal(t, root.TreeCount()*2, 10_000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 100_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 100_000)
-	assert.Equal(t, root.treeCount()*2, 100_000)
+	assert.Equal(t, root.TreeCount()*2, 100_000)
 	validateTreeItems(t, ns, root, items)
 }
 
