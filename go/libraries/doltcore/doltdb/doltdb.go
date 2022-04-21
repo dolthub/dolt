@@ -295,6 +295,10 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			if err != ErrBranchNotFound {
 				return nil, err
 			}
+			// Wrap ErrBranchNotFound to include branch name
+			if err == ErrBranchNotFound {
+				err = errors.New("branch not found: " + candidate)
+			}
 		}
 	case headCommitSpec:
 		if cwb == nil {
