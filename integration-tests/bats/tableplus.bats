@@ -24,7 +24,7 @@ INSERT INTO \`default_table\` (\`pk\`,\`col2\`,\`col3\`,\`col4\`,\`col5\`) VALUE
 INSERT INTO \`default_table\` (\`pk\`,\`col2\`,\`col3\`,\`col4\`,\`col5\`) VALUES (2,5,-2,0.5525121,2);
 INSERT INTO \`default_table\` (\`pk\`,\`col2\`,\`col3\`,\`col4\`,\`col5\`) VALUES (3,5,-2,0.9616921,3);
 INSERT INTO \`default_table\` (\`pk\`,\`col2\`,\`col3\`,\`col4\`,\`col5\`) VALUES (4,5,-2,0.93345636,4);
-CREATE TABLE \`keyed-table\` (
+CREATE TABLE \`keyed_table\` (
   \`pk\` int NOT NULL,
   \`v2\` binary(1),
   \`v1\` bigint,
@@ -61,8 +61,8 @@ CREATE TABLE \`keyed-table\` (
   \`v33\` year,
   PRIMARY KEY (\`pk\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
-INSERT INTO \`keyed-table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+INSERT INTO \`keyed_table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (1,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
+INSERT INTO \`keyed_table\` (\`pk\`,\`v2\`,\`v1\`,\`v4\`,\`v3\`,\`v5\`,\`v9\`,\`v8\`,\`v7\`,\`v6\`,\`v15\`,\`v12\`,\`v10\`,\`v11\`,\`v13\`,\`v16\`,\`v14\`,\`v17\`,\`v19\`,\`v29\`,\`v18\`,\`v20\`,\`v21\`,\`v23\`,\`v22\`,\`v25\`,\`v24\`,\`v26\`,\`v27\`,\`v28\`,\`v30\`,\`v31\`,\`v32\`,\`v33\`) VALUES (2,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
 CREATE TABLE \`keyless\` (
   \`pk\` int,
   \`val\` int,
@@ -77,7 +77,7 @@ CREATE TABLE \`trigger_table\` (
   PRIMARY KEY (\`x\`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE VIEW myview AS SELECT * FROM \`keyed-table\`;
+CREATE VIEW myview AS SELECT * FROM \`keyed_table\`;
 SQL
 }
 # executed after each test
@@ -93,10 +93,10 @@ teardown() {
   run dolt sql -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='dsimple'AND TABLE_NAME='default_table';"
   [ "$status" -eq 0 ]
 
-  run dolt sql -q "SELECT * FROM \`test\`.\`keyed-table\` ORDER BY \`pk\` LIMIT 300 OFFSET 0;"
+  run dolt sql -q "SELECT * FROM \`test\`.\`keyed_table\` ORDER BY \`pk\` LIMIT 300 OFFSET 0;"
   [ "$status" -eq 0 ]
 
-  run dolt sql -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='test'AND TABLE_NAME='keyed-table';"
+  run dolt sql -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='test'AND TABLE_NAME='keyed_table';"
   [ "$status" -eq 0 ]
 
   run dolt sql -q "SELECT VIEW_DEFINITION as create_statement FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_SCHEMA='test'AND TABLE_NAME='myview';"
@@ -119,13 +119,13 @@ teardown() {
 }
 
 @test "tableplus: load data from the keyed table" {
-  run dolt sql -r csv -q "SELECT * FROM \`test\`.\`keyed-table\` ORDER BY \`pk\` LIMIT 300 OFFSET 0;"
+  run dolt sql -r csv -q "SELECT * FROM \`test\`.\`keyed_table\` ORDER BY \`pk\` LIMIT 300 OFFSET 0;"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "pk,v2,v1,v4,v3,v5,v9,v8,v7,v6,v15,v12,v10,v11,v13,v16,v14,v17,v19,v29,v18,v20,v21,v23,v22,v25,v24,v26,v27,v28,v30,v31,v32,v33" ]] || false
   [[ "$output" =~ "1,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]] || false
   [[ "$output" =~ "2,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,," ]] || false
 
-  run dolt sql -r csv -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='test' AND TABLE_NAME='keyed-table';"
+  run dolt sql -r csv -q "SELECT table_rows as count FROM information_schema.TABLES WHERE TABLE_SCHEMA='test' AND TABLE_NAME='keyed_table';"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "count" ]] || false
 }
@@ -148,15 +148,15 @@ teardown() {
   run dolt sql -r csv -q "SELECT VIEW_DEFINITION as create_statement FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_SCHEMA='test' AND TABLE_NAME='myview'"
   [ "$status" -eq 0 ]
   [[ "$output" =~ "create_statement" ]] || false
-  [[ "$output" =~ "SELECT * FROM \`keyed-table\`" ]] || false
+  [[ "$output" =~ "SELECT * FROM \`keyed_table\`" ]] || false
 }
 
 @test "tableplus: procedures" {
-  run dolt sql -q "CREATE PROCEDURE simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y;"
+  run dolt sql -q "CREATE PROCEDURE test.simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y;"
   [ "$status" -eq 0 ]
   run dolt sql -r csv -q "SHOW CREATE procedure simple_proc1"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "CREATE PROCEDURE simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y" ]] || false
+  [[ "$output" =~ "CREATE PROCEDURE test.simple_proc1(x DOUBLE, y DOUBLE) SELECT x*y" ]] || false
 }
 
 @test "tableplus: foreign key relationships" {
@@ -196,7 +196,7 @@ SQL
 }
 
 @test "tableplus: trigger queries" {
-  dolt sql -q "CREATE TRIGGER ins_sum BEFORE INSERT ON keyless FOR EACH ROW SET @sum = @sum + NEW.val;"
+  dolt sql -q "CREATE TRIGGER ins_sum BEFORE INSERT ON test.keyless FOR EACH ROW SET @sum = @sum + NEW.val;"
 
   run dolt sql -r csv -q "SELECT trigger_name as name,event_manipulation as event,action_timing as timing,action_statement as statement FROM information_schema.triggers WHERE event_object_schema='test' AND event_object_table='keyless';"
   [ "$status" -eq 0 ]
@@ -214,5 +214,9 @@ SQL
   run dolt sql -q "SHOW VARIABLES;"
   [ "$status" -eq 0 ]
   run dolt sql -q "show databases;"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "SELECT ROUTINE_SCHEMA as function_schema,ROUTINE_NAME as function_name,ROUTINE_DEFINITION as create_statement,ROUTINE_TYPE as function_type FROM information_schema.routines where ROUTINE_SCHEMA='test';"
+  [ "$status" -eq 0 ]
+  run dolt sql -q "show full tables from test"
   [ "$status" -eq 0 ]
 }
