@@ -17,6 +17,7 @@ package doltdb
 import (
 	"errors"
 	"fmt"
+
 	errors2 "gopkg.in/src-d/go-errors.v1"
 )
 
