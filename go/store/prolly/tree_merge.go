@@ -218,8 +218,8 @@ func sendPatches(ctx context.Context, l, r treeDiffer, buf patchBuffer, cb Tuple
 	return nil
 }
 
-func compareDiffKeys(left, right Diff, cmp compareFn) int {
-	return cmp(nodeItem(left.Key), nodeItem(right.Key))
+func compareDiffKeys(left, right Diff, cmp CompareFn) int {
+	return cmp(NodeItem(left.Key), NodeItem(right.Key))
 }
 
 func equalDiffVals(left, right Diff) bool {

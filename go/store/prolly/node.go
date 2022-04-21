@@ -127,12 +127,12 @@ func (nd Node) hashOf() hash.Hash {
 }
 
 // getKey returns the |ith| key of this node
-func (nd Node) getKey(i int) nodeItem {
+func (nd Node) getKey(i int) NodeItem {
 	return nd.keys.GetSlice(i)
 }
 
-// getValue returns the |ith| value of this node. Only valid for leaf nodes.
-func (nd Node) getValue(i int) nodeItem {
+// getValue returns the |ith| value of this node. Only Valid for leaf nodes.
+func (nd Node) getValue(i int) NodeItem {
 	if nd.leafNode() {
 		return nd.values.GetSlice(i)
 	} else {
@@ -141,7 +141,7 @@ func (nd Node) getValue(i int) nodeItem {
 	}
 }
 
-// getRef returns the |ith| ref in this node. Only valid for internal nodes.
+// getRef returns the |ith| ref in this node. Only Valid for internal nodes.
 func (nd Node) getRef(i int) hash.Hash {
 	refs := nd.buf.RefArrayBytes()
 	start, stop := i*refSize, (i+1)*refSize

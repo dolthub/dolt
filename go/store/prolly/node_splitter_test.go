@@ -179,7 +179,7 @@ func plotIntHistogram(name string, data []int) {
 }
 
 type itemProvider interface {
-	Next() (key, value nodeItem)
+	Next() (key, value NodeItem)
 }
 
 type gaussianItems struct {
@@ -188,9 +188,9 @@ type gaussianItems struct {
 	r               *rand.Rand
 }
 
-func (g gaussianItems) Next() (key, value nodeItem) {
-	key = make(nodeItem, g.sample(g.keyMean, g.keyStd))
-	value = make(nodeItem, g.sample(g.valMean, g.valStd))
+func (g gaussianItems) Next() (key, value NodeItem) {
+	key = make(NodeItem, g.sample(g.keyMean, g.keyStd))
+	value = make(NodeItem, g.sample(g.valMean, g.valStd))
 	rand.Read(key)
 	rand.Read(value)
 	return
@@ -208,9 +208,9 @@ type staticItems struct {
 	key, value int
 }
 
-func (s staticItems) Next() (key, value nodeItem) {
-	key = make(nodeItem, s.key)
-	value = make(nodeItem, s.value)
+func (s staticItems) Next() (key, value NodeItem) {
+	key = make(NodeItem, s.key)
+	value = make(NodeItem, s.value)
 	rand.Read(key)
 	rand.Read(value)
 	return

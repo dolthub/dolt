@@ -59,7 +59,7 @@ func roundTripTreeItems(t *testing.T) {
 
 func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
 	ctx := context.Background()
-	err := iterTree(ctx, ns, nd, func(_ nodeItem) (err error) {
+	err := iterTree(ctx, ns, nd, func(_ NodeItem) (err error) {
 		count++
 		return
 	})
@@ -67,10 +67,10 @@ func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
 	return
 }
 
-func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]nodeItem) {
+func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]NodeItem) {
 	i := 0
 	ctx := context.Background()
-	err := iterTree(ctx, ns, nd, func(actual nodeItem) (err error) {
+	err := iterTree(ctx, ns, nd, func(actual NodeItem) (err error) {
 		if !assert.Equal(t, expected[i/2][i%2], actual) {
 			panic("here")
 		}
@@ -81,29 +81,29 @@ func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]nodeIt
 	return
 }
 
-func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item nodeItem) error) error {
+func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item NodeItem) error) error {
 	if nd.empty() {
 		return nil
 	}
 
-	cur, err := newCursorAtStart(ctx, ns, nd)
+	cur, err := NewCursorAtStart(ctx, ns, nd)
 	if err != nil {
 		return err
 	}
 
 	ok := true
 	for ok {
-		err = cb(cur.currentKey())
+		err = cb(cur.CurrentKey())
 		if err != nil {
 			return err
 		}
 
-		err = cb(cur.currentValue())
+		err = cb(cur.CurrentValue())
 		if err != nil {
 			return err
 		}
 
-		ok, err = cur.advance(ctx)
+		ok, err = cur.Advance(ctx)
 		if err != nil {
 			return err
 		}

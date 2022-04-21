@@ -130,16 +130,16 @@ func (m Map) WalkNodes(ctx context.Context, cb NodeCb) error {
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
+	cur, err := NewLeafCursorAtItem(ctx, m.ns, m.root, NodeItem(key), m.searchNode)
 	if err != nil {
 		return err
 	}
 
 	var k, v val.Tuple
-	if cur.valid() {
-		k = val.Tuple(cur.currentKey())
+	if cur.Valid() {
+		k = val.Tuple(cur.CurrentKey())
 		if m.compareKeys(key, k) == 0 {
-			v = val.Tuple(cur.currentValue())
+			v = val.Tuple(cur.CurrentValue())
 		} else {
 			k = nil
 		}
@@ -150,13 +150,13 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	cur, err := newLeafCursorAtItem(ctx, m.ns, m.root, nodeItem(key), m.searchNode)
+	cur, err := NewLeafCursorAtItem(ctx, m.ns, m.root, NodeItem(key), m.searchNode)
 	if err != nil {
 		return false, err
 	}
 
-	if cur.valid() {
-		k := val.Tuple(cur.currentKey())
+	if cur.Valid() {
+		k := val.Tuple(cur.CurrentKey())
 		ok = m.compareKeys(key, k) == 0
 	}
 
@@ -164,14 +164,14 @@ func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
 }
 
 func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
-	cur, err := newCursorAtEnd(ctx, m.ns, m.root)
+	cur, err := NewCursorAtEnd(ctx, m.ns, m.root)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if cur.valid() {
-		key = val.Tuple(cur.currentKey())
-		value = val.Tuple(cur.currentValue())
+	if cur.Valid() {
+		key = val.Tuple(cur.CurrentKey())
+		value = val.Tuple(cur.CurrentValue())
 	}
 	return
 }
@@ -192,12 +192,12 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRange
 		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
 	}
 
-	lo, err := newCursorAtOrdinal(ctx, m.ns, m.root, start)
+	lo, err := NewCursorAtOrdinal(ctx, m.ns, m.root, start)
 	if err != nil {
 		return nil, err
 	}
 
-	hi, err := newCursorAtOrdinal(ctx, m.ns, m.root, stop)
+	hi, err := NewCursorAtOrdinal(ctx, m.ns, m.root, stop)
 	if err != nil {
 		return nil, err
 	}
@@ -219,17 +219,17 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
 	search := pointLookupSearchFn(rng)
-	cur, err := newCursorFromSearchFn(ctx, m.ns, m.root, search)
+	cur, err := NewCursorFromSearchFn(ctx, m.ns, m.root, search)
 	if err != nil {
 		return nil, err
 	}
-	if !cur.valid() {
+	if !cur.Valid() {
 		// map does not contain |rng|
 		return &pointLookup{}, nil
 	}
 
-	key := val.Tuple(cur.currentKey())
-	value := val.Tuple(cur.currentValue())
+	key := val.Tuple(cur.CurrentKey())
+	value := val.Tuple(cur.CurrentValue())
 	if compareBound(rng.Start, key, m.keyDesc) != 0 {
 		// map does not contain |rng|
 		return &pointLookup{}, nil
@@ -241,15 +241,15 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {
 	var (
 		err   error
-		start *nodeCursor
-		stop  *nodeCursor
+		start *Cursor
+		stop  *Cursor
 	)
 
 	startSearch := rangeStartSearchFn(rng)
 	if rng.Start == nil {
-		start, err = newCursorAtStart(ctx, m.ns, m.root)
+		start, err = NewCursorAtStart(ctx, m.ns, m.root)
 	} else {
-		start, err = newCursorFromSearchFn(ctx, m.ns, m.root, startSearch)
+		start, err = NewCursorFromSearchFn(ctx, m.ns, m.root, startSearch)
 	}
 	if err != nil {
 		return nil, err
@@ -257,15 +257,15 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 
 	stopSearch := rangeStopSearchFn(rng)
 	if rng.Stop == nil {
-		stop, err = newCursorPastEnd(ctx, m.ns, m.root)
+		stop, err = NewCursorPastEnd(ctx, m.ns, m.root)
 	} else {
-		stop, err = newCursorFromSearchFn(ctx, m.ns, m.root, stopSearch)
+		stop, err = NewCursorFromSearchFn(ctx, m.ns, m.root, stopSearch)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	if start.compare(stop) >= 0 {
+	if start.Compare(stop) >= 0 {
 		start = nil // empty range
 	}
 
@@ -277,7 +277,7 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
-func (m Map) searchNode(query nodeItem, nd Node) int {
+func (m Map) searchNode(query NodeItem, nd Node) int {
 	n := int(nd.count)
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
@@ -297,10 +297,10 @@ func (m Map) searchNode(query nodeItem, nd Node) int {
 	return i
 }
 
-var _ itemSearchFn = Map{}.searchNode
+var _ ItemSearchFn = Map{}.searchNode
 
-// compareItems is a compareFn.
-func (m Map) compareItems(left, right nodeItem) int {
+// compareItems is a CompareFn.
+func (m Map) compareItems(left, right NodeItem) int {
 	l, r := val.Tuple(left), val.Tuple(right)
 	return m.compareKeys(l, r)
 }

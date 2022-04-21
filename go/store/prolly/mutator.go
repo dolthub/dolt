@@ -33,12 +33,12 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 		return m, nil // no mutations
 	}
 
-	cur, err := newCursorAtItem(ctx, m.ns, m.root, nodeItem(newKey), m.searchNode)
+	cur, err := NewCursorAtItem(ctx, m.ns, m.root, NodeItem(newKey), m.searchNode)
 	if err != nil {
 		return m, err
 	}
 
-	chunker, err := newTreeChunker(ctx, cur.clone(), 0, m.ns, defaultSplitterFactory)
+	chunker, err := newTreeChunker(ctx, cur.Clone(), 0, m.ns, defaultSplitterFactory)
 	if err != nil {
 		return m, err
 	}
@@ -46,18 +46,18 @@ func materializeMutations(ctx context.Context, m Map, edits mutationIter) (Map, 
 	for newKey != nil {
 
 		// move |cur| to the nextMutation mutation point
-		err = cur.seek(ctx, nodeItem(newKey), m.compareItems)
+		err = cur.seek(ctx, NodeItem(newKey), m.compareItems)
 		if err != nil {
 			return Map{}, err
 		}
 
 		var oldValue val.Tuple
-		if cur.valid() {
-			// compare mutations |newKey| and |newValue|
+		if cur.Valid() {
+			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
-			oldKey := val.Tuple(cur.currentKey())
+			oldKey := val.Tuple(cur.CurrentKey())
 			if compareKeys(m, newKey, oldKey) == 0 {
-				oldValue = val.Tuple(cur.currentValue())
+				oldValue = val.Tuple(cur.CurrentValue())
 			}
 		}
 

@@ -33,7 +33,7 @@ func newMemoryMap(keyDesc val.TupleDesc, tups ...val.Tuple) (mm memoryMap) {
 
 	mm.keyDesc = keyDesc
 
-	// todo(andy): fix allocation for |mm.compare|
+	// todo(andy): fix allocation for |mm.Compare|
 	mm.list = skip.NewSkipList(mm.compare)
 	for i := 0; i < len(tups); i += 2 {
 		mm.list.Put(tups[i], tups[i+1])

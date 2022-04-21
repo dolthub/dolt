@@ -35,7 +35,7 @@ const (
 type novelNode struct {
 	node      Node
 	addr      hash.Hash
-	lastKey   nodeItem
+	lastKey   NodeItem
 	treeCount uint64
 }
 
@@ -58,24 +58,24 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 	return novelNode{
 		addr:      addr,
 		node:      node,
-		lastKey:   nodeItem(lastKey),
+		lastKey:   NodeItem(lastKey),
 		treeCount: treeCount,
 	}, nil
 }
 
 type nodeBuilder struct {
-	keys, values []nodeItem
+	keys, values []NodeItem
 	size, level  int
 
 	subtrees subtreeCounts
 }
 
-func (nb *nodeBuilder) hasCapacity(key, value nodeItem) bool {
+func (nb *nodeBuilder) hasCapacity(key, value NodeItem) bool {
 	sum := nb.size + len(key) + len(value)
 	return sum <= int(maxVectorOffset)
 }
 
-func (nb *nodeBuilder) appendItems(key, value nodeItem, subtree uint64) {
+func (nb *nodeBuilder) appendItems(key, value NodeItem, subtree uint64) {
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
 	nb.size += len(key) + len(value)
@@ -182,8 +182,8 @@ func writeSubtreeCounts(sc subtreeCounts) []byte {
 
 func newNodeBuilder(level int) *nodeBuilder {
 	return &nodeBuilder{
-		keys:     make([]nodeItem, 0, nodeBuilderListSize),
-		values:   make([]nodeItem, 0, nodeBuilderListSize),
+		keys:     make([]NodeItem, 0, nodeBuilderListSize),
+		values:   make([]NodeItem, 0, nodeBuilderListSize),
 		subtrees: newSubtreeCounts(nodeBuilderListSize),
 		level:    level,
 	}
@@ -198,7 +198,7 @@ func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 
 // measureNodeSize returns the exact size of the tuple vectors for keys and values,
 // and an estimate of the overall size of the final flatbuffer.
-func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
+func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
 		valSz += len(values[i])
@@ -222,7 +222,7 @@ func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, 
 	return
 }
 
-func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
+func writeItemBytes(b *fb.Builder, items []NodeItem, sumSz int) fb.UOffsetT {
 	b.Prep(fb.SizeUOffsetT, sumSz)
 
 	stop := int(b.Head())
@@ -236,7 +236,7 @@ func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
-func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
+func writeItemOffsets(b *fb.Builder, items []NodeItem, sz int) (cnt int) {
 	off := sz
 	for i := len(items) - 1; i > 0; i-- { // omit first offset
 		off -= len(items[i])

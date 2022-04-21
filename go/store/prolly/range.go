@@ -244,7 +244,7 @@ func compareBound(bound []RangeCut, tup val.Tuple, desc val.TupleDesc) int {
 	return 0
 }
 
-func rangeStartSearchFn(rng Range) searchFn {
+func rangeStartSearchFn(rng Range) SearchFn {
 	return func(nd Node) int {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (in bool) {
@@ -256,7 +256,7 @@ func rangeStartSearchFn(rng Range) searchFn {
 	}
 }
 
-func rangeStopSearchFn(rng Range) searchFn {
+func rangeStopSearchFn(rng Range) SearchFn {
 	return func(nd Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {
@@ -268,7 +268,7 @@ func rangeStopSearchFn(rng Range) searchFn {
 	}
 }
 
-func pointLookupSearchFn(rng Range) searchFn {
+func pointLookupSearchFn(rng Range) SearchFn {
 	return func(nd Node) (idx int) {
 		// todo(andy): inline sort.Search()
 		return sort.Search(int(nd.count), func(i int) (out bool) {

@@ -107,7 +107,7 @@ func TestCountArray(t *testing.T) {
 	}
 }
 
-func newLeafNode(keys, values []nodeItem) Node {
+func newLeafNode(keys, values []NodeItem) Node {
 	b := &nodeBuilder{
 		keys:   keys,
 		values: values,
@@ -117,27 +117,27 @@ func newLeafNode(keys, values []nodeItem) Node {
 }
 
 func newTupleLeafNode(keys, values []val.Tuple) Node {
-	ks := make([]nodeItem, len(keys))
+	ks := make([]NodeItem, len(keys))
 	for i := range ks {
-		ks[i] = nodeItem(keys[i])
+		ks[i] = NodeItem(keys[i])
 	}
-	vs := make([]nodeItem, len(values))
+	vs := make([]NodeItem, len(values))
 	for i := range vs {
-		vs[i] = nodeItem(values[i])
+		vs[i] = NodeItem(values[i])
 	}
 	return newLeafNode(ks, vs)
 }
 
-func randomNodeItemPairs(t *testing.T, count int) (keys, values []nodeItem) {
-	keys = make([]nodeItem, count)
+func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
+	keys = make([]NodeItem, count)
 	for i := range keys {
 		sz := (rand.Int() % 41) + 10
-		keys[i] = make(nodeItem, sz)
+		keys[i] = make(NodeItem, sz)
 		_, err := rand.Read(keys[i])
 		assert.NoError(t, err)
 	}
 
-	values = make([]nodeItem, count)
+	values = make([]NodeItem, count)
 	copy(values, keys)
 	rand.Shuffle(len(values), func(i, j int) {
 		values[i], values[j] = values[j], values[i]
@@ -188,7 +188,7 @@ func ascendingCompositeIntTuples(count int) (keys, values []val.Tuple, desc val.
 	return
 }
 
-func sumSize(items []nodeItem) (sz uint64) {
+func sumSize(items []NodeItem) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}
