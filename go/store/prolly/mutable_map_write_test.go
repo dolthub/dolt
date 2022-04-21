@@ -442,7 +442,7 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err = chunker.AddPair(ctx, pair[0], pair[1])
+		err = chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

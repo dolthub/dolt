@@ -47,7 +47,7 @@ func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)
 	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, pair[0], pair[1])
+		err := chunker.AddPair(ctx, NodeItem(pair[0]), NodeItem(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

@@ -23,12 +23,10 @@ package tree
 
 import (
 	"context"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type Chunker interface {
-	AddPair(ctx context.Context, key, value val.Tuple) error
+	AddPair(ctx context.Context, key, value NodeItem) error
 	Done(ctx context.Context) (Node, error)
 }
 
@@ -116,13 +114,13 @@ func (tc *chunker) resume(ctx context.Context) (err error) {
 }
 
 // AddPair adds a val.Tuple pair to the chunker.
-func (tc *chunker) AddPair(ctx context.Context, key, value val.Tuple) error {
+func (tc *chunker) AddPair(ctx context.Context, key, value NodeItem) error {
 	_, err := tc.append(ctx, NodeItem(key), NodeItem(value), 1)
 	return err
 }
 
 // UpdatePair updates a val.Tuple pair in the chunker.
-func (tc *chunker) UpdatePair(ctx context.Context, key, value val.Tuple) error {
+func (tc *chunker) UpdatePair(ctx context.Context, key, value NodeItem) error {
 	if err := tc.skip(ctx); err != nil {
 		return err
 	}
@@ -131,7 +129,7 @@ func (tc *chunker) UpdatePair(ctx context.Context, key, value val.Tuple) error {
 }
 
 // DeletePair deletes a val.Tuple pair from the chunker.
-func (tc *chunker) DeletePair(ctx context.Context, _, _ val.Tuple) error {
+func (tc *chunker) DeletePair(ctx context.Context, _, _ NodeItem) error {
 	return tc.skip(ctx)
 }
 

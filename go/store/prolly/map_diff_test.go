@@ -127,9 +127,9 @@ func testMapDiffAgainstEmpty(t *testing.T, scale int) {
 
 	cnt := 0
 	err := DiffMaps(ctx, m.(Map), empty.(Map), func(ctx context.Context, diff tree.Diff) error {
-		assert.Equal(t, tuples[cnt][0], diff.Key)
-		assert.Equal(t, tuples[cnt][1], diff.From)
-		assert.Nil(t, diff.To)
+		assert.Equal(t, tuples[cnt][0], val.Tuple(diff.Key))
+		assert.Equal(t, tuples[cnt][1], val.Tuple(diff.From))
+		assert.Nil(t, val.Tuple(diff.To))
 		cnt++
 		return nil
 	})
@@ -138,9 +138,9 @@ func testMapDiffAgainstEmpty(t *testing.T, scale int) {
 
 	cnt = 0
 	err = DiffMaps(ctx, empty.(Map), m.(Map), func(ctx context.Context, diff tree.Diff) error {
-		assert.Equal(t, tuples[cnt][0], diff.Key)
-		assert.Equal(t, tuples[cnt][1], diff.To)
-		assert.Nil(t, diff.From)
+		assert.Equal(t, tuples[cnt][0], val.Tuple(diff.Key))
+		assert.Equal(t, tuples[cnt][1], val.Tuple(diff.To))
+		assert.Nil(t, val.Tuple(diff.From))
 		cnt++
 		return nil
 	})
@@ -163,7 +163,7 @@ func testDeleteDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numDeletes int
 	var cnt int
 	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.RemovedDiff, diff.Type)
-		assert.Equal(t, deletes[cnt][0], diff.Key)
+		assert.Equal(t, deletes[cnt][0], val.Tuple(diff.Key))
 		cnt++
 		return nil
 	})
@@ -180,8 +180,8 @@ func testInsertDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numInserts int
 		if !assert.Equal(t, tree.AddedDiff, diff.Type) {
 			fmt.Println("")
 		}
-		assert.Equal(t, inserts[cnt][0], diff.Key)
-		assert.Equal(t, inserts[cnt][1], diff.To)
+		assert.Equal(t, inserts[cnt][0], val.Tuple(diff.Key))
+		assert.Equal(t, inserts[cnt][1], val.Tuple(diff.To))
 		cnt++
 		return nil
 	})
@@ -208,9 +208,9 @@ func testUpdateDiffs(t *testing.T, from Map, tups [][2]val.Tuple, numUpdates int
 	var cnt int
 	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff tree.Diff) error {
 		assert.Equal(t, tree.ModifiedDiff, diff.Type)
-		assert.Equal(t, updates[cnt][0], diff.Key)
-		assert.Equal(t, updates[cnt][1], diff.From)
-		assert.Equal(t, updates[cnt][2], diff.To)
+		assert.Equal(t, updates[cnt][0], val.Tuple(diff.Key))
+		assert.Equal(t, updates[cnt][1], val.Tuple(diff.From))
+		assert.Equal(t, updates[cnt][2], val.Tuple(diff.To))
 		cnt++
 		return nil
 	})

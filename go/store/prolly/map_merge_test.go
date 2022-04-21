@@ -175,8 +175,8 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int) {
 		assert.Equal(t, l.Key, r.Key)
 		assert.Equal(t, l.From, r.From)
 
-		assert.Equal(t, l.To, left[idx][2])
-		assert.Equal(t, r.To, right[idx][2])
+		assert.Equal(t, val.Tuple(l.To), left[idx][2])
+		assert.Equal(t, val.Tuple(r.To), right[idx][2])
 
 		// right diff wins
 		merged, ok = r, true

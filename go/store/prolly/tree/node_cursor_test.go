@@ -53,15 +53,15 @@ func testNewCursorAtItem(t *testing.T, count int) {
 func randomTree(t *testing.T, count int) (Node, [][2]NodeItem, NodeStore) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	chkr, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
-		err = chunker.AddPair(ctx, val.Tuple(item[0]), val.Tuple(item[1]))
+		err = chkr.AddPair(ctx, NodeItem(item[0]), NodeItem(item[1]))
 		assert.NoError(t, err)
 	}
-	nd, err := chunker.Done(ctx)
+	nd, err := chkr.Done(ctx)
 	assert.NoError(t, err)
 	return nd, items, ns
 }

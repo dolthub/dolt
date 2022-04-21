@@ -36,6 +36,8 @@ type Map struct {
 
 type KeyValueFn func(key, value val.Tuple) error
 
+type DiffFn func(context.Context, tree.Diff) error
+
 // NewMap creates an empty prolly tree Map
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	return Map{
@@ -60,7 +62,7 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 	}
 
 	for i := 0; i < len(tups); i += 2 {
-		if err = ch.AddPair(ctx, tups[i], tups[i+1]); err != nil {
+		if err = ch.AddPair(ctx, tree.NodeItem(tups[i]), tree.NodeItem(tups[i+1])); err != nil {
 			return Map{}, err
 		}
 	}
@@ -73,7 +75,7 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 	return m, nil
 }
 
-func DiffMaps(ctx context.Context, from, to Map, cb tree.DiffFn) error {
+func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	differ, err := tree.DifferFromRoots(ctx, from.ns, from.root, to.root, to.compareItems)
 	if err != nil {
 		return err

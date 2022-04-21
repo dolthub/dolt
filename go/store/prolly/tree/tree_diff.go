@@ -29,12 +29,10 @@ const (
 )
 
 type Diff struct {
-	Type     DiffType
 	Key      NodeItem
 	From, To NodeItem
+	Type     DiffType
 }
-
-type DiffFn func(context.Context, Diff) error
 
 type Differ struct {
 	from, to *Cursor

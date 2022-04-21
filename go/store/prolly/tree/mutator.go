@@ -17,8 +17,6 @@ package tree
 import (
 	"bytes"
 	"context"
-
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 type MutationIter interface {
@@ -44,7 +42,7 @@ func ApplyMutations(
 		return Node{}, err
 	}
 
-	chunker, err := newTreeChunker(ctx, cur.Clone(), 0, ns, defaultSplitterFactory)
+	chkr, err := newTreeChunker(ctx, cur.Clone(), 0, ns, defaultSplitterFactory)
 	if err != nil {
 		return Node{}, err
 	}
@@ -76,19 +74,19 @@ func ApplyMutations(
 			continue // same newValue
 		}
 
-		// move |chunker| to the NextMutation mutation point
-		err = chunker.AdvanceTo(ctx, cur)
+		// move |chkr| to the NextMutation mutation point
+		err = chkr.AdvanceTo(ctx, cur)
 		if err != nil {
 			return Node{}, err
 		}
 
 		if oldValue == nil {
-			err = chunker.AddPair(ctx, val.Tuple(newKey), val.Tuple(newValue))
+			err = chkr.AddPair(ctx, newKey, newValue)
 		} else {
 			if newValue != nil {
-				err = chunker.UpdatePair(ctx, val.Tuple(newKey), val.Tuple(newValue))
+				err = chkr.UpdatePair(ctx, newKey, newValue)
 			} else {
-				err = chunker.DeletePair(ctx, val.Tuple(newKey), val.Tuple(oldValue))
+				err = chkr.DeletePair(ctx, newKey, oldValue)
 			}
 		}
 		if err != nil {
@@ -98,7 +96,7 @@ func ApplyMutations(
 		newKey, newValue = edits.NextMutation(ctx)
 	}
 
-	return chunker.Done(ctx)
+	return chkr.Done(ctx)
 }
 
 func equalValues(left, right NodeItem) bool {
