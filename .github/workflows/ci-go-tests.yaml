@@ -19,16 +19,9 @@ jobs:
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-latest]
         dolt_fmt: [ "" ]
-        race: [ "" ]
-        short: [ "" ]
         include:
           - os: "ubuntu-18.04"
-            race: "-race"
-            short: "-test.short"
-          - os: "ubuntu-18.04"
             dolt_fmt: "__DOLT_DEV__"
-            race: "-race"
-            short: "-test.short"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -48,7 +41,16 @@ jobs:
         for (( i=0; i<${#file_arr[@]}; i++ ))
         do
           echo "Testing Package: ${file_arr[$i]}"
-          go test -timeout 45m ${{ matrix.race }} ${{ matrix.short }} "${file_arr[$i]}"
+          if [ "$MATRIX_OS" == 'ubuntu-18.04' ]
+          then
+            if [ -z $(echo "${file_arr[$i]}" | grep enginetest) ]; then
+              go test -timeout 45m -race "${file_arr[$i]}"
+            else
+              echo "skipping enginetests for -race"
+            fi
+          else
+            go test -timeout 45m "${file_arr[$i]}"
+          fi
           succeeded=$(echo "$?")
           if [ "$succeeded" -ne 0 ]; then
             echo "Testing failed in package ${file_arr[$i]}"
@@ -56,6 +58,7 @@ jobs:
           fi
         done
       env:
+        MATRIX_OS: ${{ matrix.os }}
         DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
   noracetest:
     name: Go tests - no race
