@@ -522,6 +522,11 @@ func TestTriggers(t *testing.T) {
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
+func TestRollbackTriggers(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestRollbackTriggers(t, newDoltHarness(t))
+}
+
 func TestStoredProcedures(t *testing.T) {
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
