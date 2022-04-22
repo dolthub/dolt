@@ -137,19 +137,29 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	verr := checkoutTablesAndDocs(ctx, dEnv, tbls, docs)
 
 	if verr != nil && apr.NArg() == 1 {
-		verr = checkoutRemoteBranch(ctx, dEnv, name)
+		verr = checkoutRemoteBranchOrSuggestNew(ctx, dEnv, name)
 	}
 
 	return HandleVErrAndExitCode(verr, usagePrt)
-
 }
 
-func checkoutRemoteBranch(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
+func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
 	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
 		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
 	} else {
+		// Check if the user is trying to enter a detached head state
+		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
+		if commit != nil {
+			// User tried to enter a detached head state, which we don't support.
+			// Inform and suggest that they check-out a new branch at this commit instead.
+
+			str := "dolt does not support a detached head state. To create a branch at this commit instead, run:\n\n" +
+				"\tdolt checkout %s -b {new_branch_name}\n"
+
+			return errhand.BuildDError(str, name).Build()
+		}
 		return errhand.BuildDError("error: could not find %s", name).Build()
 	}
 }
