@@ -138,12 +138,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	require.NoError(t, err)
 
 	mut := MutableMap{
-		prolly: Map{
-			root:    root,
-			keyDesc: kd,
-			valDesc: vd,
-			ns:      ns,
-		},
+		prolly:  NewMap(root, ns, kd, vd),
 		overlay: newMemoryMap(kd),
 	}
 

@@ -448,12 +448,7 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	return Map{
-		root:    root,
-		keyDesc: mutKeyDesc,
-		valDesc: mutValDesc,
-		ns:      ns,
-	}
+	return NewMap(root, ns, mutKeyDesc, mutKeyDesc)
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(

@@ -179,17 +179,17 @@ func measureWriteAmplification(t *testing.T, before, after Map) (count, size int
 	require.NoError(t, err)
 
 	for addr := range novel {
-		n, err := after.ns.Read(ctx, addr)
+		n, err := after.tuples.ns.Read(ctx, addr)
 		require.NoError(t, err)
 		size += n.Size()
 	}
-	size += after.root.Size()
+	size += after.tuples.root.Size()
 	count = novel.Size() + 1
 	return
 }
 
 func printMapSummary(t *testing.T, m Map) {
-	tree.PrintTreeSummaryByLevel(t, m.root, m.ns)
+	tree.PrintTreeSummaryByLevel(t, m.tuples.root, m.tuples.ns)
 }
 
 func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values []val.Tuple) Map {
@@ -207,10 +207,5 @@ func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	return Map{
-		root:    root,
-		keyDesc: kd,
-		valDesc: vd,
-		ns:      ns,
-	}
+	return NewMap(root, ns, kd, vd)
 }

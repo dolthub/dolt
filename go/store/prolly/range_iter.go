@@ -23,9 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type MapRangeIter interface {
-	Next(ctx context.Context) (key, value val.Tuple, err error)
-}
+type MapRangeIter orderedIter[val.Tuple, val.Tuple]
 
 var _ MapRangeIter = emptyIter{}
 var _ MapRangeIter = &prollyRangeIter{}

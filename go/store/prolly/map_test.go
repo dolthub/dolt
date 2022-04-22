@@ -115,14 +115,7 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	m := Map{
-		root:    root,
-		keyDesc: kd,
-		valDesc: vd,
-		ns:      ns,
-	}
-
-	return m
+	return NewMap(root, ns, kd, vd)
 }
 
 func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
@@ -132,8 +125,9 @@ func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	for _, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
-			assert.Equal(t, kv[0], key)
-			assert.Equal(t, kv[1], val)
+			expKey, expVal := kv[0], kv[1]
+			assert.Equal(t, key, expKey)
+			assert.Equal(t, val, expVal)
 			return
 		})
 		require.NoError(t, err)

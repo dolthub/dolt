@@ -23,6 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
+type KeyValueFn[K, V ~[]byte] func(key K, value V) error
+
 func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	ctx context.Context,
 	from, to orderedTree[K, V, O],
@@ -50,22 +52,25 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K]](
 	ctx context.Context,
 	l, r, base orderedTree[K, V, O],
 	cb tree.CollisionFn,
-) (merged orderedTree[K, V, O], err error) {
+) (orderedTree[K, V, O], error) {
 	sfn, cfn := base.searchNode, base.compareItems
 
-	merged.root, err = tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, sfn, cfn, cb)
+	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, sfn, cfn, cb)
 	if err != nil {
-		return merged, err
+		return orderedTree[K, V, O]{}, err
 	}
-	merged.order = base.order
 
-	return merged, nil
+	return orderedTree[K, V, O]{
+		root:  root,
+		ns:    base.ns,
+		order: base.order,
+	}, nil
 }
 
 func newOrderedMap[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedMap[K, V, O] {
 	return orderedMap[K, V, O]{
 		list: skip.NewSkipList(func(left, right []byte) int {
-			return order.compare(left, right)
+			return order.Compare(left, right)
 		}),
 		tree: orderedTree[K, V, O]{
 			root:  root,
@@ -75,15 +80,17 @@ func newOrderedMap[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStor
 	}
 }
 
-type kvFn[K, V ~[]byte] func(key K, value V) error
-
-type ordering[K ~[]byte] interface {
-	compare(left, right K) int
-}
-
 type orderedMap[K, V ~[]byte, O ordering[K]] struct {
 	list *skip.List
 	tree orderedTree[K, V, O]
+}
+
+type ordering[K ~[]byte] interface {
+	Compare(left, right K) int
+}
+
+type orderedIter[K, V ~[]byte] interface {
+	Next(ctx context.Context) (K, V, error)
 }
 
 func (m orderedMap[K, V, O]) flush(ctx context.Context) (orderedTree[K, V, O], error) {
@@ -110,7 +117,7 @@ func (m orderedMap[K, V, O]) delete(_ context.Context, key K) error {
 	return nil
 }
 
-func (m orderedMap[K, V, O]) get(ctx context.Context, key K, cb kvFn[K, V]) (err error) {
+func (m orderedMap[K, V, O]) get(ctx context.Context, key K, cb KeyValueFn[K, V]) (err error) {
 	value, ok := m.list.Get(key)
 	if ok {
 		if value == nil {
@@ -156,6 +163,14 @@ func (it orderedListIter) Close() error {
 	return nil
 }
 
+func newOrderedTree[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedTree[K, V, O] {
+	return orderedTree[K, V, O]{
+		root:  root,
+		ns:    ns,
+		order: order,
+	}
+}
+
 type orderedTree[K, V ~[]byte, O ordering[K]] struct {
 	root  tree.Node
 	ns    tree.NodeStore
@@ -169,23 +184,22 @@ type orderedTreeIter[K, V ~[]byte] struct {
 	stop *tree.Cursor
 }
 
-func (it *orderedTreeIter[K, V]) next(ctx context.Context) (key K, value V, err error) {
+func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
 	if it.curr == nil {
 		return nil, nil, io.EOF
 	}
 
 	k, v := tree.CurrentCursorItems(it.curr)
-	key, value = K(k), V(v)
 
-	_, err = it.curr.Advance(ctx)
-	if err != nil {
+	if _, err := it.curr.Advance(ctx); err != nil {
 		return nil, nil, err
 	}
 	if it.curr.Compare(it.stop) >= 0 {
 		// past the end of the range
 		it.curr = nil
 	}
-	return
+
+	return K(k), V(v), nil
 }
 
 func (t orderedTree[K, V, O]) count() int {
@@ -203,7 +217,7 @@ func (t orderedTree[K, V, O]) hashOf() hash.Hash {
 func (t orderedTree[K, V, O]) mutate() orderedMap[K, V, O] {
 	return orderedMap[K, V, O]{
 		list: skip.NewSkipList(func(left, right []byte) int {
-			return t.order.compare(left, right)
+			return t.order.Compare(left, right)
 		}),
 		tree: t,
 	}
@@ -217,7 +231,7 @@ func (t orderedTree[K, V, O]) walkNodes(ctx context.Context, cb tree.NodeCb) err
 	return tree.WalkNodes(ctx, t.root, t.ns, cb)
 }
 
-func (t orderedTree[K, V, O]) get(ctx context.Context, query K, cb kvFn[K, V]) (err error) {
+func (t orderedTree[K, V, O]) get(ctx context.Context, query K, cb KeyValueFn[K, V]) (err error) {
 	cur, err := tree.NewLeafCursorAtItem(ctx, t.ns, t.root, tree.Item(query), t.searchNode)
 	if err != nil {
 		return err
@@ -227,13 +241,13 @@ func (t orderedTree[K, V, O]) get(ctx context.Context, query K, cb kvFn[K, V]) (
 	var value V
 
 	if cur.Valid() {
-		if t.order.compare(query, K(cur.CurrentKey())) == 0 {
+		key = K(cur.CurrentKey())
+		if t.order.Compare(query, key) == 0 {
 			value = V(cur.CurrentValue())
 		} else {
 			key = nil
 		}
 	}
-
 	return cb(key, value)
 }
 
@@ -244,7 +258,7 @@ func (t orderedTree[K, V, O]) has(ctx context.Context, query K) (ok bool, err er
 	}
 
 	if cur.Valid() {
-		ok = t.order.compare(query, K(cur.CurrentKey())) == 0
+		ok = t.order.Compare(query, K(cur.CurrentKey())) == 0
 	}
 
 	return
@@ -262,17 +276,17 @@ func (t orderedTree[K, V, O]) last(ctx context.Context) (key K, value V, err err
 	return
 }
 
-func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (iter orderedTreeIter[K, V], err error) {
-	iter.curr, err = tree.NewCursorAtStart(ctx, t.ns, t.root)
+func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (orderedIter[K, V], error) {
+	c, err := tree.NewCursorAtStart(ctx, t.ns, t.root)
 	if err != nil {
-		return iter, err
+		return nil, err
 	}
 
-	iter.stop, err = tree.NewCursorPastEnd(ctx, t.ns, t.root)
+	s, err := tree.NewCursorPastEnd(ctx, t.ns, t.root)
 	if err != nil {
-		return iter, err
+		return nil, err
 	}
-	return
+	return &orderedTreeIter[K, V]{curr: c, stop: s}, nil
 }
 
 // searchNode returns the smallest index where nd[i] >= query
@@ -284,7 +298,7 @@ func (t orderedTree[K, V, O]) searchNode(query tree.Item, nd tree.Node) int {
 	i, j := 0, n
 	for i < j {
 		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := t.order.compare(K(query), K(nd.GetKey(h))) <= 0
+		less := t.order.Compare(K(query), K(nd.GetKey(h))) <= 0
 		// i ≤ h < j
 		if !less {
 			i = h + 1 // preserves f(i-1) == false
@@ -298,7 +312,7 @@ func (t orderedTree[K, V, O]) searchNode(query tree.Item, nd tree.Node) int {
 }
 
 func (t orderedTree[K, V, O]) compareItems(left, right tree.Item) int {
-	return t.order.compare(K(left), K(right))
+	return t.order.Compare(K(left), K(right))
 }
 
 //var _ tree.ItemSearchFn = orderedTree[K, V, O]{}.searchNode

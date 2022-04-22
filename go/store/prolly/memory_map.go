@@ -65,7 +65,7 @@ func (mm memoryMap) Delete(key val.Tuple) {
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the memoryMap, a nil Tuple pair is passed to |cb|.
-func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn) error {
+func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) error {
 	value, ok := mm.list.Get(key)
 	if !ok || value == nil {
 		key = nil

@@ -41,17 +41,11 @@ func newMutableMap(m Map) MutableMap {
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 	m, edits := mut.prolly, mut.overlay.mutations()
 
-	root, err := tree.ApplyMutations(ctx, m.ns, m.root, edits, m.searchNode, m.compareItems)
+	root, err := tree.ApplyMutations(ctx, m.tuples.ns, m.tuples.root, edits, m.searchNode, m.compareItems)
 	if err != nil {
 		return Map{}, err
 	}
-
-	return Map{
-		root:    root,
-		keyDesc: m.keyDesc,
-		valDesc: m.valDesc,
-		ns:      m.ns,
-	}, nil
+	return NewMap(root, m.tuples.ns, m.keyDesc, m.valDesc), err
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
@@ -68,7 +62,7 @@ func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
-func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
+func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error) {
 	value, ok := mut.overlay.list.Get(key)
 	if ok {
 		if value == nil {

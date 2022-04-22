@@ -27,7 +27,7 @@ import (
 // testMap is a utility type that allows us to create a common test
 // harness for Map, memoryMap, and MutableMap.
 type testMap interface {
-	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
+	Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error)
 	IterAll(ctx context.Context) (MapRangeIter, error)
 	IterRange(ctx context.Context, rng Range) (MapRangeIter, error)
 }
