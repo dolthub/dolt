@@ -72,7 +72,7 @@ func TestMap(t *testing.T) {
 	}
 }
 
-func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -88,7 +88,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return om, tuples
 }
 
-func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
@@ -101,7 +101,7 @@ func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tup
 	return om, tuples
 }
 
-func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
+func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) testMap {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
@@ -125,7 +125,7 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	return m
 }
 
-func testGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	// test get
@@ -170,7 +170,7 @@ func testHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
 	}
 }
 
-func testIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	iter, err := om.IterAll(ctx)
 	require.NoError(t, err)

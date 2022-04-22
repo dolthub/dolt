@@ -103,7 +103,7 @@ func TestMutableMapReads(t *testing.T) {
 	}
 }
 
-func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
@@ -155,7 +155,7 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return mut, tuples
 }
 
-func makeMutableSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMutableSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	m, tuples := makeProllySecondaryIndex(t, count)
 	return newMutableMap(m.(Map)), tuples
 }

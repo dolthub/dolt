@@ -24,26 +24,26 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// orderedMap is a utility type that allows us to create a common test
+// testMap is a utility type that allows us to create a common test
 // harness for Map, memoryMap, and MutableMap.
-type orderedMap interface {
+type testMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error)
 	IterAll(ctx context.Context) (MapRangeIter, error)
 	IterRange(ctx context.Context, rng Range) (MapRangeIter, error)
 }
 
-var _ orderedMap = Map{}
-var _ orderedMap = MutableMap{}
-var _ orderedMap = memoryMap{}
+var _ testMap = Map{}
+var _ testMap = MutableMap{}
+var _ testMap = memoryMap{}
 
 type ordinalMap interface {
-	orderedMap
+	testMap
 	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error)
 }
 
-var _ orderedMap = Map{}
+var _ testMap = Map{}
 
-func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
+func countOrderedMap(t *testing.T, om testMap) (cnt int) {
 	iter, err := om.IterAll(context.Background())
 	require.NoError(t, err)
 	for {
@@ -57,7 +57,7 @@ func countOrderedMap(t *testing.T, om orderedMap) (cnt int) {
 	return cnt
 }
 
-func keyDescFromMap(om orderedMap) val.TupleDesc {
+func keyDescFromMap(om testMap) val.TupleDesc {
 	switch m := om.(type) {
 	case Map:
 		return m.keyDesc

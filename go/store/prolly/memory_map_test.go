@@ -73,7 +73,7 @@ func TestMemMap(t *testing.T) {
 	}
 }
 
-func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMemMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	memKeyDesc := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -92,7 +92,7 @@ func makeMemMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return mm, tuples
 }
 
-func makeMemSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMemSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	memKeyDesc := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
