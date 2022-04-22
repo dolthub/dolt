@@ -24,11 +24,11 @@ jobs:
         include:
           - os: "ubuntu-18.04"
             race: "-race"
-            short: "-short"
+            short: "-test.short"
           - os: "ubuntu-18.04"
             dolt_fmt: "__DOLT_DEV__"
             race: "-race"
-            short: "-short"
+            short: "-test.short"
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
@@ -56,8 +56,6 @@ jobs:
           fi
         done
       env:
-        MATRIX_OS: ${{ matrix.os }}
-        DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
   noracetest:
     name: Go tests - no race
     defaults:
