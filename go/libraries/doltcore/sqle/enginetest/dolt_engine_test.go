@@ -848,6 +848,7 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 }
 
 func TestScriptsPrepared(t *testing.T) {
+	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t))
 }
