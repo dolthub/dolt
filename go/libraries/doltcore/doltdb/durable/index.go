@@ -412,7 +412,7 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 	}
 
 	builder := flatbuffers.NewBuilder(1024)
-	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{name, ref.TargetHash()}})
+	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name, Addr: ref.TargetHash()}})
 	builder.Finish(off)
 	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
 
