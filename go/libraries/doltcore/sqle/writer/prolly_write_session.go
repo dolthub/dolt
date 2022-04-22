@@ -90,7 +90,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		sch:       sch,
 		aiCol:     autoCol,
 		aiTracker: s.tracker,
-		sess:      s,
+		flusher:   s,
 		setter:    setter,
 		batched:   batched,
 	}

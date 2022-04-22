@@ -880,6 +880,7 @@ type doltAlterableTableInterface interface {
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
+var _ sql.RewritableTable = (*AlterableDoltTable)(nil)
 
 func (t *AlterableDoltTable) WithProjections(colNames []string) sql.Table {
 	return &AlterableDoltTable{WritableDoltTable: *t.WritableDoltTable.WithProjections(colNames).(*WritableDoltTable)}
@@ -948,6 +949,83 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) ShouldRewriteTable(ctx *sql.Context, oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema, modifiedColumn *sql.Column) bool {
+	return true
+}
+
+type rewriteInserter struct {
+
+}
+
+func (r rewriteInserter) StatementBegin(ctx *sql.Context) {
+}
+
+func (r rewriteInserter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
+}
+
+func (r rewriteInserter) StatementComplete(ctx *sql.Context) error {
+}
+
+func (r rewriteInserter) Insert(c *sql.Context, row sql.Row) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (r rewriteInserter) Close(c *sql.Context) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+var _ sql.RowInserter = (*rewriteInserter)(nil)
+
+func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("database %s not found in session", t.db.Name())
+	}
+	root := dbState.WorkingSet.WorkingRoot()
+
+	head, err := sess.GetHeadCommit(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	headRoot, err := head.GetRootValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	doltSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := t.doltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err = dt.UpdateSchema(ctx, doltSch)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
+	// rewrite operation
+	opts := dbState.WriteSession.GetOptions()
+	opts.ForeignKeyChecksDisabled = true
+
+	ed := editor.NewTableEditor(ctx, dt, doltSch, t.Name(), )
+
 }
 
 // DropColumn implements sql.AlterableTable

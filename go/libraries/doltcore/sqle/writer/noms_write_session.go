@@ -43,14 +43,19 @@ type WriteSession interface {
 	// SetWorkingSet modifies the state of the WriteSession. The WorkingSetRef of |ws| must match the existing Ref.
 	SetWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error
 
-	// Flush flushes the pending writes in the session.
-	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
-
 	// GetOptions returns the editor.Options for this session.
 	GetOptions() editor.Options
 
 	// SetOptions sets the editor.Options for this session.
 	SetOptions(opts editor.Options)
+
+	WriteSessionFlusher
+}
+
+// WriteSessionFlusher is responsible for flushing any pending edits to the session
+type WriteSessionFlusher interface {
+	// Flush flushes the pending writes in the session.
+	Flush(ctx context.Context) (*doltdb.WorkingSet, error)
 }
 
 // nomsWriteSession handles all edit operations on a table that may also update other tables.
@@ -124,7 +129,7 @@ func (s *nomsWriteSession) GetTableWriter(ctx context.Context, table, db string,
 		vrw:         vrw,
 		kvToSQLRow:  conv,
 		tableEditor: te,
-		sess:        s,
+		flusher:     s,
 		batched:     batched,
 		autoInc:     s.tracker,
 		setter:      setter,
