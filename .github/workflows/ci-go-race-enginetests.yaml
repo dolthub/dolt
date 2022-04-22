@@ -18,10 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-18.04 ]
-        dolt_fmt: [ "" ]
-        include:
-          - os: "ubuntu-18.04"
-            dolt_fmt: "__DOLT_DEV__"
+        dolt_fmt: [ "", "__DOLT_DEV__" ]
     steps:
     - name: Set up Go 1.x
       uses: actions/setup-go@v2
