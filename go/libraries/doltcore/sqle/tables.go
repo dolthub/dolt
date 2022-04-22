@@ -992,7 +992,8 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 	if !ok {
 		return nil, fmt.Errorf("database %s not found in session", t.db.Name())
 	}
-	root := dbState.WorkingSet.WorkingRoot()
+
+	ws := dbState.WorkingSet
 
 	head, err := sess.GetHeadCommit(ctx, t.db.Name())
 	if err != nil {
@@ -1004,7 +1005,7 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
-	doltSch, err := sqlutil.ToDoltSchema(ctx, root, t.Name(), newSchema, headRoot)
+	doltSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -1019,13 +1020,29 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
+	// TODO: remove all indexes during rewrite
+	// TODO: truncate table
+
 	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
 	// rewrite operation
 	opts := dbState.WriteSession.GetOptions()
 	opts.ForeignKeyChecksDisabled = true
 
-	ed := editor.NewTableEditor(ctx, dt, doltSch, t.Name(), )
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
+	if err != nil {
+		return nil, err
+	}
 
+	newWs := ws.WithWorkingRoot(newRoot)
+
+	writeSession := writer.NewWriteSession(dt.Format(), newWs, globalstate.AutoIncrementTracker{}, opts)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), nil, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: wrap this with another editor so we can capture Close on it
+	return ed, nil
 }
 
 // DropColumn implements sql.AlterableTable
