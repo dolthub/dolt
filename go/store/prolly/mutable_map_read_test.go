@@ -131,7 +131,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	chunker, err := tree.NewEmptyChunker(ctx, ns)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {
-		err = chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
+		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

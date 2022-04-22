@@ -174,7 +174,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 	}
 }
 
-func (it *memRangeIter) NextMutation(context.Context) (tree.NodeItem, tree.NodeItem) {
+func (it *memRangeIter) NextMutation(context.Context) (tree.Item, tree.Item) {
 	k, v := it.iter.Current()
 	if k == nil {
 		return nil, nil

@@ -26,7 +26,7 @@ import (
 )
 
 type Chunker interface {
-	AddPair(ctx context.Context, key, value NodeItem) error
+	AddPair(ctx context.Context, key, value Item) error
 	Done(ctx context.Context) (Node, error)
 }
 
@@ -114,22 +114,22 @@ func (tc *chunker) resume(ctx context.Context) (err error) {
 }
 
 // AddPair adds a val.Tuple pair to the chunker.
-func (tc *chunker) AddPair(ctx context.Context, key, value NodeItem) error {
-	_, err := tc.append(ctx, NodeItem(key), NodeItem(value), 1)
+func (tc *chunker) AddPair(ctx context.Context, key, value Item) error {
+	_, err := tc.append(ctx, Item(key), Item(value), 1)
 	return err
 }
 
 // UpdatePair updates a val.Tuple pair in the chunker.
-func (tc *chunker) UpdatePair(ctx context.Context, key, value NodeItem) error {
+func (tc *chunker) UpdatePair(ctx context.Context, key, value Item) error {
 	if err := tc.skip(ctx); err != nil {
 		return err
 	}
-	_, err := tc.append(ctx, NodeItem(key), NodeItem(value), 1)
+	_, err := tc.append(ctx, Item(key), Item(value), 1)
 	return err
 }
 
 // DeletePair deletes a val.Tuple pair from the chunker.
-func (tc *chunker) DeletePair(ctx context.Context, _, _ NodeItem) error {
+func (tc *chunker) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
@@ -243,7 +243,7 @@ func (tc *chunker) skip(ctx context.Context) error {
 // Append adds a new key-value pair to the chunker, validating the new pair to ensure
 // that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
-func (tc *chunker) append(ctx context.Context, key, value NodeItem, subtree uint64) (bool, error) {
+func (tc *chunker) append(ctx context.Context, key, value Item, subtree uint64) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
 	// (2) The total Size of a Node's data cannot exceed |maxVectorOffset|.

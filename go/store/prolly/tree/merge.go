@@ -90,7 +90,7 @@ type patchBuffer struct {
 
 var _ MutationIter = patchBuffer{}
 
-type patch [2]NodeItem
+type patch [2]Item
 
 func newPatchBuffer(sz int) patchBuffer {
 	return patchBuffer{buf: make(chan patch, sz)}
@@ -107,7 +107,7 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 }
 
 // nextMutation implements mutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (NodeItem, NodeItem) {
+func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
 	case p = <-ps.buf:
@@ -225,7 +225,7 @@ func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb Collision
 }
 
 func compareDiffKeys(left, right Diff, cmp CompareFn) int {
-	return cmp(NodeItem(left.Key), NodeItem(right.Key))
+	return cmp(Item(left.Key), Item(right.Key))
 }
 
 func equalDiffVals(left, right Diff) bool {

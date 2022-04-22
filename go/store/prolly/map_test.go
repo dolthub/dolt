@@ -109,7 +109,7 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
+		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

@@ -62,7 +62,7 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 	}
 
 	for i := 0; i < len(tups); i += 2 {
-		if err = ch.AddPair(ctx, tree.NodeItem(tups[i]), tree.NodeItem(tups[i+1])); err != nil {
+		if err = ch.AddPair(ctx, tree.Item(tups[i]), tree.Item(tups[i+1])); err != nil {
 			return Map{}, err
 		}
 	}
@@ -150,7 +150,7 @@ func (m Map) WalkNodes(ctx context.Context, cb tree.NodeCb) error {
 // Get searches for the key-value pair keyed by |key| and passes the results to the callback.
 // If |key| is not present in the map, a nil key-value pair are passed.
 func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) {
-	cur, err := tree.NewLeafCursorAtItem(ctx, m.ns, m.root, tree.NodeItem(key), m.searchNode)
+	cur, err := tree.NewLeafCursorAtItem(ctx, m.ns, m.root, tree.Item(key), m.searchNode)
 	if err != nil {
 		return err
 	}
@@ -170,7 +170,7 @@ func (m Map) Get(ctx context.Context, key val.Tuple, cb KeyValueFn) (err error) 
 
 // Has returns true is |key| is present in the Map.
 func (m Map) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	cur, err := tree.NewLeafCursorAtItem(ctx, m.ns, m.root, tree.NodeItem(key), m.searchNode)
+	cur, err := tree.NewLeafCursorAtItem(ctx, m.ns, m.root, tree.Item(key), m.searchNode)
 	if err != nil {
 		return false, err
 	}
@@ -297,7 +297,7 @@ func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, er
 
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
-func (m Map) searchNode(query tree.NodeItem, nd tree.Node) int {
+func (m Map) searchNode(query tree.Item, nd tree.Node) int {
 	n := int(nd.Count())
 	// Define f(-1) == false and f(n) == true.
 	// Invariant: f(i-1) == false, f(j) == true.
@@ -320,7 +320,7 @@ func (m Map) searchNode(query tree.NodeItem, nd tree.Node) int {
 var _ tree.ItemSearchFn = Map{}.searchNode
 
 // compareItems is a CompareFn.
-func (m Map) compareItems(left, right tree.NodeItem) int {
+func (m Map) compareItems(left, right tree.Item) int {
 	l, r := val.Tuple(left), val.Tuple(right)
 	return m.compareKeys(l, r)
 }

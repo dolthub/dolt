@@ -201,7 +201,7 @@ func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values
 	require.NoError(t, err)
 
 	for i := range keys {
-		err := chunker.AddPair(ctx, tree.NodeItem(keys[i]), tree.NodeItem(values[i]))
+		err := chunker.AddPair(ctx, tree.Item(keys[i]), tree.Item(values[i]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)
