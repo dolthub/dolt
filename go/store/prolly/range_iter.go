@@ -151,7 +151,8 @@ func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err 
 		return nil, nil, io.EOF
 	}
 
-	key, value = tree.CurrentCursorItems(it.curr)
+	k, v := tree.CurrentCursorItems(it.curr)
+	key, value = val.Tuple(k), val.Tuple(v)
 
 	_, err = it.curr.Advance(ctx)
 	if err != nil {
@@ -168,7 +169,8 @@ func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err 
 func (it *prollyRangeIter) current() (key, value val.Tuple) {
 	// |it.curr| is set to nil when its range is exhausted
 	if it.curr != nil && it.curr.Valid() {
-		key, value = tree.CurrentCursorItems(it.curr)
+		k, v := tree.CurrentCursorItems(it.curr)
+		key, value = val.Tuple(k), val.Tuple(v)
 	}
 	return
 }
