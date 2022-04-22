@@ -181,8 +181,8 @@ type metaSequence struct {
 	sequenceImpl
 }
 
-func newMetaSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
-	return metaSequence{newSequenceImpl(vrw, buff, offsets, len)}
+func newMetaSequence(nbf *NomsBinFormat, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) metaSequence {
+	return metaSequence{newSequenceImpl(nbf, vrw, buff, offsets, len)}
 }
 
 func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, vrw ValueReadWriter) (metaSequence, error) {
@@ -212,7 +212,7 @@ func newMetaSequenceFromTuples(kind NomsKind, level uint64, tuples []metaTuple, 
 		offsets[i+sequencePartValues+1] = w.offset
 	}
 
-	return newMetaSequence(vrw, w.data(), offsets, length), nil
+	return newMetaSequence(vrw.Format(), vrw, w.data(), offsets, length), nil
 }
 
 func (ms metaSequence) tuples() ([]metaTuple, error) {
