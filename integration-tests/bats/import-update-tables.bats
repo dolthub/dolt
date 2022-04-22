@@ -259,7 +259,7 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "A bad row was encountered while moving data" ]] || false
     [[ "$output" =~ "Bad Row: [1,123456]" ]] || false
-    [[ "$output" =~ 'string is too large for column' ]] || false
+    [[ "$output" =~ 'is too large for column' ]] || false
 }
 
 @test "import-update-tables: update table with repeat pk in csv does not throw an error" {
