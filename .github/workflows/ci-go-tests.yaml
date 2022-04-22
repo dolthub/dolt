@@ -56,6 +56,7 @@ jobs:
           fi
         done
       env:
+        DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}
   noracetest:
     name: Go tests - no race
     defaults:
