@@ -292,7 +292,9 @@ func (ddb *DoltDB) Resolve(ctx context.Context, cs *CommitSpec, cwb ref.DoltRef)
 			if err == nil {
 				break
 			}
-			if err != ErrBranchNotFound {
+			if err == ErrBranchNotFound {
+				err = ErrBranchNotFoundInfo.New(cs.baseSpec)
+			} else {
 				return nil, err
 			}
 		}
