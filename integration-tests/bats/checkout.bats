@@ -171,7 +171,7 @@ SQL
   sha=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
 
   # remove special characters (color)
-  sha=$(echo $sha | sed -r "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+  sha=$(echo $sha | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
 
   run dolt checkout "$sha"
   [ "$status" -ne 0 ]
