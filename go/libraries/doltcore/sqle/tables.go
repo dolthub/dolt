@@ -469,25 +469,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	}
 	numOfRows := int(rowData.Count())
 
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), t.sch)
-	if err != nil {
-		return 0, err
-	}
-
-	idxSet, err := table.GetIndexSet(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	for _, idx := range sch.Indexes().AllIndexes() {
-		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, idxSet, nil)
+	newTable, err := truncate(ctx, table, sch)
 	if err != nil {
 		return 0, err
 	}
@@ -500,12 +482,37 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	err = t.setRoot(ctx, newRoot)
 	if err != nil {
 		return 0, err
 	}
 
 	return numOfRows, nil
+}
+
+// truncate returns an empty copy of the table given by setting the rows and indexes to empty. The schema can be
+// updated at the same time.
+func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb.Table, error) {
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), sch)
+	if err != nil {
+		return nil, err
+	}
+
+	idxSet, err := table.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, idx := range sch.Indexes().AllIndexes() {
+		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// truncate table resets auto-increment value
+	return doltdb.NewTable(ctx, table.ValueReadWriter(), sch, empty, idxSet, nil)
 }
 
 // Updater implements sql.UpdatableTable
@@ -990,13 +997,10 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
-	dt, err = dt.UpdateSchema(ctx, doltSch)
+	dt, err = truncate(ctx, dt, doltSch)
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: remove all indexes during rewrite
-	// TODO: truncate table
 
 	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
 	// rewrite operation
