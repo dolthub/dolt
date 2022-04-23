@@ -955,31 +955,6 @@ func (t *AlterableDoltTable) ShouldRewriteTable(ctx *sql.Context, oldSchema sql.
 	return true
 }
 
-type rewriteInserter struct {
-
-}
-
-func (r rewriteInserter) StatementBegin(ctx *sql.Context) {
-}
-
-func (r rewriteInserter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-}
-
-func (r rewriteInserter) StatementComplete(ctx *sql.Context) error {
-}
-
-func (r rewriteInserter) Insert(c *sql.Context, row sql.Row) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (r rewriteInserter) Close(c *sql.Context) error {
-	// TODO implement me
-	panic("implement me")
-}
-
-var _ sql.RowInserter = (*rewriteInserter)(nil)
-
 func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
