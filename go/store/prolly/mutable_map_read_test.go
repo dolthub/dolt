@@ -137,10 +137,7 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	mut := MutableMap{
-		prolly:  NewMap(root, ns, kd, vd),
-		overlay: newMemoryMap(kd),
-	}
+	mut := newMutableMap(NewMap(root, ns, kd, vd))
 
 	for _, pair := range memTuples {
 		err = mut.Put(ctx, pair[0], pair[1])

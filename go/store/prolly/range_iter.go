@@ -18,15 +18,12 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 type MapRangeIter kvIter[val.Tuple, val.Tuple]
 
 var _ MapRangeIter = emptyIter{}
-var _ MapRangeIter = &prollyRangeIter{}
 var _ MapRangeIter = &pointLookup{}
 var _ MapRangeIter = &MutableMapRangeIter{}
 
@@ -50,7 +47,8 @@ type rangeIter interface {
 }
 
 var _ rangeIter = emptyIter{}
-var _ rangeIter = &prollyRangeIter{}
+var _ rangeIter = &memRangeIter{}
+var _ rangeIter = &orderedTreeIter[val.Tuple, val.Tuple]{}
 
 type emptyIter struct{}
 
@@ -135,54 +133,4 @@ func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
 		return -1
 	}
 	return it.rng.Desc.Compare(memKey, proKey)
-}
-
-type prollyRangeIter struct {
-	// current tuple location
-	curr *tree.Cursor
-	// non-inclusive range stop
-	stop *tree.Cursor
-}
-
-func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	if it.curr == nil {
-		return nil, nil, io.EOF
-	}
-
-	k, v := tree.CurrentCursorItems(it.curr)
-	key, value = val.Tuple(k), val.Tuple(v)
-
-	_, err = it.curr.Advance(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	if it.curr.Compare(it.stop) >= 0 {
-		// past the end of the range
-		it.curr = nil
-	}
-
-	return
-}
-
-func (it *prollyRangeIter) current() (key, value val.Tuple) {
-	// |it.curr| is set to nil when its range is exhausted
-	if it.curr != nil && it.curr.Valid() {
-		k, v := tree.CurrentCursorItems(it.curr)
-		key, value = val.Tuple(k), val.Tuple(v)
-	}
-	return
-}
-
-func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
-	_, err = it.curr.Advance(ctx)
-	if err != nil {
-		return err
-	}
-
-	if it.curr.Compare(it.stop) >= 0 {
-		// past the end of the range
-		it.curr = nil
-	}
-
-	return
 }

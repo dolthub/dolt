@@ -62,7 +62,7 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	case Map:
 		return m.keyDesc
 	case MutableMap:
-		return m.prolly.keyDesc
+		return m.keyDesc
 	case memoryMap:
 		return m.keyDesc
 	default:

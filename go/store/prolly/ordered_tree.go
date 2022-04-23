@@ -103,7 +103,7 @@ func (t orderedTree[K, V, O]) hashOf() hash.Hash {
 
 func (t orderedTree[K, V, O]) mutate() orderedMap[K, V, O] {
 	return orderedMap[K, V, O]{
-		list: skip.NewSkipList(func(left, right []byte) int {
+		edits: skip.NewSkipList(func(left, right []byte) int {
 			return t.order.Compare(left, right)
 		}),
 		tree: t,
@@ -212,32 +212,45 @@ type orderedTreeIter[K, V ~[]byte] struct {
 	stop *tree.Cursor
 }
 
-func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
+func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (key K, value V, err error) {
 	if it.curr == nil {
 		return nil, nil, io.EOF
 	}
 
 	k, v := tree.CurrentCursorItems(it.curr)
+	key, value = K(k), V(v)
 
-	if err := it.iterate(ctx); err != nil {
+	_, err = it.curr.Advance(ctx)
+	if err != nil {
 		return nil, nil, err
-	}
-
-	return K(k), V(v), nil
-}
-
-func (it *orderedTreeIter[K, V]) current() (K, V) {
-	k, v := tree.CurrentCursorItems(it.curr)
-	return K(k), V(v)
-}
-
-func (it *orderedTreeIter[K, V]) iterate(ctx context.Context) error {
-	if _, err := it.curr.Advance(ctx); err != nil {
-		return err
 	}
 	if it.curr.Compare(it.stop) >= 0 {
 		// past the end of the range
 		it.curr = nil
 	}
-	return nil
+
+	return
+}
+
+func (it *orderedTreeIter[K, V]) current() (key K, value V) {
+	// |it.curr| is set to nil when its range is exhausted
+	if it.curr != nil && it.curr.Valid() {
+		k, v := tree.CurrentCursorItems(it.curr)
+		key, value = K(k), V(v)
+	}
+	return
+}
+
+func (it *orderedTreeIter[K, V]) iterate(ctx context.Context) (err error) {
+	_, err = it.curr.Advance(ctx)
+	if err != nil {
+		return err
+	}
+
+	if it.curr.Compare(it.stop) >= 0 {
+		// past the end of the range
+		it.curr = nil
+	}
+
+	return
 }

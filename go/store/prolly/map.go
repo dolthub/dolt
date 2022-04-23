@@ -201,40 +201,6 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	return &pointLookup{k: key, v: value}, nil
 }
 
-func (m Map) iterFromRange(ctx context.Context, rng Range) (*prollyRangeIter, error) {
-	var (
-		err   error
-		start *tree.Cursor
-		stop  *tree.Cursor
-	)
-
-	startSearch := rangeStartSearchFn(rng)
-	if rng.Start == nil {
-		start, err = tree.NewCursorAtStart(ctx, m.tuples.ns, m.tuples.root)
-	} else {
-		start, err = tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, startSearch)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	stopSearch := rangeStopSearchFn(rng)
-	if rng.Stop == nil {
-		stop, err = tree.NewCursorPastEnd(ctx, m.tuples.ns, m.tuples.root)
-	} else {
-		stop, err = tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, stopSearch)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if start.Compare(stop) >= 0 {
-		start = nil // empty range
-	}
-
-	return &prollyRangeIter{curr: start, stop: stop}, nil
-}
-
 // searchNode returns the smallest index where nd[i] >= query
 // Adapted from search.Sort to inline comparison.
 func (m Map) searchNode(query tree.Item, nd tree.Node) int {
@@ -268,6 +234,52 @@ func (m Map) compareItems(left, right tree.Item) int {
 func (m Map) compareKeys(left, right val.Tuple) int {
 	return int(m.keyDesc.Compare(left, right))
 }
+
+func (m Map) iterFromRange(ctx context.Context, rng Range) (*orderedTreeIter[val.Tuple, val.Tuple], error) {
+	return treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
+}
+
+func treeIterFromRange(
+	ctx context.Context,
+	root tree.Node,
+	ns tree.NodeStore,
+	rng Range,
+) (*orderedTreeIter[val.Tuple, val.Tuple], error) {
+	var (
+		err   error
+		start *tree.Cursor
+		stop  *tree.Cursor
+	)
+
+	startSearch := rangeStartSearchFn(rng)
+	if rng.Start == nil {
+		start, err = tree.NewCursorAtStart(ctx, ns, root)
+	} else {
+		start, err = tree.NewCursorFromSearchFn(ctx, ns, root, startSearch)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	stopSearch := rangeStopSearchFn(rng)
+	if rng.Stop == nil {
+		stop, err = tree.NewCursorPastEnd(ctx, ns, root)
+	} else {
+		stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, stopSearch)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if start.Compare(stop) >= 0 {
+		start = nil // empty range
+	}
+
+	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stop}, nil
+}
+
+var _ kvIter[val.Tuple, val.Tuple] = &orderedTreeIter[val.Tuple, val.Tuple]{}
+var _ MapRangeIter = &orderedTreeIter[val.Tuple, val.Tuple]{}
 
 // DebugFormat formats a Map.
 func DebugFormat(ctx context.Context, m Map) (string, error) {

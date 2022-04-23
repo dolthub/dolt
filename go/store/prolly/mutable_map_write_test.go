@@ -480,7 +480,7 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure edits are provided in order
-	iter := mut.overlay.mutations()
+	iter := mut.tuples.mutations()
 	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
 	for {
@@ -488,7 +488,7 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 		if next == nil {
 			break
 		}
-		cmp := mut.prolly.compareKeys(val.Tuple(prev), val.Tuple(next))
+		cmp := mut.keyDesc.Compare(val.Tuple(prev), val.Tuple(next))
 		assert.True(t, cmp < 0)
 		prev = next
 	}

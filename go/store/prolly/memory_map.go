@@ -72,7 +72,7 @@ func (mm memoryMap) Get(_ context.Context, key val.Tuple, cb KeyValueFn[val.Tupl
 	}
 
 	// if |ok| is true but |value| is nil, then there
-	// is a pending delete of |key| in |mm.list|.
+	// is a pending delete of |key| in |mm.edits|.
 	return cb(key, value)
 }
 
@@ -85,19 +85,19 @@ func (mm memoryMap) IterAll(ctx context.Context) (MapRangeIter, error) {
 // IterRange returns a MutableMapRangeIter that iterates over a Range.
 func (mm memoryMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
 	return MutableMapRangeIter{
-		memory: mm.iterFromRange(rng),
+		memory: memIterFromRange(mm.list, rng),
 		prolly: emptyIter{},
 		rng:    rng,
 	}, nil
 }
 
-func (mm memoryMap) iterFromRange(rng Range) *memRangeIter {
+func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
 	var iter *skip.ListIter
 	if rng.Start == nil {
-		iter = mm.list.IterAtStart()
+		iter = list.IterAtStart()
 	} else {
 		// use the lower bound of |rng| to construct a skip.ListIter
-		iter = mm.list.GetIterFromSearchFn(skipSearchFromRange(rng))
+		iter = list.GetIterFromSearchFn(skipSearchFromRange(rng))
 	}
 
 	// enforce range start

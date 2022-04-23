@@ -16,8 +16,6 @@ package prolly
 
 import (
 	"context"
-
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -26,81 +24,71 @@ const (
 )
 
 type MutableMap struct {
-	prolly  Map
-	overlay memoryMap
+	tuples  orderedMap[val.Tuple, val.Tuple, val.TupleDesc]
+	keyDesc val.TupleDesc
+	valDesc val.TupleDesc
 }
 
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
-		prolly:  m,
-		overlay: newMemoryMap(m.keyDesc),
+		tuples:  m.tuples.mutate(),
+		keyDesc: m.keyDesc,
+		valDesc: m.valDesc,
 	}
 }
 
 // Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	m, edits := mut.prolly, mut.overlay.mutations()
-
-	root, err := tree.ApplyMutations(ctx, m.tuples.ns, m.tuples.root, edits, m.searchNode, m.compareItems)
+	tuples, err := mut.tuples.makeTree(ctx)
 	if err != nil {
 		return Map{}, err
 	}
-	return NewMap(root, m.tuples.ns, m.keyDesc, m.valDesc), err
+
+	return Map{
+		tuples:  tuples,
+		keyDesc: mut.keyDesc,
+		valDesc: mut.valDesc,
+	}, nil
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.
-func (mut MutableMap) Put(_ context.Context, key, value val.Tuple) error {
-	mut.overlay.Put(key, value)
-	return nil
+func (mut MutableMap) Put(ctx context.Context, key, value val.Tuple) error {
+	return mut.tuples.put(ctx, key, value)
 }
 
 // Delete deletes the pair keyed by |key| from the MutableMap.
-func (mut MutableMap) Delete(_ context.Context, key val.Tuple) error {
-	mut.overlay.Delete(key)
-	return nil
+func (mut MutableMap) Delete(ctx context.Context, key val.Tuple) error {
+	return mut.tuples.delete(ctx, key)
 }
 
 // Get fetches the Tuple pair keyed by |key|, if it exists, and passes it to |cb|.
 // If the |key| is not present in the MutableMap, a nil Tuple pair is passed to |cb|.
 func (mut MutableMap) Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error) {
-	value, ok := mut.overlay.list.Get(key)
-	if ok {
-		if value == nil {
-			// there is a pending delete of |key| in |mut.overlay|.
-			key = nil
-		}
-		return cb(key, value)
-	}
-
-	return mut.prolly.Get(ctx, key, cb)
+	return mut.tuples.get(ctx, key, cb)
 }
 
 // Has returns true if |key| is present in the MutableMap.
 func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error) {
-	err = mut.Get(ctx, key, func(key, value val.Tuple) (err error) {
-		ok = key != nil
-		return
-	})
-	return
+	return mut.tuples.has(ctx, key)
 }
 
 // IterAll returns a MutableMapRangeIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
-	rng := Range{Start: nil, Stop: nil, Desc: mut.prolly.keyDesc}
+	rng := Range{Start: nil, Stop: nil, Desc: mut.keyDesc}
 	return mut.IterRange(ctx, rng)
 }
 
 // IterRange returns a MapRangeIter that iterates over a Range.
 func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
-	proIter, err := mut.prolly.iterFromRange(ctx, rng)
+	treeIter, err := treeIterFromRange(ctx, mut.tuples.tree.root, mut.tuples.tree.ns, rng)
 	if err != nil {
-		return MutableMapRangeIter{}, err
+		return nil, err
 	}
-	memIter := mut.overlay.iterFromRange(rng)
+	editIter := memIterFromRange(mut.tuples.edits, rng)
 
 	return &MutableMapRangeIter{
-		memory: memIter,
-		prolly: proIter,
+		memory: editIter,
+		prolly: treeIter,
 		rng:    rng,
 	}, nil
 }
