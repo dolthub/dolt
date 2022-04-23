@@ -25,20 +25,12 @@ import (
 
 type KeyValueFn[K, V ~[]byte] func(key K, value V) error
 
-type ordering[K ~[]byte] interface {
-	Compare(left, right K) int
-}
-
-type orderedIter[K, V ~[]byte] interface {
+type kvIter[K, V ~[]byte] interface {
 	Next(ctx context.Context) (K, V, error)
 }
 
-func newOrderedTree[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedTree[K, V, O] {
-	return orderedTree[K, V, O]{
-		root:  root,
-		ns:    ns,
-		order: order,
-	}
+type ordering[K ~[]byte] interface {
+	Compare(left, right K) int
 }
 
 type orderedTree[K, V ~[]byte, O ordering[K]] struct {
@@ -47,11 +39,12 @@ type orderedTree[K, V ~[]byte, O ordering[K]] struct {
 	order O
 }
 
-type orderedTreeIter[K, V ~[]byte] struct {
-	// current tuple location
-	curr *tree.Cursor
-	// non-inclusive range stop
-	stop *tree.Cursor
+func newOrderedTree[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedTree[K, V, O] {
+	return orderedTree[K, V, O]{
+		root:  root,
+		ns:    ns,
+		order: order,
+	}
 }
 
 func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
@@ -94,24 +87,6 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K]](
 		ns:    base.ns,
 		order: base.order,
 	}, nil
-}
-
-func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
-	if it.curr == nil {
-		return nil, nil, io.EOF
-	}
-
-	k, v := tree.CurrentCursorItems(it.curr)
-
-	if _, err := it.curr.Advance(ctx); err != nil {
-		return nil, nil, err
-	}
-	if it.curr.Compare(it.stop) >= 0 {
-		// past the end of the range
-		it.curr = nil
-	}
-
-	return K(k), V(v), nil
 }
 
 func (t orderedTree[K, V, O]) count() int {
@@ -188,7 +163,7 @@ func (t orderedTree[K, V, O]) last(ctx context.Context) (key K, value V, err err
 	return
 }
 
-func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (orderedIter[K, V], error) {
+func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (*orderedTreeIter[K, V], error) {
 	c, err := tree.NewCursorAtStart(ctx, t.ns, t.root)
 	if err != nil {
 		return nil, err
@@ -227,5 +202,42 @@ func (t orderedTree[K, V, O]) compareItems(left, right tree.Item) int {
 	return t.order.Compare(K(left), K(right))
 }
 
-//var _ tree.ItemSearchFn = orderedTree[K, V, O]{}.searchNode
-//var _ tree.CompareFn = orderedTree[K, V, O]{}.compareItems
+var _ tree.ItemSearchFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.searchNode
+var _ tree.CompareFn = orderedTree[tree.Item, tree.Item, ordering[tree.Item]]{}.compareItems
+
+type orderedTreeIter[K, V ~[]byte] struct {
+	// current tuple location
+	curr *tree.Cursor
+	// non-inclusive range stop
+	stop *tree.Cursor
+}
+
+func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (K, V, error) {
+	if it.curr == nil {
+		return nil, nil, io.EOF
+	}
+
+	k, v := tree.CurrentCursorItems(it.curr)
+
+	if err := it.iterate(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	return K(k), V(v), nil
+}
+
+func (it *orderedTreeIter[K, V]) current() (K, V) {
+	k, v := tree.CurrentCursorItems(it.curr)
+	return K(k), V(v)
+}
+
+func (it *orderedTreeIter[K, V]) iterate(ctx context.Context) error {
+	if _, err := it.curr.Advance(ctx); err != nil {
+		return err
+	}
+	if it.curr.Compare(it.stop) >= 0 {
+		// past the end of the range
+		it.curr = nil
+	}
+	return nil
+}

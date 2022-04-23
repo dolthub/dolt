@@ -23,7 +23,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type MapRangeIter orderedIter[val.Tuple, val.Tuple]
+type MapRangeIter kvIter[val.Tuple, val.Tuple]
 
 var _ MapRangeIter = emptyIter{}
 var _ MapRangeIter = &prollyRangeIter{}
