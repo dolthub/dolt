@@ -34,7 +34,7 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
-var ErrBranchNotFoundInfo = goerrors.NewKind("branch not found: %v")
+var ErrBranchNotFoundInfo = goerrors.NewKind("cowabunaga: %v")
 var ErrTagNotFound = errors.New("tag not found")
 var ErrWorkingSetNotFound = errors.New("working set not found")
 var ErrWorkspaceNotFound = errors.New("workspace not found")
