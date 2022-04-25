@@ -839,11 +839,11 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				return false
 			}
 
+			oldTx := sqlCtx.GetTransaction()
 			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
-				oldTx := sqlCtx.GetTransaction()
 				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					sqlCtx.SetTransaction(oldTx)
