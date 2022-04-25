@@ -70,7 +70,7 @@ func IsInvalidFormatErr(err error) bool {
 }
 
 func IsNotFoundErr(err error) bool {
-	if errors.Is(ErrBranchNotFound, err) {
+	if errors.Is(err, ErrBranchNotFound) {
 		return true
 	}
 	switch err {
@@ -82,7 +82,7 @@ func IsNotFoundErr(err error) bool {
 }
 
 func IsNotACommit(err error) bool {
-	if errors.Is(ErrBranchNotFound, err) {
+	if errors.Is(err, ErrBranchNotFound) {
 		return true
 	}
 	switch err {
