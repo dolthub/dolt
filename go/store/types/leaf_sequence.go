@@ -32,8 +32,8 @@ type leafSequence struct {
 	sequenceImpl
 }
 
-func newLeafSequence(vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
-	return leafSequence{newSequenceImpl(vrw, buff, offsets, len)}
+func newLeafSequence(nbf *NomsBinFormat, vrw ValueReadWriter, buff []byte, offsets []uint32, len uint64) leafSequence {
+	return leafSequence{newSequenceImpl(nbf, vrw, buff, offsets, len)}
 }
 
 func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) (leafSequence, error) {
@@ -62,7 +62,7 @@ func newLeafSequenceFromValues(kind NomsKind, vrw ValueReadWriter, vs ...Value) 
 
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return newLeafSequence(vrw, w.data(), offsets, count), nil
+	return newLeafSequence(vrw.Format(), vrw, w.data(), offsets, count), nil
 }
 
 func (seq leafSequence) values() ([]Value, error) {

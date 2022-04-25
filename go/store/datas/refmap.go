@@ -73,7 +73,9 @@ func RefMapApplyEdits(rm *serial.RefMap, builder *flatbuffers.Builder, edits []R
 		ni += 1
 	}
 	for ei < len(edits) {
-		indexes = append(indexes, idx{-1, ei})
+		if !edits[ei].Addr.IsEmpty() {
+			indexes = append(indexes, idx{-1, ei})
+		}
 		ei += 1
 	}
 

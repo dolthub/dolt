@@ -144,7 +144,7 @@ func newMapLeafSequence(vrw ValueReadWriter, data ...mapEntry) (orderedSequence,
 
 		offsets[i+sequencePartValues+1] = w.offset
 	}
-	return mapLeafSequence{newLeafSequence(vrw, w.data(), offsets, count)}, nil
+	return mapLeafSequence{newLeafSequence(vrw.Format(), vrw, w.data(), offsets, count)}, nil
 }
 
 func (ml mapLeafSequence) writeTo(w nomsWriter, nbf *NomsBinFormat) error {

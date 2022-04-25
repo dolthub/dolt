@@ -16,12 +16,14 @@ package enginetest
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/pkg/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,12 +36,20 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var skipPrepared bool
+var skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
+
 func init() {
 	sqle.MinRowsPerPartition = 8
 	sqle.MaxRowsPerPartition = 1024
+
+	if v := os.Getenv(skipPreparedFlag); v != "" {
+		skipPrepared = true
+	}
 }
 
 func TestQueries(t *testing.T) {
+	defer profile.Start().Stop()
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
@@ -500,7 +510,8 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestLoadDataPrepared(t *testing.T) {
-	t.Skip()
+	t.Skip("feature not supported")
+	skipPreparedTests(t)
 	enginetest.TestLoadDataPrepared(t, newDoltHarness(t))
 }
 
@@ -776,25 +787,31 @@ func TestKeylessUniqueIndex(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
+
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestVersionedQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInfoSchemaPrepared(t, newDoltHarness(t))
 }
 
 func TestUpdateQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip select join for update
@@ -810,6 +827,7 @@ func TestUpdateQueriesPrepared(t *testing.T) {
 }
 
 func TestInsertQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip keyless
@@ -825,72 +843,87 @@ func TestInsertQueriesPrepared(t *testing.T) {
 }
 
 func TestReplaceQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestReplaceQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestDeleteQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestDeleteQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestExplodePrepared(t *testing.T) {
-	t.Skip()
+	t.Skip("feature not supported")
+	skipPreparedTests(t)
 	enginetest.TestExplodePrepared(t, newDoltHarness(t))
 }
 
 func TestViewsPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestViewsPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedViewsPrepared(t *testing.T) {
 	t.Skip("unsupported for prepareds")
+	skipPreparedTests(t)
 	enginetest.TestVersionedViewsPrepared(t, newDoltHarness(t))
 }
 
 func TestShowTableStatusPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestShowTableStatusPrepared(t, newDoltHarness(t))
 }
 
 func TestPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestPrepared(t, newDoltHarness(t))
 }
 
 func TestPreparedInsert(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
@@ -1063,5 +1096,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 func skipNewFormat(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
+	}
+}
+
+func skipPreparedTests(t *testing.T) {
+	if skipPrepared {
+		t.Skip("skip prepared")
 	}
 }
