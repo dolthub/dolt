@@ -174,6 +174,97 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
+	case serial.TableFileID:
+		msg := serial.GetRootAsTable([]byte(sm), 0)
+		addr := hash.New(msg.SchemaBytes())
+		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+		if err != nil {
+			return err
+		}
+		err = cb(r)
+		if err != nil {
+			return err
+		}
+
+		addr = hash.New(msg.ViolationsBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		confs := msg.Conflicts(nil)
+		addr = hash.New(confs.DataBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(confs.OurSchemaBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(confs.TheirSchemaBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		addr = hash.New(confs.AncestorSchemaBytes())
+		if !addr.IsEmpty() {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		rm := msg.SecondaryIndexes(nil)
+		refs := rm.RefArrayBytes()
+		for i := 0; i < rm.NamesLength(); i++ {
+			off := i * 20
+			addr := hash.New(refs[off : off+20])
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+		}
+
+		mapbytes := msg.PrimaryIndexBytes()
+
+		dec := newValueDecoder(mapbytes, nil)
+		v, err := dec.readValue(nbf)
+		if err != nil {
+			return err
+		}
+
+		return v.walkRefs(nbf, cb)
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentRefs(nbf, sm)
 		if err != nil {

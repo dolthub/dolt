@@ -178,14 +178,14 @@ func (r *valueDecoder) readSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipp
 	end := r.pos()
 
 	if level > 0 {
-		return newMetaSequence(r.vrw, r.byteSlice(start, end), offsets, length), nil
+		return newMetaSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 	}
 
 	vrw := r.vrw
 	if vrw == nil {
 		vrw = NewMemoryValueStore()
 	}
-	return newLeafSequence(vrw, r.byteSlice(start, end), offsets, length), nil
+	return newLeafSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 }
 
 func (r *valueDecoder) readBlobSequence(nbf *NomsBinFormat) (sequence, error) {
