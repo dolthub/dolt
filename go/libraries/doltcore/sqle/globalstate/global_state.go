@@ -51,7 +51,7 @@ func (g GlobalState) GetAutoIncrementTracker(ctx context.Context, ws *doltdb.Wor
 	var err error
 	ait, err = NewAutoIncrementTracker(ctx, ws)
 	if err != nil {
-		return AutoIncrementTracker{}, err
+		return nil, err
 	}
 	g.trackerMap[ws.Ref()] = ait
 

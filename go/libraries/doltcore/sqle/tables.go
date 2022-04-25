@@ -1014,8 +1014,8 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 
 	newWs := ws.WithWorkingRoot(newRoot)
 
-	writeSession := writer.NewWriteSession(dt.Format(), newWs, globalstate.AutoIncrementTracker{}, opts)
-	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), nil, true)
+	writeSession := writer.NewWriteSession(dt.Format(), newWs, nil, opts)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), sess.SetRoot, false)
 	if err != nil {
 		return nil, err
 	}
