@@ -70,6 +70,9 @@ func IsInvalidFormatErr(err error) bool {
 }
 
 func IsNotFoundErr(err error) bool {
+	if errors.Is(ErrBranchNotFound, err) {
+		return true
+	}
 	switch err {
 	case ErrHashNotFound, ErrBranchNotFound, ErrTableNotFound:
 		return true
@@ -79,6 +82,9 @@ func IsNotFoundErr(err error) bool {
 }
 
 func IsNotACommit(err error) bool {
+	if errors.Is(ErrBranchNotFound, err) {
+		return true
+	}
 	switch err {
 	case ErrHashNotFound, ErrBranchNotFound, ErrFoundHashNotACommit:
 		return true
