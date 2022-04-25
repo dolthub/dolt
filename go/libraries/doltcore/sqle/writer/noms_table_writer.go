@@ -147,7 +147,7 @@ func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 
 // Close implements Closer
 func (te *nomsTableWriter) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don'tbl flush the edits until explicitly told to do so
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
 	if te.batched {
 		return nil
 	}
