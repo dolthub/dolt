@@ -834,7 +834,6 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 			defer stop()
 
 			sqlCtx, err = se.NewContext(subCtx)
-			oldTx := sqlCtx.GetTransaction()
 			if err != nil {
 				shell.Println(color.RedString(err.Error()))
 				return false
@@ -844,6 +843,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
+				oldTx := sqlCtx.GetTransaction()
 				err = engine.PrettyPrintResults(sqlCtx, returnFormat, sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					sqlCtx.SetTransaction(oldTx)
