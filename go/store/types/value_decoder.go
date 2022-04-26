@@ -181,10 +181,6 @@ func (r *valueDecoder) readSequence(nbf *NomsBinFormat, kind NomsKind, leafSkipp
 		return newMetaSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 	}
 
-	vrw := r.vrw
-	if vrw == nil {
-		vrw = NewMemoryValueStore()
-	}
 	return newLeafSequence(nbf, r.vrw, r.byteSlice(start, end), offsets, length), nil
 }
 
