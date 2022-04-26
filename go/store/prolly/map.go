@@ -20,9 +20,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -150,26 +149,7 @@ func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 
 // IterOrdinalRange returns a MapIter for the ordinal range beginning at |start| and ending before |stop|.
 func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error) {
-	if stop == start {
-		return &orderedTreeIter[val.Tuple, val.Tuple]{curr: nil}, nil
-	}
-	if stop < start {
-		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
-	} else if stop > uint64(m.Count()) {
-		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
-	}
-
-	lo, err := tree.NewCursorAtOrdinal(ctx, m.tuples.ns, m.tuples.root, start)
-	if err != nil {
-		return nil, err
-	}
-
-	hi, err := tree.NewCursorAtOrdinal(ctx, m.tuples.ns, m.tuples.root, stop)
-	if err != nil {
-		return nil, err
-	}
-
-	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: lo, stop: hi}, nil
+	return m.tuples.iterOrdinalRange(ctx, start, stop)
 }
 
 // IterRange returns a mutableMapIter that iterates over a Range.

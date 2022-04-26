@@ -16,12 +16,12 @@ package prolly
 
 import (
 	"context"
+	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/skip"
-
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type KeyValueFn[K, V ~[]byte] func(key K, value V) error
@@ -173,6 +173,29 @@ func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (*orderedTreeIter[K, 
 	}
 
 	return &orderedTreeIter[K, V]{curr: c, stop: s}, nil
+}
+
+func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error) {
+	if stop == start {
+		return &orderedTreeIter[K, V]{curr: nil}, nil
+	}
+	if stop < start {
+		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
+	} else if stop > uint64(t.count()) {
+		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
+	}
+
+	lo, err := tree.NewCursorAtOrdinal(ctx, t.ns, t.root, start)
+	if err != nil {
+		return nil, err
+	}
+
+	hi, err := tree.NewCursorAtOrdinal(ctx, t.ns, t.root, stop)
+	if err != nil {
+		return nil, err
+	}
+
+	return &orderedTreeIter[K, V]{curr: lo, stop: hi}, nil
 }
 
 // searchNode returns the smallest index where nd[i] >= query
