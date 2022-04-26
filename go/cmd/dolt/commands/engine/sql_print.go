@@ -51,13 +51,8 @@ const (
 // PrettyPrintResults prints the result of a query (schema + row iter).
 func PrettyPrintResults(ctx *sql.Context, resultFormat PrintResultFormat, sqlSch sql.Schema, rowIter sql.RowIter, hasTopLevelOrderBy bool) (rerr error) {
 	defer func() {
-		// Don't close if there's an error
-		if rerr != nil {
-			return
-		}
-		// Overwrite error
 		closeErr := rowIter.Close(ctx)
-		if closeErr != nil {
+		if rerr == nil && closeErr != nil {
 			rerr = closeErr
 		}
 	}()
