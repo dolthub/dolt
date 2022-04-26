@@ -20,6 +20,8 @@ import (
 	"io"
 	"math"
 
+	"github.com/dolthub/dolt/go/store/pool"
+
 	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -97,12 +99,17 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	return nil
 }
 
-func MapNodeFromBytes(bb []byte) Node {
-	buf := serial.GetRootAsTupleMap(bb, 0)
-	return mapNodeFromFlatbuffer(*buf)
+func NewEmptyNode(pool pool.BuffPool) Node {
+	bld := &nodeBuilder{}
+	return bld.build(pool)
 }
 
-func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
+func NodeFromBytes(bb []byte) Node {
+	buf := serial.GetRootAsTupleMap(bb, 0)
+	return nodeFromFlatbuffer(*buf)
+}
+
+func nodeFromFlatbuffer(buf serial.TupleMap) Node {
 	keys := val.SlicedBuffer{
 		Buf:  buf.KeyTuplesBytes(),
 		Offs: getKeyOffsetsVector(buf),

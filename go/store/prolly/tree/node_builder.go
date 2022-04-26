@@ -143,7 +143,7 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	b.Finish(serial.TupleMapEnd(b))
 
 	buf := b.FinishedBytes()
-	return MapNodeFromBytes(buf)
+	return NodeFromBytes(buf)
 }
 
 func newSubtreeCounts(count int) subtreeCounts {

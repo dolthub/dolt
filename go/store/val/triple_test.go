@@ -15,8 +15,9 @@
 package val
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewTriple(t *testing.T) {

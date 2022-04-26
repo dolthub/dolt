@@ -107,6 +107,15 @@ func TestCountArray(t *testing.T) {
 	}
 }
 
+func TestNewEmptyNode(t *testing.T) {
+	empty := NewEmptyNode(sharedPool)
+	assert.Equal(t, 0, empty.Level())
+	assert.Equal(t, 0, empty.Count())
+	assert.Equal(t, 72, empty.Size())
+	assert.Equal(t, 0, empty.TreeCount())
+	assert.True(t, empty.IsLeaf())
+}
+
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {
 	keys = make([]Item, count)
 	for i := range keys {
