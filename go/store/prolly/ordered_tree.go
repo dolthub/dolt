@@ -173,6 +173,11 @@ func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (*orderedTreeIter[K, 
 	if err != nil {
 		return nil, err
 	}
+
+	if c.Compare(s) >= 0 {
+		c = nil // empty range
+	}
+
 	return &orderedTreeIter[K, V]{curr: c, stop: s}, nil
 }
 
