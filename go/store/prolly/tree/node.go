@@ -20,12 +20,11 @@ import (
 	"io"
 	"math"
 
-	"github.com/dolthub/dolt/go/store/pool"
-
 	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )

@@ -17,10 +17,11 @@ package prolly
 import (
 	"bytes"
 	"context"
+	"io"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"io"
 )
 
 type AddressMap struct {
