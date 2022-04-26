@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/dolt/go/store/skip"
 )
 
+// orderedMap is a mutable prolly tree with ordered elements.
 type orderedMap[K, V ~[]byte, O ordering[K]] struct {
 	edits *skip.List
 	tree  orderedTree[K, V, O]

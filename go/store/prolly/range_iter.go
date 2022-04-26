@@ -151,6 +151,10 @@ func skipSearchFromRange(rng Range) skip.SearchFn {
 	}
 }
 
+// todo(andy): generalize Range iteration and consolidate this
+//  iterator with orderedListIter[K, V] in ordered_map.go.
+//  This is not currently possible due to Range checking logic
+//  that is specific to val.Tuple.
 type memRangeIter struct {
 	iter *skip.ListIter
 	rng  Range

@@ -34,6 +34,7 @@ type ordering[K ~[]byte] interface {
 	Compare(left, right K) int
 }
 
+// orderedTree is a static prolly tree with ordered elements.
 type orderedTree[K, V ~[]byte, O ordering[K]] struct {
 	root  tree.Node
 	ns    tree.NodeStore
