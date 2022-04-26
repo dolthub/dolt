@@ -182,40 +182,6 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	return &pointLookup{k: key, v: value}, nil
 }
 
-// searchNode returns the smallest index where nd[i] >= query
-// Adapted from search.Sort to inline comparison.
-func (m Map) searchNode(query tree.Item, nd tree.Node) int {
-	n := int(nd.Count())
-	// Define f(-1) == false and f(n) == true.
-	// Invariant: f(i-1) == false, f(j) == true.
-	i, j := 0, n
-	for i < j {
-		h := int(uint(i+j) >> 1) // avoid overflow when computing h
-		less := m.compareItems(query, nd.GetKey(h)) <= 0
-		// i ≤ h < j
-		if !less {
-			i = h + 1 // preserves f(i-1) == false
-		} else {
-			j = h // preserves f(j) == true
-		}
-	}
-	// i == j, f(i-1) == false, and
-	// f(j) (= f(i)) == true  =>  answer is i.
-	return i
-}
-
-var _ tree.ItemSearchFn = Map{}.searchNode
-
-// compareItems is a CompareFn.
-func (m Map) compareItems(left, right tree.Item) int {
-	l, r := val.Tuple(left), val.Tuple(right)
-	return m.compareKeys(l, r)
-}
-
-func (m Map) compareKeys(left, right val.Tuple) int {
-	return int(m.keyDesc.Compare(left, right))
-}
-
 func (m Map) iterFromRange(ctx context.Context, rng Range) (*orderedTreeIter[val.Tuple, val.Tuple], error) {
 	return treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
 }

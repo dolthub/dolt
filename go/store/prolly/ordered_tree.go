@@ -175,7 +175,7 @@ func (t orderedTree[K, V, O]) iterAll(ctx context.Context) (*orderedTreeIter[K, 
 	return &orderedTreeIter[K, V]{curr: c, stop: s}, nil
 }
 
-func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error) {
+func (t orderedTree[K, V, O]) iterOrdinalRange(ctx context.Context, start, stop uint64) (*orderedTreeIter[K, V], error) {
 	if stop == start {
 		return &orderedTreeIter[K, V]{curr: nil}, nil
 	}
