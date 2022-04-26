@@ -490,3 +490,7 @@ func (t *Table) AddColumnToRows(ctx context.Context, newCol string, newSchema sc
 
 	return &Table{table: newTable}, nil
 }
+
+func (t *Table) DebugString(ctx context.Context) string {
+	return t.table.DebugString(ctx)
+}

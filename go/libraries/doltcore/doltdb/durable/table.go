@@ -15,6 +15,7 @@
 package durable
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -91,6 +92,9 @@ type Table interface {
 	GetAutoIncrement(ctx context.Context) (uint64, error)
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
 	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
+
+	// DebugString is for debugging purposes
+	DebugString(ctx context.Context) string
 }
 
 type nomsTable struct {
@@ -490,6 +494,47 @@ func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 		return nil, err
 	}
 	return nomsTable{t.vrw, st}, nil
+}
+
+func (t nomsTable) DebugString(ctx context.Context) string {
+	var buf bytes.Buffer
+	err := types.WriteEncodedValue(ctx, &buf, t.tableStruct)
+	if err != nil {
+		panic(err)
+	}
+
+	schemaRefVal, _, _ := t.tableStruct.MaybeGet(schemaRefKey)
+	schemaRef := schemaRefVal.(types.Ref)
+	schemaVal, err := schemaRef.TargetValue(ctx, t.vrw)
+	if err != nil {
+		panic(err)
+	}
+
+	buf.WriteString("\nschema: ")
+	err = types.WriteEncodedValue(ctx, &buf, schemaVal)
+	if err != nil {
+		panic(err)
+	}
+
+	iv, ok, err := t.tableStruct.MaybeGet(indexesKey)
+	if err != nil {
+		panic(err)
+	}
+
+	if ok {
+		buf.WriteString("\nindexes: ")
+		im, err := iv.(types.Ref).TargetValue(ctx, t.vrw)
+		if err != nil {
+			panic(err)
+		}
+
+		err = types.WriteEncodedValue(ctx, &buf, im)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return buf.String()
 }
 
 func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {

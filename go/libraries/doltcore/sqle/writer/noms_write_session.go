@@ -206,7 +206,9 @@ func (s *nomsWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, error
 				return err
 			}
 
-			if schema.HasAutoIncrement(ed.Schema()) {
+			// Update the auto increment value for the table if a tracker was provided
+			// TODO: the table probably needs an autoincrement tracker no matter what
+			if schema.HasAutoIncrement(ed.Schema()) && s.tracker != nil {
 				v := s.tracker.Current(name)
 				tbl, err = tbl.SetAutoIncrementValue(ctx, v)
 				if err != nil {

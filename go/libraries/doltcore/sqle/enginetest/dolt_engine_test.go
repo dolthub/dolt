@@ -21,7 +21,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -65,31 +64,103 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "Two column index",
+			Name: "Multialter DDL with ADD/DROP INDEX",
 			SetUpScript: []string{
-				`CREATE TABLE a (x int primary key, y int)`,
-				`CREATE TABLE b (x int primary key, y int)`,
-				`insert into a values (0,0), (1,1)`,
-				`insert into b values (0,0), (1,1)`,
+				"CREATE TABLE t(pk int primary key, v1 int)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: `UPDATE a INNER JOIN b on a.x = b.x SET a.y = b.y + 1`,
-					Expected: []sql.Row{{sql.OkResult{
-						RowsAffected: uint64(2),
-						Info:         plan.UpdateInfo{Matched: 1, Updated: 2},
-					}}},
+					Query:       "ALTER TABLE t DROP COLUMN v1, ADD INDEX myidx (v1)",
+					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
 				},
 				{
-					Query: "SELECT * FROM a;",
-
+					Query: "DESCRIBE t",
 					Expected: []sql.Row{
-						{0, 1},
-						{1, 2},
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""}, // should not be dropped
+					},
+				},
+				{
+					Query:    "ALTER TABLE t ADD COLUMN (v2 int), ADD INDEX myidx (v2)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "MUL", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v3 int), DROP INDEX notanindex",
+					ExpectedErr: sql.ErrCantDropFieldOrKey,
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "MUL", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx (notacolumn)",
+					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "MUL", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx2 (v4), DROP INDEX notanindex;",
+					ExpectedErr: sql.ErrCantDropFieldOrKey,
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "MUL", "", ""},
+					},
+				},
+				{
+					Query:    "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx2 (v4)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "MUL", "", ""},
+						{"v4", "int", "YES", "MUL", "", ""},
+					},
+				},
+				{
+					Query:    "ALTER TABLE t ADD COLUMN (v5 int), RENAME INDEX myidx2 TO myidx3",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
+				},
+				{
+					Query:    "ALTER TABLE t DROP INDEX myidx, ADD INDEX v5idx (v5)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "PRI", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "YES", "", "", ""},
+						{"v4", "int", "YES", "MUL", "", ""},
+						{"v5", "int", "YES", "MUL", "", ""},
 					},
 				},
 			},
@@ -101,8 +172,8 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
+		// engine.Analyzer.Debug = true
+		// engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
