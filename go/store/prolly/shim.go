@@ -28,7 +28,7 @@ import (
 )
 
 func NodeFromValue(v types.Value) tree.Node {
-	return tree.MapNodeFromBytes(v.(types.TupleRowStorage))
+	return tree.NodeFromBytes(v.(types.TupleRowStorage))
 }
 
 func ValueFromMap(m Map) types.Value {
