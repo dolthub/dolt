@@ -16,9 +16,10 @@ package prolly
 
 import (
 	"context"
+	"io"
+
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/skip"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
 )

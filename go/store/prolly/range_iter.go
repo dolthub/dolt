@@ -16,8 +16,9 @@ package prolly
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/store/skip"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/skip"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
