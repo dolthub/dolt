@@ -20,19 +20,6 @@ import (
 	"github.com/dolthub/dolt/go/store/skip"
 )
 
-func newOrderedMap[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedMap[K, V, O] {
-	return orderedMap[K, V, O]{
-		edits: skip.NewSkipList(func(left, right []byte) int {
-			return order.Compare(left, right)
-		}),
-		tree: orderedTree[K, V, O]{
-			root:  root,
-			ns:    ns,
-			order: order,
-		},
-	}
-}
-
 type orderedMap[K, V ~[]byte, O ordering[K]] struct {
 	edits *skip.List
 	tree  orderedTree[K, V, O]

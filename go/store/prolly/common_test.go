@@ -28,17 +28,16 @@ import (
 // harness for Map, memoryMap, and MutableMap.
 type testMap interface {
 	Get(ctx context.Context, key val.Tuple, cb KeyValueFn[val.Tuple, val.Tuple]) (err error)
-	IterAll(ctx context.Context) (MapRangeIter, error)
-	IterRange(ctx context.Context, rng Range) (MapRangeIter, error)
+	IterAll(ctx context.Context) (MapIter, error)
+	IterRange(ctx context.Context, rng Range) (MapIter, error)
 }
 
 var _ testMap = Map{}
 var _ testMap = MutableMap{}
-var _ testMap = memoryMap{}
 
 type ordinalMap interface {
 	testMap
-	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error)
+	IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error)
 }
 
 var _ testMap = Map{}
@@ -62,8 +61,6 @@ func keyDescFromMap(om testMap) val.TupleDesc {
 	case Map:
 		return m.keyDesc
 	case MutableMap:
-		return m.keyDesc
-	case memoryMap:
 		return m.keyDesc
 	default:
 		panic("unknown ordered map")

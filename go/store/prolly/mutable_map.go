@@ -72,23 +72,23 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 	return mut.tuples.has(ctx, key)
 }
 
-// IterAll returns a MutableMapRangeIter that iterates over the entire MutableMap.
-func (mut MutableMap) IterAll(ctx context.Context) (MapRangeIter, error) {
+// IterAll returns a mutableMapIter that iterates over the entire MutableMap.
+func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 	rng := Range{Start: nil, Stop: nil, Desc: mut.keyDesc}
 	return mut.IterRange(ctx, rng)
 }
 
-// IterRange returns a MapRangeIter that iterates over a Range.
-func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+// IterRange returns a MapIter that iterates over a Range.
+func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	treeIter, err := treeIterFromRange(ctx, mut.tuples.tree.root, mut.tuples.tree.ns, rng)
 	if err != nil {
 		return nil, err
 	}
-	editIter := memIterFromRange(mut.tuples.edits, rng)
+	memIter := memIterFromRange(mut.tuples.edits, rng)
 
-	return &MutableMapRangeIter{
-		memory: editIter,
+	return &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
+		memory: memIter,
 		prolly: treeIter,
-		rng:    rng,
+		order:  rng.Desc,
 	}, nil
 }

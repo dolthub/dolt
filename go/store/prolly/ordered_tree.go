@@ -39,14 +39,6 @@ type orderedTree[K, V ~[]byte, O ordering[K]] struct {
 	order O
 }
 
-func newOrderedTree[K, V ~[]byte, O ordering[K]](root tree.Node, ns tree.NodeStore, order O) orderedTree[K, V, O] {
-	return orderedTree[K, V, O]{
-		root:  root,
-		ns:    ns,
-		order: order,
-	}
-}
-
 func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	ctx context.Context,
 	from, to orderedTree[K, V, O],

@@ -143,16 +143,17 @@ func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
 	return m.tuples.last(ctx)
 }
 
-// IterAll returns a MutableMapRangeIter that iterates over the entire Map.
-func (m Map) IterAll(ctx context.Context) (MapRangeIter, error) {
+// IterAll returns a mutableMapIter that iterates over the entire Map.
+func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 	return m.tuples.iterAll(ctx)
 }
 
-// IterOrdinalRange returns a MapRangeIter for the ordinal range beginning at |start| and ending before |stop|.
-func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRangeIter, error) {
+// IterOrdinalRange returns a MapIter for the ordinal range beginning at |start| and ending before |stop|.
+func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter, error) {
 	if stop == start {
-		return emptyIter{}, nil
-	} else if stop < start {
+		return &orderedTreeIter[val.Tuple, val.Tuple]{curr: nil}, nil
+	}
+	if stop < start {
 		return nil, fmt.Errorf("invalid ordinal bounds (%d, %d)", start, stop)
 	} else if stop > uint64(m.Count()) {
 		return nil, fmt.Errorf("stop index (%d) out of bounds", stop)
@@ -171,8 +172,8 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapRange
 	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: lo, stop: hi}, nil
 }
 
-// IterRange returns a MutableMapRangeIter that iterates over a Range.
-func (m Map) IterRange(ctx context.Context, rng Range) (MapRangeIter, error) {
+// IterRange returns a mutableMapIter that iterates over a Range.
+func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.isPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
 	} else {
@@ -278,8 +279,21 @@ func treeIterFromRange(
 	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stop}, nil
 }
 
-var _ kvIter[val.Tuple, val.Tuple] = &orderedTreeIter[val.Tuple, val.Tuple]{}
-var _ MapRangeIter = &orderedTreeIter[val.Tuple, val.Tuple]{}
+type pointLookup struct {
+	k, v val.Tuple
+}
+
+var _ MapIter = &pointLookup{}
+
+func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
+	if p.k == nil || p.v == nil {
+		err = io.EOF
+	} else {
+		key, value = p.k, p.v
+		p.k, p.v = nil, nil
+	}
+	return
+}
 
 // DebugFormat formats a Map.
 func DebugFormat(ctx context.Context, m Map) (string, error) {
