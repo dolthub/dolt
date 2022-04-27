@@ -28,8 +28,7 @@ type orderedMap[K, V ~[]byte, O ordering[K]] struct {
 }
 
 func (m orderedMap[K, V, O]) makeTree(ctx context.Context) (orderedTree[K, V, O], error) {
-	sfn, cfn := m.tree.searchNode, m.tree.compareItems
-	root, err := tree.ApplyMutations(ctx, m.tree.ns, m.tree.root, m.mutations(), sfn, cfn)
+	root, err := tree.ApplyMutations(ctx, m.tree.ns, m.tree.root, m.mutations(), m.tree.compareItems)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err
 	}

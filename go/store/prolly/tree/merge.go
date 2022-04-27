@@ -70,7 +70,7 @@ func ThreeWayMerge(
 
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = ApplyMutations(ctx, ns, left, patches, search, compare)
+		final, err = ApplyMutations(ctx, ns, left, patches, compare)
 		return err
 	})
 

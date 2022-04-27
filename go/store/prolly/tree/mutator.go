@@ -24,20 +24,13 @@ type MutationIter interface {
 	Close() error
 }
 
-func ApplyMutations(
-	ctx context.Context,
-	ns NodeStore,
-	root Node,
-	edits MutationIter,
-	search ItemSearchFn,
-	compare CompareFn,
-) (Node, error) {
+func ApplyMutations(ctx context.Context, ns NodeStore, root Node, edits MutationIter, compare CompareFn) (Node, error) {
 	newKey, newValue := edits.NextMutation(ctx)
 	if newKey == nil {
 		return root, nil // no mutations
 	}
 
-	cur, err := NewCursorAtItem(ctx, ns, root, newKey, search)
+	cur, err := NewCursorFromCompareFn(ctx, ns, root, newKey, compare)
 	if err != nil {
 		return Node{}, err
 	}
