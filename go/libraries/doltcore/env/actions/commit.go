@@ -125,10 +125,11 @@ func CommitStaged(ctx context.Context, roots doltdb.Roots, mergeActive bool, mer
 
 	// TODO: this is only necessary in some contexts (SQL). Come up with a more coherent set of interfaces to
 	//  rationalize where the root value writes happen before a commit is created.
-	h, err := ddb.WriteRootValue(ctx, stagedRoot)
+	r, h, err := ddb.WriteRootValue(ctx, stagedRoot)
 	if err != nil {
 		return nil, err
 	}
+	stagedRoot = r
 
 	// logrus.Errorf("staged root is %s", stagedRoot.DebugString(ctx, true))
 

@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -138,9 +140,9 @@ func generateProllyBench(size uint64) prollyBench {
 
 var shared = pool.NewBuffPool()
 
-func newTestNodeStore() prolly.NodeStore {
+func newTestNodeStore() tree.NodeStore {
 	ts := &chunks.TestStorage{}
-	return prolly.NewNodeStore(ts.NewView())
+	return tree.NewNodeStore(ts.NewView())
 }
 
 func generateProllyTuples(kd, vd val.TupleDesc, size uint64) [][2]val.Tuple {

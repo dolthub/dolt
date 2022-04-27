@@ -585,8 +585,9 @@ func processNode(t *testing.T, ctx context.Context, dEnv *env.DoltEnv, node Hist
 	require.NoError(t, err)
 
 	root = UpdateTables(t, ctx, root, node.Updates)
-	h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
+	r, h, err := dEnv.DoltDB.WriteRootValue(ctx, root)
 	require.NoError(t, err)
+	root = r
 
 	meta, err := datas.NewCommitMeta("Ash Ketchum", "ash@poke.mon", node.CommitMsg)
 	require.NoError(t, err)

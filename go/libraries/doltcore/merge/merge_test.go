@@ -375,12 +375,15 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
 	require.NoError(t, err)
 
-	mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)
+	r, mainHash, err := ddb.WriteRootValue(context.Background(), mRoot)
 	require.NoError(t, err)
-	hash, err := ddb.WriteRootValue(context.Background(), updatedRoot)
+	mRoot = r
+	r, hash, err := ddb.WriteRootValue(context.Background(), updatedRoot)
 	require.NoError(t, err)
-	mergeHash, err := ddb.WriteRootValue(context.Background(), mergeRoot)
+	updatedRoot = r
+	r, mergeHash, err := ddb.WriteRootValue(context.Background(), mergeRoot)
 	require.NoError(t, err)
+	mergeRoot = r
 
 	meta, err := datas.NewCommitMeta(name, email, "fake")
 	require.NoError(t, err)

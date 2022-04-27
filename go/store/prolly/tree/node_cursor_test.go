@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -42,32 +41,27 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	ctx := context.Background()
 	for i := range items {
 		key, value := items[i][0], items[i][1]
-		cur, err := newCursorAtItem(ctx, ns, root, key, searchTestTree)
+		cur, err := NewCursorAtItem(ctx, ns, root, key, searchTestTree)
 		require.NoError(t, err)
-		assert.Equal(t, key, cur.currentKey())
-		assert.Equal(t, value, cur.currentValue())
+		assert.Equal(t, key, cur.CurrentKey())
+		assert.Equal(t, value, cur.CurrentValue())
 	}
 
 	validateTreeItems(t, ns, root, items)
 }
 
-func newTestNodeStore() NodeStore {
-	ts := &chunks.TestStorage{}
-	return NewNodeStore(ts.NewView())
-}
-
-func randomTree(t *testing.T, count int) (Node, [][2]nodeItem, NodeStore) {
+func randomTree(t *testing.T, count int) (Node, [][2]NodeItem, NodeStore) {
 	ctx := context.Background()
-	ns := newTestNodeStore()
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	ns := NewTestNodeStore()
+	chkr, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
-		err = chunker.AddPair(ctx, val.Tuple(item[0]), val.Tuple(item[1]))
+		err = chkr.AddPair(ctx, NodeItem(item[0]), NodeItem(item[1]))
 		assert.NoError(t, err)
 	}
-	nd, err := chunker.Done(ctx)
+	nd, err := chkr.Done(ctx)
 	assert.NoError(t, err)
 	return nd, items, ns
 }
@@ -82,23 +76,23 @@ var valDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-func searchTestTree(item nodeItem, nd Node) int {
+func searchTestTree(item NodeItem, nd Node) int {
 	return sort.Search(int(nd.count), func(i int) bool {
-		l, r := val.Tuple(item), val.Tuple(nd.getKey(i))
+		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
 		return keyDesc.Compare(l, r) <= 0
 	})
 }
 
-func randomTupleItemPairs(count int) (items [][2]nodeItem) {
-	tups := randomTuplePairs(count, keyDesc, valDesc)
-	items = make([][2]nodeItem, count)
+func randomTupleItemPairs(count int) (items [][2]NodeItem) {
+	tups := RandomTuplePairs(count, keyDesc, valDesc)
+	items = make([][2]NodeItem, count)
 	if len(tups) != len(items) {
 		panic("mismatch")
 	}
 
 	for i := range items {
-		items[i][0] = nodeItem(tups[i][0])
-		items[i][1] = nodeItem(tups[i][1])
+		items[i][0] = NodeItem(tups[i][0])
+		items[i][1] = NodeItem(tups[i][1])
 	}
 	return
 }

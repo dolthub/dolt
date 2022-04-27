@@ -74,4 +74,8 @@ func TestRefMapEditDeletes(t *testing.T) {
 
 	with_b := edit_refmap(empty, []RefMapEdit{RefMapEdit{"b", b_hash}})
 	assert.Equal(t, without_a.Table().Bytes, with_b.Table().Bytes)
+
+	delete_from_empty := edit_refmap(empty, []RefMapEdit{RefMapEdit{Name: "b"}})
+	assert.Equal(t, delete_from_empty.Table().Bytes, empty.Table().Bytes)
+
 }

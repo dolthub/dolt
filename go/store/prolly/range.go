@@ -19,6 +19,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -244,35 +246,35 @@ func compareBound(bound []RangeCut, tup val.Tuple, desc val.TupleDesc) int {
 	return 0
 }
 
-func rangeStartSearchFn(rng Range) searchFn {
-	return func(nd Node) int {
+func rangeStartSearchFn(rng Range) tree.SearchFn {
+	return func(nd tree.Node) int {
 		// todo(andy): inline sort.Search()
-		return sort.Search(int(nd.count), func(i int) (in bool) {
+		return sort.Search(nd.Count(), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
-			tup := val.Tuple(nd.getKey(i))
+			tup := val.Tuple(nd.GetKey(i))
 			in = rng.AboveStart(tup)
 			return
 		})
 	}
 }
 
-func rangeStopSearchFn(rng Range) searchFn {
-	return func(nd Node) (idx int) {
+func rangeStopSearchFn(rng Range) tree.SearchFn {
+	return func(nd tree.Node) (idx int) {
 		// todo(andy): inline sort.Search()
-		return sort.Search(int(nd.count), func(i int) (out bool) {
+		return sort.Search(nd.Count(), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false
-			tup := val.Tuple(nd.getKey(i))
+			tup := val.Tuple(nd.GetKey(i))
 			out = !rng.BelowStop(tup)
 			return
 		})
 	}
 }
 
-func pointLookupSearchFn(rng Range) searchFn {
-	return func(nd Node) (idx int) {
+func pointLookupSearchFn(rng Range) tree.SearchFn {
+	return func(nd tree.Node) (idx int) {
 		// todo(andy): inline sort.Search()
-		return sort.Search(int(nd.count), func(i int) (out bool) {
-			tup := val.Tuple(nd.getKey(i))
+		return sort.Search(nd.Count(), func(i int) (out bool) {
+			tup := val.Tuple(nd.GetKey(i))
 			// |rng.Start| <= |tup|
 			return compareBound(rng.Start, tup, rng.Desc) <= 0
 		})
@@ -416,4 +418,10 @@ func formatRange(r Range) string {
 
 	sb.WriteString(" )")
 	return sb.String()
+}
+
+func assertTrue(b bool) {
+	if !b {
+		panic("assertion failed")
+	}
 }

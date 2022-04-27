@@ -984,3 +984,191 @@ SQL
     [[ "$output" =~ "i" ]] || false
     [[ "$output" =~ "1" ]] || false
 }
+
+@test "keyless: insert into keyless table with unique index" {
+    dolt sql -q "CREATE TABLE mytable (pk int UNIQUE)";
+
+    run dolt sql -q "INSERT INTO mytable values (1),(2),(3),(4)"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT * FROM mytable order by pk"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+    [[ "${lines[2]}" = "2" ]] || false
+    [[ "${lines[3]}" = "3" ]] || false
+    [[ "${lines[4]}" = "4" ]] || false
+
+    run dolt sql -q "INSERT INTO mytable VALUES (1)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
+
+    # Make sure nothing in the faulty transaction was persisted.
+    run dolt sql -q "INSERT INTO mytable VALUES (500000), (5000001), (3)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "duplicate unique key given: [3]" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM mytable where pk in (500000,5000001)"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "0" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM mytable"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "4" ]] || false
+
+    run dolt index cat mytable pk -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "pk" ]] || false
+    [[ "${lines[1]}" = "1" ]] || false
+    [[ "${lines[2]}" = "2" ]] || false
+    [[ "${lines[3]}" = "3" ]] || false
+    [[ "${lines[4]}" = "4" ]] || false
+    [[ "${#lines[@]}" = "5" ]] || false
+}
+
+@test "keyless: insert into keyless table with unique index and auto increment" {
+    dolt sql -q "CREATE TABLE gis (pk INT UNIQUE NOT NULL AUTO_INCREMENT, shape GEOMETRY NOT NULL)"
+    dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
+
+    run dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "duplicate unique key given: [1]" ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) FROM gis where pk = 1"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+
+    run dolt sql -q "INSERT INTO gis VALUES (NULL, POINT(1,1))"
+    [ $status -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT count(*) FROM gis where pk = 2"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+}
+
+@test "keyless: string type unique key index" {
+    dolt sql -q "CREATE TABLE mytable (pk int, val varchar(6) UNIQUE)"
+    dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
+
+    run dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
+    [ $status -eq 1 ]
+    [[ "$output" =~ 'duplicate unique key given: ["nekter"]' ]] || false
+
+    run dolt sql -r csv -q "SELECT count(*) from mytable where pk = 1"
+    [ $status -eq 0 ]
+    [[ "${lines[1]}" = "1" ]] || false
+
+    run dolt index cat mytable val -r csv
+    [[ "${lines[0]}" = "val" ]] || false
+    [[ "${lines[1]}" = "nekter" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "keyless: compound unique key index" {
+    dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
+    dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
+    dolt sql -q "INSERT INTO mytable values (1, 2, 2)"
+
+    run dolt sql -q "INSERT INTO mytable values (1, 2, 2)"
+    [ $status -eq 1 ]
+    [[ "$output" =~ "duplicate unique key given: [2,2]" ]] || false
+
+    run dolt sql -r csv -q "SELECT COUNT(*) as count FROM mytable where pk = 1"
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "count" ]] || false
+    [[ "${lines[1]}" = "1" ]] || false
+
+    run dolt index cat mytable v1v2 -r csv
+    [[ "${lines[0]}" = "v1,v2" ]] || false
+    [[ "${lines[1]}" = "2,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+}
+
+@test "keyless: replace into and unique key index" {
+    skip "Keyless tables with unique indexes do not properly support replace into semantics"
+    dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
+    dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
+    dolt sql -q "INSERT INTO mytable values (1, 2, 2)"
+
+    run dolt sql -q "REPLACE INTO mytable VALUES (1, 2, 2)"
+    [ $status -eq 0 ]
+}
+
+@test "keyless: batch import with keyless unique index" {
+    dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
+    dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
+
+    run dolt sql <<SQL
+    INSERT INTO mytable VALUES (1, 2, 2);
+    INSERT INTO mytable VALUES (3, 3, 3);
+    INSERT INTO mytable VALUES (2, 2, 3);
+SQL
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "SELECT * FROM mytable order by pk"
+    [[ "${lines[0]}" = "pk,v1,v2" ]] || false
+    [[ "${lines[1]}" = "1,2,2" ]] || false
+    [[ "${lines[2]}" = "3,3,3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM mytable where v1 = 2"
+    [[ "${lines[0]}" = "pk,v1,v2" ]] || false
+    [[ "${lines[1]}" = "1,2,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt index cat mytable v1 -r csv
+    [[ "${lines[0]}" = "v1" ]] || false
+    [[ "${lines[1]}" = "2" ]] || false
+    [[ "${lines[2]}" = "3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "keyless: batch import with keyless unique index and secondary index" {
+    dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
+    dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
+    dolt sql -q "ALTER TABLE mytable ADD INDEX myidx (v2)"
+
+    run dolt sql <<SQL
+    INSERT INTO mytable VALUES (1, 2, 2);
+    INSERT INTO mytable VALUES (3, 3, 4);
+    INSERT INTO mytable VALUES (2, 2, 3);
+SQL
+    [ $status -eq 1 ]
+
+    run dolt sql -r csv -q "SELECT * FROM mytable order by pk"
+    [[ "${lines[0]}" = "pk,v1,v2" ]] || false
+    [[ "${lines[1]}" = "1,2,2" ]] || false
+    [[ "${lines[2]}" = "3,3,4" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM mytable where v1 = 2"
+    [[ "${lines[0]}" = "pk,v1,v2" ]] || false
+    [[ "${lines[1]}" = "1,2,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt index cat mytable v1 -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "v1" ]] || false
+    [[ "${lines[1]}" = "2" ]] || false
+    [[ "${lines[2]}" = "3" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+
+    run dolt index cat mytable myidx -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = "v2" ]] || false
+    [[ "${lines[1]}" = "2" ]] || false
+    [[ "${lines[2]}" = "4" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "keyless: batch import into the unique key correctly works" {
+    skip "index error handling does not work with bulk import"
+    dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
+    dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
+    dolt sql -q "INSERT into mytable values (1, 1, 1), (2, 2, 2)"
+
+    echo "pk,v1,v2" >> x.csv
+    echo "3,1,1" >> x.csv
+    echo "4,2,2" >> x.csv
+    run dolt table import -u mytable x.csv
+    [ $status -eq 0 ]
+}

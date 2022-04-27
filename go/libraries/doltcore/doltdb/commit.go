@@ -210,10 +210,11 @@ func (ddb *DoltDB) NewPendingCommit(
 	parentCommits []*Commit,
 	cm *datas.CommitMeta,
 ) (*PendingCommit, error) {
-	val, err := ddb.writeRootValue(ctx, roots.Staged)
+	newstaged, val, err := ddb.writeRootValue(ctx, roots.Staged)
 	if err != nil {
 		return nil, err
 	}
+	roots.Staged = newstaged
 
 	ds, err := ddb.db.GetDataset(ctx, headRef.String())
 	if err != nil {

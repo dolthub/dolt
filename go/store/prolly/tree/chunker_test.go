@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -32,34 +32,34 @@ func roundTripTreeItems(t *testing.T) {
 	root, items, ns := randomTree(t, 1000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(1000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 1000)
-	assert.Equal(t, root.treeCount()*2, 1000)
+	assert.Equal(t, root.TreeCount()*2, 1000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 10_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(10_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 10_000)
-	assert.Equal(t, root.treeCount()*2, 10_000)
+	assert.Equal(t, root.TreeCount()*2, 10_000)
 	validateTreeItems(t, ns, root, items)
 
 	root, items, ns = randomTree(t, 100_000)
 	assert.NotNil(t, root)
 	assert.True(t, root.count > 0)
-	assert.True(t, root.level() > 0)
+	assert.True(t, root.Level() > 0)
 	//assert.Equal(t, uint64(100_000), root.cumulativeCount())
 	assert.Equal(t, countTree(t, ns, root), 100_000)
-	assert.Equal(t, root.treeCount()*2, 100_000)
+	assert.Equal(t, root.TreeCount()*2, 100_000)
 	validateTreeItems(t, ns, root, items)
 }
 
 func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
 	ctx := context.Background()
-	err := iterTree(ctx, ns, nd, func(_ nodeItem) (err error) {
+	err := iterTree(ctx, ns, nd, func(_ NodeItem) (err error) {
 		count++
 		return
 	})
@@ -67,10 +67,10 @@ func countTree(t *testing.T, ns NodeStore, nd Node) (count int) {
 	return
 }
 
-func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]nodeItem) {
+func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]NodeItem) {
 	i := 0
 	ctx := context.Background()
-	err := iterTree(ctx, ns, nd, func(actual nodeItem) (err error) {
+	err := iterTree(ctx, ns, nd, func(actual NodeItem) (err error) {
 		if !assert.Equal(t, expected[i/2][i%2], actual) {
 			panic("here")
 		}
@@ -81,29 +81,29 @@ func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]nodeIt
 	return
 }
 
-func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item nodeItem) error) error {
+func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item NodeItem) error) error {
 	if nd.empty() {
 		return nil
 	}
 
-	cur, err := newCursorAtStart(ctx, ns, nd)
+	cur, err := NewCursorAtStart(ctx, ns, nd)
 	if err != nil {
 		return err
 	}
 
 	ok := true
 	for ok {
-		err = cb(cur.currentKey())
+		err = cb(cur.CurrentKey())
 		if err != nil {
 			return err
 		}
 
-		err = cb(cur.currentValue())
+		err = cb(cur.CurrentValue())
 		if err != nil {
 			return err
 		}
 
-		ok, err = cur.advance(ctx)
+		ok, err = cur.Advance(ctx)
 		if err != nil {
 			return err
 		}

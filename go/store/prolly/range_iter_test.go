@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -229,7 +230,7 @@ func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 
 func TestMapIterRange(t *testing.T) {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := tree.NewTestNodeStore()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int32Enc},
 		val.Type{Enc: val.Int32Enc},

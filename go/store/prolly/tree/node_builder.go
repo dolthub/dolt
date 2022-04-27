@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package tree
 
 import (
 	"context"
@@ -35,7 +35,7 @@ const (
 type novelNode struct {
 	node      Node
 	addr      hash.Hash
-	lastKey   nodeItem
+	lastKey   NodeItem
 	treeCount uint64
 }
 
@@ -53,29 +53,29 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 		lastKey = val.CloneTuple(ns.Pool(), lastKey)
 	}
 
-	treeCount := uint64(node.treeCount())
+	treeCount := uint64(node.TreeCount())
 
 	return novelNode{
 		addr:      addr,
 		node:      node,
-		lastKey:   nodeItem(lastKey),
+		lastKey:   NodeItem(lastKey),
 		treeCount: treeCount,
 	}, nil
 }
 
 type nodeBuilder struct {
-	keys, values []nodeItem
+	keys, values []NodeItem
 	size, level  int
 
 	subtrees subtreeCounts
 }
 
-func (nb *nodeBuilder) hasCapacity(key, value nodeItem) bool {
+func (nb *nodeBuilder) hasCapacity(key, value NodeItem) bool {
 	sum := nb.size + len(key) + len(value)
 	return sum <= int(maxVectorOffset)
 }
 
-func (nb *nodeBuilder) appendItems(key, value nodeItem, subtree uint64) {
+func (nb *nodeBuilder) appendItems(key, value NodeItem, subtree uint64) {
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
 	nb.size += len(key) + len(value)
@@ -182,8 +182,8 @@ func writeSubtreeCounts(sc subtreeCounts) []byte {
 
 func newNodeBuilder(level int) *nodeBuilder {
 	return &nodeBuilder{
-		keys:     make([]nodeItem, 0, nodeBuilderListSize),
-		values:   make([]nodeItem, 0, nodeBuilderListSize),
+		keys:     make([]NodeItem, 0, nodeBuilderListSize),
+		values:   make([]NodeItem, 0, nodeBuilderListSize),
 		subtrees: newSubtreeCounts(nodeBuilderListSize),
 		level:    level,
 	}
@@ -196,9 +196,9 @@ func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	return
 }
 
-// measureNodeSize returns the exact size of the tuple vectors for keys and values,
-// and an estimate of the overall size of the final flatbuffer.
-func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
+// measureNodeSize returns the exact Size of the tuple vectors for keys and values,
+// and an estimate of the overall Size of the final flatbuffer.
+func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
 		valSz += len(values[i])
@@ -207,10 +207,10 @@ func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, 
 
 	// constraints enforced upstream
 	if keySz > int(maxVectorOffset) {
-		panic(fmt.Sprintf("key vector exceeds size limit ( %d > %d )", keySz, maxVectorOffset))
+		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, maxVectorOffset))
 	}
 	if valSz > int(maxVectorOffset) {
-		panic(fmt.Sprintf("value vector exceeds size limit ( %d > %d )", valSz, maxVectorOffset))
+		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, maxVectorOffset))
 	}
 
 	bufSz += keySz + valSz               // tuples
@@ -222,7 +222,7 @@ func measureNodeSize(keys, values []nodeItem, subtrees []uint64) (keySz, valSz, 
 	return
 }
 
-func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
+func writeItemBytes(b *fb.Builder, items []NodeItem, sumSz int) fb.UOffsetT {
 	b.Prep(fb.SizeUOffsetT, sumSz)
 
 	stop := int(b.Head())
@@ -236,7 +236,7 @@ func writeItemBytes(b *fb.Builder, items []nodeItem, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
-func writeItemOffsets(b *fb.Builder, items []nodeItem, sz int) (cnt int) {
+func writeItemOffsets(b *fb.Builder, items []NodeItem, sz int) (cnt int) {
 	off := sz
 	for i := len(items) - 1; i > 0; i-- { // omit first offset
 		off -= len(items[i])
@@ -254,7 +254,7 @@ func writeCountArray(b *fb.Builder, sc subtreeCounts) fb.UOffsetT {
 
 func formatCompletedNode(addr hash.Hash, bld *nodeBuilder, kd, vd val.TupleDesc) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Novel Node (level %d) #%s { \n", bld.level, addr.String()))
+	sb.WriteString(fmt.Sprintf("Novel Node (Level %d) #%s { \n", bld.level, addr.String()))
 	for i := range bld.keys {
 		k, v := bld.keys[i], bld.values[i]
 		sb.WriteString("\t")
