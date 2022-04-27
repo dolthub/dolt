@@ -68,99 +68,47 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "Multialter DDL with ADD/DROP INDEX",
+			Name: "Multialter DDL with ADD/DROP Primary Key",
 			SetUpScript: []string{
 				"CREATE TABLE t(pk int primary key, v1 int)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query:       "ALTER TABLE t DROP COLUMN v1, ADD INDEX myidx (v1)",
+					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v3 int), drop primary key, add primary key (notacolumn)",
 					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
 				},
 				{
 					Query: "DESCRIBE t",
 					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""}, // should not be dropped
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
 					},
 				},
 				{
-					Query:    "ALTER TABLE t ADD COLUMN (v2 int), ADD INDEX myidx (v2)",
+					Query:    "ALTER TABLE t ADD column `v4` int NOT NULL, ADD column `v5` int NOT NULL, DROP COLUMN `v1`, ADD COLUMN `v6` int NOT NULL, DROP COLUMN `v4`, ADD COLUMN v7 int NOT NULL",
 					Expected: []sql.Row{{sql.NewOkResult(0)}},
 				},
 				{
 					Query: "DESCRIBE t",
 					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "MUL", "", ""},
-					},
-				},
-				{
-					Query:       "ALTER TABLE t ADD COLUMN (v3 int), DROP INDEX notanindex",
-					ExpectedErr: sql.ErrCantDropFieldOrKey,
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "MUL", "", ""},
-					},
-				},
-				{
-					Query:       "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx (notacolumn)",
-					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "MUL", "", ""},
-					},
-				},
-				{
-					Query:       "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx2 (v4), DROP INDEX notanindex;",
-					ExpectedErr: sql.ErrCantDropFieldOrKey,
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "MUL", "", ""},
-					},
-				},
-				{
-					Query:    "ALTER TABLE t ADD COLUMN (v4 int), ADD INDEX myidx2 (v4)",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "MUL", "", ""},
-						{"v4", "int", "YES", "MUL", "", ""},
-					},
-				},
-				{
-					Query:    "ALTER TABLE t ADD COLUMN (v5 int), RENAME INDEX myidx2 TO myidx3",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
-				},
-				{
-					Query:    "ALTER TABLE t DROP INDEX myidx, ADD INDEX v5idx (v5)",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "PRI", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "YES", "", "", ""},
-						{"v4", "int", "YES", "MUL", "", ""},
-						{"v5", "int", "YES", "MUL", "", ""},
+						{"pk", "int", "NO", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
+						{"v5", "int", "NO", "", "", ""},
+						{"v6", "int", "NO", "", "", ""},
+						{"v7", "int", "NO", "", "", ""},
 					},
 				},
 			},

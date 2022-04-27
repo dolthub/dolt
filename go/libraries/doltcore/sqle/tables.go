@@ -987,17 +987,27 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
-	doltSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
-	if err != nil {
-		return nil, err
-	}
-
 	dt, err := t.doltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	dt, err = truncate(ctx, dt, doltSch)
+	oldSch, err := dt.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	newSch, err = schema.Adapt(oldSch, newSch) // improvise, overcome
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err = truncate(ctx, dt, newSch)
 	if err != nil {
 		return nil, err
 	}
