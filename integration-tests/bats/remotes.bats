@@ -79,11 +79,11 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "first commit on main" ]] || false
 
-    cd remote
+    cd ../remote
     dolt checkout other
     dolt commit --allow-empty -m "first commit on other"
 
-    cd local
+    cd ../local
     dolt checkout main
     run dolt pull
     [ "$status" -eq 0 ]
