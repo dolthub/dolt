@@ -84,7 +84,7 @@ func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueRea
 		}
 	}
 
-	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(MergeStateWorkingPreMergeField)
+	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(mergeStateWorkingPreMergeField)
 	if err != nil {
 		return hash.Hash{}, err
 	}
@@ -105,7 +105,7 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 		}
 	}
 
-	commitV, ok, err := ms.nomsMergeState.MaybeGet(MergeStateCommitField)
+	commitV, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitField)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Co
 		return nil, fmt.Errorf("corrupted MergeState struct")
 	}
 
-	return CommitFromValue(vr.Format(), commitV)
+	return commitFromValue(vr.Format(), commitV)
 }
 
 type dsHead interface {
@@ -152,7 +152,7 @@ func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
 }
 
 func (h serialTagHead) TypeName() string {
-	return TagName
+	return tagName
 }
 
 func (h serialTagHead) Addr() hash.Hash {
@@ -189,7 +189,7 @@ func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
 }
 
 func (h serialWorkingSetHead) TypeName() string {
-	return WorkingSetName
+	return workingSetName
 }
 
 func (h serialWorkingSetHead) Addr() hash.Hash {
@@ -219,7 +219,10 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	}
 	mergeState := h.msg.MergeState(nil)
 	if mergeState != nil {
-		ret.MergeState = &MergeState{ preMergeWorkingAddr: new(hash.Hash), fromCommitAddr: new(hash.Hash) }
+		ret.MergeState = &MergeState{
+			preMergeWorkingAddr: new(hash.Hash),
+			fromCommitAddr: new(hash.Hash),
+		}
 		*ret.MergeState.preMergeWorkingAddr = hash.New(mergeState.PreWorkingRootAddrBytes())
 		*ret.MergeState.fromCommitAddr = hash.New(mergeState.FromCommitAddrBytes())
 	}
@@ -372,11 +375,11 @@ func (ds Dataset) MaybeHeight() (uint64, bool, error) {
 }
 
 func (ds Dataset) IsTag() bool {
-	return ds.head != nil && ds.head.TypeName() == TagName
+	return ds.head != nil && ds.head.TypeName() == tagName
 }
 
 func (ds Dataset) IsWorkingSet() bool {
-	return ds.head != nil && ds.head.TypeName() == WorkingSetName
+	return ds.head != nil && ds.head.TypeName() == workingSetName
 }
 
 func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
@@ -400,7 +403,7 @@ func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
 }
 
 func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
-	metast, ok, err := h.st.MaybeGet(TagMetaField)
+	metast, ok, err := h.st.MaybeGet(tagMetaField)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -412,7 +415,7 @@ func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
 		return nil, hash.Hash{}, err
 	}
 
-	commitRef, ok, err := h.st.MaybeGet(TagCommitRefField)
+	commitRef, ok, err := h.st.MaybeGet(tagCommitRefField)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -435,16 +438,16 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	}
 	ret.Meta = meta
 
-	workingRootRef, ok, err := st.MaybeGet(WorkingRootRefField)
+	workingRootRef, ok, err := st.MaybeGet(workingRootRefField)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", WorkingRootRefField)
+		return nil, fmt.Errorf("workingset struct does not have field %s", workingRootRefField)
 	}
 	ret.WorkingAddr = workingRootRef.(types.Ref).TargetHash()
 
-	stagedRootRef, ok, err := st.MaybeGet(StagedRootRefField)
+	stagedRootRef, ok, err := st.MaybeGet(stagedRootRefField)
 	if err != nil {
 		return nil, err
 	}
@@ -453,7 +456,7 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		*ret.StagedAddr = stagedRootRef.(types.Ref).TargetHash()
 	}
 
-	mergeStateRef, ok, err := st.MaybeGet(MergeStateField)
+	mergeStateRef, ok, err := st.MaybeGet(mergeStateField)
 	if err != nil {
 		return nil, err
 	}
