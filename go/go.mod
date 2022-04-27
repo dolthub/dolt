@@ -68,7 +68,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220426211148-26d85c714348
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220427001342-3e2ca47594a5
 	github.com/google/flatbuffers v2.0.5+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
