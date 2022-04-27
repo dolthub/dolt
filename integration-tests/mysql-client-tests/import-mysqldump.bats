@@ -307,7 +307,7 @@ SQL
 }
 
 @test "import mysqldump: a table with various spatial types" {
-    run dolt sql << SQL
+    run dolt sql <<SQL
     --
     -- Table structure for table `geom_table`
     --
@@ -395,7 +395,7 @@ SQL
     INSERT INTO `poly_table` VALUES (0x000000000103000000010000000400000000000000000000000000000000000000000000000000F03F000000000000F03F0000000000000040000000000000004000000000000000000000000000000000);
     /*!40000 ALTER TABLE `poly_table` ENABLE KEYS */;
     UNLOCK TABLES;
-    SQL
+SQL
     [ "$status" -eq 0 ]
     run dolt sql -q "select st_aswkt(g) from geom_table"
     [ "$status" -eq 0 ]
