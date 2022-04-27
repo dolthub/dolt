@@ -80,7 +80,7 @@ type WorkingSetSpec struct {
 	Meta        *WorkingSetMeta
 	WorkingRoot types.Ref
 	StagedRoot  types.Ref
-	MergeState  *types.Ref
+	MergeState  *MergeState
 }
 
 // NewWorkingSet creates a new working set object.
@@ -98,15 +98,10 @@ type WorkingSetSpec struct {
 // }
 // ```
 // where M is a struct type and R is a ref type.
-func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeStateRef *types.Ref) (hash.Hash, types.Ref, error) {
+func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {
 	if db.Format() == types.Format_DOLT_DEV {
 		stagedAddr := stagedRef.TargetHash()
-		var mergeStateAddr *hash.Hash
-		if mergeStateRef != nil {
-			mergeStateAddr = new(hash.Hash)
-			*mergeStateAddr = mergeStateRef.TargetHash()
-		}
-		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeStateAddr, meta)
+		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, meta)
 
 		r, err := db.WriteValue(ctx, types.SerialMessage(data))
 		if err != nil {
@@ -131,8 +126,8 @@ func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, work
 	fields[WorkingRootRefField] = workingRef
 	fields[StagedRootRefField] = stagedRef
 
-	if mergeStateRef != nil {
-		fields[MergeStateField] = mergeStateRef
+	if mergeState != nil {
+		fields[MergeStateField] = *mergeState.nomsMergeStateRef
 	}
 
 	st, err := types.NewStruct(workingRef.Format(), WorkingSetName, fields)
@@ -153,7 +148,7 @@ func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, work
 	return ref.TargetHash(), ref, nil
 }
 
-func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, meta *WorkingSetMeta) []byte {
+func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *MergeState, meta *WorkingSetMeta) []byte {
 	builder := flatbuffers.NewBuilder(1024)
 	workingoff := builder.CreateByteVector(working[:])
 	var stagedOff, mergeStateOff flatbuffers.UOffsetT
@@ -161,7 +156,12 @@ func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, met
 		stagedOff = builder.CreateByteVector((*staged)[:])
 	}
 	if mergeState != nil {
-		mergeStateOff = builder.CreateByteVector((*mergeState)[:])
+		prerootaddroff := builder.CreateByteVector((*mergeState.preMergeWorkingAddr)[:])
+		fromaddroff := builder.CreateByteVector((*mergeState.fromCommitAddr)[:])
+		serial.MergeStateStart(builder)
+		serial.MergeStateAddPreWorkingRootAddr(builder, prerootaddroff)
+		serial.MergeStateAddFromCommitAddr(builder, fromaddroff)
+		mergeStateOff = serial.MergeStateEnd(builder)
 	}
 
 	var nameOff, emailOff, descOff flatbuffers.UOffsetT
@@ -177,7 +177,7 @@ func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, met
 		serial.WorkingSetAddStagedRootAddr(builder, stagedOff)
 	}
 	if mergeStateOff != 0 {
-		serial.WorkingSetAddMergeStateAddr(builder, mergeStateOff)
+		serial.WorkingSetAddMergeState(builder, mergeStateOff)
 	}
 	if meta != nil {
 		serial.WorkingSetAddName(builder, nameOff)
@@ -190,8 +190,29 @@ func workingset_flatbuffer(working hash.Hash, staged, mergeState *hash.Hash, met
 
 }
 
-func NewMergeState(_ context.Context, preMergeWorking types.Ref, commit types.Value) (types.Struct, error) {
-	return mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit, preMergeWorking})
+func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit) (*MergeState, error) {
+	if vrw.Format() == types.Format_DOLT_DEV {
+		ms := &MergeState{
+			preMergeWorkingAddr: new(hash.Hash),
+			fromCommitAddr: new(hash.Hash),
+		}
+		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
+		*ms.fromCommitAddr = commit.Addr()
+		return ms, nil
+	} else {
+		v, err := mergeStateTemplate.NewStruct(preMergeWorking.Format(), []types.Value{commit.NomsValue(), preMergeWorking})
+		if err != nil {
+			return nil, err
+		}
+		ref, err := vrw.WriteValue(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		return &MergeState{
+			nomsMergeStateRef: &ref,
+			nomsMergeState: &v,
+		}, nil
+	}
 }
 
 func IsWorkingSet(v types.Value) (bool, error) {
