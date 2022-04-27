@@ -524,6 +524,10 @@ func (tr tableReader) findOffsets(reqs []getRecord) (ors offsetRecSlice, remaini
 				break
 			}
 		}
+
+		if !reqs[i].found {
+			remaining = true
+		}
 	}
 
 	sort.Sort(ors)
