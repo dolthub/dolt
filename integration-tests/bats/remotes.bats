@@ -53,6 +53,24 @@ teardown() {
     [[ "$output" =~ "other" ]] || false
 }
 
+@test "remotes: pull also fetches, but does not merge other branches" {
+    mkdir remote
+
+    cd remote
+    dolt init
+    dolt commit --allow-empty -m "commit on main"
+    dolt branch other
+    dolt commit --allow-empty -m "another commit on main"
+
+    cd ..
+    dolt clone file://./remote/.dolt/noms local
+
+    cd local
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+}
+
 @test "remotes: add a remote using dolt remote" {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]
