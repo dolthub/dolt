@@ -32,18 +32,18 @@ const (
 	maxVectorOffset = uint64(math.MaxUint16)
 	refSize         = hash.ByteLen
 
-	// These constants are mirrored from serial.TupleMap.KeyOffsetsLength()
-	// and serial.TupleMap.ValueOffsetsLength() respectively.
+	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
+	// and serial.ProllyTreeNode.ValueOffsetsLength() respectively.
 	// They are only as stable as the flatbuffers schemas that define them.
 	keyOffsetsVOffset   = 6
-	valueOffsetsVOffset = 10
+	valueOffsetsVOffset = 12
 )
 
 type Item []byte
 
 type Node struct {
 	keys, values val.SlicedBuffer
-	buf          serial.TupleMap
+	msg          serial.ProllyTreeNode
 	count        uint16
 }
 
@@ -98,17 +98,17 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 }
 
 func MapNodeFromBytes(bb []byte) Node {
-	buf := serial.GetRootAsTupleMap(bb, 0)
+	buf := serial.GetRootAsProllyTreeNode(bb, 0)
 	return mapNodeFromFlatbuffer(*buf)
 }
 
-func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
+func mapNodeFromFlatbuffer(buf serial.ProllyTreeNode) Node {
 	keys := val.SlicedBuffer{
-		Buf:  buf.KeyTuplesBytes(),
+		Buf:  buf.KeyItemsBytes(),
 		Offs: getKeyOffsetsVector(buf),
 	}
 	values := val.SlicedBuffer{
-		Buf:  buf.ValueTuplesBytes(),
+		Buf:  buf.ValueItemsBytes(),
 		Offs: getValueOffsetsVector(buf),
 	}
 
@@ -121,7 +121,7 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 		keys:   keys,
 		values: values,
 		count:  uint16(count),
-		buf:    buf,
+		msg:    buf,
 	}
 }
 
@@ -134,7 +134,7 @@ func (nd Node) Count() int {
 }
 
 func (nd Node) TreeCount() int {
-	return int(nd.buf.TreeCount())
+	return int(nd.msg.TreeCount())
 }
 
 func (nd Node) Size() int {
@@ -143,12 +143,12 @@ func (nd Node) Size() int {
 
 // Level returns the tree Level for this node
 func (nd Node) Level() int {
-	return int(nd.buf.TreeLevel())
+	return int(nd.msg.TreeLevel())
 }
 
 // IsLeaf returns whether this node is a leaf
 func (nd Node) IsLeaf() bool {
-	return int(nd.buf.TreeLevel()) == 0
+	return int(nd.msg.TreeLevel()) == 0
 }
 
 // GetKey returns the |ith| key of this node
@@ -168,13 +168,13 @@ func (nd Node) getValue(i int) Item {
 
 // getRef returns the |ith| ref in this node. Only Valid for internal nodes.
 func (nd Node) getRef(i int) hash.Hash {
-	refs := nd.buf.RefArrayBytes()
+	refs := nd.msg.AddressArrayBytes()
 	start, stop := i*refSize, (i+1)*refSize
 	return hash.New(refs[start:stop])
 }
 
 func (nd Node) getSubtreeCounts() subtreeCounts {
-	buf := nd.buf.RefCardinalitiesBytes()
+	buf := nd.msg.SubtreeCountsBytes()
 	return readSubtreeCounts(int(nd.count), buf)
 }
 
@@ -183,12 +183,12 @@ func (nd Node) empty() bool {
 }
 
 func (nd Node) bytes() []byte {
-	return nd.buf.Table().Bytes
+	return nd.msg.Table().Bytes
 }
 
-func getKeyOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.KeyOffsetsLength() * 2
-	tab := buf.Table()
+func getKeyOffsetsVector(msg serial.ProllyTreeNode) []byte {
+	sz := msg.KeyOffsetsLength() * 2
+	tab := msg.Table()
 	vec := tab.Offset(keyOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
@@ -196,9 +196,9 @@ func getKeyOffsetsVector(buf serial.TupleMap) []byte {
 	return tab.Bytes[start:stop]
 }
 
-func getValueOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.ValueOffsetsLength() * 2
-	tab := buf.Table()
+func getValueOffsetsVector(msg serial.ProllyTreeNode) []byte {
+	sz := msg.ValueOffsetsLength() * 2
+	tab := msg.Table()
 	vec := tab.Offset(valueOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
