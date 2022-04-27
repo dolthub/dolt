@@ -35,7 +35,7 @@ table ProllyTreeNode {
   value_type:ItemType;
   // offsets for each address (if any) in |value_items|
   // (eg value tuples containing out-of-line BLOB addresses)
-  address_offsets:[uint16];
+  value_address_offsets:[uint16];
 
 
   // array of chunk addresses

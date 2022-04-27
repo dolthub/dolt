@@ -24,6 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
@@ -65,8 +66,24 @@ func TestMap(t *testing.T) {
 			})
 
 			pm := prollyMap.(Map)
-			t.Run("item exists in map", func(t *testing.T) {
+			t.Run("tuple exists in map", func(t *testing.T) {
 				testHas(t, pm, tuples)
+			})
+
+			ctx := context.Background()
+			t.Run("walk addresses smoke test", func(t *testing.T) {
+				err := pm.WalkAddresses(ctx, func(_ context.Context, addr hash.Hash) error {
+					assert.True(t, addr != hash.Hash{})
+					return nil
+				})
+				assert.NoError(t, err)
+			})
+			t.Run("walk nodes smoke test", func(t *testing.T) {
+				err := pm.WalkNodes(ctx, func(_ context.Context, nd tree.Node) error {
+					assert.True(t, nd.Count() > 1)
+					return nil
+				})
+				assert.NoError(t, err)
 			})
 		})
 	}

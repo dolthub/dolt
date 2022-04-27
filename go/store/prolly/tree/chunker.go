@@ -405,7 +405,7 @@ func (tc *chunker) Done(ctx context.Context) (Node, error) {
 			return child, nil
 		}
 
-		mt = child.getRef(0)
+		mt = child.getChildAddress(0)
 	}
 }
 

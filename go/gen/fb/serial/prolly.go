@@ -217,7 +217,7 @@ func (rcv *ProllyTreeNode) MutateValueType(n ItemType) bool {
 	return rcv._tab.MutateByteSlot(14, byte(n))
 }
 
-func (rcv *ProllyTreeNode) AddressOffsets(j int) uint16 {
+func (rcv *ProllyTreeNode) ValueAddressOffsets(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -226,7 +226,7 @@ func (rcv *ProllyTreeNode) AddressOffsets(j int) uint16 {
 	return 0
 }
 
-func (rcv *ProllyTreeNode) AddressOffsetsLength() int {
+func (rcv *ProllyTreeNode) ValueAddressOffsetsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -234,7 +234,7 @@ func (rcv *ProllyTreeNode) AddressOffsetsLength() int {
 	return 0
 }
 
-func (rcv *ProllyTreeNode) MutateAddressOffsets(j int, n uint16) bool {
+func (rcv *ProllyTreeNode) MutateValueAddressOffsets(j int, n uint16) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
@@ -368,10 +368,10 @@ func ProllyTreeNodeStartValueOffsetsVector(builder *flatbuffers.Builder, numElem
 func ProllyTreeNodeAddValueType(builder *flatbuffers.Builder, valueType ItemType) {
 	builder.PrependByteSlot(5, byte(valueType), 0)
 }
-func ProllyTreeNodeAddAddressOffsets(builder *flatbuffers.Builder, addressOffsets flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(addressOffsets), 0)
+func ProllyTreeNodeAddValueAddressOffsets(builder *flatbuffers.Builder, valueAddressOffsets flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(valueAddressOffsets), 0)
 }
-func ProllyTreeNodeStartAddressOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func ProllyTreeNodeStartValueAddressOffsetsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
 func ProllyTreeNodeAddAddressArray(builder *flatbuffers.Builder, addressArray flatbuffers.UOffsetT) {
