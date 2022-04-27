@@ -16,6 +16,7 @@ package prolly
 
 import (
 	"context"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -25,15 +26,15 @@ import (
 type Conflict val.Triple[val.Tuple]
 
 func (c Conflict) OurValue() val.Tuple {
-	return val.Tuple(val.Triple(c).First())
+	return val.Triple[val.Tuple](c).First()
 }
 
 func (c Conflict) TheirValue() val.Tuple {
-	return val.Tuple(val.Triple(c).Second())
+	return val.Triple[val.Tuple](c).Second()
 }
 
 func (c Conflict) BaseValue() val.Tuple {
-	return val.Tuple(val.Triple(c).Third())
+	return val.Triple[val.Tuple](c).Third()
 }
 
 type ConflictIter kvIter[val.Tuple, Conflict]
@@ -111,8 +112,8 @@ func (c ConflictMap) IterOrdinalRange(ctx context.Context, start, stop uint64) (
 	return c.conflicts.iterOrdinalRange(ctx, start, stop)
 }
 
-func (c ConflictMap) Writer() ConflictWriter {
-	return ConflictWriter{
+func (c ConflictMap) Editor() ConflictEditor {
+	return ConflictEditor{
 		conflicts: c.conflicts.mutate(),
 		keyDesc:   c.keyDesc,
 		ourDesc:   c.ourDesc,
@@ -121,7 +122,7 @@ func (c ConflictMap) Writer() ConflictWriter {
 	}
 }
 
-type ConflictWriter struct {
+type ConflictEditor struct {
 	conflicts orderedMap[val.Tuple, Conflict, val.TupleDesc]
 	keyDesc   val.TupleDesc
 	ourDesc   val.TupleDesc
@@ -129,17 +130,17 @@ type ConflictWriter struct {
 	baseDesc  val.TupleDesc
 }
 
-func (wr ConflictWriter) AddConflict(ctx context.Context, key, ourVal, theirVal, baseVal val.Tuple) error {
+func (wr ConflictEditor) Add(ctx context.Context, key, ourVal, theirVal, baseVal val.Tuple) error {
 	p := wr.conflicts.tree.ns.Pool()
 	c := val.NewTriple(p, ourVal, theirVal, baseVal)
-	return wr.conflicts.put(ctx, key, c)
+	return wr.conflicts.put(ctx, key, Conflict(c))
 }
 
-func (wr ConflictWriter) DeleteConflict(ctx context.Context, key val.Tuple) error {
+func (wr ConflictEditor) Delete(ctx context.Context, key val.Tuple) error {
 	return wr.conflicts.delete(ctx, key)
 }
 
-func (wr ConflictWriter) Flush(ctx context.Context) (ConflictMap, error) {
+func (wr ConflictEditor) Flush(ctx context.Context) (ConflictMap, error) {
 	root, err := wr.conflicts.makeTree(ctx)
 	if err != nil {
 		return ConflictMap{}, err
