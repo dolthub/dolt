@@ -121,6 +121,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 			if remoteTrackRef == nil {
 				continue
 			}
+
 			rsSeen = true
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dEnv.TempTableFilesDir(), pullSpec.Remote, srcDB, dEnv.DoltDB, branchRef, buildProgStarter(downloadLanguage), stopProgFuncs)
 			if err != nil {
@@ -149,6 +150,12 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				name, email = "", ""
 			}
 
+			// Only merge iff branch is current branch
+			if branchRef != pullSpec.Branch {
+				continue
+			}
+
+			// Begin merge
 			mergeSpec, ok, err := merge.NewMergeSpec(ctx, dEnv.RepoStateReader(), dEnv.DoltDB, roots, name, email, pullSpec.Msg, remoteTrackRef.String(), pullSpec.Squash, pullSpec.Noff, pullSpec.Force, t)
 			if err != nil {
 				return err
