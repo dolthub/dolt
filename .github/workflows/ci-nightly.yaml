@@ -24,10 +24,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - uses: xt0rted/pull-request-comment-branch@v1
-        id: comment-branch
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Create and Auth kubeconfig
         run: |
           echo "$CONFIG" > kubeconfig
