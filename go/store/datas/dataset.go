@@ -41,18 +41,18 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 type WorkingSetHead struct {
-	Meta           *WorkingSetMeta
-	WorkingAddr    hash.Hash
-	StagedAddr     *hash.Hash
-	MergeState     *MergeState
+	Meta        *WorkingSetMeta
+	WorkingAddr hash.Hash
+	StagedAddr  *hash.Hash
+	MergeState  *MergeState
 }
 
 type MergeState struct {
 	preMergeWorkingAddr *hash.Hash
-	fromCommitAddr *hash.Hash
+	fromCommitAddr      *hash.Hash
 
 	nomsMergeStateRef *types.Ref
-	nomsMergeState *types.Struct
+	nomsMergeState    *types.Struct
 }
 
 func (ms *MergeState) loadIfNeeded(ctx context.Context, vr types.ValueReader) error {
@@ -221,7 +221,7 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	if mergeState != nil {
 		ret.MergeState = &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
-			fromCommitAddr: new(hash.Hash),
+			fromCommitAddr:      new(hash.Hash),
 		}
 		*ret.MergeState.preMergeWorkingAddr = hash.New(mergeState.PreWorkingRootAddrBytes())
 		*ret.MergeState.fromCommitAddr = hash.New(mergeState.FromCommitAddrBytes())

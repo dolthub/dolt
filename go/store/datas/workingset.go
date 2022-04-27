@@ -194,7 +194,7 @@ func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorki
 	if vrw.Format() == types.Format_DOLT_DEV {
 		ms := &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
-			fromCommitAddr: new(hash.Hash),
+			fromCommitAddr:      new(hash.Hash),
 		}
 		*ms.preMergeWorkingAddr = preMergeWorking.TargetHash()
 		*ms.fromCommitAddr = commit.Addr()
@@ -210,7 +210,7 @@ func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorki
 		}
 		return &MergeState{
 			nomsMergeStateRef: &ref,
-			nomsMergeState: &v,
+			nomsMergeState:    &v,
 		}, nil
 	}
 }
