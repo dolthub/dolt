@@ -17,7 +17,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with multiple tables" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -52,14 +52,15 @@ teardown() {
 
 @test "dump: SQL type - compare tables in database with tables imported file " {
     dolt branch new_branch
-
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
-
+    if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ] ; then
+      # V1 storage format does not support keyless tables yet
+      dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+      dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+    fi
     dolt add .
     dolt commit -m "create tables"
 
@@ -80,12 +81,16 @@ teardown() {
 @test "dump: SQL type (batched) - compare tables in database with tables imported file " {
     dolt branch new_branch
 
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+
+    if ["$DOLT_FORMAT_FEATURE_FLAG" != true]
+    then
+      dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+      dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+    fi
 
     dolt add .
     dolt commit -m "create tables"
@@ -108,7 +113,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with Indexes" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -131,7 +136,7 @@ teardown() {
 
 @test "dump: SQL type - with foreign key and import" {
     skip "dolt dump foreign key option for import NOT implemented"
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -227,7 +232,12 @@ teardown() {
 }
 
 @test "dump: SQL type - with keyless tables" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    if [ "$DOLT_FORMAT_FEATURE_FLAG" = true ]
+    then
+        skip "V1 storage format does not support keyless tables yet"
+    fi
+
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -262,7 +272,6 @@ teardown() {
 
 @test "dump: SQL type - with empty tables" {
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
 
     dolt add .
@@ -279,7 +288,7 @@ teardown() {
 
     run grep CREATE doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 3 ]
+    [ "${#lines[@]}" -eq 2 ]
 
     run grep INSERT doltdump.sql
     [ "$status" -eq 1 ]
@@ -287,7 +296,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with custom filename specified" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -309,7 +318,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with directory name given" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     run dolt dump --directory dumps
     [ "$status" -eq 1 ]
     [[ "$output" =~ "directory is not supported for sql exports" ]] || false
@@ -317,7 +326,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with both filename and directory name given" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     run dolt dump --file-name dumpfile.sql --directory dumps
     [ "$status" -eq 1 ]
     [[ "$output" =~ "cannot pass both directory and file names" ]] || false
@@ -325,7 +334,7 @@ teardown() {
 }
 
 @test "dump: CSV type - with multiple tables and check -f flag" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -363,33 +372,25 @@ teardown() {
 }
 
 @test "dump: CSV type - compare tables in database with tables imported from corresponding files " {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    create_tables
 
     dolt add .
     dolt commit -m "create tables"
 
     dolt branch new_branch
 
-    dolt sql -q "INSERT INTO new_table VALUES (1);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+    insert_data_into_tables
 
     dolt add .
     dolt commit -m "insert to tables"
 
     run dolt dump -r csv
     [ "$status" -eq 0 ]
-    [ -f doltdump/keyless.csv ]
-    [ -f doltdump/new_table.csv ]
-    [ -f doltdump/warehouse.csv ]
+    check_for_files "csv"
 
     dolt checkout new_branch
 
-    dolt table import -r new_table doltdump/new_table.csv
-    dolt table import -r warehouse doltdump/warehouse.csv
-    dolt table import -r keyless doltdump/keyless.csv
+    import_tables "csv"
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
@@ -401,28 +402,20 @@ teardown() {
 @test "dump: CSV type - with empty tables" {
     dolt branch new_branch
 
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+    create_tables
 
     dolt add .
     dolt commit -m "create tables"
 
     run dolt dump -r csv
     [ "$status" -eq 0 ]
-    [ -f doltdump/keyless.csv ]
-    [ -f doltdump/test.csv ]
-    [ -f doltdump/warehouse.csv ]
+    check_for_files "csv"
 
     dolt checkout new_branch
 
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+    create_tables
 
-    dolt table import -r warehouse doltdump/warehouse.csv
-    dolt table import -r keyless doltdump/keyless.csv
-    dolt table import -r test doltdump/test.csv
+    import_tables "csv"
 
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
@@ -433,7 +426,7 @@ teardown() {
 }
 
 @test "dump: CSV type - with custom directory name specified" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -471,7 +464,7 @@ teardown() {
 }
 
 @test "dump: CSV type - with filename given" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     run dolt dump -r .csv --file-name dumpfile.csv
     [ "$status" -eq 1 ]
     [[ "$output" =~ "file-name is not supported for csv exports" ]] || false
@@ -481,7 +474,7 @@ teardown() {
 }
 
 @test "dump: JSON type - with multiple tables and check -f flag" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name varchar(100));"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -519,33 +512,25 @@ teardown() {
 }
 
 @test "dump: JSON type - compare tables in database with tables imported from corresponding files " {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name varchar(100));"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    create_tables
 
     dolt add .
     dolt commit -m "create tables"
 
     dolt branch new_branch
 
-    dolt sql -q "INSERT INTO new_table VALUES (1);"
-    dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+    insert_data_into_tables
 
     dolt add .
     dolt commit -m "insert to tables"
 
     run dolt dump -r json
     [ "$status" -eq 0 ]
-    [ -f doltdump/keyless.json ]
-    [ -f doltdump/new_table.json ]
-    [ -f doltdump/warehouse.json ]
+    check_for_files "json"
 
     dolt checkout new_branch
 
-    dolt table import -r new_table doltdump/new_table.json
-    dolt table import -r warehouse doltdump/warehouse.json
-    dolt table import -r keyless doltdump/keyless.json
+    import_tables "json"
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
@@ -557,28 +542,19 @@ teardown() {
 @test "dump: JSON type - with empty tables" {
     dolt branch new_branch
 
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+    create_tables
 
     dolt add .
     dolt commit -m "create tables"
 
     run dolt dump -r json
-    [ "$status" -eq 0 ]
-    [ -f doltdump/keyless.json ]
-    [ -f doltdump/test.json ]
-    [ -f doltdump/warehouse.json ]
+    check_for_files "json"
 
     dolt checkout new_branch
 
-    dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
-    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT);"
+    create_tables
 
-    dolt table import -r warehouse doltdump/warehouse.json
-    dolt table import -r keyless doltdump/keyless.json
-    dolt table import -r test doltdump/test.json
+    import_tables "json"
 
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
@@ -589,7 +565,7 @@ teardown() {
 }
 
 @test "dump: JSON type - with custom directory name specified" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
@@ -627,7 +603,7 @@ teardown() {
 }
 
 @test "dump: JSON type - with filename name given" {
-    dolt sql -q "CREATE TABLE new_table(pk int);"
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     run dolt dump -r json --file-name dumpfile.json
     [ "$status" -eq 1 ]
     [[ "$output" =~ "file-name is not supported for json exports" ]] || false
@@ -665,4 +641,42 @@ teardown() {
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
+}
+
+function create_tables() {
+  dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+  dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name varchar(100));"
+
+  if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ]
+  then
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+  fi
+}
+
+function insert_data_into_tables() {
+  dolt sql -q "INSERT INTO new_table VALUES (1);"
+  dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
+
+  if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ]
+  then
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
+  fi
+}
+
+function check_for_files() {
+  [ -f "doltdump/new_table.$1" ]
+  [ -f "doltdump/warehouse.$1" ]
+  if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ]
+  then
+    [ -f "doltdump/keyless.$1" ]
+  fi
+}
+
+function import_tables() {
+  dolt table import -r new_table "doltdump/new_table.$1"
+  dolt table import -r warehouse "doltdump/warehouse.$1"
+  if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ]
+  then
+    dolt table import -r keyless "doltdump/keyless.$1"
+  fi
 }
