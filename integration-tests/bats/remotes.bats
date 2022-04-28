@@ -53,6 +53,57 @@ teardown() {
     [[ "$output" =~ "other" ]] || false
 }
 
+@test "remotes: pull also fetches, but does not merge other branches" {
+    mkdir remote
+
+    cd remote
+    dolt init
+    dolt commit --allow-empty -m "first commit on main"
+    dolt branch other
+    dolt commit --allow-empty -m "second commit on main"
+
+    cd ..
+    dolt clone file://./remote/.dolt/noms local
+
+    cd local
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "second commit on main" ]] || false
+
+    dolt checkout other
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit on main" ]] || false
+
+    cd ../remote
+    dolt checkout other
+    dolt commit --allow-empty -m "first commit on other"
+
+    cd ../local
+    dolt checkout main
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt checkout other
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit on main" ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+    [[ "$output" =~ "Fast-forward" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "first commit on other" ]] || false
+}
+
 @test "remotes: add a remote using dolt remote" {
     run dolt remote add test-remote http://localhost:50051/test-org/test-repo
     [ "$status" -eq 0 ]

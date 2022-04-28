@@ -31,9 +31,6 @@ import (
 )
 
 const (
-	// The number of times we will loop through the tests to ensure consistent results
-	indexEditorConcurrencyIterations = 1000
-
 	// The number of rows we expect the test to end up with
 	indexEditorConcurrencyFinalCount = 100
 
@@ -70,83 +67,81 @@ func TestIndexEditorConcurrency(t *testing.T) {
 	require.NoError(t, err)
 
 	opts := TestEditorOptions(vrw)
-	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
-		wg := &sync.WaitGroup{}
+	indexEditor := NewIndexEditor(context.Background(), index, emptyMap, tableSch, opts)
+	wg := &sync.WaitGroup{}
 
-		for j := 0; j < indexEditorConcurrencyFinalCount*2; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey, value))
-				wg.Done()
-			}(j)
-		}
-		wg.Wait()
-
-		for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dOldRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				dNewRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val + 1),
-				})
-				require.NoError(t, err)
-				oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.EmptyTuple(format)))
-				newFullKey, newPartialKey, newValue, err := dNewRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, newValue))
-				wg.Done()
-			}(j)
-		}
-
-		// We let the Updates and Deletes execute at the same time
-		for j := indexEditorConcurrencyFinalCount; j < indexEditorConcurrencyFinalCount*2; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.EmptyTuple(format)))
-				wg.Done()
-			}(j)
-		}
-		wg.Wait()
-
-		newIndexData, err := indexEditor.Map(context.Background())
-		require.NoError(t, err)
-		if assert.Equal(t, uint64(indexEditorConcurrencyFinalCount), newIndexData.Len()) {
-			iterIndex := 0
-			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
-				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
-				require.NoError(t, err)
-				dReadVals, err := dReadRow.TaggedValues()
-				require.NoError(t, err)
-				assert.Equal(t, row.TaggedValues{
-					0: types.Int(iterIndex),
-					1: types.Int(iterIndex + 1),
-				}, dReadVals)
-				iterIndex++
-				return nil
+	for j := 0; j < indexEditorConcurrencyFinalCount*2; j++ {
+		wg.Add(1)
+		go func(val int) {
+			dRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val),
 			})
-		}
+			require.NoError(t, err)
+			fullKey, partialKey, value, err := dRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.InsertRow(context.Background(), fullKey, partialKey, value))
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+
+	for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
+		wg.Add(1)
+		go func(val int) {
+			dOldRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val),
+			})
+			require.NoError(t, err)
+			dNewRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val + 1),
+			})
+			require.NoError(t, err)
+			oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.EmptyTuple(format)))
+			newFullKey, newPartialKey, newValue, err := dNewRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, newValue))
+			wg.Done()
+		}(j)
+	}
+
+	// We let the Updates and Deletes execute at the same time
+	for j := indexEditorConcurrencyFinalCount; j < indexEditorConcurrencyFinalCount*2; j++ {
+		wg.Add(1)
+		go func(val int) {
+			dRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val),
+			})
+			require.NoError(t, err)
+			fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.EmptyTuple(format)))
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+
+	newIndexData, err := indexEditor.Map(context.Background())
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(indexEditorConcurrencyFinalCount), newIndexData.Len()) {
+		iterIndex := 0
+		_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := dReadRow.TaggedValues()
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				0: types.Int(iterIndex),
+				1: types.Int(iterIndex + 1),
+			}, dReadVals)
+			iterIndex++
+			return nil
+		})
 	}
 }
 
@@ -181,66 +176,64 @@ func TestIndexEditorConcurrencyPostInsert(t *testing.T) {
 	indexData, err := indexEditor.Map(context.Background())
 	require.NoError(t, err)
 
-	for i := 0; i < indexEditorConcurrencyIterations; i++ {
-		indexEditor := NewIndexEditor(context.Background(), index, indexData, tableSch, opts)
-		wg := &sync.WaitGroup{}
+	indexEditor = NewIndexEditor(context.Background(), index, indexData, tableSch, opts)
+	wg := &sync.WaitGroup{}
 
-		for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dOldRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				dNewRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val + 1),
-				})
-				require.NoError(t, err)
-				oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.EmptyTuple(format)))
-				newFullKey, newPartialKey, value, err := dNewRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, value))
-				wg.Done()
-			}(j)
-		}
-
-		for j := indexEditorConcurrencyFinalCount; j < indexEditorConcurrencyFinalCount*2; j++ {
-			wg.Add(1)
-			go func(val int) {
-				dRow, err := row.New(format, indexSch, row.TaggedValues{
-					0: types.Int(val),
-					1: types.Int(val),
-				})
-				require.NoError(t, err)
-				fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index, nil)
-				require.NoError(t, err)
-				require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.EmptyTuple(format)))
-				wg.Done()
-			}(j)
-		}
-		wg.Wait()
-
-		newIndexData, err := indexEditor.Map(context.Background())
-		require.NoError(t, err)
-		if assert.Equal(t, uint64(indexEditorConcurrencyFinalCount), newIndexData.Len()) {
-			iterIndex := 0
-			_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
-				dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
-				require.NoError(t, err)
-				dReadVals, err := dReadRow.TaggedValues()
-				require.NoError(t, err)
-				assert.Equal(t, row.TaggedValues{
-					0: types.Int(iterIndex),
-					1: types.Int(iterIndex + 1),
-				}, dReadVals)
-				iterIndex++
-				return nil
+	for j := 0; j < indexEditorConcurrencyFinalCount; j++ {
+		wg.Add(1)
+		go func(val int) {
+			dOldRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val),
 			})
-		}
+			require.NoError(t, err)
+			dNewRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val + 1),
+			})
+			require.NoError(t, err)
+			oldFullKey, oldPartialKey, _, err := dOldRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.DeleteRow(context.Background(), oldFullKey, oldPartialKey, types.EmptyTuple(format)))
+			newFullKey, newPartialKey, value, err := dNewRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.InsertRow(context.Background(), newFullKey, newPartialKey, value))
+			wg.Done()
+		}(j)
+	}
+
+	for j := indexEditorConcurrencyFinalCount; j < indexEditorConcurrencyFinalCount*2; j++ {
+		wg.Add(1)
+		go func(val int) {
+			dRow, err := row.New(format, indexSch, row.TaggedValues{
+				0: types.Int(val),
+				1: types.Int(val),
+			})
+			require.NoError(t, err)
+			fullKey, partialKey, _, err := dRow.ReduceToIndexKeys(index, nil)
+			require.NoError(t, err)
+			require.NoError(t, indexEditor.DeleteRow(context.Background(), fullKey, partialKey, types.EmptyTuple(format)))
+			wg.Done()
+		}(j)
+	}
+	wg.Wait()
+
+	newIndexData, err := indexEditor.Map(context.Background())
+	require.NoError(t, err)
+	if assert.Equal(t, uint64(indexEditorConcurrencyFinalCount), newIndexData.Len()) {
+		iterIndex := 0
+		_ = newIndexData.IterAll(context.Background(), func(key, value types.Value) error {
+			dReadRow, err := row.FromNoms(indexSch, key.(types.Tuple), value.(types.Tuple))
+			require.NoError(t, err)
+			dReadVals, err := dReadRow.TaggedValues()
+			require.NoError(t, err)
+			assert.Equal(t, row.TaggedValues{
+				0: types.Int(iterIndex),
+				1: types.Int(iterIndex + 1),
+			}, dReadVals)
+			iterIndex++
+			return nil
+		})
 	}
 }
 
