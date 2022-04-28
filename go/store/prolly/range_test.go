@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -145,7 +146,7 @@ func TestRangeSearch(t *testing.T) {
 	for i := range values {
 		values[i] = make(val.Tuple, 0)
 	}
-	testNode := newTupleLeafNode(rangeTuples, values)
+	testNode := tree.NewTupleLeafNode(rangeTuples, values)
 	testMap := Map{root: testNode, keyDesc: twoCol}
 
 	for _, test := range tests {

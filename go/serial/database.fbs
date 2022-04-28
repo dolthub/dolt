@@ -35,8 +35,3 @@ table DatabaseRoot {
   tables:RefMap (required);
   foreign_keys:[ForeignKey] (required);
 }
-
-table MergeState {
-  pre_merge_root:Ref (required);
-  candidate_merge_commit:Ref (required);
-}

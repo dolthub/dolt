@@ -115,42 +115,8 @@ func (rcv *WorkingSet) MutateStagedRootAddr(j int, n byte) bool {
 	return false
 }
 
-func (rcv *WorkingSet) MergeStateAddr(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *WorkingSet) MergeStateAddrLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *WorkingSet) MergeStateAddrBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *WorkingSet) MutateMergeStateAddr(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
-}
-
 func (rcv *WorkingSet) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -158,7 +124,7 @@ func (rcv *WorkingSet) Name() []byte {
 }
 
 func (rcv *WorkingSet) Email() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -166,7 +132,7 @@ func (rcv *WorkingSet) Email() []byte {
 }
 
 func (rcv *WorkingSet) Desc() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
@@ -174,7 +140,7 @@ func (rcv *WorkingSet) Desc() []byte {
 }
 
 func (rcv *WorkingSet) TimestampMillis() uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -182,7 +148,20 @@ func (rcv *WorkingSet) TimestampMillis() uint64 {
 }
 
 func (rcv *WorkingSet) MutateTimestampMillis(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(16, n)
+	return rcv._tab.MutateUint64Slot(14, n)
+}
+
+func (rcv *WorkingSet) MergeState(obj *MergeState) *MergeState {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(MergeState)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
 }
 
 func WorkingSetStart(builder *flatbuffers.Builder) {
@@ -200,24 +179,135 @@ func WorkingSetAddStagedRootAddr(builder *flatbuffers.Builder, stagedRootAddr fl
 func WorkingSetStartStagedRootAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func WorkingSetAddMergeStateAddr(builder *flatbuffers.Builder, mergeStateAddr flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(mergeStateAddr), 0)
-}
-func WorkingSetStartMergeStateAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
-}
 func WorkingSetAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(name), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(name), 0)
 }
 func WorkingSetAddEmail(builder *flatbuffers.Builder, email flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(email), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(email), 0)
 }
 func WorkingSetAddDesc(builder *flatbuffers.Builder, desc flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(desc), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(desc), 0)
 }
 func WorkingSetAddTimestampMillis(builder *flatbuffers.Builder, timestampMillis uint64) {
-	builder.PrependUint64Slot(6, timestampMillis, 0)
+	builder.PrependUint64Slot(5, timestampMillis, 0)
+}
+func WorkingSetAddMergeState(builder *flatbuffers.Builder, mergeState flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(mergeState), 0)
 }
 func WorkingSetEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type MergeState struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &MergeState{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsMergeState(buf []byte, offset flatbuffers.UOffsetT) *MergeState {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &MergeState{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *MergeState) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *MergeState) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *MergeState) PreWorkingRootAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreWorkingRootAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *MergeState) PreWorkingRootAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *MergeState) MutatePreWorkingRootAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func (rcv *MergeState) FromCommitAddr(j int) byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
+	}
+	return 0
+}
+
+func (rcv *MergeState) FromCommitAddrLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *MergeState) FromCommitAddrBytes() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *MergeState) MutateFromCommitAddr(j int, n byte) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
+	}
+	return false
+}
+
+func MergeStateStart(builder *flatbuffers.Builder) {
+	builder.StartObject(2)
+}
+func MergeStateAddPreWorkingRootAddr(builder *flatbuffers.Builder, preWorkingRootAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(preWorkingRootAddr), 0)
+}
+func MergeStateStartPreWorkingRootAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MergeStateAddFromCommitAddr(builder *flatbuffers.Builder, fromCommitAddr flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(fromCommitAddr), 0)
+}
+func MergeStateStartFromCommitAddrVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(1, numElems, 1)
+}
+func MergeStateEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

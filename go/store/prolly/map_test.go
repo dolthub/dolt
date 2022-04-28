@@ -24,11 +24,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 // todo(andy): randomize test seed
 var testRand = rand.New(rand.NewSource(1))
+var sharedPool = pool.NewBuffPool()
 
 func TestMap(t *testing.T) {
 	scales := []int{
@@ -79,7 +82,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
 
-	tuples := randomTuplePairs(count, kd, vd)
+	tuples := tree.RandomTuplePairs(count, kd, vd)
 	om := prollyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
@@ -92,7 +95,7 @@ func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tup
 	)
 	vd := val.NewTupleDescriptor()
 
-	tuples := randomCompositeTuplePairs(count, kd, vd)
+	tuples := tree.RandomCompositeTuplePairs(count, kd, vd)
 	om := prollyMapFromTuples(t, kd, vd, tuples)
 
 	return om, tuples
@@ -100,13 +103,13 @@ func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tup
 
 func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := tree.NewTestNodeStore()
 
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	chunker, err := tree.NewEmptyChunker(ctx, ns)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, pair[0], pair[1])
+		err := chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)

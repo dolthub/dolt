@@ -75,6 +75,10 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []string, p
 		return nil, err
 	}
 
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		return ProllyRowIterFromPartition(ctx, tbl, projCols, partition)
+	}
+
 	if schema.IsKeyless(sch) {
 		// would be more optimal to project columns into keyless tables also
 		return newKeylessRowIterator(ctx, tbl, projCols, partition)
@@ -115,10 +119,6 @@ func newKeylessRowIterator(ctx context.Context, tbl *doltdb.Table, projectedCols
 }
 
 func newKeyedRowIter(ctx context.Context, tbl *doltdb.Table, projectedCols []string, partition doltTablePartition) (sql.RowIter, error) {
-	if types.IsFormat_DOLT_1(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, tbl, projectedCols, partition)
-	}
-
 	mapIter, err := iterForPartition(ctx, partition)
 	if err != nil {
 		return nil, err

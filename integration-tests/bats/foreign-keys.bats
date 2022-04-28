@@ -1924,3 +1924,30 @@ SQL
     [[ $output =~ "CONSTRAINT \`fk1\` FOREIGN KEY (\`b\`) REFERENCES \`parent\` (\`b\`)" ]] || false
     [[ $output =~ "CONSTRAINT \`fk4\` FOREIGN KEY (\`b\`,\`a\`) REFERENCES \`parent\` (\`b\`,\`a\`)" ]] || false
 }
+
+@test "foreign-keys: creating a foreign key constraint on a table with rows violating it" {
+    dolt sql <<SQL
+CREATE TABLE a (
+  id int NOT NULL AUTO_INCREMENT,
+  a text NOT NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO a (id,a) VALUES (1,'a');
+CREATE TABLE b (
+  id int NOT NULL AUTO_INCREMENT,
+  b text NOT NULL,
+  a_id int,
+  PRIMARY KEY (id),
+  KEY b_a_id (a_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO b (id, b, a_id) VALUES (1, 'b', NULL);
+INSERT INTO b (id, b, a_id) VALUES (2, 'b2', 31337);
+INSERT INTO b (id, b, a_id) VALUES (3, 'b2', 31337);
+INSERT INTO b (id, b, a_id) VALUES (4, 'b2', 31337);
+SQL
+
+    run dolt sql -q "ALTER TABLE b ADD CONSTRAINT fk_b_a_id_refs_a FOREIGN KEY (a_id) REFERENCES a (id)";
+    [ "$status" -eq 1 ]
+    [[ ! "$output" =~ "panic:" ]] || false
+    [[ "$output" =~ "cannot add or update a child row - Foreign key violation on fk: \`fk_b_a_id_refs_a\`, table: \`b\`, referenced table: \`a\`, key: \`[31337]\`" ]] || false
+}

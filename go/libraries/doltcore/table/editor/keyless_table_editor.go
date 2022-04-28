@@ -20,6 +20,7 @@ import (
 	"io"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -493,10 +494,11 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 			return nil, err
 		}
 
-		func(k, v types.Tuple) (*doltdb.Table, error) {
+		err = func(k, v types.Tuple) (localErr error) {
+			// TODO: Unclear if this dead code or not. Leaving for posterity.
 			indexOpsToUndo := make([]int, len(indexEds))
 			defer func() {
-				if retErr != nil {
+				if localErr != nil {
 					for i, opsToUndo := range indexOpsToUndo {
 						for undone := 0; undone < opsToUndo; undone++ {
 							indexEds[i].Undo(ctx)
@@ -513,28 +515,37 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 					r, _, err = row.KeylessRowsFromTuples(k, v)
 				}
 				if err != nil {
-					return nil, err
+					return err
 				}
 				fullKey, partialKey, value, err := r.ReduceToIndexKeys(indexEd.Index(), nil)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				if delta.delta < 1 {
 					err = indexEd.DeleteRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						return nil, err
+						return err
 					}
 				} else {
 					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						return nil, err
+						if uke, ok := err.(*uniqueKeyErr); ok {
+							keyStr, _ := formatKey(ctx, uke.IndexTuple)
+							return sql.NewUniqueKeyErr(keyStr, false, nil)
+						}
+
+						return err
 					}
 				}
 				indexOpsToUndo[i]++
 			}
-			return nil, nil
+			return nil
 		}(k, v)
+
+		if err != nil {
+			return nil, err
+		}
 
 		if ok {
 			ed.Set(k, v)
