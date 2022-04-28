@@ -413,7 +413,7 @@ func (sess *Session) NewPendingCommit(ctx *sql.Context, dbName string, roots dol
 
 // RollbackTransaction rolls the given transaction back
 func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 

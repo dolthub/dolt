@@ -110,17 +110,15 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "conflict in table t",
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
 				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
-			// TODO: behavior right now is to leave the session state dirty on an unsuccessful commit, letting the
-			//  client choose whether to rollback or not. Not clear if this is the right behavior for a failed commit.
-			{
+			{ // client b gets a rollback after failed commit, so gets a new tx
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 3}},
+				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -263,15 +261,15 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "conflict in table t",
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
 				Expected: []sql.Row{{1, 3}, {2, 3}},
 			},
-			{
+			{ // client b got rolled back when its commit failed, so it sees the same values as client a
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 4}, {2, 4}},
+				Expected: []sql.Row{{1, 3}, {2, 3}},
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -323,8 +321,12 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
+				Query:          "/* client b */ set dolt_rollback_on_conflict = off",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "conflict in table t",
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
 				Query: "/* client b */ update t set y = 3",
@@ -598,7 +600,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "conflict in table t",
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -741,7 +743,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 		},
 	},
 	{
-		Name: "Edits from different clients to table with out of order primary key set",
+		Name: "edits from different clients to table with out of order primary key set",
 		SetUpScript: []string{
 			"create table test (x int, y int, z int, primary key(z, y))",
 			"insert into test values (1, 1, 1), (2, 2, 2)",
@@ -797,7 +799,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 
 var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 	{
-		Name: "Committed conflicts are seen by other sessions",
+		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -830,6 +832,10 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
 				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "/* client a */ commit",
@@ -867,13 +873,13 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
-			{
+			{ // dolt_merge doesn't change the working set if it fails, is this right?
 				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				Expected: []sql.Row{{0}},
 			},
-			{
+			{ // commit can proceed as normal if the working set is unchanged
 				Query:          "/* client a */ commit",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",

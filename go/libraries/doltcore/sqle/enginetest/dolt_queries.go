@@ -844,7 +844,7 @@ var DoltMerge = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflict is queryable and commitable until dolt_allow_commit_conflicts is turned off",
+		Name: "DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -856,6 +856,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"set dolt_allow_commit_conflicts = on",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
@@ -891,8 +892,8 @@ var DoltMerge = []enginetest.ScriptTest{
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{
-				Query:          "SELECT count(*) from dolt_conflicts_test", // Commit allows queries when flags are set.
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				Query:          "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

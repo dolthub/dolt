@@ -20,6 +20,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -596,23 +597,23 @@ func TestDoltMerge(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	script := enginetest.TransactionTest{
-		Name: "rollback",
+		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
-			"create table t (x int primary key, y int)",
-			"insert into t values (1, 1)",
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
-			{
-				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client b */ set autocommit = off",
-				Expected: []sql.Row{{}},
-			},
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -622,56 +623,68 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Query:    "/* client a */ /* 1 */ SELECT DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "/* client b */ insert into t values (3, 3)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
-			},
-			{
-				Query:    "/* client a */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
+				Query:    "/* client a */ set dolt_allow_commit_conflicts = 1",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "/* client a */ commit",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client b */ rollback",
+				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ /* 2 */ SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SET @@dolt_allow_commit_conflicts = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:          "/* client a */ /* 3 */ SELECT DOLT_MERGE('feature-branch')",
+				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+			},
+			{ // no changes on client a because the working set changes were rolled back automatically by auto-commit failure
+				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	}

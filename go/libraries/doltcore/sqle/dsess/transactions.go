@@ -262,6 +262,12 @@ func (tx *DoltTransaction) handleUnresolvedConflictOnCommit(ctx *sql.Context) er
 		if rollbackErr != nil {
 			return rollbackErr
 		}
+
+		// We also need to cancel out the transaction here so that a new one will begin on the next statement
+		// TODO: it would be better for the engine to handle these details probably, this code is duplicated from the
+		//  rollback statement implementation in the engine.
+		ctx.SetTransaction(nil)
+		ctx.SetIgnoreAutoCommit(false)
 	}
 
 	return doltdb.ErrUnresolvedConflicts
