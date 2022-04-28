@@ -32,7 +32,7 @@ type rangeIterTest struct {
 	expCount  int
 }
 
-func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	desc := keyDescFromMap(om)
 
@@ -127,7 +127,7 @@ type prefixRangeTest struct {
 	testRange Range
 }
 
-func testIterPrefixRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	prefixDesc := getDescPrefix(keyDescFromMap(om), 1)
 

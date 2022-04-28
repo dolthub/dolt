@@ -40,18 +40,18 @@ func NewTestNodeStore() NodeStore {
 }
 
 func NewTupleLeafNode(keys, values []val.Tuple) Node {
-	ks := make([]NodeItem, len(keys))
+	ks := make([]Item, len(keys))
 	for i := range ks {
-		ks[i] = NodeItem(keys[i])
+		ks[i] = Item(keys[i])
 	}
-	vs := make([]NodeItem, len(values))
+	vs := make([]Item, len(values))
 	for i := range vs {
-		vs[i] = NodeItem(values[i])
+		vs[i] = Item(values[i])
 	}
 	return newLeafNode(ks, vs)
 }
 
-func newLeafNode(keys, values []NodeItem) Node {
+func newLeafNode(keys, values []Item) Node {
 	b := &nodeBuilder{
 		keys:   keys,
 		values: values,

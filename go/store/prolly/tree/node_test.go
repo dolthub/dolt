@@ -107,16 +107,16 @@ func TestCountArray(t *testing.T) {
 	}
 }
 
-func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
-	keys = make([]NodeItem, count)
+func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {
+	keys = make([]Item, count)
 	for i := range keys {
 		sz := (rand.Int() % 41) + 10
-		keys[i] = make(NodeItem, sz)
+		keys[i] = make(Item, sz)
 		_, err := rand.Read(keys[i])
 		assert.NoError(t, err)
 	}
 
-	values = make([]NodeItem, count)
+	values = make([]Item, count)
 	copy(values, keys)
 	rand.Shuffle(len(values), func(i, j int) {
 		values[i], values[j] = values[j], values[i]
@@ -125,7 +125,7 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
 	return
 }
 
-func sumSize(items []NodeItem) (sz uint64) {
+func sumSize(items []Item) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}

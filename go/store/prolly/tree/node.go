@@ -39,6 +39,8 @@ const (
 	valueOffsetsVOffset = 10
 )
 
+type Item []byte
+
 type Node struct {
 	keys, values val.SlicedBuffer
 	buf          serial.TupleMap
@@ -150,12 +152,12 @@ func (nd Node) IsLeaf() bool {
 }
 
 // GetKey returns the |ith| key of this node
-func (nd Node) GetKey(i int) NodeItem {
+func (nd Node) GetKey(i int) Item {
 	return nd.keys.GetSlice(i)
 }
 
 // getValue returns the |ith| value of this node. Only Valid for leaf nodes.
-func (nd Node) getValue(i int) NodeItem {
+func (nd Node) getValue(i int) Item {
 	if nd.IsLeaf() {
 		return nd.values.GetSlice(i)
 	} else {

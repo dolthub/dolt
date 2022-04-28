@@ -59,12 +59,12 @@ type splitterFactory func(level uint8) nodeSplitter
 
 var defaultSplitterFactory splitterFactory = newKeySplitter
 
-// nodeSplitter decides where NodeItem streams should be split into chunks.
+// nodeSplitter decides where Item streams should be split into chunks.
 type nodeSplitter interface {
 	// Append provides more nodeItems to the splitter. Splitter's make chunk
-	// boundary decisions based on the NodeItem contents. Upon return, callers
+	// boundary decisions based on the Item contents. Upon return, callers
 	// can use CrossedBoundary() to see if a chunk boundary has crossed.
-	Append(items ...NodeItem) error
+	Append(items ...Item) error
 
 	// CrossedBoundary returns true if the provided nodeItems have caused a chunk
 	// boundary to be crossed.
@@ -75,7 +75,7 @@ type nodeSplitter interface {
 }
 
 // rollingHashSplitter is a nodeSplitter that makes chunk boundary decisions using
-// a rolling value hasher that processes NodeItem pairs in a byte-wise fashion.
+// a rolling value hasher that processes Item pairs in a byte-wise fashion.
 //
 // rollingHashSplitter uses a dynamic hash pattern designed to constrain the chunk
 // Size distribution by reducing the likelihood of forming very large or very small
@@ -113,7 +113,7 @@ func newRollingHashSplitter(salt uint8) nodeSplitter {
 var _ splitterFactory = newRollingHashSplitter
 
 // Append implements NodeSplitter
-func (sns *rollingHashSplitter) Append(items ...NodeItem) (err error) {
+func (sns *rollingHashSplitter) Append(items ...Item) (err error) {
 	for _, it := range items {
 		for _, byt := range it {
 			_ = sns.hashByte(byt)
@@ -164,9 +164,9 @@ func rollingHashPattern(offset uint32) uint32 {
 }
 
 // keySplitter is a nodeSplitter that makes chunk boundary decisions on the hash of
-// the key of a NodeItem pair. In contrast to the rollingHashSplitter, keySplitter
-// tries to create chunks that have an average number of NodeItem pairs, rather than
-// an average number of bytes. However, because the target number of NodeItem pairs
+// the key of a Item pair. In contrast to the rollingHashSplitter, keySplitter
+// tries to create chunks that have an average number of Item pairs, rather than
+// an average number of bytes. However, because the target number of Item pairs
 // is computed directly from the chunk size and count, the practical difference in
 // the distribution of chunk sizes is minimal.
 //
@@ -199,7 +199,7 @@ func newKeySplitter(level uint8) nodeSplitter {
 
 var _ splitterFactory = newKeySplitter
 
-func (ks *keySplitter) Append(items ...NodeItem) error {
+func (ks *keySplitter) Append(items ...Item) error {
 	if len(items) != 2 {
 		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
 	}
