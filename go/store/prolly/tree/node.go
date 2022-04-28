@@ -85,7 +85,7 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 
 func NewEmptyNode(pool pool.BuffPool) Node {
 	bld := &nodeBuilder{}
-	return bld.build(pool)
+	return bld.Build(pool)
 }
 
 func NodeFromBytes(buf []byte) Node {

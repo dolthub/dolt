@@ -35,7 +35,7 @@ func ApplyMutations(ctx context.Context, ns NodeStore, root Node, edits Mutation
 		return Node{}, err
 	}
 
-	chkr, err := newTreeChunker(ctx, cur.Clone(), 0, ns, defaultSplitterFactory)
+	chkr, err := newChunker(ctx, cur.Clone(), 0, ns)
 	if err != nil {
 		return Node{}, err
 	}

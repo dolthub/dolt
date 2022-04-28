@@ -32,6 +32,14 @@ const (
 	nodeBuilderListSize = 256
 )
 
+type NodeBuilder interface {
+	StartNode(level int)
+	HasCapacity(key, value Item) bool
+	AddItems(key, value Item, subtree uint64)
+	Count() int
+	Build(p pool.BuffPool) Node
+}
+
 type novelNode struct {
 	node      Node
 	addr      hash.Hash
@@ -39,18 +47,19 @@ type novelNode struct {
 	treeCount uint64
 }
 
-func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNode, error) {
-	node := bld.build(ns.Pool())
+func writeNewNode(ctx context.Context, ns NodeStore, bld NodeBuilder) (novelNode, error) {
+	node := bld.Build(ns.Pool())
 
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
 		return novelNode{}, err
 	}
 
-	var lastKey val.Tuple
-	if len(bld.keys) > 0 {
-		lastKey = val.Tuple(bld.keys[len(bld.keys)-1])
-		lastKey = val.CloneTuple(ns.Pool(), lastKey)
+	var lastKey Item
+	if node.count > 0 {
+		k := node.GetKey(int(node.count) - 1)
+		lastKey = ns.Pool().Get(uint64(len(k)))
+		copy(lastKey, k)
 	}
 
 	treeCount := uint64(node.TreeCount())
@@ -58,11 +67,12 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 	return novelNode{
 		addr:      addr,
 		node:      node,
-		lastKey:   Item(lastKey),
+		lastKey:   lastKey,
 		treeCount: treeCount,
 	}, nil
 }
 
+// todo(andy): move to pkg prolly
 type nodeBuilder struct {
 	keys, values []Item
 	size, level  int
@@ -70,35 +80,30 @@ type nodeBuilder struct {
 	subtrees subtreeCounts
 }
 
-func (nb *nodeBuilder) hasCapacity(key, value Item) bool {
+var _ NodeBuilder = &nodeBuilder{}
+
+func (nb *nodeBuilder) StartNode(level int) {
+	nb.level = level
+	nb.reset()
+}
+
+func (nb *nodeBuilder) HasCapacity(key, value Item) bool {
 	sum := nb.size + len(key) + len(value)
 	return sum <= int(maxVectorOffset)
 }
 
-func (nb *nodeBuilder) appendItems(key, value Item, subtree uint64) {
+func (nb *nodeBuilder) AddItems(key, value Item, subtree uint64) {
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
 	nb.size += len(key) + len(value)
 	nb.subtrees = append(nb.subtrees, subtree)
 }
 
-func (nb *nodeBuilder) nodeCount() int {
+func (nb *nodeBuilder) Count() int {
 	return len(nb.keys)
 }
 
-func (nb *nodeBuilder) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	nb.keys = nb.keys[:0]
-	nb.values = nb.values[:0]
-	nb.size = 0
-	nb.subtrees = nb.subtrees[:0]
-}
-
-func (nb *nodeBuilder) firstChildRef() hash.Hash {
-	return hash.New(nb.values[0])
-}
-
-func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
+func (nb *nodeBuilder) Build(pool pool.BuffPool) (node Node) {
 	var (
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
@@ -141,9 +146,22 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
 	b.Finish(serial.ProllyTreeNodeEnd(b))
+	nb.reset()
 
 	buf := b.FinishedBytes()
 	return NodeFromBytes(buf)
+}
+
+func (nb *nodeBuilder) firstChildRef() hash.Hash {
+	return hash.New(nb.values[0])
+}
+
+func (nb *nodeBuilder) reset() {
+	// buffers are copied, it's safe to re-use the memory.
+	nb.keys = nb.keys[:0]
+	nb.values = nb.values[:0]
+	nb.size = 0
+	nb.subtrees = nb.subtrees[:0]
 }
 
 func newSubtreeCounts(count int) subtreeCounts {

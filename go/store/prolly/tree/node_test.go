@@ -111,7 +111,7 @@ func TestNewEmptyNode(t *testing.T) {
 	empty := NewEmptyNode(sharedPool)
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
-	assert.Equal(t, 72, empty.Size())
+	assert.Equal(t, 68, empty.Size())
 	assert.Equal(t, 0, empty.TreeCount())
 	assert.True(t, empty.IsLeaf())
 }

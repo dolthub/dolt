@@ -57,7 +57,7 @@ func newLeafNode(keys, values []Item) Node {
 		values: values,
 		level:  0,
 	}
-	return b.build(sharedPool)
+	return b.Build(sharedPool)
 }
 
 func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
