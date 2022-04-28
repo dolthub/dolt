@@ -475,7 +475,7 @@ func MaybeGetCommit(ctx context.Context, dEnv *env.DoltEnv, str string) (*doltdb
 	if err == nil {
 		cm, err := dEnv.DoltDB.Resolve(ctx, cs, dEnv.RepoStateReader().CWBHeadRef())
 
-		if doltdb.ErrBranchNotFoundInfo.Is(err) {
+		if errors.Is(err, doltdb.ErrBranchNotFound) {
 			return nil, nil
 		}
 
