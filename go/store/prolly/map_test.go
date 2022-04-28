@@ -90,7 +90,7 @@ func TestMap(t *testing.T) {
 }
 
 func TestNewEmptyNode(t *testing.T) {
-	empty := newEmptyNode(sharedPool)
+	empty := newEmptyMapNode(sharedPool)
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	assert.Equal(t, 68, empty.Size())
@@ -131,7 +131,7 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns, newNodeBuilder)
+	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {

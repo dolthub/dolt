@@ -49,7 +49,7 @@ type ConflictMap struct {
 
 func NewConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
 	conflicts := orderedTree[val.Tuple, Conflict, val.TupleDesc]{
-		root:  newEmptyNode(ns.Pool()),
+		root:  newEmptyMapNode(ns.Pool()),
 		ns:    ns,
 		order: key,
 	}
@@ -141,12 +141,20 @@ func (wr ConflictEditor) Delete(ctx context.Context, key val.Tuple) error {
 }
 
 func (wr ConflictEditor) Flush(ctx context.Context) (ConflictMap, error) {
-	root, err := wr.conflicts.makeTree(ctx)
+	factory := newMapBuilder
+	tr := wr.conflicts.tree
+
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, wr.conflicts.mutations(), tr.compareItems)
 	if err != nil {
 		return ConflictMap{}, err
 	}
+
 	return ConflictMap{
-		conflicts: root,
+		conflicts: orderedTree[val.Tuple, Conflict, val.TupleDesc]{
+			root:  root,
+			ns:    tr.ns,
+			order: tr.order,
+		},
 		keyDesc:   wr.keyDesc,
 		ourDesc:   wr.ourDesc,
 		theirDesc: wr.theirDesc,

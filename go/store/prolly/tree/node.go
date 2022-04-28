@@ -143,7 +143,8 @@ func (nd Node) GetKey(i int) Item {
 
 // getValue returns the |ith| value of this node. Only Valid for leaf nodes.
 func (nd Node) getValue(i int) Item {
-	if nd.IsLeaf() {
+	// todo(andy): abstract value access
+	if nd.values.Buf != nil {
 		return nd.values.GetSlice(i)
 	} else {
 		r := nd.getChildAddress(i)

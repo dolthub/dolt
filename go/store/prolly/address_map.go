@@ -19,7 +19,11 @@ import (
 	"context"
 	"io"
 
+	fb "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -31,7 +35,7 @@ type AddressMap struct {
 func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
 	return AddressMap{
 		addresses: orderedTree[stringSlice, address, lexicographic]{
-			root:  newEmptyNode(ns.Pool()),
+			root:  newEmptyMapNode(ns.Pool()),
 			ns:    ns,
 			order: lexicographic{},
 		},
@@ -139,9 +143,105 @@ func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
 }
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
-	root, err := wr.addresses.makeTree(ctx)
+	factory := newAddrMapBuilder
+	tr := wr.addresses.tree
+
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, wr.addresses.mutations(), tr.compareItems)
 	if err != nil {
 		return AddressMap{}, err
 	}
-	return AddressMap{addresses: root}, nil
+
+	return AddressMap{
+		addresses: orderedTree[stringSlice, address, lexicographic]{
+			root:  root,
+			ns:    tr.ns,
+			order: tr.order,
+		},
+	}, nil
+}
+
+func newAddrMapBuilder(level int) *addrMapBuilder {
+	return &addrMapBuilder{level: level}
+}
+
+var _ tree.NodeBuilderFactory[*addrMapBuilder] = newAddrMapBuilder
+
+type addrMapBuilder struct {
+	keys, values []tree.Item
+	size, level  int
+
+	subtrees tree.SubtreeCounts
+}
+
+var _ tree.NodeBuilder = &addrMapBuilder{}
+
+func (nb *addrMapBuilder) StartNode() {
+	nb.reset()
+}
+
+func (nb *addrMapBuilder) HasCapacity(key, value tree.Item) bool {
+	sum := nb.size + len(key) + len(value)
+	return sum <= int(tree.MaxVectorOffset)
+}
+
+func (nb *addrMapBuilder) AddItems(key, value tree.Item, subtree uint64) {
+	nb.keys = append(nb.keys, key)
+	nb.values = append(nb.values, value)
+	nb.size += len(key) + len(value)
+	nb.subtrees = append(nb.subtrees, subtree)
+}
+
+func (nb *addrMapBuilder) Count() int {
+	return len(nb.keys)
+}
+
+func (nb *addrMapBuilder) reset() {
+	// buffers are copied, it's safe to re-use the memory.
+	nb.keys = nb.keys[:0]
+	nb.values = nb.values[:0]
+	nb.size = 0
+	nb.subtrees = nb.subtrees[:0]
+}
+
+func (nb *addrMapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
+	var (
+		keyTups, keyOffs fb.UOffsetT
+		refArr, cardArr  fb.UOffsetT
+	)
+
+	keySz, valSz, bufSz := estimateBufferSize(nb.keys, nb.values, nb.subtrees)
+	b := getFlatbufferBuilder(pool, bufSz)
+
+	// serialize keys and offsets
+	keyTups = writeItemBytes(b, nb.keys, keySz)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(nb.keys)-1)
+	keyOffs = writeItemOffsets(b, nb.keys, keySz)
+
+	if nb.level > 0 {
+		// serialize child refs and subtree counts for internal nodes
+		refArr = writeItemBytes(b, nb.values, valSz)
+		cardArr = writeCountArray(b, nb.subtrees)
+	} else {
+		// serialize value refs for leaf nodes
+		refArr = writeItemBytes(b, nb.values, valSz)
+	}
+
+	// populate the node's vtable
+	serial.ProllyTreeNodeStart(b)
+	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
+	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
+	if nb.level > 0 {
+		serial.ProllyTreeNodeAddAddressArray(b, refArr)
+		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
+		serial.ProllyTreeNodeAddTreeCount(b, nb.subtrees.Sum())
+	} else {
+		serial.ProllyTreeNodeAddAddressArray(b, refArr)
+		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(nb.keys)))
+	}
+	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
+	b.Finish(serial.ProllyTreeNodeEnd(b))
+	nb.reset()
+
+	buf := b.FinishedBytes()
+	return tree.NodeFromBytes(buf)
 }

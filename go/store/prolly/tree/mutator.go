@@ -28,9 +28,9 @@ func ApplyMutations[B NodeBuilder](
 	ctx context.Context,
 	ns NodeStore,
 	root Node,
+	factory NodeBuilderFactory[B],
 	edits MutationIter,
 	compare CompareFn,
-	factory NodeBuilderFactory[B],
 ) (Node, error) {
 	newKey, newValue := edits.NextMutation(ctx)
 	if newKey == nil {

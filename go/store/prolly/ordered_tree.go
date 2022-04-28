@@ -69,7 +69,7 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K]](
 	l, r, base orderedTree[K, V, O],
 	cb tree.CollisionFn,
 ) (orderedTree[K, V, O], error) {
-	cfn, fact := base.compareItems, newNodeBuilder
+	cfn, fact := base.compareItems, newMapBuilder
 	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, fact)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err

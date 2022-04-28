@@ -70,7 +70,7 @@ func ThreeWayMerge[B NodeBuilder](
 
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = ApplyMutations(ctx, ns, left, patches, compare, factory)
+		final, err = ApplyMutations(ctx, ns, left, factory, patches, compare)
 		return err
 	})
 
