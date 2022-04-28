@@ -464,6 +464,9 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 		sqlDb := sqle.NewSingleTableDatabase(td.FromName, fromSch, td.FromFks, td.FromFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		fromCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.FromName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	var toCreateStmt = ""
@@ -471,6 +474,9 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.V
 		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
 		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
 		toCreateStmt, err = sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
 	}
 
 	if fromCreateStmt != toCreateStmt {
