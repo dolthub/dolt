@@ -46,7 +46,7 @@ timeprefix=$(date +%Y/%m/%d)
 actorprefix="$MODE/$ACTOR/$actorShort"
 
 format="markdown"
-if [ "$MODE" = "release" ]; then
+if [[ "$MODE" = "release" || "$MODE" = "nightly" ]]; then
   format="html"
 fi
 
