@@ -41,7 +41,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrFastForward = errors.New("fast forward")
@@ -285,22 +284,24 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	mergeRP := durable.ProllyMapFromIndex(mergeR)
 	ancRP := durable.ProllyMapFromIndex(ancR)
 
-	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch)
+	//vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch)
 
 	conflicted := false
 	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
-		merged, ok := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-		if !ok {
-			conflicted = true
-			return tree.Diff{}, false
-		}
-
-		return tree.Diff{
-			Type: tree.ModifiedDiff,
-			Key:  left.Key,
-			From: left.From,
-			To:   tree.NodeItem(merged),
-		}, true
+		conflicted = true
+		return tree.Diff{}, false
+		//merged, ok := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
+		//if !ok {
+		//	conflicted = true
+		//	return tree.Diff{}, false
+		//}
+		//
+		//return tree.Diff{
+		//	Type: tree.ModifiedDiff,
+		//	Key:  left.Key,
+		//	From: left.From,
+		//	To:   tree.NodeItem(merged),
+		//}, true
 	})
 	if err != nil {
 		return nil, nil, err
@@ -319,84 +320,84 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 
 var syncPool = pool.NewBuffPool()
 
-type valueMerger struct {
-	numCols                                int
-	vD, lVD, rVD, bVD                      val.TupleDesc
-	leftMapping, rightMapping, baseMapping map[int]int
-}
-
-func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema) *valueMerger {
-	n := merged.GetNonPKCols().Size()
-	leftMapping := make(map[int]int, n)
-	rightMapping := make(map[int]int, n)
-	baseMapping := make(map[int]int, n)
-
-	for i, tag := range merged.GetNonPKCols().Tags {
-		if j, ok := leftSch.GetNonPKCols().TagToIdx[tag]; ok {
-			leftMapping[i] = j
-		}
-		if j, ok := rightSch.GetNonPKCols().TagToIdx[tag]; ok {
-			rightMapping[i] = j
-		}
-		if j, ok := baseSch.GetNonPKCols().TagToIdx[tag]; ok {
-			baseMapping[i] = j
-		}
-	}
-
-	return &valueMerger{
-		n,
-		prolly.ValueDescriptorFromSchema(merged),
-		prolly.ValueDescriptorFromSchema(leftSch),
-		prolly.ValueDescriptorFromSchema(rightSch),
-		prolly.ValueDescriptorFromSchema(baseSch),
-		leftMapping,
-		rightMapping,
-		baseMapping,
-	}
-}
-
-// tryMerge performs a cell-wise merge given left, right, and base cell value
-// tuples. It returns the merged cell value taple and an ok bool.
-func (m *valueMerger) tryMerge(left, right, base val.Tuple) (merged val.Tuple, ok bool) {
-	processColumnFunc := func(i int) (resultVal []byte, isConflict bool) {
-		var leftVal []byte
-		if l, ok := m.leftMapping[i]; ok {
-			leftVal = m.lVD.GetField(l, left)
-		}
-		var rightVal []byte
-		if r, ok := m.rightMapping[i]; ok {
-			rightVal = m.rVD.GetField(r, right)
-		}
-		var baseVal []byte
-		if b, ok := m.baseMapping[i]; ok {
-			baseVal = m.bVD.GetField(b, base)
-		}
-
-		// bytes.Equal?? What about nil vs empty slices??
-		leftModified := m.vD.Comparator().CompareValues(leftVal, baseVal, m.vD.Types[i]) != 0
-		rightModified := m.vD.Comparator().CompareValues(rightVal, baseVal, m.vD.Types[i]) != 0
-
-		switch {
-		case leftModified && rightModified:
-			return nil, true
-		case leftModified:
-			return leftVal, false
-		default:
-			return rightVal, false
-		}
-	}
-
-	mergedValues := make([][]byte, m.numCols)
-	for i := 0; i < m.numCols; i++ {
-		v, isConflict := processColumnFunc(i)
-		if isConflict {
-			return nil, false
-		}
-		mergedValues[i] = v
-	}
-
-	return val.NewTuple(syncPool, mergedValues...), true
-}
+//type valueMerger struct {
+//	numCols                                int
+//	vD, lVD, rVD, bVD                      val.TupleDesc
+//	leftMapping, rightMapping, baseMapping map[int]int
+//}
+//
+//func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema) *valueMerger {
+//	n := merged.GetNonPKCols().Size()
+//	leftMapping := make(map[int]int, n)
+//	rightMapping := make(map[int]int, n)
+//	baseMapping := make(map[int]int, n)
+//
+//	for i, tag := range merged.GetNonPKCols().Tags {
+//		if j, ok := leftSch.GetNonPKCols().TagToIdx[tag]; ok {
+//			leftMapping[i] = j
+//		}
+//		if j, ok := rightSch.GetNonPKCols().TagToIdx[tag]; ok {
+//			rightMapping[i] = j
+//		}
+//		if j, ok := baseSch.GetNonPKCols().TagToIdx[tag]; ok {
+//			baseMapping[i] = j
+//		}
+//	}
+//
+//	return &valueMerger{
+//		n,
+//		prolly.ValueDescriptorFromSchema(merged),
+//		prolly.ValueDescriptorFromSchema(leftSch),
+//		prolly.ValueDescriptorFromSchema(rightSch),
+//		prolly.ValueDescriptorFromSchema(baseSch),
+//		leftMapping,
+//		rightMapping,
+//		baseMapping,
+//	}
+//}
+//
+//// tryMerge performs a cell-wise merge given left, right, and base cell value
+//// tuples. It returns the merged cell value taple and an ok bool.
+//func (m *valueMerger) tryMerge(left, right, base val.Tuple) (merged val.Tuple, ok bool) {
+//	processColumnFunc := func(i int) (resultVal []byte, isConflict bool) {
+//		var leftVal []byte
+//		if l, ok := m.leftMapping[i]; ok {
+//			leftVal = m.lVD.GetField(l, left)
+//		}
+//		var rightVal []byte
+//		if r, ok := m.rightMapping[i]; ok {
+//			rightVal = m.rVD.GetField(r, right)
+//		}
+//		var baseVal []byte
+//		if b, ok := m.baseMapping[i]; ok {
+//			baseVal = m.bVD.GetField(b, base)
+//		}
+//
+//		// bytes.Equal?? What about nil vs empty slices??
+//		leftModified := m.vD.Comparator().CompareValues(leftVal, baseVal, m.vD.Types[i]) != 0
+//		rightModified := m.vD.Comparator().CompareValues(rightVal, baseVal, m.vD.Types[i]) != 0
+//
+//		switch {
+//		case leftModified && rightModified:
+//			return nil, true
+//		case leftModified:
+//			return leftVal, false
+//		default:
+//			return rightVal, false
+//		}
+//	}
+//
+//	mergedValues := make([][]byte, m.numCols)
+//	for i := 0; i < m.numCols; i++ {
+//		v, isConflict := processColumnFunc(i)
+//		if isConflict {
+//			return nil, false
+//		}
+//		mergedValues[i] = v
+//	}
+//
+//	return val.NewTuple(syncPool, mergedValues...), true
+//}
 
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
