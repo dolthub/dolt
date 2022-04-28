@@ -16,12 +16,12 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -546,6 +546,11 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+}
+
+func TestConcurrentTransactions(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestConcurrentTransaction(t, newDoltHarness(t))
 }
 
 func TestDoltScripts(t *testing.T) {
