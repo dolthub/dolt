@@ -218,9 +218,14 @@ func (tx *DoltTransaction) doCommit(
 			}
 			logrus.Tracef("merge took %s", time.Since(start))
 
+			// Note the error handling below: if we get an error, we still return the new mergedWorkingSet returned from
+			// ValidateWorkingSetForCommit, because we may want to update the session state with the merge info (depending
+			// on session settings). We also update the transaction to have a new start state, so that this state can be
+			// re-used during the merge logic the next time a commit is attempted.
 			mergedWorkingSet, err := tx.validateWorkingSetForCommit(ctx, workingSet.WithWorkingRoot(mergedRoot), stats)
 			if err != nil {
-				return nil, nil, err
+				tx.startState = tx.startState.WithWorkingRoot(mergedWorkingSet.WorkingRoot()).WithMergeState(mergedWorkingSet.MergeState())
+				return mergedWorkingSet, nil, err
 			}
 
 			var newCommit *doltdb.Commit
@@ -236,7 +241,7 @@ func (tx *DoltTransaction) doCommit(
 		}()
 
 		if err == doltdb.ErrUnresolvedConflicts {
-			return nil, nil, tx.handleUnresolvedConflictOnCommit(ctx)
+			return updatedWs, nil, err
 		} else if err != nil {
 			return nil, nil, err
 		} else if updatedWs != nil {
@@ -322,7 +327,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(
 		if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
 				// We will always return doltdb.ErrUnresolvedConflicts here, but we will sometimes roll back the transaction
 				// first
-				return nil, tx.handleUnresolvedConflictOnCommit(ctx)
+				return workingSet, tx.handleUnresolvedConflictOnCommit(ctx)
 		}
 	}
 

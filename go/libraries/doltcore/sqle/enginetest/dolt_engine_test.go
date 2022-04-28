@@ -549,12 +549,16 @@ func TestStoredProcedures(t *testing.T) {
 
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
-	enginetest.TestTransactionScripts(t, newDoltHarness(t))
-	for _, script := range DoltTransactionTests {
-		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
-	}
+	// enginetest.TestTransactionScripts(t, newDoltHarness(t))
+	// for _, script := range DoltTransactionTests {
+	// 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	// }
+	//
+	// for _, script := range DoltSqlFuncTransactionTests {
+	// 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	// }
 
-	for _, script := range DoltSqlFuncTransactionTests {
+	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
