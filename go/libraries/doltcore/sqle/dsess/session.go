@@ -211,7 +211,14 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(
+		dbName,
+		ws,
+		wsRef,
+		sessionState.dbData,
+		sessionState.WriteSession.GetOptions(),
+		tCharacteristic,
+	), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -717,7 +724,14 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(
+		dbName,
+		ws,
+		wsRef,
+		sessionState.dbData,
+		sessionState.WriteSession.GetOptions(),
+		tCharacteristic,
+	))
 
 	return nil
 }

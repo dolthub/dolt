@@ -64,6 +64,7 @@ func (d DisabledTransaction) IsReadOnly() bool {
 }
 
 type DoltTransaction struct {
+	sourceDbName    string
 	startState      *doltdb.WorkingSet
 	workingSetRef   ref.WorkingSetRef
 	dbData          env.DbData
@@ -78,6 +79,7 @@ type savepoint struct {
 }
 
 func NewDoltTransaction(
+	dbName string,
 	startState *doltdb.WorkingSet,
 	workingSet ref.WorkingSetRef,
 	dbData env.DbData,
@@ -85,6 +87,7 @@ func NewDoltTransaction(
 	tCharacteristic sql.TransactionCharacteristic,
 ) *DoltTransaction {
 	return &DoltTransaction{
+		sourceDbName:    dbName,
 		startState:      startState,
 		workingSetRef:   workingSet,
 		dbData:          dbData,
@@ -164,11 +167,6 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-	err := checkForConflictsAndConstraintViolations(ctx, workingSet)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
 			// Serialize commits, since only one can possibly succeed at a time anyway
@@ -195,6 +193,11 @@ func (tx *DoltTransaction) doCommit(
 			existingWorkingRoot := ws.WorkingRoot()
 			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
 				// ff merge
+				_, err = tx.validateWorkingSetForCommit(ctx, workingSet, nil)
+				if err != nil {
+					return nil, nil, err
+				}
+
 				var newCommit *doltdb.Commit
 				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, wsHash)
 				if err == datas.ErrOptimisticLockFailed {
@@ -207,6 +210,7 @@ func (tx *DoltTransaction) doCommit(
 				return workingSet, newCommit, nil
 			}
 
+			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
 			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot(), tx.mergeEditOpts)
 			if err != nil {
@@ -214,27 +218,11 @@ func (tx *DoltTransaction) doCommit(
 			}
 			logrus.Tracef("merge took %s", time.Since(start))
 
-			var tablesWithConflicts []string
-			for table, mergeStats := range stats {
-				if mergeStats.Conflicts > 0 {
-					if transactionMergeStomp {
-						tablesWithConflicts = append(tablesWithConflicts, table)
-					} else {
-						// TODO: surface duplicate key errors as appropriate
-						return nil, nil, fmt.Errorf("conflict in table %s", table)
-					}
-				}
+			mergedWorkingSet, err := tx.validateWorkingSetForCommit(ctx, workingSet.WithWorkingRoot(mergedRoot), stats)
+			if err != nil {
+				return nil, nil, err
 			}
 
-			// Only resolve conflicts automatically if the stomp environment key is set
-			if len(tablesWithConflicts) > 0 {
-				mergedRoot, err = tx.stompConflicts(ctx, mergedRoot, tablesWithConflicts)
-				if err != nil {
-					return nil, nil, err
-				}
-			}
-
-			mergedWorkingSet := workingSet.WithWorkingRoot(mergedRoot)
 			var newCommit *doltdb.Commit
 			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
 			if err == datas.ErrOptimisticLockFailed {
@@ -247,7 +235,9 @@ func (tx *DoltTransaction) doCommit(
 			return mergedWorkingSet, newCommit, nil
 		}()
 
-		if err != nil {
+		if err == doltdb.ErrUnresolvedConflicts {
+			return nil, nil, tx.handleUnresolvedConflictOnCommit(ctx)
+		} else if err != nil {
 			return nil, nil, err
 		} else if updatedWs != nil {
 			return updatedWs, newCommit, nil
@@ -258,28 +248,75 @@ func (tx *DoltTransaction) doCommit(
 	return nil, nil, datas.ErrOptimisticLockFailed
 }
 
-// checkForConflictsAndConstraintViolations determines which conflicts and constraint violations are ok to commit
-// given the state of certain system variables.
-func checkForConflictsAndConstraintViolations(ctx *sql.Context, workingSet *doltdb.WorkingSet) error {
-	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+// handleUnresolvedConflictOnCommit attempts a transaction rollback if the session settings indicate one, and returns
+// |doltdb.ErrUnresolvedConflicts|
+func (tx *DoltTransaction) handleUnresolvedConflictOnCommit(ctx *sql.Context) error {
+	rollbackOnConflict, err := ctx.GetSessionVariable(ctx, RollbackOnConflict)
 	if err != nil {
 		return err
+	}
+
+	if rollbackOnConflict.(int8) == 1 {
+		sess := DSessFromSess(ctx.Session)
+		rollbackErr := sess.RollbackTransaction(ctx, tx.sourceDbName, tx)
+		if rollbackErr != nil {
+			return rollbackErr
+		}
+	}
+
+	return doltdb.ErrUnresolvedConflicts
+}
+
+// validateWorkingSetForCommit validates that the working set given is legal to commit according to the session
+// settings. Returns an error if the given working set has conflicts or constraint violations and the session settings
+// do not allow them. If |mergeStats| is provided (because this working set is being merged with another), will
+// automatically resolve any conflicts indicated by them if session settings dictate it.
+func (tx *DoltTransaction) validateWorkingSetForCommit(
+		ctx *sql.Context,
+		workingSet *doltdb.WorkingSet,
+		mergeStats map[string]*merge.MergeStats,
+) (*doltdb.WorkingSet, error) {
+	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
+	if err != nil {
+		return nil, err
 	}
 
 	allowCommitConflicts, err := ctx.GetSessionVariable(ctx, AllowCommitConflicts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	workingRoot := workingSet.WorkingRoot()
 
-	if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
-		hasConflicts, err := workingRoot.HasConflicts(ctx)
-		if err != nil {
-			return err
+	// If the conflict stomp env variable is set, resolve conflicts automatically (accept ours)
+	if transactionMergeStomp {
+		var tablesWithConflicts []string
+		for table, stat := range mergeStats {
+			if stat.Conflicts > 0 {
+					tablesWithConflicts = append(tablesWithConflicts, table)
+			}
 		}
-		if hasConflicts {
-			return doltdb.ErrUnresolvedConflicts
+
+		if len(tablesWithConflicts) > 0 {
+			workingRoot, err = tx.stompConflicts(ctx, workingRoot, tablesWithConflicts)
+			if err != nil {
+				return nil, err
+			}
+			workingSet = workingSet.WithWorkingRoot(workingRoot)
+		}
+	}
+
+	// Otherwise, if there are conflicts decide whether to accept the commit or not based on session settings
+	hasConflicts, err := workingRoot.HasConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if hasConflicts {
+		if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
+				// We will always return doltdb.ErrUnresolvedConflicts here, but we will sometimes roll back the transaction
+				// first
+				return nil, tx.handleUnresolvedConflictOnCommit(ctx)
 		}
 	}
 
@@ -288,14 +325,14 @@ func checkForConflictsAndConstraintViolations(ctx *sql.Context, workingSet *dolt
 	if forceTransactionCommit.(int8) != 1 {
 		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if hasConstraintViolations {
-			return doltdb.ErrUnresolvedConstraintViolations
+			return nil, doltdb.ErrUnresolvedConstraintViolations
 		}
 	}
 
-	return nil
+	return workingSet, nil
 }
 
 // stompConflicts resolves the conflicted tables in the root given by blindly accepting theirs, and returns the
