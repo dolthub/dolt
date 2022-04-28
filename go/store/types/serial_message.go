@@ -129,8 +129,18 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
-		if msg.MergeStateAddrLength() != 0 {
-			addr = hash.New(msg.MergeStateAddrBytes())
+		mergeState := msg.MergeState(nil)
+		if mergeState != nil {
+			addr = hash.New(mergeState.PreWorkingRootAddrBytes())
+			r, err = constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
+			if err = cb(r); err != nil {
+				return err
+			}
+
+			addr = hash.New(mergeState.FromCommitAddrBytes())
 			r, err = constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
 				return err
