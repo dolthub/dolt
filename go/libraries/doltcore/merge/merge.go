@@ -485,6 +485,9 @@ func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMe
 			}
 			return durable.IndexFromProllyMap(merged), nil
 		}()
+		if err != nil {
+			return nil, err
+		}
 
 		mergedIndexSet, err = merge.PutIndex(ctx, index.Name(), mergedIndex)
 		if err != nil {
