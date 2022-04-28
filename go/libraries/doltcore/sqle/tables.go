@@ -569,7 +569,7 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 
 func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 	if sch.Checks() == nil {
-		return []sql.CheckDefinition{}
+		return nil
 	}
 
 	checks := make([]sql.CheckDefinition, sch.Checks().Count())
