@@ -49,7 +49,7 @@ type ConflictMap struct {
 
 func NewConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
 	conflicts := orderedTree[val.Tuple, Conflict, val.TupleDesc]{
-		root:  tree.NewEmptyNode(ns.Pool()),
+		root:  newEmptyNode(ns.Pool()),
 		ns:    ns,
 		order: key,
 	}

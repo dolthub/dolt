@@ -197,7 +197,7 @@ func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values
 	ns := tree.NewTestNodeStore()
 	require.Equal(t, len(keys), len(values))
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns)
+	chunker, err := tree.NewEmptyChunker(ctx, ns, newNodeBuilder)
 	require.NoError(t, err)
 
 	for i := range keys {

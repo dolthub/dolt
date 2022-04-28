@@ -50,7 +50,7 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	ch, err := tree.NewEmptyChunker(ctx, ns)
+	ch, err := tree.NewEmptyChunker(ctx, ns, newNodeBuilder)
 	if err != nil {
 		return Map{}, err
 	}

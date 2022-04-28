@@ -24,13 +24,12 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
-	maxVectorOffset = uint64(math.MaxUint16)
+	MaxVectorOffset = uint64(math.MaxUint16)
 	addrSz          = hash.ByteLen
 
 	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
@@ -81,11 +80,6 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 		}
 		return WalkNodes(ctx, child, ns, cb)
 	})
-}
-
-func NewEmptyNode(pool pool.BuffPool) Node {
-	bld := &nodeBuilder{}
-	return bld.Build(pool)
 }
 
 func NodeFromBytes(buf []byte) Node {
@@ -170,7 +164,7 @@ func (nd Node) getValueAddress(i int) hash.Hash {
 	return hash.New(nd.values.Buf[o : o+addrSz])
 }
 
-func (nd Node) getSubtreeCounts() subtreeCounts {
+func (nd Node) getSubtreeCounts() SubtreeCounts {
 	arr := nd.msg.SubtreeCountsBytes()
 	return readSubtreeCounts(int(nd.count), arr)
 }

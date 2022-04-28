@@ -34,7 +34,7 @@ type Cursor struct {
 	nd       Node
 	idx      int
 	parent   *Cursor
-	subtrees subtreeCounts
+	subtrees SubtreeCounts
 	nrw      NodeStore
 }
 

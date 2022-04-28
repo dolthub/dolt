@@ -35,13 +35,13 @@ type CollisionFn func(left, right Diff) (Diff, bool)
 // |right| are applied directly to |left|. This reduces the amount of write work and improves performance.
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
-func ThreeWayMerge(
+func ThreeWayMerge[B NodeBuilder](
 	ctx context.Context,
 	ns NodeStore,
 	left, right, base Node,
-	search ItemSearchFn,
 	compare CompareFn,
 	collide CollisionFn,
+	factory NodeBuilderFactory[B],
 ) (final Node, err error) {
 
 	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
@@ -70,7 +70,7 @@ func ThreeWayMerge(
 
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = ApplyMutations(ctx, ns, left, patches, compare)
+		final, err = ApplyMutations(ctx, ns, left, patches, compare, factory)
 		return err
 	})
 

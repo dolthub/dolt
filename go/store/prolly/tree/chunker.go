@@ -30,40 +30,45 @@ type Chunker interface {
 	Done(ctx context.Context) (Node, error)
 }
 
-type chunker struct {
+type chunker[B NodeBuilder] struct {
 	cur    *Cursor
-	parent *chunker
+	parent *chunker[B]
 	level  int
 
+	builder B
+	factory NodeBuilderFactory[B]
+
 	splitter nodeSplitter
-	builder  NodeBuilder
 	done     bool
 
 	ns NodeStore
 }
 
-var _ Chunker = &chunker{}
+//var _ Chunker = &chunker[]{}
 
-func NewEmptyChunker(ctx context.Context, ns NodeStore) (Chunker, error) {
-	return newEmptyChunker(ctx, ns)
+func NewEmptyChunker[B NodeBuilder](ctx context.Context, ns NodeStore, factory NodeBuilderFactory[B]) (Chunker, error) {
+	return newEmptyChunker(ctx, ns, factory)
 }
 
-func newEmptyChunker(ctx context.Context, ns NodeStore) (*chunker, error) {
-	return newChunker(ctx, nil, 0, ns)
+func newEmptyChunker[B NodeBuilder](ctx context.Context, ns NodeStore, factory NodeBuilderFactory[B]) (*chunker[B], error) {
+	return newChunker(ctx, nil, 0, ns, factory)
 }
 
-func newChunker(ctx context.Context, cur *Cursor, level int, ns NodeStore) (*chunker, error) {
+func newChunker[B NodeBuilder](ctx context.Context, cur *Cursor, level int, ns NodeStore, factory NodeBuilderFactory[B]) (*chunker[B], error) {
 	// |cur| will be nil if this is a new Node, implying this is a new tree, or the tree has grown in height relative
 	// to its original chunked form.
 
 	splitter := defaultSplitterFactory(uint8(level % 256))
+	builder := factory(level)
+	builder.StartNode()
 
-	sc := &chunker{
+	sc := &chunker[B]{
 		cur:      cur,
 		parent:   nil,
 		level:    level,
+		builder:  builder,
+		factory:  factory,
 		splitter: splitter,
-		builder:  newNodeBuilder(level),
 		ns:       ns,
 	}
 
@@ -76,7 +81,7 @@ func newChunker(ctx context.Context, cur *Cursor, level int, ns NodeStore) (*chu
 	return sc, nil
 }
 
-func (tc *chunker) resume(ctx context.Context) (err error) {
+func (tc *chunker[B]) resume(ctx context.Context) (err error) {
 	if tc.cur.parent != nil && tc.parent == nil {
 		if err := tc.createParentChunker(ctx); err != nil {
 			return err
@@ -113,13 +118,13 @@ func (tc *chunker) resume(ctx context.Context) (err error) {
 }
 
 // AddPair adds a val.Tuple pair to the chunker.
-func (tc *chunker) AddPair(ctx context.Context, key, value Item) error {
+func (tc *chunker[B]) AddPair(ctx context.Context, key, value Item) error {
 	_, err := tc.append(ctx, Item(key), Item(value), 1)
 	return err
 }
 
 // UpdatePair updates a val.Tuple pair in the chunker.
-func (tc *chunker) UpdatePair(ctx context.Context, key, value Item) error {
+func (tc *chunker[B]) UpdatePair(ctx context.Context, key, value Item) error {
 	if err := tc.skip(ctx); err != nil {
 		return err
 	}
@@ -128,12 +133,12 @@ func (tc *chunker) UpdatePair(ctx context.Context, key, value Item) error {
 }
 
 // DeletePair deletes a val.Tuple pair from the chunker.
-func (tc *chunker) DeletePair(ctx context.Context, _, _ Item) error {
+func (tc *chunker[B]) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
 // AdvanceTo advances the chunker to |next|, the nextMutation mutation point.
-func (tc *chunker) AdvanceTo(ctx context.Context, next *Cursor) error {
+func (tc *chunker[B]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	// There a four cases to handle when advancing the tree chunker
 	//  (1) |tc.cur| and |next| are aligned, we're done
 	//
@@ -234,7 +239,7 @@ func (tc *chunker) AdvanceTo(ctx context.Context, next *Cursor) error {
 	return nil
 }
 
-func (tc *chunker) skip(ctx context.Context) error {
+func (tc *chunker[B]) skip(ctx context.Context) error {
 	_, err := tc.cur.Advance(ctx)
 	return err
 }
@@ -242,10 +247,10 @@ func (tc *chunker) skip(ctx context.Context) error {
 // Append adds a new key-value pair to the chunker, validating the new pair to ensure
 // that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
 // may be made before or after the pair, but not between them.
-func (tc *chunker) append(ctx context.Context, key, value Item, subtree uint64) (bool, error) {
+func (tc *chunker[B]) append(ctx context.Context, key, value Item, subtree uint64) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
-	// (2) The total Size of a Node's data cannot exceed |maxVectorOffset|.
+	// (2) The total Size of a Node's data cannot exceed |MaxVectorOffset|.
 	// (3) Internal Nodes (Level > 0) must contain at least 2 key-value pairs (4 node items).
 	//     Infinite recursion can occur if internal nodes contain a single novelNode with a key
 	//     large enough to trigger a chunk boundary. Forming a chunk boundary after a single
@@ -295,7 +300,7 @@ func (tc *chunker) append(ctx context.Context, key, value Item, subtree uint64) 
 	return false, nil
 }
 
-func (tc *chunker) appendToParent(ctx context.Context, novel novelNode) (bool, error) {
+func (tc *chunker[B]) appendToParent(ctx context.Context, novel novelNode) (bool, error) {
 	if tc.parent == nil {
 		if err := tc.createParentChunker(ctx); err != nil {
 			return false, err
@@ -305,7 +310,7 @@ func (tc *chunker) appendToParent(ctx context.Context, novel novelNode) (bool, e
 	return tc.parent.append(ctx, novel.lastKey, novel.addr[:], novel.treeCount)
 }
 
-func (tc *chunker) handleChunkBoundary(ctx context.Context) error {
+func (tc *chunker[B]) handleChunkBoundary(ctx context.Context) error {
 	assertTrue(tc.builder.Count() > 0)
 
 	novel, err := writeNewNode(ctx, tc.ns, tc.builder)
@@ -318,12 +323,12 @@ func (tc *chunker) handleChunkBoundary(ctx context.Context) error {
 	}
 
 	tc.splitter.Reset()
-	tc.builder.StartNode(tc.level)
+	tc.builder.StartNode()
 
 	return nil
 }
 
-func (tc *chunker) createParentChunker(ctx context.Context) (err error) {
+func (tc *chunker[B]) createParentChunker(ctx context.Context) (err error) {
 	assertTrue(tc.parent == nil)
 
 	var parent *Cursor
@@ -334,7 +339,7 @@ func (tc *chunker) createParentChunker(ctx context.Context) (err error) {
 		parent = tc.cur.parent
 	}
 
-	tc.parent, err = newChunker(ctx, parent, tc.level+1, tc.ns)
+	tc.parent, err = newChunker(ctx, parent, tc.level+1, tc.ns, tc.factory)
 	if err != nil {
 		return err
 	}
@@ -344,7 +349,7 @@ func (tc *chunker) createParentChunker(ctx context.Context) (err error) {
 
 // Done returns the root Node of the resulting tree.
 // The logic here is subtle, but hopefully correct and understandable. See comments inline.
-func (tc *chunker) Done(ctx context.Context) (Node, error) {
+func (tc *chunker[B]) Done(ctx context.Context) (Node, error) {
 	assertTrue(!tc.done)
 	tc.done = true
 
@@ -396,7 +401,7 @@ func (tc *chunker) Done(ctx context.Context) (Node, error) {
 
 // If we are mutating an existing Node, appending subsequent items in the Node until we reach a pre-existing chunk
 // boundary or the end of the Node.
-func (tc *chunker) finalizeCursor(ctx context.Context) (err error) {
+func (tc *chunker[B]) finalizeCursor(ctx context.Context) (err error) {
 	for tc.cur.Valid() {
 		var ok bool
 		ok, err = tc.append(ctx,
@@ -431,7 +436,7 @@ func (tc *chunker) finalizeCursor(ctx context.Context) (err error) {
 }
 
 // Returns true if this nodeSplitter or any of its parents have any pending items in their |currentPair| slice.
-func (tc *chunker) anyPending() bool {
+func (tc *chunker[B]) anyPending() bool {
 	if tc.builder.Count() > 0 {
 		return true
 	}
@@ -443,12 +448,13 @@ func (tc *chunker) anyPending() bool {
 	return false
 }
 
-func (tc *chunker) isLeaf() bool {
+func (tc *chunker[B]) isLeaf() bool {
 	return tc.level == 0
 }
 
 func getCanonicalRoot(ctx context.Context, ns NodeStore, builder NodeBuilder) (Node, error) {
-	assertTrue(builder.Count() == 1)
+	cnt := builder.Count()
+	assertTrue(cnt == 1)
 
 	nd := builder.Build(ns.Pool())
 	mt := nd.getChildAddress(0)

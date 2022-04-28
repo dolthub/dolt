@@ -24,7 +24,14 @@ type MutationIter interface {
 	Close() error
 }
 
-func ApplyMutations(ctx context.Context, ns NodeStore, root Node, edits MutationIter, compare CompareFn) (Node, error) {
+func ApplyMutations[B NodeBuilder](
+	ctx context.Context,
+	ns NodeStore,
+	root Node,
+	edits MutationIter,
+	compare CompareFn,
+	factory NodeBuilderFactory[B],
+) (Node, error) {
 	newKey, newValue := edits.NextMutation(ctx)
 	if newKey == nil {
 		return root, nil // no mutations
@@ -35,7 +42,7 @@ func ApplyMutations(ctx context.Context, ns NodeStore, root Node, edits Mutation
 		return Node{}, err
 	}
 
-	chkr, err := newChunker(ctx, cur.Clone(), 0, ns)
+	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, factory)
 	if err != nil {
 		return Node{}, err
 	}

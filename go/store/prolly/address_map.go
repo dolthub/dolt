@@ -31,7 +31,7 @@ type AddressMap struct {
 func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
 	return AddressMap{
 		addresses: orderedTree[stringSlice, address, lexicographic]{
-			root:  tree.NewEmptyNode(ns.Pool()),
+			root:  newEmptyNode(ns.Pool()),
 			ns:    ns,
 			order: lexicographic{},
 		},

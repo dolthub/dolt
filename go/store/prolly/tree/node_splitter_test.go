@@ -100,7 +100,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 
 	ctx := context.Background()
 	ns = NewTestNodeStore()
-	chunker, err := newEmptyChunker(ctx, ns)
+	chunker, err := newEmptyChunker(ctx, ns, newTestBuilder)
 	require.NoError(t, err)
 
 	for i := 0; i < scale; i++ {
