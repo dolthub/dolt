@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -113,6 +114,7 @@ func CreateIndex(
 		if err != nil {
 			return nil, err
 		}
+		// TODO (dhruv) this seems like it would fail?
 		err = newTable.VerifyIndexRowData(ctx, index.Name())
 		if err != nil {
 			return nil, err
@@ -146,30 +148,30 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 		return durable.IndexFromNomsMap(m, tbl.ValueReadWriter()), nil
 
 	case types.Format_DOLT_1:
-		return BuildSecondaryProllyIndex(ctx, tbl, idx)
+		sch, err := tbl.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		m, err := tbl.GetRowData(ctx)
+		if err != nil {
+			return nil, err
+		}
+		primary := durable.ProllyMapFromIndex(m)
+		return BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, idx, primary)
 
 	default:
 		return nil, fmt.Errorf("unknown NomsBinFormat")
 	}
 }
 
-func BuildSecondaryProllyIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Index) (durable.Index, error) {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	empty, err := durable.NewEmptyIndex(ctx, tbl.ValueReadWriter(), idx.Schema())
+// BuildSecondaryProllyIndex builds secondary index data for the given primary
+// index row data |primary|. |sch| is the current schema of the table.
+func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
+	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
 	if err != nil {
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
-
-	m, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-	primary := durable.ProllyMapFromIndex(m)
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {

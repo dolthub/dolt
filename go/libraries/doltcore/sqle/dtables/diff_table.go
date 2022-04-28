@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -216,18 +217,19 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
 // and the schema of the table (or EmptySchema if tbl is null).
-func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.Map, schema.Schema, error) {
-	var data types.Map
+func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable.Index, schema.Schema, error) {
+	var data durable.Index
 	var err error
+
 	if tbl == nil {
-		data, err = types.NewMap(ctx, ddb.ValueReadWriter())
+		data, err = durable.NewEmptyIndex(ctx, ddb.ValueReadWriter(), schema.EmptySchema)
 		if err != nil {
-			return types.EmptyMap, nil, err
+			return nil, nil, err
 		}
 	} else {
-		data, err = tbl.GetNomsRowData(ctx)
+		data, err = tbl.GetRowData(ctx)
 		if err != nil {
-			return types.EmptyMap, nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -238,7 +240,7 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (types.M
 		sch, err = tbl.GetSchema(ctx)
 
 		if err != nil {
-			return types.EmptyMap, nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -415,7 +417,8 @@ func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner 
 	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
-	rd.Start(ctx, fromData, toData)
+	// TODO (dhruv) don't cast to noms map
+	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
 
 	warnFn := func(code int, message string, args ...string) {
 		ctx.Warn(code, message, args)

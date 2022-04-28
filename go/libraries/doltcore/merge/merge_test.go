@@ -25,13 +25,18 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func mustTuple(tpl types.Tuple, err error) types.Tuple {
@@ -210,7 +215,7 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
+			actualResult, isConflict, err := nomsPkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
 			assert.Equal(t, test.expectConflict, isConflict)
@@ -253,7 +258,7 @@ var uuids = []types.UUID{
 
 var keyTuples = make([]types.Tuple, len(uuids))
 
-var index schema.Index
+var indexSchema schema.Index
 
 func init() {
 	keyTag := types.Uint(idTag)
@@ -262,10 +267,80 @@ func init() {
 		keyTuples[i] = mustTuple(types.NewTuple(types.Format_Default, keyTag, id))
 	}
 
-	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
+func TestNomsMergeCommits(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+
+	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupNomsMergeTest(t)
+
+	root, err := commit.GetRootValue(context.Background())
+	require.NoError(t, err)
+
+	mergeRoot, err := mergeCommit.GetRootValue(context.Background())
+	require.NoError(t, err)
+
+	ancCm, err := doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
+	require.NoError(t, err)
+
+	ancRoot, err := ancCm.GetRootValue(context.Background())
+	require.NoError(t, err)
+
+	ff, err := commit.CanFastForwardTo(context.Background(), mergeCommit)
+	require.NoError(t, err)
+	require.False(t, ff)
+
+	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	opts := editor.TestEditorOptions(vrw)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if stats.Adds != 2 || stats.Deletes != 2 || stats.Modifications != 3 || stats.Conflicts != 2 {
+		t.Error("Actual stats differ from expected")
+	}
+
+	tbl, _, err := root.GetTable(context.Background(), tableName)
+	assert.NoError(t, err)
+	sch, err := tbl.GetSchema(context.Background())
+	assert.NoError(t, err)
+	expected, err := doltdb.NewNomsTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	assert.NoError(t, err)
+	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
+	assert.NoError(t, err)
+	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
+	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
+	assert.NoError(t, err)
+
+	h, err := merged.HashOf()
+	assert.NoError(t, err)
+	eh, err := expected.HashOf()
+	assert.NoError(t, err)
+	if h == eh {
+		mergedRows, err := merged.GetNomsRowData(context.Background())
+		assert.NoError(t, err)
+		if !mergedRows.Equals(expectedRows) {
+			t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
+		}
+		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), indexSchema.Name())
+		assert.NoError(t, err)
+		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), indexSchema.Name())
+		assert.NoError(t, err)
+		if expectedRows.Len() != mergedIndexRows.Len() || !mergedIndexRows.Equals(expectedIndexRows) {
+			t.Error("index contents are incorrect")
+		}
+	} else {
+		assert.Fail(t, "%s and %s do not equal", h.String(), eh.String())
+	}
+}
+
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
 	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
 	vrw := ddb.ValueReadWriter()
 
@@ -400,8 +475,38 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
 }
 
+var testPersons = []testPerson{
+	{1, "person 1", newString("dufus")},
+	{2, "person 2", nil},
+	{3, "person 3", nil},
+	{4, "person 4", newString("senior dufus")},
+	{5, "person 5", nil},
+	{6, "person 6", nil},
+	{7, "person 7", newString("madam")},
+	{8, "person 8", newString("miss")},
+	{9, "person 9", nil},
+}
+
+type testPerson struct {
+	id    uint32
+	name  string
+	title *string
+}
+
+var kD = val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+var vD = val.NewTupleDescriptor(val.Type{Enc: val.StringEnc}, val.Type{Enc: val.StringEnc, Nullable: true})
+var kB = val.NewTupleBuilder(kD)
+var vB = val.NewTupleBuilder(vD)
+
+func newString(str string) *string {
+	return &str
+}
+
 func TestMergeCommits(t *testing.T) {
-	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest(t)
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+	vrw, commit, mergeCommit, expectedRows, expectedIndex := setupProllyMergeTest(t)
 
 	root, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
@@ -421,47 +526,177 @@ func TestMergeCommits(t *testing.T) {
 
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
-
+	merged, _, err := merger.MergeTable(context.Background(), tableName, opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if stats.Adds != 2 || stats.Deletes != 2 || stats.Modifications != 3 || stats.Conflicts != 2 {
-		t.Error("Actual stats differ from expected")
-	}
+	r, err := merged.GetRowData(context.Background())
+	require.NoError(t, err)
+	receivedRows := durable.ProllyMapFromIndex(r)
+	prolly.MustEqual(t, expectedRows, receivedRows)
 
-	tbl, _, err := root.GetTable(context.Background(), tableName)
-	assert.NoError(t, err)
-	sch, err := tbl.GetSchema(context.Background())
-	assert.NoError(t, err)
-	expected, err := doltdb.NewNomsTable(context.Background(), vrw, sch, expectedRows, nil, nil)
-	assert.NoError(t, err)
-	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
-	assert.NoError(t, err)
-	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
-	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
-	assert.NoError(t, err)
-
-	h, err := merged.HashOf()
-	assert.NoError(t, err)
-	eh, err := expected.HashOf()
-	assert.NoError(t, err)
-	if h == eh {
-		mergedRows, err := merged.GetNomsRowData(context.Background())
-		assert.NoError(t, err)
-		if !mergedRows.Equals(expectedRows) {
-			t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
-		}
-		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		if expectedRows.Len() != mergedIndexRows.Len() || !mergedIndexRows.Equals(expectedIndexRows) {
-			t.Error("index contents are incorrect")
-		}
-	} else {
-		assert.Fail(t, "%s and %s do not equal", h.String(), eh.String())
-	}
+	rIndex, err := merged.GetIndexRowData(context.Background(), indexSchema.Name())
+	require.NoError(t, err)
+	receivedIndex := durable.ProllyMapFromIndex(rIndex)
+	prolly.MustEqual(t, expectedIndex, receivedIndex)
 }
+
+func setupProllyMergeTest(t *testing.T) (vrw types.ValueReadWriter, leftCommit *doltdb.Commit, rightCommit *doltdb.Commit, expectedRows prolly.Map, expectedIndex prolly.Map) {
+	ctx := context.Background()
+	ddb, _ := doltdb.LoadDoltDB(ctx, types.Format_DOLT_1, doltdb.InMemDoltDB, filesys2.LocalFS)
+	vrw = ddb.ValueReadWriter()
+
+	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
+	require.NoError(t, err)
+
+	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
+	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
+	require.NoError(t, err)
+
+	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+	initialRows, err := prolly.NewMapFromTuples(ctx, ns, kD, vD, tableData(testPersons)...)
+	require.NoError(t, err)
+
+	// left updates
+	leftM := initialRows.Mutate()
+	err = leftM.Delete(ctx, key(2))
+	err = leftM.Put(ctx, key(4), value("person ~4", nil))
+	err = leftM.Put(ctx, key(6), value("person ~6", nil))
+	require.NoError(t, err)
+	leftRows, err := leftM.Map(ctx)
+	require.NoError(t, err)
+
+	// right updates
+	rightM := initialRows.Mutate()
+	err = rightM.Delete(ctx, key(3))
+	err = rightM.Put(ctx, key(5), value("person ~5", nil))
+	err = rightM.Put(ctx, key(6), value("person 6", newString("new title")))
+	require.NoError(t, err)
+	rightRows, err := rightM.Map(ctx)
+	require.NoError(t, err)
+
+	// expected updates
+	expectedM := initialRows.Mutate()
+	err = expectedM.Delete(ctx, key(2))
+	require.NoError(t, err)
+	err = expectedM.Delete(ctx, key(3))
+	require.NoError(t, err)
+	err = expectedM.Put(ctx, key(4), value("person ~4", nil))
+	require.NoError(t, err)
+	err = expectedM.Put(ctx, key(5), value("person ~5", nil))
+	require.NoError(t, err)
+	err = expectedM.Put(ctx, key(6), value("person ~6", newString("new title")))
+	require.NoError(t, err)
+	expectedRows, err = expectedM.Map(ctx)
+	require.NoError(t, err)
+	// expected secondary index
+	expectedI, err := creation.BuildSecondaryProllyIndex(ctx, vrw, sch, indexSchema, expectedRows)
+	require.NoError(t, err)
+	expectedIndex = durable.ProllyMapFromIndex(expectedI)
+
+	tbl, err := doltdb.NewTable(ctx, vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	require.NoError(t, err)
+	leftTbl, err := doltdb.NewTable(ctx, vrw, sch, durable.IndexFromProllyMap(leftRows), nil, nil)
+	require.NoError(t, err)
+	rightTbl, err := doltdb.NewTable(ctx, vrw, sch, durable.IndexFromProllyMap(rightRows), nil, nil)
+	require.NoError(t, err)
+
+	// TODO: Add another index that covers name and title
+
+	// Build secondary index
+
+	idx, err := creation.BuildSecondaryProllyIndex(ctx, vrw, sch, indexSchema, initialRows)
+	require.NoError(t, err)
+	leftIdx, err := creation.BuildSecondaryProllyIndex(ctx, vrw, sch, indexSchema, leftRows)
+	require.NoError(t, err)
+	rightIdx, err := creation.BuildSecondaryProllyIndex(ctx, vrw, sch, indexSchema, rightRows)
+	require.NoError(t, err)
+
+	// Set secondary index
+
+	tbl, err = tbl.SetIndexRows(ctx, indexSchema.Name(), idx)
+	require.NoError(t, err)
+	leftTbl, err = leftTbl.SetIndexRows(ctx, indexSchema.Name(), leftIdx)
+	require.NoError(t, err)
+	rightTbl, err = rightTbl.SetIndexRows(ctx, indexSchema.Name(), rightIdx)
+	require.NoError(t, err)
+
+	root, err := mainHead.GetRootValue(ctx)
+	require.NoError(t, err)
+	root, err = root.PutTable(ctx, tableName, tbl)
+	require.NoError(t, err)
+	leftRoot, err := root.PutTable(ctx, tableName, leftTbl)
+	require.NoError(t, err)
+	rightRoot, err := root.PutTable(ctx, tableName, rightTbl)
+	require.NoError(t, err)
+
+	meta, err := datas.NewCommitMeta(name, email, "fake")
+	require.NoError(t, err)
+
+	_, ancRootHash, err := ddb.WriteRootValue(ctx, root)
+	require.NoError(t, err)
+	_, leftRootHash, err := ddb.WriteRootValue(ctx, leftRoot)
+	require.NoError(t, err)
+	_, rightRootHash, err := ddb.WriteRootValue(ctx, rightRoot)
+	require.NoError(t, err)
+
+	// Ancestor
+	ancCommit, err := ddb.Commit(ctx, ancRootHash, ref.NewBranchRef(env.DefaultInitBranch), meta)
+	require.NoError(t, err)
+
+	// Right
+	newBranchRef := ref.NewBranchRef("to-merge")
+	err = ddb.NewBranchAtCommit(ctx, newBranchRef, ancCommit)
+	require.NoError(t, err)
+	rightCommit, err = ddb.Commit(ctx, rightRootHash, newBranchRef, meta)
+	require.NoError(t, err)
+
+	// Left
+	leftCommit, err = ddb.Commit(ctx, leftRootHash, ref.NewBranchRef(env.DefaultInitBranch), meta)
+	require.NoError(t, err)
+
+	return
+}
+
+func tableData(data []testPerson) []val.Tuple {
+	tups := make([]val.Tuple, 2*len(data))
+	i := 0
+	for _, d := range data {
+		tups[i], tups[i+1] = key(d.id), value(d.name, d.title)
+		i += 2
+	}
+	return tups
+}
+
+func key(id uint32) val.Tuple {
+	kB.PutUint32(0, id)
+	return kB.Build(syncPool)
+}
+
+func value(name string, title *string) val.Tuple {
+	vB.PutString(0, name)
+	if title != nil {
+		vB.PutString(1, *title)
+	}
+	return vB.Build(syncPool)
+}
+
+//func diffStr(t tree.Diff, kD val.TupleDesc) string {
+//	var str string
+//	switch t.Type {
+//	case tree.AddedDiff:
+//		str = "added"
+//	case tree.ModifiedDiff:
+//		str = "modified"
+//	case tree.RemovedDiff:
+//		str = "removed"
+//	default:
+//		panic("unknown type")
+//	}
+//
+//	key := kD.Format(val.Tuple(t.Key))
+//	str += " key " + key
+//
+//	return str
+//}

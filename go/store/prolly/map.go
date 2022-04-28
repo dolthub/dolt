@@ -19,10 +19,12 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"testing"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -357,4 +359,15 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	}
 	sb.WriteString("}")
 	return sb.String(), nil
+}
+
+func MustDebugFormat(t *testing.T, m Map) string {
+	s, err := DebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
+func MustEqual(t *testing.T, expected Map, actual Map) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"hashes differed. expected: %s\nactual: %s", MustDebugFormat(t, expected), MustDebugFormat(t, actual))
 }
