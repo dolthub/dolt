@@ -40,7 +40,7 @@ jobs:
           FROM_VERSION: '8.0.28'
           TO_SERVER: 'dolt'
           TO_VERSION: ${{ github.sha }}
-          MODE: 'release'
+          MODE: 'nightly'
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
@@ -50,7 +50,7 @@ jobs:
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
           TO_VERSION: ${{ github.sha }}
-          MODE: 'release'
+          MODE: 'nightly'
           ACTOR: ${{ github.actor }}
           ACTOR_EMAIL: 'max@dolthub.com'
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
