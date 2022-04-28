@@ -24,10 +24,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-west-2
-      - uses: xt0rted/pull-request-comment-branch@v1
-        id: comment-branch
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Create and Auth kubeconfig
         run: |
           echo "$CONFIG" > kubeconfig
@@ -44,17 +40,17 @@ jobs:
           FROM_VERSION: '8.0.28'
           TO_SERVER: 'dolt'
           TO_VERSION: ${{ github.sha }}
-          MODE: 'release'
+          MODE: 'nightly'
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
       - name: Run correctness
         id: run-correctness
         run: ./.github/scripts/sql-correctness/run-correctness.sh
         env:
           TO_VERSION: ${{ github.sha }}
-          MODE: 'release'
+          MODE: 'nightly'
           ACTOR: ${{ github.actor }}
           ACTOR_EMAIL: 'max@dolthub.com'
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
