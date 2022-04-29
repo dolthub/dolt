@@ -64,7 +64,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
-	assert.Equal(t, 136, int(sz))
+	assert.Equal(t, 128, int(sz))
 }
 
 func TestCountArray(t *testing.T) {

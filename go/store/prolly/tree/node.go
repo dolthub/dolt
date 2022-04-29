@@ -24,6 +24,7 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -45,8 +46,8 @@ type Node struct {
 	// keys and values contain sub-slices of |msg|,
 	// allowing faster lookups by avoiding the vtable
 	keys, values val.SlicedBuffer
-	msg          serial.ProllyTreeNode
 	count        uint16
+	msg          message.Message
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
@@ -82,30 +83,11 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	})
 }
 
-func NodeFromBytes(buf []byte) Node {
-	msg := serial.GetRootAsProllyTreeNode(buf, 0)
-	return nodeFromFlatbuffer(*msg)
-}
-
-func nodeFromFlatbuffer(msg serial.ProllyTreeNode) Node {
-	keys := val.SlicedBuffer{
-		Buf:  msg.KeyItemsBytes(),
-		Offs: getKeyOffsetsVector(msg),
-	}
-	values := val.SlicedBuffer{
-		Buf:  msg.ValueItemsBytes(),
-		Offs: getValueOffsetsVector(msg),
-	}
-
-	count := msg.KeyOffsetsLength() + 1
-	if len(keys.Buf) == 0 {
-		count = 0
-	}
-
+func NodeFromBytes(msg []byte) Node {
 	return Node{
-		keys:   keys,
-		values: values,
-		count:  uint16(count),
+		keys:   message.GetKeys(msg),
+		values: message.GetValues(msg),
+		count:  message.GetCount(msg),
 		msg:    msg,
 	}
 }
@@ -119,7 +101,7 @@ func (nd Node) Count() int {
 }
 
 func (nd Node) TreeCount() int {
-	return int(nd.msg.TreeCount())
+	return message.GetTreeCount(nd.msg)
 }
 
 func (nd Node) Size() int {
@@ -128,7 +110,7 @@ func (nd Node) Size() int {
 
 // Level returns the tree Level for this node
 func (nd Node) Level() int {
-	return int(nd.msg.TreeLevel())
+	return message.GetTreeLevel(nd.msg)
 }
 
 // IsLeaf returns whether this node is a leaf
@@ -143,25 +125,17 @@ func (nd Node) GetKey(i int) Item {
 
 // getValue returns the |ith| value of this node.
 func (nd Node) getValue(i int) Item {
-	// todo(andy): abstract value access
-	if nd.values.Buf != nil {
-		return nd.values.GetSlice(i)
-	} else {
-		r := nd.getAddress(i)
-		return r[:]
-	}
+	return nd.values.GetSlice(i)
 }
 
 // getAddress returns the |ith| address of this node.
 // This method assumes values are 20-byte address hashes.
 func (nd Node) getAddress(i int) hash.Hash {
-	refs := nd.msg.AddressArrayBytes()
-	start, stop := i*addrSz, (i+1)*addrSz
-	return hash.New(refs[start:stop])
+	return hash.New(nd.getValue(i))
 }
 
 func (nd Node) getSubtreeCounts() SubtreeCounts {
-	arr := nd.msg.SubtreeCountsBytes()
+	arr := message.GetSubtrees(nd.msg)
 	return readSubtreeCounts(int(nd.count), arr)
 }
 
@@ -170,27 +144,11 @@ func (nd Node) empty() bool {
 }
 
 func (nd Node) bytes() []byte {
-	return nd.msg.Table().Bytes
+	return nd.msg
 }
 
 func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
-	arr := nd.msg.AddressArrayBytes()
-	cnt := len(arr) / addrSz
-	for i := 0; i < cnt; i++ {
-		if err = cb(ctx, nd.getAddress(i)); err != nil {
-			return err
-		}
-	}
-
-	cnt2 := nd.msg.ValueAddressOffsetsLength()
-	for i := 0; i < cnt2; i++ {
-		o := nd.msg.ValueAddressOffsets(i)
-		addr := hash.New(nd.values.Buf[o : o+addrSz])
-		if err = cb(ctx, addr); err != nil {
-			return err
-		}
-	}
-	return
+	return message.WalkAddresses(ctx, nd.msg, cb)
 }
 
 func getKeyOffsetsVector(msg serial.ProllyTreeNode) []byte {
