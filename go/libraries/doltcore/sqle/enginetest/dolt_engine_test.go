@@ -549,14 +549,14 @@ func TestStoredProcedures(t *testing.T) {
 
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
-	// enginetest.TestTransactionScripts(t, newDoltHarness(t))
-	// for _, script := range DoltTransactionTests {
-	// 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
-	// }
-	//
-	// for _, script := range DoltSqlFuncTransactionTests {
-	// 	enginetest.TestTransactionScript(t, newDoltHarness(t), script)
-	// }
+	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+	for _, script := range DoltTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range DoltSqlFuncTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 
 	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -601,7 +601,7 @@ func TestDoltMerge(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	script := enginetest.TransactionTest{
 		Name: "committed conflicts are seen by other sessions",
