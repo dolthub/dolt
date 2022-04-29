@@ -330,7 +330,6 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue,
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 
-	stats := &MergeStats{}
 	var initalKVs []types.Value
 	var expectedKVs []types.Value
 	var expectedConflictsKVs []types.Value
@@ -342,7 +341,6 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue,
 			expectedKVs = append(expectedKVs, nomsKey(testCase.key), testCase.expectedValue.nomsValue())
 		}
 		if testCase.conflict {
-			stats.Conflicts++
 			expectedConflictsKVs = append(
 				expectedConflictsKVs,
 				nomsKey(testCase.key),
