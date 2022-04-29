@@ -266,25 +266,21 @@ func (sc *ServerConfig) GetServerArgs() []string {
 type Config struct {
 	// Runs is the number of times to run all tests
 	Runs int
-
 	// RuntimeOS is the platform the benchmarks ran on
 	RuntimeOS string
-
 	// RuntimeGoArch is the runtime architecture
 	RuntimeGoArch string
-
 	// Servers are the servers to benchmark
 	Servers []*ServerConfig
-
 	// Tests are the tests to run. If no tests are provided,
 	// the default tests will be used
 	Tests []*ConfigTest
-
 	// TestOptions a list of sysbench test options to apply to all tests
 	TestOptions []string
-
 	// ScriptDir is a path to a directory of lua scripts
 	ScriptDir string
+	// DirtyClone downloads a database with existing chunks and commits
+	InitBigRepo bool
 }
 
 // NewConfig returns a new Config
