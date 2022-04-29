@@ -110,13 +110,13 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, nb.keys, keySz)
-	serial.TupleMapStartKeyOffsetsVector(b, len(nb.keys)-1)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(nb.keys)-1)
 	keyOffs = b.EndVector(writeItemOffsets(b, nb.keys, keySz))
 
 	if nb.level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, nb.values, valSz)
-		serial.TupleMapStartValueOffsetsVector(b, len(nb.values)-1)
+		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(nb.values)-1)
 		valOffs = b.EndVector(writeItemOffsets(b, nb.values, valSz))
 	} else {
 		// serialize child refs and subtree counts for internal nodes
@@ -125,22 +125,22 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	}
 
 	// populate the node's vtable
-	serial.TupleMapStart(b)
-	serial.TupleMapAddKeyTuples(b, keyTups)
-	serial.TupleMapAddKeyOffsets(b, keyOffs)
+	serial.ProllyTreeNodeStart(b)
+	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
+	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
 	if nb.level == 0 {
-		serial.TupleMapAddValueTuples(b, valTups)
-		serial.TupleMapAddValueOffsets(b, valOffs)
-		serial.TupleMapAddTreeCount(b, uint64(len(nb.keys)))
+		serial.ProllyTreeNodeAddValueItems(b, valTups)
+		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
+		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(nb.keys)))
 	} else {
-		serial.TupleMapAddRefArray(b, refArr)
-		serial.TupleMapAddRefCardinalities(b, cardArr)
-		serial.TupleMapAddTreeCount(b, nb.subtrees.sum())
+		serial.ProllyTreeNodeAddAddressArray(b, refArr)
+		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
+		serial.ProllyTreeNodeAddTreeCount(b, nb.subtrees.sum())
 	}
-	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
-	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
-	serial.TupleMapAddTreeLevel(b, uint8(nb.level))
-	b.Finish(serial.TupleMapEnd(b))
+	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
+	b.Finish(serial.ProllyTreeNodeEnd(b))
 
 	buf := b.FinishedBytes()
 	return MapNodeFromBytes(buf)

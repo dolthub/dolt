@@ -69,7 +69,7 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		nd := newLeafNode(keys, values)
 
 		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
-		ko2, vo2 := offsetsFromFlatbuffer(nd.buf)
+		ko2, vo2 := offsetsFromFlatbuffer(nd.msg)
 
 		assert.Equal(t, len(ko1), len(ko2))
 		assert.Equal(t, len(ko1), len(keys)-1)
@@ -139,7 +139,7 @@ func sumTupleSize(items []val.Tuple) (sz uint64) {
 	return
 }
 
-func offsetsFromFlatbuffer(buf serial.TupleMap) (ko, vo []uint16) {
+func offsetsFromFlatbuffer(buf serial.ProllyTreeNode) (ko, vo []uint16) {
 	ko = make([]uint16, buf.KeyOffsetsLength())
 	for i := range ko {
 		ko[i] = buf.KeyOffsets(i)
