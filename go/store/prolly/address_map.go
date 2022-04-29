@@ -54,7 +54,6 @@ func (l lexicographic) Compare(left, right stringSlice) int {
 	return bytes.Compare(left, right)
 }
 
-// Count returns the number of key-value pairs in the Map.
 func (c AddressMap) Count() int {
 	return c.addresses.count()
 }
@@ -63,12 +62,10 @@ func (c AddressMap) Height() int {
 	return c.addresses.height()
 }
 
-// HashOf returns the Hash of this Map.
 func (c AddressMap) HashOf() hash.Hash {
 	return c.addresses.hashOf()
 }
 
-// Format returns the NomsBinFormat of this Map.
 func (c AddressMap) Format() *types.NomsBinFormat {
 	return c.addresses.ns.Format()
 }
@@ -95,7 +92,6 @@ func (c AddressMap) Has(ctx context.Context, name string) (ok bool, err error) {
 	return c.addresses.has(ctx, stringSlice(name))
 }
 
-// IterAll returns a mutableMapIter that iterates over the entire Map.
 func (c AddressMap) IterAll(ctx context.Context, cb func(name string, address hash.Hash) error) error {
 	iter, err := c.addresses.iterAll(ctx)
 	if err != nil {

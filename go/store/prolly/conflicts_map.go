@@ -62,7 +62,6 @@ func NewConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) Co
 	}
 }
 
-// Count returns the number of key-value pairs in the Map.
 func (c ConflictMap) Count() int {
 	return c.conflicts.count()
 }
@@ -71,17 +70,14 @@ func (c ConflictMap) Height() int {
 	return c.conflicts.height()
 }
 
-// HashOf returns the Hash of this Map.
 func (c ConflictMap) HashOf() hash.Hash {
 	return c.conflicts.hashOf()
 }
 
-// Format returns the NomsBinFormat of this Map.
 func (c ConflictMap) Format() *types.NomsBinFormat {
 	return c.conflicts.ns.Format()
 }
 
-// Descriptors returns the TupleDesc's from this Map.
 func (c ConflictMap) Descriptors() (key, ours, theirs, base val.TupleDesc) {
 	return c.keyDesc, c.ourDesc, c.theirDesc, c.baseDesc
 }
@@ -102,12 +98,10 @@ func (c ConflictMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error
 	return c.conflicts.has(ctx, key)
 }
 
-// IterAll returns a mutableMapIter that iterates over the entire Map.
 func (c ConflictMap) IterAll(ctx context.Context) (ConflictIter, error) {
 	return c.conflicts.iterAll(ctx)
 }
 
-// IterOrdinalRange returns a MapIter for the ordinal range beginning at |start| and ending before |stop|.
 func (c ConflictMap) IterOrdinalRange(ctx context.Context, start, stop uint64) (ConflictIter, error) {
 	return c.conflicts.iterOrdinalRange(ctx, start, stop)
 }
