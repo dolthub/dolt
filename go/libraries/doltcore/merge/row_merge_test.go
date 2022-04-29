@@ -5,10 +5,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type RowMergeTest struct {
@@ -16,6 +17,7 @@ type RowMergeTest struct {
 	row, mergeRow, ancRow types.Value
 	sch                   schema.Schema
 	expectedResult        types.Value
+	expectCellMerge       bool
 	expectConflict        bool
 }
 
@@ -28,6 +30,7 @@ func TestRowMerge(t *testing.T) {
 			nil,
 			[]types.Value{types.String("one"), types.Int(2)},
 			false,
+			false,
 		),
 		createRowMergeStruct(
 			"add diff row",
@@ -35,6 +38,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.String("three")},
 			nil,
 			nil,
+			false,
 			true,
 		),
 		createRowMergeStruct(
@@ -44,6 +48,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(2)},
 			nil,
 			false,
+			false,
 		),
 		createRowMergeStruct(
 			"one delete one modify",
@@ -51,6 +56,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("two"), types.Uint(2)},
 			[]types.Value{types.String("one"), types.Uint(2)},
 			nil,
+			false,
 			true,
 		),
 		createRowMergeStruct(
@@ -59,6 +65,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(3)},
 			[]types.Value{types.String("one"), types.Uint(2)},
 			[]types.Value{types.String("two"), types.Uint(3)},
+			true,
 			false,
 		),
 		createRowMergeStruct(
@@ -67,6 +74,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
 			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))},
 			[]types.Value{types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
+			true,
 			false,
 		),
 		createRowMergeStruct(
@@ -75,6 +83,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
 			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))},
 			nil,
+			false,
 			true,
 		),
 		createRowMergeStruct(
@@ -83,6 +92,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
 			[]types.Value{types.String("one"), types.Uint(2)},
 			[]types.Value{types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
+			true,
 			false,
 		),
 		createRowMergeStruct(
@@ -91,6 +101,7 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")), types.String("")},
 			[]types.Value{types.String("one"), types.Uint(2), types.NullValue, types.NullValue},
 			nil,
+			false,
 			true,
 		),
 		createRowMergeStruct(
@@ -99,15 +110,17 @@ func TestRowMerge(t *testing.T) {
 			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.String("b")))},
 			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.NullValue))},
 			nil,
+			false,
 			true,
 		),
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
+			actualResult, didCellMerge, isConflict, err := pkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
 			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
+			assert.Equal(t, test.expectCellMerge, didCellMerge)
 			assert.Equal(t, test.expectConflict, isConflict)
 		})
 	}
@@ -142,7 +155,7 @@ func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
 	return mustTuple(types.NewTuple(types.Format_Default, tplVals...))
 }
 
-func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCnf bool) RowMergeTest {
+func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCellMrg bool, expectCnf bool) RowMergeTest {
 	longest := vals
 
 	if len(mergeVals) > len(longest) {
@@ -168,5 +181,5 @@ func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []type
 	mergeTpl := valsToTestTupleWithPks(mergeVals)
 	ancTpl := valsToTestTupleWithPks(ancVals)
 	expectedTpl := valsToTestTupleWithPks(expected)
-	return RowMergeTest{name, tpl, mergeTpl, ancTpl, sch, expectedTpl, expectCnf}
+	return RowMergeTest{name, tpl, mergeTpl, ancTpl, sch, expectedTpl, expectCellMrg, expectCnf}
 }

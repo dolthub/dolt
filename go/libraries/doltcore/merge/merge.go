@@ -296,7 +296,8 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	return ms, nil
 }
 
-type rowMerger func(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error)
+// returns merged roow, bool indicating if a cell-wise merge was performed, bool indicating a conflict, and error
+type rowMerger func(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, bool, error)
 
 type applicator func(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, rowData types.Map, stats *MergeStats, change types.ValueChanged) error
 
@@ -402,7 +403,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 
 			if !processed {
 				r, mergeRow, ancRow := change.NewValue, mergeChange.NewValue, change.OldValue
-				mergedRow, isConflict, err := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
+				mergedRow, didCellMerge, isConflict, err := rowMerge(ctx, vrw.Format(), sch, r, mergeRow, ancRow)
 				if err != nil {
 					return err
 				}
@@ -419,7 +420,12 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, tblName stri
 						return err
 					}
 				} else {
-					vc := types.ValueChanged{ChangeType: change.ChangeType, Key: key, OldValue: ancRow, NewValue: mergedRow}
+					vc := types.ValueChanged{ChangeType: change.ChangeType, Key: key, NewValue: mergedRow}
+					if didCellMerge {
+						vc.OldValue = r
+					} else {
+						vc.OldValue = ancRow
+					}
 					err = applyChange(ctx, sch, tblEdit, rows, stats, vc)
 					if err != nil {
 						return err
@@ -691,36 +697,37 @@ func convertValueChanged(vc types.ValueChanged) (types.ValueChanged, uint64, err
 	}
 }
 
-func pkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, error) {
+// pkRowMerge returns the merged value, if a cell-wise merge was performed, and whether a conflict occurred
+func pkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, r, mergeRow, baseRow types.Value) (types.Value, bool, bool, error) {
 	var baseVals row.TaggedValues
 	if baseRow == nil {
 		if r.Equals(mergeRow) {
 			// same row added to both
-			return r, false, nil
+			return r, false, false, nil
 		}
 	} else if r == nil && mergeRow == nil {
 		// same row removed from both
-		return nil, false, nil
+		return nil, false, false, nil
 	} else if r == nil || mergeRow == nil {
 		// removed from one and modified in another
-		return nil, true, nil
+		return nil, false, true, nil
 	} else {
 		var err error
 		baseVals, err = row.ParseTaggedValues(baseRow.(types.Tuple))
 
 		if err != nil {
-			return nil, false, err
+			return nil, false, false, err
 		}
 	}
 
 	rowVals, err := row.ParseTaggedValues(r.(types.Tuple))
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	mergeVals, err := row.ParseTaggedValues(mergeRow.(types.Tuple))
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
@@ -757,27 +764,27 @@ func pkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema
 	})
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
 	if isConflict {
-		return nil, true, nil
+		return nil, false, true, nil
 	}
 
 	tpl := resultVals.NomsTupleForNonPKCols(nbf, sch.GetNonPKCols())
 	v, err := tpl.Value(ctx)
 
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 
-	return v, false, nil
+	return v, true, false, nil
 }
 
-func keylessRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, val, mergeVal, ancVal types.Value) (types.Value, bool, error) {
+func keylessRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, val, mergeVal, ancVal types.Value) (types.Value, bool, bool, error) {
 	// both sides of the merge produced a diff for this key,
 	// so we always throw a conflict
-	return nil, true, nil
+	return nil, false, true, nil
 }
 
 func mergeAutoIncrementValues(ctx context.Context, tbl, otherTbl, resultTbl *doltdb.Table) (*doltdb.Table, error) {
