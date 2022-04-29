@@ -335,7 +335,7 @@ func (nb *mapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
-	b.Finish(serial.ProllyTreeNodeEnd(b))
+	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), []byte(serial.ProllyTreeNodeFileID))
 	nb.reset()
 
 	buf := b.FinishedBytes()

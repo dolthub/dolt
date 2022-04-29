@@ -307,7 +307,7 @@ func (tb *testBuilder) Build(pool pool.BuffPool) (node Node) {
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(tb.level))
-	b.Finish(serial.ProllyTreeNodeEnd(b))
+	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), []byte(serial.ProllyTreeNodeFileID))
 	tb.reset()
 
 	buf := b.FinishedBytes()

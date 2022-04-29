@@ -22,6 +22,7 @@ const WorkingSetFileID = "WRST"
 const CommitFileID = "DCMT"
 const RootValueFileID = "RTVL"
 const TableFileID = "DTBL"
+const ProllyTreeNodeFileID = "PRLY"
 
 func GetFileID(bs []byte) string {
 	if len(bs) < 8 {

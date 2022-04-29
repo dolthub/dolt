@@ -235,7 +235,7 @@ func (nb *addrMapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
 		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(nb.keys)))
 	}
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
-	b.Finish(serial.ProllyTreeNodeEnd(b))
+	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), []byte(serial.ProllyTreeNodeFileID))
 	nb.reset()
 
 	buf := b.FinishedBytes()

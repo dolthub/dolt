@@ -62,26 +62,6 @@ func TestRoundTripNodeItems(t *testing.T) {
 	}
 }
 
-func TestGetKeyValueOffsetsVectors(t *testing.T) {
-	for trial := 0; trial < 100; trial++ {
-		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
-		nd := newLeafNode(keys, values)
-
-		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
-		ko2, vo2 := offsetsFromFlatbuffer(nd.msg)
-
-		assert.Equal(t, len(ko1), len(ko2))
-		assert.Equal(t, len(ko1), len(keys)-1)
-		assert.Equal(t, ko1, ko2)
-
-		assert.Equal(t, len(vo1), len(vo2))
-		assert.Equal(t, len(vo1), len(values)-1)
-		assert.Equal(t, vo1, vo2)
-
-	}
-}
-
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
 	assert.Equal(t, 136, int(sz))

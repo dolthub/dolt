@@ -133,7 +133,7 @@ func (nd Node) Level() int {
 
 // IsLeaf returns whether this node is a leaf
 func (nd Node) IsLeaf() bool {
-	return int(nd.msg.TreeLevel()) == 0
+	return nd.Level() == 0
 }
 
 // GetKey returns the |ith| key of this node
@@ -141,28 +141,23 @@ func (nd Node) GetKey(i int) Item {
 	return nd.keys.GetSlice(i)
 }
 
-// getValue returns the |ith| value of this node. Only Valid for leaf nodes.
+// getValue returns the |ith| value of this node.
 func (nd Node) getValue(i int) Item {
 	// todo(andy): abstract value access
 	if nd.values.Buf != nil {
 		return nd.values.GetSlice(i)
 	} else {
-		r := nd.getChildAddress(i)
+		r := nd.getAddress(i)
 		return r[:]
 	}
 }
 
-// getChildAddress returns the |ith| address in this node
-func (nd Node) getChildAddress(i int) hash.Hash {
+// getAddress returns the |ith| address of this node.
+// This method assumes values are 20-byte address hashes.
+func (nd Node) getAddress(i int) hash.Hash {
 	refs := nd.msg.AddressArrayBytes()
 	start, stop := i*addrSz, (i+1)*addrSz
 	return hash.New(refs[start:stop])
-}
-
-// getValueAddress returns the |ith| value address in this node
-func (nd Node) getValueAddress(i int) hash.Hash {
-	o := nd.msg.ValueAddressOffsets(i)
-	return hash.New(nd.values.Buf[o : o+addrSz])
 }
 
 func (nd Node) getSubtreeCounts() SubtreeCounts {
@@ -182,19 +177,19 @@ func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 	arr := nd.msg.AddressArrayBytes()
 	cnt := len(arr) / addrSz
 	for i := 0; i < cnt; i++ {
-		if err = cb(ctx, nd.getChildAddress(i)); err != nil {
+		if err = cb(ctx, nd.getAddress(i)); err != nil {
 			return err
 		}
 	}
 
 	cnt2 := nd.msg.ValueAddressOffsetsLength()
 	for i := 0; i < cnt2; i++ {
-		if err = cb(ctx, nd.getValueAddress(i)); err != nil {
+		o := nd.msg.ValueAddressOffsets(i)
+		addr := hash.New(nd.values.Buf[o : o+addrSz])
+		if err = cb(ctx, addr); err != nil {
 			return err
 		}
 	}
-
-	assertFalse((cnt > 0) && (cnt2 > 0))
 	return
 }
 
@@ -250,7 +245,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 
 			w.Write([]byte(" }"))
 		} else {
-			ref := node.getChildAddress(i)
+			ref := hash.New(node.getValue(i))
 
 			w.Write([]byte(" ref: #"))
 			w.Write([]byte(ref.String()))

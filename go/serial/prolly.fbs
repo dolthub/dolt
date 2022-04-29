@@ -81,3 +81,9 @@ table CommitClosure {
   // node tree level, 0 for leaf nodes
   tree_level:uint8;
 }
+
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "PRLY";
+
+root_type ProllyTreeNode;
