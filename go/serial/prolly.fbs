@@ -52,21 +52,22 @@ table ProllyTreeNode {
   tree_level:uint8;
 }
 
+// todo(andy): rename to AddressMap
 table RefMap {
   // map keys ordered lexigraphically
   names:[string] (required);
 
-  // array of ref hashes
-  // - internal nodes: contains refs for
-  //   Prolly tree children
-  // - leaf nodes: contains refs corresponding
-  //   to keys in |names|
+  // array of chunk addresses
+  //  - subtree addresses for internal prolly tree nodes
+  //  - value addresses for AddressMap leaf nodes
+  // todo(andy): rename to address_array
   ref_array:[ubyte] (required);
 
-  // subtree member count
+  // array of uvarint encoded subtree counts
+  subtree_counts:[ubyte];
+  // total count of prolly tree
   tree_count:uint64;
-
-  // node tree level, 0 for leaf nodes
+  // prolly tree level, 0 for leaf nodes
   tree_level:uint8;
 }
 
