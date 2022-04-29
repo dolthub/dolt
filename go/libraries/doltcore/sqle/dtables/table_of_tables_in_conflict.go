@@ -17,6 +17,7 @@ package dtables
 import (
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
@@ -27,13 +28,13 @@ var _ sql.Table = (*TableOfTablesInConflict)(nil)
 
 // TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
 type TableOfTablesInConflict struct {
+	dbName string
 	ddb  *doltdb.DoltDB
-	root *doltdb.RootValue
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict
-func NewTableOfTablesInConflict(_ *sql.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue) sql.Table {
-	return &TableOfTablesInConflict{ddb: ddb, root: root}
+func NewTableOfTablesInConflict(_ *sql.Context, dbName string, ddb *doltdb.DoltDB) sql.Table {
+	return &TableOfTablesInConflict{dbName: dbName, ddb: ddb}
 }
 
 // Name is a sql.Table interface function which returns the name of the table which is defined by the constant
@@ -61,7 +62,6 @@ type tableInConflict struct {
 	size    uint64
 	done    bool
 	schemas conflict.ConflictSchema
-	//cnfItr types.MapIterator
 }
 
 // Key returns a unique key for the partition
@@ -111,15 +111,21 @@ func (p *tablesInConflict) Close(*sql.Context) error {
 
 // Partitions is a sql.Table interface function that returns a partition of the data.  Conflict data is partitioned by table.
 func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	tblNames, err := dt.root.TablesInConflict(ctx)
+	sess := dsess.DSessFromSess(ctx.Session)
+	ws, err := sess.WorkingSet(ctx, dt.dbName)
+	if err != nil {
+		return nil, err
+	}
 
+	root := ws.WorkingRoot()
+	tblNames, err := root.TablesInConflict(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	var partitions []*tableInConflict
 	for _, tblName := range tblNames {
-		tbl, ok, err := dt.root.GetTable(ctx, tblName)
+		tbl, ok, err := root.GetTable(ctx, tblName)
 
 		if err != nil {
 			return nil, err

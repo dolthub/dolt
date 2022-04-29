@@ -838,7 +838,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Query:    "/* client b */ commit",
 				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
-			{
+			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
 				Expected: []sql.Row{{0}},
 			},

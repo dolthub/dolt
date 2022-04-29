@@ -350,7 +350,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		dt, found = dtables.NewUnscopedDiffTable(ctx, db.ddb, head), true
 	case doltdb.TableOfTablesInConflictName:
-		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.ddb, root), true
+		dt, found = dtables.NewTableOfTablesInConflict(ctx, db.name, db.ddb), true
 	case doltdb.TableOfTablesWithViolationsName:
 		dt, found = dtables.NewTableOfTablesConstraintViolations(ctx, root), true
 	case doltdb.BranchesTableName:
