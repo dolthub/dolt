@@ -118,7 +118,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 	close(quit)
 	wg.Wait()
 
-	//err = os.RemoveAll(testRepo)
+	err = os.RemoveAll(testRepo)
 	if err != nil {
 		return nil, err
 	}
