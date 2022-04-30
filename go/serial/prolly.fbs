@@ -14,42 +14,41 @@
 
 namespace serial;
 
-enum TupleFormat : uint8 {
+enum ItemType : uint8 {
   Unknown,
-  V1 = 1,
+  TupleFormatAlpha = 1,
 }
 
-table TupleMap {
-  // array of map key tuples, ordered lexigraphically
-  key_tuples:[ubyte] (required);
-  // array of offets into |key_tuples|, zeroth offset omitted
+table ProllyTreeNode {
+  // sorted array of key items
+  key_items:[ubyte] (required);
+  // items offets for |key_items|, zeroth offset omitted
   key_offsets:[uint16] (required);
+  // item type for |key_items|
+  key_type:ItemType;
 
-  // array of map values tuples, ordered by paired key
-  // |value_tuples| is only present in leaf nodes
-  value_tuples:[ubyte];
-  // array of offets into |value_tuples|, zeroth offset omitted
-  // |value_offsets| is only present in leaf nodes
+  // array of values items, ordered by paired key
+  value_items:[ubyte];
+  // item offsets for |value_items|, zeroth offset omitted
   value_offsets:[uint16];
+  // item type for |value_items|
+  value_type:ItemType;
+  // offsets for each address (if any) in |value_items|
+  // (eg value tuples containing out-of-line BLOB addresses)
+  value_address_offsets:[uint16];
 
-  // array of ref hashes
-  // - internal nodes: contains refs for
-  //   Prolly tree children
-  // - leaf nodes: contains refs for heap values
-  //   iff table has ref'd types (eg TEXT)
-  ref_array:[ubyte];
+
+  // array of chunk addresses
+  //  - subtree addresses for internal prolly tree nodes
+  //  - value addresses for AddressMap leaf nodes
+  address_array:[ubyte];
+
+
   // array of uvarint encoded subtree counts
-  ref_cardinalities:[ubyte];
-
-  // tuple format for |key_tuples|
-  key_format:TupleFormat;
-  // tuple format for |value_tuples|
-  value_format:TupleFormat;
-
-  // subtree member count
+  subtree_counts:[ubyte];
+  // total count of prolly tree
   tree_count:uint64;
-
-  // node tree level, 0 for leaf nodes
+  // prolly tree level, 0 for leaf nodes
   tree_level:uint8;
 }
 

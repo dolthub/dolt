@@ -69,7 +69,7 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		nd := newLeafNode(keys, values)
 
 		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
-		ko2, vo2 := offsetsFromFlatbuffer(nd.buf)
+		ko2, vo2 := offsetsFromFlatbuffer(nd.msg)
 
 		assert.Equal(t, len(ko1), len(ko2))
 		assert.Equal(t, len(ko1), len(keys)-1)
@@ -107,16 +107,16 @@ func TestCountArray(t *testing.T) {
 	}
 }
 
-func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
-	keys = make([]NodeItem, count)
+func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {
+	keys = make([]Item, count)
 	for i := range keys {
 		sz := (rand.Int() % 41) + 10
-		keys[i] = make(NodeItem, sz)
+		keys[i] = make(Item, sz)
 		_, err := rand.Read(keys[i])
 		assert.NoError(t, err)
 	}
 
-	values = make([]NodeItem, count)
+	values = make([]Item, count)
 	copy(values, keys)
 	rand.Shuffle(len(values), func(i, j int) {
 		values[i], values[j] = values[j], values[i]
@@ -125,7 +125,7 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
 	return
 }
 
-func sumSize(items []NodeItem) (sz uint64) {
+func sumSize(items []Item) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}
@@ -139,7 +139,7 @@ func sumTupleSize(items []val.Tuple) (sz uint64) {
 	return
 }
 
-func offsetsFromFlatbuffer(buf serial.TupleMap) (ko, vo []uint16) {
+func offsetsFromFlatbuffer(buf serial.ProllyTreeNode) (ko, vo []uint16) {
 	ko = make([]uint16, buf.KeyOffsetsLength())
 	for i := range ko {
 		ko[i] = buf.KeyOffsets(i)

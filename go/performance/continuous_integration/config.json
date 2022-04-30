@@ -18,5 +18,6 @@
     }
   ],
   "ScriptDir":"/sysbench-lua-scripts",
-  "TestOptions": ["--rand-seed=1", "--table-size=30"]
+  "TestOptions": ["--rand-seed=1", "--table-size=30"],
+  "InitBigRepo": true
 }

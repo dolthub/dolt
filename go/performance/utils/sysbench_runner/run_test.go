@@ -53,6 +53,7 @@ func TestRunner(t *testing.T) {
 			"--time=120",
 			"--percentile=50",
 		},
+		InitBigRepo: true,
 	}
 
 	err = Run(conf)

@@ -29,8 +29,8 @@ const (
 )
 
 type Diff struct {
-	Key      NodeItem
-	From, To NodeItem
+	Key      Item
+	From, To Item
 	Type     DiffType
 }
 

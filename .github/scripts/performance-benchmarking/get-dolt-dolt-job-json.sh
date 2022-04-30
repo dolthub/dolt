@@ -73,7 +73,8 @@ echo '
               "--sysbenchQueries='"$medianLatencyChangeReadsQuery"'",
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
-              "--tpccQueries='"$tpccTpsQuery"'"
+              "--tpccQueries='"$tpccTpsQuery"'",
+              "--init-big-repo"
             ]
           }
         ],
