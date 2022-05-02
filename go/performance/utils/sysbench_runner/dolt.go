@@ -29,8 +29,9 @@ import (
 )
 
 const (
-	dbName  = "test"
-	luaPath = "?.lua"
+	dbName       = "test"
+	luaPath      = "?.lua"
+	bigEmptyRepo = "max-hoffman/big-empty"
 )
 
 var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
@@ -49,7 +50,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 		return nil, err
 	}
 
-	testRepo, err := initDoltRepo(ctx, serverConfig)
+	testRepo, err := initDoltRepo(ctx, serverConfig, config.InitBigRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -132,13 +133,20 @@ func doltVersion(ctx context.Context, config *ServerConfig) error {
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
-func initDoltRepo(ctx context.Context, config *ServerConfig) (string, error) {
+func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
 	}
 
 	testRepo := filepath.Join(cwd, dbName)
+	if initBigRepo {
+		err := ExecCommand(ctx, config.ServerExec, "clone", bigEmptyRepo, dbName).Run()
+		if err != nil {
+			return "", err
+		}
+		return testRepo, nil
+	}
 	err = os.MkdirAll(testRepo, os.ModePerm)
 	if err != nil {
 		return "", err
