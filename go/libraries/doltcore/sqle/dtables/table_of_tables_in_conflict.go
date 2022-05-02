@@ -17,11 +17,11 @@ package dtables
 import (
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var _ sql.Table = (*TableOfTablesInConflict)(nil)
@@ -29,7 +29,7 @@ var _ sql.Table = (*TableOfTablesInConflict)(nil)
 // TableOfTablesInConflict is a sql.Table implementation that implements a system table which shows the current conflicts
 type TableOfTablesInConflict struct {
 	dbName string
-	ddb  *doltdb.DoltDB
+	ddb    *doltdb.DoltDB
 }
 
 // NewTableOfTablesInConflict creates a TableOfTablesInConflict

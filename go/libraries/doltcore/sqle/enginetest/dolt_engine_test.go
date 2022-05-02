@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -28,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -679,11 +679,11 @@ func TestSingleTransactionScript(t *testing.T) {
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{ // no changes on client a because the working set changes were rolled back automatically by auto-commit failure
-				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "/* client a */ commit",
+				Query:    "/* client a */ commit",
 				Expected: []sql.Row{},
 			},
 			{

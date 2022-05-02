@@ -283,9 +283,9 @@ func (tx *DoltTransaction) handleUnresolvedConflictOnCommit(ctx *sql.Context) er
 // do not allow them. If |mergeStats| is provided (because this working set is being merged with another), will
 // automatically resolve any conflicts indicated by them if session settings dictate it.
 func (tx *DoltTransaction) validateWorkingSetForCommit(
-		ctx *sql.Context,
-		workingSet *doltdb.WorkingSet,
-		mergeStats map[string]*merge.MergeStats,
+	ctx *sql.Context,
+	workingSet *doltdb.WorkingSet,
+	mergeStats map[string]*merge.MergeStats,
 ) (*doltdb.WorkingSet, error) {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
@@ -304,7 +304,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(
 		var tablesWithConflicts []string
 		for table, stat := range mergeStats {
 			if stat.Conflicts > 0 {
-					tablesWithConflicts = append(tablesWithConflicts, table)
+				tablesWithConflicts = append(tablesWithConflicts, table)
 			}
 		}
 
@@ -325,9 +325,9 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(
 
 	if hasConflicts {
 		if !(allowCommitConflicts.(int8) == 1 || forceTransactionCommit.(int8) == 1) {
-				// We will always return doltdb.ErrUnresolvedConflicts here, but we will sometimes roll back the transaction
-				// first
-				return workingSet, tx.handleUnresolvedConflictOnCommit(ctx)
+			// We will always return doltdb.ErrUnresolvedConflicts here, but we will sometimes roll back the transaction
+			// first
+			return workingSet, tx.handleUnresolvedConflictOnCommit(ctx)
 		}
 	}
 

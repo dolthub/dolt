@@ -892,7 +892,7 @@ var DoltMerge = []enginetest.ScriptTest{
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{
-				Query:          "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
+				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
 				Expected: []sql.Row{{0}},
 			},
 		},

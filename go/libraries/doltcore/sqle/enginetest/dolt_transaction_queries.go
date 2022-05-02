@@ -321,7 +321,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:          "/* client b */ set dolt_rollback_on_conflict = off",
+				Query:    "/* client b */ set dolt_rollback_on_conflict = off",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -835,7 +835,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{ // no conflicts, transaction got rolled back
@@ -844,7 +844,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,1}},
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 		},
 	},
@@ -885,7 +885,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
@@ -894,28 +894,28 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{ // We see the merge value from a's commit here, we need to fix it to get our values
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,1}},
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query:    "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: 1,
-					Info:         plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
 					},
 				}}},
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,2}},
+				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 			{
 				Query:    "/* client b */ delete from dolt_conflicts_test",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query: "/* client b */ commit",
 			},
 		},
 	},
@@ -969,15 +969,15 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{ // We see the merge value from a's commit here, we need to fix it to get our values
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,1}},
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query:    "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: 1,
-					Info:         plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
 					},
 				}}},
 			},
@@ -995,7 +995,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,2}},
+				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 		},
 	},
@@ -1050,15 +1050,15 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{ // We see the merge value from a's commit here, we need to fix it to get our values
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,1}},
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query:    "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: 1,
-					Info:         plan.UpdateInfo{
-						Matched:  1,
-						Updated:  1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
 					},
 				}}},
 			},
@@ -1076,7 +1076,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0,0}, {1,2}},
+				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 		},
 	},
@@ -1159,11 +1159,11 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{ // client rolled back on merge with conflicts
-				Query:          "/* client a */ SELECT count(*) from dolt_conflicts_test",
+				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:          "/* client a */ commit",
+				Query:    "/* client a */ commit",
 				Expected: []sql.Row{},
 			},
 			{
