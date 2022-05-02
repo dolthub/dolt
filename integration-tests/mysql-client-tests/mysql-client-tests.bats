@@ -65,6 +65,7 @@ teardown() {
 
 @test "node mysql client" {
     node $BATS_TEST_DIRNAME/node/index.js $USER $PORT $REPO_NAME
+    node $BATS_TEST_DIRNAME/node/knex.js $USER $PORT $REPO_NAME
 }
 
 @test "c mysql connector" {
