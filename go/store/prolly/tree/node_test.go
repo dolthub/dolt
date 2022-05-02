@@ -21,11 +21,12 @@ import (
 	"testing"
 	"unsafe"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/val"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestRoundTripInts(t *testing.T) {
@@ -36,7 +37,7 @@ func TestRoundTripInts(t *testing.T) {
 		keys[i] = tups[i][0]
 		values[i] = tups[i][1]
 	}
-	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < MaxVectorOffset)
+	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < message.MaxVectorOffset)
 
 	nd := NewTupleLeafNode(keys, values)
 	assert.True(t, nd.IsLeaf())
@@ -50,7 +51,7 @@ func TestRoundTripInts(t *testing.T) {
 func TestRoundTripNodeItems(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
+		require.True(t, sumSize(keys)+sumSize(values) < message.MaxVectorOffset)
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.IsLeaf())
@@ -65,26 +66,6 @@ func TestRoundTripNodeItems(t *testing.T) {
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
 	assert.Equal(t, 128, int(sz))
-}
-
-func TestCountArray(t *testing.T) {
-	for k := 0; k < 100; k++ {
-		n := testRand.Intn(45) + 5
-
-		counts := make(SubtreeCounts, n)
-		sum := uint64(0)
-		for i := range counts {
-			c := testRand.Uint64() % math.MaxUint32
-			counts[i] = c
-			sum += c
-		}
-		assert.Equal(t, sum, counts.Sum())
-
-		// round trip the array
-		buf := WriteSubtreeCounts(counts)
-		counts = readSubtreeCounts(n, buf)
-		assert.Equal(t, sum, counts.Sum())
-	}
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {

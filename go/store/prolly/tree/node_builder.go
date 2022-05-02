@@ -16,7 +16,6 @@ package tree
 
 import (
 	"context"
-	"encoding/binary"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
@@ -86,25 +85,4 @@ func (sc SubtreeCounts) Sum() (s uint64) {
 		s += count
 	}
 	return
-}
-
-func readSubtreeCounts(n int, buf []byte) (sc SubtreeCounts) {
-	sc = make([]uint64, 0, n)
-	for len(buf) > 0 {
-		count, n := binary.Uvarint(buf)
-		sc = append(sc, count)
-		buf = buf[n:]
-	}
-	assertTrue(len(sc) == n)
-	return
-}
-
-func WriteSubtreeCounts(sc SubtreeCounts) []byte {
-	buf := make([]byte, len(sc)*binary.MaxVarintLen64)
-	pos := 0
-	for _, count := range sc {
-		n := binary.PutUvarint(buf[pos:], count)
-		pos += n
-	}
-	return buf[:pos]
 }

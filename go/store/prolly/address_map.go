@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -177,7 +178,7 @@ func (nb *addrMapBuilder) StartNode() {
 
 func (nb *addrMapBuilder) HasCapacity(key, value tree.Item) bool {
 	sum := nb.size + len(key) + len(value)
-	return sum <= int(tree.MaxVectorOffset)
+	return sum <= int(message.MaxVectorOffset)
 }
 
 func (nb *addrMapBuilder) AddItems(key, value tree.Item, subtree uint64) {

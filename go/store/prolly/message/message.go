@@ -85,13 +85,19 @@ func GetTreeCount(msg Message) int {
 	}
 }
 
-func GetSubtrees(msg Message) []byte {
+func GetSubtrees(msg Message) []uint64 {
 	id := serial.GetFileID(msg)
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
+	}
+}
+
+func assertTrue(b bool) {
+	if !b {
+		panic("assertion failed")
 	}
 }
 

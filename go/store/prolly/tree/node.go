@@ -18,11 +18,7 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
-	"math"
 
-	fb "github.com/google/flatbuffers/go"
-
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
@@ -30,9 +26,6 @@ import (
 )
 
 const (
-	MaxVectorOffset = uint64(math.MaxUint16)
-	addrSz          = hash.ByteLen
-
 	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
 	// and serial.ProllyTreeNode.ValueOffsetsLength() respectively.
 	// They are only as stable as the flatbuffers schemas that define them.
@@ -135,8 +128,7 @@ func (nd Node) getAddress(i int) hash.Hash {
 }
 
 func (nd Node) getSubtreeCounts() SubtreeCounts {
-	arr := message.GetSubtrees(nd.msg)
-	return readSubtreeCounts(int(nd.count), arr)
+	return message.GetSubtrees(nd.msg)
 }
 
 func (nd Node) empty() bool {
@@ -149,26 +141,6 @@ func (nd Node) bytes() []byte {
 
 func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
 	return message.WalkAddresses(ctx, nd.msg, cb)
-}
-
-func getKeyOffsetsVector(msg serial.ProllyTreeNode) []byte {
-	sz := msg.KeyOffsetsLength() * 2
-	tab := msg.Table()
-	vec := tab.Offset(keyOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
-}
-
-func getValueOffsetsVector(msg serial.ProllyTreeNode) []byte {
-	sz := msg.ValueOffsetsLength() * 2
-	tab := msg.Table()
-	vec := tab.Offset(valueOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
 }
 
 // OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still

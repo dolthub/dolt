@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -31,6 +32,60 @@ const (
 	keyOffsetsVOffset   = 6
 	valueOffsetsVOffset = 12
 )
+
+func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, subtrees []uint64) Message {
+	var (
+		keyTups, keyOffs fb.UOffsetT
+		valTups, valOffs fb.UOffsetT
+		refArr, cardArr  fb.UOffsetT
+	)
+
+	keySz, valSz, bufSz := estimateBufferSize(keys, values, subtrees)
+	b := getFlatbufferBuilder(pool, bufSz)
+
+	// serialize keys and offsets
+	keyTups = writeItemBytes(b, keys, keySz)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(keys)-1)
+	keyOffs = writeItemOffsets(b, keys, keySz)
+
+	if level == 0 {
+		// serialize value tuples for leaf nodes
+		valTups = writeItemBytes(b, values, valSz)
+		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(values)-1)
+		valOffs = writeItemOffsets(b, values, valSz)
+	} else {
+		// serialize child refs and subtree counts for internal nodes
+		refArr = writeItemBytes(b, values, valSz)
+		cardArr = writeCountArray(b, subtrees)
+	}
+
+	// populate the node's vtable
+	serial.ProllyTreeNodeStart(b)
+	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
+	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
+	if level == 0 {
+		serial.ProllyTreeNodeAddValueItems(b, valTups)
+		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
+		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(keys)))
+	} else {
+		serial.ProllyTreeNodeAddAddressArray(b, refArr)
+		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
+		serial.ProllyTreeNodeAddTreeCount(b, sumSubtrees(subtrees))
+	}
+	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
+	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), []byte(serial.ProllyTreeNodeFileID))
+
+	return b.FinishedBytes()
+}
+
+func sumSubtrees(subtrees []uint64) (sum uint64) {
+	for i := range subtrees {
+		sum += subtrees[i]
+	}
+	return
+}
 
 func getProllyMapKeys(msg Message) (keys val.SlicedBuffer) {
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
@@ -94,9 +149,10 @@ func getProllyMapTreeCount(msg Message) int {
 	return int(pm.TreeCount())
 }
 
-func getProllyMapSubtrees(msg Message) []byte {
+func getProllyMapSubtrees(msg Message) []uint64 {
+	cnt := getProllyMapCount(msg)
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
-	return pm.SubtreeCountsBytes()
+	return readSubtreeCounts(int(cnt), pm.SubtreeCountsBytes())
 }
 
 func getKeyOffsetsVector(pm *serial.ProllyTreeNode) []byte {
