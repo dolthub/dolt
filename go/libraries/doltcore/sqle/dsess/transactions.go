@@ -221,13 +221,10 @@ func (tx *DoltTransaction) doCommit(
 
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
-			ctx.GetLogger().Errorf("before merge, working set root is %s", workingSet.WorkingRoot().DebugString(ctx, true))
-
 			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot(), tx.mergeEditOpts)
 			if err != nil {
 				return nil, nil, err
 			}
-			ctx.GetLogger().Errorf("after merge, merged root is %s", mergedRoot.DebugString(ctx, true))
 
 			logrus.Tracef("merge took %s", time.Since(start))
 
