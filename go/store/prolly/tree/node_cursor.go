@@ -30,12 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type NodeItem []byte
-
-func (i NodeItem) size() val.ByteSize {
-	return val.ByteSize(len(i))
-}
-
 // Cursor explores a tree of Nodes.
 type Cursor struct {
 	nd       Node
@@ -45,11 +39,11 @@ type Cursor struct {
 	nrw      NodeStore
 }
 
-type CompareFn func(left, right NodeItem) int
+type CompareFn func(left, right Item) int
 
 type SearchFn func(nd Node) (idx int)
 
-type ItemSearchFn func(item NodeItem, nd Node) (idx int)
+type ItemSearchFn func(item Item, nd Node) (idx int)
 
 func NewCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: nrw}
@@ -149,10 +143,10 @@ func NewCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search S
 }
 
 func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search ItemSearchFn) (cur *Cursor, err error) {
-	return NewCursorAtItem(ctx, nrw, nd, NodeItem(tup), search)
+	return NewCursorAtItem(ctx, nrw, nd, Item(tup), search)
 }
 
-func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem, search ItemSearchFn) (cur *Cursor, err error) {
+func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item Item, search ItemSearchFn) (cur *Cursor, err error) {
 	cur = &Cursor{nd: nd, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -175,7 +169,7 @@ func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem,
 	return
 }
 
-func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem, search ItemSearchFn) (cur Cursor, err error) {
+func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item Item, search ItemSearchFn) (cur Cursor, err error) {
 	cur = Cursor{nd: nd, parent: nil, nrw: nrw}
 
 	cur.idx = search(item, cur.nd)
@@ -196,7 +190,7 @@ func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeI
 	return cur, nil
 }
 
-func CurrentCursorTuples(cur *Cursor) (key, value val.Tuple) {
+func CurrentCursorItems(cur *Cursor) (key, value Item) {
 	key = cur.nd.keys.GetSlice(cur.idx)
 	value = cur.nd.values.GetSlice(cur.idx)
 	return
@@ -213,16 +207,16 @@ func (cur *Cursor) Invalidate() {
 	cur.idx = math.MinInt32
 }
 
-func (cur *Cursor) CurrentKey() NodeItem {
+func (cur *Cursor) CurrentKey() Item {
 	return cur.nd.GetKey(cur.idx)
 }
 
-func (cur *Cursor) CurrentValue() NodeItem {
+func (cur *Cursor) CurrentValue() Item {
 	return cur.nd.getValue(cur.idx)
 }
 
 func (cur *Cursor) CurrentRef() hash.Hash {
-	return cur.nd.getRef(cur.idx)
+	return cur.nd.getChildAddress(cur.idx)
 }
 
 func (cur *Cursor) currentSubtreeSize() uint64 {
@@ -235,11 +229,11 @@ func (cur *Cursor) currentSubtreeSize() uint64 {
 	return cur.subtrees[cur.idx]
 }
 
-func (cur *Cursor) firstKey() NodeItem {
+func (cur *Cursor) firstKey() Item {
 	return cur.nd.GetKey(0)
 }
 
-func (cur *Cursor) lastKey() NodeItem {
+func (cur *Cursor) lastKey() Item {
 	lastKeyIdx := int(cur.nd.count - 1)
 	return cur.nd.GetKey(lastKeyIdx)
 }
@@ -281,7 +275,7 @@ func (cur *Cursor) level() uint64 {
 	return uint64(cur.nd.Level())
 }
 
-func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err error) {
+func (cur *Cursor) seek(ctx context.Context, item Item, cb CompareFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = inBounds && cb(item, cur.firstKey()) >= 0
@@ -310,7 +304,7 @@ func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err e
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the next greatest element if it's not present.
-func (cur *Cursor) search(item NodeItem, cb CompareFn) (idx int) {
+func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
 		return cb(item, cur.nd.GetKey(i)) <= 0
 	})
@@ -489,6 +483,12 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 
 func assertTrue(b bool) {
 	if !b {
+		panic("assertion failed")
+	}
+}
+
+func assertFalse(b bool) {
+	if b {
 		panic("assertion failed")
 	}
 }

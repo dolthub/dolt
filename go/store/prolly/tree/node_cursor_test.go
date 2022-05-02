@@ -50,7 +50,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 	validateTreeItems(t, ns, root, items)
 }
 
-func randomTree(t *testing.T, count int) (Node, [][2]NodeItem, NodeStore) {
+func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
 	chkr, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
@@ -58,7 +58,7 @@ func randomTree(t *testing.T, count int) (Node, [][2]NodeItem, NodeStore) {
 
 	items := randomTupleItemPairs(count / 2)
 	for _, item := range items {
-		err = chkr.AddPair(ctx, NodeItem(item[0]), NodeItem(item[1]))
+		err = chkr.AddPair(ctx, Item(item[0]), Item(item[1]))
 		assert.NoError(t, err)
 	}
 	nd, err := chkr.Done(ctx)
@@ -76,23 +76,23 @@ var valDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Int64Enc, Nullable: true},
 )
 
-func searchTestTree(item NodeItem, nd Node) int {
+func searchTestTree(item Item, nd Node) int {
 	return sort.Search(int(nd.count), func(i int) bool {
 		l, r := val.Tuple(item), val.Tuple(nd.GetKey(i))
 		return keyDesc.Compare(l, r) <= 0
 	})
 }
 
-func randomTupleItemPairs(count int) (items [][2]NodeItem) {
+func randomTupleItemPairs(count int) (items [][2]Item) {
 	tups := RandomTuplePairs(count, keyDesc, valDesc)
-	items = make([][2]NodeItem, count)
+	items = make([][2]Item, count)
 	if len(tups) != len(items) {
 		panic("mismatch")
 	}
 
 	for i := range items {
-		items[i][0] = NodeItem(tups[i][0])
-		items[i][1] = NodeItem(tups[i][1])
+		items[i][0] = Item(tups[i][0])
+		items[i][1] = Item(tups[i][1])
 	}
 	return
 }

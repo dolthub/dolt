@@ -20,7 +20,7 @@ import (
 )
 
 type MutationIter interface {
-	NextMutation(ctx context.Context) (key, value NodeItem)
+	NextMutation(ctx context.Context) (key, value Item)
 	Close() error
 }
 
@@ -55,7 +55,7 @@ func ApplyMutations(
 			return Node{}, err
 		}
 
-		var oldValue NodeItem
+		var oldValue Item
 		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
@@ -99,6 +99,6 @@ func ApplyMutations(
 	return chkr.Done(ctx)
 }
 
-func equalValues(left, right NodeItem) bool {
+func equalValues(left, right Item) bool {
 	return bytes.Equal(left, right)
 }

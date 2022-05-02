@@ -30,7 +30,7 @@ const indexLookupBufSize = 1024
 
 type prollyIndexIter struct {
 	idx       DoltIndex
-	indexIter prolly.MapRangeIter
+	indexIter prolly.MapIter
 	primary   prolly.Map
 
 	// pkMap transforms indexRows index keys
@@ -197,7 +197,7 @@ func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 
 type prollyCoveringIndexIter struct {
 	idx       DoltIndex
-	indexIter prolly.MapRangeIter
+	indexIter prolly.MapIter
 	keyDesc   val.TupleDesc
 	valDesc   val.TupleDesc
 

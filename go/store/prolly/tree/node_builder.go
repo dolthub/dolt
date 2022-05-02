@@ -35,7 +35,7 @@ const (
 type novelNode struct {
 	node      Node
 	addr      hash.Hash
-	lastKey   NodeItem
+	lastKey   Item
 	treeCount uint64
 }
 
@@ -58,24 +58,24 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld *nodeBuilder) (novelNod
 	return novelNode{
 		addr:      addr,
 		node:      node,
-		lastKey:   NodeItem(lastKey),
+		lastKey:   Item(lastKey),
 		treeCount: treeCount,
 	}, nil
 }
 
 type nodeBuilder struct {
-	keys, values []NodeItem
+	keys, values []Item
 	size, level  int
 
 	subtrees subtreeCounts
 }
 
-func (nb *nodeBuilder) hasCapacity(key, value NodeItem) bool {
+func (nb *nodeBuilder) hasCapacity(key, value Item) bool {
 	sum := nb.size + len(key) + len(value)
 	return sum <= int(maxVectorOffset)
 }
 
-func (nb *nodeBuilder) appendItems(key, value NodeItem, subtree uint64) {
+func (nb *nodeBuilder) appendItems(key, value Item, subtree uint64) {
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
 	nb.size += len(key) + len(value)
@@ -110,13 +110,13 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, nb.keys, keySz)
-	serial.TupleMapStartKeyOffsetsVector(b, len(nb.keys)-1)
+	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(nb.keys)-1)
 	keyOffs = b.EndVector(writeItemOffsets(b, nb.keys, keySz))
 
 	if nb.level == 0 {
 		// serialize value tuples for leaf nodes
 		valTups = writeItemBytes(b, nb.values, valSz)
-		serial.TupleMapStartValueOffsetsVector(b, len(nb.values)-1)
+		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(nb.values)-1)
 		valOffs = b.EndVector(writeItemOffsets(b, nb.values, valSz))
 	} else {
 		// serialize child refs and subtree counts for internal nodes
@@ -125,22 +125,22 @@ func (nb *nodeBuilder) build(pool pool.BuffPool) (node Node) {
 	}
 
 	// populate the node's vtable
-	serial.TupleMapStart(b)
-	serial.TupleMapAddKeyTuples(b, keyTups)
-	serial.TupleMapAddKeyOffsets(b, keyOffs)
+	serial.ProllyTreeNodeStart(b)
+	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
+	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
 	if nb.level == 0 {
-		serial.TupleMapAddValueTuples(b, valTups)
-		serial.TupleMapAddValueOffsets(b, valOffs)
-		serial.TupleMapAddTreeCount(b, uint64(len(nb.keys)))
+		serial.ProllyTreeNodeAddValueItems(b, valTups)
+		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
+		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(nb.keys)))
 	} else {
-		serial.TupleMapAddRefArray(b, refArr)
-		serial.TupleMapAddRefCardinalities(b, cardArr)
-		serial.TupleMapAddTreeCount(b, nb.subtrees.sum())
+		serial.ProllyTreeNodeAddAddressArray(b, refArr)
+		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
+		serial.ProllyTreeNodeAddTreeCount(b, nb.subtrees.sum())
 	}
-	serial.TupleMapAddKeyFormat(b, serial.TupleFormatV1)
-	serial.TupleMapAddValueFormat(b, serial.TupleFormatV1)
-	serial.TupleMapAddTreeLevel(b, uint8(nb.level))
-	b.Finish(serial.TupleMapEnd(b))
+	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
+	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
+	b.Finish(serial.ProllyTreeNodeEnd(b))
 
 	buf := b.FinishedBytes()
 	return MapNodeFromBytes(buf)
@@ -182,8 +182,8 @@ func writeSubtreeCounts(sc subtreeCounts) []byte {
 
 func newNodeBuilder(level int) *nodeBuilder {
 	return &nodeBuilder{
-		keys:     make([]NodeItem, 0, nodeBuilderListSize),
-		values:   make([]NodeItem, 0, nodeBuilderListSize),
+		keys:     make([]Item, 0, nodeBuilderListSize),
+		values:   make([]Item, 0, nodeBuilderListSize),
 		subtrees: newSubtreeCounts(nodeBuilderListSize),
 		level:    level,
 	}
@@ -198,7 +198,7 @@ func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 
 // measureNodeSize returns the exact Size of the tuple vectors for keys and values,
 // and an estimate of the overall Size of the final flatbuffer.
-func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, bufSz int) {
+func measureNodeSize(keys, values []Item, subtrees []uint64) (keySz, valSz, bufSz int) {
 	for i := range keys {
 		keySz += len(keys[i])
 		valSz += len(values[i])
@@ -222,7 +222,7 @@ func measureNodeSize(keys, values []NodeItem, subtrees []uint64) (keySz, valSz, 
 	return
 }
 
-func writeItemBytes(b *fb.Builder, items []NodeItem, sumSz int) fb.UOffsetT {
+func writeItemBytes(b *fb.Builder, items []Item, sumSz int) fb.UOffsetT {
 	b.Prep(fb.SizeUOffsetT, sumSz)
 
 	stop := int(b.Head())
@@ -236,7 +236,7 @@ func writeItemBytes(b *fb.Builder, items []NodeItem, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
-func writeItemOffsets(b *fb.Builder, items []NodeItem, sz int) (cnt int) {
+func writeItemOffsets(b *fb.Builder, items []Item, sz int) (cnt int) {
 	off := sz
 	for i := len(items) - 1; i > 0; i-- { // omit first offset
 		off -= len(items[i])

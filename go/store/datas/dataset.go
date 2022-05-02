@@ -41,10 +41,79 @@ var DatasetRe = regexp.MustCompile(`[a-zA-Z0-9\-_/]+`)
 var DatasetFullRe = regexp.MustCompile("^" + DatasetRe.String() + "$")
 
 type WorkingSetHead struct {
-	Meta           *WorkingSetMeta
-	WorkingAddr    hash.Hash
-	StagedAddr     *hash.Hash
-	MergeStateAddr *hash.Hash
+	Meta        *WorkingSetMeta
+	WorkingAddr hash.Hash
+	StagedAddr  *hash.Hash
+	MergeState  *MergeState
+}
+
+type MergeState struct {
+	preMergeWorkingAddr *hash.Hash
+	fromCommitAddr      *hash.Hash
+
+	nomsMergeStateRef *types.Ref
+	nomsMergeState    *types.Struct
+}
+
+func (ms *MergeState) loadIfNeeded(ctx context.Context, vr types.ValueReader) error {
+	if ms.nomsMergeState == nil {
+		v, err := ms.nomsMergeStateRef.TargetValue(ctx, vr)
+		if err != nil {
+			return err
+		}
+		if v == nil {
+			return errors.New("dangling reference to merge state")
+		}
+		st, ok := v.(types.Struct)
+		if !ok {
+			return fmt.Errorf("corrupted MergeState struct")
+		}
+		ms.nomsMergeState = &st
+	}
+	return nil
+}
+
+func (ms *MergeState) PreMergeWorkingAddr(ctx context.Context, vr types.ValueReader) (hash.Hash, error) {
+	if ms.preMergeWorkingAddr != nil {
+		return *ms.preMergeWorkingAddr, nil
+	}
+	if ms.nomsMergeState == nil {
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return hash.Hash{}, err
+		}
+	}
+
+	workingRootRef, ok, err := ms.nomsMergeState.MaybeGet(mergeStateWorkingPreMergeField)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	if !ok {
+		return hash.Hash{}, fmt.Errorf("corrupted MergeState struct")
+	}
+	return workingRootRef.(types.Ref).TargetHash(), nil
+}
+
+func (ms *MergeState) FromCommit(ctx context.Context, vr types.ValueReader) (*Commit, error) {
+	if ms.fromCommitAddr != nil {
+		return LoadCommitAddr(ctx, vr, *ms.fromCommitAddr)
+	}
+	if ms.nomsMergeState == nil {
+		err := ms.loadIfNeeded(ctx, vr)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	commitV, ok, err := ms.nomsMergeState.MaybeGet(mergeStateCommitField)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("corrupted MergeState struct")
+	}
+
+	return commitFromValue(vr.Format(), commitV)
 }
 
 type dsHead interface {
@@ -83,7 +152,7 @@ func newSerialTagHead(bs []byte, addr hash.Hash) serialTagHead {
 }
 
 func (h serialTagHead) TypeName() string {
-	return TagName
+	return tagName
 }
 
 func (h serialTagHead) Addr() hash.Hash {
@@ -120,7 +189,7 @@ func newSerialWorkingSetHead(bs []byte, addr hash.Hash) serialWorkingSetHead {
 }
 
 func (h serialWorkingSetHead) TypeName() string {
-	return WorkingSetName
+	return workingSetName
 }
 
 func (h serialWorkingSetHead) Addr() hash.Hash {
@@ -148,9 +217,14 @@ func (h serialWorkingSetHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		ret.StagedAddr = new(hash.Hash)
 		*ret.StagedAddr = hash.New(h.msg.StagedRootAddrBytes())
 	}
-	if h.msg.MergeStateAddrLength() != 0 {
-		ret.MergeStateAddr = new(hash.Hash)
-		*ret.MergeStateAddr = hash.New(h.msg.MergeStateAddrBytes())
+	mergeState := h.msg.MergeState(nil)
+	if mergeState != nil {
+		ret.MergeState = &MergeState{
+			preMergeWorkingAddr: new(hash.Hash),
+			fromCommitAddr:      new(hash.Hash),
+		}
+		*ret.MergeState.preMergeWorkingAddr = hash.New(mergeState.PreWorkingRootAddrBytes())
+		*ret.MergeState.fromCommitAddr = hash.New(mergeState.FromCommitAddrBytes())
 	}
 	return &ret, nil
 }
@@ -301,11 +375,11 @@ func (ds Dataset) MaybeHeight() (uint64, bool, error) {
 }
 
 func (ds Dataset) IsTag() bool {
-	return ds.head != nil && ds.head.TypeName() == TagName
+	return ds.head != nil && ds.head.TypeName() == tagName
 }
 
 func (ds Dataset) IsWorkingSet() bool {
-	return ds.head != nil && ds.head.TypeName() == WorkingSetName
+	return ds.head != nil && ds.head.TypeName() == workingSetName
 }
 
 func (ds Dataset) HeadTag() (*TagMeta, hash.Hash, error) {
@@ -329,7 +403,7 @@ func (ds Dataset) HeadWorkingSet() (*WorkingSetHead, error) {
 }
 
 func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
-	metast, ok, err := h.st.MaybeGet(TagMetaField)
+	metast, ok, err := h.st.MaybeGet(tagMetaField)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -341,7 +415,7 @@ func (h nomsHead) HeadTag() (*TagMeta, hash.Hash, error) {
 		return nil, hash.Hash{}, err
 	}
 
-	commitRef, ok, err := h.st.MaybeGet(TagCommitRefField)
+	commitRef, ok, err := h.st.MaybeGet(tagCommitRefField)
 	if err != nil {
 		return nil, hash.Hash{}, err
 	}
@@ -364,16 +438,16 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 	}
 	ret.Meta = meta
 
-	workingRootRef, ok, err := st.MaybeGet(WorkingRootRefField)
+	workingRootRef, ok, err := st.MaybeGet(workingRootRefField)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, fmt.Errorf("workingset struct does not have field %s", WorkingRootRefField)
+		return nil, fmt.Errorf("workingset struct does not have field %s", workingRootRefField)
 	}
 	ret.WorkingAddr = workingRootRef.(types.Ref).TargetHash()
 
-	stagedRootRef, ok, err := st.MaybeGet(StagedRootRefField)
+	stagedRootRef, ok, err := st.MaybeGet(stagedRootRefField)
 	if err != nil {
 		return nil, err
 	}
@@ -382,13 +456,15 @@ func (h nomsHead) HeadWorkingSet() (*WorkingSetHead, error) {
 		*ret.StagedAddr = stagedRootRef.(types.Ref).TargetHash()
 	}
 
-	mergeStateRef, ok, err := st.MaybeGet(MergeStateField)
+	mergeStateRef, ok, err := st.MaybeGet(mergeStateField)
 	if err != nil {
 		return nil, err
 	}
 	if ok {
-		ret.MergeStateAddr = new(hash.Hash)
-		*ret.MergeStateAddr = mergeStateRef.(types.Ref).TargetHash()
+		r := mergeStateRef.(types.Ref)
+		ret.MergeState = &MergeState{
+			nomsMergeStateRef: &r,
+		}
 	}
 
 	return &ret, nil

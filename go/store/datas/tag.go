@@ -27,12 +27,12 @@ import (
 )
 
 const (
-	TagMetaField      = "meta"
-	TagCommitRefField = "ref"
-	TagName           = "Tag"
+	tagMetaField      = "meta"
+	tagCommitRefField = "ref"
+	tagName           = "Tag"
 )
 
-var tagTemplate = types.MakeStructTemplate(TagName, []string{TagMetaField, TagCommitRefField})
+var tagTemplate = types.MakeStructTemplate(tagName, []string{tagMetaField, tagCommitRefField})
 
 // ref is a Ref<Commit>, but 'Commit' is not defined in this snippet.
 // Tag refs are validated to point at Commits during write.
@@ -144,13 +144,13 @@ func IsTag(v types.Value) (bool, error) {
 }
 
 func makeTagStructType(metaType, refType *types.Type) (*types.Type, error) {
-	return types.MakeStructType(TagName,
+	return types.MakeStructType(tagName,
 		types.StructField{
-			Name: TagMetaField,
+			Name: tagMetaField,
 			Type: metaType,
 		},
 		types.StructField{
-			Name: TagCommitRefField,
+			Name: tagCommitRefField,
 			Type: refType,
 		},
 	)

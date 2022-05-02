@@ -51,7 +51,7 @@ func init() {
 var encodingToType [256]query.Type
 
 type prollyRowIter struct {
-	iter prolly.MapRangeIter
+	iter prolly.MapIter
 
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
@@ -67,7 +67,7 @@ func NewProllyRowIter(
 	ctx context.Context,
 	sch schema.Schema,
 	rows prolly.Map,
-	iter prolly.MapRangeIter,
+	iter prolly.MapIter,
 	projections []string,
 ) (sql.RowIter, error) {
 
@@ -205,7 +205,7 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 }
 
 type prollyKeylessIter struct {
-	iter prolly.MapRangeIter
+	iter prolly.MapIter
 
 	valDesc val.TupleDesc
 	valProj []int

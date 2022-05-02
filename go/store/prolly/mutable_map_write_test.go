@@ -442,18 +442,13 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err = chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
+		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	return Map{
-		root:    root,
-		keyDesc: mutKeyDesc,
-		valDesc: mutValDesc,
-		ns:      ns,
-	}
+	return NewMap(root, ns, mutKeyDesc, mutKeyDesc)
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(
@@ -485,7 +480,7 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure edits are provided in order
-	iter := mut.overlay.mutations()
+	iter := mut.tuples.mutations()
 	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
 	for {
@@ -493,7 +488,7 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 		if next == nil {
 			break
 		}
-		cmp := mut.prolly.compareKeys(val.Tuple(prev), val.Tuple(next))
+		cmp := mut.keyDesc.Compare(val.Tuple(prev), val.Tuple(next))
 		assert.True(t, cmp < 0)
 		prev = next
 	}

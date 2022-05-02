@@ -131,11 +131,13 @@ func TestRowMerge(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actualResult, didCellMerge, isConflict, err := nomsPkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
+			rowMergeResult, err := nomsPkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
 			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
-			assert.Equal(t, test.expectCellMerge, didCellMerge)
-			assert.Equal(t, test.expectConflict, isConflict)
+			assert.Equal(t, test.expectedResult, rowMergeResult.mergedRow,
+				"expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+
+					"got "+mustString(types.EncodedValue(context.Background(), rowMergeResult.mergedRow)))
+			assert.Equal(t, test.expectCellMerge, rowMergeResult.didCellMerge)
+			assert.Equal(t, test.expectConflict, rowMergeResult.isConflict)
 		})
 	}
 }
