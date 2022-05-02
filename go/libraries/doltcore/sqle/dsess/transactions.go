@@ -167,6 +167,15 @@ func (tx *DoltTransaction) doCommit(
 	commit *doltdb.PendingCommit,
 	writeFn transactionWrite,
 ) (*doltdb.WorkingSet, *doltdb.Commit, error) {
+
+	// Before we do any merging, we need to make sure the given working root either has no conflicts / constraint
+	// violations or such conflicts / violations are permitted by session settings. The merge algorithms currently assumes
+	// that roots being merged are conflict free.
+	workingSet, err := tx.validateWorkingSetForCommit(ctx, workingSet, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for i := 0; i < maxTxCommitRetries; i++ {
 		updatedWs, newCommit, err := func() (*doltdb.WorkingSet, *doltdb.Commit, error) {
 			// Serialize commits, since only one can possibly succeed at a time anyway
@@ -212,10 +221,14 @@ func (tx *DoltTransaction) doCommit(
 
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
+			ctx.GetLogger().Errorf("before merge, working set root is %s", workingSet.WorkingRoot().DebugString(ctx, true))
+
 			mergedRoot, stats, err := merge.MergeRoots(ctx, existingWorkingRoot, workingSet.WorkingRoot(), tx.startState.WorkingRoot(), tx.mergeEditOpts)
 			if err != nil {
 				return nil, nil, err
 			}
+			ctx.GetLogger().Errorf("after merge, merged root is %s", mergedRoot.DebugString(ctx, true))
+
 			logrus.Tracef("merge took %s", time.Since(start))
 
 			// Note the error handling below: if we get an error, we still return the new mergedWorkingSet returned from

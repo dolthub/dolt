@@ -328,27 +328,53 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 				Query:          "/* client b */ commit",
 				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
-			{
+			{ // we now have the updates from client a in our working set so this is a no-op
 				Query: "/* client b */ update t set y = 3",
 				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
+					RowsAffected: uint64(0),
 					Info: plan.UpdateInfo{
 						Matched: 2,
-						Updated: 2,
+						Updated: 0,
 					},
 				}}},
 			},
-			{
+			{ // committing is still an error because we haven't resolved our conflicts yet
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 3}},
+				Query:    "/* client b */ update t set y = (select their_y from dolt_conflicts_t dc where dc.base_x = 1) where x = 1",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(1),
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{ // still need to clear conflicts
+				Query:    "/* client b */ commit",
+				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
+			},
+			{
+				Query:    "/* client b */ delete from dolt_conflicts_t",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: uint64(2),
+				}}},
+			},
+			{ // now we can commit without error
+				Query:    "/* client b */ commit",
 			},
 			{
 				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 3}, {2, 3}},
+				Expected: []sql.Row{{1, 4}, {2, 3}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+			},
+			{
+				Query:    "/* client a */ select * from t order by x",
+				Expected: []sql.Row{{1, 4}, {2, 3}},
 			},
 		},
 	},
