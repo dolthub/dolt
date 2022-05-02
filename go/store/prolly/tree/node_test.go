@@ -15,7 +15,6 @@
 package tree
 
 import (
-	"encoding/binary"
 	"math"
 	"math/rand"
 	"testing"
@@ -24,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -96,35 +94,6 @@ func sumSize(items []Item) (sz uint64) {
 func sumTupleSize(items []val.Tuple) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
-	}
-	return
-}
-
-func offsetsFromFlatbuffer(buf serial.ProllyTreeNode) (ko, vo []uint16) {
-	ko = make([]uint16, buf.KeyOffsetsLength())
-	for i := range ko {
-		ko[i] = buf.KeyOffsets(i)
-	}
-
-	vo = make([]uint16, buf.ValueOffsetsLength())
-	for i := range vo {
-		vo[i] = buf.ValueOffsets(i)
-	}
-
-	return
-}
-
-func offsetsFromSlicedBuffers(keys, values val.SlicedBuffer) (ko, vo []uint16) {
-	ko = deserializeOffsets(keys.Offs)
-	vo = deserializeOffsets(values.Offs)
-	return
-}
-
-func deserializeOffsets(buf []byte) (offs []uint16) {
-	offs = make([]uint16, len(buf)/2)
-	for i := range offs {
-		start, stop := i*2, (i+1)*2
-		offs[i] = binary.LittleEndian.Uint16(buf[start:stop])
 	}
 	return
 }
