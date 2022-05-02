@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -40,13 +42,20 @@ func newMutableMap(m Map) MutableMap {
 
 // Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	tuples, err := mut.tuples.makeTree(ctx)
+	factory := newMapBuilder
+	tr := mut.tuples.tree
+
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, mut.tuples.mutations(), tr.compareItems)
 	if err != nil {
 		return Map{}, err
 	}
 
 	return Map{
-		tuples:  tuples,
+		tuples: orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
+			root:  root,
+			ns:    tr.ns,
+			order: tr.order,
+		},
 		keyDesc: mut.keyDesc,
 		valDesc: mut.valDesc,
 	}, nil

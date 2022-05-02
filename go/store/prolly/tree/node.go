@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	maxVectorOffset = uint64(math.MaxUint16)
+	MaxVectorOffset = uint64(math.MaxUint16)
 	addrSz          = hash.ByteLen
 
 	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
@@ -82,12 +82,12 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	})
 }
 
-func MapNodeFromBytes(buf []byte) Node {
+func NodeFromBytes(buf []byte) Node {
 	msg := serial.GetRootAsProllyTreeNode(buf, 0)
-	return mapNodeFromFlatbuffer(*msg)
+	return nodeFromFlatbuffer(*msg)
 }
 
-func mapNodeFromFlatbuffer(msg serial.ProllyTreeNode) Node {
+func nodeFromFlatbuffer(msg serial.ProllyTreeNode) Node {
 	keys := val.SlicedBuffer{
 		Buf:  msg.KeyItemsBytes(),
 		Offs: getKeyOffsetsVector(msg),
@@ -143,7 +143,8 @@ func (nd Node) GetKey(i int) Item {
 
 // getValue returns the |ith| value of this node. Only Valid for leaf nodes.
 func (nd Node) getValue(i int) Item {
-	if nd.IsLeaf() {
+	// todo(andy): abstract value access
+	if nd.values.Buf != nil {
 		return nd.values.GetSlice(i)
 	} else {
 		r := nd.getChildAddress(i)
@@ -164,7 +165,7 @@ func (nd Node) getValueAddress(i int) hash.Hash {
 	return hash.New(nd.values.Buf[o : o+addrSz])
 }
 
-func (nd Node) getSubtreeCounts() subtreeCounts {
+func (nd Node) getSubtreeCounts() SubtreeCounts {
 	arr := nd.msg.SubtreeCountsBytes()
 	return readSubtreeCounts(int(nd.count), arr)
 }

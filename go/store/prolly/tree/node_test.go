@@ -36,7 +36,7 @@ func TestRoundTripInts(t *testing.T) {
 		keys[i] = tups[i][0]
 		values[i] = tups[i][1]
 	}
-	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
+	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < MaxVectorOffset)
 
 	nd := NewTupleLeafNode(keys, values)
 	assert.True(t, nd.IsLeaf())
@@ -50,7 +50,7 @@ func TestRoundTripInts(t *testing.T) {
 func TestRoundTripNodeItems(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.IsLeaf())
@@ -65,7 +65,7 @@ func TestRoundTripNodeItems(t *testing.T) {
 func TestGetKeyValueOffsetsVectors(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
 		nd := newLeafNode(keys, values)
 
 		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
@@ -91,19 +91,19 @@ func TestCountArray(t *testing.T) {
 	for k := 0; k < 100; k++ {
 		n := testRand.Intn(45) + 5
 
-		counts := make(subtreeCounts, n)
+		counts := make(SubtreeCounts, n)
 		sum := uint64(0)
 		for i := range counts {
 			c := testRand.Uint64() % math.MaxUint32
 			counts[i] = c
 			sum += c
 		}
-		assert.Equal(t, sum, counts.sum())
+		assert.Equal(t, sum, counts.Sum())
 
 		// round trip the array
-		buf := writeSubtreeCounts(counts)
+		buf := WriteSubtreeCounts(counts)
 		counts = readSubtreeCounts(n, buf)
-		assert.Equal(t, sum, counts.sum())
+		assert.Equal(t, sum, counts.Sum())
 	}
 }
 

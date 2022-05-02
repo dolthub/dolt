@@ -32,6 +32,7 @@ var goldenHash = hash.Hash{
 	0x29, 0x47, 0x16, 0xa8, 0x89,
 }
 
+// todo(andy): need and analogous test in pkg prolly
 func TestContentAddress(t *testing.T) {
 	tups, _ := AscendingUintTuples(12345)
 	m := makeTree(t, tups)
@@ -44,7 +45,7 @@ func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
 
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	chunker, err := newEmptyChunker(ctx, ns, newTestBuilder)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))

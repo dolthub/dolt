@@ -53,7 +53,7 @@ func testNewCursorAtItem(t *testing.T, count int) {
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	chkr, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	chkr, err := newEmptyChunker(ctx, ns, newTestBuilder)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count / 2)
