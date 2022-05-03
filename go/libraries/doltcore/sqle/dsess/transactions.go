@@ -194,8 +194,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			existingWorkingRoot := existingWs.WorkingRoot()
-			if newWorkingSet || rootsEqual(existingWorkingRoot, tx.startState.WorkingRoot()) {
+			if newWorkingSet || rootsEqual(existingWs.WorkingRoot(), tx.startState.WorkingRoot()) {
 				// ff merge
 				err = tx.validateWorkingSetForCommit(ctx, workingSet, isFfMerge)
 				if err != nil {
@@ -213,7 +212,7 @@ func (tx *DoltTransaction) doCommit(
 
 				return workingSet, newCommit, nil
 			}
-
+			
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
 			mergedWorkingSet, err := tx.mergeRoots(ctx, existingWs, workingSet)

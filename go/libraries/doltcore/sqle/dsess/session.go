@@ -328,10 +328,20 @@ func (sess *Session) DoltCommit(
 	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		return dtx.DoltCommit(
+		ws, commit, err := dtx.DoltCommit(
 			ctx,
 			workingSet.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged),
 			commit)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Unlike normal COMMIT statements, CALL DOLT_COMMIT() doesn't get the current transaction cleared out by the query
+		// engine, so we do it here.
+		// TODO: the engine needs to manage this
+		ctx.SetTransaction(nil)
+
+		return ws, commit, err
 	}
 
 	return sess.doCommit(ctx, dbName, tx, commitFunc)
