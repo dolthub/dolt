@@ -272,29 +272,6 @@ func TestScripts(t *testing.T) {
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
-func TestSpatialScripts(t *testing.T) {
-	skipNewFormat(t)
-
-	skipped := []string{
-		"create index r_c0 on r (c0);",
-		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
-		"SELECT group_concat(`attribute`) FROM t where o_id=2",
-		"SELECT group_concat(o_id) FROM t WHERE `attribute`='color'",
-
-		// TODO(aaron): go-mysql-server GroupBy with grouping
-		// expressions currently has a bug where it does not insert
-		// necessary Sort nodes.  These queries used to work by
-		// accident based on the return order from the storage layer,
-		// but they no longer do.
-		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
-		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
-
-		// no support for naming unique constraints yet, engine dependent
-		"show create table t2",
-	}
-	enginetest.TestSpatialScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
-}
-
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
 	skipNewFormat(t)
