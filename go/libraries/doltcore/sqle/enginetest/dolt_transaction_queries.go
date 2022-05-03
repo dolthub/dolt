@@ -852,28 +852,36 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
+				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
 				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
 				Expected: []sql.Row{{1}},
 			},
 			{
-				Query:    "/* client a */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
-			},
-			{ // We see the merge value from a's commit here, we need to fix it to get our values
 				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{ // no error because of our session settings
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",

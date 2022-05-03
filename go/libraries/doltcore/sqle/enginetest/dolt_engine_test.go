@@ -601,17 +601,84 @@ func TestDoltMerge(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	script := enginetest.TransactionTest{
-		Name: "conflicting updates, resolved with more updates",
+		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
-			"create table t (x int primary key, y int)",
-			"insert into t values (1, 1), (2, 2)",
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
+				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{ // no error because of our session settings
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
+				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: 1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client a */ delete from dolt_conflicts_test",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
 				Expected: []sql.Row{},
 			},
 			{
@@ -619,84 +686,8 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
-				Query: "/* client a */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 2,
-					},
-				}}},
-			},
-			{
-				Query: "/* client b */ update t set y = 4",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 2,
-					},
-				}}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ set dolt_rollback_on_conflict = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{ // we now have the updates from client a in our working set so this is a no-op
-				Query: "/* client b */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(0),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 0,
-					},
-				}}},
-			},
-			{ // committing is still an error because we haven't resolved our conflicts yet
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{
-				Query: "/* client b */ update t set y = (select their_y from dolt_conflicts_t dc where dc.base_x = 1) where x = 1",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(1),
-					Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					},
-				}}},
-			},
-			{ // still need to clear conflicts
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{
-				Query: "/* client b */ delete from dolt_conflicts_t",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-				}}},
-			},
-			{ // now we can commit without error
-				Query: "/* client b */ commit",
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 4}, {2, 3}},
-			},
-			{
-				Query: "/* client a */ start transaction",
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 4}, {2, 3}},
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 		},
 	}
