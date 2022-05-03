@@ -276,11 +276,15 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 
 		return v.walkRefs(nbf, cb)
 	case serial.CommitFileID:
-		parents, err := SerialCommitParentRefs(nbf, sm)
+		parents, err := SerialCommitParentAddrs(nbf, sm)
 		if err != nil {
 			return err
 		}
-		for _, r := range parents {
+		for _, addr := range parents {
+			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+			if err != nil {
+				return err
+			}
 			if err = cb(r); err != nil {
 				return err
 			}
@@ -299,19 +303,15 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 
-func SerialCommitParentRefs(nbf *NomsBinFormat, sm SerialMessage) ([]Ref, error) {
+func SerialCommitParentAddrs(nbf *NomsBinFormat, sm SerialMessage) ([]hash.Hash, error) {
 	msg := serial.GetRootAsCommit([]byte(sm), 0)
 	addrs := msg.ParentAddrsBytes()
 	n := len(addrs) / 20
-	ret := make([]Ref, n)
+	ret := make([]hash.Hash, n)
 	for i := 0; i < n; i++ {
 		addr := hash.New(addrs[:20])
 		addrs = addrs[20:]
-		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-		if err != nil {
-			return nil, err
-		}
-		ret[i] = r
+		ret[i] = addr
 	}
 	return ret, nil
 }
