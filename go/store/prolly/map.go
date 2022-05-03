@@ -294,6 +294,7 @@ func (nb *mapBuilder) reset() {
 
 func (nb *mapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
 	msg := message.SerializeProllyMap(pool, nb.keys, nb.values, nb.level, nb.subtrees)
+	nb.reset()
 	return tree.NodeFromBytes(msg)
 }
 

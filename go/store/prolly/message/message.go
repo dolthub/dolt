@@ -30,6 +30,8 @@ func GetKeys(msg Message) val.SlicedBuffer {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapKeys(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapKeys(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -40,6 +42,8 @@ func GetValues(msg Message) val.SlicedBuffer {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapValues(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapValues(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -50,6 +54,8 @@ func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return walkProllyMapAddresses(ctx, msg, cb)
+	case serial.AddressMapFileID:
+		return walkAddressMapAddresses(ctx, msg, cb)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -60,6 +66,8 @@ func GetCount(msg Message) uint16 {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapCount(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapCount(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -70,6 +78,8 @@ func GetTreeLevel(msg Message) int {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeLevel(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapTreeLevel(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -80,6 +90,8 @@ func GetTreeCount(msg Message) int {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeCount(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapTreeCount(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}
@@ -90,6 +102,8 @@ func GetSubtrees(msg Message) []uint64 {
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)
+	case serial.AddressMapFileID:
+		return getAddressMapSubtrees(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}

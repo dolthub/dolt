@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ package message
 
 import (
 	"context"
+	"encoding/binary"
+	"fmt"
 
 	fb "github.com/google/flatbuffers/go"
 
@@ -26,12 +28,14 @@ import (
 )
 
 const (
-	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
-	// and serial.ProllyTreeNode.ValueOffsetsLength() respectively.
-	// They are only as stable as the flatbuffers schemas that define them.
-	keyOffsetsVOffset   = 6
-	valueOffsetsVOffset = 12
+	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsets()
+	// and serial.ProllyTreeNode.ValueOffsets() respectively.
+	// They are only as stable as the flatbuffers schema that define them.
+	prollyMapKeyOffsetsVOffset   = 6
+	prollyMapValueOffsetsVOffset = 12
 )
+
+var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
 func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, subtrees []uint64) Message {
 	var (
@@ -40,7 +44,7 @@ func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, su
 		refArr, cardArr  fb.UOffsetT
 	)
 
-	keySz, valSz, bufSz := estimateBufferSize(keys, values, subtrees)
+	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees)
 	b := getFlatbufferBuilder(pool, bufSz)
 
 	// serialize keys and offsets
@@ -75,22 +79,14 @@ func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, su
 	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
 	serial.ProllyTreeNodeAddTreeLevel(b, uint8(level))
-	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), []byte(serial.ProllyTreeNodeFileID))
-
+	b.FinishWithFileIdentifier(serial.ProllyTreeNodeEnd(b), prollyMapFileID)
 	return b.FinishedBytes()
-}
-
-func sumSubtrees(subtrees []uint64) (sum uint64) {
-	for i := range subtrees {
-		sum += subtrees[i]
-	}
-	return
 }
 
 func getProllyMapKeys(msg Message) (keys val.SlicedBuffer) {
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
 	keys.Buf = pm.KeyItemsBytes()
-	keys.Offs = getKeyOffsetsVector(pm)
+	keys.Offs = getProllyMapKeyOffsets(pm)
 	return
 }
 
@@ -99,7 +95,7 @@ func getProllyMapValues(msg Message) (values val.SlicedBuffer) {
 	items := pm.ValueItemsBytes()
 	if items != nil {
 		values.Buf = items
-		values.Offs = getValueOffsetsVector(pm)
+		values.Offs = getProllyMapValueOffsets(pm)
 	} else {
 		values.Buf = pm.AddressArrayBytes()
 		values.Offs = offsetsForAddressArray(values.Buf)
@@ -111,7 +107,7 @@ func walkProllyMapAddresses(ctx context.Context, msg Message, cb func(ctx contex
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
 	arr := pm.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
-		addr := hash.New(arr[i*addrSz : (i+1)*addrSz])
+		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
 		if err := cb(ctx, addr); err != nil {
 			return err
 		}
@@ -121,7 +117,7 @@ func walkProllyMapAddresses(ctx context.Context, msg Message, cb func(ctx contex
 	arr2 := pm.ValueItemsBytes()
 	for i := 0; i < cnt; i++ {
 		o := pm.ValueAddressOffsets(i)
-		addr := hash.New(arr[o : o+addrSz])
+		addr := hash.New(arr[o : o+addrSize])
 		if err := cb(ctx, addr); err != nil {
 			return err
 		}
@@ -155,22 +151,48 @@ func getProllyMapSubtrees(msg Message) []uint64 {
 	return readSubtreeCounts(int(cnt), pm.SubtreeCountsBytes())
 }
 
-func getKeyOffsetsVector(pm *serial.ProllyTreeNode) []byte {
+func getProllyMapKeyOffsets(pm *serial.ProllyTreeNode) []byte {
 	sz := pm.KeyOffsetsLength() * 2
 	tab := pm.Table()
-	vec := tab.Offset(keyOffsetsVOffset)
+	vec := tab.Offset(prollyMapKeyOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
 
 	return tab.Bytes[start:stop]
 }
 
-func getValueOffsetsVector(pm *serial.ProllyTreeNode) []byte {
+func getProllyMapValueOffsets(pm *serial.ProllyTreeNode) []byte {
 	sz := pm.ValueOffsetsLength() * 2
 	tab := pm.Table()
-	vec := tab.Offset(valueOffsetsVOffset)
+	vec := tab.Offset(prollyMapValueOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
 
 	return tab.Bytes[start:stop]
+}
+
+// estimateProllyMapSize returns the exact Size of the tuple vectors for keys and values,
+// and an estimate of the overall Size of the final flatbuffer.
+func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64) (keySz, valSz, bufSz int) {
+	for i := range keys {
+		keySz += len(keys[i])
+		valSz += len(values[i])
+	}
+	refCntSz := len(subtrees) * binary.MaxVarintLen64
+
+	// constraints enforced upstream
+	if keySz > int(MaxVectorOffset) {
+		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, MaxVectorOffset))
+	}
+	if valSz > int(MaxVectorOffset) {
+		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
+	}
+
+	bufSz += keySz + valSz               // tuples
+	bufSz += refCntSz                    // subtree counts
+	bufSz += len(keys)*2 + len(values)*2 // offsets
+	bufSz += 8 + 1 + 1 + 1               // metadata
+	bufSz += 72                          // vtable (approx)
+
+	return
 }

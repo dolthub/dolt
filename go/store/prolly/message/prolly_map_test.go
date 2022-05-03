@@ -31,10 +31,10 @@ func TestGetKeyValueOffsetsVectors(t *testing.T) {
 		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
 		msg := SerializeProllyMap(sharedPool, keys, values, 0, nil)
 
-		// uses getKeyOffsetsVector with hard-coded vtable slot
+		// uses getProllyMapKeyOffsetsVector with hard-coded vtable slot
 		keyBuf := getProllyMapKeys(msg)
 
-		// uses getValueOffsetsVector with hard-coded vtable slot
+		// uses getProllyMapValueOffsetsVector with hard-coded vtable slot
 		valBuf := getProllyMapValues(msg)
 
 		for i := range keys {

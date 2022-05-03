@@ -16,7 +16,6 @@ package message
 
 import (
 	"encoding/binary"
-	"fmt"
 	"math"
 
 	fb "github.com/google/flatbuffers/go"
@@ -87,28 +86,9 @@ func WriteSubtreeCounts(sc []uint64) []byte {
 	return buf[:pos]
 }
 
-// estimateBufferSize returns the exact Size of the tuple vectors for keys and values,
-// and an estimate of the overall Size of the final flatbuffer.
-func estimateBufferSize(keys, values [][]byte, subtrees []uint64) (keySz, valSz, bufSz int) {
-	for i := range keys {
-		keySz += len(keys[i])
-		valSz += len(values[i])
+func sumSubtrees(subtrees []uint64) (sum uint64) {
+	for i := range subtrees {
+		sum += subtrees[i]
 	}
-	refCntSz := len(subtrees) * binary.MaxVarintLen64
-
-	// constraints enforced upstream
-	if keySz > int(MaxVectorOffset) {
-		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, MaxVectorOffset))
-	}
-	if valSz > int(MaxVectorOffset) {
-		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
-	}
-
-	bufSz += keySz + valSz               // tuples
-	bufSz += refCntSz                    // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offsets
-	bufSz += 8 + 1 + 1 + 1               // metadata
-	bufSz += 72                          // vtable (approx)
-
 	return
 }

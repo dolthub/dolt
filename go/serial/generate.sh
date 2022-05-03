@@ -14,6 +14,7 @@ fi
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   commit.fbs \
   prolly.fbs \
+  addressmap.fbs \
   rootvalue.fbs \
   schema.fbs \
   storeroot.fbs \

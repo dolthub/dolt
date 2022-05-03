@@ -23,8 +23,8 @@ import (
 
 const (
 	maxChunkSz  = math.MaxUint16
-	addrSz      = hash.ByteLen
-	offsetCount = maxChunkSz / addrSz
+	addrSize    = hash.ByteLen
+	offsetCount = maxChunkSz / addrSize
 	uint16Size  = 2
 )
 
@@ -34,16 +34,16 @@ func init() {
 	addressOffsets = make([]byte, offsetCount*uint16Size)
 
 	buf := addressOffsets
-	off := uint16(addrSz)
+	off := uint16(addrSize)
 	for len(buf) > 0 {
 		binary.LittleEndian.PutUint16(buf, off)
 		buf = buf[uint16Size:]
-		off += uint16(addrSz)
+		off += uint16(addrSize)
 	}
 }
 
 func offsetsForAddressArray(arr []byte) (offs []byte) {
-	cnt := len(arr) / addrSz
+	cnt := len(arr) / addrSize
 	offs = addressOffsets[:cnt*uint16Size]
 	return
 }
