@@ -72,8 +72,9 @@ func TestGetDotDotRevisions(t *testing.T) {
 
 	rv, err := commit.GetRootValue(context.Background())
 	require.NoError(t, err)
-	rvh, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
+	r, rvh, err := dEnv.DoltDB.WriteRootValue(context.Background(), rv)
 	require.NoError(t, err)
+	rv = r
 
 	// Create 5 commits on main.
 	mainCommits := make([]*doltdb.Commit, 6)

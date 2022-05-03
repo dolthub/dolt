@@ -292,7 +292,7 @@ func TestLDNoms(t *testing.T) {
 		root, err = root.PutTable(context.Background(), "test", tbl)
 		assert.NoError(t, err)
 
-		valHash, err = ddb.WriteRootValue(context.Background(), root)
+		root, valHash, err = ddb.WriteRootValue(context.Background(), root)
 		assert.NoError(t, err)
 
 		meta, err = datas.NewCommitMeta(committerName, committerEmail, "Sample data")

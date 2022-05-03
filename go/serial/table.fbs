@@ -12,31 +12,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-include "database.fbs";
 include "prolly.fbs";
-include "schema.fbs";
 
 namespace serial;
 
 table Table {
-  name:string (required);
-  schema:Ref (required);
-  primary_index:Ref (required);
+  // address of schema.
+  schema:[ubyte] (required);
+
+  // an embedded row map;
+  // for __DOLT_DEV__, an EncodeValue(types.Map).
+  // for __DOLT_1__, a TupleMap.
+  primary_index:[ubyte] (required);
+
+  // Entries map from index names to addresses of
+  // index maps.
   secondary_indexes:RefMap (required);
+
+  auto_increment_value:uint64;
+
   conflicts:Conflicts;
-  violations:ConstraintViolations;
+
+  // address of a violations types.Map (for __DOLT_DEV__).
+  violations:[ubyte];
 }
 
 table Conflicts {
-    ours:Ref (required);
-    theirs:Ref (required);
-    ancestor:Ref (required);
+    // address of a conflicts types.Map (for __DOLT_DEV__).
+    data:[ubyte] (required);
 
-    our_schema:Ref (required);
-    their_schema:Ref (required);
-    ancestor_schema:Ref (required);
+    // address of merge destination schema
+    our_schema:[ubyte] (required);
+    // address of merge source schema
+    their_schema:[ubyte] (required);
+    // address of merge common ancestor schema
+    ancestor_schema:[ubyte] (required);
 }
 
-table ConstraintViolations {
-    violations:Ref (required);
-}
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DTBL";

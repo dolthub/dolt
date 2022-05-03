@@ -20,6 +20,8 @@ const StoreRootFileID = "STRT"
 const TagFileID = "DTAG"
 const WorkingSetFileID = "WRST"
 const CommitFileID = "DCMT"
+const RootValueFileID = "RTVL"
+const TableFileID = "DTBL"
 
 func GetFileID(bs []byte) string {
 	if len(bs) < 8 {

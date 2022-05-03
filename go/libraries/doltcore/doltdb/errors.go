@@ -70,21 +70,15 @@ func IsInvalidFormatErr(err error) bool {
 }
 
 func IsNotFoundErr(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrTableNotFound:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrTableNotFound)
 }
 
 func IsNotACommit(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrFoundHashNotACommit:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrFoundHashNotACommit)
 }
 
 type RootType int

@@ -568,6 +568,10 @@ func (t *DoltTable) GetChecks(ctx *sql.Context) ([]sql.CheckDefinition, error) {
 }
 
 func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
+	if sch.Checks() == nil {
+		return nil
+	}
+
 	checks := make([]sql.CheckDefinition, sch.Checks().Count())
 	for i, check := range sch.Checks().AllChecks() {
 		checks[i] = sql.CheckDefinition{
@@ -1065,7 +1069,7 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
-// modifyColumn implements sql.AlterableTable
+// ModifyColumn implements sql.AlterableTable
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
 	if types.IsFormat_DOLT_1(t.nbf) {
 		return nil

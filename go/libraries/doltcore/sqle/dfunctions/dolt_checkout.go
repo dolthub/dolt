@@ -34,25 +34,27 @@ const DoltCheckoutFuncName = "dolt_checkout"
 
 var ErrEmptyBranchName = errors.New("error: cannot checkout empty string")
 
+// Deprecated: please use the version in the dprocedures package
 type DoltCheckoutFunc struct {
 	expression.NaryExpression
 }
 
 func (d DoltCheckoutFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return 1, err
+	}
+	return DoDoltCheckout(ctx, args)
+}
+
+func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	ap := cli.CreateCheckoutArgParser()
-	args, err := getDoltArgs(ctx, row, d.Children())
-
-	if err != nil {
-		return 1, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
 	}
@@ -192,6 +194,7 @@ func (d DoltCheckoutFunc) WithChildren(children ...sql.Expression) (sql.Expressi
 	return NewDoltCheckoutFunc(children...)
 }
 
+// Deprecated: please use the version in the dprocedures package
 func NewDoltCheckoutFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltCheckoutFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }

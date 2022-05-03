@@ -24,9 +24,9 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type rmedit struct {
-	name string
-	addr hash.Hash
+type RefMapEdit struct {
+	Name string
+	Addr hash.Hash
 }
 
 func RefMapLookup(rm *serial.RefMap, key string) hash.Hash {
@@ -40,9 +40,9 @@ func RefMapLookup(rm *serial.RefMap, key string) hash.Hash {
 	return res
 }
 
-func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit) flatbuffers.UOffsetT {
+func RefMapApplyEdits(rm *serial.RefMap, builder *flatbuffers.Builder, edits []RefMapEdit) flatbuffers.UOffsetT {
 	sort.Slice(edits, func(i, j int) bool {
-		return edits[i].name < edits[j].name
+		return edits[i].Name < edits[j].Name
 	})
 
 	type idx struct {
@@ -52,17 +52,17 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 	ni := 0
 	ei := 0
 	for ni < rm.NamesLength() && ei < len(edits) {
-		if string(rm.Names(ni)) < edits[ei].name {
+		if string(rm.Names(ni)) < edits[ei].Name {
 			indexes = append(indexes, idx{ni, -1})
 			ni += 1
-		} else if string(rm.Names(ni)) == edits[ei].name {
-			if !edits[ei].addr.IsEmpty() {
+		} else if string(rm.Names(ni)) == edits[ei].Name {
+			if !edits[ei].Addr.IsEmpty() {
 				indexes = append(indexes, idx{-1, ei})
 			}
 			ei += 1
 			ni += 1
 		} else {
-			if !edits[ei].addr.IsEmpty() {
+			if !edits[ei].Addr.IsEmpty() {
 				indexes = append(indexes, idx{-1, ei})
 			}
 			ei += 1
@@ -73,7 +73,9 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 		ni += 1
 	}
 	for ei < len(edits) {
-		indexes = append(indexes, idx{-1, ei})
+		if !edits[ei].Addr.IsEmpty() {
+			indexes = append(indexes, idx{-1, ei})
+		}
 		ei += 1
 	}
 
@@ -88,7 +90,7 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 		if indexes[i].l != -1 {
 			name = string(rm.Names(indexes[i].l))
 		} else {
-			name = edits[indexes[i].r].name
+			name = edits[indexes[i].r].Name
 		}
 		nameoffs[i] = builder.CreateString(name)
 	}
@@ -109,7 +111,7 @@ func RefMapEdit(rm *serial.RefMap, builder *flatbuffers.Builder, edits []rmedit)
 		if idx.l != -1 {
 			copy(builder.Bytes[start:stop], rmaddrbytes[idx.l*20:idx.l*20+20])
 		} else {
-			copy(builder.Bytes[start:stop], edits[idx.r].addr[:])
+			copy(builder.Bytes[start:stop], edits[idx.r].Addr[:])
 		}
 		start += hashsz
 	}
@@ -139,9 +141,9 @@ func (rm refmap) len() uint64 {
 	return uint64(rm.RefMap.NamesLength())
 }
 
-func (rm refmap) edit(edits []rmedit) refmap {
+func (rm refmap) edit(edits []RefMapEdit) refmap {
 	builder := flatbuffers.NewBuilder(1024)
-	builder.Finish(RefMapEdit(rm.RefMap, builder, edits))
+	builder.Finish(RefMapApplyEdits(rm.RefMap, builder, edits))
 	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
 }
 
@@ -150,16 +152,16 @@ func (rm refmap) lookup(key string) hash.Hash {
 }
 
 func (rm refmap) set(key string, addr hash.Hash) refmap {
-	return rm.edit([]rmedit{{key, addr}})
+	return rm.edit([]RefMapEdit{{key, addr}})
 }
 
 func (rm *refmap) delete(key string) refmap {
-	return rm.edit([]rmedit{{key, hash.Hash{}}})
+	return rm.edit([]RefMapEdit{{key, hash.Hash{}}})
 }
 
 func (rm refmap) storeroot_flatbuffer() []byte {
 	builder := flatbuffers.NewBuilder(1024)
-	refmap := RefMapEdit(rm.RefMap, builder, []rmedit{})
+	refmap := RefMapApplyEdits(rm.RefMap, builder, []RefMapEdit{})
 	serial.StoreRootStart(builder)
 	serial.StoreRootAddRefs(builder, refmap)
 	builder.FinishWithFileIdentifier(serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))

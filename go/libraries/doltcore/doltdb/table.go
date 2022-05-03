@@ -363,7 +363,7 @@ func (t *Table) GetIndexRowData(ctx context.Context, indexName string) (durable.
 	return indexes.GetIndex(ctx, sch, indexName)
 }
 
-// SetNomsIndexRows replaces the current row data for the given index and returns an updated Table.
+// SetIndexRows replaces the current row data for the given index and returns an updated Table.
 func (t *Table) SetIndexRows(ctx context.Context, indexName string, idx durable.Index) (*Table, error) {
 	indexes, err := t.GetIndexSet(ctx)
 	if err != nil {
@@ -469,4 +469,24 @@ func (t *Table) SetAutoIncrementValue(ctx context.Context, val uint64) (*Table, 
 		return nil, err
 	}
 	return &Table{table: table}, nil
+}
+
+// AddColumnToRows adds the column named to row data as necessary and returns the resulting table.
+func (t *Table) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (*Table, error) {
+	idx, err := t.table.GetTableRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newIdx, err := idx.AddColumnToRows(ctx, newCol, newSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	newTable, err := t.table.SetTableRows(ctx, newIdx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Table{table: newTable}, nil
 }

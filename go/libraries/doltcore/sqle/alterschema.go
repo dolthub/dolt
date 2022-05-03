@@ -80,85 +80,33 @@ func addColumnToTable(
 		return nil, err
 	}
 
-	newSchema, err := addColumnToSchema(oldSchema, tag, newColName, typeInfo, nullable, order, defaultVal, comment)
+	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
 	if err != nil {
 		return nil, err
 	}
 
-	// if types.IsFormat_DOLT_1(t.nbf) {
-	// 	return nil
-	// }
+	newSchema, err := oldSchema.AddColumn(newCol, orderToOrder(order))
+	if err != nil {
+		return nil, err
+	}
 
 	newTable, err := tbl.UpdateSchema(ctx, newSchema)
 	if err != nil {
 		return nil, err
 	}
 
-	return newTable, nil
+	// TODO: we do a second pass in the engine to set a default if there is one. We should only do a single table scan.
+	return newTable.AddColumnToRows(ctx, newColName, newSchema)
 }
 
-// addColumnToSchema creates a new schema with a column as specified by the params.
-// TODO: make this a schema operation, not in this package
-func addColumnToSchema(
-	sch schema.Schema,
-	tag uint64,
-	newColName string,
-	typeInfo typeinfo.TypeInfo,
-	nullable Nullable,
-	order *sql.ColumnOrder,
-	defaultVal sql.Expression,
-	comment string,
-) (schema.Schema, error) {
-	newCol, err := createColumn(nullable, newColName, tag, typeInfo, defaultVal.String(), comment)
-	if err != nil {
-		return nil, err
-	}
-
-	var newCols []schema.Column
-	if order != nil && order.First {
-		newCols = append(newCols, newCol)
-	}
-	for _, col := range sch.GetAllCols().GetColumns() {
-		newCols = append(newCols, col)
-		if order != nil && order.AfterColumn == col.Name {
-			newCols = append(newCols, newCol)
-		}
-	}
-
+func orderToOrder(order *sql.ColumnOrder) *schema.ColumnOrder {
 	if order == nil {
-		newCols = append(newCols, newCol)
+		return nil
 	}
-
-	collection := schema.NewColCollection(newCols...)
-
-	err = schema.ValidateForInsert(collection)
-	if err != nil {
-		return nil, err
+	return &schema.ColumnOrder{
+		First:       order.First,
+		AfterColumn: order.AfterColumn,
 	}
-
-	newSch, err := schema.SchemaFromCols(collection)
-	if err != nil {
-		return nil, err
-	}
-	newSch.Indexes().AddIndex(sch.Indexes().AllIndexes()...)
-
-	// Copy over all checks from the old schema
-	for _, check := range sch.Checks().AllChecks() {
-		_, err := newSch.Checks().AddCheck(check.Name(), check.Expression(), check.Enforced())
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	pkOrds, err := modifyPkOrdinals(sch, newSch)
-	if err != nil {
-		return nil, err
-	}
-	err = newSch.SetPkOrdinals(pkOrds)
-	if err != nil {
-		return nil, err
-	}
-	return newSch, nil
 }
 
 func createColumn(nullable Nullable, newColName string, tag uint64, typeInfo typeinfo.TypeInfo, defaultVal, comment string) (schema.Column, error) {
@@ -558,6 +506,7 @@ func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schem
 // the relative positions of PKs from the oldSch. Return an ErrPrimaryKeySetsIncompatible
 // error if the two schemas have a different number of primary keys, or a primary
 // key column's tag changed between the two sets.
+// TODO: move this to schema package
 func modifyPkOrdinals(oldSch, newSch schema.Schema) ([]int, error) {
 	if newSch.GetPKCols().Size() != oldSch.GetPKCols().Size() {
 		return nil, ErrPrimaryKeySetsIncompatible

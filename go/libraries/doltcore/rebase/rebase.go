@@ -253,10 +253,11 @@ func rebaseRecursive(ctx context.Context, ddb *doltdb.DoltDB, replay ReplayCommi
 		return nil, err
 	}
 
-	valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
+	r, valueHash, err := ddb.WriteRootValue(ctx, rebasedRoot)
 	if err != nil {
 		return nil, err
 	}
+	rebasedRoot = r
 
 	oldMeta, err := commit.GetCommitMeta(ctx)
 	if err != nil {

@@ -32,12 +32,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+// Deprecated: please use the version in the dprocedures package
 func NewDoltMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 	return &DoltMergeFunc{expression.NaryExpression{ChildExpressions: args}}, nil
 }
 
 const DoltMergeFuncName = "dolt_merge"
 
+// Deprecated: please use the version in the dprocedures package
 type DoltMergeFunc struct {
 	expression.NaryExpression
 }
@@ -50,10 +52,14 @@ const (
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
-	return doDoltMerge(ctx, row, d.Children())
+	args, err := getDoltArgs(ctx, row, d.Children())
+	if err != nil {
+		return noConflicts, err
+	}
+	return DoDoltMerge(ctx, args)
 }
 
-func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interface{}, error) {
+func DoDoltMerge(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
@@ -62,14 +68,7 @@ func doDoltMerge(ctx *sql.Context, row sql.Row, exprs []sql.Expression) (interfa
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	ap := cli.CreateMergeArgParser()
-	args, err := getDoltArgs(ctx, row, exprs)
-
-	if err != nil {
-		return noConflicts, err
-	}
-
-	apr, err := ap.Parse(args)
+	apr, err := cli.CreateMergeArgParser().Parse(args)
 	if err != nil {
 		return noConflicts, err
 	}
@@ -145,7 +144,7 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflicts, doltdb.ErrMergeActive
 	}
 
-	err := checkForUncommittedChanges(roots.Working, roots.Head)
+	err := checkForUncommittedChanges(ctx, roots.Working, roots.Head)
 	if err != nil {
 		return ws, noConflicts, err
 	}
@@ -409,7 +408,7 @@ func mergeRootToWorking(
 	return ws, nil
 }
 
-func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
+func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRoot *doltdb.RootValue) error {
 	rh, err := root.HashOf()
 
 	if err != nil {
@@ -423,6 +422,7 @@ func checkForUncommittedChanges(root *doltdb.RootValue, headRoot *doltdb.RootVal
 	}
 
 	if rh != hrh {
+		fmt.Printf("root: %s\nheadRoot: %s\n", root.DebugString(ctx, true), headRoot.DebugString(ctx, true))
 		return ErrUncommittedChanges.New()
 	}
 	return nil

@@ -47,49 +47,6 @@ func MergeStateFromCommitAndWorking(commit *Commit, preMergeWorking *RootValue) 
 	return &MergeState{commit: commit, preMergeWorking: preMergeWorking}
 }
 
-func newMergeState(ctx context.Context, vrw types.ValueReadWriter, mergeState types.Struct) (*MergeState, error) {
-	commitSt, ok, err := mergeState.MaybeGet(datas.MergeStateCommitField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("corrupted MergeState struct")
-	}
-
-	dc, err := datas.CommitFromValue(vrw.Format(), commitSt)
-	if err != nil {
-		return nil, err
-	}
-
-	commit, err := NewCommit(ctx, vrw, dc)
-	if err != nil {
-		return nil, err
-	}
-
-	workingRootRef, ok, err := mergeState.MaybeGet(datas.MergeStateWorkingPreMergeField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("corrupted MergeState struct")
-	}
-
-	workingRootValSt, err := workingRootRef.(types.Ref).TargetValue(ctx, vrw)
-	if err != nil {
-		return nil, err
-	}
-
-	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
-	if err != nil {
-		return nil, err
-	}
-
-	return &MergeState{
-		commit:          commit,
-		preMergeWorking: workingRoot,
-	}, nil
-}
-
 func (m MergeState) Commit() *Commit {
 	return m.commit
 }
@@ -187,38 +144,57 @@ func NewWorkingSet(ctx context.Context, name string, vrw types.ValueReadWriter, 
 		}
 	}
 
-	workingRootValSt, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
+	workingRootVal, err := vrw.ReadValue(ctx, dsws.WorkingAddr)
 	if err != nil {
 		return nil, err
 	}
-	workingRoot, err := newRootValue(vrw, workingRootValSt.(types.Struct))
+	workingRoot, err := newRootValue(vrw, workingRootVal)
 	if err != nil {
 		return nil, err
 	}
 
 	var stagedRoot *RootValue
 	if dsws.StagedAddr != nil {
-		stagedRootValSt, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
+		stagedRootVal, err := vrw.ReadValue(ctx, *dsws.StagedAddr)
 		if err != nil {
 			return nil, err
 		}
 
-		stagedRoot, err = newRootValue(vrw, stagedRootValSt.(types.Struct))
+		stagedRoot, err = newRootValue(vrw, stagedRootVal)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	var mergeState *MergeState
-	if dsws.MergeStateAddr != nil {
-		mergeStateValSt, err := vrw.ReadValue(ctx, *dsws.MergeStateAddr)
+	if dsws.MergeState != nil {
+		preMergeWorkingAddr, err := dsws.MergeState.PreMergeWorkingAddr(ctx, vrw)
+		if err != nil {
+			return nil, err
+		}
+		fromDCommit, err := dsws.MergeState.FromCommit(ctx, vrw)
 		if err != nil {
 			return nil, err
 		}
 
-		mergeState, err = newMergeState(ctx, vrw, mergeStateValSt.(types.Struct))
+		commit, err := NewCommit(ctx, vrw, fromDCommit)
 		if err != nil {
 			return nil, err
+		}
+
+		preMergeWorkingV, err := vrw.ReadValue(ctx, preMergeWorkingAddr)
+		if err != nil {
+			return nil, err
+		}
+
+		preMergeWorkingRoot, err := newRootValue(vrw, preMergeWorkingV)
+		if err != nil {
+			return nil, err
+		}
+
+		mergeState = &MergeState{
+			commit:          commit,
+			preMergeWorking: preMergeWorkingRoot,
 		}
 	}
 
@@ -252,7 +228,7 @@ func (ws *WorkingSet) Ref() ref.WorkingSetRef {
 func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 	workingRoot types.Ref,
 	stagedRoot types.Ref,
-	mergeState *types.Ref,
+	mergeState *datas.MergeState,
 	err error,
 ) {
 
@@ -260,43 +236,39 @@ func (ws *WorkingSet) writeValues(ctx context.Context, db *DoltDB) (
 		return types.Ref{}, types.Ref{}, nil, fmt.Errorf("StagedRoot and workingRoot must be set. This is a bug.")
 	}
 
-	workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
+	var r *RootValue
+	r, workingRoot, err = db.writeRootValue(ctx, ws.workingRoot)
 	if err != nil {
 		return types.Ref{}, types.Ref{}, nil, err
 	}
+	ws.workingRoot = r
 
-	stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
+	r, stagedRoot, err = db.writeRootValue(ctx, ws.stagedRoot)
 	if err != nil {
 		return types.Ref{}, types.Ref{}, nil, err
 	}
+	ws.stagedRoot = r
 
 	if ws.mergeState != nil {
-		var mergeStateRef types.Ref
-		preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		r, preMergeWorking, err := db.writeRootValue(ctx, ws.mergeState.preMergeWorking)
+		if err != nil {
+			return types.Ref{}, types.Ref{}, nil, err
+		}
+		ws.mergeState.preMergeWorking = r
+
+		h, err := ws.mergeState.commit.HashOf()
+		if err != nil {
+			return types.Ref{}, types.Ref{}, nil, err
+		}
+		dCommit, err := datas.LoadCommitAddr(ctx, db.vrw, h)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}
 
-		commitH, err := ws.mergeState.commit.HashOf()
+		mergeState, err = datas.NewMergeState(ctx, db.vrw, preMergeWorking, dCommit)
 		if err != nil {
 			return types.Ref{}, types.Ref{}, nil, err
 		}
-		commitV, err := db.vrw.ReadValue(ctx, commitH)
-		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
-		}
-
-		mergeStateRefSt, err := datas.NewMergeState(ctx, preMergeWorking, commitV)
-		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
-		}
-
-		mergeStateRef, err = db.vrw.WriteValue(ctx, mergeStateRefSt)
-		if err != nil {
-			return types.Ref{}, types.Ref{}, nil, err
-		}
-
-		mergeState = &mergeStateRef
 	}
 
 	return workingRoot, stagedRoot, mergeState, nil

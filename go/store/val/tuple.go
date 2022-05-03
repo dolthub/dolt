@@ -161,6 +161,10 @@ func (tup Tuple) GetManyFields(indexes []int, slices [][]byte) [][]byte {
 	return sliceManyFields(tup, indexes, slices)
 }
 
+func (tup Tuple) FieldIsNull(i int) bool {
+	return tup.GetField(i) == nil
+}
+
 func (tup Tuple) Count() int {
 	sl := tup[len(tup)-int(countSize):]
 	return int(readUint16(sl))

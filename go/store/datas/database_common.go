@@ -380,7 +380,7 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		if !iscommit {
 			return fmt.Errorf("SetHead failed: reffered to value is not a commit:")
 		}
-	case TagName:
+	case tagName:
 		istag, err := IsTag(newVal)
 		if err != nil {
 			return err
@@ -743,7 +743,7 @@ func (db *database) CommitWithWorkingSet(
 		if currDS != currDSHash {
 			return refmap{}, ErrMergeNeeded
 		}
-		rm = rm.edit([]rmedit{
+		rm = rm.edit([]RefMapEdit{
 			{commitDS.ID(), commitValRef.TargetHash()},
 			{workingSetDS.ID(), wsAddr},
 		})

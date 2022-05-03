@@ -66,7 +66,12 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		return nil, err
 	}
 
-	pw, err := getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
+	var pw indexWriter
+	if schema.IsKeyless(sch) {
+		pw, err = getKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+	} else {
+		pw, err = getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
+	}
 	if err != nil {
 		return nil, err
 	}
