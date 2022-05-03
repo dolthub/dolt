@@ -155,8 +155,6 @@ func ShuffleTuplePairs(items [][2]val.Tuple) {
 }
 
 func newLeafNode(keys, values []Item) Node {
-
-	// furp
 	kk := make([][]byte, len(keys))
 	for i := range keys {
 		kk[i] = keys[i]

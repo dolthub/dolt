@@ -22,7 +22,7 @@ const WorkingSetFileID = "WRST"
 const CommitFileID = "DCMT"
 const RootValueFileID = "RTVL"
 const TableFileID = "DTBL"
-const ProllyTreeNodeFileID = "PRLY"
+const ProllyTreeNodeFileID = "TUPM"
 const AddressMapFileID = "ADRM"
 
 func GetFileID(bs []byte) string {

@@ -396,6 +396,7 @@ func ProllyTreeNodeEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
+/// Refmap has been deprecated in favor of AddressMap
 type RefMap struct {
 	_tab flatbuffers.Table
 }
@@ -474,42 +475,8 @@ func (rcv *RefMap) MutateRefArray(j int, n byte) bool {
 	return false
 }
 
-func (rcv *RefMap) SubtreeCounts(j int) byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.GetByte(a + flatbuffers.UOffsetT(j*1))
-	}
-	return 0
-}
-
-func (rcv *RefMap) SubtreeCountsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *RefMap) SubtreeCountsBytes() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *RefMap) MutateSubtreeCounts(j int, n byte) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.MutateByte(a+flatbuffers.UOffsetT(j*1), n)
-	}
-	return false
-}
-
 func (rcv *RefMap) TreeCount() uint64 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.GetUint64(o + rcv._tab.Pos)
 	}
@@ -517,11 +484,11 @@ func (rcv *RefMap) TreeCount() uint64 {
 }
 
 func (rcv *RefMap) MutateTreeCount(n uint64) bool {
-	return rcv._tab.MutateUint64Slot(10, n)
+	return rcv._tab.MutateUint64Slot(8, n)
 }
 
 func (rcv *RefMap) TreeLevel() byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.GetByte(o + rcv._tab.Pos)
 	}
@@ -529,11 +496,11 @@ func (rcv *RefMap) TreeLevel() byte {
 }
 
 func (rcv *RefMap) MutateTreeLevel(n byte) bool {
-	return rcv._tab.MutateByteSlot(12, n)
+	return rcv._tab.MutateByteSlot(10, n)
 }
 
 func RefMapStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+	builder.StartObject(4)
 }
 func RefMapAddNames(builder *flatbuffers.Builder, names flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(names), 0)
@@ -547,17 +514,11 @@ func RefMapAddRefArray(builder *flatbuffers.Builder, refArray flatbuffers.UOffse
 func RefMapStartRefArrayVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(1, numElems, 1)
 }
-func RefMapAddSubtreeCounts(builder *flatbuffers.Builder, subtreeCounts flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(subtreeCounts), 0)
-}
-func RefMapStartSubtreeCountsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(1, numElems, 1)
-}
 func RefMapAddTreeCount(builder *flatbuffers.Builder, treeCount uint64) {
-	builder.PrependUint64Slot(3, treeCount, 0)
+	builder.PrependUint64Slot(2, treeCount, 0)
 }
 func RefMapAddTreeLevel(builder *flatbuffers.Builder, treeLevel byte) {
-	builder.PrependByteSlot(4, treeLevel, 0)
+	builder.PrependByteSlot(3, treeLevel, 0)
 }
 func RefMapEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

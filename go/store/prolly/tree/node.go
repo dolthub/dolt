@@ -25,14 +25,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
-	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
-	// and serial.ProllyTreeNode.ValueOffsetsLength() respectively.
-	// They are only as stable as the flatbuffers schemas that define them.
-	keyOffsetsVOffset   = 6
-	valueOffsetsVOffset = 12
-)
-
 type Item []byte
 
 type Node struct {
@@ -175,7 +167,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 
 			w.Write([]byte(" }"))
 		} else {
-			ref := hash.New(node.getValue(i))
+			ref := node.getAddress(i)
 
 			w.Write([]byte(" ref: #"))
 			w.Write([]byte(ref.String()))

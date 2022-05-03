@@ -42,6 +42,11 @@ func init() {
 	}
 }
 
+// offsetsForAddressArray provides an uint16 offsets array |offs| for an array
+// of addresses |arr|. Together, |arr| and |offs| can construct a val.SlicedBuffer.
+// Offsets aren't necessary to slice into an array of fixed-width addresses, but
+// we still wrap address arrays in val.SlicedBuffer to provide a uniform API when
+// accessing keys and values of Messages.
 func offsetsForAddressArray(arr []byte) (offs []byte) {
 	cnt := len(arr) / addrSize
 	offs = addressOffsets[:cnt*uint16Size]
