@@ -17,34 +17,14 @@ package tree
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 )
 
 const (
 	nodeBuilderListSize = 256
 )
-
-// NodeBuilderFactory ProviderBean™
-type NodeBuilderFactory[B NodeBuilder] func(level int) B
-
-// NodeBuilder builds prolly tree Nodes.
-type NodeBuilder interface {
-	// StartNode initializes a NodeBuilder to start building a new Node.
-	StartNode()
-
-	// Count returns the number of key-value pairs in the NodeBuilder.
-	Count() int
-
-	// HasCapacity returns true if the NodeBuilder can fit the next pair.
-	HasCapacity(key, value Item) bool
-
-	// AddItems adds a key-value pair to the NodeBuilder.
-	AddItems(key, value Item, subtree uint64)
-
-	// Build constructs a new Node from the accumulated key-value pairs.
-	Build(p pool.BuffPool) Node
-}
 
 type novelNode struct {
 	node      Node
@@ -53,8 +33,8 @@ type novelNode struct {
 	treeCount uint64
 }
 
-func writeNewNode(ctx context.Context, ns NodeStore, bld NodeBuilder) (novelNode, error) {
-	node := bld.Build(ns.Pool())
+func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *nodeBuilder[S]) (novelNode, error) {
+	node := bld.build()
 
 	addr, err := ns.Write(ctx, node)
 	if err != nil {
@@ -78,11 +58,50 @@ func writeNewNode(ctx context.Context, ns NodeStore, bld NodeBuilder) (novelNode
 	}, nil
 }
 
-type SubtreeCounts []uint64
-
-func (sc SubtreeCounts) Sum() (s uint64) {
-	for _, count := range sc {
-		s += count
+func newNodeBuilder[S message.Serializer](serializer S, level int) *nodeBuilder[S] {
+	return &nodeBuilder[S]{
+		level:      level,
+		serializer: serializer,
 	}
-	return
+}
+
+type nodeBuilder[S message.Serializer] struct {
+	keys, values [][]byte
+	size, level  int
+	subtrees     SubtreeCounts
+	serializer   S
+}
+
+func (nb *nodeBuilder[S]) startNode() {
+	nb.reset()
+}
+
+func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {
+	sum := nb.size + len(key) + len(value)
+	return sum <= int(message.MaxVectorOffset)
+}
+
+func (nb *nodeBuilder[S]) addItems(key, value Item, subtree uint64) {
+	nb.keys = append(nb.keys, key)
+	nb.values = append(nb.values, value)
+	nb.size += len(key) + len(value)
+	nb.subtrees = append(nb.subtrees, subtree)
+}
+
+func (nb *nodeBuilder[S]) count() int {
+	return len(nb.keys)
+}
+
+func (nb *nodeBuilder[S]) build() (node Node) {
+	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
+	nb.reset()
+	return NodeFromBytes(msg)
+}
+
+func (nb *nodeBuilder[S]) reset() {
+	// buffers are copied, it's safe to re-use the memory.
+	nb.keys = nb.keys[:0]
+	nb.values = nb.values[:0]
+	nb.size = 0
+	nb.subtrees = nb.subtrees[:0]
 }

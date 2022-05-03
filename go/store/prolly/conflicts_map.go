@@ -17,6 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -135,10 +137,10 @@ func (wr ConflictEditor) Delete(ctx context.Context, key val.Tuple) error {
 }
 
 func (wr ConflictEditor) Flush(ctx context.Context) (ConflictMap, error) {
-	factory := newMapBuilder
 	tr := wr.conflicts.tree
+	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool()}
 
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, wr.conflicts.mutations(), tr.compareItems)
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.conflicts.mutations(), tr.compareItems)
 	if err != nil {
 		return ConflictMap{}, err
 	}
