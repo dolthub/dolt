@@ -824,6 +824,52 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 		},
 	},
 	{
+		Name: "force commit on, conflict on transaction commit (same as dolt_allow_commit_conflicts)",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ commit",
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+			},
+			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+		},
+	},
+	{
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
@@ -852,24 +898,24 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -884,7 +930,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
@@ -894,18 +940,176 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				}}},
 			},
 			{
-				Query:    "/* client a */ delete from dolt_conflicts_test",
+				Query:    "/* client b */ delete from dolt_conflicts_test",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "force commit on, conflict on dolt_merge (same as dolt_allow_commit_conflicts)",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{}},
 			},
 			{
 				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{ // no error because of our session settings
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: 1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from dolt_conflicts_test",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "allow commit conflicts off, conflict on dolt_merge",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ set autocommit = off",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ start transaction",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ insert into test values (1, 1)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{
+				Query:    "/* client b */ insert into test values (2, 2)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:          "/* client b */ commit",
+				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+			},
+			{ // our transaction got rolled back, so we lose the above insert
 				Query:    "/* client b */ select * from test order by 1",
 				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},

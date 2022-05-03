@@ -33,7 +33,6 @@ const (
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	CurrentBatchModeKey           = "batch_mode"
 	AllowCommitConflicts          = "dolt_allow_commit_conflicts"
-	// RollbackOnConflict            = "dolt_rollback_on_conflict"
 )
 
 func init() {

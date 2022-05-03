@@ -212,7 +212,7 @@ func (tx *DoltTransaction) doCommit(
 
 				return workingSet, newCommit, nil
 			}
-			
+
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
 			mergedWorkingSet, err := tx.mergeRoots(ctx, existingWs, workingSet)

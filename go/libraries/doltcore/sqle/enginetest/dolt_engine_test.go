@@ -611,7 +611,7 @@ func TestDoltMerge(t *testing.T) {
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	script := enginetest.TransactionTest{
 		Name: "allow commit conflicts on, conflict on dolt_merge",
@@ -673,10 +673,6 @@ func TestSingleTransactionScript(t *testing.T) {
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
-			{
-				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
-			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
 				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
@@ -696,12 +692,12 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	}
