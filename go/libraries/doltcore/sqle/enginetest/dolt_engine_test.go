@@ -642,24 +642,24 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
+				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -673,8 +673,12 @@ func TestSingleTransactionScript(t *testing.T) {
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
 			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
 				Expected: []sql.Row{{sql.OkResult{
 					RowsAffected: 1,
 					Info: plan.UpdateInfo{
@@ -684,11 +688,11 @@ func TestSingleTransactionScript(t *testing.T) {
 				}}},
 			},
 			{
-				Query:    "/* client a */ delete from dolt_conflicts_test",
+				Query:    "/* client b */ delete from dolt_conflicts_test",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ commit",
+				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
 			{
