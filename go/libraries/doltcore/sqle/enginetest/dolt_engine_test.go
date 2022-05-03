@@ -533,6 +533,11 @@ func TestTriggers(t *testing.T) {
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
+func TestRollbackTriggers(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestRollbackTriggers(t, newDoltHarness(t))
+}
+
 func TestStoredProcedures(t *testing.T) {
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
@@ -561,6 +566,11 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+}
+
+func TestConcurrentTransactions(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestConcurrentTransactions(t, newDoltHarness(t))
 }
 
 func TestDoltScripts(t *testing.T) {

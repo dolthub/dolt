@@ -27,63 +27,56 @@ import (
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/val"
 )
-
-type NodeItem []byte
-
-func (i NodeItem) size() val.ByteSize {
-	return val.ByteSize(len(i))
-}
 
 // Cursor explores a tree of Nodes.
 type Cursor struct {
 	nd       Node
 	idx      int
 	parent   *Cursor
-	subtrees subtreeCounts
+	subtrees SubtreeCounts
 	nrw      NodeStore
 }
 
-type CompareFn func(left, right NodeItem) int
+type CompareFn func(left, right Item) int
 
 type SearchFn func(nd Node) (idx int)
 
-type ItemSearchFn func(item NodeItem, nd Node) (idx int)
+type ItemSearchFn func(item Item, nd Node) (idx int)
 
-func NewCursorAtStart(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: nrw}
+func NewCursorAtStart(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
+	cur = &Cursor{nd: nd, nrw: ns}
 	for !cur.isLeaf() {
-		nd, err = fetchChild(ctx, nrw, cur.CurrentRef())
+		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return nil, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: nrw}
+		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 	}
 	return
 }
 
-func NewCursorAtEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: nrw}
+func NewCursorAtEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
+	cur = &Cursor{nd: nd, nrw: ns}
 	cur.skipToNodeEnd()
 
 	for !cur.isLeaf() {
-		nd, err = fetchChild(ctx, nrw, cur.CurrentRef())
+		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return nil, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: nrw}
+		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 		cur.skipToNodeEnd()
 	}
 	return
 }
 
-func NewCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor, err error) {
-	cur, err = NewCursorAtEnd(ctx, nrw, nd)
+func NewCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, err error) {
+	cur, err = NewCursorAtEnd(ctx, ns, nd)
 	if err != nil {
 		return nil, err
 	}
@@ -100,13 +93,13 @@ func NewCursorPastEnd(ctx context.Context, nrw NodeStore, nd Node) (cur *Cursor,
 	return
 }
 
-func NewCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64) (cur *Cursor, err error) {
+func NewCursorAtOrdinal(ctx context.Context, ns NodeStore, nd Node, ord uint64) (cur *Cursor, err error) {
 	if ord >= uint64(nd.TreeCount()) {
-		return NewCursorPastEnd(ctx, nrw, nd)
+		return NewCursorPastEnd(ctx, ns, nd)
 	}
 
 	distance := int64(ord)
-	return NewCursorFromSearchFn(ctx, nrw, nd, func(nd Node) (idx int) {
+	return NewCursorFromSearchFn(ctx, ns, nd, func(nd Node) (idx int) {
 		if nd.IsLeaf() {
 			return int(distance)
 		}
@@ -125,8 +118,8 @@ func NewCursorAtOrdinal(ctx context.Context, nrw NodeStore, nd Node, ord uint64)
 	})
 }
 
-func NewCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: nrw}
+func NewCursorFromSearchFn(ctx context.Context, ns NodeStore, nd Node, search SearchFn) (cur *Cursor, err error) {
+	cur = &Cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(cur.nd)
 	for !cur.isLeaf() {
@@ -134,13 +127,13 @@ func NewCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search S
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		nd, err = fetchChild(ctx, nrw, cur.CurrentRef())
+		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return cur, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: nrw}
+		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(cur.nd)
 	}
@@ -148,12 +141,16 @@ func NewCursorFromSearchFn(ctx context.Context, nrw NodeStore, nd Node, search S
 	return
 }
 
-func newCursorAtTuple(ctx context.Context, nrw NodeStore, nd Node, tup val.Tuple, search ItemSearchFn) (cur *Cursor, err error) {
-	return NewCursorAtItem(ctx, nrw, nd, NodeItem(tup), search)
+func NewCursorFromCompareFn(ctx context.Context, ns NodeStore, n Node, i Item, compare CompareFn) (*Cursor, error) {
+	return NewCursorAtItem(ctx, ns, n, i, func(item Item, node Node) (idx int) {
+		return sort.Search(node.Count(), func(i int) bool {
+			return compare(item, node.GetKey(i)) <= 0
+		})
+	})
 }
 
-func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem, search ItemSearchFn) (cur *Cursor, err error) {
-	cur = &Cursor{nd: nd, nrw: nrw}
+func NewCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur *Cursor, err error) {
+	cur = &Cursor{nd: nd, nrw: ns}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
@@ -161,13 +158,13 @@ func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem,
 		// stay in bounds for internal nodes
 		cur.keepInBounds()
 
-		nd, err = fetchChild(ctx, nrw, cur.CurrentRef())
+		nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return cur, err
 		}
 
 		parent := cur
-		cur = &Cursor{nd: nd, parent: parent, nrw: nrw}
+		cur = &Cursor{nd: nd, parent: parent, nrw: ns}
 
 		cur.idx = search(item, cur.nd)
 	}
@@ -175,8 +172,8 @@ func NewCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem,
 	return
 }
 
-func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeItem, search ItemSearchFn) (cur Cursor, err error) {
-	cur = Cursor{nd: nd, parent: nil, nrw: nrw}
+func NewLeafCursorAtItem(ctx context.Context, ns NodeStore, nd Node, item Item, search ItemSearchFn) (cur Cursor, err error) {
+	cur = Cursor{nd: nd, parent: nil, nrw: ns}
 
 	cur.idx = search(item, cur.nd)
 	for !cur.isLeaf() {
@@ -185,7 +182,7 @@ func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeI
 		cur.keepInBounds()
 
 		// reuse |cur| object to keep stack alloc'd
-		cur.nd, err = fetchChild(ctx, nrw, cur.CurrentRef())
+		cur.nd, err = fetchChild(ctx, ns, cur.CurrentRef())
 		if err != nil {
 			return cur, err
 		}
@@ -196,7 +193,7 @@ func NewLeafCursorAtItem(ctx context.Context, nrw NodeStore, nd Node, item NodeI
 	return cur, nil
 }
 
-func CurrentCursorTuples(cur *Cursor) (key, value val.Tuple) {
+func CurrentCursorItems(cur *Cursor) (key, value Item) {
 	key = cur.nd.keys.GetSlice(cur.idx)
 	value = cur.nd.values.GetSlice(cur.idx)
 	return
@@ -213,16 +210,16 @@ func (cur *Cursor) Invalidate() {
 	cur.idx = math.MinInt32
 }
 
-func (cur *Cursor) CurrentKey() NodeItem {
+func (cur *Cursor) CurrentKey() Item {
 	return cur.nd.GetKey(cur.idx)
 }
 
-func (cur *Cursor) CurrentValue() NodeItem {
+func (cur *Cursor) CurrentValue() Item {
 	return cur.nd.getValue(cur.idx)
 }
 
 func (cur *Cursor) CurrentRef() hash.Hash {
-	return cur.nd.getRef(cur.idx)
+	return cur.nd.getChildAddress(cur.idx)
 }
 
 func (cur *Cursor) currentSubtreeSize() uint64 {
@@ -235,11 +232,11 @@ func (cur *Cursor) currentSubtreeSize() uint64 {
 	return cur.subtrees[cur.idx]
 }
 
-func (cur *Cursor) firstKey() NodeItem {
+func (cur *Cursor) firstKey() Item {
 	return cur.nd.GetKey(0)
 }
 
-func (cur *Cursor) lastKey() NodeItem {
+func (cur *Cursor) lastKey() Item {
 	lastKeyIdx := int(cur.nd.count - 1)
 	return cur.nd.GetKey(lastKeyIdx)
 }
@@ -281,7 +278,7 @@ func (cur *Cursor) level() uint64 {
 	return uint64(cur.nd.Level())
 }
 
-func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err error) {
+func (cur *Cursor) seek(ctx context.Context, item Item, cb CompareFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
 		inBounds = inBounds && cb(item, cur.firstKey()) >= 0
@@ -310,7 +307,7 @@ func (cur *Cursor) seek(ctx context.Context, item NodeItem, cb CompareFn) (err e
 
 // search returns the index of |item| if it's present in |cur.nd|, or the
 // index of the next greatest element if it's not present.
-func (cur *Cursor) search(item NodeItem, cb CompareFn) (idx int) {
+func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	idx = sort.Search(int(cur.nd.count), func(i int) bool {
 		return cb(item, cur.nd.GetKey(i)) <= 0
 	})
@@ -489,6 +486,12 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 
 func assertTrue(b bool) {
 	if !b {
+		panic("assertion failed")
+	}
+}
+
+func assertFalse(b bool) {
+	if b {
 		panic("assertion failed")
 	}
 }

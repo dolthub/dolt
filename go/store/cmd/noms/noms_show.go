@@ -85,7 +85,7 @@ func runShow(ctx context.Context, args []string) int {
 		chunk, err := cs.Get(ctx, sp.Path.Hash)
 		util.CheckErrorNoUsage(err)
 
-		value = tree.MapNodeFromBytes(chunk.Data())
+		value = tree.NodeFromBytes(chunk.Data())
 	} else {
 		util.CheckErrorNoUsage(err)
 	}

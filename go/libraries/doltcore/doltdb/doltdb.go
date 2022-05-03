@@ -949,7 +949,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 
 	// logrus.Tracef("Updating working set with root %s", workingSet.RootValue().DebugString(ctx, true))
 
-	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
+	workingRootRef, stagedRef, mergeState, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return err
 	}
@@ -958,7 +958,7 @@ func (ddb *DoltDB) UpdateWorkingSet(
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
-		MergeState:  mergeStateRef,
+		MergeState:  mergeState,
 	}, prevHash)
 
 	return err
@@ -985,7 +985,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		return nil, err
 	}
 
-	workingRootRef, stagedRef, mergeStateRef, err := workingSet.writeValues(ctx, ddb)
+	workingRootRef, stagedRef, mergeState, err := workingSet.writeValues(ctx, ddb)
 	if err != nil {
 		return nil, err
 	}
@@ -994,7 +994,7 @@ func (ddb *DoltDB) CommitWithWorkingSet(
 		Meta:        meta,
 		WorkingRoot: workingRootRef,
 		StagedRoot:  stagedRef,
-		MergeState:  mergeStateRef,
+		MergeState:  mergeState,
 	}, prevHash, commit.CommitOptions)
 
 	if err != nil {

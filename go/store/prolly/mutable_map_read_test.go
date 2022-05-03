@@ -103,7 +103,7 @@ func TestMutableMapReads(t *testing.T) {
 	}
 }
 
-func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
@@ -128,24 +128,16 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	tree.SortTuplePairs(mapTuples, kd)
 	tree.SortTuplePairs(memTuples, kd)
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns)
+	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {
-		err = chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
+		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	mut := MutableMap{
-		prolly: Map{
-			root:    root,
-			keyDesc: kd,
-			valDesc: vd,
-			ns:      ns,
-		},
-		overlay: newMemoryMap(kd),
-	}
+	mut := newMutableMap(NewMap(root, ns, kd, vd))
 
 	for _, pair := range memTuples {
 		err = mut.Put(ctx, pair[0], pair[1])
@@ -155,7 +147,7 @@ func makeMutableMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return mut, tuples
 }
 
-func makeMutableSecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeMutableSecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	m, tuples := makeProllySecondaryIndex(t, count)
 	return newMutableMap(m.(Map)), tuples
 }

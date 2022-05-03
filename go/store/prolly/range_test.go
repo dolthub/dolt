@@ -147,7 +147,7 @@ func TestRangeSearch(t *testing.T) {
 		values[i] = make(val.Tuple, 0)
 	}
 	testNode := tree.NewTupleLeafNode(rangeTuples, values)
-	testMap := Map{root: testNode, keyDesc: twoCol}
+	tm := NewMap(testNode, nil, twoCol, val.TupleDesc{})
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -162,7 +162,7 @@ func TestRangeSearch(t *testing.T) {
 			idx = stopSearch(testNode)
 			assert.Equal(t, test.hi, idx, "range should stop before index %d", test.hi)
 
-			iter, err := testMap.IterRange(ctx, rng)
+			iter, err := tm.IterRange(ctx, rng)
 			require.NoError(t, err)
 			expected := rangeTuples[test.lo:test.hi]
 

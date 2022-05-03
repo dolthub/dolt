@@ -36,7 +36,7 @@ func TestRoundTripInts(t *testing.T) {
 		keys[i] = tups[i][0]
 		values[i] = tups[i][1]
 	}
-	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < maxVectorOffset)
+	require.True(t, sumTupleSize(keys)+sumTupleSize(values) < MaxVectorOffset)
 
 	nd := NewTupleLeafNode(keys, values)
 	assert.True(t, nd.IsLeaf())
@@ -50,7 +50,7 @@ func TestRoundTripInts(t *testing.T) {
 func TestRoundTripNodeItems(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
 
 		nd := newLeafNode(keys, values)
 		assert.True(t, nd.IsLeaf())
@@ -65,11 +65,11 @@ func TestRoundTripNodeItems(t *testing.T) {
 func TestGetKeyValueOffsetsVectors(t *testing.T) {
 	for trial := 0; trial < 100; trial++ {
 		keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
-		require.True(t, sumSize(keys)+sumSize(values) < maxVectorOffset)
+		require.True(t, sumSize(keys)+sumSize(values) < MaxVectorOffset)
 		nd := newLeafNode(keys, values)
 
 		ko1, vo1 := offsetsFromSlicedBuffers(nd.keys, nd.values)
-		ko2, vo2 := offsetsFromFlatbuffer(nd.buf)
+		ko2, vo2 := offsetsFromFlatbuffer(nd.msg)
 
 		assert.Equal(t, len(ko1), len(ko2))
 		assert.Equal(t, len(ko1), len(keys)-1)
@@ -91,32 +91,32 @@ func TestCountArray(t *testing.T) {
 	for k := 0; k < 100; k++ {
 		n := testRand.Intn(45) + 5
 
-		counts := make(subtreeCounts, n)
+		counts := make(SubtreeCounts, n)
 		sum := uint64(0)
 		for i := range counts {
 			c := testRand.Uint64() % math.MaxUint32
 			counts[i] = c
 			sum += c
 		}
-		assert.Equal(t, sum, counts.sum())
+		assert.Equal(t, sum, counts.Sum())
 
 		// round trip the array
-		buf := writeSubtreeCounts(counts)
+		buf := WriteSubtreeCounts(counts)
 		counts = readSubtreeCounts(n, buf)
-		assert.Equal(t, sum, counts.sum())
+		assert.Equal(t, sum, counts.Sum())
 	}
 }
 
-func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
-	keys = make([]NodeItem, count)
+func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {
+	keys = make([]Item, count)
 	for i := range keys {
 		sz := (rand.Int() % 41) + 10
-		keys[i] = make(NodeItem, sz)
+		keys[i] = make(Item, sz)
 		_, err := rand.Read(keys[i])
 		assert.NoError(t, err)
 	}
 
-	values = make([]NodeItem, count)
+	values = make([]Item, count)
 	copy(values, keys)
 	rand.Shuffle(len(values), func(i, j int) {
 		values[i], values[j] = values[j], values[i]
@@ -125,7 +125,7 @@ func randomNodeItemPairs(t *testing.T, count int) (keys, values []NodeItem) {
 	return
 }
 
-func sumSize(items []NodeItem) (sz uint64) {
+func sumSize(items []Item) (sz uint64) {
 	for _, item := range items {
 		sz += uint64(len(item))
 	}
@@ -139,7 +139,7 @@ func sumTupleSize(items []val.Tuple) (sz uint64) {
 	return
 }
 
-func offsetsFromFlatbuffer(buf serial.TupleMap) (ko, vo []uint16) {
+func offsetsFromFlatbuffer(buf serial.ProllyTreeNode) (ko, vo []uint16) {
 	ko = make([]uint16, buf.KeyOffsetsLength())
 	for i := range ko {
 		ko[i] = buf.KeyOffsets(i)

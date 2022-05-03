@@ -29,33 +29,30 @@ import (
 )
 
 const (
-	maxVectorOffset = uint64(math.MaxUint16)
-	refSize         = hash.ByteLen
+	MaxVectorOffset = uint64(math.MaxUint16)
+	addrSz          = hash.ByteLen
 
-	// These constants are mirrored from serial.TupleMap.KeyOffsetsLength()
-	// and serial.TupleMap.ValueOffsetsLength() respectively.
+	// These constants are mirrored from serial.ProllyTreeNode.KeyOffsetsLength()
+	// and serial.ProllyTreeNode.ValueOffsetsLength() respectively.
 	// They are only as stable as the flatbuffers schemas that define them.
 	keyOffsetsVOffset   = 6
-	valueOffsetsVOffset = 10
+	valueOffsetsVOffset = 12
 )
 
+type Item []byte
+
 type Node struct {
+	// keys and values contain sub-slices of |msg|,
+	// allowing faster lookups by avoiding the vtable
 	keys, values val.SlicedBuffer
-	buf          serial.TupleMap
+	msg          serial.ProllyTreeNode
 	count        uint16
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
 
 func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
-	if nd.IsLeaf() {
-		// todo(andy): ref'd values
-		return nil
-	}
-
-	for i := 0; i < int(nd.count); i++ {
-		addr := nd.getRef(i)
-
+	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
 		if err := cb(ctx, addr); err != nil {
 			return err
 		}
@@ -65,11 +62,8 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
-		if err := WalkAddresses(ctx, child, ns, cb); err != nil {
-			return err
-		}
-	}
-	return nil
+		return WalkAddresses(ctx, child, ns, cb)
+	})
 }
 
 type NodeCb func(ctx context.Context, nd Node) error
@@ -78,39 +72,32 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
-	if nd.IsLeaf() {
-		// todo(andy): walk ref'd values?
-		return nil
-	}
 
-	for i := 0; i < int(nd.count); i++ {
-		child, err := ns.Read(ctx, nd.getRef(i))
+	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
+		child, err := ns.Read(ctx, addr)
 		if err != nil {
 			return err
 		}
-		if err := WalkNodes(ctx, child, ns, cb); err != nil {
-			return err
-		}
-	}
-	return nil
+		return WalkNodes(ctx, child, ns, cb)
+	})
 }
 
-func MapNodeFromBytes(bb []byte) Node {
-	buf := serial.GetRootAsTupleMap(bb, 0)
-	return mapNodeFromFlatbuffer(*buf)
+func NodeFromBytes(buf []byte) Node {
+	msg := serial.GetRootAsProllyTreeNode(buf, 0)
+	return nodeFromFlatbuffer(*msg)
 }
 
-func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
+func nodeFromFlatbuffer(msg serial.ProllyTreeNode) Node {
 	keys := val.SlicedBuffer{
-		Buf:  buf.KeyTuplesBytes(),
-		Offs: getKeyOffsetsVector(buf),
+		Buf:  msg.KeyItemsBytes(),
+		Offs: getKeyOffsetsVector(msg),
 	}
 	values := val.SlicedBuffer{
-		Buf:  buf.ValueTuplesBytes(),
-		Offs: getValueOffsetsVector(buf),
+		Buf:  msg.ValueItemsBytes(),
+		Offs: getValueOffsetsVector(msg),
 	}
 
-	count := buf.KeyOffsetsLength() + 1
+	count := msg.KeyOffsetsLength() + 1
 	if len(keys.Buf) == 0 {
 		count = 0
 	}
@@ -119,7 +106,7 @@ func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
 		keys:   keys,
 		values: values,
 		count:  uint16(count),
-		buf:    buf,
+		msg:    msg,
 	}
 }
 
@@ -132,7 +119,7 @@ func (nd Node) Count() int {
 }
 
 func (nd Node) TreeCount() int {
-	return int(nd.buf.TreeCount())
+	return int(nd.msg.TreeCount())
 }
 
 func (nd Node) Size() int {
@@ -141,39 +128,46 @@ func (nd Node) Size() int {
 
 // Level returns the tree Level for this node
 func (nd Node) Level() int {
-	return int(nd.buf.TreeLevel())
+	return int(nd.msg.TreeLevel())
 }
 
 // IsLeaf returns whether this node is a leaf
 func (nd Node) IsLeaf() bool {
-	return int(nd.buf.TreeLevel()) == 0
+	return int(nd.msg.TreeLevel()) == 0
 }
 
 // GetKey returns the |ith| key of this node
-func (nd Node) GetKey(i int) NodeItem {
+func (nd Node) GetKey(i int) Item {
 	return nd.keys.GetSlice(i)
 }
 
 // getValue returns the |ith| value of this node. Only Valid for leaf nodes.
-func (nd Node) getValue(i int) NodeItem {
-	if nd.IsLeaf() {
+func (nd Node) getValue(i int) Item {
+	// todo(andy): abstract value access
+	if nd.values.Buf != nil {
 		return nd.values.GetSlice(i)
 	} else {
-		r := nd.getRef(i)
+		r := nd.getChildAddress(i)
 		return r[:]
 	}
 }
 
-// getRef returns the |ith| ref in this node. Only Valid for internal nodes.
-func (nd Node) getRef(i int) hash.Hash {
-	refs := nd.buf.RefArrayBytes()
-	start, stop := i*refSize, (i+1)*refSize
+// getChildAddress returns the |ith| address in this node
+func (nd Node) getChildAddress(i int) hash.Hash {
+	refs := nd.msg.AddressArrayBytes()
+	start, stop := i*addrSz, (i+1)*addrSz
 	return hash.New(refs[start:stop])
 }
 
-func (nd Node) getSubtreeCounts() subtreeCounts {
-	buf := nd.buf.RefCardinalitiesBytes()
-	return readSubtreeCounts(int(nd.count), buf)
+// getValueAddress returns the |ith| value address in this node
+func (nd Node) getValueAddress(i int) hash.Hash {
+	o := nd.msg.ValueAddressOffsets(i)
+	return hash.New(nd.values.Buf[o : o+addrSz])
+}
+
+func (nd Node) getSubtreeCounts() SubtreeCounts {
+	arr := nd.msg.SubtreeCountsBytes()
+	return readSubtreeCounts(int(nd.count), arr)
 }
 
 func (nd Node) empty() bool {
@@ -181,12 +175,32 @@ func (nd Node) empty() bool {
 }
 
 func (nd Node) bytes() []byte {
-	return nd.buf.Table().Bytes
+	return nd.msg.Table().Bytes
 }
 
-func getKeyOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.KeyOffsetsLength() * 2
-	tab := buf.Table()
+func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
+	arr := nd.msg.AddressArrayBytes()
+	cnt := len(arr) / addrSz
+	for i := 0; i < cnt; i++ {
+		if err = cb(ctx, nd.getChildAddress(i)); err != nil {
+			return err
+		}
+	}
+
+	cnt2 := nd.msg.ValueAddressOffsetsLength()
+	for i := 0; i < cnt2; i++ {
+		if err = cb(ctx, nd.getValueAddress(i)); err != nil {
+			return err
+		}
+	}
+
+	assertFalse((cnt > 0) && (cnt2 > 0))
+	return
+}
+
+func getKeyOffsetsVector(msg serial.ProllyTreeNode) []byte {
+	sz := msg.KeyOffsetsLength() * 2
+	tab := msg.Table()
 	vec := tab.Offset(keyOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
@@ -194,9 +208,9 @@ func getKeyOffsetsVector(buf serial.TupleMap) []byte {
 	return tab.Bytes[start:stop]
 }
 
-func getValueOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.ValueOffsetsLength() * 2
-	tab := buf.Table()
+func getValueOffsetsVector(msg serial.ProllyTreeNode) []byte {
+	sz := msg.ValueOffsetsLength() * 2
+	tab := msg.Table()
 	vec := tab.Offset(valueOffsetsVOffset)
 	start := int(tab.Vector(fb.UOffsetT(vec)))
 	stop := start + sz
@@ -236,7 +250,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 
 			w.Write([]byte(" }"))
 		} else {
-			ref := node.getRef(i)
+			ref := node.getChildAddress(i)
 
 			w.Write([]byte(" ref: #"))
 			w.Write([]byte(ref.String()))
