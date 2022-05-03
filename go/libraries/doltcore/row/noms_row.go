@@ -77,21 +77,18 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
-			// Column is GeometryKind but didn't get PointKind, LinestringKind, nor PolygonKind
-			if col.Kind == types.GeometryKind &&
-				val.Kind() != types.PointKind &&
-				val.Kind() != types.LinestringKind &&
-				val.Kind() != types.PolygonKind &&
-				val.Kind() != types.GeometryKind {
+			// Column is GeometryKind and received PointKind, LinestringKind, or PolygonKind
+			if col.Kind == types.GeometryKind && (val.Kind() == types.PointKind ||
+				val.Kind() == types.LinestringKind ||
+				val.Kind() == types.PolygonKind ||
+				val.Kind() == types.GeometryKind) {
+				filteredVals[tag] = val
+			} else if col.Kind == val.Kind() {
+				filteredVals[tag] = val
+			} else {
 				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 			}
 
-			// Received incorrect kind
-			if col.Kind != val.Kind() {
-				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-			}
-
-			filteredVals[tag] = val
 		}
 
 		return false, nil
@@ -222,6 +219,11 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		} else if !col.IsPartOfPK {
 			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			if col.Kind == types.GeometryKind && (val.Kind() == types.PointKind ||
+				val.Kind() == types.LinestringKind ||
+				val.Kind() == types.PolygonKind) {
+				return false, nil
+			}
 			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
 		}
 
@@ -242,7 +244,13 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
-			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			if col.Kind == types.GeometryKind && (val.Kind() == types.PointKind ||
+				val.Kind() == types.LinestringKind ||
+				val.Kind() == types.PolygonKind) {
+				filteredVals[tag] = val
+				return false, nil
+			}
+			return false, errors.New("4bug.  Setting a value to an incorrect kind. col:" + col.Name)
 		} else {
 			filteredVals[tag] = val
 		}
