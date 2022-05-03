@@ -307,14 +307,14 @@ func TestMergeCommits(t *testing.T) {
 	mergedRows, err := merged.GetRowData(context.Background())
 	assert.NoError(t, err)
 
-	prolly.MustEqual(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
 	for _, index := range sch.Indexes().AllIndexes() {
 		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
 		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
 		require.NoError(t, err)
-		prolly.MustEqual(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+		MustEqualProlly(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
 	}
 
 	h, err := merged.HashOf()
@@ -750,6 +750,17 @@ func mustString(str string, err error) string {
 	}
 
 	return str
+}
+
+func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
+	s, err := prolly.DebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
+func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
 }
 
 //func diffStr(t tree.Diff, kD val.TupleDesc) string {
