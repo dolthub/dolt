@@ -17,7 +17,6 @@ package row
 import (
 	"errors"
 	"fmt"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -78,11 +77,21 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
+			// Column is GeometryKind but didn't get PointKind, LinestringKind, nor PolygonKind
+			if col.Kind == types.GeometryKind &&
+				val.Kind() != types.PointKind &&
+				val.Kind() != types.LinestringKind &&
+				val.Kind() != types.PolygonKind &&
+				val.Kind() != types.GeometryKind {
+				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			}
+
+			// Received incorrect kind
 			if col.Kind != val.Kind() {
 				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-			} else {
-				filteredVals[tag] = val
 			}
+
+			filteredVals[tag] = val
 		}
 
 		return false, nil
