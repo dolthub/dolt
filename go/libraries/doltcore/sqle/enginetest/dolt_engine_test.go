@@ -642,11 +642,11 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -654,7 +654,7 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
 				SkipResultsCheck: true,
 			},
 			{

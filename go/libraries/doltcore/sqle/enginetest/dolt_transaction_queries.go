@@ -814,7 +814,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
@@ -860,7 +860,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ commit",
+				Query:          "/* client b */ commit",
 				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
@@ -898,11 +898,11 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -910,7 +910,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -986,11 +986,11 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "/* client a */ call dolt_commit('-am', 'commit on main')",
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -998,7 +998,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
 				SkipResultsCheck: true,
 			},
 			{

@@ -252,9 +252,9 @@ func (tx *DoltTransaction) doCommit(
 // mergeRoots merges the roots in the existing working set with the one being committed and returns the resulting
 // working set. Conflicts are automatically resolved with "accept ours" if the session settings dictate it.
 func (tx *DoltTransaction) mergeRoots(
-		ctx *sql.Context,
-		existingWorkingRoot *doltdb.WorkingSet,
-		workingSet *doltdb.WorkingSet,
+	ctx *sql.Context,
+	existingWorkingRoot *doltdb.WorkingSet,
+	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
 
 	mergedRoot, mergeStats, err := merge.MergeRoots(
@@ -306,9 +306,10 @@ func (tx *DoltTransaction) rollback(ctx *sql.Context) error {
 }
 
 type ffMerge bool
+
 const (
-	isFfMerge = ffMerge(true)
-  notFfMerge = ffMerge(false)
+	isFfMerge  = ffMerge(true)
+	notFfMerge = ffMerge(false)
 )
 
 // validateWorkingSetForCommit validates that the working set given is legal to commit according to the session
