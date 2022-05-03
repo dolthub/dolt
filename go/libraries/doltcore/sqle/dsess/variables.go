@@ -33,7 +33,7 @@ const (
 	ForceTransactionCommit        = "dolt_force_transaction_commit"
 	CurrentBatchModeKey           = "batch_mode"
 	AllowCommitConflicts          = "dolt_allow_commit_conflicts"
-	RollbackOnConflict            = "dolt_rollback_on_conflict"
+	// RollbackOnConflict            = "dolt_rollback_on_conflict"
 )
 
 func init() {
@@ -77,14 +77,6 @@ func init() {
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
 			Default:           int8(0),
-		},
-		{ // If true, rolls back a transaction with conflicts on commit
-			Name:              RollbackOnConflict,
-			Scope:             sql.SystemVariableScope_Both,
-			Dynamic:           true,
-			SetVarHintApplies: false,
-			Type:              sql.NewSystemBoolType(RollbackOnConflict),
-			Default:           int8(1),
 		},
 	})
 }

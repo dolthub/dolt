@@ -110,7 +110,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -261,7 +261,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -278,103 +278,6 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 3}, {2, 3}},
-			},
-		},
-	},
-	{
-		Name: "conflicting updates, resolved with more updates",
-		SetUpScript: []string{
-			"create table t (x int primary key, y int)",
-			"insert into t values (1, 1), (2, 2)",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
-			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query: "/* client a */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 2,
-					},
-				}}},
-			},
-			{
-				Query: "/* client b */ update t set y = 4",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 2,
-					},
-				}}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ set dolt_rollback_on_conflict = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{ // we now have the updates from client a in our working set so this is a no-op
-				Query: "/* client b */ update t set y = 3",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(0),
-					Info: plan.UpdateInfo{
-						Matched: 2,
-						Updated: 0,
-					},
-				}}},
-			},
-			{ // committing is still an error because we haven't resolved our conflicts yet
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{
-				Query: "/* client b */ update t set y = (select their_y from dolt_conflicts_t dc where dc.base_x = 1) where x = 1",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(1),
-					Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					},
-				}}},
-			},
-			{ // still need to clear conflicts
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{
-				Query: "/* client b */ delete from dolt_conflicts_t",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: uint64(2),
-				}}},
-			},
-			{ // now we can commit without error
-				Query: "/* client b */ commit",
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 4}, {2, 3}},
-			},
-			{
-				Query: "/* client a */ start transaction",
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 4}, {2, 3}},
 			},
 		},
 	},
@@ -626,7 +529,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -825,7 +728,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 
 var DoltConflictHandlingTests = []enginetest.TransactionTest{
 	{
-		Name: "default behavior",
+		Name: "default behavior (rollback on commit conflict)",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -862,7 +765,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -875,78 +778,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 		},
 	},
 	{
-		Name: "auto rollback turned off",
-		SetUpScript: []string{
-			"CREATE TABLE test (pk int primary key, val int)",
-			"INSERT INTO test VALUES (0, 0)",
-			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
-		},
-		Assertions: []enginetest.ScriptTestAssertion{
-			{
-				Query:    "/* client a */ set autocommit = off, dolt_rollback_on_conflict = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client a */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ set autocommit = off, dolt_rollback_on_conflict = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ insert into test values (1, 1)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client b */ insert into test values (1, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:          "/* client b */ commit",
-				ExpectedErrStr: "merge has unresolved conflicts. please use the dolt_conflicts table to resolve",
-			},
-			{
-				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
-			},
-			{ // We see the merge value from a's commit here, we need to fix it to get our values
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 1}},
-			},
-			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: 1,
-					Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					},
-				}}},
-			},
-			{
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
-			},
-			{
-				Query:    "/* client b */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query: "/* client b */ commit",
-			},
-		},
-	},
-	{
-		Name: "allow commit conflicts on",
+		Name: "allow commit conflicts on, conflict on transaction commit",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -983,51 +815,16 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
-			{
-				Query:    "/* client b */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
-			},
-			{
-				Query:    "/* client a */ select count(*) from dolt_conflicts",
-				Expected: []sql.Row{{1}},
-			},
-			{ // We see the merge value from a's commit here, we need to fix it to get our values
+			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
 				Expected: []sql.Row{{0, 0}, {1, 1}},
-			},
-			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
-				Query: "/* client a */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
-				Expected: []sql.Row{{sql.OkResult{
-					RowsAffected: 1,
-					Info: plan.UpdateInfo{
-						Matched: 1,
-						Updated: 1,
-					},
-				}}},
-			},
-			{
-				Query:    "/* client a */ delete from dolt_conflicts_test",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ start transaction",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select * from test order by 1",
-				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 		},
 	},
 	{
-		// This test is functionally identical to allow conflicts = 1, rollback_on_conflict = 1 but we want to verify it
-		Name: "allow commit conflicts on, rollback on conflict off",
+		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -1035,7 +832,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on, dolt_rollback_on_conflict = off",
+				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1043,7 +840,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on, dolt_rollback_on_conflict = off",
+				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -1064,7 +861,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ commit",
-				Expected: []sql.Row{},
+				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
