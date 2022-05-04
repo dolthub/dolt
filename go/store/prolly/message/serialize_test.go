@@ -39,7 +39,7 @@ func TestCountArray(t *testing.T) {
 
 		// round trip the array
 		buf := WriteSubtreeCounts(counts)
-		counts = readSubtreeCounts(n, buf)
-		assert.Equal(t, sum, sumSubtrees(counts))
+		readCounts := readSubtreeCounts(n, buf)
+		assert.Equal(t, counts, readCounts)
 	}
 }
