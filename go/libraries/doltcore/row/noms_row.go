@@ -251,7 +251,7 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 				filteredVals[tag] = val
 				return false, nil
 			}
-			return false, errors.New("4bug.  Setting a value to an incorrect kind. col:" + col.Name)
+			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 		} else {
 			filteredVals[tag] = val
 		}
