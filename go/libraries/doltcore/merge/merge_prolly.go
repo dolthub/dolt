@@ -62,8 +62,12 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 		return nil, nil, err
 	}
 
+	var updatedRootIndexSet durable.IndexSet
+	var updatedMergeIndexSet durable.IndexSet
 	group.Go(func() error {
-		return updateProllySecondaryIndexes(gCtx, cellWiseMerges, rootSchema, mergeSchema, tbl, mergeTbl, &rootIndexSet, &mergeIndexSet)
+		var err error
+		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, cellWiseMerges, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
+		return err
 	})
 
 	err = group.Wait()
@@ -71,11 +75,11 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 		return nil, nil, err
 	}
 
-	tbl, err = tbl.SetIndexSet(ctx, rootIndexSet)
+	tbl, err = tbl.SetIndexSet(ctx, updatedRootIndexSet)
 	if err != nil {
 		return nil, nil, err
 	}
-	mergeTbl, err = mergeTbl.SetIndexSet(ctx, mergeIndexSet)
+	mergeTbl, err = mergeTbl.SetIndexSet(ctx, updatedMergeIndexSet)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,25 +151,31 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 type valueMerger struct {
 	numCols                                int
 	vD                                     val.TupleDesc
-	leftMapping, rightMapping, baseMapping map[int]int
+	leftMapping, rightMapping, baseMapping val.OrdinalMapping
 	syncPool                               pool.BuffPool
 }
 
 func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool pool.BuffPool) *valueMerger {
 	n := merged.GetNonPKCols().Size()
-	leftMapping := make(map[int]int, n)
-	rightMapping := make(map[int]int, n)
-	baseMapping := make(map[int]int, n)
+	leftMapping := make(val.OrdinalMapping, n)
+	rightMapping := make(val.OrdinalMapping, n)
+	baseMapping := make(val.OrdinalMapping, n)
 
 	for i, tag := range merged.GetNonPKCols().Tags {
 		if j, ok := leftSch.GetNonPKCols().TagToIdx[tag]; ok {
 			leftMapping[i] = j
+		} else {
+			leftMapping[i] = -1
 		}
 		if j, ok := rightSch.GetNonPKCols().TagToIdx[tag]; ok {
 			rightMapping[i] = j
+		} else {
+			rightMapping[i] = -1
 		}
 		if j, ok := baseSch.GetNonPKCols().TagToIdx[tag]; ok {
 			baseMapping[i] = j
+		} else {
+			baseMapping[i] = -1
 		}
 	}
 
@@ -213,11 +223,11 @@ func (m *valueMerger) tryMerge(left, right, base val.Tuple) (val.Tuple, bool) {
 func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte, bool) {
 	// missing columns are coerced into NULL column values
 	var leftCol []byte
-	if l, ok := m.leftMapping[i]; ok {
+	if l := m.leftMapping[i]; l != -1 {
 		leftCol = left.GetField(l)
 	}
 	var rightCol []byte
-	if r, ok := m.rightMapping[i]; ok {
+	if r := m.rightMapping[i]; r != -1 {
 		rightCol = right.GetField(r)
 	}
 
@@ -231,7 +241,7 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 	}
 
 	var baseVal []byte
-	if b, ok := m.baseMapping[i]; ok {
+	if b := m.baseMapping[i]; b != -1 {
 		baseVal = base.GetField(b)
 	}
 
@@ -250,21 +260,22 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 
 // Given cellWiseMerge's sent on |cellWiseChan|, update the secondary indexes in
 // |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
-// they produce entries consistent with the cell-wise merges.
+// they produce entries consistent with the cell-wise merges. The updated
+// |rootIndexSet| and |mergeIndexSet| are returned.
 func updateProllySecondaryIndexes(
 	ctx context.Context,
 	cellWiseChan chan cellWiseMerge,
 	rootSchema, mergeSchema schema.Schema,
 	tbl, mergeTbl *doltdb.Table,
-	rootIndexSet, mergeIndexSet *durable.IndexSet) error {
+	rootIndexSet, mergeIndexSet durable.IndexSet) (durable.IndexSet, durable.IndexSet, error) {
 
 	rootIdxs, err := getMutableSecondaryIdxs(ctx, rootSchema, tbl)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	mergeIdxs, err := getMutableSecondaryIdxs(ctx, mergeSchema, mergeTbl)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	select {
@@ -276,46 +287,46 @@ func updateProllySecondaryIndexes(
 			// Revert corresponding idx entry in left
 			err = idx.UpdateEntry(ctx, val.Tuple(m.leftDiff.Key), val.Tuple(m.leftDiff.To), val.Tuple(m.leftDiff.From))
 			if err != nil {
-				return err
+				return nil, nil, err
 			}
 		}
 		for _, idx := range mergeIdxs {
 			// Update corresponding idx entry to merged value in right
 			err = idx.UpdateEntry(ctx, val.Tuple(m.rightDiff.Key), val.Tuple(m.rightDiff.To), val.Tuple(m.merged.To))
 			if err != nil {
-				return err
+				return nil, nil, err
 			}
 		}
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, nil, ctx.Err()
 	}
 
-	persistIndexMuts := func(indexSet *durable.IndexSet, idxs []MutableSecondaryIdx) error {
+	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
 		for _, idx := range idxs {
 			m, err := idx.Map(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			*indexSet, err = (*indexSet).PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
+			indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 
-		return nil
+		return indexSet, nil
 	}
 
-	err = persistIndexMuts(rootIndexSet, rootIdxs)
+	updatedRootIndexSet, err := persistIndexMuts(rootIndexSet, rootIdxs)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	err = persistIndexMuts(mergeIndexSet, mergeIdxs)
+	updatedMergeIndexSet, err := persistIndexMuts(mergeIndexSet, mergeIdxs)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	return nil
+	return updatedRootIndexSet, updatedMergeIndexSet, nil
 }
 
 // getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index
