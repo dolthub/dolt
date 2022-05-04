@@ -23,14 +23,19 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -60,6 +65,15 @@ func init() {
 
 type rowV struct {
 	col1, col2 int
+}
+
+var vD = prolly.ValueDescriptorFromSchema(sch)
+var vB = val.NewTupleBuilder(vD)
+
+func (v rowV) value() val.Tuple {
+	vB.PutInt64(0, int64(v.col1))
+	vB.PutInt64(1, int64(v.col2))
+	return vB.Build(syncPool)
 }
 
 func (v rowV) nomsValue() types.Value {
@@ -267,6 +281,49 @@ var testRows = []testRow{
 	},
 }
 
+func TestMergeCommits(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+
+	vrw, root, mergeRoot, ancRoot, expectedRows := setupMergeTest(t)
+	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	opts := editor.TestEditorOptions(vrw)
+	// TODO: stats
+	merged, _, err := merger.MergeTable(context.Background(), tableName, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tbl, _, err := root.GetTable(context.Background(), tableName)
+	assert.NoError(t, err)
+	sch, err := tbl.GetSchema(context.Background())
+	assert.NoError(t, err)
+	expected, err := doltdb.NewTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	assert.NoError(t, err)
+	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
+	assert.NoError(t, err)
+
+	mergedRows, err := merged.GetRowData(context.Background())
+	assert.NoError(t, err)
+
+	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
+		require.NoError(t, err)
+		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
+		require.NoError(t, err)
+		MustEqualProlly(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+	}
+
+	h, err := merged.HashOf()
+	require.NoError(t, err)
+	eh, err := expected.HashOf()
+	require.NoError(t, err)
+	require.Equal(t, eh.String(), h.String(), "table hashes do not equal")
+}
+
 func TestNomsMergeCommits(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
@@ -324,6 +381,98 @@ func TestNomsMergeCommits(t *testing.T) {
 	eh, err := expected.HashOf()
 	assert.NoError(t, err)
 	assert.Equal(t, eh.String(), h.String(), "table hashes do not equal")
+}
+
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index) {
+	ddb := mustMakeEmptyRepo(t)
+	vrw := ddb.ValueReadWriter()
+
+	var initialKVs []val.Tuple
+	var expectedKVs []val.Tuple
+	// TODO: conflicts
+	for _, testCase := range testRows {
+		// Skip conflicts
+		if testCase.conflict {
+			continue
+		}
+
+		// Skip cell-wise merges
+		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
+			continue
+		}
+
+		if testCase.initialValue != nil {
+			initialKVs = append(initialKVs, key(testCase.key), testCase.initialValue.value())
+		}
+		if testCase.expectedValue != nil {
+			expectedKVs = append(expectedKVs, key(testCase.key), testCase.expectedValue.value())
+		}
+	}
+	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+	initialRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, initialKVs...)
+	require.NoError(t, err)
+	expectedRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, expectedKVs...)
+	require.NoError(t, err)
+
+	leftMut := initialRows.Mutate()
+	rightMut := initialRows.Mutate()
+	for _, testCase := range testRows {
+		// Skip conflicts
+		if testCase.conflict {
+			continue
+		}
+
+		// Skip cell-wise merges
+		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
+			continue
+		}
+
+		switch testCase.leftAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			err = leftMut.Put(context.Background(), key(testCase.key), testCase.leftValue.value())
+			require.NoError(t, err)
+		case DeleteAction:
+			err = leftMut.Delete(context.Background(), key(testCase.key))
+			require.NoError(t, err)
+		}
+
+		switch testCase.rightAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			err = rightMut.Put(context.Background(), key(testCase.key), testCase.rightValue.value())
+			require.NoError(t, err)
+		case DeleteAction:
+			err = rightMut.Delete(context.Background(), key(testCase.key))
+			require.NoError(t, err)
+		}
+	}
+
+	updatedRows, err := leftMut.Map(context.Background())
+	require.NoError(t, err)
+	mergeRows, err := rightMut.Map(context.Background())
+	require.NoError(t, err)
+
+	tbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	require.NoError(t, err)
+	tbl, err = rebuildAllProllyIndexes(context.Background(), tbl)
+	require.NoError(t, err)
+
+	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
+	require.NoError(t, err)
+	updatedTbl, err = rebuildAllProllyIndexes(context.Background(), updatedTbl)
+	require.NoError(t, err)
+
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
+	require.NoError(t, err)
+	mergeTbl, err = rebuildAllProllyIndexes(context.Background(), mergeTbl)
+	require.NoError(t, err)
+
+	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, tbl, updatedTbl, mergeTbl)
+
+	return vrw, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows)
 }
 
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
@@ -404,6 +553,44 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue,
 	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, tbl, updatedTbl, mergeTbl)
 
 	return vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
+}
+
+// rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
+// schema.
+func rebuildAllProllyIndexes(ctx context.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch.Indexes().Count() == 0 {
+		return tbl, nil
+	}
+
+	indexes, err := tbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tableRowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	primary := durable.ProllyMapFromIndex(tableRowData)
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, index, primary)
+		if err != nil {
+			return nil, err
+		}
+
+		indexes, err = indexes.PutIndex(ctx, index.Name(), rebuiltIndexRowData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tbl.SetIndexSet(ctx, indexes)
 }
 
 func calcExpectedStats(t *testing.T) *MergeStats {
@@ -530,6 +717,14 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, tbl, 
 	return root, mergeRoot, ancRoot
 }
 
+var kD = prolly.KeyDescriptorFromSchema(sch)
+var kB = val.NewTupleBuilder(kD)
+
+func key(i int) val.Tuple {
+	kB.PutInt64(0, int64(i))
+	return kB.Build(syncPool)
+}
+
 func nomsKey(i int) types.Value {
 	return mustTuple(types.NewTuple(types.Format_Default, types.Uint(idTag), types.Int(i)))
 }
@@ -556,3 +751,33 @@ func mustString(str string, err error) string {
 
 	return str
 }
+
+func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
+	s, err := prolly.DebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
+func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
+}
+
+//func diffStr(t tree.Diff, kD val.TupleDesc) string {
+//	var str string
+//	switch t.Type {
+//	case tree.AddedDiff:
+//		str = "added"
+//	case tree.ModifiedDiff:
+//		str = "modified"
+//	case tree.RemovedDiff:
+//		str = "removed"
+//	default:
+//		panic("unknown type")
+//	}
+//
+//	key := kD.Format(val.Tuple(t.Key))
+//	str += " key " + key
+//
+//	return str
+//}

@@ -144,7 +144,6 @@ func TestSingleQueryPrepared(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
 
@@ -346,7 +345,6 @@ func TestUserPrivileges(t *testing.T) {
 }
 
 func TestUserAuthentication(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
