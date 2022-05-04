@@ -15,10 +15,11 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
