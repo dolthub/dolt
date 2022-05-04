@@ -19,9 +19,9 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
-
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 const patchBufferSize = 1024
