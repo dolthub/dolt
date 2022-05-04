@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -69,6 +70,7 @@ type rowV struct {
 
 var vD = prolly.ValueDescriptorFromSchema(sch)
 var vB = val.NewTupleBuilder(vD)
+var syncPool = pool.NewBuffPool()
 
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
