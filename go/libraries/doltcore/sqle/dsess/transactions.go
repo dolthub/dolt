@@ -314,8 +314,7 @@ const (
 
 // validateWorkingSetForCommit validates that the working set given is legal to commit according to the session
 // settings. Returns an error if the given working set has conflicts or constraint violations and the session settings
-// do not allow them. If |mergeStats| is provided (because this working set is being merged with another), will
-// automatically resolve any conflicts indicated by them if session settings dictate it.
+// do not allow them.
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {

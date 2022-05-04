@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
@@ -110,7 +111,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -261,7 +262,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{
 				Query:    "/* client a */ select * from t order by x",
@@ -529,7 +530,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{
 				Query:    "/* client b */ rollback",
@@ -765,7 +766,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{ // no conflicts, transaction got rolled back
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -815,7 +816,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
@@ -861,7 +862,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: "another client has modified the working set incompatibly. retry the transaction",
+				ExpectedErrStr: dsess.ErrRetryTransaction.Error(),
 			},
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",

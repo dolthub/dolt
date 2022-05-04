@@ -370,16 +370,7 @@ func (sess *Session) doCommit(ctx *sql.Context, dbName string, tx sql.Transactio
 	}
 
 	mergedWorkingSet, newCommit, err := commitFunc(ctx, dtx, dbState.WorkingSet)
-
-	// Under some session settings, we update the working set in memory even on a failure to commit (if we disallow merge
-	// conflicts to be committed but also don't roll back the transaction when we encounter one)
-	if mergedWorkingSet != nil && err == doltdb.ErrUnresolvedConflicts {
-		wsErr := sess.SetWorkingSet(ctx, dbName, mergedWorkingSet)
-		if wsErr != nil {
-			return nil, wsErr
-		}
-		return nil, err
-	} else if err != nil {
+	if err != nil {
 		return nil, err
 	}
 
