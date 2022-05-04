@@ -50,15 +50,24 @@ func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Geometry, return a sql.Geometry
-	if val, ok := v.(types.Geometry); ok {
-		return ConvertTypesGeometryToSQLGeometry(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+
+	// Expect a Geometry type, return a sql.Geometry
+	switch val := v.(type) {
+	case types.Geometry:
+		return ConvertTypesGeometryToSQLGeometry(val), nil
+	case types.Point:
+		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
+	case types.Linestring:
+		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
+	case types.Polygon:
+		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
+	default:
+		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+	}
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
