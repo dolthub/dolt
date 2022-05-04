@@ -37,7 +37,7 @@ const (
 	maxTxCommitRetries = 5
 )
 
-var ErrRetryTransaction = errors.New("another client has modified the working set incompatibly. retry the transaction")
+var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
 
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)

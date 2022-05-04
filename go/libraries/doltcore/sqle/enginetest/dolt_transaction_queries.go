@@ -928,6 +928,8 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Expected: []sql.Row{{0, 0}, {1, 2}},
 			},
 			{ // no error because of our session settings
+				// TODO: we should also be able to commit this if the other client made a compatible change
+				//  (has the same merge conflicts we do), but that's an error right now
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
