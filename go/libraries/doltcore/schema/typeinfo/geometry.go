@@ -123,12 +123,15 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 		return nil, nil
 	}
 
-	// Expect a Geometry type
-	if val, ok := v.(types.Geometry); ok {
+	// Expect one of the Geometry types
+	switch val := v.(type) {
+	case types.Point, types.Linestring, types.Polygon:
+		return PointType.FormatValue(val)
+	case types.Geometry:
 		return ti.innerType.FormatValue(val.Inner)
+	default:
+		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 	}
-
-	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v.Kind())
 }
 
 // GetTypeIdentifier implements TypeInfo interface.
@@ -143,13 +146,19 @@ func (ti *geometryType) GetTypeParams() map[string]string {
 
 // IsValid implements TypeInfo interface.
 func (ti *geometryType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Geometry); ok {
-		return true
-	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return true
 	}
-	return false
+
+	switch v.(type) {
+	case types.Geometry,
+		types.Point,
+		types.Linestring,
+		types.Polygon:
+		return true
+	default:
+		return false
+	}
 }
 
 // NomsKind implements TypeInfo interface.
