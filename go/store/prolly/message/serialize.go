@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package message
 
 import (
 	"encoding/binary"
-	"fmt"
+	"math"
 
 	fb "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
+)
+
+const (
+	MaxVectorOffset = uint64(math.MaxUint16)
 )
 
 func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
@@ -31,7 +34,7 @@ func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	return
 }
 
-func writeItemBytes(b *fb.Builder, items []tree.Item, sumSz int) fb.UOffsetT {
+func writeItemBytes(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	b.Prep(fb.SizeUOffsetT, sumSz)
 
 	stop := int(b.Head())
@@ -45,7 +48,7 @@ func writeItemBytes(b *fb.Builder, items []tree.Item, sumSz int) fb.UOffsetT {
 	return b.CreateByteVector(b.Bytes[start:stop])
 }
 
-func writeItemOffsets(b *fb.Builder, items []tree.Item, sumSz int) fb.UOffsetT {
+func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	var cnt int
 	var off = sumSz
 	for i := len(items) - 1; i > 0; i-- { // omit first offset
@@ -56,34 +59,36 @@ func writeItemOffsets(b *fb.Builder, items []tree.Item, sumSz int) fb.UOffsetT {
 	return b.EndVector(cnt)
 }
 
-func writeCountArray(b *fb.Builder, sc tree.SubtreeCounts) fb.UOffsetT {
+func writeCountArray(b *fb.Builder, sc []uint64) fb.UOffsetT {
 	// todo(andy) write without copy
-	arr := tree.WriteSubtreeCounts(sc)
+	arr := WriteSubtreeCounts(sc)
 	return b.CreateByteVector(arr)
 }
 
-// estimateBufferSize returns the exact Size of the tuple vectors for keys and values,
-// and an estimate of the overall Size of the final flatbuffer.
-func estimateBufferSize(keys, values []tree.Item, subtrees []uint64) (keySz, valSz, bufSz int) {
-	for i := range keys {
-		keySz += len(keys[i])
-		valSz += len(values[i])
+func readSubtreeCounts(n int, buf []byte) (sc []uint64) {
+	sc = make([]uint64, 0, n)
+	for len(buf) > 0 {
+		count, n := binary.Uvarint(buf)
+		sc = append(sc, count)
+		buf = buf[n:]
 	}
-	refCntSz := len(subtrees) * binary.MaxVarintLen64
+	assertTrue(len(sc) == n)
+	return
+}
 
-	// constraints enforced upstream
-	if keySz > int(tree.MaxVectorOffset) {
-		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, tree.MaxVectorOffset))
+func WriteSubtreeCounts(sc []uint64) []byte {
+	buf := make([]byte, len(sc)*binary.MaxVarintLen64)
+	pos := 0
+	for _, count := range sc {
+		n := binary.PutUvarint(buf[pos:], count)
+		pos += n
 	}
-	if valSz > int(tree.MaxVectorOffset) {
-		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, tree.MaxVectorOffset))
+	return buf[:pos]
+}
+
+func sumSubtrees(subtrees []uint64) (sum uint64) {
+	for i := range subtrees {
+		sum += subtrees[i]
 	}
-
-	bufSz += keySz + valSz               // tuples
-	bufSz += refCntSz                    // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offsets
-	bufSz += 8 + 1 + 1 + 1               // metadata
-	bufSz += 72                          // vtable (approx)
-
 	return
 }

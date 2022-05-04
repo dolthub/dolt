@@ -15,15 +15,12 @@
 package tree
 
 import (
-	"encoding/binary"
-	"fmt"
 	"math"
 	"math/rand"
 	"sort"
 
-	fb "github.com/google/flatbuffers/go"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
@@ -158,9 +155,18 @@ func ShuffleTuplePairs(items [][2]val.Tuple) {
 }
 
 func newLeafNode(keys, values []Item) Node {
+	kk := make([][]byte, len(keys))
+	for i := range keys {
+		kk[i] = keys[i]
+	}
+	vv := make([][]byte, len(values))
+	for i := range vv {
+		vv[i] = values[i]
+	}
+
 	b := &testBuilder{
-		keys:   keys,
-		values: values,
+		keys:   kk,
+		values: vv,
 		level:  0,
 	}
 	return b.Build(sharedPool)
@@ -237,7 +243,7 @@ func newTestBuilder(level int) *testBuilder {
 var _ NodeBuilderFactory[*testBuilder] = newTestBuilder
 
 type testBuilder struct {
-	keys, values []Item
+	keys, values [][]byte
 	size, level  int
 
 	subtrees SubtreeCounts
@@ -251,7 +257,7 @@ func (tb *testBuilder) StartNode() {
 
 func (tb *testBuilder) HasCapacity(key, value Item) bool {
 	sum := tb.size + len(key) + len(value)
-	return sum <= int(MaxVectorOffset)
+	return sum <= int(message.MaxVectorOffset)
 }
 
 func (tb *testBuilder) AddItems(key, value Item, subtree uint64) {
@@ -265,53 +271,9 @@ func (tb *testBuilder) Count() int {
 	return len(tb.keys)
 }
 
-func (tb *testBuilder) Build(pool pool.BuffPool) (node Node) {
-	var (
-		keyTups, keyOffs fb.UOffsetT
-		valTups, valOffs fb.UOffsetT
-		refArr, cardArr  fb.UOffsetT
-	)
-
-	keySz, valSz, bufSz := measureNodeSize(tb.keys, tb.values, tb.subtrees)
-	b := getMapBuilder(pool, bufSz)
-
-	// serialize keys and offsets
-	keyTups = writeItemBytes(b, tb.keys, keySz)
-	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(tb.keys)-1)
-	keyOffs = b.EndVector(writeItemOffsets(b, tb.keys, keySz))
-
-	if tb.level == 0 {
-		// serialize value tuples for leaf nodes
-		valTups = writeItemBytes(b, tb.values, valSz)
-		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(tb.values)-1)
-		valOffs = b.EndVector(writeItemOffsets(b, tb.values, valSz))
-	} else {
-		// serialize child refs and subtree counts for internal nodes
-		refArr = writeItemBytes(b, tb.values, valSz)
-		cardArr = writeCountArray(b, tb.subtrees)
-	}
-
-	// populate the node's vtable
-	serial.ProllyTreeNodeStart(b)
-	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
-	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
-	if tb.level == 0 {
-		serial.ProllyTreeNodeAddValueItems(b, valTups)
-		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
-		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(tb.keys)))
-	} else {
-		serial.ProllyTreeNodeAddAddressArray(b, refArr)
-		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
-		serial.ProllyTreeNodeAddTreeCount(b, tb.subtrees.Sum())
-	}
-	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddTreeLevel(b, uint8(tb.level))
-	b.Finish(serial.ProllyTreeNodeEnd(b))
-	tb.reset()
-
-	buf := b.FinishedBytes()
-	return NodeFromBytes(buf)
+func (tb *testBuilder) Build(pool pool.BuffPool) Node {
+	msg := message.SerializeProllyMap(pool, tb.keys, tb.values, tb.level, tb.subtrees)
+	return NodeFromBytes(msg)
 }
 
 func (tb *testBuilder) reset() {
@@ -320,67 +282,4 @@ func (tb *testBuilder) reset() {
 	tb.values = tb.values[:0]
 	tb.size = 0
 	tb.subtrees = tb.subtrees[:0]
-}
-
-func getMapBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
-	b = fb.NewBuilder(0)
-	buf := pool.Get(uint64(sz))
-	b.Bytes = buf[:0]
-	return
-}
-
-// measureNodeSize returns the exact Size of the tuple vectors for keys and values,
-// and an estimate of the overall Size of the final flatbuffer.
-func measureNodeSize(keys, values []Item, subtrees []uint64) (keySz, valSz, bufSz int) {
-	for i := range keys {
-		keySz += len(keys[i])
-		valSz += len(values[i])
-	}
-	refCntSz := len(subtrees) * binary.MaxVarintLen64
-
-	// constraints enforced upstream
-	if keySz > int(MaxVectorOffset) {
-		panic(fmt.Sprintf("key vector exceeds Size limit ( %d > %d )", keySz, MaxVectorOffset))
-	}
-	if valSz > int(MaxVectorOffset) {
-		panic(fmt.Sprintf("value vector exceeds Size limit ( %d > %d )", valSz, MaxVectorOffset))
-	}
-
-	bufSz += keySz + valSz               // tuples
-	bufSz += refCntSz                    // subtree counts
-	bufSz += len(keys)*2 + len(values)*2 // offsets
-	bufSz += 8 + 1 + 1 + 1               // metadata
-	bufSz += 72                          // vtable (approx)
-
-	return
-}
-
-func writeItemBytes(b *fb.Builder, items []Item, sumSz int) fb.UOffsetT {
-	b.Prep(fb.SizeUOffsetT, sumSz)
-
-	stop := int(b.Head())
-	start := stop - sumSz
-	for _, item := range items {
-		copy(b.Bytes[start:stop], item)
-		start += len(item)
-	}
-
-	start = stop - sumSz
-	return b.CreateByteVector(b.Bytes[start:stop])
-}
-
-func writeItemOffsets(b *fb.Builder, items []Item, sz int) (cnt int) {
-	off := sz
-	for i := len(items) - 1; i > 0; i-- { // omit first offset
-		off -= len(items[i])
-		b.PrependUint16(uint16(off))
-		cnt++
-	}
-	return
-}
-
-func writeCountArray(b *fb.Builder, sc SubtreeCounts) fb.UOffsetT {
-	// todo(andy) write without copy
-	arr := WriteSubtreeCounts(sc)
-	return b.CreateByteVector(arr)
 }

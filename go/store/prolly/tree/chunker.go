@@ -457,7 +457,7 @@ func getCanonicalRoot(ctx context.Context, ns NodeStore, builder NodeBuilder) (N
 	assertTrue(cnt == 1)
 
 	nd := builder.Build(ns.Pool())
-	mt := nd.getChildAddress(0)
+	mt := nd.getAddress(0)
 
 	for {
 		child, err := fetchChild(ctx, ns, mt)
@@ -469,6 +469,6 @@ func getCanonicalRoot(ctx context.Context, ns NodeStore, builder NodeBuilder) (N
 			return child, nil
 		}
 
-		mt = child.getChildAddress(0)
+		mt = child.getAddress(0)
 	}
 }

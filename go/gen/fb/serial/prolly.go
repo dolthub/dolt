@@ -396,6 +396,7 @@ func ProllyTreeNodeEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
+/// Refmap has been deprecated in favor of AddressMap
 type RefMap struct {
 	_tab flatbuffers.Table
 }

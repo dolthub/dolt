@@ -12,22 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package serial
+package message
 
-// KEEP THESE IN SYNC WITH .fbs FILES!
+import (
+	"math"
+	"math/rand"
+	"testing"
 
-const StoreRootFileID = "STRT"
-const TagFileID = "DTAG"
-const WorkingSetFileID = "WRST"
-const CommitFileID = "DCMT"
-const RootValueFileID = "RTVL"
-const TableFileID = "DTBL"
-const ProllyTreeNodeFileID = "TUPM"
-const AddressMapFileID = "ADRM"
+	"github.com/stretchr/testify/assert"
+)
 
-func GetFileID(bs []byte) string {
-	if len(bs) < 8 {
-		return ""
+var testRand = rand.New(rand.NewSource(1))
+
+func TestCountArray(t *testing.T) {
+	for k := 0; k < 100; k++ {
+		n := testRand.Intn(45) + 5
+
+		counts := make([]uint64, n)
+		sum := uint64(0)
+		for i := range counts {
+			c := testRand.Uint64() % math.MaxUint32
+			counts[i] = c
+			sum += c
+		}
+		assert.Equal(t, sum, sumSubtrees(counts))
+
+		// round trip the array
+		buf := WriteSubtreeCounts(counts)
+		readCounts := readSubtreeCounts(n, buf)
+		assert.Equal(t, counts, readCounts)
 	}
-	return string(bs[4:8])
 }

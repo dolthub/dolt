@@ -20,9 +20,8 @@ import (
 	"io"
 	"strings"
 
-	fb "github.com/google/flatbuffers/go"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -257,7 +256,7 @@ func newMapBuilder(level int) *mapBuilder {
 var _ tree.NodeBuilderFactory[*mapBuilder] = newMapBuilder
 
 type mapBuilder struct {
-	keys, values []tree.Item
+	keys, values [][]byte
 	size, level  int
 
 	subtrees tree.SubtreeCounts
@@ -271,7 +270,7 @@ func (nb *mapBuilder) StartNode() {
 
 func (nb *mapBuilder) HasCapacity(key, value tree.Item) bool {
 	sum := nb.size + len(key) + len(value)
-	return sum <= int(tree.MaxVectorOffset)
+	return sum <= int(message.MaxVectorOffset)
 }
 
 func (nb *mapBuilder) AddItems(key, value tree.Item, subtree uint64) {
@@ -294,52 +293,9 @@ func (nb *mapBuilder) reset() {
 }
 
 func (nb *mapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
-	var (
-		keyTups, keyOffs fb.UOffsetT
-		valTups, valOffs fb.UOffsetT
-		refArr, cardArr  fb.UOffsetT
-	)
-
-	keySz, valSz, bufSz := estimateBufferSize(nb.keys, nb.values, nb.subtrees)
-	b := getFlatbufferBuilder(pool, bufSz)
-
-	// serialize keys and offsets
-	keyTups = writeItemBytes(b, nb.keys, keySz)
-	serial.ProllyTreeNodeStartKeyOffsetsVector(b, len(nb.keys)-1)
-	keyOffs = writeItemOffsets(b, nb.keys, keySz)
-
-	if nb.level == 0 {
-		// serialize value tuples for leaf nodes
-		valTups = writeItemBytes(b, nb.values, valSz)
-		serial.ProllyTreeNodeStartValueOffsetsVector(b, len(nb.values)-1)
-		valOffs = writeItemOffsets(b, nb.values, valSz)
-	} else {
-		// serialize child refs and subtree counts for internal nodes
-		refArr = writeItemBytes(b, nb.values, valSz)
-		cardArr = writeCountArray(b, nb.subtrees)
-	}
-
-	// populate the node's vtable
-	serial.ProllyTreeNodeStart(b)
-	serial.ProllyTreeNodeAddKeyItems(b, keyTups)
-	serial.ProllyTreeNodeAddKeyOffsets(b, keyOffs)
-	if nb.level == 0 {
-		serial.ProllyTreeNodeAddValueItems(b, valTups)
-		serial.ProllyTreeNodeAddValueOffsets(b, valOffs)
-		serial.ProllyTreeNodeAddTreeCount(b, uint64(len(nb.keys)))
-	} else {
-		serial.ProllyTreeNodeAddAddressArray(b, refArr)
-		serial.ProllyTreeNodeAddSubtreeCounts(b, cardArr)
-		serial.ProllyTreeNodeAddTreeCount(b, nb.subtrees.Sum())
-	}
-	serial.ProllyTreeNodeAddKeyType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddValueType(b, serial.ItemTypeTupleFormatAlpha)
-	serial.ProllyTreeNodeAddTreeLevel(b, uint8(nb.level))
-	b.Finish(serial.ProllyTreeNodeEnd(b))
+	msg := message.SerializeProllyMap(pool, nb.keys, nb.values, nb.level, nb.subtrees)
 	nb.reset()
-
-	buf := b.FinishedBytes()
-	return tree.NodeFromBytes(buf)
+	return tree.NodeFromBytes(msg)
 }
 
 // DebugFormat formats a Map.

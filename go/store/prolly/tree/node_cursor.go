@@ -219,7 +219,7 @@ func (cur *Cursor) CurrentValue() Item {
 }
 
 func (cur *Cursor) CurrentRef() hash.Hash {
-	return cur.nd.getChildAddress(cur.idx)
+	return cur.nd.getAddress(cur.idx)
 }
 
 func (cur *Cursor) currentSubtreeSize() uint64 {
@@ -486,12 +486,6 @@ func fetchChild(ctx context.Context, ns NodeStore, ref hash.Hash) (Node, error) 
 
 func assertTrue(b bool) {
 	if !b {
-		panic("assertion failed")
-	}
-}
-
-func assertFalse(b bool) {
-	if b {
 		panic("assertion failed")
 	}
 }
