@@ -215,6 +215,11 @@ func (tx *DoltTransaction) doCommit(
 
 			// otherwise (not a ff), merge the working sets together
 			start := time.Now()
+			// TODO: this loses track of merge conflicts in the working set, clearing them out and replacing them with any
+			//  new merge conflicts produced by this merge operation. We want to preserve merge conflicts in the working set
+			//  given and permit them to be committed as long as a) no new ones are introduced, and b) any merge conflicts in
+			//  the shared working set match the merge conflicts in this one. Longer term, we will implement transaction
+			//  commit without a merge, making this point moot.
 			mergedWorkingSet, err := tx.mergeRoots(ctx, existingWs, workingSet)
 			if err != nil {
 				return nil, nil, err
