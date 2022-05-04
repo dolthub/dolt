@@ -13,7 +13,7 @@ teardown() {
     rm -rf $REPO_NAME
 }
 
-@test "import mysqldump: database with view" {
+@test "import-mysqldump: database with view" {
     run dolt sql <<SQL
 DROP TABLE IF EXISTS mytable;
 CREATE TABLE mytable (
@@ -60,7 +60,7 @@ SQL
     [[ "$output" =~ "CREATE VIEW \`myview\` AS select \`mytable\`.\`id\` AS \`id\`,\`mytable\`.\`col2\` AS \`col2\`,\`mytable\`.\`col3\` AS \`col3\` from \`mytable\`" ]] || false
 }
 
-@test "import mysqldump: database with trigger" {
+@test "import-mysqldump: database with trigger" {
     run dolt sql <<SQL
 DROP TABLE IF EXISTS mytable;
 CREATE TABLE mytable (
@@ -94,7 +94,7 @@ SQL
     [[ "$output" =~ "tt,mytable,SET NEW.v1 = NEW.v1 * 11,\`root\`@\`localhost\`" ]] || false
 }
 
-@test "import mysqldump: database with procedure dumped with --routines flag" {
+@test "import-mysqldump: database with procedure dumped with --routines flag" {
     run dolt sql <<SQL
 /*!50003 DROP PROCEDURE IF EXISTS new_proc */;
 /*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
@@ -116,7 +116,7 @@ SQL
     [[ "$output" =~ "new_proc,PROCEDURE,\`root\`@\`localhost\`" ]] || false
 }
 
-@test "import mysqldump: a table with all types with DEFAULT NULL dump" {
+@test "import-mysqldump: a table with all types with DEFAULT NULL dump" {
     run dolt sql <<SQL
 CREATE TABLE all_types (
   pk int NOT NULL,
@@ -166,7 +166,7 @@ SQL
     [[ "$output" =~ "NULL" ]] || false
 }
 
-@test "import mysqldump: a table with all types with DEFAULT not-null VALUE dump" {
+@test "import-mysqldump: a table with all types with DEFAULT not-null VALUE dump" {
     run dolt sql <<SQL
 CREATE TABLE types_default (
   pk int NOT NULL,
@@ -215,7 +215,7 @@ SQL
     [[ "$output" =~ "0101000000CDCCCCCCCCCCF43F0000000000000840" ]] || false
 }
 
-@test "import mysqldump: a table with string literal representation in column definition" {
+@test "import-mysqldump: a table with string literal representation in column definition" {
     run dolt sql <<SQL
 CREATE TABLE mytable (
   pk int NOT NULL,
@@ -233,7 +233,7 @@ SQL
     [[ "$output" =~ "1,2003,first_sometext" ]] || false
 }
 
-@test "import mysqldump: charset introducer in tables from mysql db" {
+@test "import-mysqldump: charset introducer in tables from mysql db" {
     run dolt sql <<SQL
 CREATE TABLE engine_cost (
   engine_name varchar(64) NOT NULL,
