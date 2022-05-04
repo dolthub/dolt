@@ -110,6 +110,10 @@ type testRow struct {
 // non-conflicting updates. => +2
 //
 // For (insert, insert) there are identical inserts and conflicting inserts => +1
+//
+// A modification of a primary key is the combination of the two base cases:
+// First, a (delete, delete), then an (insert, insert). We omit tests for these
+// and instead defer to the base cases.
 
 var testRows = []testRow{
 	// Ancestor exists
@@ -358,10 +362,10 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 
 	if !mergedRows.Equals(expectedRows) {
-		t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), mergedRows)))
 	}
 	if !conflicts.Equals(expectedConflicts) {
-		t.Error(mustString(types.EncodedValue(context.Background(), conflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedConflicts)))
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedConflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), conflicts)))
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
@@ -396,11 +400,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 			continue
 		}
 
-		// Skip cell-wise merges
-		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
-			continue
-		}
-
 		if testCase.initialValue != nil {
 			initialKVs = append(initialKVs, key(testCase.key), testCase.initialValue.value())
 		}
@@ -419,11 +418,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	for _, testCase := range testRows {
 		// Skip conflicts
 		if testCase.conflict {
-			continue
-		}
-
-		// Skip cell-wise merges
-		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
 			continue
 		}
 
