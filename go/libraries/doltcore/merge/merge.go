@@ -763,21 +763,25 @@ func nomsPkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 
 		if valutil.NilSafeEqCheck(val, mergeVal) {
 			return val, false
-		} else {
-			modified := !valutil.NilSafeEqCheck(val, baseVal)
-			mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
-			switch {
-			case modified && mergeModified:
-				return nil, true
-			case modified:
-				didMerge = true
-				return val, false
-			default:
-				didMerge = true
-				return mergeVal, false
-			}
 		}
 
+		if baseRow == nil {
+			// Conflicting insert
+			return nil, true
+		}
+
+		modified := !valutil.NilSafeEqCheck(val, baseVal)
+		mergeModified := !valutil.NilSafeEqCheck(mergeVal, baseVal)
+		switch {
+		case modified && mergeModified:
+			return nil, true
+		case modified:
+			didMerge = true
+			return val, false
+		default:
+			didMerge = true
+			return mergeVal, false
+		}
 	}
 
 	resultVals := make(row.TaggedValues)
