@@ -221,7 +221,7 @@ func DoltProceduresDropProcedure(ctx *sql.Context, db Database, name string) (re
 	if err != nil {
 		return err
 	} else if tbl == nil {
-		return fmt.Errorf("dolt_procedures table doesn't exist")
+		return sql.ErrStoredProcedureDoesNotExist.New(name)
 	}
 
 	_, ok, err := DoltProceduresGetDetails(ctx, tbl, name)
