@@ -247,97 +247,6 @@ func tableData(ctx *sql.Context, tbl *doltdb.Table, ddb *doltdb.DoltDB) (durable
 	return data, sch, nil
 }
 
-var _ sql.RowIter = (*diffRowItr)(nil)
-
-type diffRowItr struct {
-	ad             diff.RowDiffer
-	diffSrc        *diff.RowDiffSource
-	joiner         *rowconv.Joiner
-	sch            schema.Schema
-	fromCommitInfo commitInfo
-	toCommitInfo   commitInfo
-}
-
-type commitInfo struct {
-	name    types.String
-	date    *types.Timestamp
-	nameTag uint64
-	dateTag uint64
-}
-
-// Next returns the next row
-func (itr *diffRowItr) Next(*sql.Context) (sql.Row, error) {
-	r, _, err := itr.diffSrc.NextDiff()
-
-	if err != nil {
-		return nil, err
-	}
-
-	toAndFromRows, err := itr.joiner.Split(r)
-	if err != nil {
-		return nil, err
-	}
-	_, hasTo := toAndFromRows[diff.To]
-	_, hasFrom := toAndFromRows[diff.From]
-
-	r, err = r.SetColVal(itr.toCommitInfo.nameTag, types.String(itr.toCommitInfo.name), itr.sch)
-	if err != nil {
-		return nil, err
-	}
-
-	r, err = r.SetColVal(itr.fromCommitInfo.nameTag, types.String(itr.fromCommitInfo.name), itr.sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if itr.toCommitInfo.date != nil {
-		r, err = r.SetColVal(itr.toCommitInfo.dateTag, *itr.toCommitInfo.date, itr.sch)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if itr.fromCommitInfo.date != nil {
-		r, err = r.SetColVal(itr.fromCommitInfo.dateTag, *itr.fromCommitInfo.date, itr.sch)
-
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, itr.sch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	if hasTo && hasFrom {
-		sqlRow = append(sqlRow, diffTypeModified)
-	} else if hasTo && !hasFrom {
-		sqlRow = append(sqlRow, diffTypeAdded)
-	} else {
-		sqlRow = append(sqlRow, diffTypeRemoved)
-	}
-
-	return sqlRow, nil
-}
-
-// Close closes the iterator
-func (itr *diffRowItr) Close(*sql.Context) (err error) {
-	defer itr.ad.Close()
-	defer func() {
-		closeErr := itr.diffSrc.Close()
-
-		if err == nil {
-			err = closeErr
-		}
-	}()
-
-	return nil
-}
-
 type TblInfoAtCommit struct {
 	name    string
 	date    *types.Timestamp
@@ -383,58 +292,11 @@ func (dp DiffPartition) Key() []byte {
 }
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
-	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
-
-	if err != nil {
-		return nil, err
+	if types.IsFormat_DOLT_1(ddb.Format()) {
+		return newProllyDiffIter(ctx, dp)
+	} else {
+		return newNomsDiffIter(ctx, ddb, joiner, dp)
 	}
-
-	toData, toSch, err := tableData(ctx, dp.to, ddb)
-
-	if err != nil {
-		return nil, err
-	}
-
-	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.fromSch, fromSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.toSch, toSch)
-
-	if err != nil {
-		return nil, err
-	}
-
-	sch := joiner.GetSchema()
-	toCol, _ := sch.GetAllCols().GetByName(toCommit)
-	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
-	toDateCol, _ := sch.GetAllCols().GetByName(toCommitDate)
-	fromDateCol, _ := sch.GetAllCols().GetByName(fromCommitDate)
-
-	fromCmInfo := commitInfo{types.String(dp.fromName), dp.fromDate, fromCol.Tag, fromDateCol.Tag}
-	toCmInfo := commitInfo{types.String(dp.toName), dp.toDate, toCol.Tag, toDateCol.Tag}
-
-	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
-	// TODO (dhruv) don't cast to noms map
-	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
-
-	warnFn := func(code int, message string, args ...string) {
-		ctx.Warn(code, message, args)
-	}
-
-	src := diff.NewRowDiffSource(rd, joiner, warnFn)
-	src.AddInputRowConversion(fromConv, toConv)
-
-	return &diffRowItr{
-		ad:             rd,
-		diffSrc:        src,
-		joiner:         joiner,
-		sch:            joiner.GetSchema(),
-		fromCommitInfo: fromCmInfo,
-		toCommitInfo:   toCmInfo,
-	}, nil
 }
 
 // isDiffablePartition checks if the commit pair for this partition is "diffable".
