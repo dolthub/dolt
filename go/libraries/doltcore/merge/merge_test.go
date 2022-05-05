@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -191,6 +192,17 @@ var testRows = []testRow{
 		&rowV{6, -6},
 		false,
 		&rowV{-6, -6},
+	},
+	// Non-conflicting update 2
+	{
+		62,
+		&rowV{62, 62},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-62, 62},
+		&rowV{62, -62},
+		false,
+		&rowV{-62, -62},
 	},
 	{
 		7,
@@ -389,9 +401,16 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.Equal(t, eh.String(), h.String(), "table hashes do not equal")
 }
 
+func sortTests(t []testRow) {
+	sort.Slice(t, func(i, j int) bool {
+		return t[i].key < t[j].key
+	})
+}
+
 func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
 
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
@@ -474,6 +493,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
 
 	var initalKVs []types.Value
 	var expectedKVs []types.Value

@@ -52,7 +52,7 @@ type cellWiseMerge struct {
 func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
-	cellWiseMerges := make(chan cellWiseMerge)
+	cellWiseMerges := make(chan cellWiseMerge, 128)
 	var updatedTable *doltdb.Table
 	var mergedData durable.Index
 
@@ -63,7 +63,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 		if err != nil {
 			return err
 		}
-		close(cellWiseMerges)
+		defer close(cellWiseMerges)
 		return nil
 	})
 
@@ -143,7 +143,13 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 			From: left.From,
 			To:   tree.Item(merged),
 		}
-		cellWiseMerges <- cellWiseMerge{left, right, d}
+
+		select {
+		case cellWiseMerges <- cellWiseMerge{left, right, d}:
+			break
+		case <-ctx.Done():
+			return tree.Diff{}, false
+		}
 
 		return d, true
 	})
@@ -292,27 +298,30 @@ func updateProllySecondaryIndexes(
 		return nil, nil, err
 	}
 
-	select {
-	case m, ok := <-cellWiseChan:
-		if !ok {
-			break
-		}
-		for _, idx := range rootIdxs {
-			// Revert corresponding idx entry in left
-			err = idx.UpdateEntry(ctx, val.Tuple(m.leftDiff.Key), val.Tuple(m.leftDiff.To), val.Tuple(m.leftDiff.From))
-			if err != nil {
-				return nil, nil, err
+OUTER:
+	for {
+		select {
+		case m, ok := <-cellWiseChan:
+			if !ok {
+				break OUTER
 			}
-		}
-		for _, idx := range mergeIdxs {
-			// Update corresponding idx entry to merged value in right
-			err = idx.UpdateEntry(ctx, val.Tuple(m.rightDiff.Key), val.Tuple(m.rightDiff.To), val.Tuple(m.merged.To))
-			if err != nil {
-				return nil, nil, err
+			for _, idx := range rootIdxs {
+				// Revert corresponding idx entry in left
+				err = idx.UpdateEntry(ctx, val.Tuple(m.leftDiff.Key), val.Tuple(m.leftDiff.To), val.Tuple(m.leftDiff.From))
+				if err != nil {
+					return nil, nil, err
+				}
 			}
+			for _, idx := range mergeIdxs {
+				// Update corresponding idx entry to merged value in right
+				err = idx.UpdateEntry(ctx, val.Tuple(m.rightDiff.Key), val.Tuple(m.rightDiff.To), val.Tuple(m.merged.To))
+				if err != nil {
+					return nil, nil, err
+				}
+			}
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
 		}
-	case <-ctx.Done():
-		return nil, nil, ctx.Err()
 	}
 
 	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
