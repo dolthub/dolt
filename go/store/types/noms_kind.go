@@ -177,6 +177,18 @@ func isKindOrderedByValue(k NomsKind) bool {
 	return k <= StringKind || k >= UUIDKind
 }
 
+func IsGeometryKind(k NomsKind) bool {
+	switch k {
+	case PointKind,
+		LinestringKind,
+		PolygonKind,
+		GeometryKind:
+		return true
+	default:
+		return false
+	}
+}
+
 func (k NomsKind) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	if k == UnknownKind {
 		return ErrUnknownType
