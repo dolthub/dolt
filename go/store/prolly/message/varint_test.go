@@ -24,7 +24,7 @@ import (
 
 var testRand = rand.New(rand.NewSource(1))
 
-func TestCountArray(t *testing.T) {
+func TestRoundTripVarints(t *testing.T) {
 	for k := 0; k < 100; k++ {
 		n := testRand.Intn(45) + 5
 
@@ -38,8 +38,10 @@ func TestCountArray(t *testing.T) {
 		assert.Equal(t, sum, sumSubtrees(counts))
 
 		// round trip the array
-		buf := WriteSubtreeCounts(counts)
-		readCounts := readSubtreeCounts(n, buf)
-		assert.Equal(t, counts, readCounts)
+		buf := make([]byte, maxEncodedSize(len(counts)))
+		buf = encodeVarints(counts, buf)
+		actual := decodeVarints(buf, make([]uint64, n))
+
+		assert.Equal(t, counts, actual)
 	}
 }

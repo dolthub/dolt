@@ -152,9 +152,9 @@ func getProllyMapTreeCount(msg Message) int {
 }
 
 func getProllyMapSubtrees(msg Message) []uint64 {
-	cnt := getProllyMapCount(msg)
+	counts := make([]uint64, getProllyMapCount(msg))
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
-	return readSubtreeCounts(int(cnt), pm.SubtreeCountsBytes())
+	return decodeVarints(pm.SubtreeCountsBytes(), counts)
 }
 
 func getProllyMapKeyOffsets(pm *serial.ProllyTreeNode) []byte {
