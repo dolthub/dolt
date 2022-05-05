@@ -31,6 +31,11 @@ func maxEncodedSize(n int) int {
 	return (n + 1) * binary.MaxVarintLen64
 }
 
+// encodeMinDeltas encodes an unsorted array |ints|.
+// The encoding format attempts to minimize encoded size by
+// first finding and encoding the minimum value of |ints|
+// and then encoding the difference between each value and
+// that minimum.
 func encodeMinDeltas(ints []uint64, buf []byte) []byte {
 	min := uint64(math.MaxUint64)
 	for i := range ints {
@@ -49,6 +54,8 @@ func encodeMinDeltas(ints []uint64, buf []byte) []byte {
 	return buf[:pos]
 }
 
+// decodeMinDeltas decodes an array of ints that were
+// previously encoded with encodeMinDeltas.
 func decodeMinDeltas(buf []byte, ints []uint64) []uint64 {
 	min, k := binary.Uvarint(buf)
 	buf = buf[k:]
