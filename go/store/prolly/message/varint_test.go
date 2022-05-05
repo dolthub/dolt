@@ -15,6 +15,7 @@
 package message
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 	"testing"
@@ -44,4 +45,65 @@ func TestRoundTripVarints(t *testing.T) {
 
 		assert.Equal(t, counts, actual)
 	}
+}
+
+func BenchmarkVarint(b *testing.B) {
+	k := 150
+	b.Run("level 1 subtree counts", func(b *testing.B) {
+		benchmarkVarint(b, 100, 200, k)
+	})
+	b.Run("level 2 subtree counts", func(b *testing.B) {
+		benchmarkVarint(b, uint64(100*k), uint64(200*k), k)
+	})
+	b.Run("level 3 subtree counts", func(b *testing.B) {
+		benchmarkVarint(b, uint64(100*k*k), uint64(200*k*k), k)
+	})
+	b.Run("level 4 subtree counts", func(b *testing.B) {
+		benchmarkVarint(b, uint64(100*k*k*k), uint64(200*k*k*k), k)
+	})
+}
+
+func benchmarkVarint(b *testing.B, lo, hi uint64, k int) {
+	const n = 10_000
+	ints, bufs := makeBenchmarkData(lo, hi, k, n)
+
+	name := fmt.Sprintf("benchmark encode [%d:%d]", lo, hi)
+	b.Run(name, func(b *testing.B) {
+		buf := make([]byte, maxEncodedSize(k))
+		for i := 0; i < b.N; i++ {
+			_ = encodeVarints(ints[i%n][:], buf)
+		}
+	})
+	name = fmt.Sprintf("benchmark decode (mean size: %f)", meanSize(bufs))
+	b.Run(name, func(b *testing.B) {
+		ints := make([]uint64, k)
+		for i := 0; i < b.N; i++ {
+			_ = decodeVarints(bufs[i%n], ints)
+		}
+	})
+}
+
+func makeBenchmarkData(lo, hi uint64, k, n int) (ints [][]uint64, bufs [][]byte) {
+	ints = make([][]uint64, n)
+	bufs = make([][]byte, n)
+
+	for i := range ints {
+		ints[i] = make([]uint64, k)
+		for j := range ints[i] {
+			ints[i][j] = (testRand.Uint64() % (hi - lo)) + lo
+		}
+	}
+	for i := range bufs {
+		bufs[i] = make([]byte, maxEncodedSize(k))
+		bufs[i] = encodeVarints(ints[i], bufs[i])
+	}
+	return
+}
+
+func meanSize(encoded [][]byte) float64 {
+	var sumSz int
+	for i := range encoded {
+		sumSz += len(encoded[i])
+	}
+	return float64(sumSz) / float64(len(encoded))
 }
