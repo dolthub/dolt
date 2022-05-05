@@ -438,7 +438,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
 
 	return nil

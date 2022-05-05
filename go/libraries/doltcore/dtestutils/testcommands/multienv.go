@@ -376,7 +376,7 @@ func createTestTable(dEnv *env.DoltEnv, tableName string, sch schema.Schema, err
 func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()
