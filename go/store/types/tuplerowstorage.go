@@ -71,7 +71,7 @@ func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		values := msg.ValueItemsBytes()
 		for i := 0; i < msg.ValueAddressOffsetsLength(); i++ {
 			off := msg.ValueAddressOffsets(i)
-			addr := hash.New(values[off:off+20])
+			addr := hash.New(values[off : off+20])
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
 				return err
@@ -82,7 +82,7 @@ func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		}
 		addresses := msg.AddressArrayBytes()
 		for i := 0; i < len(addresses); i += 20 {
-			addr := hash.New(addresses[i:i+20])
+			addr := hash.New(addresses[i : i+20])
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
 				return err
