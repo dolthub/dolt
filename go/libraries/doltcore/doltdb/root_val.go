@@ -1317,20 +1317,10 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 	if transitive {
 		buf.WriteString("\nTables:")
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-			buf.WriteString("\nName:")
+			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString("\n")
-
-			buf.WriteString("Data:\n")
-			data, err := table.GetNomsRowData(ctx)
-			if err != nil {
-				panic(err)
-			}
-
-			err = types.WriteEncodedValue(ctx, &buf, data)
-			if err != nil {
-				panic(err)
-			}
+			buf.WriteString(": \n")
+			buf.WriteString(table.table.DebugString(ctx))
 			return false, nil
 		})
 	}

@@ -422,7 +422,6 @@ func checkForUncommittedChanges(ctx *sql.Context, root *doltdb.RootValue, headRo
 	}
 
 	if rh != hrh {
-		fmt.Printf("root: %s\nheadRoot: %s\n", root.DebugString(ctx, true), headRoot.DebugString(ctx, true))
 		return ErrUncommittedChanges.New()
 	}
 	return nil

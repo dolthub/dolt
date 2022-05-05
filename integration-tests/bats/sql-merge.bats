@@ -887,8 +887,9 @@ SQL
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
 
-@test "sql-merge: DOLT_MERGE can correctly commit unresolved conflicts" {
+@test "sql-merge: DOLT_MERGE can commit unresolved conflicts with dolt_allow_commit_conflicts set" {
      dolt sql << SQL
+set dolt_allow_commit_conflicts = on;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
@@ -915,8 +916,9 @@ SQL
     [[ $output =~ "merge has unresolved conflicts" ]] || false
 }
 
-@test "sql-merge: CALL DOLT_MERGE can correctly commit unresolved conflicts" {
+@test "sql-merge: CALL DOLT_MERGE can commit unresolved conflicts with dolt_allow_commit_conflicts on" {
      dolt sql << SQL
+set dolt_allow_commit_conflicts = on;
 CREATE TABLE one_pk (
   pk1 BIGINT NOT NULL,
   c1 BIGINT,
