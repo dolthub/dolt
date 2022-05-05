@@ -20,7 +20,6 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -137,10 +136,10 @@ func (wr AddressMapEditor) Delete(ctx context.Context, name string) error {
 }
 
 func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
-	factory := newAddrMapBuilder
 	tr := wr.addresses.tree
+	serializer := message.AddressMapSerializer{Pool: tr.ns.Pool()}
 
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, wr.addresses.mutations(), tr.compareItems)
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, wr.addresses.mutations(), tr.compareItems)
 	if err != nil {
 		return AddressMap{}, err
 	}
@@ -152,53 +151,4 @@ func (wr AddressMapEditor) Flush(ctx context.Context) (AddressMap, error) {
 			order: tr.order,
 		},
 	}, nil
-}
-
-func newAddrMapBuilder(level int) *addrMapBuilder {
-	return &addrMapBuilder{level: level}
-}
-
-var _ tree.NodeBuilderFactory[*addrMapBuilder] = newAddrMapBuilder
-
-type addrMapBuilder struct {
-	keys, values [][]byte
-	size, level  int
-
-	subtrees tree.SubtreeCounts
-}
-
-var _ tree.NodeBuilder = &addrMapBuilder{}
-
-func (nb *addrMapBuilder) StartNode() {
-	nb.reset()
-}
-
-func (nb *addrMapBuilder) HasCapacity(key, value tree.Item) bool {
-	sum := nb.size + len(key) + len(value)
-	return sum <= int(message.MaxVectorOffset)
-}
-
-func (nb *addrMapBuilder) AddItems(key, value tree.Item, subtree uint64) {
-	nb.keys = append(nb.keys, key)
-	nb.values = append(nb.values, value)
-	nb.size += len(key) + len(value)
-	nb.subtrees = append(nb.subtrees, subtree)
-}
-
-func (nb *addrMapBuilder) Count() int {
-	return len(nb.keys)
-}
-
-func (nb *addrMapBuilder) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	nb.keys = nb.keys[:0]
-	nb.values = nb.values[:0]
-	nb.size = 0
-	nb.subtrees = nb.subtrees[:0]
-}
-
-func (nb *addrMapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
-	msg := message.SerializeAddressMap(pool, nb.keys, nb.values, nb.level, nb.subtrees)
-	nb.reset()
-	return tree.NodeFromBytes(msg)
 }

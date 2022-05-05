@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/skip"
@@ -64,13 +66,14 @@ func diffOrderedTrees[K, V ~[]byte, O ordering[K]](
 	return err
 }
 
-func mergeOrderedTrees[K, V ~[]byte, O ordering[K]](
+func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base orderedTree[K, V, O],
 	cb tree.CollisionFn,
+	serializer S,
 ) (orderedTree[K, V, O], error) {
-	cfn, fact := base.compareItems, newMapBuilder
-	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, fact)
+	cfn := base.compareItems
+	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, serializer)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err
 	}

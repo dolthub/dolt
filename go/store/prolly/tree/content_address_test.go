@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -45,7 +46,9 @@ func makeTree(t *testing.T, tuples [][2]val.Tuple) Node {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
 
-	chunker, err := newEmptyChunker(ctx, ns, newTestBuilder)
+	// todo(andy): move this test
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 	for _, pair := range tuples {
 		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))

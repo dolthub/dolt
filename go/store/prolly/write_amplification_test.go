@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -197,7 +198,8 @@ func prollyMapFromKeysAndValues(t *testing.T, kd, vd val.TupleDesc, keys, values
 	ns := tree.NewTestNodeStore()
 	require.Equal(t, len(keys), len(values))
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for i := range keys {

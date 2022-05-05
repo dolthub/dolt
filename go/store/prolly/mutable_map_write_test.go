@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -438,7 +439,8 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 		tuples[i][0], tuples[i][1] = makePut(v, v)
 	}
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {

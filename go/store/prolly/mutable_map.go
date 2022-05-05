@@ -17,8 +17,8 @@ package prolly
 import (
 	"context"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
-
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -42,10 +42,10 @@ func newMutableMap(m Map) MutableMap {
 
 // Map materializes the pending mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
-	factory := newMapBuilder
 	tr := mut.tuples.tree
+	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool()}
 
-	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, factory, mut.tuples.mutations(), tr.compareItems)
+	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, mut.tuples.mutations(), tr.compareItems)
 	if err != nil {
 		return Map{}, err
 	}
