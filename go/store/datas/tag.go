@@ -52,7 +52,7 @@ type TagOptions struct {
 // persists it, and returns its addr. Also returns a types.Ref to the tag, if
 // the format for |db| is noms.
 func newTag(ctx context.Context, db *database, commitAddr hash.Hash, meta *TagMeta) (hash.Hash, types.Ref, error) {
-	if db.Format() != types.Format_DOLT_DEV {
+	if !db.Format().UsesFlatbuffers() {
 		commitSt, err := db.ReadValue(ctx, commitAddr)
 		if err != nil {
 			return hash.Hash{}, types.Ref{}, err

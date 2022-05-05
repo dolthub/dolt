@@ -283,7 +283,7 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
 		if err != nil {
 			return nil, err
@@ -792,7 +792,7 @@ func (db *database) update(ctx context.Context,
 
 		var newRootHash hash.Hash
 
-		if db.Format() == types.Format_DOLT_DEV {
+		if db.Format().UsesFlatbuffers() {
 			datasets, err := db.loadDatasetsRefmap(ctx, root)
 			if err != nil {
 				return err

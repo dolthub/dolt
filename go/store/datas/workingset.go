@@ -99,7 +99,7 @@ type WorkingSetSpec struct {
 // ```
 // where M is a struct type and R is a ref type.
 func newWorkingSet(ctx context.Context, db *database, meta *WorkingSetMeta, workingRef, stagedRef types.Ref, mergeState *MergeState) (hash.Hash, types.Ref, error) {
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		stagedAddr := stagedRef.TargetHash()
 		data := workingset_flatbuffer(workingRef.TargetHash(), &stagedAddr, mergeState, meta)
 
@@ -191,7 +191,7 @@ func workingset_flatbuffer(working hash.Hash, staged *hash.Hash, mergeState *Mer
 }
 
 func NewMergeState(ctx context.Context, vrw types.ValueReadWriter, preMergeWorking types.Ref, commit *Commit) (*MergeState, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		ms := &MergeState{
 			preMergeWorkingAddr: new(hash.Hash),
 			fromCommitAddr:      new(hash.Hash),
