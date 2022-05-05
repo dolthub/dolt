@@ -51,7 +51,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c1` int,\n" +
 					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -63,7 +63,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `c1` int,\n" +
 					"  `c2` text,\n" +
 					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -75,7 +75,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `c2` text,\n" +
 					"  PRIMARY KEY (`pk`),\n" +
 					"  UNIQUE KEY `c2` (`c2`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -174,7 +174,7 @@ var DoltScripts = []enginetest.ScriptTest{
 						"  PRIMARY KEY (`a`),\n" +
 						"  KEY `t1b` (`b`),\n" +
 						"  CONSTRAINT `ck1` CHECK (`b` LIKE \"%abc%\")\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -186,7 +186,7 @@ var DoltScripts = []enginetest.ScriptTest{
 						"  PRIMARY KEY (`c`),\n" +
 						"  UNIQUE KEY `d_0` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 		},
