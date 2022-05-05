@@ -21,19 +21,27 @@ func maxEncodedSize(n int) int {
 }
 
 func encodeVarints(ints []uint64, buf []byte) []byte {
-	pos := 0
-	for _, count := range ints {
-		n := binary.PutUvarint(buf[pos:], count)
+	pos, prev := 0, int64(0)
+	for i := range ints {
+		curr := int64(ints[i])
+		delta := curr - prev
+		prev = curr
+
+		n := binary.PutVarint(buf[pos:], delta)
 		pos += n
 	}
 	return buf[:pos]
 }
 
 func decodeVarints(buf []byte, ints []uint64) []uint64 {
+	prev := int64(0)
 	for i := range ints {
-		var k int
-		ints[i], k = binary.Uvarint(buf)
-		buf = buf[k:]
+		delta, n := binary.Varint(buf)
+		buf = buf[n:]
+
+		curr := prev + delta
+		ints[i] = uint64(curr)
+		prev = curr
 	}
 	assertTrue(len(buf) == 0)
 	return ints

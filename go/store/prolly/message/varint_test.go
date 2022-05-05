@@ -25,8 +25,8 @@ import (
 var testRand = rand.New(rand.NewSource(1))
 
 func TestRoundTripVarints(t *testing.T) {
-	for k := 0; k < 100; k++ {
-		n := testRand.Intn(45) + 5
+	for k := 0; k < 1000; k++ {
+		n := testRand.Intn(145) + 5
 
 		counts := make([]uint64, n)
 		sum := uint64(0)
