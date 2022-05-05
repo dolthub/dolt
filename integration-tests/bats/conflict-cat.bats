@@ -9,7 +9,7 @@ teardown() {
     teardown_common
 }
 
-@test "conflicts should show using the union-schema (new schema on right)" {
+@test "conflict-cat: conflicts should show using the union-schema (new schema on right)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
     dolt commit -am "base"
 
@@ -32,7 +32,7 @@ SQL
     [[ "$output" =~ "| c" ]]
 }
 
-@test "conflicts should show using the union-schema (new schema on left)" {
+@test "conflict-cat: conflicts should show using the union-schema (new schema on left)" {
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
     dolt commit -am "base"
 
