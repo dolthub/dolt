@@ -15,6 +15,7 @@
 package durable
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -96,11 +97,34 @@ type Table interface {
 	GetAutoIncrement(ctx context.Context) (uint64, error)
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
 	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
+
+	// DebugString returns the table contents for debugging purposes
+	DebugString(ctx context.Context) string
 }
 
 type nomsTable struct {
 	vrw         types.ValueReadWriter
 	tableStruct types.Struct
+}
+
+func (t nomsTable) DebugString(ctx context.Context) string {
+	var buf bytes.Buffer
+
+	buf.WriteString("\tStruct:\n")
+	types.WriteEncodedValue(ctx, &buf, t.tableStruct)
+
+	buf.WriteString("\n\tRows:\n")
+	data, err := t.GetTableRows(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	err = types.WriteEncodedValue(ctx, &buf, NomsMapFromIndex(data))
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.String()
 }
 
 var _ Table = nomsTable{}
@@ -568,6 +592,10 @@ func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Ha
 type doltDevTable struct {
 	vrw types.ValueReadWriter
 	msg *serial.Table
+}
+
+func (t doltDevTable) DebugString(ctx context.Context) string {
+	return "doltDevTable has no DebugString" // TODO: fill in
 }
 
 var _ Table = doltDevTable{}
