@@ -182,7 +182,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, s
 	// create a key builder for index key tuples
 	kd, _ := secondary.Descriptors()
 	keyBld := val.NewTupleBuilder(kd)
-	keyMap := getIndexKeyMapping(sch, idx)
+	keyMap := GetIndexKeyMapping(sch, idx)
 
 	mut := secondary.Mutate()
 	for {
@@ -222,7 +222,7 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, s
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
-func getIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
+func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(idx.AllTags()))
 
 	for i, tag := range idx.AllTags() {
