@@ -15,6 +15,7 @@
 package message
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -25,7 +26,108 @@ import (
 
 var testRand = rand.New(rand.NewSource(1))
 
-func TestRoundTripVarints(t *testing.T) {
+func TestVarint(t *testing.T) {
+	t.Run("min delta varint", func(t *testing.T) {
+		testRoundTripVarints(t, minDeltaCodec{})
+	})
+	t.Run("direct varint", func(t *testing.T) {
+		testRoundTripVarints(t, directCodec{})
+	})
+	t.Run("signed delta varint", func(t *testing.T) {
+		testRoundTripVarints(t, signedDeltaCodec{})
+	})
+}
+
+func BenchmarkVarint(b *testing.B) {
+	b.Run("min delta varint", func(b *testing.B) {
+		benchmarkVarintCodec(b, minDeltaCodec{})
+	})
+	b.Run("direct varint", func(tb *testing.B) {
+		benchmarkVarintCodec(b, directCodec{})
+	})
+	b.Run("signed delta varint", func(b *testing.B) {
+		benchmarkVarintCodec(b, signedDeltaCodec{})
+	})
+}
+
+type codec interface {
+	encode(ints []uint64, buf []byte) []byte
+	decode(buf []byte, ints []uint64) []uint64
+	maxSize(n int) int
+}
+
+type minDeltaCodec struct{}
+
+func (d minDeltaCodec) encode(ints []uint64, buf []byte) []byte {
+	return encodeMinDeltas(ints, buf)
+}
+
+func (d minDeltaCodec) decode(buf []byte, ints []uint64) []uint64 {
+	return decodeMinDeltas(buf, ints)
+}
+
+func (d minDeltaCodec) maxSize(n int) int {
+	return maxEncodedSize(n)
+}
+
+type directCodec struct{}
+
+func (d directCodec) encode(ints []uint64, buf []byte) []byte {
+	pos := 0
+	for i := range ints {
+		pos += binary.PutUvarint(buf[pos:], ints[i])
+	}
+	return buf[:pos]
+}
+
+func (d directCodec) decode(buf []byte, ints []uint64) []uint64 {
+	for i := range ints {
+		var n int
+		ints[i], n = binary.Uvarint(buf)
+		buf = buf[n:]
+	}
+	assertTrue(len(buf) == 0)
+	return ints
+}
+
+func (d directCodec) maxSize(n int) int {
+	return n * binary.MaxVarintLen64
+}
+
+type signedDeltaCodec struct{}
+
+func (d signedDeltaCodec) encode(ints []uint64, buf []byte) []byte {
+	pos, prev := 0, int64(0)
+	for i := range ints {
+		curr := int64(ints[i])
+		delta := curr - prev
+		prev = curr
+
+		n := binary.PutVarint(buf[pos:], delta)
+		pos += n
+	}
+	return buf[:pos]
+}
+
+func (d signedDeltaCodec) decode(buf []byte, ints []uint64) []uint64 {
+	prev := int64(0)
+	for i := range ints {
+		delta, n := binary.Varint(buf)
+		buf = buf[n:]
+
+		curr := prev + delta
+		ints[i] = uint64(curr)
+		prev = curr
+	}
+	assertTrue(len(buf) == 0)
+	return ints
+}
+
+func (d signedDeltaCodec) maxSize(n int) int {
+	return n * binary.MaxVarintLen64
+}
+
+func testRoundTripVarints(t *testing.T, c codec) {
 	for k := 0; k < 1000; k++ {
 		n := testRand.Intn(145) + 5
 
@@ -39,51 +141,51 @@ func TestRoundTripVarints(t *testing.T) {
 		assert.Equal(t, sum, sumSubtrees(counts))
 
 		// round trip the array
-		buf := make([]byte, maxEncodedSize(len(counts)))
-		buf = encodeVarints(counts, buf)
-		actual := decodeVarints(buf, make([]uint64, n))
+		buf := make([]byte, c.maxSize(len(counts)))
+		buf = c.encode(counts, buf)
+		actual := c.decode(buf, make([]uint64, n))
 
 		assert.Equal(t, counts, actual)
 	}
 }
 
-func BenchmarkVarint(b *testing.B) {
+func benchmarkVarintCodec(b *testing.B, c codec) {
 	k := 150
 	b.Run("level 1 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, 100, 200, k)
+		benchmarkVarint(b, 100, 200, k, c)
 	})
 	b.Run("level 2 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k), uint64(200*k), k)
+		benchmarkVarint(b, uint64(100*k), uint64(200*k), k, c)
 	})
 	b.Run("level 3 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k*k), uint64(200*k*k), k)
+		benchmarkVarint(b, uint64(100*k*k), uint64(200*k*k), k, c)
 	})
 	b.Run("level 4 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k*k*k), uint64(200*k*k*k), k)
+		benchmarkVarint(b, uint64(100*k*k*k), uint64(200*k*k*k), k, c)
 	})
 }
 
-func benchmarkVarint(b *testing.B, lo, hi uint64, k int) {
+func benchmarkVarint(b *testing.B, lo, hi uint64, k int, c codec) {
 	const n = 10_000
-	ints, bufs := makeBenchmarkData(lo, hi, k, n)
+	ints, bufs := makeBenchmarkData(lo, hi, k, n, c)
 
 	name := fmt.Sprintf("benchmark encode [%d:%d]", lo, hi)
 	b.Run(name, func(b *testing.B) {
-		buf := make([]byte, maxEncodedSize(k))
+		buf := make([]byte, c.maxSize(k))
 		for i := 0; i < b.N; i++ {
-			_ = encodeVarints(ints[i%n][:], buf)
+			_ = c.encode(ints[i%n][:], buf)
 		}
 	})
 	name = fmt.Sprintf("benchmark decode (mean size: %f)", meanSize(bufs))
 	b.Run(name, func(b *testing.B) {
 		ints := make([]uint64, k)
 		for i := 0; i < b.N; i++ {
-			_ = decodeVarints(bufs[i%n], ints)
+			_ = c.decode(bufs[i%n], ints)
 		}
 	})
 }
 
-func makeBenchmarkData(lo, hi uint64, k, n int) (ints [][]uint64, bufs [][]byte) {
+func makeBenchmarkData(lo, hi uint64, k, n int, c codec) (ints [][]uint64, bufs [][]byte) {
 	ints = make([][]uint64, n)
 	bufs = make([][]byte, n)
 
@@ -94,8 +196,8 @@ func makeBenchmarkData(lo, hi uint64, k, n int) (ints [][]uint64, bufs [][]byte)
 		}
 	}
 	for i := range bufs {
-		bufs[i] = make([]byte, maxEncodedSize(k))
-		bufs[i] = encodeVarints(ints[i], bufs[i])
+		bufs[i] = make([]byte, c.maxSize(k))
+		bufs[i] = c.encode(ints[i], bufs[i])
 	}
 	return
 }
