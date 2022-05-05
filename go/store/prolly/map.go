@@ -20,7 +20,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -50,7 +53,7 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	ch, err := tree.NewEmptyChunker(ctx, ns)
+	ch, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
 	if err != nil {
 		return Map{}, err
 	}
@@ -239,6 +242,60 @@ func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
 		p.k, p.v = nil, nil
 	}
 	return
+}
+
+func newEmptyMapNode(pool pool.BuffPool) tree.Node {
+	bld := &mapBuilder{}
+	return bld.Build(pool)
+}
+
+func newMapBuilder(level int) *mapBuilder {
+	return &mapBuilder{level: level}
+}
+
+var _ tree.NodeBuilderFactory[*mapBuilder] = newMapBuilder
+
+type mapBuilder struct {
+	keys, values [][]byte
+	size, level  int
+
+	subtrees tree.SubtreeCounts
+}
+
+var _ tree.NodeBuilder = &mapBuilder{}
+
+func (nb *mapBuilder) StartNode() {
+	nb.reset()
+}
+
+func (nb *mapBuilder) HasCapacity(key, value tree.Item) bool {
+	sum := nb.size + len(key) + len(value)
+	return sum <= int(message.MaxVectorOffset)
+}
+
+func (nb *mapBuilder) AddItems(key, value tree.Item, subtree uint64) {
+	nb.keys = append(nb.keys, key)
+	nb.values = append(nb.values, value)
+	nb.size += len(key) + len(value)
+	nb.subtrees = append(nb.subtrees, subtree)
+}
+
+func (nb *mapBuilder) Count() int {
+	return len(nb.keys)
+}
+
+func (nb *mapBuilder) reset() {
+	// buffers are copied, it's safe to re-use the memory.
+	nb.keys = nb.keys[:0]
+	nb.values = nb.values[:0]
+	nb.size = 0
+	nb.subtrees = nb.subtrees[:0]
+}
+
+func (nb *mapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
+	msg := message.SerializeProllyMap(pool, nb.keys, nb.values, nb.level, nb.subtrees)
+	nb.reset()
+	return tree.NodeFromBytes(msg)
 }
 
 // DebugFormat formats a Map.

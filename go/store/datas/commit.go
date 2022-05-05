@@ -415,28 +415,21 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
-		refs, err := types.SerialCommitParentRefs(vr.Format(), sm)
-		if err != nil {
-			return nil, err
-		}
-		hashes := make([]hash.Hash, len(refs))
-		for i, r := range refs {
-			hashes[i] = r.TargetHash()
-		}
-		vals, err := vr.ReadManyValues(ctx, hashes)
+		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
+		vals, err := vr.ReadManyValues(ctx, addrs)
 		if err != nil {
 			return nil, err
 		}
 		res := make([]*Commit, len(vals))
 		for i, v := range vals {
 			if v == nil {
-				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 			}
 			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0)
 			res[i] = &Commit{
 				val:    v,
 				height: csm.Height(),
-				addr:   hashes[i],
+				addr:   addrs[i],
 			}
 		}
 		return res, nil

@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "sql-checkout: CALL DOLT_CHECKOUT just works" {
-    run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'feature-branch')"
+    run dolt sql -q "CALL DOLT_CHECKOUT('-b', 'feature-branch')"
     [ $status -eq 0 ]
 
     # dolt sql -q "select dolt_checkout() should not change the branch
@@ -62,6 +62,13 @@ teardown() {
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "main" ]] || false
+
+    # Should also work in a transaction
+    dolt sql <<SQL
+START TRANSACTION;
+CALL DOLT_CHECKOUT('-b', 'new-branch');
+SQL
+    
 }
 
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {

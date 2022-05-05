@@ -31,14 +31,14 @@ var testRand = rand.New(rand.NewSource(1))
 
 func TestNewTuple(t *testing.T) {
 	t.Run("test tuple round trip", func(t *testing.T) {
-		roundTripBytes(t)
+		roundTripTupleFields(t)
 	})
 	t.Run("test tuple get many", func(t *testing.T) {
 		testTupleGetMany(t)
 	})
 }
 
-func roundTripBytes(t *testing.T) {
+func roundTripTupleFields(t *testing.T) {
 	for n := 0; n < 100; n++ {
 		fields := randomByteFields(t)
 		tup := NewTuple(testPool, fields...)
