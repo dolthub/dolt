@@ -201,6 +201,7 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 					for _, vaArray := range vaArrays {
 						for _, val := range vaArray {
 							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
+								// Should be able to convert Point, Linestring, and Polygon to Geometry columns
 								if ti.NomsKind() == types.GeometryKind {
 									if types.IsGeometryKind(val.Kind()) {
 										_, err := ti.ConvertNomsValueToValue(val)

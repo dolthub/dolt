@@ -41,14 +41,16 @@ func ConvertTypesPointToSQLPoint(p types.Point) sql.Point {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Point, return a sql.Point
-	if val, ok := v.(types.Point); ok {
-		return ConvertTypesPointToSQLPoint(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+
+	// Expect a types.Point, return a sql.Point
+	if val, ok := v.(types.Point); ok {
+		return ConvertTypesPointToSQLPoint(val), nil
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
