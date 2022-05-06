@@ -185,8 +185,8 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLTables.SetPersistCallback(privileges.SavePrivileges)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLTables.LoadData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
 	}

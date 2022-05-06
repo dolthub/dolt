@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/grant_tables"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -61,7 +61,7 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		var sqlDb SqlDatabase
 		if sqlDatabase, ok := db.(SqlDatabase); ok {
 			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(grant_tables.PrivilegedDatabase); ok {
+		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
 			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
 				sqlDb = sqlDatabase
 			}

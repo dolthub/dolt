@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/grant_tables"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
 var (
@@ -32,8 +32,8 @@ var (
 
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
 type privDataJson struct {
-	Users []*grant_tables.User
-	Roles []*grant_tables.RoleEdge
+	Users []*mysql_db.User
+	Roles []*mysql_db.RoleEdge
 }
 
 // SetFilePath sets the file path that will be used for saving and loading privileges.
@@ -59,7 +59,7 @@ func SetFilePath(fp string) {
 // LoadPrivileges reads the file previously set on the file path and returns the privileges and role connections. If the
 // file path has not been set, returns an empty slice for both, but does not error. This is so that the logic path can
 // retain the calls regardless of whether a user wants privileges to be loaded or persisted.
-func LoadPrivileges() ([]*grant_tables.User, []*grant_tables.RoleEdge, error) {
+func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	if filePath == "" {
@@ -81,12 +81,12 @@ func LoadPrivileges() ([]*grant_tables.User, []*grant_tables.RoleEdge, error) {
 	return data.Users, data.Roles, nil
 }
 
-var _ grant_tables.PersistCallback = SavePrivileges
+var _ mysql_db.PersistCallback = SavePrivileges
 
-// SavePrivileges implements the interface grant_tables.PersistCallback. This is used to save privileges to disk. If the
+// SavePrivileges implements the interface mysql_db.PersistCallback. This is used to save privileges to disk. If the
 // file path has not been previously set, this returns without error. This is so that the logic path can retain the
 // calls regardless of whether a user wants privileges to be loaded or persisted.
-func SavePrivileges(ctx *sql.Context, users []*grant_tables.User, roles []*grant_tables.RoleEdge) error {
+func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	if filePath == "" {
