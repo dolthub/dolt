@@ -190,15 +190,22 @@ func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
 		assert.Nil(t, v)
 	}
 
-	iter := list.IterAtStart()
-	k, v := iter.Current()
-	assert.Nil(t, k)
-	assert.Nil(t, v)
+	validateIter := func(iter *ListIter) {
+		k, v := iter.Current()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+		iter.Advance()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+		iter.Retreat()
+		iter.Retreat()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+	}
 
-	iter = list.IterAtEnd()
-	k, v = iter.Current()
-	assert.Nil(t, k)
-	assert.Nil(t, v)
+	validateIter(list.IterAtStart())
+	validateIter(list.IterAtEnd())
+	validateIter(list.GetIterAt(vals[0]))
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
