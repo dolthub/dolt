@@ -18,11 +18,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // TupleRowStorage is a clone of InlineBlob. It only exists to be able to easily differentiate these two very different
@@ -58,11 +60,17 @@ func (v TupleRowStorage) isPrimitive() bool {
 }
 
 func (v TupleRowStorage) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
+	return errors.New("unsupported WalkValues on TupleRowStorage. Use types.WalkValues.")
 }
 
 func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	return nil
+	return message.WalkAddresses(context.TODO(), message.Message([]byte(v)), func(ctx context.Context, addr hash.Hash) error {
+		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+		if err != nil {
+			return err
+		}
+		return cb(r)
+	})
 }
 
 func (v TupleRowStorage) typeOf() (*Type, error) {

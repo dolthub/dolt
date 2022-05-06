@@ -302,6 +302,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return err
 		}
 		// TODO: cb for parent closure.
+	default:
+		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID([]byte(sm)))
 	}
 	return nil
 }
