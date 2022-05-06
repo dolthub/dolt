@@ -408,7 +408,7 @@ SQL
     dolt merge other
 }
 
-@test "merge: compound unique index conflict" {
+@test "merge: composite unique index conflict" {
     dolt sql <<SQL
 CREATE TABLE test (
     pk int PRIMARY KEY,
@@ -432,6 +432,44 @@ SQL
 
     skip "merge fails on unique index violation, should log conflict"
     dolt merge other
+}
+
+@test "merge: composite indexes should be consistent post-merge" {
+    dolt sql <<SQL
+CREATE TABLE test (
+    id int PRIMARY KEY,
+    c0 int,
+    c1 int,
+    INDEX idx_c0_c1 (c0, c1)
+);
+INSERT INTO test VALUES (1, 0, 0);
+SQL
+    dolt commit -am "initial data"
+    dolt branch right
+
+    dolt sql -q "UPDATE test SET c0 = 1;"
+    dolt commit -am "left commit"
+
+    dolt checkout right
+    dolt sql -q "UPDATE test SET c1 = 1;"
+    dolt commit -am "right commit"
+
+    dolt checkout main
+    dolt merge right && dolt commit -am "merge"
+
+    # left composite index left-over
+    run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 0;"
+    [ "$status" -eq 0 ]
+    [ ${lines[1]} -eq 0 ]
+
+    # right composite index left-over
+    run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 0 AND c1 = 1;"
+    [ "$status" -eq 0 ]
+    [ ${lines[1]} -eq 0 ]
+
+    run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 1;"
+    [ "$status" -eq 0 ]
+    [ ${lines[1]} -eq 1 ]
 }
 
 @test "merge: merge a branch with a new table" {

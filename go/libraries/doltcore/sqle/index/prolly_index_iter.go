@@ -30,7 +30,7 @@ const indexLookupBufSize = 1024
 
 type prollyIndexIter struct {
 	idx       DoltIndex
-	indexIter prolly.MapRangeIter
+	indexIter prolly.MapIter
 	primary   prolly.Map
 
 	// pkMap transforms indexRows index keys
@@ -126,9 +126,8 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 		pk := p.pkBld.Build(sharePool)
 
 		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
-		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) (err error) {
-			p.rowFromTuples(key, value, r)
-			return
+		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
+			return p.rowFromTuples(key, value, r)
 		})
 		if err != nil {
 			return err
@@ -198,13 +197,12 @@ func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 
 type prollyCoveringIndexIter struct {
 	idx       DoltIndex
-	indexIter prolly.MapRangeIter
+	indexIter prolly.MapIter
 	keyDesc   val.TupleDesc
 	valDesc   val.TupleDesc
 
 	// keyMap transforms secondary index key tuples into SQL tuples.
 	// secondary index value tuples are assumed to be empty.
-	// todo(andy): shore up this mapping concept, different semantics different places
 
 	// |keyMap| and |valMap| are both of len ==
 	keyMap, valMap val.OrdinalMapping
@@ -328,7 +326,6 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-// todo(andy): there are multiple column mapping concepts with different semantics
 func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap val.OrdinalMapping) {
 	allCols := idx.Schema().GetAllCols()
 	idxCols := idx.IndexSchema().GetAllCols()

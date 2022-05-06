@@ -163,3 +163,18 @@ SQL
     [[ "$output" =~ "8" ]] || false
     [[ ! "$output" =~ "4" ]] || false
 }
+
+@test "checkout: attempting to checkout a detached head shows a suggestion instead" {
+  dolt sql -q "create table test (id int primary key);"
+  dolt add .
+  dolt commit -m "create test table."
+  sha=$(dolt log --oneline --decorate=no | head -n 1 | cut -d ' ' -f 1)
+
+  # remove special characters (color)
+  sha=$(echo $sha | sed -E "s/[[:cntrl:]]\[[0-9]{1,3}m//g")
+
+  run dolt checkout "$sha"
+  [ "$status" -ne 0 ]
+  cmd=$(echo "${lines[1]}" | cut -d ' ' -f 1,2,3)
+  [[ $cmd =~ "dolt checkout $sha" ]]
+}

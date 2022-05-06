@@ -639,7 +639,7 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 		return nil, false, nil
 	}
 
-	table, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
+	table, err := durable.TableFromAddr(ctx, root.VRW(), addr)
 	if err != nil {
 		return nil, false, err
 	}
@@ -795,7 +795,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 	}
 
 	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
-		nt, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
+		nt, err := durable.TableFromAddr(ctx, root.VRW(), addr)
 		if err != nil {
 			return true, err
 		}
@@ -1317,20 +1317,10 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 	if transitive {
 		buf.WriteString("\nTables:")
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-			buf.WriteString("\nName:")
+			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString("\n")
-
-			buf.WriteString("Data:\n")
-			data, err := table.GetNomsRowData(ctx)
-			if err != nil {
-				panic(err)
-			}
-
-			err = types.WriteEncodedValue(ctx, &buf, data)
-			if err != nil {
-				panic(err)
-			}
+			buf.WriteString(": \n")
+			buf.WriteString(table.table.DebugString(ctx))
 			return false, nil
 		})
 	}

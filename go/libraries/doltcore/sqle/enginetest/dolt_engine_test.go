@@ -16,12 +16,14 @@ package enginetest
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/pkg/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -34,12 +36,20 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+var skipPrepared bool
+var skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
+
 func init() {
 	sqle.MinRowsPerPartition = 8
 	sqle.MaxRowsPerPartition = 1024
+
+	if v := os.Getenv(skipPreparedFlag); v != "" {
+		skipPrepared = true
+	}
 }
 
 func TestQueries(t *testing.T) {
+	defer profile.Start().Stop()
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
@@ -134,7 +144,6 @@ func TestSingleQueryPrepared(t *testing.T) {
 }
 
 func TestVersionedQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
 
@@ -336,7 +345,6 @@ func TestUserPrivileges(t *testing.T) {
 }
 
 func TestUserAuthentication(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestUserAuthentication(t, newDoltHarness(t))
 }
 
@@ -478,7 +486,6 @@ func TestNaturalJoinDisjoint(t *testing.T) {
 }
 
 func TestInnerNestedInNaturalJoins(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestInnerNestedInNaturalJoins(t, newDoltHarness(t))
 }
 
@@ -501,7 +508,8 @@ func TestVariableErrors(t *testing.T) {
 }
 
 func TestLoadDataPrepared(t *testing.T) {
-	t.Skip()
+	t.Skip("feature not supported")
+	skipPreparedTests(t)
 	enginetest.TestLoadDataPrepared(t, newDoltHarness(t))
 }
 
@@ -523,6 +531,11 @@ func TestTriggers(t *testing.T) {
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
+func TestRollbackTriggers(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestRollbackTriggers(t, newDoltHarness(t))
+}
+
 func TestStoredProcedures(t *testing.T) {
 	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
 	for _, test := range enginetest.ProcedureLogicTests {
@@ -539,6 +552,7 @@ func TestStoredProcedures(t *testing.T) {
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
@@ -546,6 +560,15 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+
+	for _, script := range DoltConflictHandlingTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+}
+
+func TestConcurrentTransactions(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestConcurrentTransactions(t, newDoltHarness(t))
 }
 
 func TestDoltScripts(t *testing.T) {
@@ -589,18 +612,15 @@ func TestSingleTransactionScript(t *testing.T) {
 	t.Skip()
 
 	script := enginetest.TransactionTest{
-		Name: "rollback",
+		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
-			"create table t (x int primary key, y int)",
-			"insert into t values (1, 1)",
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client b */ set autocommit = off",
+				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -608,60 +628,74 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ insert into t values (2, 2)",
+				Query:    "/* client a */ insert into test values (1, 1)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ insert into t values (3, 3)",
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{ // no error because of our session settings
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: 1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from dolt_conflicts_test",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{
-				Query:    "/* client a */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	}
@@ -765,26 +799,38 @@ func TestPersist(t *testing.T) {
 	enginetest.TestPersist(t, harness, newPersistableSession)
 }
 
+func TestKeylessUniqueIndex(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t)
+	enginetest.TestKeylessUniqueIndex(t, harness)
+}
+
 func TestQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
+
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestVersionedQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInfoSchemaPrepared(t, newDoltHarness(t))
 }
 
 func TestUpdateQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip select join for update
@@ -800,6 +846,7 @@ func TestUpdateQueriesPrepared(t *testing.T) {
 }
 
 func TestInsertQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip keyless
@@ -815,72 +862,87 @@ func TestInsertQueriesPrepared(t *testing.T) {
 }
 
 func TestReplaceQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestReplaceQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestDeleteQueriesPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestDeleteQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestExplodePrepared(t *testing.T) {
-	t.Skip()
+	t.Skip("feature not supported")
+	skipPreparedTests(t)
 	enginetest.TestExplodePrepared(t, newDoltHarness(t))
 }
 
 func TestViewsPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestViewsPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedViewsPrepared(t *testing.T) {
 	t.Skip("unsupported for prepareds")
+	skipPreparedTests(t)
 	enginetest.TestVersionedViewsPrepared(t, newDoltHarness(t))
 }
 
 func TestShowTableStatusPrepared(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestShowTableStatusPrepared(t, newDoltHarness(t))
 }
 
 func TestPrepared(t *testing.T) {
 	skipNewFormat(t)
+	skipPreparedTests(t)
 	enginetest.TestPrepared(t, newDoltHarness(t))
 }
 
 func TestPreparedInsert(t *testing.T) {
+	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
@@ -1053,5 +1115,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 func skipNewFormat(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
+	}
+}
+
+func skipPreparedTests(t *testing.T) {
+	if skipPrepared {
+		t.Skip("skip prepared")
 	}
 }

@@ -23,6 +23,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -429,7 +431,7 @@ func ascendingIntMap(t *testing.T, count int) Map {
 
 func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := tree.NewTestNodeStore()
 
 	tuples := make([][2]val.Tuple, count)
 	for i := range tuples {
@@ -437,22 +439,18 @@ func ascendingIntMapWithStep(t *testing.T, count, step int) Map {
 		tuples[i][0], tuples[i][1] = makePut(v, v)
 	}
 
-	chunker, err := newEmptyTreeChunker(ctx, ns, defaultSplitterFactory)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err = chunker.AddPair(ctx, pair[0], pair[1])
+		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	return Map{
-		root:    root,
-		keyDesc: mutKeyDesc,
-		valDesc: mutValDesc,
-		ns:      ns,
-	}
+	return NewMap(root, ns, mutKeyDesc, mutKeyDesc)
 }
 
 var mutKeyDesc = val.NewTupleDescriptor(
@@ -484,15 +482,15 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure edits are provided in order
-	iter := mut.overlay.mutations()
-	prev, _ := iter.nextMutation(ctx)
+	iter := mut.tuples.mutations()
+	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
 	for {
-		next, _ := iter.nextMutation(ctx)
+		next, _ := iter.NextMutation(ctx)
 		if next == nil {
 			break
 		}
-		cmp := mut.prolly.compareKeys(prev, next)
+		cmp := mut.keyDesc.Compare(val.Tuple(prev), val.Tuple(next))
 		assert.True(t, cmp < 0)
 		prev = next
 	}

@@ -20,9 +20,14 @@ import (
 	"io"
 	"strings"
 
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -83,9 +88,13 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 	}
 }
 
-// IndexFromRef reads the types.Ref from storage and returns the Index it points to.
-func IndexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
-	v, err := r.TargetValue(ctx, vrw)
+// indexFromRef reads the types.Ref from storage and returns the Index it points to.
+func indexFromRef(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, r types.Ref) (Index, error) {
+	return indexFromAddr(ctx, vrw, sch, r.TargetHash())
+}
+
+func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, addr hash.Hash) (Index, error) {
+	v, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +124,7 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 
 	case types.Format_DOLT_1:
 		kd, vd := prolly.MapDescriptorsFromScheam(sch)
-		ns := prolly.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err
@@ -137,10 +146,6 @@ var _ Index = nomsIndex{}
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
 func NomsMapFromIndex(i Index) types.Map {
 	return i.(nomsIndex).index
-}
-
-func VrwFromNomsIndex(i Index) types.ValueReadWriter {
-	return i.(nomsIndex).vrw
 }
 
 // IndexFromNomsMap wraps a types.Map and returns it as an Index.
@@ -281,6 +286,13 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 
 // NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
+	if vrw.Format() == types.Format_DOLT_DEV {
+		builder := flatbuffers.NewBuilder(24)
+		serial.RefMapStart(builder)
+		builder.Finish(serial.RefMapEnd(builder))
+		return doltDevIndexSet{vrw, serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+	}
+
 	empty, _ := types.NewMap(ctx, vrw)
 	return nomsIndexSet{
 		indexes: empty,
@@ -315,7 +327,7 @@ func (s nomsIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name stri
 		return nil, fmt.Errorf("index not found: %s", name)
 	}
 
-	return IndexFromRef(ctx, s.vrw, idx.Schema(), v.(types.Ref))
+	return indexFromRef(ctx, s.vrw, idx.Schema(), v.(types.Ref))
 }
 
 // PutIndex implements IndexSet.
@@ -368,4 +380,74 @@ func (s nomsIndexSet) RenameIndex(ctx context.Context, oldName, newName string) 
 
 func mapFromIndexSet(ic IndexSet) types.Map {
 	return ic.(nomsIndexSet).indexes
+}
+
+type doltDevIndexSet struct {
+	vrw types.ValueReadWriter
+	msg *serial.RefMap
+}
+
+var _ IndexSet = doltDevIndexSet{}
+
+func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
+	return types.SerialMessage(is.msg.Table().Bytes).Hash(is.vrw.Format())
+}
+
+func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
+	addr := datas.RefMapLookup(is.msg, name)
+	if addr.IsEmpty() {
+		return nil, fmt.Errorf("index %s not found in IndexSet", name)
+	}
+	idxSch := sch.Indexes().GetByName(name)
+	if idxSch == nil {
+		return nil, fmt.Errorf("index schema not found: %s", name)
+	}
+	return indexFromAddr(ctx, is.vrw, idxSch.Schema(), addr)
+}
+
+func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) (IndexSet, error) {
+	ref, err := RefFromIndex(ctx, is.vrw, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	builder := flatbuffers.NewBuilder(1024)
+	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name, Addr: ref.TargetHash()}})
+	builder.Finish(off)
+	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+
+	return doltDevIndexSet{is.vrw, msg}, nil
+}
+
+func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
+	return is.PutIndex(ctx, name, IndexFromNomsMap(idx, is.vrw))
+}
+
+func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
+	builder := flatbuffers.NewBuilder(1024)
+	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name}})
+	builder.Finish(off)
+	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+	return doltDevIndexSet{is.vrw, msg}, nil
+}
+
+func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
+	addr := datas.RefMapLookup(is.msg, oldName)
+	if addr.IsEmpty() {
+		return nil, fmt.Errorf("index %s not found in IndexSet", oldName)
+	}
+	newaddr := datas.RefMapLookup(is.msg, newName)
+	if !newaddr.IsEmpty() {
+		return nil, fmt.Errorf("index %s found in IndexSet when attempting to rename index", newName)
+	}
+
+	builder := flatbuffers.NewBuilder(1024)
+	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{
+		{Name: newName, Addr: addr},
+		{Name: oldName},
+	})
+	builder.Finish(off)
+	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+
+	return doltDevIndexSet{is.vrw, msg}, nil
 }

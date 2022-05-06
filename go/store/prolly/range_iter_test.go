@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -31,7 +32,7 @@ type rangeIterTest struct {
 	expCount  int
 }
 
-func testIterRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	desc := keyDescFromMap(om)
 
@@ -126,7 +127,7 @@ type prefixRangeTest struct {
 	testRange Range
 }
 
-func testIterPrefixRange(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterPrefixRange(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	prefixDesc := getDescPrefix(keyDescFromMap(om), 1)
 
@@ -229,7 +230,7 @@ func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 
 func TestMapIterRange(t *testing.T) {
 	ctx := context.Background()
-	ns := newTestNodeStore()
+	ns := tree.NewTestNodeStore()
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Int32Enc},
 		val.Type{Enc: val.Int32Enc},

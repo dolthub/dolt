@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/datetime"
 	"github.com/dolthub/dolt/go/store/util/outputpager"
@@ -84,7 +85,7 @@ func runShow(ctx context.Context, args []string) int {
 		chunk, err := cs.Get(ctx, sp.Path.Hash)
 		util.CheckErrorNoUsage(err)
 
-		value = prolly.MapNodeFromBytes(chunk.Data())
+		value = tree.NodeFromBytes(chunk.Data())
 	} else {
 		util.CheckErrorNoUsage(err)
 	}
@@ -135,7 +136,7 @@ func runShow(ctx context.Context, args []string) int {
 func outputType(value interface{}) {
 	var typeString string
 	switch value := value.(type) {
-	case prolly.Node:
+	case tree.Node:
 		typeString = "prolly.Node"
 	case types.Value:
 		t, err := types.TypeOf(value)
@@ -151,9 +152,9 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 	switch value := value.(type) {
 	case types.TupleRowStorage:
 		node := prolly.NodeFromValue(value)
-		return prolly.OutputProllyNode(w, node)
-	case prolly.Node:
-		return prolly.OutputProllyNode(w, value)
+		return tree.OutputProllyNode(w, node)
+	case tree.Node:
+		return tree.OutputProllyNode(w, value)
 	case types.Value:
 		return types.WriteEncodedValue(ctx, w, value)
 	default:

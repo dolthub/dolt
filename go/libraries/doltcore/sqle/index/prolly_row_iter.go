@@ -16,7 +16,6 @@ package index
 
 import (
 	"context"
-	"errors"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -52,8 +51,7 @@ func init() {
 var encodingToType [256]query.Type
 
 type prollyRowIter struct {
-	ctx  context.Context
-	iter prolly.MapRangeIter
+	iter prolly.MapIter
 
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
@@ -65,19 +63,11 @@ type prollyRowIter struct {
 var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
-func NewProllyRowIter(ctx context.Context, sch schema.Schema, rows prolly.Map, iter prolly.MapRangeIter, projections []string) (sql.RowIter, error) {
-	if schema.IsKeyless(sch) {
-		return nil, errors.New("format __DOLT_1__ does not support keyless tables")
-	}
-
-	return rowIterFromMapIter(ctx, sch, rows, iter, projections)
-}
-
-func rowIterFromMapIter(
+func NewProllyRowIter(
 	ctx context.Context,
 	sch schema.Schema,
-	m prolly.Map,
-	iter prolly.MapRangeIter,
+	rows prolly.Map,
+	iter prolly.MapIter,
 	projections []string,
 ) (sql.RowIter, error) {
 
@@ -89,10 +79,18 @@ func rowIterFromMapIter(
 	projections = sch.GetAllCols().GetColumnNames()
 	keyProj, valProj := projectionMappings(sch, projections)
 
-	kd, vd := m.Descriptors()
+	kd, vd := rows.Descriptors()
+
+	if schema.IsKeyless(sch) {
+		return &prollyKeylessIter{
+			iter:    iter,
+			valDesc: vd,
+			valProj: valProj,
+			rowLen:  len(projections),
+		}, nil
+	}
 
 	return prollyRowIter{
-		ctx:     ctx,
 		iter:    iter,
 		keyDesc: kd,
 		valDesc: vd,
@@ -127,11 +125,17 @@ func projectionMappings(sch schema.Schema, projs []string) (keyMap, valMap val.O
 		}
 	}
 
+	if schema.IsKeyless(sch) {
+		skip := val.OrdinalMapping{-1}
+		keyMap = append(skip, keyMap...) // hashId
+		valMap = append(skip, valMap...) // cardinality
+	}
+
 	return
 }
 
 func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
-	key, value, err := it.iter.Next(it.ctx)
+	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +165,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
-	key, value, err := it.iter.Next(it.ctx)
+	key, value, err := it.iter.Next(ctx)
 	if err != nil {
 		return err
 	}
@@ -197,5 +201,57 @@ func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 }
 
 func (it prollyRowIter) Close(ctx *sql.Context) error {
+	return nil
+}
+
+type prollyKeylessIter struct {
+	iter prolly.MapIter
+
+	valDesc val.TupleDesc
+	valProj []int
+	rowLen  int
+
+	curr sql.Row
+	card uint64
+}
+
+var _ sql.RowIter = &prollyKeylessIter{}
+
+//var _ sql.RowIter2 = prollyKeylessIter{}
+
+func (it *prollyKeylessIter) Next(ctx *sql.Context) (sql.Row, error) {
+	if it.card == 0 {
+		if err := it.nextTuple(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	it.card--
+
+	return it.curr, nil
+}
+
+func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
+	_, value, err := it.iter.Next(ctx)
+	if err != nil {
+		return err
+	}
+
+	it.card = val.ReadKeylessCardinality(value)
+	it.curr = make(sql.Row, it.rowLen)
+
+	for valIdx, rowIdx := range it.valProj {
+		if rowIdx == -1 {
+			continue
+		}
+		it.curr[rowIdx], err = GetField(it.valDesc, valIdx, value)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (it *prollyKeylessIter) Close(ctx *sql.Context) error {
 	return nil
 }
