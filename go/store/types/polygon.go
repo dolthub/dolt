@@ -98,15 +98,6 @@ func (v Polygon) isPrimitive() bool {
 	return true
 }
 
-func (v Polygon) WalkValues(ctx context.Context, cb ValueCallback) error {
-	for _, l := range v.Lines {
-		if err := l.WalkValues(ctx, cb); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (v Polygon) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }

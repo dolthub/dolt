@@ -139,24 +139,6 @@ func (l List) Value(ctx context.Context) (Value, error) {
 	return l, nil
 }
 
-func (l List) WalkValues(ctx context.Context, cb ValueCallback) error {
-	var err error
-	iterErr := iterAll(ctx, l, func(v Value, idx uint64) error {
-		if err != nil {
-			return nil
-		}
-
-		err = cb(v)
-		return err
-	})
-
-	if err != nil {
-		return err
-	}
-
-	return iterErr
-}
-
 // Get returns the value at the given index. If this list has been chunked then this will have to
 // descend into the prolly-tree which leads to Get being O(depth).
 func (l List) Get(ctx context.Context, idx uint64) (Value, error) {
