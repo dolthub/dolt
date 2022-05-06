@@ -23,9 +23,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 // TupleRowStorage is a clone of InlineBlob. It only exists to be able to easily differentiate these two very different
@@ -65,36 +64,13 @@ func (v TupleRowStorage) WalkValues(ctx context.Context, cb ValueCallback) error
 }
 
 func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
-	switch serial.GetFileID([]byte(v)) {
-	case serial.ProllyTreeNodeFileID:
-		msg := serial.GetRootAsProllyTreeNode([]byte(v), 0)
-		values := msg.ValueItemsBytes()
-		for i := 0; i < msg.ValueAddressOffsetsLength(); i++ {
-			off := msg.ValueAddressOffsets(i)
-			addr := hash.New(values[off : off+20])
+	return message.WalkAddresses(context.TODO(), message.Message([]byte(v)), func(ctx context.Context, addr hash.Hash) error {
 			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
 			if err != nil {
 				return err
 			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
-		addresses := msg.AddressArrayBytes()
-		for i := 0; i < len(addresses); i += 20 {
-			addr := hash.New(addresses[i : i+20])
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
-		}
-	default:
-		return fmt.Errorf("unsupported TupleRowStorage message with FileID: %s", serial.GetFileID([]byte(v)))
-	}
-	return nil
+			return cb(r)
+	})
 }
 
 func (v TupleRowStorage) typeOf() (*Type, error) {
