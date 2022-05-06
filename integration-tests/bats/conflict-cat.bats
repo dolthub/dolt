@@ -16,12 +16,12 @@ teardown() {
     dolt checkout -b right
     dolt sql <<SQL
 ALTER TABLE t ADD c INT;
-INSERT INTO t VALUES (1, 1, 1);
+INSERT INTO t VALUES (1, 2, 1);
 SQL
     dolt commit -am "right"
 
     dolt checkout main
-    dolt sql -q "INSERT INTO t values (1, 1);"
+    dolt sql -q "INSERT INTO t values (1, 3);"
     dolt commit -am "left"
 
     dolt merge right
@@ -37,13 +37,13 @@ SQL
     dolt commit -am "base"
 
     dolt checkout -b right
-    dolt sql -q "INSERT INTO t values (1, 1);"
+    dolt sql -q "INSERT INTO t values (1, 2);"
     dolt commit -am "right"
 
     dolt checkout main
     dolt sql <<SQL
 ALTER TABLE t ADD c INT;
-INSERT INTO t VALUES (1, 1, 1);
+INSERT INTO t VALUES (1, 3, 1);
 SQL
     dolt commit -am "left"
     dolt merge right
