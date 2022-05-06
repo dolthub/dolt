@@ -48,7 +48,7 @@ var blameDocs = cli.CommandDocumentationContent{
 // blameInfo contains blame information for a row
 type blameInfo struct {
 	// Key represents the primary key of the row
-	Key types.Value
+	Key types.Tuple
 
 	// CommitHash is the commit hash of the commit which last modified the row
 	CommitHash string
@@ -468,7 +468,7 @@ func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows type
 		if err != nil {
 			return err
 		}
-		graph[hash] = blameInfo{Key: key}
+		graph[hash] = blameInfo{Key: key.(types.Tuple)}
 		return nil
 	})
 	if err != nil {
@@ -479,7 +479,7 @@ func blameGraphFromRows(ctx context.Context, nbf *types.NomsBinFormat, rows type
 
 // AssignBlame updates the blame graph to contain blame information from the given commit
 // for the row identified by the given primary key
-func (bg *blameGraph) AssignBlame(ctx context.Context, rowPK types.Value, nbf *types.NomsBinFormat, c *doltdb.Commit) error {
+func (bg *blameGraph) AssignBlame(ctx context.Context, rowPK types.Tuple, nbf *types.NomsBinFormat, c *doltdb.Commit) error {
 	commitHash, err := c.HashOf()
 	if err != nil {
 		return fmt.Errorf("error getting commit hash: %v", err)
@@ -506,7 +506,7 @@ func (bg *blameGraph) AssignBlame(ctx context.Context, rowPK types.Value, nbf *t
 	return nil
 }
 
-func getPKVal(ctx context.Context, pk types.Value) (values []types.Value) {
+func getPKVal(ctx context.Context, pk types.Tuple) (values []types.Value) {
 	i := 0
 	pk.WalkValues(ctx, func(val types.Value) error {
 		// even-indexed values are index numbers. they aren't useful, don't print them.
