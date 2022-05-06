@@ -65,11 +65,11 @@ func (v TupleRowStorage) WalkValues(ctx context.Context, cb ValueCallback) error
 
 func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return message.WalkAddresses(context.TODO(), message.Message([]byte(v)), func(ctx context.Context, addr hash.Hash) error {
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			return cb(r)
+		r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+		if err != nil {
+			return err
+		}
+		return cb(r)
 	})
 }
 
