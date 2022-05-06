@@ -55,7 +55,7 @@ type ConflictSplitter struct {
 // NewConflictSplitter creates a new ConflictSplitter
 func NewConflictSplitter(ctx context.Context, vrw types.ValueReadWriter, joiner *rowconv.Joiner) (ConflictSplitter, error) {
 	baseSch := joiner.SchemaForName(baseStr)
-	ourSch := joiner.SchemaForName(baseStr)
+	ourSch := joiner.SchemaForName(oursStr)
 	theirSch := joiner.SchemaForName(theirsStr)
 
 	sch, err := untyped.UntypedSchemaUnion(baseSch, ourSch, theirSch)
