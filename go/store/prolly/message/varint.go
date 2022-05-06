@@ -16,84 +16,42 @@ package message
 
 import (
 	"encoding/binary"
-	"math"
 )
 
 func encodeVarints(ints []uint64, buf []byte) []byte {
-	return encodeMinDeltas(ints, buf)
+	return endcodeSignedDeltas(ints, buf)
 }
 
 func decodeVarints(buf []byte, ints []uint64) []uint64 {
-	return decodeMinDeltas(buf, ints)
+	return decodeSignedDeltas(buf, ints)
 }
 
 func maxEncodedSize(n int) int {
 	return (n + 1) * binary.MaxVarintLen64
 }
 
-// encodeMinDeltas encodes an unsorted array |ints|.
-// The encoding format attempts to minimize encoded size by
-// first finding and encoding the minimum value of |ints|
-// and then encoding the difference between each value and
-// that minimum.
-func encodeMinDeltas(ints []uint64, buf []byte) []byte {
-	min := uint64(math.MaxUint64)
+func endcodeSignedDeltas(ints []uint64, buf []byte) []byte {
+	pos, prev := 0, int64(0)
 	for i := range ints {
-		if min > ints[i] {
-			min = ints[i]
-		}
-	}
+		curr := int64(ints[i])
+		delta := curr - prev
+		prev = curr
 
-	pos := 0
-	pos += binary.PutUvarint(buf[pos:], min)
-
-	for _, count := range ints {
-		delta := count - min
-		pos += binary.PutUvarint(buf[pos:], delta)
+		n := binary.PutVarint(buf[pos:], delta)
+		pos += n
 	}
 	return buf[:pos]
 }
 
-// decodeMinDeltas decodes an array of ints that were
-// previously encoded with encodeMinDeltas.
-func decodeMinDeltas(buf []byte, ints []uint64) []uint64 {
-	min, k := binary.Uvarint(buf)
-	buf = buf[k:]
+func decodeSignedDeltas(buf []byte, ints []uint64) []uint64 {
+	prev := int64(0)
 	for i := range ints {
-		delta, k := binary.Uvarint(buf)
-		buf = buf[k:]
-		ints[i] = min + delta
-	}
-	assertTrue(len(buf) == 0)
-	return ints
-}
+		delta, n := binary.Varint(buf)
+		buf = buf[n:]
 
-func encodeMeanDeltas(ints []uint64, buf []byte) []byte {
-	var sum int64
-	for i := range ints {
-		sum += int64(ints[i])
-	}
-	mean := sum / int64(len(ints))
-
-	pos := 0
-	pos += binary.PutVarint(buf[pos:], mean)
-
-	for _, count := range ints {
-		delta := int64(count) - mean
-		pos += binary.PutVarint(buf[pos:], delta)
-	}
-	return buf[:pos]
-}
-
-// decodeMinDeltas decodes an array of ints that were
-// previously encoded with encodeMinDeltas.
-func decodeMeanDeltas(buf []byte, ints []uint64) []uint64 {
-	mean, k := binary.Varint(buf)
-	buf = buf[k:]
-	for i := range ints {
-		delta, k := binary.Varint(buf)
-		buf = buf[k:]
-		ints[i] = uint64(mean + delta)
+		curr := prev + delta
+		ints[i] = uint64(curr)
+		prev = curr
 	}
 	assertTrue(len(buf) == 0)
 	return ints

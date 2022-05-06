@@ -42,7 +42,9 @@ func TestVarint(t *testing.T) {
 }
 
 func BenchmarkVarint(b *testing.B) {
-	b.Skip()
+	b.Run("signed delta varint", func(b *testing.B) {
+		benchmarkVarintCodec(b, signedDeltaCodec{})
+	})
 	b.Run("min delta varint", func(b *testing.B) {
 		benchmarkVarintCodec(b, minDeltaCodec{})
 	})
@@ -52,9 +54,7 @@ func BenchmarkVarint(b *testing.B) {
 	b.Run("direct varint", func(tb *testing.B) {
 		benchmarkVarintCodec(b, directCodec{})
 	})
-	b.Run("signed delta varint", func(b *testing.B) {
-		benchmarkVarintCodec(b, signedDeltaCodec{})
-	})
+
 }
 
 type codec interface {
@@ -94,21 +94,11 @@ func (d meanDeltaCodec) maxSize(n int) int {
 type directCodec struct{}
 
 func (d directCodec) encode(ints []uint64, buf []byte) []byte {
-	pos := 0
-	for i := range ints {
-		pos += binary.PutUvarint(buf[pos:], ints[i])
-	}
-	return buf[:pos]
+	return encodeVarintDirect(ints, buf)
 }
 
 func (d directCodec) decode(buf []byte, ints []uint64) []uint64 {
-	for i := range ints {
-		var n int
-		ints[i], n = binary.Uvarint(buf)
-		buf = buf[n:]
-	}
-	assertTrue(len(buf) == 0)
-	return ints
+	return decodeVarintDirect(buf, ints)
 }
 
 func (d directCodec) maxSize(n int) int {
@@ -118,30 +108,11 @@ func (d directCodec) maxSize(n int) int {
 type signedDeltaCodec struct{}
 
 func (d signedDeltaCodec) encode(ints []uint64, buf []byte) []byte {
-	pos, prev := 0, int64(0)
-	for i := range ints {
-		curr := int64(ints[i])
-		delta := curr - prev
-		prev = curr
-
-		n := binary.PutVarint(buf[pos:], delta)
-		pos += n
-	}
-	return buf[:pos]
+	return endcodeSignedDeltas(ints, buf)
 }
 
 func (d signedDeltaCodec) decode(buf []byte, ints []uint64) []uint64 {
-	prev := int64(0)
-	for i := range ints {
-		delta, n := binary.Varint(buf)
-		buf = buf[n:]
-
-		curr := prev + delta
-		ints[i] = uint64(curr)
-		prev = curr
-	}
-	assertTrue(len(buf) == 0)
-	return ints
+	return decodeSignedDeltas(buf, ints)
 }
 
 func (d signedDeltaCodec) maxSize(n int) int {
@@ -171,26 +142,31 @@ func testRoundTripVarints(t *testing.T, c codec) {
 }
 
 func benchmarkVarintCodec(b *testing.B, c codec) {
-	k := 150
+	k := 150 // branching factor
+
 	b.Run("level 1 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, 100, 200, k, c)
+		mean := uint64(k)
+		benchmarkVarint(b, mean, mean/4, k, c)
 	})
 	b.Run("level 2 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k), uint64(200*k), k, c)
+		mean := uint64(k * k)
+		benchmarkVarint(b, mean, mean/4, k, c)
 	})
 	b.Run("level 3 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k*k), uint64(200*k*k), k, c)
+		mean := uint64(k * k * k)
+		benchmarkVarint(b, mean, mean/4, k, c)
 	})
 	b.Run("level 4 subtree counts", func(b *testing.B) {
-		benchmarkVarint(b, uint64(100*k*k*k), uint64(200*k*k*k), k, c)
+		mean := uint64(k * k * k * k)
+		benchmarkVarint(b, mean, mean/4, k, c)
 	})
 }
 
-func benchmarkVarint(b *testing.B, lo, hi uint64, k int, c codec) {
-	const n = 10_000
-	ints, bufs := makeBenchmarkData(lo, hi, k, n, c)
+func benchmarkVarint(b *testing.B, mean, std uint64, k int, c codec) {
+	const n = 1000
+	ints, bufs := makeBenchmarkData(mean, std, k, n, c)
 
-	name := fmt.Sprintf("benchmark encode [%d:%d]", lo, hi)
+	name := fmt.Sprintf("benchmark encode (mean: %d std: %d)", mean, std)
 	b.Run(name, func(b *testing.B) {
 		buf := make([]byte, c.maxSize(k))
 		for i := 0; i < b.N; i++ {
@@ -206,14 +182,14 @@ func benchmarkVarint(b *testing.B, lo, hi uint64, k int, c codec) {
 	})
 }
 
-func makeBenchmarkData(lo, hi uint64, k, n int, c codec) (ints [][]uint64, bufs [][]byte) {
+func makeBenchmarkData(mean, std uint64, k, n int, c codec) (ints [][]uint64, bufs [][]byte) {
 	ints = make([][]uint64, n)
 	bufs = make([][]byte, n)
 
 	for i := range ints {
 		ints[i] = make([]uint64, k)
 		for j := range ints[i] {
-			ints[i][j] = (testRand.Uint64() % (hi - lo)) + lo
+			ints[i][j] = gaussian(float64(mean), float64(std))
 		}
 	}
 	for i := range bufs {
@@ -223,10 +199,98 @@ func makeBenchmarkData(lo, hi uint64, k, n int, c codec) (ints [][]uint64, bufs 
 	return
 }
 
+func gaussian(mean, std float64) uint64 {
+	return uint64(testRand.NormFloat64()*std + mean)
+}
+
 func meanSize(encoded [][]byte) float64 {
 	var sumSz int
 	for i := range encoded {
 		sumSz += len(encoded[i])
 	}
 	return float64(sumSz) / float64(len(encoded))
+}
+
+func encodeVarintDirect(ints []uint64, buf []byte) []byte {
+	pos := 0
+	for i := range ints {
+		pos += binary.PutUvarint(buf[pos:], ints[i])
+	}
+	return buf[:pos]
+}
+
+func decodeVarintDirect(buf []byte, ints []uint64) []uint64 {
+	for i := range ints {
+		var n int
+		ints[i], n = binary.Uvarint(buf)
+		buf = buf[n:]
+	}
+	assertTrue(len(buf) == 0)
+	return ints
+}
+
+// encodeMinDeltas encodes an unsorted array |ints|.
+// The encoding format attempts to minimize encoded size by
+// first finding and encoding the minimum value of |ints|
+// and then encoding the difference between each value and
+// that minimum.
+func encodeMinDeltas(ints []uint64, buf []byte) []byte {
+	min := uint64(math.MaxUint64)
+	for i := range ints {
+		if min > ints[i] {
+			min = ints[i]
+		}
+	}
+
+	pos := 0
+	pos += binary.PutUvarint(buf[pos:], min)
+
+	for _, count := range ints {
+		delta := count - min
+		pos += binary.PutUvarint(buf[pos:], delta)
+	}
+	return buf[:pos]
+}
+
+// decodeMinDeltas decodes an array of ints that were
+// previously encoded with encodeMinDeltas.
+func decodeMinDeltas(buf []byte, ints []uint64) []uint64 {
+	min, k := binary.Uvarint(buf)
+	buf = buf[k:]
+	for i := range ints {
+		delta, k := binary.Uvarint(buf)
+		buf = buf[k:]
+		ints[i] = min + delta
+	}
+	assertTrue(len(buf) == 0)
+	return ints
+}
+
+func encodeMeanDeltas(ints []uint64, buf []byte) []byte {
+	var sum int64
+	for i := range ints {
+		sum += int64(ints[i])
+	}
+	mean := sum / int64(len(ints))
+
+	pos := 0
+	pos += binary.PutVarint(buf[pos:], mean)
+
+	for _, count := range ints {
+		delta := int64(count) - mean
+		pos += binary.PutVarint(buf[pos:], delta)
+	}
+	return buf[:pos]
+}
+
+func decodeMeanDeltas(buf []byte, ints []uint64) []uint64 {
+	mean, k := binary.Varint(buf)
+	buf = buf[k:]
+	for i := range ints {
+		delta, k := binary.Varint(buf)
+		buf = buf[k:]
+		ints[i] = uint64(mean + delta)
+	}
+	assertTrue(len(buf) == 0)
+	return ints
 }
