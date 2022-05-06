@@ -85,16 +85,12 @@ type confVals struct {
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
 // and returns its updated value.
-func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancSet durable.IndexSet) (*doltdb.Table, error) {
 	rootSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 	mergeSet, err := mergeTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ancSet, err := ancTbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}

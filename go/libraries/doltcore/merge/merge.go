@@ -73,8 +73,14 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	var ancRows durable.Index
+	// only used by new storage format
+	var ancIndexSet durable.IndexSet
 	if ancHasTable {
 		ancRows, err = ancTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		ancIndexSet, err = ancTbl.GetIndexSet(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -100,7 +106,14 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 					// If both added the same table, pretend it was in the ancestor all along with no data
 					// Don't touch ancHash to avoid triggering other short-circuit logic below
 					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
-					ancRows, _ = durable.NewEmptyIndex(ctx, merger.vrw, ancSchema)
+					ancRows, err = durable.NewEmptyIndex(ctx, merger.vrw, ancSchema)
+					if err != nil {
+						return nil, nil, err
+					}
+					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, merger.vrw, ancSchema)
+					if err != nil {
+						return nil, nil, err
+					}
 				} else {
 					return nil, nil, ErrSameTblAddedTwice
 				}
@@ -161,7 +174,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if updatedTbl.Format() == types.Format_DOLT_1 {
-		mergeRes, err := mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, updatedTbl)
+		mergeRes, err := mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, ancIndexSet)
 		if err != nil {
 			return nil, nil, err
 		}

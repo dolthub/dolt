@@ -47,7 +47,7 @@ type mergeResult struct {
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (mergeResult, error) {
+func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, ancIndexSet durable.IndexSet) (mergeResult, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	indexEdits := make(chan indexEdit, 128)
@@ -58,7 +58,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 	group.Go(func() error {
 		var err error
 		// TODO (dhruv): update this function definition to return any conflicts
-		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, tableToUpdate, indexEdits, conflicts)
+		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, tableToUpdate, ancRows, indexEdits, conflicts)
 		if err != nil {
 			return err
 		}
@@ -113,7 +113,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 	}
 	confIdx = durable.ConflictIndexFromProllyMap(confMap)
 
-	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, ancTbl, updatedTable)
+	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
 	if err != nil {
 		return mergeResult{}, err
 	}
@@ -128,7 +128,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
+func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -137,13 +137,9 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	if err != nil {
 		return nil, nil, err
 	}
-	ancR, err := ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
 	rootRP := durable.ProllyMapFromIndex(rootR)
 	mergeRP := durable.ProllyMapFromIndex(mergeR)
-	ancRP := durable.ProllyMapFromIndex(ancR)
+	ancRP := durable.ProllyMapFromIndex(ancRows)
 
 	m := durable.ProllyMapFromIndex(rootR)
 	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
