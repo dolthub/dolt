@@ -278,7 +278,7 @@ func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
 }
 
 func (suite *DatabaseSuite) TestDatasetsMapType() {
-	if suite.db.Format() == types.Format_DOLT_DEV {
+	if suite.db.Format().UsesFlatbuffers() {
 		suite.T().Skip()
 	}
 

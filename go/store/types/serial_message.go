@@ -268,13 +268,16 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 
 		mapbytes := msg.PrimaryIndexBytes()
 
-		dec := newValueDecoder(mapbytes, nil)
-		v, err := dec.readValue(nbf)
-		if err != nil {
-			return err
+		if nbf == Format_DOLT_DEV {
+			dec := newValueDecoder(mapbytes, nil)
+			v, err := dec.readValue(nbf)
+			if err != nil {
+				return err
+			}
+			return v.walkRefs(nbf, cb)
+		} else {
+			return TupleRowStorage(mapbytes).walkRefs(nbf, cb)
 		}
-
-		return v.walkRefs(nbf, cb)
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
 		if err != nil {

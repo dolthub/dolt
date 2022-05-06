@@ -120,3 +120,7 @@ func (nbf *NomsBinFormat) VersionString() string {
 		panic("unrecognized NomsBinFormat tag value")
 	}
 }
+
+func (nbf *NomsBinFormat) UsesFlatbuffers() bool {
+	return nbf.tag == formatTag_DOLT_1 || nbf.tag == formatTag_DOLT_DEV
+}

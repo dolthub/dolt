@@ -39,7 +39,7 @@ func TestNewTag(t *testing.T) {
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		t.Skip()
 	}
 

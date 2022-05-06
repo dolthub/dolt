@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -138,7 +139,7 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 
 // NewTable returns a new Table.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		return newDoltDevTable(ctx, vrw, sch, rows, indexes, autoIncVal)
 	}
 
@@ -191,7 +192,7 @@ func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Has
 		return nil, err
 	}
 
-	if vrw.Format() != types.Format_DOLT_DEV {
+	if !vrw.Format().UsesFlatbuffers() {
 		st, ok := val.(types.Struct)
 		if !ok {
 			err = errors.New("table ref is unexpected noms value")
@@ -655,12 +656,10 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.
 	}
 	schemaAddr := schemaRef.TargetHash()
 
-	rowsmap := rows.(nomsIndex).index
-	rowschunk, err := types.EncodeValue(rowsmap, vrw.Format())
+	rowsbytes, err := rows.bytes()
 	if err != nil {
 		return nil, err
 	}
-	rowsbytes := rowschunk.Data()
 
 	if indexes == nil {
 		indexes = NewIndexSet(ctx, vrw)
@@ -727,21 +726,28 @@ func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, 
 
 func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 	rowbytes := t.msg.PrimaryIndexBytes()
-	rowchunk := chunks.NewChunk(rowbytes)
-	tv, err := types.DecodeValue(rowchunk, t.vrw)
-	if err != nil {
-		return nil, err
+	if t.vrw.Format() == types.Format_DOLT_DEV {
+		rowchunk := chunks.NewChunk(rowbytes)
+		tv, err := types.DecodeValue(rowchunk, t.vrw)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromNomsMap(tv.(types.Map), t.vrw), nil
+	} else {
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		m := prolly.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
+		return IndexFromProllyMap(m), nil
 	}
-	return IndexFromNomsMap(tv.(types.Map), t.vrw), nil
 }
 
 func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {
-	rowsmap := rows.(nomsIndex).index
-	rowschunk, err := types.EncodeValue(rowsmap, t.vrw.Format())
+	rowsbytes, err := rows.bytes()
 	if err != nil {
 		return nil, err
 	}
-	rowsbytes := rowschunk.Data()
 
 	fields := t.fields()
 	fields.rows = rowsbytes
