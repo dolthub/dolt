@@ -973,7 +973,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `c1` int,\n" +
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1023,7 +1023,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`),\n" +
 							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1087,7 +1087,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
