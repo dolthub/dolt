@@ -54,6 +54,8 @@ type skipNode struct {
 
 func NewSkipList(cmp ValueCmp) (l *List) {
 	l = &List{
+		// point |head| at sentinel
+		head: skipPointer{},
 		// todo(andy): buffer pool
 		nodes: make([]skipNode, 1, 128),
 		cmp:   cmp,
@@ -70,6 +72,17 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 	}
 
 	return
+}
+
+// Truncate deletes all entries from the list.
+func (l *List) Truncate() {
+	l.nodes = l.nodes[:1]
+	// point |head| at sentinel
+	l.head = skipPointer{}
+	// point sentinel.prev at itself
+	s := l.getNode(sentinelId)
+	s.prev = sentinelId
+	l.updateNode(s)
 }
 
 func (l *List) Count() int {

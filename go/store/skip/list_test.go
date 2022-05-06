@@ -57,18 +57,22 @@ func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
 	src.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
+
+	// |list| is shared between each test
 	list := NewSkipList(compare)
-	for _, v := range vals {
-		list.Put(v, v)
-	}
 
 	t.Run("test puts", func(t *testing.T) {
+		// |list| is populated
+		for _, v := range vals {
+			list.Put(v, v)
+		}
 		testSkipListPuts(t, list, vals...)
 	})
 	t.Run("test gets", func(t *testing.T) {
 		testSkipListGets(t, list, vals...)
 	})
 	t.Run("test updates", func(t *testing.T) {
+		// |list| is mutated
 		testSkipListUpdates(t, list, vals...)
 	})
 	t.Run("test iter forward", func(t *testing.T) {
@@ -76,6 +80,10 @@ func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
 	})
 	t.Run("test iter backward", func(t *testing.T) {
 		testSkipListIterBackward(t, list, vals...)
+	})
+	t.Run("test truncate", func(t *testing.T) {
+		// |list| is truncated
+		testSkipListTruncate(t, list, vals...)
 	})
 }
 
@@ -165,6 +173,32 @@ func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
 	assert.Equal(t, 1, act)
 	act = validateIterBackwardFrom(t, list, vals[len(vals)-1])
 	assert.Equal(t, len(vals), act)
+}
+
+func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
+	assert.Equal(t, list.Count(), len(vals))
+
+	list.Truncate()
+	assert.Equal(t, list.Count(), 0)
+
+	for i := range vals {
+		assert.False(t, list.Has(vals[i]))
+	}
+	for i := range vals {
+		v, ok := list.Get(vals[i])
+		assert.False(t, ok)
+		assert.Nil(t, v)
+	}
+
+	iter := list.IterAtStart()
+	k, v := iter.Current()
+	assert.Nil(t, k)
+	assert.Nil(t, v)
+
+	iter = list.IterAtEnd()
+	k, v = iter.Current()
+	assert.Nil(t, k)
+	assert.Nil(t, v)
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
