@@ -304,7 +304,7 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, root, mergeRoot, ancRoot, expectedRows := setupMergeTest(t)
+	vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
 	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
@@ -321,9 +321,16 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
 	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), conflict.ConflictSchema{Base: sch, Schema: sch, MergeSchema: sch}, durable.ConflictIndexFromProllyMap(expectedConflicts))
+	require.NoError(t, err)
 
 	mergedRows, err := merged.GetRowData(context.Background())
 	assert.NoError(t, err)
+
+	_, conflictIdx, err := merged.GetConflicts(context.Background())
+	require.NoError(t, err)
+	conflicts := durable.ProllyMapFromConflictIndex(conflictIdx)
+	MustEqualConflictMap(t, expectedConflicts, conflicts)
 
 	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
@@ -367,13 +374,14 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
 	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
+	expected, err = expected.SetConflicts(context.Background(), conflictSchema, durable.ConflictIndexFromNomsMap(expectedConflicts, vrw))
 	assert.NoError(t, err)
 
 	mergedRows, err := merged.GetNomsRowData(context.Background())
 	assert.NoError(t, err)
-	_, conflicts, err := merged.GetConflicts(context.Background())
+	_, confIdx, err := merged.GetConflicts(context.Background())
 	assert.NoError(t, err)
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
 
 	if !mergedRows.Equals(expectedRows) {
 		t.Error(mustString(types.EncodedValue(context.Background(), expectedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), mergedRows)))
@@ -407,18 +415,21 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	sortTests(testRows)
 
+	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
-	// TODO: conflicts
+	conflictMap := prolly.NewEmptyConflictMap(ns, kD, vD, vD, vD)
+	confEdit := conflictMap.Editor()
 	for _, testCase := range testRows {
-		// Skip conflicts
 		if testCase.conflict {
-			continue
+			err := confEdit.Add(context.Background(), key(testCase.key), unwrap(testCase.leftValue), unwrap(testCase.rightValue), unwrap(testCase.initialValue))
+			require.NoError(t, err)
 		}
 
 		if testCase.initialValue != nil {
@@ -428,19 +439,17 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 			expectedKVs = append(expectedKVs, key(testCase.key), testCase.expectedValue.value())
 		}
 	}
-	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+
 	initialRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, initialKVs...)
 	require.NoError(t, err)
 	expectedRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, expectedKVs...)
+	require.NoError(t, err)
+	expectedConflicts, err := confEdit.Flush(context.Background())
 	require.NoError(t, err)
 
 	leftMut := initialRows.Mutate()
 	rightMut := initialRows.Mutate()
 	for _, testCase := range testRows {
-		// Skip conflicts
-		if testCase.conflict {
-			continue
-		}
 
 		switch testCase.leftAction {
 		case NoopAction:
@@ -470,14 +479,9 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	mergeRows, err := rightMut.Map(context.Background())
 	require.NoError(t, err)
 
-	tbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	rootTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
 	require.NoError(t, err)
-	tbl, err = rebuildAllProllyIndexes(context.Background(), tbl)
-	require.NoError(t, err)
-
-	updatedTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
-	require.NoError(t, err)
-	updatedTbl, err = rebuildAllProllyIndexes(context.Background(), updatedTbl)
+	rootTbl, err = rebuildAllProllyIndexes(context.Background(), rootTbl)
 	require.NoError(t, err)
 
 	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
@@ -485,9 +489,14 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	mergeTbl, err = rebuildAllProllyIndexes(context.Background(), mergeTbl)
 	require.NoError(t, err)
 
-	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, tbl, updatedTbl, mergeTbl)
+	ancTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	require.NoError(t, err)
+	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
+	require.NoError(t, err)
 
-	return vrw, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows)
+	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
+
+	return vrw, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
 }
 
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
@@ -678,7 +687,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, tbl, updatedTbl, mergeTbl *doltdb.Table) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
@@ -686,10 +695,10 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, tbl, 
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
+	mRoot, err = mRoot.PutTable(context.Background(), tableName, ancTbl)
 	require.NoError(t, err)
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, updatedTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, rootTbl)
 	require.NoError(t, err)
 
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
@@ -745,6 +754,13 @@ func nomsKey(i int) types.Value {
 	return mustTuple(types.NewTuple(types.Format_Default, types.Uint(idTag), types.Int(i)))
 }
 
+func unwrap(v *rowV) val.Tuple {
+	if v == nil {
+		return nil
+	}
+	return v.value()
+}
+
 func unwrapNoms(v *rowV) types.Value {
 	if v == nil {
 		return nil
@@ -774,9 +790,20 @@ func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
 	return s
 }
 
+func MustDebugFormatConflictMap(t *testing.T, m prolly.ConflictMap) string {
+	s, err := prolly.ConflictDebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
 func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
 		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
+}
+
+func MustEqualConflictMap(t *testing.T, expected prolly.ConflictMap, actual prolly.ConflictMap) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"conflict map hashes differed. expected: %s\nactual: %s", MustDebugFormatConflictMap(t, expected), MustDebugFormatConflictMap(t, actual))
 }
 
 //func diffStr(t tree.Diff, kD val.TupleDesc) string {

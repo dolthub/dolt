@@ -18,6 +18,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -262,8 +263,9 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
-			_, conflicts, err := tbl.GetConflicts(ctx)
+			_, confIdx, err := tbl.GetConflicts(ctx)
 			require.NoError(t, err)
+			conflicts := durable.NomsMapFromConflictIndex(confIdx)
 
 			assert.True(t, conflicts.Len() > 0)
 			assert.Equal(t, int(conflicts.Len()), len(test.conflicts))

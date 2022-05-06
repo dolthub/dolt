@@ -161,10 +161,18 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if updatedTbl.Format() == types.Format_DOLT_1 {
-		var stats *MergeStats
-		updatedTbl, stats, err = mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, updatedTbl)
+		mergeRes, err := mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, updatedTbl)
 		if err != nil {
 			return nil, nil, err
+		}
+		updatedTbl = mergeRes.tbl
+		cons, stats := mergeRes.cons, mergeRes.stats
+
+		if cons.Count() > 0 {
+			updatedTbl, err = setConflicts(ctx, cons, tbl, mergeTbl, ancTbl, updatedTbl)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		updatedTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, updatedTbl)
@@ -214,24 +222,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if cons.Len() > 0 {
-		ancSch, err := ancTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		mergeSch, err := mergeTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
-
-		resultTbl, err = resultTbl.SetConflicts(ctx, cs, cons)
+		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, merger.vrw), tbl, mergeTbl, ancTbl, resultTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -243,6 +234,32 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	return resultTbl, stats, nil
+}
+
+func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+	ancSch, err := ancTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	mergeSch, err := mergeTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
+
+	tableToUpdate, err = tableToUpdate.SetConflicts(ctx, cs, cons)
+	if err != nil {
+		return nil, err
+	}
+
+	return tableToUpdate, nil
 }
 
 func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (

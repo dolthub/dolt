@@ -16,6 +16,9 @@ package prolly
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 
@@ -49,9 +52,9 @@ type ConflictMap struct {
 	baseDesc  val.TupleDesc
 }
 
-func NewConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
+func NewConflictMap(root tree.Node, ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
 	conflicts := orderedTree[val.Tuple, Conflict, val.TupleDesc]{
-		root:  newEmptyMapNode(ns.Pool()),
+		root:  root,
 		ns:    ns,
 		order: key,
 	}
@@ -62,6 +65,10 @@ func NewConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) Co
 		theirDesc: theirs,
 		baseDesc:  base,
 	}
+}
+
+func NewEmptyConflictMap(ns tree.NodeStore, key, ours, theirs, base val.TupleDesc) ConflictMap {
+	return NewConflictMap(newEmptyMapNode(ns.Pool()), ns, key, ours, theirs, base)
 }
 
 func (c ConflictMap) Count() int {
@@ -156,4 +163,50 @@ func (wr ConflictEditor) Flush(ctx context.Context) (ConflictMap, error) {
 		theirDesc: wr.theirDesc,
 		baseDesc:  wr.baseDesc,
 	}, nil
+}
+
+// ConflictDebugFormat formats a ConflictMap.
+func ConflictDebugFormat(ctx context.Context, m ConflictMap) (string, error) {
+	kd, ourVD, theirVD, baseVD := m.Descriptors()
+	iter, err := m.IterAll(ctx)
+	if err != nil {
+		return "", err
+	}
+	c := m.Count()
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Prolly Map (count: %d) {\n", c))
+	for {
+		k, v, err := iter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		sb.WriteString("\t")
+		sb.WriteString(kd.Format(k))
+		sb.WriteString(": ")
+		if len(v.OurValue()) == 0 {
+			sb.WriteString("NULL")
+		} else {
+			sb.WriteString(ourVD.Format(v.OurValue()))
+		}
+		sb.WriteString(", ")
+		if len(v.TheirValue()) == 0 {
+			sb.WriteString("NULL")
+		} else {
+			sb.WriteString(theirVD.Format(v.TheirValue()))
+		}
+		sb.WriteString(", ")
+		if len(v.BaseValue()) == 0 {
+			sb.WriteString("NULL")
+		} else {
+			sb.WriteString(baseVD.Format(v.BaseValue()))
+		}
+		sb.WriteString(",\n")
+	}
+	sb.WriteString("}")
+	return sb.String(), nil
 }
