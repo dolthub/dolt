@@ -575,7 +575,12 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue,
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, tbl, updatedTbl, mergeTbl)
+	ancTable, err := doltdb.NewNomsTable(context.Background(), vrw, sch, initialRows, nil, nil)
+	require.NoError(t, err)
+	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
+	require.NoError(t, err)
+
+	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
 
 	return vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
 }
