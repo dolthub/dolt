@@ -30,6 +30,9 @@ func TestVarint(t *testing.T) {
 	t.Run("min delta varint", func(t *testing.T) {
 		testRoundTripVarints(t, minDeltaCodec{})
 	})
+	t.Run("mean delta varint", func(t *testing.T) {
+		testRoundTripVarints(t, meanDeltaCodec{})
+	})
 	t.Run("direct varint", func(t *testing.T) {
 		testRoundTripVarints(t, directCodec{})
 	})
@@ -39,8 +42,12 @@ func TestVarint(t *testing.T) {
 }
 
 func BenchmarkVarint(b *testing.B) {
+	b.Skip()
 	b.Run("min delta varint", func(b *testing.B) {
 		benchmarkVarintCodec(b, minDeltaCodec{})
+	})
+	b.Run("mean delta varint", func(b *testing.B) {
+		benchmarkVarintCodec(b, meanDeltaCodec{})
 	})
 	b.Run("direct varint", func(tb *testing.B) {
 		benchmarkVarintCodec(b, directCodec{})
@@ -67,6 +74,20 @@ func (d minDeltaCodec) decode(buf []byte, ints []uint64) []uint64 {
 }
 
 func (d minDeltaCodec) maxSize(n int) int {
+	return maxEncodedSize(n)
+}
+
+type meanDeltaCodec struct{}
+
+func (d meanDeltaCodec) encode(ints []uint64, buf []byte) []byte {
+	return encodeMeanDeltas(ints, buf)
+}
+
+func (d meanDeltaCodec) decode(buf []byte, ints []uint64) []uint64 {
+	return decodeMeanDeltas(buf, ints)
+}
+
+func (d meanDeltaCodec) maxSize(n int) int {
 	return maxEncodedSize(n)
 }
 

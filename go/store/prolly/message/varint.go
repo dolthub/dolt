@@ -67,3 +67,34 @@ func decodeMinDeltas(buf []byte, ints []uint64) []uint64 {
 	assertTrue(len(buf) == 0)
 	return ints
 }
+
+func encodeMeanDeltas(ints []uint64, buf []byte) []byte {
+	var sum int64
+	for i := range ints {
+		sum += int64(ints[i])
+	}
+	mean := sum / int64(len(ints))
+
+	pos := 0
+	pos += binary.PutVarint(buf[pos:], mean)
+
+	for _, count := range ints {
+		delta := int64(count) - mean
+		pos += binary.PutVarint(buf[pos:], delta)
+	}
+	return buf[:pos]
+}
+
+// decodeMinDeltas decodes an array of ints that were
+// previously encoded with encodeMinDeltas.
+func decodeMeanDeltas(buf []byte, ints []uint64) []uint64 {
+	mean, k := binary.Varint(buf)
+	buf = buf[k:]
+	for i := range ints {
+		delta, k := binary.Varint(buf)
+		buf = buf[k:]
+		ints[i] = uint64(mean + delta)
+	}
+	assertTrue(len(buf) == 0)
+	return ints
+}
