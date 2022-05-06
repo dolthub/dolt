@@ -10,6 +10,7 @@ setup() {
 
 teardown() {
     cd ..
+    cd ..
     rm -rf $REPO_NAME
 }
 
@@ -47,12 +48,22 @@ staff_list" ]
     # procedures
     run dolt sql -q "select routine_name from information_schema.routines where routine_name not like 'dolt_%' and routine_type = 'PROCEDURE';" -r csv
     [ "$output" = "routine_name
-simple_proc1
-simple_proc2" ]
+film_in_stock" ]
+
+    run dolt sql -r csv <<SQL
+CALL film_in_stock(1, 1, @aa);
+SELECT @aa;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = "inventory_id
+1
+2
+3
+4
+@aa
+4" ]
 
     # views are imported correctly
     run dolt sql -q "select count(*) from film_list"
     [[ "$output" =~ "997" ]] || false
-
-    cd ..
 }

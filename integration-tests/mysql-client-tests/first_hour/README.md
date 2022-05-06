@@ -1,4 +1,4 @@
-First-Hour Database is based on MySQL Sakila Database with few modifications to fit Dolt.
+First-Hour Database is based on MySQL Sakila Database with few modifications (commented out some parts that are unsupported) to fit Dolt.
 
 -- Sakila Sample Database Data
 -- Version 1.2
