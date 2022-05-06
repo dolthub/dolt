@@ -168,7 +168,7 @@ func Serve(
 	if serverConfig.PrivilegeFilePath() != "" {
 		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
 	}
-	users, roles, err := privileges.LoadPrivileges()
+	users, roles, colStats, err := privileges.LoadPrivileges()
 	if err != nil {
 		return err, nil
 	}
@@ -186,7 +186,7 @@ func Serve(
 	defer sqlEngine.Close()
 
 	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles, colStats)
 	if err != nil {
 		return err, nil
 	}

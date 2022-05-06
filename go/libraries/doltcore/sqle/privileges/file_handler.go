@@ -32,8 +32,9 @@ var (
 
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
 type privDataJson struct {
-	Users []*grant_tables.User
-	Roles []*grant_tables.RoleEdge
+	Users            []*grant_tables.User
+	Roles            []*grant_tables.RoleEdge
+	ColumnStatistics []*grant_tables.ColStats
 }
 
 // SetFilePath sets the file path that will be used for saving and loading privileges.
@@ -59,26 +60,27 @@ func SetFilePath(fp string) {
 // LoadPrivileges reads the file previously set on the file path and returns the privileges and role connections. If the
 // file path has not been set, returns an empty slice for both, but does not error. This is so that the logic path can
 // retain the calls regardless of whether a user wants privileges to be loaded or persisted.
-func LoadPrivileges() ([]*grant_tables.User, []*grant_tables.RoleEdge, error) {
+func LoadPrivileges() ([]*grant_tables.User, []*grant_tables.RoleEdge, []*grant_tables.ColStats, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	if filePath == "" {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	fileContents, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if len(fileContents) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	data := &privDataJson{}
 	err = json.Unmarshal(fileContents, data)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return data.Users, data.Roles, nil
+
+	return data.Users, data.Roles, data.ColumnStatistics, nil
 }
 
 var _ grant_tables.PersistCallback = SavePrivileges
@@ -86,7 +88,7 @@ var _ grant_tables.PersistCallback = SavePrivileges
 // SavePrivileges implements the interface grant_tables.PersistCallback. This is used to save privileges to disk. If the
 // file path has not been previously set, this returns without error. This is so that the logic path can retain the
 // calls regardless of whether a user wants privileges to be loaded or persisted.
-func SavePrivileges(ctx *sql.Context, users []*grant_tables.User, roles []*grant_tables.RoleEdge) error {
+func SavePrivileges(ctx *sql.Context, users []*grant_tables.User, roles []*grant_tables.RoleEdge, colStats []*grant_tables.ColStats) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 	if filePath == "" {
@@ -94,8 +96,9 @@ func SavePrivileges(ctx *sql.Context, users []*grant_tables.User, roles []*grant
 	}
 
 	data := &privDataJson{
-		Users: users,
-		Roles: roles,
+		Users:            users,
+		Roles:            roles,
+		ColumnStatistics: colStats,
 	}
 	jsonData, err := json.Marshal(data)
 	if err != nil {
