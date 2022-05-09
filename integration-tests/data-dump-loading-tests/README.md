@@ -1,4 +1,31 @@
-First-Hour Database is based on MySQL Sakila Database with few modifications (commented out some parts that are unsupported) to fit Dolt.
+## Data Dump Loading Test
+We created tests for loading data dumps from mysqldump, and we run these tests through Github Actions
+on pull requests.
+
+These tests can be run locally using Docker. From the root directory of this repo, run:
+```bash
+$ docker build -t data-dump-loading-tests -f DataDumpLoadDockerfile .
+$ docker run data-dump-loading-tests:latest
+```
+
+The `docker build` step will take a few minutes to complete as it needs to install all of the
+dependencies in the image.
+
+Running the built container will produce output like:
+```bash
+$ docker run data-dump-loading-tests:latest
+updating dolt config for tests:
+Config successfully updated.
+Config successfully updated.
+Config successfully updated.
+Config successfully updated.
+Running mysql-client-tests:
+1..2
+ok 1 import mysqldump: empty database dump
+ok 2 import mysqldump: a simple table dump
+```
+
+We are using MySQL Sakila Database dump file with few modifications (commented out some parts that are not supported yet) to fit Dolt.
 
 -- Sakila Sample Database Data
 -- Version 1.2

@@ -10,15 +10,14 @@ setup() {
 
 teardown() {
     cd ..
-    cd ..
     rm -rf $REPO_NAME
 }
 
 @test "first-hour: import first-hour-db dump" {
-    run dolt sql < ../first_hour/first_hour_db_dump.sql
+    run dolt sql < ../sakila_dump.sql
     [ "$status" -eq 0 ]
 
-    cd first_hour_db
+    cd sakila
 
     # tables in working set
     run dolt ls
@@ -66,4 +65,6 @@ SQL
     # views are imported correctly
     run dolt sql -q "select count(*) from film_list"
     [[ "$output" =~ "997" ]] || false
+
+    cd ..
 }

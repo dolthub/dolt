@@ -1,6 +1,6 @@
 -- MySQL dump 10.13  Distrib 8.0.27, for macos12.0 (x86_64)
 --
--- Host: localhost    Database: first_hour_db
+-- Host: localhost    Database: sakila
 -- ------------------------------------------------------
 -- Server version 8.0.27
 
@@ -16,12 +16,12 @@
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
 --
--- Current Database: `first_hour_db`
+-- Current Database: `sakila`
 --
 
-CREATE DATABASE /*!32312 IF NOT EXISTS*/ `first_hour_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
+CREATE DATABASE /*!32312 IF NOT EXISTS*/ `sakila` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci */ /*!80016 DEFAULT ENCRYPTION='N' */;
 
-USE `first_hour_db`;
+USE `sakila`;
 
 --
 -- Table structure for table `actor`
@@ -772,10 +772,10 @@ DELIMITER ;
 /*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
--- Current Database: `first_hour_db`
+-- Current Database: `sakila`
 --
 
-USE `first_hour_db`;
+USE `sakila`;
 
 --
 -- Final view structure for view `actor_info`
