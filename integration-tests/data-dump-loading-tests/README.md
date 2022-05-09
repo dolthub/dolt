@@ -26,6 +26,7 @@ ok 2 import mysqldump: a simple table dump
 ```
 
 We are using MySQL Sakila Database dump file with few modifications (commented out some parts that are not supported yet) to fit Dolt.
+These commented out parts can be found with 'UNSUPPORTED SYNTAX' in search bar in 'sakila_dump.sql' file.
 
 -- Sakila Sample Database Data
 -- Version 1.2

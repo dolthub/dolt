@@ -7,5 +7,5 @@ dolt config --global --add user.name mysql-test-runner
 dolt config --global --add user.email mysql-test-runner@liquidata.co
 
 echo "Running data-dump-loading-tests:"
-bats /mysql-client-tests/import-mysqldump.bats
-bats /mysql-client-tests/sakila-data-dump-load.bats
+bats /data-dump-loading-tests/import-mysqldump.bats
+bats /data-dump-loading-tests/sakila-data-dump-load.bats
