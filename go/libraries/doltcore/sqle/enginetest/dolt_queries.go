@@ -997,11 +997,10 @@ var DoltReset = []enginetest.ScriptTest{
 			},
 		},
 	},
-	// TODO: The following test case doesn't work. We need the setup the conflicted state in SetUpScript, but
-	// unfortunately, DOLT_MERGE produces an error when a conflict occurs failing the test.
-	/*{
+	{
 		Name: "CALL DOLT_RESET('--hard') should reset the merge state after conflicting merge",
 		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on",
 			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
 			"INSERT INTO test1 values (0,1,1);",
 			"CALL DOLT_COMMIT('-am', 'added table')",
@@ -1023,7 +1022,7 @@ var DoltReset = []enginetest.ScriptTest{
 				ExpectedErrStr: "fatal: There is no merge to abort",
 			},
 		},
-	}, */
+	},
 }
 
 var DiffSystemTableScriptTests = []enginetest.ScriptTest{
