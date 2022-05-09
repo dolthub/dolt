@@ -481,21 +481,15 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	newRef, err := types.NewRef(v, db.Format())
+	newCommit, err := commitFromValue(db.Format(), v)
 	if err != nil {
 		return err
 	}
 
-	var currentHeadAddr hash.Hash
-	if ref, ok, err := ds.MaybeHeadRef(); err != nil {
-		return err
-	} else if ok {
-		currentHeadAddr = ref.TargetHash()
-		currCommit, err := LoadCommitRef(ctx, db, ref)
-		if err != nil {
-			return err
-		}
-		newCommit, err := LoadCommitRef(ctx, db, newRef)
+	currentHeadAddr, ok := ds.MaybeHeadAddr()
+	if ok {
+		currentHeadValue, _ := ds.MaybeHead()
+		currCommit, err := commitFromValue(db.Format(), currentHeadValue)
 		if err != nil {
 			return err
 		}
@@ -507,6 +501,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 			return ErrMergeNeeded
 		}
 	}
+
 
 	err = db.doCommit(ctx, ds.ID(), currentHeadAddr, v)
 	if err == ErrAlreadyCommitted {
