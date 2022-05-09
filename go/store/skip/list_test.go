@@ -132,6 +132,9 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 		assert.True(t, ok)
 		assert.Equal(t, v2, act)
 	}
+
+	// introspect list to assert copy-on-update behavior
+	assert.Equal(t, 1+len(vals)*2, len(list.nodes))
 }
 
 func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {

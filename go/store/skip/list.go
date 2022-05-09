@@ -104,7 +104,7 @@ func (l *List) Has(key []byte) (ok bool) {
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	path := l.findPathToKey(key)
+	path := l.pathToKey(key)
 	node := l.getNode(path[0])
 	if l.compareKeys(key, node.key) == 0 {
 		val, ok = node.val, true
@@ -120,25 +120,18 @@ func (l *List) Put(key, val []byte) {
 		panic("list has no capacity")
 	}
 
-	path := l.findPathToKey(key)
+	path := l.pathToKey(key)
+	node := l.getNode(path[0])
 
-	nd := l.getNode(path[0])
-	if l.compareKeys(key, nd.key) == 0 {
-		// in-place update
-		nd.val = val
-		l.updateNode(nd)
-		return
+	if l.compareKeys(key, node.key) == 0 {
+		l.overwrite(key, val, node)
 	} else {
+		l.insert(key, val, path)
 		l.count++
 	}
-
-	insert := l.makeNode(key, val)
-	l.splice(insert, path)
-
-	return
 }
 
-func (l *List) findPathToKey(key []byte) (path skipPointer) {
+func (l *List) pathToKey(key []byte) (path skipPointer) {
 	next := l.head
 	prev := sentinelId
 
@@ -159,7 +152,17 @@ func (l *List) findPathToKey(key []byte) (path skipPointer) {
 	return
 }
 
-func (l *List) splice(nd skipNode, history skipPointer) {
+func (l *List) insert(key, value []byte, history skipPointer) {
+	nd := skipNode{
+		id:     nodeId(len(l.nodes)),
+		key:    key,
+		val:    value,
+		height: rollHeight(l.src),
+		next:   skipPointer{},
+		prev:   sentinelId,
+	}
+	l.nodes = append(l.nodes, nd)
+
 	for h := uint8(0); h <= nd.height; h++ {
 		// if |node.key| is the smallest key for
 		// level |h| then update |l.head|
@@ -183,6 +186,32 @@ func (l *List) splice(nd skipNode, history skipPointer) {
 	nextNd.prev = nd.id
 	l.updateNode(nextNd)
 	l.updateNode(nd)
+}
+
+func (l *List) overwrite(key, value []byte, old skipNode) {
+	novel := old
+	novel.id = l.nextNodeId()
+	novel.overwrite = old.id
+	novel.key, novel.val = key, value
+	l.nodes = append(l.nodes, novel)
+
+	// brute force update
+	for i := range l.head {
+		if l.head[i] == old.id {
+			l.head[i] = novel.id
+		}
+	}
+	for _, nd := range l.nodes {
+		for i := range nd.next {
+			if nd.next[i] == old.id {
+				nd.next[i] = novel.id
+			}
+		}
+		if nd.prev == old.id {
+			nd.prev = novel.id
+		}
+		l.updateNode(nd)
+	}
 }
 
 type ListIter struct {
@@ -283,6 +312,10 @@ func (l *List) updateNode(node skipNode) {
 	l.nodes[node.id] = node
 }
 
+func (l *List) nextNodeId() nodeId {
+	return nodeId(len(l.nodes))
+}
+
 func (l *List) compare(left, right skipNode) int {
 	return l.compareKeys(left.key, right.key)
 }
@@ -296,20 +329,6 @@ func (l *List) compareKeysWithFn(left, right []byte, cmp ValueCmp) int {
 		return -1 // |right| is sentinel key
 	}
 	return cmp(left, right)
-}
-
-func (l *List) makeNode(key, val []byte) (n skipNode) {
-	n = skipNode{
-		id:     nodeId(len(l.nodes)),
-		key:    key,
-		val:    val,
-		height: rollHeight(l.src),
-		next:   skipPointer{},
-		prev:   sentinelId,
-	}
-	l.nodes = append(l.nodes, n)
-
-	return
 }
 
 const (
