@@ -970,6 +970,62 @@ var DoltMerge = []enginetest.ScriptTest{
 	},
 }
 
+var DoltReset = []enginetest.ScriptTest{
+	{
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
+		SetUpScript: []string{
+			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
+			"INSERT INTO test1 values (0,1,1);",
+			"CALL DOLT_COMMIT('-am', 'added table')",
+
+			"CALL DOLT_CHECKOUT('-b', 'merge_branch');",
+			"UPDATE test1 set c1 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 2,1 to test1');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test1 set c2 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 1,2 to test1');",
+
+			"CALL DOLT_MERGE('merge_branch');",
+
+			"CALL DOLT_RESET('--hard');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('--abort')",
+				ExpectedErrStr: "fatal: There is no merge to abort",
+			},
+		},
+	},
+	// TODO: The following test case doesn't work. We need the setup the conflicted state in SetUpScript, but
+	// unfortunately, DOLT_MERGE produces an error when a conflict occurs failing the test.
+	/*{
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after conflicting merge",
+		SetUpScript: []string{
+			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
+			"INSERT INTO test1 values (0,1,1);",
+			"CALL DOLT_COMMIT('-am', 'added table')",
+
+			"CALL DOLT_CHECKOUT('-b', 'merge_branch');",
+			"UPDATE test1 set c1 = 2, c2 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 2,2 to test1');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test1 set c1 = 3, c2 = 3;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 3,3 to test1');",
+
+			"CALL DOLT_MERGE('merge_branch');",
+			"CALL DOLT_RESET('--hard');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('--abort')",
+				ExpectedErrStr: "fatal: There is no merge to abort",
+			},
+		},
+	}, */
+}
+
 var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 	{
 		Name: "base case: added rows",

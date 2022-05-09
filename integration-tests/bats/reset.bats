@@ -21,8 +21,6 @@ CREATE TABLE test1 (
 INSERT INTO test1 values (0,1,1);
 SQL
 
-    dolt add test1
-
     dolt add .
     dolt commit -m "added tables"
 }
@@ -59,7 +57,7 @@ merge_with_conflicts() {
     run dolt merge merge_branch
 }
 
-@test "reset: git reset --hard should clear an uncommitted merge state" {
+@test "reset: dolt reset --hard should clear an uncommitted merge state" {
     merge_without_conflicts
 
     run dolt reset --hard
@@ -72,7 +70,7 @@ merge_with_conflicts() {
     [[ "$output" =~ "fatal: There is no merge to abort" ]]
 }
 
-@test "reset: git reset --hard should clear a conflicted merge state" {
+@test "reset: dolt reset --hard should clear a conflicted merge state" {
     merge_with_conflicts
 
     run dolt reset --hard
