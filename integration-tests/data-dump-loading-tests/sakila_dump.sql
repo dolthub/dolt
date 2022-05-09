@@ -80,11 +80,11 @@ CREATE TABLE `address` (
   `city_id` smallint unsigned NOT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `phone` varchar(20) NOT NULL,
-  `location` geometry NOT NULL /*SRID 0 */,
+  `location` geometry NOT NULL /* unsupported: SRID 0 */,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`address_id`),
   KEY `idx_fk_city_id` (`city_id`),
-  /*SPATIAL KEY `idx_location` (`location`),*/
+  /* unsupported: SPATIAL KEY `idx_location` (`location`), */
   CONSTRAINT `fk_address_city` FOREIGN KEY (`city_id`) REFERENCES `city` (`city_id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=606 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -433,7 +433,7 @@ CREATE TABLE `film_text` (
   `film_id` smallint NOT NULL,
   `title` varchar(255) NOT NULL,
   `description` text,
-  PRIMARY KEY (`film_id`)/*,
+  PRIMARY KEY (`film_id`)/*, unsupported:
   FULLTEXT KEY `idx_title_description` (`title`,`description`)*/
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;

@@ -45,9 +45,8 @@ sales_by_store
 staff_list" ]
 
     # procedures
-    run dolt sql -q "select routine_name from information_schema.routines where routine_name not like 'dolt_%' and routine_type = 'PROCEDURE';" -r csv
-    [ "$output" = "routine_name
-film_in_stock" ]
+    run dolt sql -q "select routine_name from information_schema.routines where routine_schema = 'sakila' and routine_type = 'PROCEDURE';" -r csv
+    [[ "$output" =~ "film_in_stock" ]] || false
 
     run dolt sql -r csv <<SQL
 CALL film_in_stock(1, 1, @aa);
