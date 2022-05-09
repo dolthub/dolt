@@ -502,7 +502,6 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		}
 	}
 
-
 	err = db.doCommit(ctx, ds.ID(), currentHeadAddr, v)
 	if err == ErrAlreadyCommitted {
 		return nil
