@@ -165,6 +165,9 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
+	// TODO: need a way to store all mysql db tables all in one place
+
+	// Load in privileges from server
 	if serverConfig.PrivilegeFilePath() != "" {
 		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
 	}
@@ -185,8 +188,8 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLTables.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLTables.LoadData(sql.NewEmptyContext(), users, roles)
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(privileges.SavePrivileges)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
 	}
