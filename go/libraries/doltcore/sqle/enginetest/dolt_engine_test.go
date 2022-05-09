@@ -623,6 +623,14 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestDoltReset(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t)
+	for _, script := range DoltReset {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
