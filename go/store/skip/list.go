@@ -31,8 +31,10 @@ const (
 type List struct {
 	head  skipPointer
 	nodes []skipNode
-	cmp   ValueCmp
-	src   rand.Source
+	count uint32
+
+	cmp ValueCmp
+	src rand.Source
 }
 
 type ValueCmp func(left, right []byte) int
@@ -44,12 +46,18 @@ type nodeId uint32
 type skipPointer [maxHeight]nodeId
 
 type skipNode struct {
-	id       nodeId
 	key, val []byte
 
-	height uint8
+	id     nodeId
 	next   skipPointer
 	prev   nodeId
+	height uint8
+
+	// new skipNodes are created for inserts
+	// and updates to the List. If this node
+	// is an update, |overwrite| points to
+	// the old version of this node.
+	overwrite nodeId
 }
 
 func NewSkipList(cmp ValueCmp) (l *List) {
@@ -83,10 +91,11 @@ func (l *List) Truncate() {
 	s := l.getNode(sentinelId)
 	s.prev = sentinelId
 	l.updateNode(s)
+	l.count = 0
 }
 
 func (l *List) Count() int {
-	return len(l.nodes) - 1
+	return int(l.count)
 }
 
 func (l *List) Has(key []byte) (ok bool) {
@@ -119,6 +128,8 @@ func (l *List) Put(key, val []byte) {
 		nd.val = val
 		l.updateNode(nd)
 		return
+	} else {
+		l.count++
 	}
 
 	insert := l.makeNode(key, val)

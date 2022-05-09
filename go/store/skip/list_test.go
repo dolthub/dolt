@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -50,7 +51,14 @@ func TestSkipList(t *testing.T) {
 		vals := randomInts((src.Int63() % 10_000) + 100)
 		testSkipList(t, compare, vals...)
 	})
+}
 
+func TestMemoryFootprint(t *testing.T) {
+	var sz int
+	sz = int(unsafe.Sizeof(skipNode{}))
+	assert.Equal(t, 88, sz)
+	sz = int(unsafe.Sizeof(skipPointer{}))
+	assert.Equal(t, 20, sz)
 }
 
 func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
