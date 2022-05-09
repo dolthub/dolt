@@ -111,8 +111,8 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
+		//engine.Analyzer.Debug = true
+		//engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
@@ -191,6 +191,14 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 }
 
 func TestInsertInto(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(enginetest.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: test uses keyless foreign key logic which is not yet fully implemented
+			if enginetest.InsertScripts[i].Name == "Insert on duplicate key" {
+				enginetest.InsertScripts = append(enginetest.InsertScripts[:i], enginetest.InsertScripts[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
@@ -404,17 +412,22 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
 func TestDropForeignKeys(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
 func TestForeignKeys(t *testing.T) {
-	skipNewFormat(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(enginetest.ForeignKeyTests) - 1; i >= 0; i-- {
+			//TODO: test uses ALTER TABLE MODIFY COLUMN which is not yet supported in new format
+			if enginetest.ForeignKeyTests[i].Name == "ALTER TABLE SET NULL on non-nullable column" {
+				enginetest.ForeignKeyTests = append(enginetest.ForeignKeyTests[:i], enginetest.ForeignKeyTests[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
@@ -572,6 +585,10 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: add prolly path for index verification
+		t.Skip("new format using old noms path, need to update")
+	}
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
 		enginetest.TestScript(t, harness, script)
@@ -943,6 +960,10 @@ func TestPrepared(t *testing.T) {
 
 func TestPreparedInsert(t *testing.T) {
 	skipPreparedTests(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: test uses keyless foreign key logic which is not yet fully implemented
+		t.Skip("test uses keyless foreign key logic which is not yet fully implemented")
+	}
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
@@ -973,7 +994,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `c1` int,\n" +
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1023,7 +1044,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`),\n" +
 							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1087,7 +1108,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},

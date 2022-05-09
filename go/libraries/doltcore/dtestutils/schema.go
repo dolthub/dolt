@@ -16,6 +16,7 @@ package dtestutils
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"testing"
 
@@ -132,7 +133,7 @@ func CreateTestTable(t *testing.T, dEnv *env.DoltEnv, tableName string, sch sche
 func putTableToWorking(ctx context.Context, dEnv *env.DoltEnv, sch schema.Schema, rows types.Map, indexData durable.IndexSet, tableName string, autoVal types.Value) error {
 	root, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
 
 	vrw := dEnv.DoltDB.ValueReadWriter()

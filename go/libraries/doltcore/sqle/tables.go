@@ -585,10 +585,6 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 
 // GetDeclaredForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil, nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -641,10 +637,6 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 
 // GetReferencedForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil, nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -1353,11 +1345,6 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 
 // AddForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy)
-		return nil
-	}
-
 	if sqlFk.Name != "" && !doltdb.IsValidForeignKeyName(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", sqlFk.Name, doltdb.ForeignKeyNameRegexStr)
 	}
@@ -1545,11 +1532,6 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 
 // DropForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy)
-		return nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err

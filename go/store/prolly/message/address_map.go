@@ -124,9 +124,9 @@ func getAddressMapTreeCount(msg Message) int {
 }
 
 func getAddressMapSubtrees(msg Message) []uint64 {
-	cnt := getAddressMapCount(msg)
+	counts := make([]uint64, getAddressMapCount(msg))
 	am := serial.GetRootAsAddressMap(msg, 0)
-	return readSubtreeCounts(int(cnt), am.SubtreeCountsBytes())
+	return decodeVarints(am.SubtreeCountsBytes(), counts)
 }
 
 func getAddressMapKeyOffsets(pm *serial.AddressMap) []byte {

@@ -64,6 +64,20 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "sql-fetch: CALL dfetch default" {
+    cd repo2
+    dolt sql -q "CALL dfetch()"
+
+    run dolt diff main origin/main
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "added table" ]] || false
+
+    run dolt sql -q "show tables as of hashof('origin/main')" -r csv
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
 @test "sql-fetch: dolt_fetch origin" {
     cd repo2
     dolt sql -q "select dolt_fetch('origin')"

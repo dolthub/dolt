@@ -250,7 +250,7 @@ func (r nomsRvStorage) nomsValue() types.Value {
 func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) {
 	var storage rvStorage
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), 0)
 		storage = fbRvStorage{srv}
 	} else {
@@ -278,7 +278,7 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
 			return string(serial.GetFileID([]byte(sm))) == serial.RootValueFileID
 		}
@@ -291,7 +291,7 @@ func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 }
 
 func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
 		var empty hash.Hash
 		serial.RefMapStart(builder)

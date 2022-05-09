@@ -177,7 +177,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		opts.Meta = &CommitMeta{}
 	}
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		r, err := vrw.WriteValue(ctx, v)
 		if err != nil {
 			return nil, err
@@ -241,7 +241,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 }
 
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		bs := []byte(v.(types.SerialMessage))
 		height := serial.GetRootAsCommit(bs, 0).Height()
 		var addr hash.Hash
