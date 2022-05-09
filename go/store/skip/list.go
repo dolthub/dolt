@@ -33,6 +33,8 @@ type List struct {
 	nodes []skipNode
 	count uint32
 
+	checkpoint nodeId
+
 	cmp ValueCmp
 	src rand.Source
 }
@@ -52,12 +54,6 @@ type skipNode struct {
 	next   skipPointer
 	prev   nodeId
 	height uint8
-
-	// new skipNodes are created for inserts
-	// and updates to the List. If this node
-	// is an update, |overwrite| points to
-	// the old version of this node.
-	overwrite nodeId
 }
 
 func NewSkipList(cmp ValueCmp) (l *List) {
@@ -80,6 +76,20 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 	}
 
 	return
+}
+
+// Checkpoint records a checkpoint that can be reverted to.
+func (l *List) Checkpoint() {
+	l.checkpoint = l.nextNodeId()
+}
+
+// Revert reverts to the last recorded checkpoint.
+func (l *List) Revert() {
+	keepers := l.nodes[1:l.checkpoint]
+	l.Truncate()
+	for _, nd := range keepers {
+		l.Put(nd.key, nd.val)
+	}
 }
 
 // Truncate deletes all entries from the list.
@@ -152,6 +162,27 @@ func (l *List) pathToKey(key []byte) (path skipPointer) {
 	return
 }
 
+func (l *List) pathBeforeKey(key []byte) (path skipPointer) {
+	next := l.head
+	prev := sentinelId
+
+	for lvl := int(highest); lvl >= 0; {
+		curr := l.getNode(next[lvl])
+
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, curr.key) <= 0 {
+			path[lvl] = prev
+			lvl--
+			continue
+		}
+
+		// advance
+		next = curr.next
+		prev = curr.id
+	}
+	return
+}
+
 func (l *List) insert(key, value []byte, history skipPointer) {
 	nd := skipNode{
 		id:     nodeId(len(l.nodes)),
@@ -191,8 +222,8 @@ func (l *List) insert(key, value []byte, history skipPointer) {
 func (l *List) overwrite(key, value []byte, old skipNode) {
 	novel := old
 	novel.id = l.nextNodeId()
-	novel.overwrite = old.id
-	novel.key, novel.val = key, value
+	novel.key = key
+	novel.val = value
 	l.nodes = append(l.nodes, novel)
 
 	// brute force update
@@ -355,4 +386,10 @@ func rollHeight(r rand.Source) (h uint8) {
 	}
 
 	return
+}
+
+func assertTrue(b bool) {
+	if !b {
+		panic("expected true")
+	}
 }

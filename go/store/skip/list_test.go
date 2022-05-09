@@ -53,10 +53,36 @@ func TestSkipList(t *testing.T) {
 	})
 }
 
+func TestSkipListCheckpoints(t *testing.T) {
+	t.Run("test skip list", func(t *testing.T) {
+		vals := [][]byte{
+			b("a"), b("b"), b("c"), b("d"), b("e"),
+			b("f"), b("g"), b("h"), b("i"), b("j"),
+			b("k"), b("l"), b("m"), b("n"), b("o"),
+		}
+		testSkipListCheckpoints(t, bytes.Compare, vals...)
+	})
+
+	t.Skip("todo(andy)")
+	t.Run("test skip list of random bytes", func(t *testing.T) {
+		vals := randomVals((src.Int63() % 10_000) + 100)
+		testSkipListCheckpoints(t, bytes.Compare, vals...)
+	})
+	t.Run("test with custom compare function", func(t *testing.T) {
+		compare := func(left, right []byte) int {
+			l := int64(binary.LittleEndian.Uint64(left))
+			r := int64(binary.LittleEndian.Uint64(right))
+			return int(l - r)
+		}
+		vals := randomInts((src.Int63() % 10_000) + 100)
+		testSkipListCheckpoints(t, compare, vals...)
+	})
+}
+
 func TestMemoryFootprint(t *testing.T) {
 	var sz int
 	sz = int(unsafe.Sizeof(skipNode{}))
-	assert.Equal(t, 88, sz)
+	assert.Equal(t, 80, sz)
 	sz = int(unsafe.Sizeof(skipPointer{}))
 	assert.Equal(t, 20, sz)
 }
@@ -289,5 +315,69 @@ func iterAllBackwards(l *List, cb func([]byte, []byte)) {
 		cb(key, val)
 		iter.Retreat()
 		key, val = iter.Current()
+	}
+}
+
+func testSkipListCheckpoints(t *testing.T, compare ValueCmp, data ...[]byte) {
+	src.Shuffle(len(data), func(i, j int) {
+		data[i], data[j] = data[j], data[i]
+	})
+
+	k := len(data) / 3
+
+	init := data[:k*2]
+	static := data[:k]
+	updates := data[k : k*2]
+	inserts := data[k*2:]
+
+	list := NewSkipList(compare)
+	for _, v := range init {
+		list.Put(v, v)
+	}
+	for _, v := range init {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		assert.False(t, list.Has(v))
+	}
+
+	list.Checkpoint()
+
+	up := []byte("update")
+	for _, v := range updates {
+		list.Put(v, up)
+	}
+
+	for _, v := range inserts {
+		list.Put(v, v)
+	}
+
+	for _, v := range static {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range updates {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, up, act)
+	}
+
+	list.Revert()
+
+	for _, v := range init {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		assert.False(t, list.Has(v))
 	}
 }
