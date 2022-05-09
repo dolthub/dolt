@@ -165,7 +165,11 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	// TODO: need a way to store all mysql db tables all in one place
+	// Load in MySQL Db from file, if it exists
+	mysqlDbData, err := privileges.LoadData()
+	if err != nil {
+		return nil, err
+	}
 
 	// Load in privileges from server
 	if serverConfig.PrivilegeFilePath() != "" {
@@ -175,6 +179,8 @@ func Serve(
 	if err != nil {
 		return err, nil
 	}
+
+	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
 	if len(users) == 0 && len(serverConfig.User()) > 0 {
 		tempUsers = append(tempUsers, gms.TemporaryUser{
@@ -182,14 +188,24 @@ func Serve(
 			Password: serverConfig.Password(),
 		})
 	}
+
+	// Create SQL Engine with users
 	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", isReadOnly, tempUsers, serverConfig.AutoCommit())
 	if err != nil {
 		return err, nil
 	}
 	defer sqlEngine.Close()
 
+	// TODO: a bit strange, but need to prioritize privsJson over mysql.db file
+	// Load in MySQL Db information
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
+	if err != nil {
+		return err, nil
+	}
+
+	// Load in Privilege data
 	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), users, roles)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
 	}

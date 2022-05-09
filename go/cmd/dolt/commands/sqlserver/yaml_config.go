@@ -324,6 +324,10 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 	return ""
 }
 
+func (cfg YAMLConfig) MySQLDbFilePath() string {
+	return "mysql-db"
+}
+
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
 func (cfg YAMLConfig) QueryParallelism() int {
 	if cfg.PerformanceConfig.QueryParallelism == nil {

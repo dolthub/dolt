@@ -125,6 +125,9 @@ type ServerConfig interface {
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
+
+	// MySQLDbFilePath returns the path to the file which contains the information for a MySQL db.
+	//MySQLDbFilePath() string
 }
 
 type commandLineServerConfig struct {
@@ -239,6 +242,10 @@ func (cfg *commandLineServerConfig) MetricsPort() int {
 
 func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 	return cfg.privilegeFilePath
+}
+
+func (cfg *commandLineServerConfig) MySQLDbFilePath() string {
+	return "mysql-db"
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in

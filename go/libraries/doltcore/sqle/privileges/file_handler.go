@@ -81,6 +81,29 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 	return data.Users, data.Roles, nil
 }
 
+// LoadData reads the mysql.db file, returns nil if empty or not found
+func LoadData() (map[string]interface{}, error) {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+
+	// TODO: right filepath?
+	fileContents, err := ioutil.ReadFile("mysql.db")
+	if err != nil {
+		return nil, nil
+	}
+	if len(fileContents) == 0 {
+		return nil, nil
+	}
+
+	// TODO: Flat buffers?
+	var res map[string]interface{}
+	err = json.Unmarshal(fileContents, &res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
 var _ mysql_db.PersistCallback = SavePrivileges
 
 // SavePrivileges implements the interface mysql_db.PersistCallback. This is used to save privileges to disk. If the
