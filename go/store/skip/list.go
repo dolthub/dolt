@@ -95,7 +95,8 @@ func (l *List) Has(key []byte) (ok bool) {
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	node := l.seek(key)
+	path := l.findPathToKey(key)
+	node := l.getNode(path[0])
 	if l.compareKeys(key, node.key) == 0 {
 		val, ok = node.val, true
 	}
@@ -110,35 +111,40 @@ func (l *List) Put(key, val []byte) {
 		panic("list has no capacity")
 	}
 
-	var curr, prev skipNode
-	var next, history skipPointer
+	path := l.findPathToKey(key)
 
-	next = l.head
-	for h := int(highest); h >= 0; h-- {
-
-		// for each skip level, advance until
-		//   prev.key < key <= curr.key
-		curr = l.getNode(next[h])
-		for l.compareKeys(key, curr.key) > 0 {
-			prev = curr
-			next = curr.next
-			curr = l.getNode(next[h])
-		}
-
-		if l.compareKeys(key, curr.key) == 0 {
-			// in-place update
-			curr.val = val
-			l.updateNode(curr)
-			return
-		}
-
-		// save our steps
-		history[h] = prev.id
+	nd := l.getNode(path[0])
+	if l.compareKeys(key, nd.key) == 0 {
+		// in-place update
+		nd.val = val
+		l.updateNode(nd)
+		return
 	}
 
 	insert := l.makeNode(key, val)
-	l.splice(insert, history)
+	l.splice(insert, path)
 
+	return
+}
+
+func (l *List) findPathToKey(key []byte) (path skipPointer) {
+	next := l.head
+	prev := sentinelId
+
+	for lvl := int(highest); lvl >= 0; {
+		curr := l.getNode(next[lvl])
+
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, curr.key) < 0 {
+			path[lvl] = prev
+			lvl--
+			continue
+		}
+
+		// advance
+		next = curr.next
+		prev = curr.id
+	}
 	return
 }
 
