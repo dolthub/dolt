@@ -97,20 +97,6 @@ func TestSingleScript(t *testing.T) {
 						{"v2", "int", "NO", "PRI", "", ""},
 					},
 				},
-				{
-					Query:    "ALTER TABLE t ADD column `v4` int NOT NULL, ADD column `v5` int NOT NULL, DROP COLUMN `v1`, ADD COLUMN `v6` int NOT NULL, DROP COLUMN `v4`, ADD COLUMN v7 int NOT NULL",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "", "", ""},
-						{"v2", "int", "NO", "PRI", "", ""},
-						{"v5", "int", "NO", "", "", ""},
-						{"v6", "int", "NO", "", "", ""},
-						{"v7", "int", "NO", "", "", ""},
-					},
-				},
 			},
 		},
 	}
@@ -120,8 +106,8 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		// engine.Analyzer.Debug = true
-		// engine.Analyzer.Verbose = true
+		engine.Analyzer.Debug = true
+		engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
