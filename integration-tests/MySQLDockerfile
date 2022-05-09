@@ -123,6 +123,7 @@ RUN go build -o /usr/local/bin/dolt ./cmd/dolt
 
 COPY mysql-client-tests /mysql-client-tests
 COPY mysql-client-tests/mysql-client-tests-entrypoint.sh /mysql-client-tests/entrypoint.sh
+RUN ["chmod", "+x", "/mysql-client-tests/entrypoint.sh"]
 
 WORKDIR /mysql-client-tests
 ENTRYPOINT ["/mysql-client-tests/entrypoint.sh"]
