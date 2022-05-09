@@ -170,8 +170,7 @@ func (it *memRangeIter) current() (key, value val.Tuple) {
 	return
 }
 
-// iterate progresses the iter inside its range, skipping
-// over pending deletes in the memoryMap.
+// iterate progresses the iter inside its range.
 func (it *memRangeIter) iterate(context.Context) (err error) {
 	for {
 		it.iter.Advance()

@@ -482,6 +482,8 @@ func materializeMap(t *testing.T, mut MutableMap) Map {
 	ctx := context.Background()
 
 	// ensure edits are provided in order
+	err := mut.ApplyPending(ctx)
+	require.NoError(t, err)
 	iter := mut.tuples.mutations()
 	prev, _ := iter.NextMutation(ctx)
 	require.NotNil(t, prev)
