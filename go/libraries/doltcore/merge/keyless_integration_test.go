@@ -24,6 +24,7 @@ import (
 	cmd "github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/cnfcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	dtu "github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -262,8 +263,9 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
-			_, conflicts, err := tbl.GetConflicts(ctx)
+			_, confIdx, err := tbl.GetConflicts(ctx)
 			require.NoError(t, err)
+			conflicts := durable.NomsMapFromConflictIndex(confIdx)
 
 			assert.True(t, conflicts.Len() > 0)
 			assert.Equal(t, int(conflicts.Len()), len(test.conflicts))
