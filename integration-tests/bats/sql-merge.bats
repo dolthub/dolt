@@ -106,6 +106,43 @@ SQL
     [[ "$output" =~ "4" ]] || false
 }
 
+@test "sql-merge: CALL DMERGE works with ff" {
+    dolt sql <<SQL
+CALL DCOMMIT('-a', '-m', 'Step 1');
+CALL DCHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+UPDATE test SET pk=1000 WHERE pk=0;
+CALL DCOMMIT('-a', '-m', 'this is a ff');
+CALL DCHECKOUT('main');
+SQL
+    run dolt sql -q "CALL DMERGE('feature-branch');"
+    [ $status -eq 0 ]
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "this is a ff" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "1000" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
+
 @test "sql-merge: DOLT_MERGE works in the session for fastforward." {
      run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');

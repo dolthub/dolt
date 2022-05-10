@@ -37,7 +37,13 @@ const (
 
 var prollyMapFileID = []byte(serial.ProllyTreeNodeFileID)
 
-func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, subtrees []uint64) Message {
+type ProllyMapSerializer struct {
+	Pool pool.BuffPool
+}
+
+var _ Serializer = ProllyMapSerializer{}
+
+func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64, level int) Message {
 	var (
 		keyTups, keyOffs fb.UOffsetT
 		valTups, valOffs fb.UOffsetT
@@ -45,7 +51,7 @@ func SerializeProllyMap(pool pool.BuffPool, keys, values [][]byte, level int, su
 	)
 
 	keySz, valSz, bufSz := estimateProllyMapSize(keys, values, subtrees)
-	b := getFlatbufferBuilder(pool, bufSz)
+	b := getFlatbufferBuilder(s.Pool, bufSz)
 
 	// serialize keys and offsets
 	keyTups = writeItemBytes(b, keys, keySz)
@@ -146,9 +152,9 @@ func getProllyMapTreeCount(msg Message) int {
 }
 
 func getProllyMapSubtrees(msg Message) []uint64 {
-	cnt := getProllyMapCount(msg)
+	counts := make([]uint64, getProllyMapCount(msg))
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
-	return readSubtreeCounts(int(cnt), pm.SubtreeCountsBytes())
+	return decodeVarints(pm.SubtreeCountsBytes(), counts)
 }
 
 func getProllyMapKeyOffsets(pm *serial.ProllyTreeNode) []byte {

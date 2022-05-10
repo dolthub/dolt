@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,7 @@ import (
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -69,6 +71,7 @@ type rowV struct {
 
 var vD = prolly.ValueDescriptorFromSchema(sch)
 var vB = val.NewTupleBuilder(vD)
+var syncPool = pool.NewBuffPool()
 
 func (v rowV) value() val.Tuple {
 	vB.PutInt64(0, int64(v.col1))
@@ -110,6 +113,10 @@ type testRow struct {
 // non-conflicting updates. => +2
 //
 // For (insert, insert) there are identical inserts and conflicting inserts => +1
+//
+// A modification of a primary key is the combination of the two base cases:
+// First, a (delete, delete), then an (insert, insert). We omit tests for these
+// and instead defer to the base cases.
 
 var testRows = []testRow{
 	// Ancestor exists
@@ -185,6 +192,17 @@ var testRows = []testRow{
 		&rowV{6, -6},
 		false,
 		&rowV{-6, -6},
+	},
+	// Non-conflicting update 2
+	{
+		62,
+		&rowV{62, 62},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-62, 62},
+		&rowV{62, -62},
+		false,
+		&rowV{-62, -62},
 	},
 	{
 		7,
@@ -358,10 +376,10 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 
 	if !mergedRows.Equals(expectedRows) {
-		t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), mergedRows)))
 	}
 	if !conflicts.Equals(expectedConflicts) {
-		t.Error(mustString(types.EncodedValue(context.Background(), conflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedConflicts)))
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedConflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), conflicts)))
 	}
 
 	for _, index := range sch.Indexes().AllIndexes() {
@@ -383,9 +401,16 @@ func TestNomsMergeCommits(t *testing.T) {
 	assert.Equal(t, eh.String(), h.String(), "table hashes do not equal")
 }
 
+func sortTests(t []testRow) {
+	sort.Slice(t, func(i, j int) bool {
+		return t[i].key < t[j].key
+	})
+}
+
 func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
 
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
@@ -393,11 +418,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	for _, testCase := range testRows {
 		// Skip conflicts
 		if testCase.conflict {
-			continue
-		}
-
-		// Skip cell-wise merges
-		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
 			continue
 		}
 
@@ -419,11 +439,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	for _, testCase := range testRows {
 		// Skip conflicts
 		if testCase.conflict {
-			continue
-		}
-
-		// Skip cell-wise merges
-		if testCase.leftAction == UpdateAction && testCase.rightAction == UpdateAction {
 			continue
 		}
 
@@ -478,6 +493,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
 
 	var initalKVs []types.Value
 	var expectedKVs []types.Value

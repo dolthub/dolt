@@ -283,7 +283,7 @@ func (db *database) Datasets(ctx context.Context) (DatasetsMap, error) {
 		return nil, err
 	}
 
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
 		if err != nil {
 			return nil, err
@@ -409,16 +409,6 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 
 	key := types.String(ds.ID())
 
-	vref, err := types.NewRef(newVal, db.Format())
-	if err != nil {
-		return err
-	}
-
-	ref, err := types.ToRefOfValue(vref, db.Format())
-	if err != nil {
-		return err
-	}
-
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		currRef, ok, err := datasets.MaybeGet(ctx, key)
 		if err != nil {
@@ -435,6 +425,16 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 			}
 		}
 
+		vref, err := types.NewRef(newVal, db.Format())
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		ref, err := types.ToRefOfValue(vref, db.Format())
+		if err != nil {
+			return types.Map{}, err
+		}
+
 		return datasets.Edit().Set(key, ref).Map(ctx)
 	}, func(ctx context.Context, rm refmap) (refmap, error) {
 		curr := rm.lookup(ds.ID())
@@ -448,7 +448,11 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 				return refmap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
 			}
 		}
-		return rm.set(ds.ID(), ref.TargetHash()), nil
+		h, err := newVal.Hash(db.Format())
+		if err != nil {
+			return refmap{}, err
+		}
+		return rm.set(ds.ID(), h), nil
 	})
 }
 
@@ -477,26 +481,15 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		return fmt.Errorf("FastForward: target value of new head address %v is not a commit.", newHeadAddr)
 	}
 
-	newRef, err := types.NewRef(v, db.Format())
+	newCommit, err := commitFromValue(db.Format(), v)
 	if err != nil {
 		return err
 	}
 
-	newValueRef, err := types.ToRefOfValue(newRef, db.Format())
-	if err != nil {
-		return err
-	}
-
-	var currentHeadAddr hash.Hash
-	if ref, ok, err := ds.MaybeHeadRef(); err != nil {
-		return err
-	} else if ok {
-		currentHeadAddr = ref.TargetHash()
-		currCommit, err := LoadCommitRef(ctx, db, ref)
-		if err != nil {
-			return err
-		}
-		newCommit, err := LoadCommitRef(ctx, db, newRef)
+	currentHeadAddr, ok := ds.MaybeHeadAddr()
+	if ok {
+		currentHeadValue, _ := ds.MaybeHead()
+		currCommit, err := commitFromValue(db.Format(), currentHeadValue)
 		if err != nil {
 			return err
 		}
@@ -509,7 +502,7 @@ func (db *database) doFastForward(ctx context.Context, ds Dataset, newHeadAddr h
 		}
 	}
 
-	err = db.doCommit(ctx, ds.ID(), currentHeadAddr, newValueRef)
+	err = db.doCommit(ctx, ds.ID(), currentHeadAddr, v)
 	if err == ErrAlreadyCommitted {
 		return nil
 	}
@@ -523,12 +516,9 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 		return Dataset{}, err
 	}
 
-	commitRef, err := db.WriteValue(ctx, commit.NomsValue())
-	if err != nil {
-		return Dataset{}, err
-	}
+	val := commit.NomsValue()
 
-	newCommitValueRef, err := types.ToRefOfValue(commitRef, db.Format())
+	_, err = db.WriteValue(ctx, val)
 	if err != nil {
 		return Dataset{}, err
 	}
@@ -537,7 +527,7 @@ func (db *database) Commit(ctx context.Context, ds Dataset, v types.Value, opts 
 		ctx,
 		ds,
 		func(ds Dataset) error {
-			return db.doCommit(ctx, ds.ID(), currentAddr, newCommitValueRef)
+			return db.doCommit(ctx, ds.ID(), currentAddr, val)
 		},
 	)
 }
@@ -547,12 +537,23 @@ func CommitValue(ctx context.Context, db Database, ds Dataset, v types.Value) (D
 	return db.Commit(ctx, ds, v, CommitOptions{})
 }
 
-func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValueRef types.Ref) error {
+func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurrentAddr hash.Hash, newCommitValue types.Value) error {
 	return db.update(ctx, func(ctx context.Context, datasets types.Map) (types.Map, error) {
 		curr, hasHead, err := datasets.MaybeGet(ctx, types.String(datasetID))
 		if err != nil {
 			return types.Map{}, err
 		}
+
+		newCommitRef, err := types.NewRef(newCommitValue, db.Format())
+		if err != nil {
+			return types.Map{}, err
+		}
+
+		newCommitValueRef, err := types.ToRefOfValue(newCommitRef, db.Format())
+		if err != nil {
+			return types.Map{}, err
+		}
+
 		if hasHead {
 			currRef := curr.(types.Ref)
 			if currRef.TargetHash() != datasetCurrentAddr {
@@ -571,12 +572,16 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 		if curr != datasetCurrentAddr {
 			return refmap{}, ErrMergeNeeded
 		}
+		h, err := newCommitValue.Hash(db.Format())
+		if err != nil {
+			return refmap{}, err
+		}
 		if curr != (hash.Hash{}) {
-			if curr == newCommitValueRef.TargetHash() {
+			if curr == h {
 				return refmap{}, ErrAlreadyCommitted
 			}
 		}
-		return rm.set(datasetID, newCommitValueRef.TargetHash()), nil
+		return rm.set(datasetID, h), nil
 	})
 }
 
@@ -792,7 +797,7 @@ func (db *database) update(ctx context.Context,
 
 		var newRootHash hash.Hash
 
-		if db.Format() == types.Format_DOLT_DEV {
+		if db.Format().UsesFlatbuffers() {
 			datasets, err := db.loadDatasetsRefmap(ctx, root)
 			if err != nil {
 				return err

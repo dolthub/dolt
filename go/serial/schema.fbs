@@ -80,5 +80,5 @@ table ForeignKey {
   on_update:ForeignKeyReferenceOption;
   on_delete:ForeignKeyReferenceOption;
 
-  // todo(andy): "resolved details"
+  // todo(andy): "resolved details" (consult with Daylon)
 }

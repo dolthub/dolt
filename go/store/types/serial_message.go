@@ -17,7 +17,6 @@ package types
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -74,10 +73,6 @@ func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 		return bytes.Compare(sm, v2) == -1, nil
 	}
 	return sm.Kind() < other.Kind(), nil
-}
-
-func (sm SerialMessage) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return errors.New("unsupported WalkValues on SerialMessage. Use types.WalkValues.")
 }
 
 // Refs in SerialMessage do not have height. This should be taller than
@@ -268,13 +263,16 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 
 		mapbytes := msg.PrimaryIndexBytes()
 
-		dec := newValueDecoder(mapbytes, nil)
-		v, err := dec.readValue(nbf)
-		if err != nil {
-			return err
+		if nbf == Format_DOLT_DEV {
+			dec := newValueDecoder(mapbytes, nil)
+			v, err := dec.readValue(nbf)
+			if err != nil {
+				return err
+			}
+			return v.walkRefs(nbf, cb)
+		} else {
+			return TupleRowStorage(mapbytes).walkRefs(nbf, cb)
 		}
-
-		return v.walkRefs(nbf, cb)
 	case serial.CommitFileID:
 		parents, err := SerialCommitParentAddrs(nbf, sm)
 		if err != nil {
@@ -299,6 +297,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			return err
 		}
 		// TODO: cb for parent closure.
+	default:
+		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID([]byte(sm)))
 	}
 	return nil
 }

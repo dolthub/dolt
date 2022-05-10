@@ -219,6 +219,13 @@ SQL
     [[ "$output" =~ "no_violations" ]] || false
     [[ "$output" =~ "1" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "CALL DVERIFY_ALL_CONSTRAINTS('child1')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "no_violations" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ ! "$output" =~ "child1_parent1" ]] || false
     [[ ! "$output" =~ "child1_parent2" ]] || false

@@ -238,14 +238,6 @@ func (m Map) Value(ctx context.Context) (Value, error) {
 	return m, nil
 }
 
-func (m Map) WalkValues(ctx context.Context, cb ValueCallback) error {
-	err := iterAll(ctx, m, func(v Value, idx uint64) error {
-		return cb(v)
-	})
-
-	return err
-}
-
 func (m Map) firstOrLast(ctx context.Context, last bool) (Value, Value, error) {
 	cur, err := newCursorAt(ctx, m.orderedSequence, emptyKey, false, last)
 

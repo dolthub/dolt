@@ -25,6 +25,10 @@ import (
 
 type Message []byte
 
+type Serializer interface {
+	Serialize(keys, values [][]byte, subtrees []uint64, level int) Message
+}
+
 func GetKeys(msg Message) val.SlicedBuffer {
 	id := serial.GetFileID(msg)
 	switch id {

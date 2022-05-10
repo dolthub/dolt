@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -128,7 +129,8 @@ func makeMutableMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	tree.SortTuplePairs(mapTuples, kd)
 	tree.SortTuplePairs(memTuples, kd)
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 	for _, pair := range mapTuples {
 		err = chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))

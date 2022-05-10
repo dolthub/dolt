@@ -149,14 +149,6 @@ func (s Set) Value(ctx context.Context) (Value, error) {
 	return s, nil
 }
 
-func (s Set) WalkValues(ctx context.Context, cb ValueCallback) error {
-	err := iterAll(ctx, s, func(v Value, idx uint64) error {
-		return cb(v)
-	})
-
-	return err
-}
-
 func (s Set) First(ctx context.Context) (Value, error) {
 	cur, err := newCursorAt(ctx, s.orderedSequence, emptyKey, false, false)
 

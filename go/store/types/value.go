@@ -102,10 +102,6 @@ type Value interface {
 	// isPrimitive returns whether the Value is a primitive type
 	isPrimitive() bool
 
-	// WalkValues iterates over the immediate children of this value in the DAG, if any, not including
-	// Type()
-	WalkValues(context.Context, ValueCallback) error
-
 	// HumanReadableString returns a human-readable string version of this Value (not meant for re-parsing)
 	HumanReadableString() string
 

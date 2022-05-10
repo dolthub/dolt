@@ -26,6 +26,7 @@ import (
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -131,7 +132,8 @@ func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tup
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {

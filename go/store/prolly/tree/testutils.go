@@ -22,7 +22,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/message"
 
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -164,12 +163,9 @@ func newLeafNode(keys, values []Item) Node {
 		vv[i] = values[i]
 	}
 
-	b := &testBuilder{
-		keys:   kk,
-		values: vv,
-		level:  0,
-	}
-	return b.Build(sharedPool)
+	s := message.ProllyMapSerializer{Pool: sharedPool}
+	msg := s.Serialize(kk, vv, nil, 0)
+	return NodeFromBytes(msg)
 }
 
 // assumes a sorted list
@@ -234,52 +230,4 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	default:
 		panic("unknown encoding")
 	}
-}
-
-func newTestBuilder(level int) *testBuilder {
-	return &testBuilder{level: level}
-}
-
-var _ NodeBuilderFactory[*testBuilder] = newTestBuilder
-
-type testBuilder struct {
-	keys, values [][]byte
-	size, level  int
-
-	subtrees SubtreeCounts
-}
-
-var _ NodeBuilder = &testBuilder{}
-
-func (tb *testBuilder) StartNode() {
-	tb.reset()
-}
-
-func (tb *testBuilder) HasCapacity(key, value Item) bool {
-	sum := tb.size + len(key) + len(value)
-	return sum <= int(message.MaxVectorOffset)
-}
-
-func (tb *testBuilder) AddItems(key, value Item, subtree uint64) {
-	tb.keys = append(tb.keys, key)
-	tb.values = append(tb.values, value)
-	tb.size += len(key) + len(value)
-	tb.subtrees = append(tb.subtrees, subtree)
-}
-
-func (tb *testBuilder) Count() int {
-	return len(tb.keys)
-}
-
-func (tb *testBuilder) Build(pool pool.BuffPool) Node {
-	msg := message.SerializeProllyMap(pool, tb.keys, tb.values, tb.level, tb.subtrees)
-	return NodeFromBytes(msg)
-}
-
-func (tb *testBuilder) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	tb.keys = tb.keys[:0]
-	tb.values = tb.values[:0]
-	tb.size = 0
-	tb.subtrees = tb.subtrees[:0]
 }
