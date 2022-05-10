@@ -31,6 +31,7 @@ teardown() {
 }
 
 @test "sql-conflicts: read from empty table" {
+    skip_nbf_dolt_1
     dolt sql -q "SELECT * FROM dolt_conflicts_empty"
 }
 
