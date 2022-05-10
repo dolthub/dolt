@@ -31,10 +31,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCodecWriteFloat(t *testing.T) {
+func TestCodecWriteFloat_7_18(t *testing.T) {
+	nbf := Format_7_18
+
 	test := func(f float64, exp []byte) {
 		w := newBinaryNomsWriter()
-		w.writeFloat(Float(f), Format_7_18)
+		w.writeFloat(Float(f), nbf)
 		assert.Equal(t, exp, w.data())
 	}
 
@@ -54,10 +56,12 @@ func TestCodecWriteFloat(t *testing.T) {
 	test(-15, []byte{15*2 - 1, 0})  // -15 * 2*0
 }
 
-func TestCodecReadFloat(t *testing.T) {
+func TestCodecReadFloat_7_18(t *testing.T) {
+	nbf := Format_7_18
+
 	test := func(data []byte, exp float64) {
 		r := binaryNomsReader{buff: data}
-		n := r.ReadFloat(Format_7_18)
+		n := r.ReadFloat(nbf)
 		assert.Equal(t, exp, n)
 		assert.Equal(t, len(data), int(r.offset))
 	}

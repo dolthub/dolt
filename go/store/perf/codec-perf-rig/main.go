@@ -72,7 +72,7 @@ func main() {
 
 			// Build One-Time
 			storage := &chunks.MemoryStorage{}
-			vrw := types.NewValueStore(storage.NewView())
+			vrw := types.NewValueStore(storage.NewViewWithDefaultFormat())
 			db := datas.NewTypesDatabase(vrw)
 			ds, err := db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
@@ -93,7 +93,7 @@ func main() {
 
 			// Build Incrementally
 			storage = &chunks.MemoryStorage{}
-			vrw = types.NewValueStore(storage.NewView())
+			vrw = types.NewValueStore(storage.NewViewWithDefaultFormat())
 			db = datas.NewTypesDatabase(vrw)
 			ds, err = db.GetDataset(context.Background(), "test")
 			d.Chk.NoError(err)
@@ -115,7 +115,7 @@ func main() {
 	fmt.Printf("Testing Blob: \t\tbuild %d MB\t\t\tscan %d MB\n", *blobSize/1000000, *blobSize/1000000)
 
 	storage := &chunks.MemoryStorage{}
-	vrw := types.NewValueStore(storage.NewView())
+	vrw := types.NewValueStore(storage.NewViewWithDefaultFormat())
 	db := datas.NewTypesDatabase(vrw)
 	ds, err := db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
@@ -128,7 +128,7 @@ func main() {
 	d.Chk.NoError(err)
 	buildDuration := time.Since(t1)
 
-	db = datas.NewDatabase(storage.NewView())
+	db = datas.NewDatabase(storage.NewViewWithDefaultFormat())
 	ds, err = db.GetDataset(context.Background(), "test")
 	d.Chk.NoError(err)
 	t1 = time.Now()
@@ -174,7 +174,7 @@ func createNumber(i uint64) types.Value {
 var structTemplate = types.MakeStructTemplate("S1", []string{"bool", "num", "str"})
 
 func createStruct(i uint64) types.Value {
-	st, err := structTemplate.NewStruct(types.Format_7_18, []types.Value{
+	st, err := structTemplate.NewStruct(types.Format_Default, []types.Value{
 		types.Bool(i%2 == 0), // "bool"
 		types.Float(i),       // "num"
 		types.String(fmt.Sprintf("i am a 55 bytes............................%12d", i)), // "str"

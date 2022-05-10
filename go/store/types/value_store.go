@@ -108,6 +108,11 @@ const (
 // and is backed by a chunks.TestStore. Used for testing noms.
 func newTestValueStore() *ValueStore {
 	ts := &chunks.TestStorage{}
+	return NewValueStore(ts.NewViewWithDefaultFormat())
+}
+
+func newTestValueStore_7_18() *ValueStore {
+	ts := &chunks.TestStorage{}
 	return NewValueStore(ts.NewView())
 }
 

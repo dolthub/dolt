@@ -90,7 +90,7 @@ func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_HandleNil() {
 }
 
 func (s *ThreeWaySetMergeSuite) TestThreeWayMerge_Refs() {
-	v, err := types.NewStruct(types.Format_7_18, "Foo", types.StructData{"life": types.Float(42)})
+	v, err := types.NewStruct(types.Format_Default, "Foo", types.StructData{"life": types.Float(42)})
 	s.NoError(err)
 	strRef, err := s.vs.WriteValue(context.Background(), v)
 	s.NoError(err)

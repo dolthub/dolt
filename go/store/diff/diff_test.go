@@ -102,7 +102,7 @@ func createStruct(name string, kv ...interface{}) types.Struct {
 	for i := 0; i < len(kv); i += 2 {
 		fields[kv[i].(string)] = valToTypesValue(kv[i+1])
 	}
-	st, err := types.NewStruct(types.Format_7_18, name, fields)
+	st, err := types.NewStruct(types.Format_Default, name, fields)
 	d.PanicIfError(err)
 	return st
 }
@@ -202,9 +202,9 @@ func TestNomsDiffPrintSet(t *testing.T) {
 +   }
   }
 `
-	h3, err := mm3.Hash(types.Format_7_18)
+	h3, err := mm3.Hash(types.Format_Default)
 	require.NoError(t, err)
-	h3x, err := mm3x.Hash(types.Format_7_18)
+	h3x, err := mm3x.Hash(types.Format_Default)
 	require.NoError(t, err)
 	expectedPaths2 := []string{
 		fmt.Sprintf("[#%s]", h3),
@@ -538,9 +538,9 @@ func TestNomsDiffPrintRef(t *testing.T) {
 	expectedPaths1 := []string{``}
 	l1 := createList(1)
 	l2 := createList(2)
-	r1, err := types.NewRef(l1, types.Format_7_18)
+	r1, err := types.NewRef(l1, types.Format_Default)
 	require.NoError(t, err)
-	r2, err := types.NewRef(l2, types.Format_7_18)
+	r2, err := types.NewRef(l2, types.Format_Default)
 	require.NoError(t, err)
 
 	tf := func(leftRight bool) {

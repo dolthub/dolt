@@ -52,7 +52,7 @@ func mustValue(val types.Value, err error) types.Value {
 
 func newTestValueStore() *types.ValueStore {
 	st := &chunks.TestStorage{}
-	return types.NewValueStore(st.NewView())
+	return types.NewValueStore(st.NewViewWithDefaultFormat())
 }
 
 func assertParseType(t *testing.T, code string, expected *types.Type) {
@@ -368,16 +368,16 @@ func TestValueType(t *testing.T) {
 
 func TestValueStruct(t *testing.T) {
 	vs := newTestValueStore()
-	assertParse(t, vs, "struct {}", mustValue(types.NewStruct(types.Format_7_18, "", nil)))
+	assertParse(t, vs, "struct {}", mustValue(types.NewStruct(vs.Format(), "", nil)))
 	assertParseError(t, "struct", "Unexpected token EOF, expected \"{\", example:1:7")
 	assertParseError(t, "struct {", "Unexpected token EOF, expected Ident, example:1:9")
 
-	assertParse(t, vs, "struct name {}", mustValue(types.NewStruct(types.Format_7_18, "name", nil)))
+	assertParse(t, vs, "struct name {}", mustValue(types.NewStruct(vs.Format(), "name", nil)))
 	assertParseError(t, "struct name", "Unexpected token EOF, expected \"{\", example:1:12")
 	assertParseError(t, "struct name {", "Unexpected token EOF, expected Ident, example:1:14")
 
-	assertParse(t, vs, "struct name {a: 42}", mustValue(types.NewStruct(types.Format_7_18, "name", types.StructData{"a": types.Float(42)})))
-	assertParse(t, vs, "struct name {a: 42,}", mustValue(types.NewStruct(types.Format_7_18, "name", types.StructData{"a": types.Float(42)})))
+	assertParse(t, vs, "struct name {a: 42}", mustValue(types.NewStruct(vs.Format(), "name", types.StructData{"a": types.Float(42)})))
+	assertParse(t, vs, "struct name {a: 42,}", mustValue(types.NewStruct(vs.Format(), "name", types.StructData{"a": types.Float(42)})))
 	assertParseError(t, "struct name {a", "Unexpected token EOF, expected \":\", example:1:15")
 	assertParseError(t, "struct name {a: ", "Unexpected token EOF, example:1:17")
 	assertParseError(t, "struct name {a,", "Unexpected token \",\", expected \":\", example:1:16")
@@ -386,13 +386,13 @@ func TestValueStruct(t *testing.T) {
 	assertParseError(t, "struct name {a: 42,", "Unexpected token EOF, expected Ident, example:1:20")
 	assertParseError(t, "struct name {a:}", "Unexpected token \"}\", example:1:17")
 
-	assertParse(t, vs, "struct name {b: 42, a: true}", mustValue(types.NewStruct(types.Format_7_18, "name", types.StructData{"b": types.Float(42), "a": types.Bool(true)})))
+	assertParse(t, vs, "struct name {b: 42, a: true}", mustValue(types.NewStruct(vs.Format(), "name", types.StructData{"b": types.Float(42), "a": types.Bool(true)})))
 	assertParse(t, vs, `struct name {
                 b: 42,
                 a: true,
-        }`, mustValue(types.NewStruct(types.Format_7_18, "name", types.StructData{"b": types.Float(42), "a": types.Bool(true)})))
+        }`, mustValue(types.NewStruct(vs.Format(), "name", types.StructData{"b": types.Float(42), "a": types.Bool(true)})))
 
-	assertParse(t, vs, "struct name {a: Struct {}}", mustValue(types.NewStruct(types.Format_7_18, "name", types.StructData{"a": mustType(types.MakeStructType(""))})))
+	assertParse(t, vs, "struct name {a: Struct {}}", mustValue(types.NewStruct(vs.Format(), "name", types.StructData{"a": mustType(types.MakeStructType(""))})))
 }
 
 func TestValueBlob(t *testing.T) {
@@ -468,9 +468,9 @@ func TestRoundTrips(t *testing.T) {
 	test(mustValue(types.NewMap(context.Background(), vs)))
 	test(mustValue(types.NewMap(context.Background(), vs, types.Float(42), types.Bool(true), types.String("abc"), mustValue(types.NewMap(context.Background(), vs)))))
 
-	test(mustValue(types.NewStruct(types.Format_7_18, "", nil)))
-	test(mustValue(types.NewStruct(types.Format_7_18, "Float", nil)))
-	test(mustValue(types.NewStruct(types.Format_7_18, "Float", types.StructData{
+	test(mustValue(types.NewStruct(vs.Format(), "", nil)))
+	test(mustValue(types.NewStruct(vs.Format(), "Float", nil)))
+	test(mustValue(types.NewStruct(vs.Format(), "Float", types.StructData{
 		"Float": types.PrimitiveTypeMap[types.FloatKind],
 	})))
 

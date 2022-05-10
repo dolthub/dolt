@@ -117,10 +117,10 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 			"l4":      mustMarshal([]string{"two", "three", "four"}),
 			"l5":      mustMarshal([]string{"one", "two", "three", "four", "five"}),
 			"l6":      mustMarshal([]string{"one", "four"}),
-			"struct1": mustValue(types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2)})),
-			"struct2": mustValue(types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(11111), "f2": types.Float(2)})),
-			"struct3": mustValue(types.NewStruct(types.Format_7_18, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2), "f3": types.Float(3)})),
-			"struct4": mustValue(types.NewStruct(types.Format_7_18, "test1", types.StructData{"f2": types.Float(2)})),
+			"struct1": mustValue(types.NewStruct(types.Format_Default, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2)})),
+			"struct2": mustValue(types.NewStruct(types.Format_Default, "test1", types.StructData{"f1": types.Float(11111), "f2": types.Float(2)})),
+			"struct3": mustValue(types.NewStruct(types.Format_Default, "test1", types.StructData{"f1": types.Float(1), "f2": types.Float(2), "f3": types.Float(3)})),
+			"struct4": mustValue(types.NewStruct(types.Format_Default, "test1", types.StructData{"f2": types.Float(2)})),
 			"m1":      mustMarshal(map[string]int{}),
 			"m2":      mustMarshal(map[string]int{"k1": 1, "k2": 2, "k3": 3}),
 			"m3":      mustMarshal(map[string]int{"k2": 2, "k3": 3, "k4": 4}),
@@ -147,7 +147,7 @@ func testValues(vrw types.ValueReadWriter) map[string]types.Value {
 
 func newTestValueStore() *types.ValueStore {
 	st := &chunks.TestStorage{}
-	return types.NewValueStore(st.NewView())
+	return types.NewValueStore(st.NewViewWithDefaultFormat())
 }
 
 func getPatch(g1, g2 types.Value) (Patch, error) {
@@ -169,7 +169,7 @@ func getPatch(g1, g2 types.Value) (Patch, error) {
 func checkApplyPatch(assert *assert.Assertions, g1, expectedG2 types.Value, k1, k2 string) {
 	patch, err := getPatch(g1, expectedG2)
 	assert.NoError(err)
-	g2, err := Apply(context.Background(), types.Format_7_18, g1, patch)
+	g2, err := Apply(context.Background(), types.Format_Default, g1, patch)
 	assert.NoError(err)
 	assert.True(expectedG2.Equals(g2), "failed to apply diffs for k1: %s and k2: %s", k1, k2)
 }
@@ -226,7 +226,7 @@ func TestUpdateNode(t *testing.T) {
 	oldVal := types.String("Yo")
 	newVal := types.String("YooHoo")
 
-	s1, err := types.NewStruct(types.Format_7_18, "TestStruct", types.StructData{"f1": types.Float(1), "f2": oldVal})
+	s1, err := types.NewStruct(types.Format_Default, "TestStruct", types.StructData{"f1": types.Float(1), "f2": oldVal})
 	require.NoError(t, err)
 	pp = types.FieldPath{Name: "f2"}
 	doTest(pp, s1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
@@ -247,13 +247,13 @@ func TestUpdateNode(t *testing.T) {
 		return mustGetValue(parent.(types.Map).MaybeGet(context.Background(), types.String("k2")))
 	})
 
-	k1, err := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
+	k1, err := types.NewStruct(types.Format_Default, "Sizes", types.StructData{"height": types.Float(200), "width": types.Float(300)})
 	require.NoError(t, err)
 	_, err = vs.WriteValue(context.Background(), k1)
 	require.NoError(t, err)
 	m1, err = types.NewMap(context.Background(), vs, k1, oldVal)
 	require.NoError(t, err)
-	h, err := k1.Hash(types.Format_7_18)
+	h, err := k1.Hash(types.Format_Default)
 	require.NoError(t, err)
 	pp = types.HashIndexPath{Hash: h}
 	doTest(pp, m1, oldVal, newVal, newVal, func(parent types.Value) types.Value {
@@ -269,11 +269,11 @@ func TestUpdateNode(t *testing.T) {
 		return parent
 	})
 
-	k2, err := types.NewStruct(types.Format_7_18, "Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
+	k2, err := types.NewStruct(types.Format_Default, "Sizes", types.StructData{"height": types.Float(300), "width": types.Float(500)})
 	require.NoError(t, err)
 	set1, err = types.NewSet(context.Background(), vs, oldVal, k1)
 	require.NoError(t, err)
-	h, err = k1.Hash(types.Format_7_18)
+	h, err = k1.Hash(types.Format_Default)
 	require.NoError(t, err)
 	pp = types.HashIndexPath{Hash: h}
 	exp, err = types.NewSet(context.Background(), vs, oldVal, k2)
@@ -298,7 +298,7 @@ func checkApplyDiffs(a *assert.Assertions, n1, n2 types.Value, leftRight bool) {
 
 	a.NoError(derr)
 
-	res, err := Apply(context.Background(), types.Format_7_18, n1, difs)
+	res, err := Apply(context.Background(), types.Format_Default, n1, difs)
 	a.NoError(err)
 	a.True(n2.Equals(res))
 }
@@ -374,12 +374,12 @@ func TestUpdateMap(t *testing.T) {
 func TestUpdateStruct(t *testing.T) {
 	a := assert.New(t)
 
-	a1 := mustValue(types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
+	a1 := mustValue(types.NewStruct(types.Format_Default, "tStruct", types.StructData{
 		"f1": types.Float(1),
 		"f2": types.String("two"),
 		"f3": mustMarshal([]string{"one", "two", "three"}),
 	}))
-	a2 := mustValue(types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
+	a2 := mustValue(types.NewStruct(types.Format_Default, "tStruct", types.StructData{
 		"f1": types.Float(2),
 		"f2": types.String("twotwo"),
 		"f3": mustMarshal([]interface{}{0, "one", 1, "two", 2, "three", 3}),
@@ -387,7 +387,7 @@ func TestUpdateStruct(t *testing.T) {
 	checkApplyDiffs(a, a1, a2, true)
 	checkApplyDiffs(a, a1, a2, false)
 
-	a2 = mustValue(types.NewStruct(types.Format_7_18, "tStruct", types.StructData{
+	a2 = mustValue(types.NewStruct(types.Format_Default, "tStruct", types.StructData{
 		"f1": types.Float(2),
 		"f2": types.String("two"),
 		"f3": mustMarshal([]interface{}{0, "one", 1, "two", 2, "three", 3}),
