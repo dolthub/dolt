@@ -14,6 +14,8 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
+
+skip_nbf_dolt_1
 }
 
 teardown() {
