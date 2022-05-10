@@ -24,6 +24,7 @@ package types
 import (
 	"bytes"
 	"context"
+	"github.com/dolthub/dolt/go/store/constants"
 	"math"
 	"os"
 	"strconv"
@@ -636,9 +637,15 @@ func TestWriteEmptyUnionList(t *testing.T) {
 }
 
 func TestNomsBinFormat(t *testing.T) {
-	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
-		assert.Equal(t, Format_DOLT_1, Format_Default)
-	} else {
+	v, _ := os.LookupEnv("DOLT_DEFAULT_BIN_FORMAT")
+	switch v {
+	case constants.Format718String:
+		assert.Equal(t, Format_7_18, Format_Default)
+	case constants.FormatLD1String:
 		assert.Equal(t, Format_LD_1, Format_Default)
+	case constants.FormatDolt1String:
+		assert.Equal(t, Format_DOLT_1, Format_Default)
+	case constants.FormatDoltDevString:
+		assert.Equal(t, Format_DOLT_DEV, Format_Default)
 	}
 }
