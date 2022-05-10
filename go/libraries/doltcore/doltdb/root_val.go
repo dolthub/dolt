@@ -470,7 +470,9 @@ func (root *RootValue) GenerateTagsForNewColumns(
 	if headRoot != nil {
 		for _, col := range existingCols {
 			for i := range newColNames {
-				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+				// Only re-use tags if the noms kind didn't change
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 					newTags[i] = col.Tag
 					break
 				}

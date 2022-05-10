@@ -382,7 +382,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
