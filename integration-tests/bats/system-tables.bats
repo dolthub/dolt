@@ -2,9 +2,9 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skip_nbf_dolt_1
     skiponwindows "tests are flaky on Windows"
     setup_common
+    skip_nbf_dolt_1
 
     # Needed for dolt_branches test
     cd $BATS_TMPDIR
