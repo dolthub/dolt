@@ -252,7 +252,6 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
