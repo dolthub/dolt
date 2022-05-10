@@ -24,7 +24,6 @@ package types
 import (
 	"bytes"
 	"context"
-	"github.com/dolthub/dolt/go/store/constants"
 	"math"
 	"os"
 	"strconv"
@@ -34,6 +33,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
