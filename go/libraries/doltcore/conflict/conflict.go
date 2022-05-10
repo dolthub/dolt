@@ -53,7 +53,7 @@ func ValueFromConflictSchema(ctx context.Context, vrw types.ValueReadWriter, cs 
 		return nil, err
 	}
 
-	return types.NewTuple(types.Format_Default, b, s, m)
+	return types.NewTuple(vrw.Format(), b, s, m)
 }
 
 func ConflictSchemaFromValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (cs ConflictSchema, err error) {
@@ -113,7 +113,7 @@ func deserializeSchema(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		return nil, err
 	}
 
-	return encoding.UnmarshalSchemaNomsValue(ctx, types.Format_Default, tv)
+	return encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), tv)
 }
 
 type Conflict struct {
