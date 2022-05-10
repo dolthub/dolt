@@ -955,10 +955,10 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 }
 
 func (t *AlterableDoltTable) ShouldRewriteTable(
-		ctx *sql.Context,
-		oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema,
-		modifiedColumn *sql.Column,
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	modifiedColumn *sql.Column,
 ) bool {
 	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in either format
 	return types.IsFormat_DOLT_1(t.nbf)
