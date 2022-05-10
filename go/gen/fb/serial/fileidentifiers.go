@@ -14,6 +14,10 @@
 
 package serial
 
+import (
+	"unsafe"
+)
+
 // KEEP THESE IN SYNC WITH .fbs FILES!
 
 const StoreRootFileID = "STRT"
@@ -29,5 +33,11 @@ func GetFileID(bs []byte) string {
 	if len(bs) < 8 {
 		return ""
 	}
-	return string(bs[4:8])
+	return byteSliceToString(bs[4:8])
+}
+
+// byteSliceToString converts a []byte to string without a heap allocation.
+// copied from github.com/google/flatbuffers/go/sizes.go
+func byteSliceToString(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }

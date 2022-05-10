@@ -58,7 +58,7 @@ func BenchmarkProllyLargeWrites(b *testing.B) {
 }
 
 func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
-	bench := generateProllyBench(size)
+	bench := generateProllyBench(b, size)
 	b.ReportAllocs()
 	b.ResetTimer()
 
@@ -82,7 +82,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 }
 
 func benchmarkTypesMapUpdate(b *testing.B, size, k uint64) {
-	bench := generateTypesBench(size)
+	bench := generateTypesBench(b, size)
 	b.ResetTimer()
 
 	b.Run("benchmark types map writes", func(b *testing.B) {
