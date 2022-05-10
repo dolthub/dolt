@@ -252,7 +252,6 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
@@ -348,7 +347,6 @@ func TestJoinQueries(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
@@ -432,7 +430,6 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -903,37 +900,31 @@ func TestScriptsPrepared(t *testing.T) {
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }

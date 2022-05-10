@@ -232,10 +232,7 @@ teardown() {
 }
 
 @test "dump: SQL type - with keyless tables" {
-    if [ "$DOLT_FORMAT_FEATURE_FLAG" = true ]
-    then
-        skip "V1 storage format does not support keyless tables yet"
-    fi
+    skip_nbf_dolt_1
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"

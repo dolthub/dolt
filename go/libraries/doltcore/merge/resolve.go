@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -73,12 +74,12 @@ func ResolveTable(ctx context.Context, vrw types.ValueReadWriter, tblName string
 		return nil, err
 	}
 
-	m, err := types.NewMap(ctx, vrw)
+	confIdx, err := durable.NewEmptyConflictIndex(ctx, vrw, schemas.Schema, schemas.MergeSchema, schemas.Base)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, err = tbl.SetConflicts(ctx, schemas, m)
+	tbl, err = tbl.SetConflicts(ctx, schemas, confIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +115,7 @@ func resolvePkTable(ctx context.Context, tbl *doltdb.Table, tblName string, opts
 		return nil, err
 	}
 
-	_, conflicts, err := tbl.GetConflicts(ctx)
+	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -124,6 +125,11 @@ func resolvePkTable(ctx context.Context, tbl *doltdb.Table, tblName string, opts
 		return nil, err
 	}
 
+	if confIdx.Format() == types.Format_DOLT_1 {
+		panic("resolvePkTable not implemented for new storage format")
+	}
+
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
 	err = conflicts.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 		cnf, err := conflict.ConflictFromTuple(value.(types.Tuple))
 		if err != nil {
@@ -184,10 +190,16 @@ func resolvePkTable(ctx context.Context, tbl *doltdb.Table, tblName string, opts
 }
 
 func resolveKeylessTable(ctx context.Context, tbl *doltdb.Table, auto AutoResolver) (*doltdb.Table, error) {
-	_, conflicts, err := tbl.GetConflicts(ctx)
+	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	if confIdx.Format() == types.Format_DOLT_1 {
+		panic("resolvePkTable not implemented for new storage format")
+	}
+
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
 
 	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {

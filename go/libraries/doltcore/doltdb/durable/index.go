@@ -318,6 +318,21 @@ func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	}
 }
 
+func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (IndexSet, error) {
+	s := NewIndexSet(ctx, vrw)
+	for _, index := range sch.Indexes().AllIndexes() {
+		empty, err := NewEmptyIndex(ctx, vrw, index.Schema())
+		if err != nil {
+			return nil, err
+		}
+		s, err = s.PutIndex(ctx, index.Name(), empty)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
 type nomsIndexSet struct {
 	indexes types.Map
 	vrw     types.ValueReadWriter

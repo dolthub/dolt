@@ -1,4 +1,5 @@
 #!/usr/bin/env bats
+load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     REPO_NAME="dolt_repo_$$"
@@ -117,6 +118,7 @@ SQL
 }
 
 @test "import-mysqldump: a table with all types with DEFAULT NULL dump" {
+    skip_nbf_dolt_1
     run dolt sql <<SQL
 CREATE TABLE all_types (
   pk int NOT NULL,
@@ -167,6 +169,7 @@ SQL
 }
 
 @test "import-mysqldump: a table with all types with DEFAULT not-null VALUE dump" {
+    skip_nbf_dolt_1
     run dolt sql <<SQL
 CREATE TABLE types_default (
   pk int NOT NULL,
