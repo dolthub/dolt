@@ -430,7 +430,6 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -916,7 +915,6 @@ func TestJsonScriptsPrepared(t *testing.T) {
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
