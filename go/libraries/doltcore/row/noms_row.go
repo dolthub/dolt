@@ -78,11 +78,15 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
-			if col.Kind != val.Kind() {
-				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
-			} else {
+			// Column is GeometryKind and received PointKind, LinestringKind, or PolygonKind
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
 				filteredVals[tag] = val
+			} else if col.Kind == val.Kind() {
+				filteredVals[tag] = val
+			} else {
+				return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 			}
+
 		}
 
 		return false, nil
@@ -213,6 +217,9 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		} else if !col.IsPartOfPK {
 			return false, errors.New("writing columns that are not part of the primary key to pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
+				return false, nil
+			}
 			return false, errors.New("bug.  Setting a value to an incorrect kind. col: " + col.Name)
 		}
 
@@ -233,6 +240,10 @@ func fromTaggedVals(nbf *types.NomsBinFormat, sch schema.Schema, keyVals, nonKey
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) && col.Kind != val.Kind() {
+			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
+				filteredVals[tag] = val
+				return false, nil
+			}
 			return false, errors.New("bug.  Setting a value to an incorrect kind. col:" + col.Name)
 		} else {
 			filteredVals[tag] = val

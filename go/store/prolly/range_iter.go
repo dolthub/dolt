@@ -18,65 +18,34 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/skip"
 
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type MapRangeIter interface {
-	Next(ctx context.Context) (key, value val.Tuple, err error)
-}
+type MapIter kvIter[val.Tuple, val.Tuple]
 
-var _ MapRangeIter = emptyIter{}
-var _ MapRangeIter = &prollyRangeIter{}
-var _ MapRangeIter = &pointLookup{}
-var _ MapRangeIter = &MutableMapRangeIter{}
+var _ MapIter = &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{}
+var _ MapIter = &orderedTreeIter[val.Tuple, val.Tuple]{}
 
-type pointLookup struct {
-	k, v val.Tuple
-}
-
-func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
-	if p.k == nil || p.v == nil {
-		err = io.EOF
-	} else {
-		key, value = p.k, p.v
-		p.k, p.v = nil, nil
-	}
-	return
-}
-
-type rangeIter interface {
+type rangeIter[K, V ~[]byte] interface {
 	iterate(ctx context.Context) error
-	current() (key, value val.Tuple)
+	current() (key K, value V)
 }
 
-var _ rangeIter = emptyIter{}
-var _ rangeIter = &prollyRangeIter{}
+var _ rangeIter[val.Tuple, val.Tuple] = &orderedTreeIter[val.Tuple, val.Tuple]{}
+var _ rangeIter[val.Tuple, val.Tuple] = &memRangeIter{}
+var _ rangeIter[val.Tuple, val.Tuple] = emptyIter{}
 
-type emptyIter struct{}
-
-func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
-	return nil, nil, io.EOF
-}
-
-func (e emptyIter) iterate(ctx context.Context) (err error) {
-	return
-}
-
-func (e emptyIter) current() (key, value val.Tuple) {
-	return
-}
-
-// MutableMapRangeIter iterates over a Range of Tuples.
-type MutableMapRangeIter struct {
-	memory rangeIter
-	prolly rangeIter
-	rng    Range
+// mutableMapIter iterates over a Range of Tuples.
+type mutableMapIter[K, V ~[]byte, O ordering[K]] struct {
+	memory rangeIter[K, V]
+	prolly *orderedTreeIter[K, V]
+	order  O
 }
 
 // Next returns the next pair of Tuples in the Range, or io.EOF if the iter is done.
-func (it MutableMapRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
+func (it mutableMapIter[K, V, O]) Next(ctx context.Context) (key K, value V, err error) {
 	for {
 		mk, mv := it.memory.current()
 		pk, pv := it.prolly.current()
@@ -119,7 +88,7 @@ func (it MutableMapRangeIter) Next(ctx context.Context) (key, value val.Tuple, e
 	}
 }
 
-func (it MutableMapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
+func (it mutableMapIter[K, V, O]) currentKeys() (memKey, proKey K) {
 	if it.memory != nil {
 		memKey, _ = it.memory.current()
 	}
@@ -129,60 +98,98 @@ func (it MutableMapRangeIter) currentKeys() (memKey, proKey val.Tuple) {
 	return
 }
 
-func (it MutableMapRangeIter) compareKeys(memKey, proKey val.Tuple) int {
+func (it mutableMapIter[K, V, O]) compareKeys(memKey, proKey K) int {
 	if memKey == nil {
 		return 1
 	}
 	if proKey == nil {
 		return -1
 	}
-	return it.rng.Desc.Compare(memKey, proKey)
+	return it.order.Compare(memKey, proKey)
 }
 
-type prollyRangeIter struct {
-	// current tuple location
-	curr *tree.Cursor
-	// non-inclusive range stop
-	stop *tree.Cursor
+func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
+	var iter *skip.ListIter
+	if rng.Start == nil {
+		iter = list.IterAtStart()
+	} else {
+		// use the lower bound of |rng| to construct a skip.ListIter
+		iter = list.GetIterFromSearchFn(skipSearchFromRange(rng))
+	}
+
+	// enforce range start
+	var key val.Tuple
+	for {
+		key, _ = iter.Current()
+		if key == nil || rng.AboveStart(key) {
+			break // |i| inside |rng|
+		}
+		iter.Advance()
+	}
+
+	// enforce range end
+	if key == nil || !rng.BelowStop(key) {
+		iter = nil
+	}
+
+	return &memRangeIter{
+		iter: iter,
+		rng:  rng,
+	}
 }
 
-func (it *prollyRangeIter) Next(ctx context.Context) (key, value val.Tuple, err error) {
-	if it.curr == nil {
-		return nil, nil, io.EOF
+// skipSearchFromRange is a skip.SearchFn used to initialize
+// a skip.List iterator for a given Range. The skip.SearchFn
+// returns true if the iter being initialized is not yet
+// within the bounds of Range |rng|.
+func skipSearchFromRange(rng Range) skip.SearchFn {
+	return func(nodeKey []byte) bool {
+		if nodeKey == nil {
+			return false
+		}
+		return !rng.AboveStart(nodeKey)
 	}
+}
 
-	key, value = tree.CurrentCursorTuples(it.curr)
+// todo(andy): generalize Range iteration and consolidate this
+//  iterator with orderedListIter[K, V] in ordered_map.go.
+//  This is not currently possible due to Range checking logic
+//  that is specific to val.Tuple.
+type memRangeIter struct {
+	iter *skip.ListIter
+	rng  Range
+}
 
-	_, err = it.curr.Advance(ctx)
-	if err != nil {
-		return nil, nil, err
+// current returns the iter's current Tuple pair, or nil Tuples
+// if the iter has exhausted its range, it will
+func (it *memRangeIter) current() (key, value val.Tuple) {
+	// |it.iter| is set to nil when its range is exhausted
+	if it.iter != nil {
+		key, value = it.iter.Current()
 	}
-	if it.curr.Compare(it.stop) >= 0 {
-		// past the end of the range
-		it.curr = nil
-	}
-
 	return
 }
 
-func (it *prollyRangeIter) current() (key, value val.Tuple) {
-	// |it.curr| is set to nil when its range is exhausted
-	if it.curr != nil && it.curr.Valid() {
-		key, value = tree.CurrentCursorTuples(it.curr)
+// iterate progresses the iter inside its range.
+func (it *memRangeIter) iterate(context.Context) (err error) {
+	for {
+		it.iter.Advance()
+
+		k, _ := it.current()
+		if k == nil || !it.rng.BelowStop(k) {
+			it.iter = nil // range exhausted
+		}
+
+		return
 	}
-	return
 }
 
-func (it *prollyRangeIter) iterate(ctx context.Context) (err error) {
-	_, err = it.curr.Advance(ctx)
-	if err != nil {
-		return err
-	}
+type emptyIter struct{}
 
-	if it.curr.Compare(it.stop) >= 0 {
-		// past the end of the range
-		it.curr = nil
-	}
-
-	return
+func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
+	return nil, nil, io.EOF
 }
+
+func (e emptyIter) iterate(ctx context.Context) (err error) { return }
+
+func (e emptyIter) current() (key, value val.Tuple) { return }

@@ -17,8 +17,6 @@ package doltdb
 import (
 	"errors"
 	"fmt"
-
-	goerrors "gopkg.in/src-d/go-errors.v1"
 )
 
 var ErrInvBranchName = errors.New("not a valid user branch name")
@@ -34,7 +32,6 @@ var ErrFoundHashNotACommit = errors.New("the value retrieved for this hash is no
 
 var ErrHashNotFound = errors.New("could not find a value for this hash")
 var ErrBranchNotFound = errors.New("branch not found")
-var ErrBranchNotFoundInfo = goerrors.NewKind("branch not found: %v")
 var ErrTagNotFound = errors.New("tag not found")
 var ErrWorkingSetNotFound = errors.New("working set not found")
 var ErrWorkspaceNotFound = errors.New("workspace not found")
@@ -73,21 +70,15 @@ func IsInvalidFormatErr(err error) bool {
 }
 
 func IsNotFoundErr(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrTableNotFound:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrTableNotFound)
 }
 
 func IsNotACommit(err error) bool {
-	switch err {
-	case ErrHashNotFound, ErrBranchNotFound, ErrFoundHashNotACommit:
-		return true
-	default:
-		return false
-	}
+	return errors.Is(err, ErrHashNotFound) ||
+		errors.Is(err, ErrBranchNotFound) ||
+		errors.Is(err, ErrFoundHashNotACommit)
 }
 
 type RootType int

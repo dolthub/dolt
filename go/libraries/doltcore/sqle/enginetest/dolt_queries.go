@@ -51,7 +51,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `pk` int NOT NULL,\n" +
 					"  `c1` int,\n" +
 					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -63,7 +63,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `c1` int,\n" +
 					"  `c2` text,\n" +
 					"  PRIMARY KEY (`pk`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -75,7 +75,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 					"  `c2` text,\n" +
 					"  PRIMARY KEY (`pk`),\n" +
 					"  UNIQUE KEY `c2` (`c2`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
 			},
 		},
@@ -174,7 +174,7 @@ var DoltScripts = []enginetest.ScriptTest{
 						"  PRIMARY KEY (`a`),\n" +
 						"  KEY `t1b` (`b`),\n" +
 						"  CONSTRAINT `ck1` CHECK (`b` LIKE \"%abc%\")\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 			{
@@ -186,7 +186,7 @@ var DoltScripts = []enginetest.ScriptTest{
 						"  PRIMARY KEY (`c`),\n" +
 						"  UNIQUE KEY `d_0` (`d`),\n" +
 						"  CONSTRAINT `fk1` FOREIGN KEY (`d`) REFERENCES `t1` (`b`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
 		},
@@ -844,7 +844,7 @@ var DoltMerge = []enginetest.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflict is queryable and commitable until dolt_allow_commit_conflicts is turned off",
+		Name: "DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -856,6 +856,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"set dolt_allow_commit_conflicts = on",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
@@ -891,8 +892,8 @@ var DoltMerge = []enginetest.ScriptTest{
 				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
 			},
 			{
-				Query:          "SELECT count(*) from dolt_conflicts_test", // Commit allows queries when flags are set.
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},
@@ -964,6 +965,61 @@ var DoltMerge = []enginetest.ScriptTest{
 			{
 				Query:       "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErr: dfunctions.ErrUncommittedChanges,
+			},
+		},
+	},
+}
+
+var DoltReset = []enginetest.ScriptTest{
+	{
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
+		SetUpScript: []string{
+			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
+			"INSERT INTO test1 values (0,1,1);",
+			"CALL DOLT_COMMIT('-am', 'added table')",
+
+			"CALL DOLT_CHECKOUT('-b', 'merge_branch');",
+			"UPDATE test1 set c1 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 2,1 to test1');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test1 set c2 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 1,2 to test1');",
+
+			"CALL DOLT_MERGE('merge_branch');",
+
+			"CALL DOLT_RESET('--hard');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('--abort')",
+				ExpectedErrStr: "fatal: There is no merge to abort",
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_RESET('--hard') should reset the merge state after conflicting merge",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on",
+			"CREATE TABLE test1 (pk int NOT NULL, c1 int, c2 int, PRIMARY KEY (pk));",
+			"INSERT INTO test1 values (0,1,1);",
+			"CALL DOLT_COMMIT('-am', 'added table')",
+
+			"CALL DOLT_CHECKOUT('-b', 'merge_branch');",
+			"UPDATE test1 set c1 = 2, c2 = 2;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 2,2 to test1');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE test1 set c1 = 3, c2 = 3;",
+			"CALL DOLT_COMMIT('-am', 'update pk 0 = 3,3 to test1');",
+
+			"CALL DOLT_MERGE('merge_branch');",
+			"CALL DOLT_RESET('--hard');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('--abort')",
+				ExpectedErrStr: "fatal: There is no merge to abort",
 			},
 		},
 	},

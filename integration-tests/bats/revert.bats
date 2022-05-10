@@ -145,6 +145,16 @@ SQL
     [[ "${#lines[@]}" = "3" ]] || false
 }
 
+@test "revert: SQL HEAD dfunc" {
+    dolt sql -q "CALL drevert('HEAD')"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
 @test "revert: Stored Procedure HEAD" {
     dolt sql -q "CALL DOLT_REVERT('HEAD')"
     run dolt sql -q "SELECT * FROM test" -r=csv

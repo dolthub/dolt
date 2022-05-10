@@ -39,7 +39,7 @@ func TestNewTag(t *testing.T) {
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		t.Skip()
 	}
 
@@ -78,7 +78,7 @@ func TestNewTag(t *testing.T) {
 
 func TestPersistedTagConsts(t *testing.T) {
 	// changing constants that are persisted requires a migration strategy
-	assert.Equal(t, "meta", TagMetaField)
-	assert.Equal(t, "ref", TagCommitRefField)
-	assert.Equal(t, "Tag", TagName)
+	assert.Equal(t, "meta", tagMetaField)
+	assert.Equal(t, "ref", tagCommitRefField)
+	assert.Equal(t, "Tag", tagName)
 }

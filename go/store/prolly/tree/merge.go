@@ -20,6 +20,8 @@ import (
 	"io"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 const patchBufferSize = 1024
@@ -35,13 +37,13 @@ type CollisionFn func(left, right Diff) (Diff, bool)
 // |right| are applied directly to |left|. This reduces the amount of write work and improves performance.
 // In the case that a key-value pair was modified on both |left| and |right| with different resulting
 // values, the CollisionFn is called to perform a cell-wise merge, or to throw a conflict.
-func ThreeWayMerge(
+func ThreeWayMerge[S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
 	left, right, base Node,
-	search ItemSearchFn,
 	compare CompareFn,
 	collide CollisionFn,
+	serializer S,
 ) (final Node, err error) {
 
 	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
@@ -70,7 +72,7 @@ func ThreeWayMerge(
 
 	// consume |patches| and apply them to |left|
 	eg.Go(func() error {
-		final, err = ApplyMutations(ctx, ns, left, patches, search, compare)
+		final, err = ApplyMutations(ctx, ns, left, serializer, patches, compare)
 		return err
 	})
 
@@ -81,7 +83,7 @@ func ThreeWayMerge(
 	return final, nil
 }
 
-// patchBuffer implements mutationIter. It consumes Diffs
+// patchBuffer implements MutationIter. It consumes Diffs
 // from the parallel treeDiffers and transforms them into
 // patches for the chunker to apply.
 type patchBuffer struct {
@@ -90,7 +92,7 @@ type patchBuffer struct {
 
 var _ MutationIter = patchBuffer{}
 
-type patch [2]NodeItem
+type patch [2]Item
 
 func newPatchBuffer(sz int) patchBuffer {
 	return patchBuffer{buf: make(chan patch, sz)}
@@ -106,8 +108,8 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 	}
 }
 
-// nextMutation implements mutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (NodeItem, NodeItem) {
+// NextMutation implements MutationIter.
+func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
 	case p = <-ps.buf:
@@ -225,7 +227,7 @@ func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb Collision
 }
 
 func compareDiffKeys(left, right Diff, cmp CompareFn) int {
-	return cmp(NodeItem(left.Key), NodeItem(right.Key))
+	return cmp(Item(left.Key), Item(right.Key))
 }
 
 func equalDiffVals(left, right Diff) bool {

@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -50,25 +51,61 @@ func TestSkipList(t *testing.T) {
 		vals := randomInts((src.Int63() % 10_000) + 100)
 		testSkipList(t, compare, vals...)
 	})
+}
 
+func TestSkipListCheckpoints(t *testing.T) {
+	t.Run("test skip list", func(t *testing.T) {
+		vals := [][]byte{
+			b("a"), b("b"), b("c"), b("d"), b("e"),
+			b("f"), b("g"), b("h"), b("i"), b("j"),
+			b("k"), b("l"), b("m"), b("n"), b("o"),
+		}
+		testSkipListCheckpoints(t, bytes.Compare, vals...)
+	})
+
+	t.Run("test skip list of random bytes", func(t *testing.T) {
+		vals := randomVals((src.Int63() % 10_000) + 100)
+		testSkipListCheckpoints(t, bytes.Compare, vals...)
+	})
+	t.Run("test with custom compare function", func(t *testing.T) {
+		compare := func(left, right []byte) int {
+			l := int64(binary.LittleEndian.Uint64(left))
+			r := int64(binary.LittleEndian.Uint64(right))
+			return int(l - r)
+		}
+		vals := randomInts((src.Int63() % 10_000) + 100)
+		testSkipListCheckpoints(t, compare, vals...)
+	})
+}
+
+func TestMemoryFootprint(t *testing.T) {
+	var sz int
+	sz = int(unsafe.Sizeof(skipNode{}))
+	assert.Equal(t, 80, sz)
+	sz = int(unsafe.Sizeof(skipPointer{}))
+	assert.Equal(t, 20, sz)
 }
 
 func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
 	src.Shuffle(len(vals), func(i, j int) {
 		vals[i], vals[j] = vals[j], vals[i]
 	})
+
+	// |list| is shared between each test
 	list := NewSkipList(compare)
-	for _, v := range vals {
-		list.Put(v, v)
-	}
 
 	t.Run("test puts", func(t *testing.T) {
+		// |list| is populated
+		for _, v := range vals {
+			list.Put(v, v)
+		}
 		testSkipListPuts(t, list, vals...)
 	})
 	t.Run("test gets", func(t *testing.T) {
 		testSkipListGets(t, list, vals...)
 	})
 	t.Run("test updates", func(t *testing.T) {
+		// |list| is mutated
 		testSkipListUpdates(t, list, vals...)
 	})
 	t.Run("test iter forward", func(t *testing.T) {
@@ -76,6 +113,10 @@ func testSkipList(t *testing.T, compare ValueCmp, vals ...[]byte) {
 	})
 	t.Run("test iter backward", func(t *testing.T) {
 		testSkipListIterBackward(t, list, vals...)
+	})
+	t.Run("test truncate", func(t *testing.T) {
+		// |list| is truncated
+		testSkipListTruncate(t, list, vals...)
 	})
 }
 
@@ -116,6 +157,9 @@ func testSkipListUpdates(t *testing.T, list *List, vals ...[]byte) {
 		assert.True(t, ok)
 		assert.Equal(t, v2, act)
 	}
+
+	// introspect list to assert copy-on-update behavior
+	assert.Equal(t, 1+len(vals)*2, len(list.nodes))
 }
 
 func testSkipListIterForward(t *testing.T, list *List, vals ...[]byte) {
@@ -165,6 +209,39 @@ func testSkipListIterBackward(t *testing.T, list *List, vals ...[]byte) {
 	assert.Equal(t, 1, act)
 	act = validateIterBackwardFrom(t, list, vals[len(vals)-1])
 	assert.Equal(t, len(vals), act)
+}
+
+func testSkipListTruncate(t *testing.T, list *List, vals ...[]byte) {
+	assert.Equal(t, list.Count(), len(vals))
+
+	list.Truncate()
+	assert.Equal(t, list.Count(), 0)
+
+	for i := range vals {
+		assert.False(t, list.Has(vals[i]))
+	}
+	for i := range vals {
+		v, ok := list.Get(vals[i])
+		assert.False(t, ok)
+		assert.Nil(t, v)
+	}
+
+	validateIter := func(iter *ListIter) {
+		k, v := iter.Current()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+		iter.Advance()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+		iter.Retreat()
+		iter.Retreat()
+		assert.Nil(t, k)
+		assert.Nil(t, v)
+	}
+
+	validateIter(list.IterAtStart())
+	validateIter(list.IterAtEnd())
+	validateIter(list.GetIterAt(vals[0]))
 }
 
 func validateIterForwardFrom(t *testing.T, l *List, key []byte) (count int) {
@@ -237,5 +314,73 @@ func iterAllBackwards(l *List, cb func([]byte, []byte)) {
 		cb(key, val)
 		iter.Retreat()
 		key, val = iter.Current()
+	}
+}
+
+func testSkipListCheckpoints(t *testing.T, compare ValueCmp, data ...[]byte) {
+	src.Shuffle(len(data), func(i, j int) {
+		data[i], data[j] = data[j], data[i]
+	})
+
+	k := len(data) / 3
+
+	init := data[:k*2]
+	static := data[:k]
+	updates := data[k : k*2]
+	inserts := data[k*2:]
+
+	list := NewSkipList(compare)
+
+	// test empty revert
+	list.Revert()
+
+	for _, v := range init {
+		list.Put(v, v)
+	}
+	for _, v := range init {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		assert.False(t, list.Has(v))
+	}
+
+	list.Checkpoint()
+
+	up := []byte("update")
+	for _, v := range updates {
+		list.Put(v, up)
+	}
+
+	for _, v := range inserts {
+		list.Put(v, v)
+	}
+
+	for _, v := range static {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range updates {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, up, act)
+	}
+
+	list.Revert()
+
+	for _, v := range init {
+		act, ok := list.Get(v)
+		assert.True(t, ok)
+		assert.Equal(t, v, act)
+	}
+	for _, v := range inserts {
+		assert.False(t, list.Has(v))
 	}
 }

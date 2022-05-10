@@ -107,7 +107,7 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 }
 
 // SetConflicts sets the merge conflicts for this table.
-func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (*Table, error) {
+func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData durable.ConflictIndex) (*Table, error) {
 	table, err := t.table.SetConflicts(ctx, schemas, conflictData)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchem
 }
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
-func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
+func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
 	return t.table.GetConflicts(ctx)
 }
 
@@ -140,7 +140,7 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 		return 0, err
 	}
 
-	return cons.Len(), nil
+	return cons.Count(), nil
 }
 
 // ClearConflicts deletes all merge conflicts for this table.
@@ -272,10 +272,16 @@ func (t *Table) GetRowData(ctx context.Context) (durable.Index, error) {
 // ResolveConflicts resolves conflicts for this table.
 func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (invalid, notFound []types.Value, tbl *Table, err error) {
 	removed := 0
-	conflictSchema, confData, err := t.GetConflicts(ctx)
+	conflictSchema, confIdx, err := t.GetConflicts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	if confIdx.Format() == types.Format_DOLT_1 {
+		panic("resolve conflicts not implemented for new storage format")
+	}
+
+	confData := durable.NomsMapFromConflictIndex(confIdx)
 
 	confEdit := confData.Edit()
 	for _, pkTupleVal := range pkTuples {
@@ -306,7 +312,7 @@ func (t *Table) ResolveConflicts(ctx context.Context, pkTuples []types.Value) (i
 		return invalid, notFound, &Table{table: table}, nil
 	}
 
-	table, err := t.table.SetConflicts(ctx, conflictSchema, conflicts)
+	table, err := t.table.SetConflicts(ctx, conflictSchema, durable.ConflictIndexFromNomsMap(conflicts, t.ValueReadWriter()))
 	if err != nil {
 		return nil, nil, nil, err
 	}

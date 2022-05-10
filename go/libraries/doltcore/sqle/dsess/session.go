@@ -211,7 +211,14 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
-	return NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic), nil
+	return NewDoltTransaction(
+		dbName,
+		ws,
+		wsRef,
+		sessionState.dbData,
+		sessionState.WriteSession.GetOptions(),
+		tCharacteristic,
+	), nil
 }
 
 func (sess *Session) newWorkingSetForHead(ctx *sql.Context, wsRef ref.WorkingSetRef, dbName string) (*doltdb.WorkingSet, error) {
@@ -321,10 +328,20 @@ func (sess *Session) DoltCommit(
 	commit *doltdb.PendingCommit,
 ) (*doltdb.Commit, error) {
 	commitFunc := func(ctx *sql.Context, dtx *DoltTransaction, workingSet *doltdb.WorkingSet) (*doltdb.WorkingSet, *doltdb.Commit, error) {
-		return dtx.DoltCommit(
+		ws, commit, err := dtx.DoltCommit(
 			ctx,
 			workingSet.WithWorkingRoot(commit.Roots.Working).WithStagedRoot(commit.Roots.Staged),
 			commit)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		// Unlike normal COMMIT statements, CALL DOLT_COMMIT() doesn't get the current transaction cleared out by the query
+		// engine, so we do it here.
+		// TODO: the engine needs to manage this
+		ctx.SetTransaction(nil)
+
+		return ws, commit, err
 	}
 
 	return sess.doCommit(ctx, dbName, tx, commitFunc)
@@ -406,7 +423,7 @@ func (sess *Session) NewPendingCommit(ctx *sql.Context, dbName string, roots dol
 
 // RollbackTransaction rolls the given transaction back
 func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql.Transaction) error {
-	if !TransactionsDisabled(ctx) || dbName == "" {
+	if TransactionsDisabled(ctx) || dbName == "" {
 		return nil
 	}
 
@@ -424,6 +441,9 @@ func (sess *Session) RollbackTransaction(ctx *sql.Context, dbName string, tx sql
 		return fmt.Errorf("expected a DoltTransaction")
 	}
 
+	// This operation usually doesn't matter, because the engine will process a `rollback` statement by first calling
+	// this logic, then discarding any current transaction. So the next statement will get a fresh transaction regardless,
+	// and this is throwaway work. It only matters if this method is used outside a standalone `rollback` statement.
 	err = sess.SetRoot(ctx, dbName, dtx.startState.WorkingRoot())
 	if err != nil {
 		return err
@@ -719,7 +739,14 @@ func (sess *Session) SwitchWorkingSet(
 			tCharacteristic = sql.ReadOnly
 		}
 	}
-	ctx.SetTransaction(NewDoltTransaction(ws, wsRef, sessionState.dbData, sessionState.WriteSession.GetOptions(), tCharacteristic))
+	ctx.SetTransaction(NewDoltTransaction(
+		dbName,
+		ws,
+		wsRef,
+		sessionState.dbData,
+		sessionState.WriteSession.GetOptions(),
+		tCharacteristic,
+	))
 
 	return nil
 }

@@ -20,11 +20,17 @@ import (
 	"errors"
 	"fmt"
 
+	flatbuffers "github.com/google/flatbuffers/go"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -75,11 +81,11 @@ type Table interface {
 	SetIndexes(ctx context.Context, indexes IndexSet) (Table, error)
 
 	// GetConflicts returns the merge conflicts for this table.
-	GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error)
+	GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error)
 	// HasConflicts returns true if this table has conflicts.
 	HasConflicts(ctx context.Context) (bool, error)
 	// SetConflicts sets the merge conflicts for this table.
-	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts types.Map) (Table, error)
+	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error)
 	// ClearConflicts removes all merge conflicts for this table.
 	ClearConflicts(ctx context.Context) (Table, error)
 
@@ -93,7 +99,7 @@ type Table interface {
 	// SetAutoIncrement sets the AUTO_INCREMENT sequence value for this table.
 	SetAutoIncrement(ctx context.Context, val uint64) (Table, error)
 
-	// DebugString is for debugging purposes
+	// DebugString returns the table contents for debugging purposes
 	DebugString(ctx context.Context) string
 }
 
@@ -102,9 +108,29 @@ type nomsTable struct {
 	tableStruct types.Struct
 }
 
-var sharePool = pool.NewBuffPool()
+func (t nomsTable) DebugString(ctx context.Context) string {
+	var buf bytes.Buffer
+
+	buf.WriteString("\tStruct:\n")
+	types.WriteEncodedValue(ctx, &buf, t.tableStruct)
+
+	buf.WriteString("\n\tRows:\n")
+	data, err := t.GetTableRows(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	err = types.WriteEncodedValue(ctx, &buf, NomsMapFromIndex(data))
+	if err != nil {
+		panic(err)
+	}
+
+	return buf.String()
+}
 
 var _ Table = nomsTable{}
+
+var sharePool = pool.NewBuffPool()
 
 // NewNomsTable makes a new Table.
 func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows types.Map, indexes IndexSet, autoIncVal types.Value) (Table, error) {
@@ -113,6 +139,10 @@ func NewNomsTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sch
 
 // NewTable returns a new Table.
 func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+	if vrw.Format().UsesFlatbuffers() {
+		return newDoltDevTable(ctx, vrw, sch, rows, indexes, autoIncVal)
+	}
+
 	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
 	if err != nil {
 		return nil, err
@@ -155,33 +185,55 @@ func NewTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema,
 	return nomsTable{vrw, tableStruct}, nil
 }
 
-// NomsTableFromAddr deserializes the table in the chunk at |addr|.
-func NomsTableFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (Table, error) {
+// TableFromAddr deserializes the table in the chunk at |addr|.
+func TableFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (Table, error) {
 	val, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 
-	st, ok := val.(types.Struct)
-	if !ok {
-		err = errors.New("table ref is unexpected noms value")
-		return nil, err
-	}
+	if !vrw.Format().UsesFlatbuffers() {
+		st, ok := val.(types.Struct)
+		if !ok {
+			err = errors.New("table ref is unexpected noms value")
+			return nil, err
+		}
 
-	return nomsTable{vrw: vrw, tableStruct: st}, nil
+		return nomsTable{vrw: vrw, tableStruct: st}, nil
+	} else {
+		sm, ok := val.(types.SerialMessage)
+		if !ok {
+			err = errors.New("table ref is unexpected noms value; not SerialMessage")
+			return nil, err
+		}
+		if serial.GetFileID([]byte(sm)) != serial.TableFileID {
+			err = errors.New("table ref is unexpected noms value; GetFileID == " + serial.GetFileID([]byte(sm)))
+			return nil, err
+		}
+		return doltDevTable{vrw, serial.GetRootAsTable([]byte(sm), 0)}, nil
+	}
 }
 
 // RefFromNomsTable serialized |table|, and returns its types.Ref.
 func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
-	nt := table.(nomsTable)
-	return refFromNomsValue(ctx, nt.vrw, nt.tableStruct)
+	nt, ok := table.(nomsTable)
+	if ok {
+		return refFromNomsValue(ctx, nt.vrw, nt.tableStruct)
+	}
+	ddt := table.(doltDevTable)
+	return refFromNomsValue(ctx, ddt.vrw, ddt.nomsValue())
 }
 
 // VrwFromTable returns the types.ValueReadWriter used by |t|.
 // todo(andy): this is a temporary method that will be removed when there is a
 //  general-purpose abstraction to replace types.ValueReadWriter.
 func VrwFromTable(t Table) types.ValueReadWriter {
-	return t.(nomsTable).vrw
+	if nt, ok := t.(nomsTable); ok {
+		return nt.vrw
+	} else {
+		ddt := t.(doltDevTable)
+		return ddt.vrw
+	}
 }
 
 // valueReadWriter returns the valueReadWriter for this table.
@@ -217,7 +269,7 @@ func (t nomsTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
 	if err != nil {
 		return hash.Hash{}, err
 	}
-	return r.Hash(t.vrw.Format())
+	return r.(types.Ref).TargetHash(), nil
 }
 
 // SetSchema implements Table.
@@ -267,7 +319,7 @@ func (t nomsTable) GetTableRows(ctx context.Context) (Index, error) {
 		return nil, err
 	}
 
-	return IndexFromRef(ctx, t.vrw, sch, val.(types.Ref))
+	return indexFromRef(ctx, t.vrw, sch, val.(types.Ref))
 }
 
 // GetIndexes implements Table.
@@ -317,44 +369,52 @@ func (t nomsTable) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // GetConflicts implements Table.
-func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
+func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 	if !ok {
-		confMap, _ := types.NewMap(ctx, t.valueReadWriter())
-		return conflict.ConflictSchema{}, confMap, nil
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		empty, err := NewEmptyConflictIndex(ctx, t.vrw, sch, sch, sch)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		return conflict.ConflictSchema{}, empty, nil
 	}
 
 	schemas, err := conflict.ConflictSchemaFromValue(ctx, t.vrw, schemasVal)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 
 	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 
-	confMap := types.EmptyMap
-	if conflictsVal != nil {
-		confMapRef := conflictsVal.(types.Ref)
-		v, err := confMapRef.TargetValue(ctx, t.vrw)
-
+	if conflictsVal == nil {
+		confIndex, err := NewEmptyConflictIndex(ctx, t.vrw, schemas.Schema, schemas.MergeSchema, schemas.Base)
 		if err != nil {
-			return conflict.ConflictSchema{}, types.EmptyMap, err
+			return conflict.ConflictSchema{}, nil, err
 		}
-
-		confMap = v.(types.Map)
+		return conflict.ConflictSchema{}, confIndex, nil
 	}
 
-	return schemas, confMap, nil
+	i, err := conflictIndexFromRef(ctx, t.vrw, schemas.Schema, schemas.MergeSchema, schemas.Base, conflictsVal.(types.Ref))
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
+
+	return schemas, i, nil
 }
 
 // SetConflicts implements Table.
-func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (Table, error) {
-	conflictsRef, err := refFromNomsValue(ctx, t.vrw, conflictData)
+func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData ConflictIndex) (Table, error) {
+	conflictsRef, err := RefFromConflictIndex(ctx, t.vrw, conflictData)
 	if err != nil {
 		return nil, err
 	}
@@ -562,17 +622,387 @@ func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.
 }
 
 func schemaFromRef(ctx context.Context, vrw types.ValueReadWriter, ref types.Ref) (schema.Schema, error) {
-	schemaVal, err := ref.TargetValue(ctx, vrw)
+	return schemaFromAddr(ctx, vrw, ref.TargetHash())
+}
 
+func schemaFromAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (schema.Schema, error) {
+	schemaVal, err := vrw.ReadValue(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 
 	schema, err := encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), schemaVal)
-
 	if err != nil {
 		return nil, err
 	}
 
 	return schema, nil
+}
+
+type doltDevTable struct {
+	vrw types.ValueReadWriter
+	msg *serial.Table
+}
+
+func (t doltDevTable) DebugString(ctx context.Context) string {
+	return "doltDevTable has no DebugString" // TODO: fill in
+}
+
+var _ Table = doltDevTable{}
+
+type serialTableFields struct {
+	schema            []byte
+	rows              []byte
+	indexes           *serial.RefMap
+	conflictsdata     []byte
+	conflictsours     []byte
+	conflictstheirs   []byte
+	conflictsancestor []byte
+	violations        []byte
+	autoincval        uint64
+}
+
+func (fields serialTableFields) write() *serial.Table {
+	// TODO: Chance for a pool.
+	builder := flatbuffers.NewBuilder(1024)
+
+	schemaoff := builder.CreateByteVector(fields.schema)
+	rowsoff := builder.CreateByteVector(fields.rows)
+	indexesoff := datas.RefMapApplyEdits(fields.indexes, builder, nil)
+	conflictsdataoff := builder.CreateByteVector(fields.conflictsdata)
+	conflictsoursoff := builder.CreateByteVector(fields.conflictsours)
+	conflictstheirsoff := builder.CreateByteVector(fields.conflictstheirs)
+	conflictsbaseoff := builder.CreateByteVector(fields.conflictsancestor)
+	serial.ConflictsStart(builder)
+	serial.ConflictsAddData(builder, conflictsdataoff)
+	serial.ConflictsAddOurSchema(builder, conflictsoursoff)
+	serial.ConflictsAddTheirSchema(builder, conflictstheirsoff)
+	serial.ConflictsAddAncestorSchema(builder, conflictsbaseoff)
+	conflictsoff := serial.ConflictsEnd(builder)
+
+	violationsoff := builder.CreateByteVector(fields.violations)
+
+	serial.TableStart(builder)
+	serial.TableAddSchema(builder, schemaoff)
+	serial.TableAddPrimaryIndex(builder, rowsoff)
+	serial.TableAddSecondaryIndexes(builder, indexesoff)
+	serial.TableAddAutoIncrementValue(builder, fields.autoincval)
+	serial.TableAddConflicts(builder, conflictsoff)
+	serial.TableAddViolations(builder, violationsoff)
+	builder.FinishWithFileIdentifier(serial.TableEnd(builder), []byte(serial.TableFileID))
+	return serial.GetRootAsTable(builder.FinishedBytes(), 0)
+}
+
+func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, rows Index, indexes IndexSet, autoIncVal types.Value) (Table, error) {
+	schVal, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaRef, err := refFromNomsValue(ctx, vrw, schVal)
+	if err != nil {
+		return nil, err
+	}
+	schemaAddr := schemaRef.TargetHash()
+
+	rowsbytes, err := rows.bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	if indexes == nil {
+		indexes = NewIndexSet(ctx, vrw)
+	}
+
+	var autoInc uint64
+	if autoIncVal != nil {
+		autoInc = uint64(autoIncVal.(types.Uint))
+	}
+
+	var emptyhash hash.Hash
+	msg := serialTableFields{
+		schema:            schemaAddr[:],
+		rows:              rowsbytes,
+		indexes:           indexes.(doltDevIndexSet).msg,
+		conflictsdata:     emptyhash[:],
+		conflictsours:     emptyhash[:],
+		conflictstheirs:   emptyhash[:],
+		conflictsancestor: emptyhash[:],
+		violations:        emptyhash[:],
+		autoincval:        autoInc,
+	}.write()
+
+	return doltDevTable{vrw, msg}, nil
+}
+
+func (t doltDevTable) nomsValue() types.Value {
+	return types.SerialMessage(t.msg.Table().Bytes)
+}
+
+func (t doltDevTable) HashOf() (hash.Hash, error) {
+	return t.nomsValue().Hash(t.Format())
+}
+
+func (t doltDevTable) Format() *types.NomsBinFormat {
+	return t.vrw.Format()
+}
+
+func (t doltDevTable) GetSchemaHash(ctx context.Context) (hash.Hash, error) {
+	return hash.New(t.msg.SchemaBytes()), nil
+}
+
+func (t doltDevTable) GetSchema(ctx context.Context) (schema.Schema, error) {
+	addr := hash.New(t.msg.SchemaBytes())
+	return schemaFromAddr(ctx, t.vrw, addr)
+}
+
+func (t doltDevTable) SetSchema(ctx context.Context, sch schema.Schema) (Table, error) {
+	newSchemaVal, err := encoding.MarshalSchemaAsNomsValue(ctx, t.vrw, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	schRef, err := refFromNomsValue(ctx, t.vrw, newSchemaVal)
+	if err != nil {
+		return nil, err
+	}
+
+	addr := schRef.TargetHash()
+	msg := t.clone()
+	copy(msg.SchemaBytes(), addr[:])
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
+	rowbytes := t.msg.PrimaryIndexBytes()
+	if t.vrw.Format() == types.Format_DOLT_DEV {
+		rowchunk := chunks.NewChunk(rowbytes)
+		tv, err := types.DecodeValue(rowchunk, t.vrw)
+		if err != nil {
+			return nil, err
+		}
+		return IndexFromNomsMap(tv.(types.Map), t.vrw), nil
+	} else {
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return nil, err
+		}
+		m := prolly.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
+		return IndexFromProllyMap(m), nil
+	}
+}
+
+func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, error) {
+	rowsbytes, err := rows.bytes()
+	if err != nil {
+		return nil, err
+	}
+
+	fields := t.fields()
+	fields.rows = rowsbytes
+	msg := fields.write()
+
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
+	is := t.msg.SecondaryIndexes(nil)
+	return doltDevIndexSet{t.vrw, is}, nil
+}
+
+func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
+	fields := t.fields()
+	fields.indexes = indexes.(doltDevIndexSet).msg
+	msg := fields.write()
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
+	conflicts := t.msg.Conflicts(nil)
+
+	ouraddr := hash.New(conflicts.OurSchemaBytes())
+	theiraddr := hash.New(conflicts.TheirSchemaBytes())
+	baseaddr := hash.New(conflicts.AncestorSchemaBytes())
+
+	if ouraddr.IsEmpty() {
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		empty, err := NewEmptyConflictIndex(ctx, t.vrw, sch, sch, sch)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		return conflict.ConflictSchema{}, empty, nil
+	}
+
+	ourschema, err := getSchemaAtAddr(ctx, t.vrw, ouraddr)
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
+	theirschema, err := getSchemaAtAddr(ctx, t.vrw, theiraddr)
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
+	baseschema, err := getSchemaAtAddr(ctx, t.vrw, baseaddr)
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
+
+	conflictschema := conflict.ConflictSchema{
+		Base:        baseschema,
+		Schema:      ourschema,
+		MergeSchema: theirschema,
+	}
+
+	mapaddr := hash.New(conflicts.DataBytes())
+	var conflictIdx ConflictIndex
+	if mapaddr.IsEmpty() {
+		conflictIdx, err = NewEmptyConflictIndex(ctx, t.vrw, ourschema, theirschema, baseschema)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+	} else {
+		conflictIdx, err = conflictIndexFromAddr(ctx, t.vrw, ourschema, theirschema, baseschema, mapaddr)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+	}
+
+	return conflictschema, conflictIdx, nil
+}
+
+func (t doltDevTable) HasConflicts(ctx context.Context) (bool, error) {
+	conflicts := t.msg.Conflicts(nil)
+	addr := hash.New(conflicts.OurSchemaBytes())
+	return !addr.IsEmpty(), nil
+}
+
+func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error) {
+	conflictsRef, err := RefFromConflictIndex(ctx, t.vrw, conflicts)
+	if err != nil {
+		return nil, err
+	}
+	conflictsAddr := conflictsRef.TargetHash()
+
+	baseaddr, err := getAddrForSchema(ctx, t.vrw, sch.Base)
+	if err != nil {
+		return nil, err
+	}
+	ouraddr, err := getAddrForSchema(ctx, t.vrw, sch.Schema)
+	if err != nil {
+		return nil, err
+	}
+	theiraddr, err := getAddrForSchema(ctx, t.vrw, sch.MergeSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	msg := t.clone()
+	cmsg := msg.Conflicts(nil)
+	copy(cmsg.DataBytes(), conflictsAddr[:])
+	copy(cmsg.OurSchemaBytes(), ouraddr[:])
+	copy(cmsg.TheirSchemaBytes(), theiraddr[:])
+	copy(cmsg.AncestorSchemaBytes(), baseaddr[:])
+
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) ClearConflicts(ctx context.Context) (Table, error) {
+	msg := t.clone()
+	conflicts := msg.Conflicts(nil)
+	var emptyhash hash.Hash
+	copy(conflicts.DataBytes(), emptyhash[:])
+	copy(conflicts.OurSchemaBytes(), emptyhash[:])
+	copy(conflicts.TheirSchemaBytes(), emptyhash[:])
+	copy(conflicts.AncestorSchemaBytes(), emptyhash[:])
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) GetConstraintViolations(ctx context.Context) (types.Map, error) {
+	addr := hash.New(t.msg.ViolationsBytes())
+	if addr.IsEmpty() {
+		return types.NewMap(ctx, t.vrw)
+	}
+	v, err := t.vrw.ReadValue(ctx, addr)
+	if err != nil {
+		return types.Map{}, err
+	}
+	return v.(types.Map), nil
+}
+
+func (t doltDevTable) SetConstraintViolations(ctx context.Context, violations types.Map) (Table, error) {
+	var addr hash.Hash
+	if violations != types.EmptyMap && violations.Len() != 0 {
+		ref, err := refFromNomsValue(ctx, t.vrw, violations)
+		if err != nil {
+			return nil, err
+		}
+		addr = ref.TargetHash()
+	}
+	msg := t.clone()
+	copy(msg.ViolationsBytes(), addr[:])
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) GetAutoIncrement(ctx context.Context) (uint64, error) {
+	res := t.msg.AutoIncrementValue()
+	if res == 0 {
+		return 1, nil
+	}
+	return res, nil
+}
+
+func (t doltDevTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, error) {
+	// TODO: This clones before checking if the mutate will work.
+	msg := t.clone()
+	if !msg.MutateAutoIncrementValue(val) {
+		fields := t.fields()
+		fields.autoincval = val
+		msg = fields.write()
+	}
+	return doltDevTable{t.vrw, msg}, nil
+}
+
+func (t doltDevTable) clone() *serial.Table {
+	bs := make([]byte, len(t.msg.Table().Bytes))
+	copy(bs, t.msg.Table().Bytes)
+	var ret serial.Table
+	ret.Init(bs, t.msg.Table().Pos)
+	return &ret
+}
+
+func (t doltDevTable) fields() serialTableFields {
+	conflicts := t.msg.Conflicts(nil)
+	return serialTableFields{
+		schema:            t.msg.SchemaBytes(),
+		rows:              t.msg.PrimaryIndexBytes(),
+		indexes:           t.msg.SecondaryIndexes(nil),
+		conflictsdata:     conflicts.DataBytes(),
+		conflictsours:     conflicts.OurSchemaBytes(),
+		conflictstheirs:   conflicts.TheirSchemaBytes(),
+		conflictsancestor: conflicts.AncestorSchemaBytes(),
+		violations:        t.msg.ViolationsBytes(),
+		autoincval:        t.msg.AutoIncrementValue(),
+	}
+}
+
+func getSchemaAtAddr(ctx context.Context, vrw types.ValueReadWriter, addr hash.Hash) (schema.Schema, error) {
+	val, err := vrw.ReadValue(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	return encoding.UnmarshalSchemaNomsValue(ctx, vrw.Format(), val)
+}
+
+func getAddrForSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (hash.Hash, error) {
+	st, err := encoding.MarshalSchemaAsNomsValue(ctx, vrw, sch)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	ref, err := vrw.WriteValue(ctx, st)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+	return ref.TargetHash(), nil
 }

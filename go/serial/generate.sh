@@ -1,15 +1,20 @@
 #!/bin/bash
 
-GEN_DIR="../gen/fb/serial"
+set -eou pipefail
+SRC=$(dirname ${BASH_SOURCE[0]})
+
+GEN_DIR="$SRC/../gen/fb/serial"
 
 # cleanup old generated files
-rm $GEN_DIR/*.go
+if [ ! -z "$(ls $GEN_DIR)" ]; then
+    rm $GEN_DIR/*.go
+fi
 
 # generate golang (de)serialization package
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
   commit.fbs \
-  database.fbs \
   prolly.fbs \
+  addressmap.fbs \
   rootvalue.fbs \
   schema.fbs \
   storeroot.fbs \

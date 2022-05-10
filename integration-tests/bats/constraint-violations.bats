@@ -29,7 +29,7 @@ SQL
 
     run dolt merge other
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "fix constraint violations" ]] || false
+    [[ "$output" =~ "Fix constraint violations" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false

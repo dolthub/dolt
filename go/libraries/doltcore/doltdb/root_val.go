@@ -250,7 +250,7 @@ func (r nomsRvStorage) nomsValue() types.Value {
 func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) {
 	var storage rvStorage
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), 0)
 		storage = fbRvStorage{srv}
 	} else {
@@ -278,7 +278,7 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
 			return string(serial.GetFileID([]byte(sm))) == serial.RootValueFileID
 		}
@@ -291,7 +291,7 @@ func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 }
 
 func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
 		var empty hash.Hash
 		serial.RefMapStart(builder)
@@ -641,7 +641,7 @@ func (root *RootValue) GetTable(ctx context.Context, tName string) (*Table, bool
 		return nil, false, nil
 	}
 
-	table, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
+	table, err := durable.TableFromAddr(ctx, root.VRW(), addr)
 	if err != nil {
 		return nil, false, err
 	}
@@ -797,7 +797,7 @@ func (root *RootValue) IterTables(ctx context.Context, cb func(name string, tabl
 	}
 
 	return tm.Iter(ctx, func(name string, addr hash.Hash) (bool, error) {
-		nt, err := durable.NomsTableFromAddr(ctx, root.VRW(), addr)
+		nt, err := durable.TableFromAddr(ctx, root.VRW(), addr)
 		if err != nil {
 			return true, err
 		}
@@ -1323,7 +1323,7 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 	if transitive {
 		buf.WriteString("\nTables:")
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-			buf.WriteString("\nName:")
+			buf.WriteString("\nTable ")
 			buf.WriteString(name)
 			buf.WriteString("\n")
 

@@ -156,5 +156,6 @@ func (ste *sessionedTableEditor) SetConstraintViolation(ctx context.Context, k t
 
 // Close implements TableEditor.
 func (ste *sessionedTableEditor) Close(ctx context.Context) error {
+	//TODO: I don't think this gets called anymore...is this leaking?
 	return ste.tableEditor.Close(ctx)
 }

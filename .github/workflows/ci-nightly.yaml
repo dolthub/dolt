@@ -1,0 +1,61 @@
+name: Nightly Benchmarks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'
+
+jobs:
+  perf:
+    runs-on: ubuntu-18.04
+    name: Benchmark Performance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - uses: azure/setup-kubectl@v2.0
+        with:
+          version: 'v1.23.6'
+      - name: Install aws-iam-authenticator
+        run: |
+          curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.18.8/2020-09-18/bin/linux/amd64/aws-iam-authenticator && \
+          chmod +x ./aws-iam-authenticator && \
+          sudo cp ./aws-iam-authenticator /usr/local/bin/aws-iam-authenticator
+          aws-iam-authenticator version
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      - name: Create and Auth kubeconfig
+        run: |
+          echo "$CONFIG" > kubeconfig
+          KUBECONFIG=kubeconfig kubectl config set-credentials github-actions-dolt --exec-api-version=client.authentication.k8s.io/v1alpha1 --exec-command=aws-iam-authenticator --exec-arg=token --exec-arg=-i --exec-arg=eks-cluster-1
+          KUBECONFIG=kubeconfig kubectl config set-context github-actions-dolt-context --cluster=eks-cluster-1 --user=github-actions-dolt --namespace=performance-benchmarking
+          KUBECONFIG=kubeconfig kubectl config use-context github-actions-dolt-context
+        env:
+          CONFIG: ${{ secrets.CORP_KUBECONFIG }}
+      - name: Run benchmarks
+        id: run-benchmarks
+        run: ./.github/scripts/performance-benchmarking/run-benchmarks.sh
+        env:
+          FROM_SERVER: 'mysql'
+          FROM_VERSION: '8.0.28'
+          TO_SERVER: 'dolt'
+          TO_VERSION: ${{ github.sha }}
+          MODE: 'nightly'
+          ACTOR: ${{ github.actor }}
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
+      - name: Run correctness
+        id: run-correctness
+        run: ./.github/scripts/sql-correctness/run-correctness.sh
+        env:
+          TO_VERSION: ${{ github.sha }}
+          MODE: 'nightly'
+          ACTOR: ${{ github.actor }}
+          ACTOR_EMAIL: 'max@dolthub.com'
+          REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
+          KUBECONFIG: "./kubeconfig"
+          TEMPLATE_SCRIPT: "./.github/scripts/sql-correctness/get-dolt-correctness-job-json.sh"

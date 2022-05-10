@@ -18,44 +18,27 @@ import (
 	"context"
 	"encoding/hex"
 	"io"
-	"math"
 
-	fb "github.com/google/flatbuffers/go"
-
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const (
-	maxVectorOffset = uint64(math.MaxUint16)
-	refSize         = hash.ByteLen
-
-	// These constants are mirrored from serial.TupleMap.KeyOffsetsLength()
-	// and serial.TupleMap.ValueOffsetsLength() respectively.
-	// They are only as stable as the flatbuffers schemas that define them.
-	keyOffsetsVOffset   = 6
-	valueOffsetsVOffset = 10
-)
+type Item []byte
 
 type Node struct {
+	// keys and values contain sub-slices of |msg|,
+	// allowing faster lookups by avoiding the vtable
 	keys, values val.SlicedBuffer
-	buf          serial.TupleMap
 	count        uint16
+	msg          message.Message
 }
 
 type AddressCb func(ctx context.Context, addr hash.Hash) error
 
 func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) error {
-	if nd.IsLeaf() {
-		// todo(andy): ref'd values
-		return nil
-	}
-
-	for i := 0; i < int(nd.count); i++ {
-		addr := nd.getRef(i)
-
+	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
 		if err := cb(ctx, addr); err != nil {
 			return err
 		}
@@ -65,11 +48,8 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
-		if err := WalkAddresses(ctx, child, ns, cb); err != nil {
-			return err
-		}
-	}
-	return nil
+		return WalkAddresses(ctx, child, ns, cb)
+	})
 }
 
 type NodeCb func(ctx context.Context, nd Node) error
@@ -78,48 +58,22 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
 	}
-	if nd.IsLeaf() {
-		// todo(andy): walk ref'd values?
-		return nil
-	}
 
-	for i := 0; i < int(nd.count); i++ {
-		child, err := ns.Read(ctx, nd.getRef(i))
+	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
+		child, err := ns.Read(ctx, addr)
 		if err != nil {
 			return err
 		}
-		if err := WalkNodes(ctx, child, ns, cb); err != nil {
-			return err
-		}
-	}
-	return nil
+		return WalkNodes(ctx, child, ns, cb)
+	})
 }
 
-func MapNodeFromBytes(bb []byte) Node {
-	buf := serial.GetRootAsTupleMap(bb, 0)
-	return mapNodeFromFlatbuffer(*buf)
-}
-
-func mapNodeFromFlatbuffer(buf serial.TupleMap) Node {
-	keys := val.SlicedBuffer{
-		Buf:  buf.KeyTuplesBytes(),
-		Offs: getKeyOffsetsVector(buf),
-	}
-	values := val.SlicedBuffer{
-		Buf:  buf.ValueTuplesBytes(),
-		Offs: getValueOffsetsVector(buf),
-	}
-
-	count := buf.KeyOffsetsLength() + 1
-	if len(keys.Buf) == 0 {
-		count = 0
-	}
-
+func NodeFromBytes(msg []byte) Node {
 	return Node{
-		keys:   keys,
-		values: values,
-		count:  uint16(count),
-		buf:    buf,
+		keys:   message.GetKeys(msg),
+		values: message.GetValues(msg),
+		count:  message.GetCount(msg),
+		msg:    msg,
 	}
 }
 
@@ -132,7 +86,7 @@ func (nd Node) Count() int {
 }
 
 func (nd Node) TreeCount() int {
-	return int(nd.buf.TreeCount())
+	return message.GetTreeCount(nd.msg)
 }
 
 func (nd Node) Size() int {
@@ -141,39 +95,32 @@ func (nd Node) Size() int {
 
 // Level returns the tree Level for this node
 func (nd Node) Level() int {
-	return int(nd.buf.TreeLevel())
+	return message.GetTreeLevel(nd.msg)
 }
 
 // IsLeaf returns whether this node is a leaf
 func (nd Node) IsLeaf() bool {
-	return int(nd.buf.TreeLevel()) == 0
+	return nd.Level() == 0
 }
 
 // GetKey returns the |ith| key of this node
-func (nd Node) GetKey(i int) NodeItem {
+func (nd Node) GetKey(i int) Item {
 	return nd.keys.GetSlice(i)
 }
 
-// getValue returns the |ith| value of this node. Only Valid for leaf nodes.
-func (nd Node) getValue(i int) NodeItem {
-	if nd.IsLeaf() {
-		return nd.values.GetSlice(i)
-	} else {
-		r := nd.getRef(i)
-		return r[:]
-	}
+// getValue returns the |ith| value of this node.
+func (nd Node) getValue(i int) Item {
+	return nd.values.GetSlice(i)
 }
 
-// getRef returns the |ith| ref in this node. Only Valid for internal nodes.
-func (nd Node) getRef(i int) hash.Hash {
-	refs := nd.buf.RefArrayBytes()
-	start, stop := i*refSize, (i+1)*refSize
-	return hash.New(refs[start:stop])
+// getAddress returns the |ith| address of this node.
+// This method assumes values are 20-byte address hashes.
+func (nd Node) getAddress(i int) hash.Hash {
+	return hash.New(nd.getValue(i))
 }
 
-func (nd Node) getSubtreeCounts() subtreeCounts {
-	buf := nd.buf.RefCardinalitiesBytes()
-	return readSubtreeCounts(int(nd.count), buf)
+func (nd Node) getSubtreeCounts() SubtreeCounts {
+	return message.GetSubtrees(nd.msg)
 }
 
 func (nd Node) empty() bool {
@@ -181,27 +128,11 @@ func (nd Node) empty() bool {
 }
 
 func (nd Node) bytes() []byte {
-	return nd.buf.Table().Bytes
+	return nd.msg
 }
 
-func getKeyOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.KeyOffsetsLength() * 2
-	tab := buf.Table()
-	vec := tab.Offset(keyOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
-}
-
-func getValueOffsetsVector(buf serial.TupleMap) []byte {
-	sz := buf.ValueOffsetsLength() * 2
-	tab := buf.Table()
-	vec := tab.Offset(valueOffsetsVOffset)
-	start := int(tab.Vector(fb.UOffsetT(vec)))
-	stop := start + sz
-
-	return tab.Bytes[start:stop]
+func walkAddresses(ctx context.Context, nd Node, cb AddressCb) (err error) {
+	return message.WalkAddresses(ctx, nd.msg, cb)
 }
 
 // OutputProllyNode writes the node given to the writer given in a semi-human-readable format, where values are still
@@ -236,7 +167,7 @@ func OutputProllyNode(w io.Writer, node Node) error {
 
 			w.Write([]byte(" }"))
 		} else {
-			ref := node.getRef(i)
+			ref := node.getAddress(i)
 
 			w.Write([]byte(" ref: #"))
 			w.Write([]byte(ref.String()))

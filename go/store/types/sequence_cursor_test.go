@@ -120,10 +120,6 @@ func (ts testSequence) Hash(*NomsBinFormat) (hash.Hash, error) {
 	panic("not reached")
 }
 
-func (ts testSequence) WalkValues(cb ValueCallback) error {
-	panic("not reached")
-}
-
 func (ts testSequence) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	panic("not reached")
 }

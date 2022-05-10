@@ -141,7 +141,7 @@ func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 		writer:  te,
 		idxName: idx.ID(),
 		idxSch:  idx.IndexSchema(),
-		nrr:     index.ReadRangesFromIndexLookup(lookup)[0],
+		nrr:     index.NomsRangesFromIndexLookup(lookup)[0],
 	}
 }
 

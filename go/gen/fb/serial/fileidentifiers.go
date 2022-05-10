@@ -21,6 +21,9 @@ const TagFileID = "DTAG"
 const WorkingSetFileID = "WRST"
 const CommitFileID = "DCMT"
 const RootValueFileID = "RTVL"
+const TableFileID = "DTBL"
+const ProllyTreeNodeFileID = "TUPM"
+const AddressMapFileID = "ADRM"
 
 func GetFileID(bs []byte) string {
 	if len(bs) < 8 {

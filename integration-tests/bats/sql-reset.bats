@@ -88,6 +88,41 @@ teardown() {
     [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
 }
 
+@test "sql-reset: CALL DRESET --hard works on unstaged and staged table changes" {
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    run dolt sql -q "CALL DRESET('--hard')"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    dolt add .
+
+    run dolt sql -q "CALL DRESET('--hard')"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    # Reset to head results in clean main.
+    run dolt sql -q "CALL DRESET('--hard', 'head');"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "sql-reset: DOLT_RESET --hard does not ignore staged docs" {
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md

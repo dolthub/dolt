@@ -23,8 +23,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 func init() {
@@ -100,7 +101,8 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 
 	ctx := context.Background()
 	ns = NewTestNodeStore()
-	chunker, err := newEmptyTreeChunker(ctx, ns, fact)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for i := 0; i < scale; i++ {
@@ -115,7 +117,7 @@ func makeProllyTreeWithSizes(t *testing.T, fact splitterFactory, scale, keySz, v
 }
 
 type itemProvider interface {
-	Next() (key, value NodeItem)
+	Next() (key, value Item)
 }
 
 type gaussianItems struct {
@@ -124,9 +126,9 @@ type gaussianItems struct {
 	r               *rand.Rand
 }
 
-func (g gaussianItems) Next() (key, value NodeItem) {
-	key = make(NodeItem, g.sample(g.keyMean, g.keyStd))
-	value = make(NodeItem, g.sample(g.valMean, g.valStd))
+func (g gaussianItems) Next() (key, value Item) {
+	key = make(Item, g.sample(g.keyMean, g.keyStd))
+	value = make(Item, g.sample(g.valMean, g.valStd))
 	rand.Read(key)
 	rand.Read(value)
 	return
@@ -144,9 +146,9 @@ type staticItems struct {
 	key, value int
 }
 
-func (s staticItems) Next() (key, value NodeItem) {
-	key = make(NodeItem, s.key)
-	value = make(NodeItem, s.value)
+func (s staticItems) Next() (key, value Item) {
+	key = make(Item, s.key)
+	value = make(Item, s.value)
 	rand.Read(key)
 	rand.Read(value)
 	return

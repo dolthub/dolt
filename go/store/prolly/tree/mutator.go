@@ -17,19 +17,21 @@ package tree
 import (
 	"bytes"
 	"context"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 type MutationIter interface {
-	NextMutation(ctx context.Context) (key, value NodeItem)
+	NextMutation(ctx context.Context) (key, value Item)
 	Close() error
 }
 
-func ApplyMutations(
+func ApplyMutations[S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
 	root Node,
+	serializer S,
 	edits MutationIter,
-	search ItemSearchFn,
 	compare CompareFn,
 ) (Node, error) {
 	newKey, newValue := edits.NextMutation(ctx)
@@ -37,12 +39,12 @@ func ApplyMutations(
 		return root, nil // no mutations
 	}
 
-	cur, err := NewCursorAtItem(ctx, ns, root, newKey, search)
+	cur, err := NewCursorFromCompareFn(ctx, ns, root, newKey, compare)
 	if err != nil {
 		return Node{}, err
 	}
 
-	chkr, err := newTreeChunker(ctx, cur.Clone(), 0, ns, defaultSplitterFactory)
+	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, serializer)
 	if err != nil {
 		return Node{}, err
 	}
@@ -55,7 +57,7 @@ func ApplyMutations(
 			return Node{}, err
 		}
 
-		var oldValue NodeItem
+		var oldValue Item
 		if cur.Valid() {
 			// Compare mutations |newKey| and |newValue|
 			// to the existing pair from the cursor
@@ -99,6 +101,6 @@ func ApplyMutations(
 	return chkr.Done(ctx)
 }
 
-func equalValues(left, right NodeItem) bool {
+func equalValues(left, right Item) bool {
 	return bytes.Equal(left, right)
 }

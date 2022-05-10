@@ -177,7 +177,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		opts.Meta = &CommitMeta{}
 	}
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		r, err := vrw.WriteValue(ctx, v)
 		if err != nil {
 			return nil, err
@@ -241,7 +241,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 }
 
 func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, error) {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		bs := []byte(v.(types.SerialMessage))
 		height := serial.GetRootAsCommit(bs, 0).Height()
 		var addr hash.Hash
@@ -274,7 +274,7 @@ func commitPtr(nbf *types.NomsBinFormat, v types.Value, r *types.Ref) (*Commit, 
 	}, nil
 }
 
-func CommitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
+func commitFromValue(nbf *types.NomsBinFormat, v types.Value) (*Commit, error) {
 	return commitPtr(nbf, v, nil)
 }
 
@@ -297,7 +297,7 @@ func LoadCommitAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (
 	if v == nil {
 		return nil, errors.New("target commit not found")
 	}
-	return CommitFromValue(vr.Format(), v)
+	return commitFromValue(vr.Format(), v)
 }
 
 func findCommonAncestorUsingParentsList(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (hash.Hash, bool, error) {
@@ -415,28 +415,21 @@ func GetCommitParents(ctx context.Context, vr types.ValueReader, cv types.Value)
 		if serial.GetFileID(data) != serial.CommitFileID {
 			return nil, errors.New("GetCommitParents: provided value is not a commit.")
 		}
-		refs, err := types.SerialCommitParentRefs(vr.Format(), sm)
-		if err != nil {
-			return nil, err
-		}
-		hashes := make([]hash.Hash, len(refs))
-		for i, r := range refs {
-			hashes[i] = r.TargetHash()
-		}
-		vals, err := vr.ReadManyValues(ctx, hashes)
+		addrs, err := types.SerialCommitParentAddrs(vr.Format(), sm)
+		vals, err := vr.ReadManyValues(ctx, addrs)
 		if err != nil {
 			return nil, err
 		}
 		res := make([]*Commit, len(vals))
 		for i, v := range vals {
 			if v == nil {
-				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", hashes[i].String())
+				return nil, fmt.Errorf("GetCommitParents: Did not find parent Commit in ValueReader: %s", addrs[i].String())
 			}
 			csm := serial.GetRootAsCommit([]byte(v.(types.SerialMessage)), 0)
 			res[i] = &Commit{
 				val:    v,
 				height: csm.Height(),
-				addr:   hashes[i],
+				addr:   addrs[i],
 			}
 		}
 		return res, nil

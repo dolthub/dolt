@@ -45,7 +45,7 @@ func newBlob(seq sequence) Blob {
 }
 
 func NewEmptyBlob(vrw ValueReadWriter) (Blob, error) {
-	seq, err := newBlobLeafSequence(vrw, []byte{})
+	seq, err := newBlobLeafSequence(vrw.Format(), vrw, []byte{})
 
 	if err != nil {
 		return Blob{}, err
@@ -307,10 +307,6 @@ func (b Blob) Kind() NomsKind {
 	return b.sequence.Kind()
 }
 
-func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
 type BlobReader struct {
 	b   Blob
 	pos int64
@@ -365,7 +361,7 @@ func makeBlobLeafChunkFn(vrw ValueReadWriter) makeChunkFn {
 }
 
 func chunkBlobLeaf(vrw ValueReadWriter, buff []byte) (Collection, orderedKey, uint64, error) {
-	seq, err := newBlobLeafSequence(vrw, buff)
+	seq, err := newBlobLeafSequence(vrw.Format(), vrw, buff)
 
 	if err != nil {
 		return nil, orderedKey{}, 0, err

@@ -30,6 +30,18 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
+@test "sql-commit: DCOMMIT without a message throws error" {
+    run dolt sql -q "CALL DADD('.')"
+    [ $status -eq 0 ]
+
+    run dolt sql -q "CALL DCOMMIT()"
+    [ $status -eq 1 ]
+    run dolt log
+    [ $status -eq 0 ]
+    regex='Initialize'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
 @test "sql-commit: CALL DOLT_COMMIT without a message throws error" {
     run dolt sql -q "CALL DOLT_ADD('.')"
     [ $status -eq 0 ]

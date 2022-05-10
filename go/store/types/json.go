@@ -133,15 +133,6 @@ func (t JSON) Inner() (Value, error) {
 	return dec.readValue(t.nbf)
 }
 
-// WalkValues implements the Value interface.
-func (t JSON) WalkValues(ctx context.Context, cb ValueCallback) error {
-	val, err := t.Inner()
-	if err != nil {
-		return err
-	}
-	return val.WalkValues(ctx, cb)
-}
-
 // typeOf implements the Value interface.
 func (t JSON) typeOf() (*Type, error) {
 	val, err := t.Inner()

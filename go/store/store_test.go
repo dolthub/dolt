@@ -242,7 +242,7 @@ func BenchmarkMapItr(b *testing.B) {
 	if err != io.EOF {
 		require.NoError(b, err)
 	}
-	dmItr.Close(sqlCtx)
+	_ = dmItr.Close(sqlCtx)
 }
 
 /*func BenchmarkFullScan(b *testing.B) {

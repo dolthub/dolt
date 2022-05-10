@@ -16,336 +16,548 @@ package merge
 
 import (
 	"context"
-	"strconv"
+	"sort"
 	"testing"
 
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	filesys2 "github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
-
-func mustTuple(tpl types.Tuple, err error) types.Tuple {
-	if err != nil {
-		panic(err)
-	}
-
-	return tpl
-}
-
-func mustString(str string, err error) string {
-	if err != nil {
-		panic(err)
-	}
-
-	return str
-}
-
-func mustGetValue(val types.Value, _ bool, err error) types.Value {
-	if err != nil {
-		panic(err)
-	}
-
-	return val
-}
-
-type RowMergeTest struct {
-	name                  string
-	row, mergeRow, ancRow types.Value
-	sch                   schema.Schema
-	expectedResult        types.Value
-	expectConflict        bool
-}
-
-func valsToTestTupleWithoutPks(vals []types.Value) types.Value {
-	return valsToTestTuple(vals, false)
-}
-
-func valsToTestTupleWithPks(vals []types.Value) types.Value {
-	return valsToTestTuple(vals, true)
-}
-
-func valsToTestTuple(vals []types.Value, includePrimaryKeys bool) types.Value {
-	if vals == nil {
-		return nil
-	}
-
-	tplVals := make([]types.Value, 0, 2*len(vals))
-	for i, val := range vals {
-		if !types.IsNull(val) {
-			tag := i
-			// Assume one primary key tag, add 1 to all other tags
-			if includePrimaryKeys {
-				tag++
-			}
-			tplVals = append(tplVals, types.Uint(tag))
-			tplVals = append(tplVals, val)
-		}
-	}
-
-	return mustTuple(types.NewTuple(types.Format_Default, tplVals...))
-}
-
-func createRowMergeStruct(name string, vals, mergeVals, ancVals, expected []types.Value, expectCnf bool) RowMergeTest {
-	longest := vals
-
-	if len(mergeVals) > len(longest) {
-		longest = mergeVals
-	}
-
-	if len(ancVals) > len(longest) {
-		longest = ancVals
-	}
-
-	cols := make([]schema.Column, len(longest)+1)
-	// Schema needs a primary key to be valid, but all the logic being tested works only on the non-key columns.
-	cols[0] = schema.NewColumn("primaryKey", 0, types.IntKind, true)
-	for i, val := range longest {
-		tag := i + 1
-		cols[tag] = schema.NewColumn(strconv.FormatInt(int64(tag), 10), uint64(tag), val.Kind(), false)
-	}
-
-	colColl := schema.NewColCollection(cols...)
-	sch := schema.MustSchemaFromCols(colColl)
-
-	tpl := valsToTestTupleWithPks(vals)
-	mergeTpl := valsToTestTupleWithPks(mergeVals)
-	ancTpl := valsToTestTupleWithPks(ancVals)
-	expectedTpl := valsToTestTupleWithPks(expected)
-	return RowMergeTest{name, tpl, mergeTpl, ancTpl, sch, expectedTpl, expectCnf}
-}
-
-func TestRowMerge(t *testing.T) {
-	tests := []RowMergeTest{
-		createRowMergeStruct(
-			"add same row",
-			[]types.Value{types.String("one"), types.Int(2)},
-			[]types.Value{types.String("one"), types.Int(2)},
-			nil,
-			[]types.Value{types.String("one"), types.Int(2)},
-			false,
-		),
-		createRowMergeStruct(
-			"add diff row",
-			[]types.Value{types.String("one"), types.String("two")},
-			[]types.Value{types.String("one"), types.String("three")},
-			nil,
-			nil,
-			true,
-		),
-		createRowMergeStruct(
-			"both delete row",
-			nil,
-			nil,
-			[]types.Value{types.String("one"), types.Uint(2)},
-			nil,
-			false,
-		),
-		createRowMergeStruct(
-			"one delete one modify",
-			nil,
-			[]types.Value{types.String("two"), types.Uint(2)},
-			[]types.Value{types.String("one"), types.Uint(2)},
-			nil,
-			true,
-		),
-		createRowMergeStruct(
-			"modify rows without overlap",
-			[]types.Value{types.String("two"), types.Uint(2)},
-			[]types.Value{types.String("one"), types.Uint(3)},
-			[]types.Value{types.String("one"), types.Uint(2)},
-			[]types.Value{types.String("two"), types.Uint(3)},
-			false,
-		),
-		createRowMergeStruct(
-			"modify rows with equal overlapping changes",
-			[]types.Value{types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))},
-			[]types.Value{types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			false,
-		),
-		createRowMergeStruct(
-			"modify rows with differing overlapping changes",
-			[]types.Value{types.String("two"), types.Uint(2), types.UUID(uuid.MustParse("99999999-9999-9999-9999-999999999999"))},
-			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000"))},
-			nil,
-			true,
-		),
-		createRowMergeStruct(
-			"modify rows where one adds a column",
-			[]types.Value{types.String("two"), types.Uint(2)},
-			[]types.Value{types.String("one"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			[]types.Value{types.String("one"), types.Uint(2)},
-			[]types.Value{types.String("two"), types.Uint(3), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			false,
-		),
-		createRowMergeStruct(
-			"modify row where values added in different columns",
-			[]types.Value{types.String("one"), types.Uint(2), types.String(""), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff"))},
-			[]types.Value{types.String("one"), types.Uint(2), types.UUID(uuid.MustParse("ffffffff-ffff-ffff-ffff-ffffffffffff")), types.String("")},
-			[]types.Value{types.String("one"), types.Uint(2), types.NullValue, types.NullValue},
-			nil,
-			true,
-		),
-		createRowMergeStruct(
-			"modify row where initial value wasn't given",
-			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.String("a")))},
-			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.String("b")))},
-			[]types.Value{mustTuple(types.NewTuple(types.Format_Default, types.String("one"), types.Uint(2), types.NullValue))},
-			nil,
-			true,
-		),
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actualResult, isConflict, err := pkRowMerge(context.Background(), types.Format_Default, test.sch, test.row, test.mergeRow, test.ancRow)
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedResult, actualResult, "expected "+mustString(types.EncodedValue(context.Background(), test.expectedResult))+"got "+mustString(types.EncodedValue(context.Background(), actualResult)))
-			assert.Equal(t, test.expectConflict, isConflict)
-		})
-	}
-}
 
 const (
 	tableName = "test-table"
 	name      = "billy bob"
 	email     = "bigbillieb@fake.horse"
 
-	idTag    = 100
-	nameTag  = 0
-	titleTag = 1
+	idTag   = 100
+	col1Tag = 0
+	col2Tag = 1
 )
 
 var colColl = schema.NewColCollection(
-	schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-	schema.NewColumn("name", nameTag, types.StringKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("title", titleTag, types.StringKind, false),
+	schema.NewColumn("id", idTag, types.IntKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("col1", col1Tag, types.IntKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("col2", col2Tag, types.IntKind, false, schema.NotNullConstraint{}),
 )
 var sch = schema.MustSchemaFromCols(colColl)
 
-var uuids = []types.UUID{
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000000")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000001")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000002")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000003")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000004")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000005")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000006")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000007")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000008")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-000000000009")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-00000000000a")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-00000000000b")),
-	types.UUID(uuid.MustParse("00000000-0000-0000-0000-00000000000c")),
-}
-
-var keyTuples = make([]types.Tuple, len(uuids))
-
-var index schema.Index
+var indexSchema schema.Index
+var compositeIndexSchema schema.Index
 
 func init() {
-	keyTag := types.Uint(idTag)
-
-	for i, id := range uuids {
-		keyTuples[i] = mustTuple(types.NewTuple(types.Format_Default, keyTag, id))
-	}
-
-	index, _ = sch.Indexes().AddIndexByColTags("idx_name", []uint64{nameTag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	indexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1", []uint64{col1Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
+	compositeIndexSchema, _ = sch.Indexes().AddIndexByColTags("idx_col1_col2", []uint64{col1Tag, col2Tag}, schema.IndexProperties{IsUnique: false, Comment: ""})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltdb.Commit, types.Map, types.Map) {
-	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
-	vrw := ddb.ValueReadWriter()
+type rowV struct {
+	col1, col2 int
+}
 
-	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
-	require.NoError(t, err)
+var vD = prolly.ValueDescriptorFromSchema(sch)
+var vB = val.NewTupleBuilder(vD)
+var syncPool = pool.NewBuffPool()
 
-	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
-	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
-	require.NoError(t, err)
+func (v rowV) value() val.Tuple {
+	vB.PutInt64(0, int64(v.col1))
+	vB.PutInt64(1, int64(v.col2))
+	return vB.Build(syncPool)
+}
 
-	initialRows, err := types.NewMap(context.Background(), vrw,
-		keyTuples[0], valsToTestTupleWithoutPks([]types.Value{types.String("person 1"), types.String("dufus")}),
-		keyTuples[1], valsToTestTupleWithoutPks([]types.Value{types.String("person 2"), types.NullValue}),
-		keyTuples[2], valsToTestTupleWithoutPks([]types.Value{types.String("person 3"), types.NullValue}),
-		keyTuples[3], valsToTestTupleWithoutPks([]types.Value{types.String("person 4"), types.String("senior dufus")}),
-		keyTuples[4], valsToTestTupleWithoutPks([]types.Value{types.String("person 5"), types.NullValue}),
-		keyTuples[5], valsToTestTupleWithoutPks([]types.Value{types.String("person 6"), types.NullValue}),
-		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person 7"), types.String("madam")}),
-		keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person 8"), types.String("miss")}),
-		keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person 9"), types.NullValue}),
-	)
-	require.NoError(t, err)
+func (v rowV) nomsValue() types.Value {
+	return valsToTestTupleWithoutPks([]types.Value{types.Int(v.col1), types.Int(v.col2)})
+}
 
-	updateRowEditor := initialRows.Edit()                                                                                          // leave 0 as is
-	updateRowEditor.Remove(keyTuples[1])                                                                                           // remove 1 from both
-	updateRowEditor.Remove(keyTuples[2])                                                                                           // remove 2 from update
-	updateRowEditor.Set(keyTuples[4], valsToTestTupleWithoutPks([]types.Value{types.String("person five"), types.NullValue}))      // modify 4 only in update
-	updateRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person 7"), types.String("dr")}))      // modify 6 in both without overlap
-	updateRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))     // modify 7 in both with equal overlap
-	updateRowEditor.Set(keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
-	updateRowEditor.Set(keyTuples[9], valsToTestTupleWithoutPks([]types.Value{types.String("person ten"), types.NullValue}))       // add 9 in update
-	updateRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))   // add 11 in both without difference
-	updateRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue})) // add 12 in both with differences
+const (
+	NoopAction ActionType = iota
+	InsertAction
+	UpdateAction
+	DeleteAction
+)
 
-	updatedRows, err := updateRowEditor.Map(context.Background())
-	require.NoError(t, err)
+type ActionType int
 
-	mergeRowEditor := initialRows.Edit()                                                                                                 // leave 0 as is
-	mergeRowEditor.Remove(keyTuples[1])                                                                                                  // remove 1 from both
-	mergeRowEditor.Remove(keyTuples[3])                                                                                                  // remove 3 from merge
-	mergeRowEditor.Set(keyTuples[5], valsToTestTupleWithoutPks([]types.Value{types.String("person six"), types.NullValue}))              // modify 5 only in merge
-	mergeRowEditor.Set(keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("madam")}))      // modify 6 in both without overlap
-	mergeRowEditor.Set(keyTuples[7], valsToTestTupleWithoutPks([]types.Value{types.String("person eight"), types.NullValue}))            // modify 7 in both with equal overlap
-	mergeRowEditor.Set(keyTuples[8], valsToTestTupleWithoutPks([]types.Value{types.String("person number nine"), types.NullValue}))      // modify 8 in both with conflicting overlap
-	mergeRowEditor.Set(keyTuples[10], valsToTestTupleWithoutPks([]types.Value{types.String("person eleven"), types.NullValue}))          // add 10 in merge
-	mergeRowEditor.Set(keyTuples[11], valsToTestTupleWithoutPks([]types.Value{types.String("person twelve"), types.NullValue}))          // add 11 in both without difference
-	mergeRowEditor.Set(keyTuples[12], valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue})) // add 12 in both with differences
+type testRow struct {
+	key                     int
+	initialValue            *rowV
+	leftAction, rightAction ActionType
+	leftValue, rightValue   *rowV
+	conflict                bool
+	expectedValue           *rowV
+}
 
-	mergeRows, err := mergeRowEditor.Map(context.Background())
-	require.NoError(t, err)
+// There are 16 cases for merges if the left and right branches don't modify primary keys.
+//
+// If a row exists in the ancestor commit, then left and right can perform a no-op, update,
+// or delete => 3*3 = +9.
+//
+// If a row does not exist in the ancestor commit, then left and right can perform a no-op or
+// insert => 2*2 = +4.
+//
+// For (update, update) there are identical updates, conflicting updates, and
+// non-conflicting updates. => +2
+//
+// For (insert, insert) there are identical inserts and conflicting inserts => +1
+//
+// A modification of a primary key is the combination of the two base cases:
+// First, a (delete, delete), then an (insert, insert). We omit tests for these
+// and instead defer to the base cases.
 
-	expectedRows, err := types.NewMap(context.Background(), vrw,
-		keyTuples[0], mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[0])), // unaltered
-		keyTuples[4], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[4])), // modified in updated
-		keyTuples[5], mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[5])), // modified in merged
-		keyTuples[6], valsToTestTupleWithoutPks([]types.Value{types.String("person seven"), types.String("dr")}), // modified in both with no overlap
-		keyTuples[7], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[7])), // modify both with the same value
-		keyTuples[8], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[8])), // conflict
-		keyTuples[9], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[9])), // added in update
-		keyTuples[10], mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[10])), // added in merge
-		keyTuples[11], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[11])), // added same in both
-		keyTuples[12], mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[12])), // conflict
-	)
-	require.NoError(t, err)
-
-	updateConflict := conflict.NewConflict(
-		mustGetValue(initialRows.MaybeGet(context.Background(), keyTuples[8])),
-		mustGetValue(updatedRows.MaybeGet(context.Background(), keyTuples[8])),
-		mustGetValue(mergeRows.MaybeGet(context.Background(), keyTuples[8])))
-
-	addConflict := conflict.NewConflict(
+var testRows = []testRow{
+	// Ancestor exists
+	{
+		0,
+		&rowV{0, 0},
+		NoopAction,
+		NoopAction,
 		nil,
-		valsToTestTupleWithoutPks([]types.Value{types.String("person thirteen"), types.NullValue}),
-		valsToTestTupleWithoutPks([]types.Value{types.String("person number thirteen"), types.NullValue}),
-	)
+		nil,
+		false,
+		&rowV{0, 0},
+	},
+	{
+		1,
+		&rowV{1, 1},
+		NoopAction,
+		UpdateAction,
+		nil,
+		&rowV{-1, -1},
+		false,
+		&rowV{-1, -1},
+	},
+	{
+		2,
+		&rowV{2, 2},
+		NoopAction,
+		DeleteAction,
+		nil,
+		nil,
+		false,
+		nil,
+	},
+	{
+		3,
+		&rowV{3, 3},
+		UpdateAction,
+		NoopAction,
+		&rowV{-3, -3},
+		nil,
+		false,
+		&rowV{-3, -3},
+	},
+	// Identical Update
+	{
+		4,
+		&rowV{4, 4},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-4, -4},
+		&rowV{-4, -4},
+		false,
+		&rowV{-4, -4},
+	},
+	// Conflicting Update
+	{
+		5,
+		&rowV{5, 5},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-5, 5},
+		&rowV{0, 5},
+		true,
+		&rowV{-5, 5},
+	},
+	// Non-conflicting update
+	{
+		6,
+		&rowV{6, 6},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-6, 6},
+		&rowV{6, -6},
+		false,
+		&rowV{-6, -6},
+	},
+	// Non-conflicting update 2
+	{
+		62,
+		&rowV{62, 62},
+		UpdateAction,
+		UpdateAction,
+		&rowV{-62, 62},
+		&rowV{62, -62},
+		false,
+		&rowV{-62, -62},
+	},
+	{
+		7,
+		&rowV{7, 7},
+		UpdateAction,
+		DeleteAction,
+		&rowV{-7, -7},
+		nil,
+		true,
+		&rowV{-7, -7},
+	},
+	{
+		8,
+		&rowV{8, 8},
+		DeleteAction,
+		NoopAction,
+		nil,
+		nil,
+		false,
+		nil,
+	},
+	{
+		9,
+		&rowV{9, 9},
+		DeleteAction,
+		UpdateAction,
+		nil,
+		&rowV{-9, -9},
+		true,
+		nil,
+	},
+	{
+		10,
+		&rowV{10, 10},
+		DeleteAction,
+		DeleteAction,
+		nil,
+		nil,
+		false,
+		nil,
+	},
+	// Key does not exist in ancestor
+	{
+		11,
+		nil,
+		NoopAction,
+		NoopAction,
+		nil,
+		nil,
+		false,
+		nil,
+	},
+	{
+		12,
+		nil,
+		NoopAction,
+		InsertAction,
+		nil,
+		&rowV{12, 12},
+		false,
+		&rowV{12, 12},
+	},
+	{
+		13,
+		nil,
+		InsertAction,
+		NoopAction,
+		&rowV{13, 13},
+		nil,
+		false,
+		&rowV{13, 13},
+	},
+	// Identical Insert
+	{
+		14,
+		nil,
+		InsertAction,
+		InsertAction,
+		&rowV{14, 14},
+		&rowV{14, 14},
+		false,
+		&rowV{14, 14},
+	},
+	// Conflicting Insert
+	{
+		15,
+		nil,
+		InsertAction,
+		InsertAction,
+		&rowV{15, 15},
+		&rowV{15, -15},
+		true,
+		&rowV{15, 15},
+	},
+}
 
-	expectedConflicts, err := types.NewMap(context.Background(), vrw,
-		keyTuples[8], mustTuple(updateConflict.ToNomsList(vrw)),
-		keyTuples[12], mustTuple(addConflict.ToNomsList(vrw)),
-	)
+func TestMergeCommits(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+
+	vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
+	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	opts := editor.TestEditorOptions(vrw)
+	// TODO: stats
+	merged, _, err := merger.MergeTable(context.Background(), tableName, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tbl, _, err := root.GetTable(context.Background(), tableName)
+	assert.NoError(t, err)
+	sch, err := tbl.GetSchema(context.Background())
+	assert.NoError(t, err)
+	expected, err := doltdb.NewTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	assert.NoError(t, err)
+	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
+	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), conflict.ConflictSchema{Base: sch, Schema: sch, MergeSchema: sch}, durable.ConflictIndexFromProllyMap(expectedConflicts))
+	require.NoError(t, err)
+
+	mergedRows, err := merged.GetRowData(context.Background())
+	assert.NoError(t, err)
+
+	_, conflictIdx, err := merged.GetConflicts(context.Background())
+	require.NoError(t, err)
+	conflicts := durable.ProllyMapFromConflictIndex(conflictIdx)
+	MustEqualConflictMap(t, expectedConflicts, conflicts)
+
+	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		mergedIndexRows, err := merged.GetIndexRowData(context.Background(), index.Name())
+		require.NoError(t, err)
+		expectedIndexRows, err := expected.GetIndexRowData(context.Background(), index.Name())
+		require.NoError(t, err)
+		MustEqualProlly(t, durable.ProllyMapFromIndex(expectedIndexRows), durable.ProllyMapFromIndex(mergedIndexRows))
+	}
+
+	h, err := merged.HashOf()
+	require.NoError(t, err)
+	eh, err := expected.HashOf()
+	require.NoError(t, err)
+	require.Equal(t, eh.String(), h.String(), "table hashes do not equal")
+}
+
+func TestNomsMergeCommits(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+
+	vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+
+	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	opts := editor.TestEditorOptions(vrw)
+	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, expectedStats, stats, "received stats is incorrect")
+
+	tbl, _, err := root.GetTable(context.Background(), tableName)
+	assert.NoError(t, err)
+	sch, err := tbl.GetSchema(context.Background())
+	assert.NoError(t, err)
+	expected, err := doltdb.NewNomsTable(context.Background(), vrw, sch, expectedRows, nil, nil)
+	assert.NoError(t, err)
+	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
+	assert.NoError(t, err)
+	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
+	assert.NoError(t, err)
+	expected, err = expected.SetConflicts(context.Background(), conflictSchema, durable.ConflictIndexFromNomsMap(expectedConflicts, vrw))
+	assert.NoError(t, err)
+
+	mergedRows, err := merged.GetNomsRowData(context.Background())
+	assert.NoError(t, err)
+	_, confIdx, err := merged.GetConflicts(context.Background())
+	assert.NoError(t, err)
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
+
+	if !mergedRows.Equals(expectedRows) {
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), mergedRows)))
+	}
+	if !conflicts.Equals(expectedConflicts) {
+		t.Error(mustString(types.EncodedValue(context.Background(), expectedConflicts)), "\n!=\n", mustString(types.EncodedValue(context.Background(), conflicts)))
+	}
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), index.Name())
+		assert.NoError(t, err)
+		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
+		assert.NoError(t, err)
+		assert.Equal(t, expectedRows.Len(), mergedIndexRows.Len(), "index %s incorrect row count", index.Name())
+		assert.Truef(t, expectedIndexRows.Equals(mergedIndexRows),
+			"index %s contents incorrect.\nExpected: \n%s\nReceived: \n%s\n", index.Name(),
+			mustString(types.EncodedValue(context.Background(), expectedIndexRows)),
+			mustString(types.EncodedValue(context.Background(), mergedIndexRows)))
+	}
+
+	h, err := merged.HashOf()
+	assert.NoError(t, err)
+	eh, err := expected.HashOf()
+	assert.NoError(t, err)
+	assert.Equal(t, eh.String(), h.String(), "table hashes do not equal")
+}
+
+func sortTests(t []testRow) {
+	sort.Slice(t, func(i, j int) bool {
+		return t[i].key < t[j].key
+	})
+}
+
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
+	ddb := mustMakeEmptyRepo(t)
+	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
+
+	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+
+	var initialKVs []val.Tuple
+	var expectedKVs []val.Tuple
+	conflictMap := prolly.NewEmptyConflictMap(ns, kD, vD, vD, vD)
+	confEdit := conflictMap.Editor()
+	for _, testCase := range testRows {
+		if testCase.conflict {
+			err := confEdit.Add(context.Background(), key(testCase.key), unwrap(testCase.leftValue), unwrap(testCase.rightValue), unwrap(testCase.initialValue))
+			require.NoError(t, err)
+		}
+
+		if testCase.initialValue != nil {
+			initialKVs = append(initialKVs, key(testCase.key), testCase.initialValue.value())
+		}
+		if testCase.expectedValue != nil {
+			expectedKVs = append(expectedKVs, key(testCase.key), testCase.expectedValue.value())
+		}
+	}
+
+	initialRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, initialKVs...)
+	require.NoError(t, err)
+	expectedRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, expectedKVs...)
+	require.NoError(t, err)
+	expectedConflicts, err := confEdit.Flush(context.Background())
+	require.NoError(t, err)
+
+	leftMut := initialRows.Mutate()
+	rightMut := initialRows.Mutate()
+	for _, testCase := range testRows {
+
+		switch testCase.leftAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			err = leftMut.Put(context.Background(), key(testCase.key), testCase.leftValue.value())
+			require.NoError(t, err)
+		case DeleteAction:
+			err = leftMut.Delete(context.Background(), key(testCase.key))
+			require.NoError(t, err)
+		}
+
+		switch testCase.rightAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			err = rightMut.Put(context.Background(), key(testCase.key), testCase.rightValue.value())
+			require.NoError(t, err)
+		case DeleteAction:
+			err = rightMut.Delete(context.Background(), key(testCase.key))
+			require.NoError(t, err)
+		}
+	}
+
+	updatedRows, err := leftMut.Map(context.Background())
+	require.NoError(t, err)
+	mergeRows, err := rightMut.Map(context.Background())
+	require.NoError(t, err)
+
+	rootTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(updatedRows), nil, nil)
+	require.NoError(t, err)
+	rootTbl, err = rebuildAllProllyIndexes(context.Background(), rootTbl)
+	require.NoError(t, err)
+
+	mergeTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(mergeRows), nil, nil)
+	require.NoError(t, err)
+	mergeTbl, err = rebuildAllProllyIndexes(context.Background(), mergeTbl)
+	require.NoError(t, err)
+
+	ancTbl, err := doltdb.NewTable(context.Background(), vrw, sch, durable.IndexFromProllyMap(initialRows), nil, nil)
+	require.NoError(t, err)
+	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
+	require.NoError(t, err)
+
+	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
+
+	return vrw, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
+}
+
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+	ddb := mustMakeEmptyRepo(t)
+	vrw := ddb.ValueReadWriter()
+	sortTests(testRows)
+
+	var initalKVs []types.Value
+	var expectedKVs []types.Value
+	var expectedConflictsKVs []types.Value
+	for _, testCase := range testRows {
+		if testCase.initialValue != nil {
+			initalKVs = append(initalKVs, nomsKey(testCase.key), testCase.initialValue.nomsValue())
+		}
+		if testCase.expectedValue != nil {
+			expectedKVs = append(expectedKVs, nomsKey(testCase.key), testCase.expectedValue.nomsValue())
+		}
+		if testCase.conflict {
+			expectedConflictsKVs = append(
+				expectedConflictsKVs,
+				nomsKey(testCase.key),
+				mustTuple(conflict.NewConflict(
+					unwrapNoms(testCase.initialValue),
+					unwrapNoms(testCase.leftValue),
+					unwrapNoms(testCase.rightValue),
+				).ToNomsList(vrw)),
+			)
+		}
+	}
+	initialRows, err := types.NewMap(context.Background(), vrw, initalKVs...)
+	require.NoError(t, err)
+	expectedRows, err := types.NewMap(context.Background(), vrw, expectedKVs...)
+	require.NoError(t, err)
+	expectedConflicts, err := types.NewMap(context.Background(), vrw, expectedConflictsKVs...)
+	require.NoError(t, err)
+
+	leftE := initialRows.Edit()
+	rightE := initialRows.Edit()
+	for _, testCase := range testRows {
+		switch testCase.leftAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			leftE.Set(nomsKey(testCase.key), testCase.leftValue.nomsValue())
+		case DeleteAction:
+			leftE.Remove(nomsKey(testCase.key))
+		}
+
+		switch testCase.rightAction {
+		case NoopAction:
+			break
+		case InsertAction, UpdateAction:
+			rightE.Set(nomsKey(testCase.key), testCase.rightValue.nomsValue())
+		case DeleteAction:
+			rightE.Remove(nomsKey(testCase.key))
+		}
+	}
+
+	updatedRows, err := leftE.Map(context.Background())
+	require.NoError(t, err)
+	mergeRows, err := rightE.Map(context.Background())
 	require.NoError(t, err)
 
 	tbl, err := doltdb.NewNomsTable(context.Background(), vrw, sch, initialRows, nil, nil)
@@ -363,13 +575,135 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeTbl, err = editor.RebuildAllIndexes(context.Background(), mergeTbl, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
+	ancTable, err := doltdb.NewNomsTable(context.Background(), vrw, sch, initialRows, nil, nil)
+	require.NoError(t, err)
+	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
+	require.NoError(t, err)
+
+	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
+
+	return vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
+}
+
+// rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
+// schema.
+func rebuildAllProllyIndexes(ctx context.Context, tbl *doltdb.Table) (*doltdb.Table, error) {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if sch.Indexes().Count() == 0 {
+		return tbl, nil
+	}
+
+	indexes, err := tbl.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tableRowData, err := tbl.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	primary := durable.ProllyMapFromIndex(tableRowData)
+
+	for _, index := range sch.Indexes().AllIndexes() {
+		rebuiltIndexRowData, err := creation.BuildSecondaryProllyIndex(ctx, tbl.ValueReadWriter(), sch, index, primary)
+		if err != nil {
+			return nil, err
+		}
+
+		indexes, err = indexes.PutIndex(ctx, index.Name(), rebuiltIndexRowData)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return tbl.SetIndexSet(ctx, indexes)
+}
+
+func calcExpectedStats(t *testing.T) *MergeStats {
+	s := &MergeStats{Operation: TableModified}
+	for _, testCase := range testRows {
+		if (testCase.leftAction == InsertAction) != (testCase.rightAction == InsertAction) {
+			if testCase.leftAction == UpdateAction || testCase.rightAction == UpdateAction ||
+				testCase.leftAction == DeleteAction || testCase.rightAction == DeleteAction {
+				// Either the row exists in the ancestor commit and we are
+				// deleting or updating it, or the row doesn't exist and we are
+				// inserting it.
+				t.Fatalf("it's impossible for an insert to be paired with an update or delete")
+			}
+		}
+
+		if testCase.leftAction == NoopAction {
+			switch testCase.rightAction {
+			case NoopAction:
+			case DeleteAction:
+				s.Deletes++
+			case InsertAction:
+				s.Adds++
+			case UpdateAction:
+				s.Modifications++
+			}
+			continue
+		}
+
+		if testCase.rightAction == NoopAction {
+			switch testCase.leftAction {
+			case NoopAction:
+			case DeleteAction:
+				s.Deletes++
+			case InsertAction:
+				s.Adds++
+			case UpdateAction:
+				s.Modifications++
+			}
+			continue
+		}
+
+		if testCase.conflict {
+			// (UpdateAction, DeleteAction),
+			// (DeleteAction, UpdateAction),
+			// (UpdateAction, UpdateAction) with conflict,
+			// (InsertAction, InsertAction) with conflict
+			s.Conflicts++
+			continue
+		}
+
+		if testCase.leftAction == InsertAction && testCase.rightAction == InsertAction {
+			// Equivalent inserts
+			continue
+		}
+
+		if !valutil.NilSafeEqCheck(unwrapNoms(testCase.leftValue), unwrapNoms(testCase.rightValue)) {
+			s.Modifications++
+			continue
+		}
+	}
+
+	return s
+}
+
+func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
+	ddb, _ := doltdb.LoadDoltDB(context.Background(), types.Format_Default, doltdb.InMemDoltDB, filesys2.LocalFS)
+	err := ddb.WriteEmptyRepo(context.Background(), env.DefaultInitBranch, name, email)
+	require.NoError(t, err)
+	return ddb
+}
+
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
+	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
+	require.NoError(t, err)
+
 	mRoot, err := mainHead.GetRootValue(context.Background())
 	require.NoError(t, err)
 
-	mRoot, err = mRoot.PutTable(context.Background(), tableName, tbl)
+	mRoot, err = mRoot.PutTable(context.Background(), tableName, ancTbl)
 	require.NoError(t, err)
 
-	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, updatedTbl)
+	updatedRoot, err := mRoot.PutTable(context.Background(), tableName, rootTbl)
 	require.NoError(t, err)
 
 	mergeRoot, err := mRoot.PutTable(context.Background(), tableName, mergeTbl)
@@ -397,16 +731,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.Commit, *doltd
 	mergeCommit, err := ddb.Commit(context.Background(), mergeHash, ref.NewBranchRef("to-merge"), meta)
 	require.NoError(t, err)
 
-	return vrw, commit, mergeCommit, expectedRows, expectedConflicts
-}
-
-func TestMergeCommits(t *testing.T) {
-	vrw, commit, mergeCommit, expectedRows, expectedConflicts := setupMergeTest(t)
-
 	root, err := commit.GetRootValue(context.Background())
-	require.NoError(t, err)
-
-	mergeRoot, err := mergeCommit.GetRootValue(context.Background())
 	require.NoError(t, err)
 
 	ancCm, err := doltdb.GetCommitAncestor(context.Background(), commit, mergeCommit)
@@ -419,49 +744,88 @@ func TestMergeCommits(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, ff)
 
-	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
-	opts := editor.TestEditorOptions(vrw)
-	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if stats.Adds != 2 || stats.Deletes != 2 || stats.Modifications != 3 || stats.Conflicts != 2 {
-		t.Error("Actual stats differ from expected")
-	}
-
-	tbl, _, err := root.GetTable(context.Background(), tableName)
-	assert.NoError(t, err)
-	sch, err := tbl.GetSchema(context.Background())
-	assert.NoError(t, err)
-	expected, err := doltdb.NewNomsTable(context.Background(), vrw, sch, expectedRows, nil, nil)
-	assert.NoError(t, err)
-	expected, err = editor.RebuildAllIndexes(context.Background(), expected, editor.TestEditorOptions(vrw))
-	assert.NoError(t, err)
-	conflictSchema := conflict.NewConflictSchema(sch, sch, sch)
-	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflictSchema, expectedConflicts)
-	assert.NoError(t, err)
-
-	h, err := merged.HashOf()
-	assert.NoError(t, err)
-	eh, err := expected.HashOf()
-	assert.NoError(t, err)
-	if h == eh {
-		mergedRows, err := merged.GetNomsRowData(context.Background())
-		assert.NoError(t, err)
-		if !mergedRows.Equals(expectedRows) {
-			t.Error(mustString(types.EncodedValue(context.Background(), mergedRows)), "\n!=\n", mustString(types.EncodedValue(context.Background(), expectedRows)))
-		}
-		mergedIndexRows, err := merged.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		expectedIndexRows, err := expected.GetNomsIndexRowData(context.Background(), index.Name())
-		assert.NoError(t, err)
-		if expectedRows.Len() != mergedIndexRows.Len() || !mergedIndexRows.Equals(expectedIndexRows) {
-			t.Error("index contents are incorrect")
-		}
-	} else {
-		assert.Fail(t, "%s and %s do not equal", h.String(), eh.String())
-	}
+	return root, mergeRoot, ancRoot
 }
+
+var kD = prolly.KeyDescriptorFromSchema(sch)
+var kB = val.NewTupleBuilder(kD)
+
+func key(i int) val.Tuple {
+	kB.PutInt64(0, int64(i))
+	return kB.Build(syncPool)
+}
+
+func nomsKey(i int) types.Value {
+	return mustTuple(types.NewTuple(types.Format_Default, types.Uint(idTag), types.Int(i)))
+}
+
+func unwrap(v *rowV) val.Tuple {
+	if v == nil {
+		return nil
+	}
+	return v.value()
+}
+
+func unwrapNoms(v *rowV) types.Value {
+	if v == nil {
+		return nil
+	}
+	return v.nomsValue()
+}
+
+func mustTuple(tpl types.Tuple, err error) types.Tuple {
+	if err != nil {
+		panic(err)
+	}
+
+	return tpl
+}
+
+func mustString(str string, err error) string {
+	if err != nil {
+		panic(err)
+	}
+
+	return str
+}
+
+func MustDebugFormatProlly(t *testing.T, m prolly.Map) string {
+	s, err := prolly.DebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
+func MustDebugFormatConflictMap(t *testing.T, m prolly.ConflictMap) string {
+	s, err := prolly.ConflictDebugFormat(context.Background(), m)
+	require.NoError(t, err)
+	return s
+}
+
+func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"hashes differed. expected: %s\nactual: %s", MustDebugFormatProlly(t, expected), MustDebugFormatProlly(t, actual))
+}
+
+func MustEqualConflictMap(t *testing.T, expected prolly.ConflictMap, actual prolly.ConflictMap) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"conflict map hashes differed. expected: %s\nactual: %s", MustDebugFormatConflictMap(t, expected), MustDebugFormatConflictMap(t, actual))
+}
+
+//func diffStr(t tree.Diff, kD val.TupleDesc) string {
+//	var str string
+//	switch t.Type {
+//	case tree.AddedDiff:
+//		str = "added"
+//	case tree.ModifiedDiff:
+//		str = "modified"
+//	case tree.RemovedDiff:
+//		str = "removed"
+//	default:
+//		panic("unknown type")
+//	}
+//
+//	key := kD.Format(val.Tuple(t.Key))
+//	str += " key " + key
+//
+//	return str
+//}

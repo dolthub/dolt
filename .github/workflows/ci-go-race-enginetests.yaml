@@ -1,0 +1,34 @@
+name: Enginetest Race
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'go/**'
+  workflow_dispatch:
+
+jobs:
+  enginerace:
+    name: Go tests - race enginetests
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-18.04 ]
+        dolt_fmt: [ "", "__DOLT_DEV__" ]
+    steps:
+    - name: Set up Go 1.x
+      uses: actions/setup-go@v2
+      with:
+        go-version: ^1.18
+      id: go
+    - uses: actions/checkout@v2
+    - name: Test All
+      working-directory: ./go
+      run: |
+        DOLT_SKIP_PREPARED_ENGINETESTS=1 go test -race -timeout 30m github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest
+      env:
+        DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}

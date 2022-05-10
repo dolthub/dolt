@@ -24,7 +24,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -65,14 +67,39 @@ func TestMap(t *testing.T) {
 			})
 
 			pm := prollyMap.(Map)
-			t.Run("item exists in map", func(t *testing.T) {
+			t.Run("tuple exists in map", func(t *testing.T) {
 				testHas(t, pm, tuples)
+			})
+
+			ctx := context.Background()
+			t.Run("walk addresses smoke test", func(t *testing.T) {
+				err := pm.WalkAddresses(ctx, func(_ context.Context, addr hash.Hash) error {
+					assert.True(t, addr != hash.Hash{})
+					return nil
+				})
+				assert.NoError(t, err)
+			})
+			t.Run("walk nodes smoke test", func(t *testing.T) {
+				err := pm.WalkNodes(ctx, func(_ context.Context, nd tree.Node) error {
+					assert.True(t, nd.Count() > 1)
+					return nil
+				})
+				assert.NoError(t, err)
 			})
 		})
 	}
 }
 
-func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func TestNewEmptyNode(t *testing.T) {
+	empty := newEmptyMapNode(sharedPool)
+	assert.Equal(t, 0, empty.Level())
+	assert.Equal(t, 0, empty.Count())
+	assert.Equal(t, 0, empty.TreeCount())
+	assert.Equal(t, 72, empty.Size())
+	assert.True(t, empty.IsLeaf())
+}
+
+func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
 	)
@@ -88,7 +115,7 @@ func makeProllyMap(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
 	return om, tuples
 }
 
-func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tuple) {
+func makeProllySecondaryIndex(t *testing.T, count int) (testMap, [][2]val.Tuple) {
 	kd := val.NewTupleDescriptor(
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 		val.Type{Enc: val.Uint32Enc, Nullable: false},
@@ -101,39 +128,34 @@ func makeProllySecondaryIndex(t *testing.T, count int) (orderedMap, [][2]val.Tup
 	return om, tuples
 }
 
-func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) orderedMap {
+func prollyMapFromTuples(t *testing.T, kd, vd val.TupleDesc, tuples [][2]val.Tuple) testMap {
 	ctx := context.Background()
 	ns := tree.NewTestNodeStore()
 
-	chunker, err := tree.NewEmptyChunker(ctx, ns)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chunker, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	for _, pair := range tuples {
-		err := chunker.AddPair(ctx, tree.NodeItem(pair[0]), tree.NodeItem(pair[1]))
+		err := chunker.AddPair(ctx, tree.Item(pair[0]), tree.Item(pair[1]))
 		require.NoError(t, err)
 	}
 	root, err := chunker.Done(ctx)
 	require.NoError(t, err)
 
-	m := Map{
-		root:    root,
-		keyDesc: kd,
-		valDesc: vd,
-		ns:      ns,
-	}
-
-	return m
+	return NewMap(root, ns, kd, vd)
 }
 
-func testGet(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testGet(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 
 	// test get
 	for _, kv := range tuples {
 		err := om.Get(ctx, kv[0], func(key, val val.Tuple) (err error) {
 			assert.NotNil(t, kv[0])
-			assert.Equal(t, kv[0], key)
-			assert.Equal(t, kv[1], val)
+			expKey, expVal := kv[0], kv[1]
+			assert.Equal(t, key, expKey)
+			assert.Equal(t, val, expVal)
 			return
 		})
 		require.NoError(t, err)
@@ -170,7 +192,7 @@ func testHas(t *testing.T, om Map, tuples [][2]val.Tuple) {
 	}
 }
 
-func testIterAll(t *testing.T, om orderedMap, tuples [][2]val.Tuple) {
+func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 	ctx := context.Background()
 	iter, err := om.IterAll(ctx)
 	require.NoError(t, err)

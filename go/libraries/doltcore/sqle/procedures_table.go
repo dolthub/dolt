@@ -63,8 +63,9 @@ func ProceduresTableSchema() schema.Schema {
 	return schema.MustSchemaFromCols(colColl)
 }
 
-// DoltProceduresGetTable returns the `dolt_procedures` table from the given db, creating it if it does not already exist.
-func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
+// DoltProceduresGetOrCreateTable returns the `dolt_procedures` table from the given db, creating it in the db's
+// current root if it doesn't exist
+func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
 	root, err := db.GetRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -96,10 +97,29 @@ func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, 
 	return tbl.(*WritableDoltTable), nil
 }
 
+// DoltProceduresGetTable returns the `dolt_procedures` table from the given db, or nil if the table doesn't exist
+func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.ProceduresTableName)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		return tbl.(*WritableDoltTable), nil
+	} else {
+		return nil, nil
+	}
+}
+
 func DoltProceduresGetAll(ctx *sql.Context, db Database) ([]sql.StoredProcedureDetails, error) {
 	tbl, err := DoltProceduresGetTable(ctx, db)
 	if err != nil {
 		return nil, err
+	} else if tbl == nil {
+		return nil, nil
 	}
 
 	indexes, err := tbl.GetIndexes(ctx)
@@ -167,7 +187,7 @@ func DoltProceduresGetAll(ctx *sql.Context, db Database) ([]sql.StoredProcedureD
 // DoltProceduresAddProcedure adds the stored procedure to the `dolt_procedures` table in the given db, creating it if
 // it does not exist.
 func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredProcedureDetails) (retErr error) {
-	tbl, err := DoltProceduresGetTable(ctx, db)
+	tbl, err := DoltProceduresGetOrCreateTable(ctx, db)
 	if err != nil {
 		return err
 	}
@@ -193,13 +213,17 @@ func DoltProceduresAddProcedure(ctx *sql.Context, db Database, spd sql.StoredPro
 	})
 }
 
-// DoltProceduresDropProcedure removes the stored procedure from the `dolt_procedures` table.
+// DoltProceduresDropProcedure removes the stored procedure from the `dolt_procedures` table. The procedure named must
+// exist.
 func DoltProceduresDropProcedure(ctx *sql.Context, db Database, name string) (retErr error) {
 	strings.ToLower(name)
 	tbl, err := DoltProceduresGetTable(ctx, db)
 	if err != nil {
 		return err
+	} else if tbl == nil {
+		return sql.ErrStoredProcedureDoesNotExist.New(name)
 	}
+
 	_, ok, err := DoltProceduresGetDetails(ctx, tbl, name)
 	if err != nil {
 		return err

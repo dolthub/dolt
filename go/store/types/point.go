@@ -58,10 +58,6 @@ func (v Point) isPrimitive() bool {
 	return true
 }
 
-func (v Point) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return cb(v)
-}
-
 func (v Point) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
