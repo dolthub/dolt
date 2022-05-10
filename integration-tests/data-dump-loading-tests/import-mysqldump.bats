@@ -382,7 +382,6 @@ d
 }
 
 @test "import mysqldump: allow non-existent table in create trigger" {
-    skip "fix not completed yet"
     run dolt sql <<SQL
 CREATE TABLE film (
   film_id smallint unsigned NOT NULL AUTO_INCREMENT,
@@ -419,7 +418,6 @@ SQL
 }
 
 @test "import mysqldump: allow non-existent procedure in create trigger" {
-    skip "fix not completed yet"
     run dolt sql <<SQL
 CREATE TABLE t0 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
 CREATE TABLE t1 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);

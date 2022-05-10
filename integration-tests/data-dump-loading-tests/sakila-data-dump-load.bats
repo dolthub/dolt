@@ -14,7 +14,7 @@ teardown() {
 }
 
 @test "sakila: import sakila dump" {
-    run dolt sql < ../sakila_dump.sql
+    run dolt sql < ./sakila_dump.sql
     [ "$status" -eq 0 ]
 
     cd sakila
