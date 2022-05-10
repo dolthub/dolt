@@ -44,6 +44,14 @@ func BenchmarkMapGet(b *testing.B) {
 	})
 }
 
+func BenchmarkProllyGetLarge(b *testing.B) {
+	benchmarkProllyMapGet(b, 1_000_000)
+}
+
+func BenchmarkNomsGetLarge(b *testing.B) {
+	benchmarkTypesMapGet(b, 1_000_000)
+}
+
 type prollyBench struct {
 	m    prolly.Map
 	tups [][2]val.Tuple
