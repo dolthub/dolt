@@ -43,7 +43,7 @@ jobs:
           echo "Testing Package: ${file_arr[$i]}"
           if [ "$MATRIX_OS" == 'ubuntu-18.04' ]
           then
-            if [[ "${file_arr[$i]}" == *enginetest* ]]; then
+            if [[ "${file_arr[$i]}" != *enginetest* ]]; then
               go test -timeout 45m -race "${file_arr[$i]}"
             else
               echo "skipping enginetests for -race"
