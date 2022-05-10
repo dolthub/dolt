@@ -45,6 +45,7 @@ RUN go build -o /usr/local/bin/dolt ./cmd/dolt
 
 COPY data-dump-loading-tests /data-dump-loading-tests
 COPY data-dump-loading-tests/data-dump-loading-tests-entrypoint.sh /data-dump-loading-tests/entrypoint.sh
+COPY data-dump-loading-tests/sakila_dump.sql /data-dump-loading-tests/sakila_dump.sql
 
 WORKDIR /data-dump-loading-tests
 ENTRYPOINT ["/data-dump-loading-tests/entrypoint.sh"]
