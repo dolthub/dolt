@@ -13,7 +13,7 @@ teardown() {
     rm -rf $REPO_NAME
 }
 
-@test "first-hour: import first-hour-db dump" {
+@test "sakila: import sakila dump" {
     run dolt sql < ../sakila_dump.sql
     [ "$status" -eq 0 ]
 
