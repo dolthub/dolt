@@ -901,19 +901,16 @@ func TestScriptsPrepared(t *testing.T) {
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
@@ -925,13 +922,11 @@ func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }
