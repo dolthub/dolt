@@ -359,6 +359,7 @@ func TestComplexIndexQueries(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
