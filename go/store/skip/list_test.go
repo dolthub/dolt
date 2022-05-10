@@ -63,7 +63,6 @@ func TestSkipListCheckpoints(t *testing.T) {
 		testSkipListCheckpoints(t, bytes.Compare, vals...)
 	})
 
-	t.Skip("todo(andy)")
 	t.Run("test skip list of random bytes", func(t *testing.T) {
 		vals := randomVals((src.Int63() % 10_000) + 100)
 		testSkipListCheckpoints(t, bytes.Compare, vals...)
@@ -331,6 +330,10 @@ func testSkipListCheckpoints(t *testing.T, compare ValueCmp, data ...[]byte) {
 	inserts := data[k*2:]
 
 	list := NewSkipList(compare)
+
+	// test empty revert
+	list.Revert()
+
 	for _, v := range init {
 		list.Put(v, v)
 	}

@@ -55,16 +55,12 @@ type skipNode struct {
 	height uint8
 }
 
-func NewSkipList(cmp ValueCmp) (l *List) {
-	l = &List{
-		// todo(andy): buffer pool
-		nodes: make([]skipNode, 1, 128),
-		cmp:   cmp,
-		src:   rand.NewSource(0),
-	}
+func NewSkipList(cmp ValueCmp) *List {
+	// todo(andy): buffer pool
+	nodes := make([]skipNode, 1, 128)
 
 	// initialize sentinel node
-	l.nodes[sentinelId] = skipNode{
+	nodes[sentinelId] = skipNode{
 		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
@@ -72,7 +68,12 @@ func NewSkipList(cmp ValueCmp) (l *List) {
 		prev:   sentinelId,
 	}
 
-	return
+	return &List{
+		nodes:      nodes,
+		checkpoint: nodeId(1),
+		cmp:        cmp,
+		src:        rand.NewSource(0),
+	}
 }
 
 // Checkpoint records a checkpoint that can be reverted to.
