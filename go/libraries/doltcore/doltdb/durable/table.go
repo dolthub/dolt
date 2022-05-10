@@ -108,26 +108,6 @@ type nomsTable struct {
 	tableStruct types.Struct
 }
 
-func (t nomsTable) DebugString(ctx context.Context) string {
-	var buf bytes.Buffer
-
-	buf.WriteString("\tStruct:\n")
-	types.WriteEncodedValue(ctx, &buf, t.tableStruct)
-
-	buf.WriteString("\n\tRows:\n")
-	data, err := t.GetTableRows(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	err = types.WriteEncodedValue(ctx, &buf, NomsMapFromIndex(data))
-	if err != nil {
-		panic(err)
-	}
-
-	return buf.String()
-}
-
 var _ Table = nomsTable{}
 
 var sharePool = pool.NewBuffPool()

@@ -573,8 +573,6 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 		return nil
 	}
 
-	//fmt.Printf("setting root to %s\n", newRoot.DebugString(ctx, true))
-
 	if sessionState.readOnly {
 		// TODO: Return an error here?
 		return nil
