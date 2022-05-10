@@ -3,6 +3,8 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
+
     dolt sql <<SQL
 CREATE TABLE onepk (
   pk1 BIGINT PRIMARY KEY,

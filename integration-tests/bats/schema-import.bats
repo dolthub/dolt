@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     cat <<DELIM > 1pk5col-ints.csv
 pk,c1,c2,c3,c4,c5
