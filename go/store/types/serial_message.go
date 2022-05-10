@@ -17,7 +17,6 @@ package types
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -74,10 +73,6 @@ func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, er
 		return bytes.Compare(sm, v2) == -1, nil
 	}
 	return sm.Kind() < other.Kind(), nil
-}
-
-func (sm SerialMessage) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return errors.New("unsupported WalkValues on SerialMessage. Use types.WalkValues.")
 }
 
 // Refs in SerialMessage do not have height. This should be taller than

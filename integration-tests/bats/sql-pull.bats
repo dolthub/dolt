@@ -57,6 +57,16 @@ teardown() {
     [[ "$output" =~ "t1" ]] || false
 }
 
+@test "sql-pull: CALL dpull main" {
+    cd repo2
+    dolt sql -q "CALL dpull('origin')"
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
 @test "sql-pull: dolt_pull custom remote" {
     cd repo2
     dolt sql -q "select dolt_pull('test-remote')"

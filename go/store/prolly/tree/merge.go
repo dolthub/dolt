@@ -83,7 +83,7 @@ func ThreeWayMerge[S message.Serializer](
 	return final, nil
 }
 
-// patchBuffer implements mutationIter. It consumes Diffs
+// patchBuffer implements MutationIter. It consumes Diffs
 // from the parallel treeDiffers and transforms them into
 // patches for the chunker to apply.
 type patchBuffer struct {
@@ -108,7 +108,7 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 	}
 }
 
-// nextMutation implements mutationIter.
+// NextMutation implements MutationIter.
 func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
