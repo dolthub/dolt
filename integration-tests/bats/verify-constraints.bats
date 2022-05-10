@@ -2,6 +2,7 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
+    skip_nbf_dolt_1
     setup_common
     dolt sql <<"SQL"
 CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));

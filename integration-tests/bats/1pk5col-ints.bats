@@ -14,8 +14,6 @@ CREATE TABLE test (
   PRIMARY KEY (pk)
 );
 SQL
-
-skip_nbf_dolt_1
 }
 
 teardown() {
@@ -25,6 +23,7 @@ teardown() {
 
 # Create a single primary key table and do stuff
 @test "1pk5col-ints: create a table with a schema file and examine repo" {
+    skip_nbf_dolt_1
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -73,6 +72,7 @@ teardown() {
 }
 
 @test "1pk5col-ints: add a row to a created table using dolt table put-row" {
+    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "create table"
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -390,6 +390,7 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with ours" {
+    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -434,6 +435,7 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and try to roll back using dolt merge --abort" {
+    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -465,6 +467,7 @@ teardown() {
 }
 
 @test "1pk5col-ints: generate a merge conflict and resolve with theirs" {
+    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     dolt branch test-branch
@@ -658,6 +661,7 @@ DELIM
 }
 
 @test "1pk5col-ints: display correct merge stats" {
+    skip_nbf_dolt_1
     dolt checkout -b test-branch
     dolt add test
     dolt commit -m "added test table"

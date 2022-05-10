@@ -11,6 +11,7 @@ teardown() {
 }
 
 @test "window: no diff table window buffer sharing" {
+    skip_nbf_dolt_1
     dolt sql -q "create table a (x int primary key, y varchar(1))"
     dolt add .
     dolt commit -m table
