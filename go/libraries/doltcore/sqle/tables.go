@@ -1013,6 +1013,17 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
+	// If we have an auto increment column, we need to set it here before we begin the rewrite process
+	if schema.HasAutoIncrement(newSch) {
+		newSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if col.AutoIncrement {
+				t.autoIncCol = col
+				return true, nil
+			}
+			return false, nil
+		})
+	}
+
 	dt, err = truncate(ctx, dt, newSch)
 	if err != nil {
 		return nil, err
@@ -1030,13 +1041,19 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 
 	newWs := ws.WithWorkingRoot(newRoot)
 
-	writeSession := writer.NewWriteSession(dt.Format(), newWs, nil, opts)
+	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
+	//  do the same. We're messing with global auto-increment values here and it's not safe.
+	ait, err := t.db.gs.GetAutoIncrementTracker(ctx, newWs)
+	if err != nil {
+		return nil, err
+	}
+
+	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
 	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), sess.SetRoot, false)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: wrap this with another editor so we can capture Close on it
 	return ed, nil
 }
 

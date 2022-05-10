@@ -57,6 +57,7 @@ type AutoIncrementTracker interface {
 	// AddNewTable adds |tablename| to the AutoIncrementTracker.
 	AddNewTable(tableName string)
 	// DropTable drops |tablename| from the AutoIncrementTracker.
+	// TODO: this doesn't respect transaction boundaries
 	DropTable(tableName string)
 }
 
