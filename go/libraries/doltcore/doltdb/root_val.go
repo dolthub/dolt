@@ -471,6 +471,7 @@ func (root *RootValue) GenerateTagsForNewColumns(
 		for _, col := range existingCols {
 			for i := range newColNames {
 				// Only re-use tags if the noms kind didn't change
+				// TODO: revisit this when new storage format is further along
 				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
 					newColKinds[i] == col.TypeInfo.NomsKind() {
 					newTags[i] = col.Tag
