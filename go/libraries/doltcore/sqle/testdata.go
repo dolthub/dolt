@@ -93,10 +93,10 @@ func createPeopleTestSchema() schema.Schema {
 		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+		schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 		schema.NewColumn("age", AgeTag, types.IntKind, false),
 		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+		schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 	)
 	return schema.MustSchemaFromCols(colColl)
@@ -130,11 +130,16 @@ func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, part
 }
 
 func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
+	isMarriedVal := types.Int(0)
+	if isMarried {
+		isMarriedVal = types.Int(1)
+	}
+
 	vals := row.TaggedValues{
 		IdTag:        types.Int(id),
 		FirstNameTag: types.String(first),
 		LastNameTag:  types.String(last),
-		IsMarriedTag: types.Bool(isMarried),
+		IsMarriedTag: isMarriedVal,
 		AgeTag:       types.Int(age),
 		RatingTag:    types.Float(rating),
 	}
@@ -191,14 +196,19 @@ func newAppsRow2(charId, epId int, comment string) row.Row {
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
 func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float64, uid uuid.UUID, numEpisodes uint64) row.Row {
+	isMarriedVal := types.Int(0)
+	if isMarried {
+		isMarriedVal = types.Int(1)
+	}
+
 	vals := row.TaggedValues{
 		IdTag:          types.Int(id),
 		FirstNameTag:   types.String(first),
 		LastNameTag:    types.String(last),
-		IsMarriedTag:   types.Bool(isMarried),
+		IsMarriedTag:   isMarriedVal,
 		AgeTag:         types.Int(age),
 		RatingTag:      types.Float(rating),
-		UuidTag:        types.UUID(uid),
+		UuidTag:        types.String(uid.String()),
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
