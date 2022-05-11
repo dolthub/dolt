@@ -19,7 +19,7 @@ Config successfully updated.
 Config successfully updated.
 Config successfully updated.
 Config successfully updated.
-Running mysql-client-tests:
+Running data-dump-loading-tests:
 1..2
 ok 1 import mysqldump: empty database dump
 ok 2 import mysqldump: a simple table dump
@@ -30,9 +30,13 @@ These commented out parts can be found with 'UNSUPPORTED SYNTAX' in search bar i
 procedures from the original database is not present in the dump file. Only one procedure is added to fit and test Dolt procedure 
 functionality.
 
+The Sakila database dump file is the only dump file we have tests for. If there are more dump files to be added as needed for 
+more testing, we need to use different way to store those dump files.
+
+Sakila Database License:
+
 -- Sakila Sample Database Data
 -- Version 1.2
-
 
 -- Copyright (c) 2022, Oracle and/or its affiliates.
 
