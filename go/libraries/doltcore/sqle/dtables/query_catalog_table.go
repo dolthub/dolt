@@ -71,7 +71,7 @@ func savedQueryFromKV(id string, valTuple types.Tuple) (SavedQuery, error) {
 	}, nil
 }
 
-func (sq SavedQuery) asRow() (row.Row, error) {
+func (sq SavedQuery) asRow(nbf *types.NomsBinFormat) (row.Row, error) {
 	taggedVals := make(row.TaggedValues)
 	taggedVals[schema.QueryCatalogIdTag] = types.String(sq.ID)
 	taggedVals[schema.QueryCatalogOrderTag] = types.Uint(sq.Order)
@@ -79,7 +79,7 @@ func (sq SavedQuery) asRow() (row.Row, error) {
 	taggedVals[schema.QueryCatalogQueryTag] = types.String(sq.Query)
 	taggedVals[schema.QueryCatalogDescriptionTag] = types.String(sq.Description)
 
-	return row.New(types.Format_Default, DoltQueryCatalogSchema, taggedVals)
+	return row.New(nbf, DoltQueryCatalogSchema, taggedVals)
 }
 
 var DoltQueryCatalogSchema = schema.MustSchemaFromCols(queryCatalogCols)
@@ -154,7 +154,7 @@ func newQueryCatalogEntry(ctx context.Context, root *doltdb.RootValue, id, name,
 		Order:       order,
 	}
 
-	r, err := sq.asRow()
+	r, err := sq.asRow(root.VRW().Format())
 	if err != nil {
 		return SavedQuery{}, nil, err
 	}

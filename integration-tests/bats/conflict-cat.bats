@@ -10,6 +10,7 @@ teardown() {
 }
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on right)" {
+    skip_nbf_dolt_1
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
     dolt commit -am "base"
 
@@ -33,6 +34,7 @@ SQL
 }
 
 @test "conflict-cat: conflicts should show using the union-schema (new schema on left)" {
+    skip_nbf_dolt_1
     dolt sql -q "CREATE TABLE t (a INT PRIMARY KEY, b INT);"
     dolt commit -am "base"
 

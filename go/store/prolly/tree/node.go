@@ -69,10 +69,11 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 }
 
 func NodeFromBytes(msg []byte) Node {
+	keys, values, count := message.GetKeysAndValues(msg)
 	return Node{
-		keys:   message.GetKeys(msg),
-		values: message.GetValues(msg),
-		count:  message.GetCount(msg),
+		keys:   keys,
+		values: values,
+		count:  count,
 		msg:    msg,
 	}
 }

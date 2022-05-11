@@ -118,6 +118,7 @@ teardown() {
 }
 
 @test "import-create-tables: use -f to overwrite data in existing table" {
+    skip_nbf_dolt_1
     cat <<DELIM > other.csv
 pk,c1,c2,c3,c4,c5
 8,1,2,3,4,5
@@ -143,6 +144,7 @@ DELIM
 }
 
 @test "import-create-tables: use -f to overwrite data in existing table with fk constraints" {
+    skip_nbf_dolt_1
     cat <<DELIM > other.csv
 pk,c1,c2,c3,c4,c5
 8,1,2,3,4,5
@@ -392,6 +394,7 @@ DELIM
 }
 
 @test "import-create-tables: dolt diff on a newly created table" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -556,6 +559,7 @@ DELIM
 }
 
 @test "import-create-tables: table import -c collects garbage" {
+    skip_nbf_dolt_1
     echo "pk" > pk.csv
     seq 0 100000 >> pk.csv
 

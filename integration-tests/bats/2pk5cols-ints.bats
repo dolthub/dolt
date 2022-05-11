@@ -23,6 +23,7 @@ teardown() {
 }
 
 @test "2pk5cols-ints: create a table with a schema file and examine repo" {
+    skip_nbf_dolt_1
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -40,6 +41,7 @@ teardown() {
 }
 
 @test "2pk5cols-ints: add a row to a two primary table using dolt table put-row" {
+    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "added test table"
     run dolt sql -q "insert into test values (0, 0, 1, 2, 3, 4, 5)"

@@ -27,6 +27,7 @@ teardown() {
 }
 
 @test "case-sensitivity: dolt system tables & db names" {
+    skip_nbf_dolt_1
     dolt add -A
     dolt commit -m "random commit"
     dolt sql -q "INSERT INTO test VALUES (3, 'ccc', 'CCC')"
