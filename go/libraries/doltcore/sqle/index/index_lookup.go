@@ -142,9 +142,9 @@ type rangePartitionIter struct {
 	curr         int
 	mu           *sync.Mutex
 	// the rows of the index itself
-	secondary    durable.Index
+	secondary durable.Index
 	// the rows of the table the index references
-	primary      durable.Index
+	primary durable.Index
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -204,9 +204,9 @@ type rangePartition struct {
 	prollyRange prolly.Range
 	key         []byte
 	// the index entries
-	secondary   durable.Index
+	secondary durable.Index
 	// the rows of the table the index refers to
-	primary     durable.Index
+	primary durable.Index
 }
 
 func (rp rangePartition) Key() []byte {

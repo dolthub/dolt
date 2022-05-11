@@ -73,16 +73,16 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	cols := sch.GetPKCols().GetColumns()
 
 	return doltIndex{
-		id:        "PRIMARY",
-		tblName:   tbl,
-		dbName:    db,
-		columns:   cols,
-		indexSch:  sch,
-		tableSch:  sch,
-		unique:    true,
-		comment:   "",
-		vrw:       t.ValueReadWriter(),
-		keyBld:    keyBld,
+		id:       "PRIMARY",
+		tblName:  tbl,
+		dbName:   db,
+		columns:  cols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
 	}, nil
 }
 
@@ -99,16 +99,16 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	}
 
 	return doltIndex{
-		id:        idx.Name(),
-		tblName:   tbl,
-		dbName:    db,
-		columns:   cols,
-		indexSch:  idx.Schema(),
-		tableSch:  sch,
-		unique:    idx.IsUnique(),
-		comment:   idx.Comment(),
-		vrw:       t.ValueReadWriter(),
-		keyBld:    keyBld,
+		id:       idx.Name(),
+		tblName:  tbl,
+		dbName:   db,
+		columns:  cols,
+		indexSch: idx.Schema(),
+		tableSch: sch,
+		unique:   idx.IsUnique(),
+		comment:  idx.Comment(),
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
 	}, nil
 }
 
@@ -119,10 +119,10 @@ type doltIndex struct {
 
 	columns []schema.Column
 
-	indexSch  schema.Schema
-	tableSch  schema.Schema
-	unique    bool
-	comment   string
+	indexSch schema.Schema
+	tableSch schema.Schema
+	unique   bool
+	comment  string
 
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
