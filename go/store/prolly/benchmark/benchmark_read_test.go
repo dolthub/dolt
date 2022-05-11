@@ -38,7 +38,19 @@ func BenchmarkMapGet(b *testing.B) {
 	})
 }
 
-func BenchmarkMapGetParallel(b *testing.B) {
+func BenchmarkStepMapGet(b *testing.B) {
+	b.Skip()
+	step := uint64(100_000)
+	for sz := step; sz < step*20; sz += step {
+		nm := fmt.Sprintf("benchmark maps %d", sz)
+		b.Run(nm, func(b *testing.B) {
+			benchmarkProllyMapGet(b, sz)
+			benchmarkTypesMapGet(b, sz)
+		})
+	}
+}
+
+func BenchmarkParallelMapGet(b *testing.B) {
 	b.Run("benchmark maps 10k", func(b *testing.B) {
 		benchmarkProllyMapGetParallel(b, 10_000)
 		benchmarkTypesMapGetParallel(b, 10_000)
@@ -61,11 +73,11 @@ func BenchmarkNomsGetLarge(b *testing.B) {
 	benchmarkTypesMapGet(b, 1_000_000)
 }
 
-func BenchmarkProllyGetLargeParallel(b *testing.B) {
+func BenchmarkProllyParallelGetLarge(b *testing.B) {
 	benchmarkProllyMapGetParallel(b, 1_000_000)
 }
 
-func BenchmarkNomsGetLargeParallel(b *testing.B) {
+func BenchmarkNomsParallelGetLarge(b *testing.B) {
 	benchmarkTypesMapGetParallel(b, 1_000_000)
 }
 
