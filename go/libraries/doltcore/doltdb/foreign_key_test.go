@@ -18,7 +18,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -26,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestForeignKeys(t *testing.T) {
