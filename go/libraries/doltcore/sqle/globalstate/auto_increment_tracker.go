@@ -46,23 +46,9 @@ func CoerceAutoIncrementValue(val interface{}) (uint64, error) {
 	return val.(uint64), nil
 }
 
-// AutoIncrementTracker knows how to track the latest auto-increment values for every table across all sessions.
-type AutoIncrementTracker interface {
-	// Current returns the current AUTO_INCREMENT value for |tableName|.
-	Current(tableName string) uint64
-	// Next returns the next AUTO_INCREMENT value for |tableName|, considering the provided |insertVal|.
-	Next(tbl string, insertVal interface{}) (uint64, error)
-	// Set sets the current AUTO_INCREMENT value for |tableName|.
-	Set(tableName string, val uint64)
-	// AddNewTable adds |tablename| to the AutoIncrementTracker.
-	AddNewTable(tableName string)
-	// DropTable drops |tablename| from the AutoIncrementTracker.
-	// TODO: this doesn't respect transaction boundaries
-	DropTable(tableName string)
-}
-
+// NewAutoIncrementTracker returns a new autoincrement tracker for the working set given
 func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIncrementTracker, error) {
-	ait := autoIncrementTracker{
+	ait := AutoIncrementTracker{
 		wsRef:     ws.Ref(),
 		sequences: make(map[string]uint64),
 		mu:        &sync.Mutex{},
@@ -85,19 +71,19 @@ func NewAutoIncrementTracker(ctx context.Context, ws *doltdb.WorkingSet) (AutoIn
 	return ait, err
 }
 
-type autoIncrementTracker struct {
+type AutoIncrementTracker struct {
 	wsRef     ref.WorkingSetRef
 	sequences map[string]uint64
 	mu        *sync.Mutex
 }
 
-func (a autoIncrementTracker) Current(tableName string) uint64 {
+func (a AutoIncrementTracker) Current(tableName string) uint64 {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.sequences[tableName]
 }
 
-func (a autoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
+func (a AutoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
@@ -124,19 +110,19 @@ func (a autoIncrementTracker) Next(tbl string, insertVal interface{}) (uint64, e
 	return given, nil
 }
 
-func (a autoIncrementTracker) Set(tableName string, val uint64) {
+func (a AutoIncrementTracker) Set(tableName string, val uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sequences[tableName] = val
 }
 
-func (a autoIncrementTracker) AddNewTable(tableName string) {
+func (a AutoIncrementTracker) AddNewTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.sequences[tableName] = uint64(1)
 }
 
-func (a autoIncrementTracker) DropTable(tableName string) {
+func (a AutoIncrementTracker) DropTable(tableName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	delete(a.sequences, tableName)
