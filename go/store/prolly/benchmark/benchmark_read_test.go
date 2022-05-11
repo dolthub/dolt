@@ -38,6 +38,21 @@ func BenchmarkMapGet(b *testing.B) {
 	})
 }
 
+func BenchmarkMapGetParallel(b *testing.B) {
+	b.Run("benchmark maps 10k", func(b *testing.B) {
+		benchmarkProllyMapGetParallel(b, 10_000)
+		benchmarkTypesMapGetParallel(b, 10_000)
+	})
+	b.Run("benchmark maps 100k", func(b *testing.B) {
+		benchmarkProllyMapGetParallel(b, 100_000)
+		benchmarkTypesMapGetParallel(b, 100_000)
+	})
+	b.Run("benchmark maps 1M", func(b *testing.B) {
+		benchmarkProllyMapGetParallel(b, 1_000_000)
+		benchmarkTypesMapGetParallel(b, 1_000_000)
+	})
+}
+
 func BenchmarkProllyGetLarge(b *testing.B) {
 	benchmarkProllyMapGet(b, 1_000_000)
 }
@@ -48,7 +63,6 @@ func BenchmarkNomsGetLarge(b *testing.B) {
 
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
 	bench := generateProllyBench(b, size)
-
 	b.Run(fmt.Sprintf("benchmark prolly map %d", size), func(b *testing.B) {
 		ctx := context.Background()
 
@@ -65,13 +79,43 @@ func benchmarkProllyMapGet(b *testing.B, size uint64) {
 
 func benchmarkTypesMapGet(b *testing.B, size uint64) {
 	bench := generateTypesBench(b, size)
-
 	b.Run(fmt.Sprintf("benchmark types map %d", size), func(b *testing.B) {
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			idx := rand.Uint64() % uint64(len(bench.tups))
 			_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 		}
+		b.ReportAllocs()
+	})
+}
+
+func benchmarkProllyMapGetParallel(b *testing.B, size uint64) {
+	bench := generateProllyBench(b, size)
+	b.Run(fmt.Sprintf("benchmark prolly map %d", size), func(b *testing.B) {
+		b.RunParallel(func(b *testing.PB) {
+			ctx := context.Background()
+			for b.Next() {
+				idx := rand.Uint64() % uint64(len(bench.tups))
+				key := bench.tups[idx][0]
+				_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
+					return
+				})
+			}
+		})
+		b.ReportAllocs()
+	})
+}
+
+func benchmarkTypesMapGetParallel(b *testing.B, size uint64) {
+	bench := generateTypesBench(b, size)
+	b.Run(fmt.Sprintf("benchmark types map %d", size), func(b *testing.B) {
+		b.RunParallel(func(pb *testing.PB) {
+			ctx := context.Background()
+			for pb.Next() {
+				idx := rand.Uint64() % uint64(len(bench.tups))
+				_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
+			}
+		})
 		b.ReportAllocs()
 	})
 }
