@@ -82,7 +82,7 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
-func LoadData() (map[string]interface{}, error) {
+func LoadData() (*mysql_db.MySQLDataJSON, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -96,12 +96,12 @@ func LoadData() (map[string]interface{}, error) {
 	}
 
 	// TODO: Flat buffers?
-	var res map[string]interface{}
+	var res mysql_db.MySQLDataJSON
 	err = json.Unmarshal(fileContents, &res)
 	if err != nil {
 		return nil, err
 	}
-	return res, nil
+	return &res, nil
 }
 
 var _ mysql_db.PersistCallback = SavePrivileges
