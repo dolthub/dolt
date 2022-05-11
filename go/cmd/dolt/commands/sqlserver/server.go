@@ -196,19 +196,21 @@ func Serve(
 	}
 	defer sqlEngine.Close()
 
-	// TODO: a bit strange, but need to prioritize privsJson over mysql.db file
-	// Load in MySQL Db information
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
+	// Load in MySQL DB information
+	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
+	err = mysqlDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
 	if err != nil {
 		return err, nil
 	}
 
 	// Load in Privilege data
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
+	err = mysqlDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
 	}
+
+	// Set persist callbacks
+	mysqlDb.SetPersistCallbacks(privileges.SavePrivileges, privileges.SaveData)
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)

@@ -96,17 +96,18 @@ func LoadData() (*mysql_db.MySQLDataJSON, error) {
 	}
 
 	// TODO: Flat buffers?
-	var res mysql_db.MySQLDataJSON
-	err = json.Unmarshal(fileContents, &res)
+	res := &mysql_db.MySQLDataJSON{}
+	err = json.Unmarshal(fileContents, res)
 	if err != nil {
 		return nil, err
 	}
-	return &res, nil
+	return res, nil
 }
 
-var _ mysql_db.PersistCallback = SavePrivileges
+var _ mysql_db.PrivilegePersistCallback = SavePrivileges
+var _ mysql_db.DataPersistCallback = SaveData
 
-// SavePrivileges implements the interface mysql_db.PersistCallback. This is used to save privileges to disk. If the
+// SavePrivileges implements the interface mysql_db.PrivilegePersistCallback. This is used to save privileges to disk. If the
 // file path has not been previously set, this returns without error. This is so that the logic path can retain the
 // calls regardless of whether a user wants privileges to be loaded or persisted.
 func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
@@ -120,6 +121,20 @@ func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.
 		Users: users,
 		Roles: roles,
 	}
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+	return ioutil.WriteFile(filePath, jsonData, 0777)
+}
+
+func SaveData(ctx *sql.Context, data *mysql_db.MySQLDataJSON) error {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+	if filePath == "" {
+		return nil
+	}
+
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
