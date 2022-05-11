@@ -65,6 +65,18 @@ func BenchmarkParallelMapGet(b *testing.B) {
 	})
 }
 
+func BenchmarkStepParallelMapGet(b *testing.B) {
+	b.Skip()
+	step := uint64(100_000)
+	for sz := step; sz < step*20; sz += step {
+		nm := fmt.Sprintf("benchmark maps parallel %d", sz)
+		b.Run(nm, func(b *testing.B) {
+			benchmarkProllyMapGetParallel(b, sz)
+			benchmarkTypesMapGetParallel(b, sz)
+		})
+	}
+}
+
 func BenchmarkProllyGetLarge(b *testing.B) {
 	benchmarkProllyMapGet(b, 1_000_000)
 }
