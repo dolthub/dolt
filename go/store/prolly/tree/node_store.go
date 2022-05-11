@@ -19,11 +19,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -114,7 +113,7 @@ type centry struct {
 }
 
 type chunkCache struct {
-	mu     *sync.Mutex
+	mu     *sync.RWMutex
 	chunks map[hash.Hash]*centry
 	head   *centry
 	sz     int
@@ -124,7 +123,7 @@ type chunkCache struct {
 
 func newChunkCache(maxSize int) *chunkCache {
 	return &chunkCache{
-		&sync.Mutex{},
+		&sync.RWMutex{},
 		make(map[hash.Hash]*centry),
 		nil,
 		0,
@@ -157,8 +156,8 @@ func (mc *chunkCache) moveToFront(e *centry) {
 }
 
 func (mc *chunkCache) get(h hash.Hash) (chunks.Chunk, bool) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
 	if e, ok := mc.chunks[h]; ok {
 		mc.moveToFront(e)
 		return e.c, true
@@ -168,8 +167,8 @@ func (mc *chunkCache) get(h hash.Hash) (chunks.Chunk, bool) {
 }
 
 func (mc *chunkCache) getMany(hs hash.HashSet) ([]chunks.Chunk, hash.HashSet) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
 	absent := make(map[hash.Hash]struct{})
 	var found []chunks.Chunk
 	for h, _ := range hs {
@@ -212,14 +211,14 @@ func (mc *chunkCache) addIfAbsent(c chunks.Chunk) {
 }
 
 func (mc *chunkCache) Len() int {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
 	return len(mc.chunks)
 }
 
 func (mc *chunkCache) Size() int {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
 	return mc.sz
 }
 
@@ -277,3 +276,26 @@ func (mc *chunkCache) sanityCheck() {
 		}
 	}
 }
+
+//type appendOnlyCache struct {
+//	list *ask.Skiplist
+//}
+//
+//func (c appendOnlyCache) get(addr hash.Hash) (chunk chunks.Chunk, ok bool) {
+//	var iter ask.Iterator
+//	iter.Init(c.list)
+//	ok = iter.Seek(addr[:])
+//	if ok {
+//		chunk = chunks.NewChunkWithHash(addr, iter.Value())
+//	}
+//	return
+//}
+//
+//func (c appendOnlyCache) insert(chunk chunks.Chunk) {
+//	var iter ask.Iterator
+//	iter.Init(c.list)
+//
+//	addr := chunk.Hash()
+//	_ = iter.Add(addr[:], chunk.Data(), 0)
+//	return
+//}
