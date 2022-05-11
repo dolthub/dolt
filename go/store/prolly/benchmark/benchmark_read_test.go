@@ -61,6 +61,14 @@ func BenchmarkNomsGetLarge(b *testing.B) {
 	benchmarkTypesMapGet(b, 1_000_000)
 }
 
+func BenchmarkProllyGetLargeParallel(b *testing.B) {
+	benchmarkProllyMapGetParallel(b, 1_000_000)
+}
+
+func BenchmarkNomsGetLargeParallel(b *testing.B) {
+	benchmarkTypesMapGetParallel(b, 1_000_000)
+}
+
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
 	bench := generateProllyBench(b, size)
 	b.Run(fmt.Sprintf("benchmark prolly map %d", size), func(b *testing.B) {
@@ -94,8 +102,9 @@ func benchmarkProllyMapGetParallel(b *testing.B, size uint64) {
 	b.Run(fmt.Sprintf("benchmark prolly map %d", size), func(b *testing.B) {
 		b.RunParallel(func(b *testing.PB) {
 			ctx := context.Background()
+			rnd := rand.NewSource(0)
 			for b.Next() {
-				idx := rand.Uint64() % uint64(len(bench.tups))
+				idx := int(rnd.Int63()) % len(bench.tups)
 				key := bench.tups[idx][0]
 				_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
 					return
@@ -111,8 +120,9 @@ func benchmarkTypesMapGetParallel(b *testing.B, size uint64) {
 	b.Run(fmt.Sprintf("benchmark types map %d", size), func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			ctx := context.Background()
+			rnd := rand.NewSource(0)
 			for pb.Next() {
-				idx := rand.Uint64() % uint64(len(bench.tups))
+				idx := int(rnd.Int63()) % len(bench.tups)
 				_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 			}
 		})
