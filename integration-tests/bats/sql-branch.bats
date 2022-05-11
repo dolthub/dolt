@@ -52,6 +52,23 @@ teardown() {
     [[ "$output" =~ "new-branch" ]] || false
 }
 
+@test "sql-branch: CALL DBRANCH works" {
+    run dolt branch
+    [[ ! "$output" =~ "new_branch" ]] || false
+
+    run dolt sql -q "CALL dbranch('new-branch')"
+    [ $status -eq 0 ]
+
+    # should create new branch and should not checkout the new branch
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "main" ]] || false
+
+    run dolt branch
+    [ $status -eq 0 ]
+    [[ "$output" =~ "new-branch" ]] || false
+}
+
 @test "sql-branch: DOLT_BRANCH throws error" {
     # branches that already exist
     dolt branch existing_branch

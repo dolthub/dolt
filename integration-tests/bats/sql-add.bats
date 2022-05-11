@@ -36,6 +36,22 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
+@test "sql-add: DADD all flag works" {
+    run dolt sql -q "call dadd('-A')"
+    run dolt sql -q "call dcommit('-m', 'Commit1')"
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
 @test "sql-add: CALL DOLT_ADD all flag works" {
     run dolt sql -q "CALL DOLT_ADD('-A')"
     run dolt sql -q "CALL DOLT_COMMIT('-m', 'Commit1')"

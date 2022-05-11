@@ -136,7 +136,7 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 				return nil, err
 			}
 
-			partitions = append(partitions, &tableInConflict{tblName, m.Len(), false, schemas})
+			partitions = append(partitions, &tableInConflict{tblName, m.Count(), false, schemas})
 		}
 	}
 

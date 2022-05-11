@@ -1599,5 +1599,5 @@ func ReadRangesFromQuery(ctx *sql.Context, eng *sqle.Engine, query string) ([]*n
 		return true
 	})
 
-	return index.ReadRangesFromIndexLookup(lookup), nil
+	return index.NomsRangesFromIndexLookup(lookup), nil
 }

@@ -38,6 +38,8 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 		return nil, err
 	}
 
+	nbf := m.Format()
+
 	me := m.Edit()
 	for _, doc := range docs {
 		key, err := docTblKeyFromName(docTbl.Format(), doc.DocPk)
@@ -57,7 +59,7 @@ func updateDocsTable(ctx context.Context, docTbl *doltdb.Table, docs Docs) (*dol
 				schema.DocNameTag: types.String(doc.DocPk),
 				schema.DocTextTag: types.String(doc.Text),
 			}
-			docRow, err = row.New(types.Format_Default, sch, docTaggedVals)
+			docRow, err = row.New(nbf, sch, docTaggedVals)
 			if err != nil {
 				return nil, err
 			}
@@ -91,7 +93,7 @@ func createDocsTable(ctx context.Context, vrw types.ValueReadWriter, docs Docs) 
 				schema.DocTextTag: types.String(doc.Text),
 			}
 
-			r, err := row.New(types.Format_Default, DocsSchema, docTaggedVals)
+			r, err := row.New(vrw.Format(), DocsSchema, docTaggedVals)
 			if err != nil {
 				return nil, err
 			}

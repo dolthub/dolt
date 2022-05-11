@@ -26,12 +26,17 @@ const (
 	maxPending = 64 * 1024
 )
 
+// MutableMap represents a Map that is able to store mutations in-memory. A MutableMap has two tiers of in-memory storage:
+// pending and applied. All mutations are first written to the pending tier, which may be discarded at any time.
+// However, once ApplyPending() is called, those mutations are moved to the applied tier, and the pending tier is
+// cleared.
 type MutableMap struct {
 	tuples  orderedMap[val.Tuple, val.Tuple, val.TupleDesc]
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 }
 
+// newMutableMap returns a new MutableMap.
 func newMutableMap(m Map) MutableMap {
 	return MutableMap{
 		tuples:  m.tuples.mutate(),
@@ -40,8 +45,11 @@ func newMutableMap(m Map) MutableMap {
 	}
 }
 
-// Map materializes the pending mutations in the MutableMap.
+// Map materializes all pending and applied mutations in the MutableMap.
 func (mut MutableMap) Map(ctx context.Context) (Map, error) {
+	if err := mut.ApplyPending(ctx); err != nil {
+		return Map{}, err
+	}
 	tr := mut.tuples.tree
 	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool()}
 
@@ -82,6 +90,17 @@ func (mut MutableMap) Has(ctx context.Context, key val.Tuple) (ok bool, err erro
 	return mut.tuples.has(ctx, key)
 }
 
+// ApplyPending moves all pending mutations to the underlying map.
+func (mut *MutableMap) ApplyPending(ctx context.Context) error {
+	mut.tuples.edits.Checkpoint()
+	return nil
+}
+
+// DiscardPending removes all pending mutations.
+func (mut *MutableMap) DiscardPending(context.Context) {
+	mut.tuples.edits.Revert()
+}
+
 // IterAll returns a mutableMapIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
 	rng := Range{Start: nil, Stop: nil, Desc: mut.keyDesc}
@@ -94,6 +113,7 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 	if err != nil {
 		return nil, err
 	}
+
 	memIter := memIterFromRange(mut.tuples.edits, rng)
 
 	return &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
@@ -101,4 +121,10 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 		prolly: treeIter,
 		order:  rng.Desc,
 	}, nil
+}
+
+// HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate
+// whether the materialized map contains different values to the contained unedited map.
+func (mut MutableMap) HasEdits() bool {
+	return mut.tuples.edits.Count() > 0
 }

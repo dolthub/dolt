@@ -492,7 +492,7 @@ func (sp Spec) createDatabase(ctx context.Context) (datas.Database, types.ValueR
 		newGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), sp.DatabaseName, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 
-		oldGenSt, err := nbs.NewLocalStore(ctx, types.Format_Default.VersionString(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
+		oldGenSt, err := nbs.NewLocalStore(ctx, newGenSt.Version(), oldgenDb, 1<<28, nbs.NewUnlimitedMemQuotaProvider())
 		d.PanicIfError(err)
 
 		cs := nbs.NewGenerationalCS(oldGenSt, newGenSt)

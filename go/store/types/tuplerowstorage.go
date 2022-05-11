@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -57,10 +56,6 @@ func (v TupleRowStorage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 
 func (v TupleRowStorage) isPrimitive() bool {
 	return true
-}
-
-func (v TupleRowStorage) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return errors.New("unsupported WalkValues on TupleRowStorage. Use types.WalkValues.")
 }
 
 func (v TupleRowStorage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {

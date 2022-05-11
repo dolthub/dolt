@@ -55,10 +55,6 @@ func (v Float) isPrimitive() bool {
 	return true
 }
 
-func (v Float) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
 func (v Float) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }

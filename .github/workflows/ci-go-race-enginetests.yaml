@@ -1,4 +1,4 @@
-name: Test Go
+name: Enginetest Race
 
 on:
   push:
