@@ -197,21 +197,19 @@ func Serve(
 	defer sqlEngine.Close()
 
 	// Load in MySQL DB information
-	mysqlDb := sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb
-	err = mysqlDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
 	if err != nil {
 		return err, nil
 	}
 
 	// Load in Privilege data
-	err = mysqlDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
 	if err != nil {
 		return err, nil
 	}
 
 	// Set persist callbacks
-	mysqlDb.SetPersistCallbacks(privileges.SavePrivileges, privileges.SaveData)
-
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallbacks(privileges.SavePrivileges, privileges.SaveData)
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
 	defer listener.Close()

@@ -30,6 +30,8 @@ var (
 	fileMutex = &sync.Mutex{}
 )
 
+const mysqlDbFilePath = "mysql.db"
+
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
 type privDataJson struct {
 	Users []*mysql_db.User
@@ -87,7 +89,7 @@ func LoadData() (*mysql_db.MySQLDataJSON, error) {
 	defer fileMutex.Unlock()
 
 	// TODO: right filepath?
-	fileContents, err := ioutil.ReadFile("mysql.db")
+	fileContents, err := ioutil.ReadFile(mysqlDbFilePath)
 	if err != nil {
 		return nil, nil
 	}
@@ -131,13 +133,10 @@ func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.
 func SaveData(ctx *sql.Context, data *mysql_db.MySQLDataJSON) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
-	if filePath == "" {
-		return nil
-	}
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(filePath, jsonData, 0777)
+	return ioutil.WriteFile(mysqlDbFilePath, jsonData, 0777)
 }
