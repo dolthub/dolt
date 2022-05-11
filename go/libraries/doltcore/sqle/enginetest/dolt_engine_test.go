@@ -415,6 +415,7 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
@@ -423,14 +424,7 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(enginetest.ForeignKeyTests) - 1; i >= 0; i-- {
-			//TODO: test uses ALTER TABLE MODIFY COLUMN which is not yet supported in new format
-			if enginetest.ForeignKeyTests[i].Name == "ALTER TABLE SET NULL on non-nullable column" {
-				enginetest.ForeignKeyTests = append(enginetest.ForeignKeyTests[:i], enginetest.ForeignKeyTests[i+1:]...)
-			}
-		}
-	}
+	skipNewFormat(t)
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
