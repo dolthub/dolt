@@ -45,17 +45,18 @@ var resetDocContent = cli.CommandDocumentationContent{
 		"\n\n" +
 		"After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the contents out of the staged tables to the working tables." +
 		"\n\n" +
-		"{{.EmphasisLeft}}dolt reset [--hard | --soft] <commit>{{.EmphasisRight}}" +
+		"{{.EmphasisLeft}}dolt reset [--hard | --soft] <revision>{{.EmphasisRight}}" +
 		"\n\n" +
-		"This form resets all staged and working tables to their values in the specified commit. " +
-		"Uncommitted work is lost." +
+		"This form resets all tables to values in the specified revision (i.e. commit, tag, working set). " +
+		"The --soft option resets HEAD to a revision without changing the current working set. " +
+		" The --hard option resets all three HEADs to a revision, deleting all uncommitted changes in the current working set." +
 		"\n\n" +
 		"{{.EmphasisLeft}}dolt reset .{{.EmphasisRight}}" +
 		"\n\n" +
 		"This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}tables{{.GreaterThan}}...",
-		"[--hard | --soft] {{.LessThan}}commit{{.GreaterThan}}",
+		"[--hard | --soft] {{.LessThan}}revision{{.GreaterThan}}",
 	},
 }
 
