@@ -305,9 +305,12 @@ func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row
 			case string:
 				nomsVal = types.String(v)
 			case uuid.UUID:
-				nomsVal = types.UUID(v)
+				nomsVal = types.String(v.String())
 			case bool:
-				nomsVal = types.Bool(v)
+				nomsVal = types.Int(0)
+				if v {
+					nomsVal = types.Int(1)
+				}
 			case time.Time:
 				nomsVal = types.Timestamp(v)
 			default:

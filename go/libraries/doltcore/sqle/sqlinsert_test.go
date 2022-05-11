@@ -189,7 +189,7 @@ var BasicInsertTests = []InsertTest{
 			NewPeopleRow(11, "Selma", "Bouvier", false, 40, 7),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 	},
 	{
 		Name: "insert ignore partial columns multiple rows null constraint failure",
@@ -199,7 +199,7 @@ var BasicInsertTests = []InsertTest{
 		SelectQuery:  "select id, first_name, last_name, is_married, age, rating from people where id > 6 ORDER BY id",
 		ExpectedRows: ToSqlRows(PeopleTestSchema, NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 3.5)),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 		SkipOnSqlEngine: true,
 	},
 	{
@@ -213,7 +213,7 @@ var BasicInsertTests = []InsertTest{
 			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 8.5),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 		SkipOnSqlEngine: true,
 	},
 	{
@@ -224,7 +224,7 @@ var BasicInsertTests = []InsertTest{
 		SelectQuery:  "select id, first_name, last_name, is_married, age, rating from people where id = 7 ORDER BY id",
 		ExpectedRows: ToSqlRows(PeopleTestSchema, NewPeopleRow(7, "Maggie", "Simpson", false, 1, 5.1)),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 		SkipOnSqlEngine: true,
 	},
 	{
