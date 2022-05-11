@@ -226,7 +226,8 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = aiCol
-	w.sess = sess
+	w.flusher = sess
+
 	return nil
 }
 
