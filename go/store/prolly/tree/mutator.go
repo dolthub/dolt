@@ -17,6 +17,8 @@ package tree
 import (
 	"bytes"
 	"context"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 type MutationIter interface {
@@ -24,11 +26,11 @@ type MutationIter interface {
 	Close() error
 }
 
-func ApplyMutations[B NodeBuilder](
+func ApplyMutations[S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
 	root Node,
-	factory NodeBuilderFactory[B],
+	serializer S,
 	edits MutationIter,
 	compare CompareFn,
 ) (Node, error) {
@@ -42,7 +44,7 @@ func ApplyMutations[B NodeBuilder](
 		return Node{}, err
 	}
 
-	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, factory)
+	chkr, err := newChunker(ctx, cur.Clone(), 0, ns, serializer)
 	if err != nil {
 		return Node{}, err
 	}

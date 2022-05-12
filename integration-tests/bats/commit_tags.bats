@@ -78,6 +78,7 @@ teardown() {
 }
 
 @test "commit_tags: use a tag as ref for diff" {
+    skip_nbf_dolt_1
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]

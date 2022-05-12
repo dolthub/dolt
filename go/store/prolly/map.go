@@ -53,7 +53,8 @@ func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) M
 
 // NewMapFromTuples creates a prolly tree Map from slice of sorted Tuples.
 func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc, tups ...val.Tuple) (Map, error) {
-	ch, err := tree.NewEmptyChunker(ctx, ns, newMapBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	ch, err := tree.NewEmptyChunker(ctx, ns, serializer)
 	if err != nil {
 		return Map{}, err
 	}
@@ -81,7 +82,8 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb)
+	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
 	if err != nil {
 		return Map{}, err
 	}
@@ -162,6 +164,11 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	} else {
 		return m.iterFromRange(ctx, rng)
 	}
+}
+
+// Pool returns the pool.BuffPool of the underlying tuples' tree.NodeStore
+func (m Map) Pool() pool.BuffPool {
+	return m.tuples.ns.Pool()
 }
 
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
@@ -245,56 +252,8 @@ func (p *pointLookup) Next(context.Context) (key, value val.Tuple, err error) {
 }
 
 func newEmptyMapNode(pool pool.BuffPool) tree.Node {
-	bld := &mapBuilder{}
-	return bld.Build(pool)
-}
-
-func newMapBuilder(level int) *mapBuilder {
-	return &mapBuilder{level: level}
-}
-
-var _ tree.NodeBuilderFactory[*mapBuilder] = newMapBuilder
-
-type mapBuilder struct {
-	keys, values [][]byte
-	size, level  int
-
-	subtrees tree.SubtreeCounts
-}
-
-var _ tree.NodeBuilder = &mapBuilder{}
-
-func (nb *mapBuilder) StartNode() {
-	nb.reset()
-}
-
-func (nb *mapBuilder) HasCapacity(key, value tree.Item) bool {
-	sum := nb.size + len(key) + len(value)
-	return sum <= int(message.MaxVectorOffset)
-}
-
-func (nb *mapBuilder) AddItems(key, value tree.Item, subtree uint64) {
-	nb.keys = append(nb.keys, key)
-	nb.values = append(nb.values, value)
-	nb.size += len(key) + len(value)
-	nb.subtrees = append(nb.subtrees, subtree)
-}
-
-func (nb *mapBuilder) Count() int {
-	return len(nb.keys)
-}
-
-func (nb *mapBuilder) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	nb.keys = nb.keys[:0]
-	nb.values = nb.values[:0]
-	nb.size = 0
-	nb.subtrees = nb.subtrees[:0]
-}
-
-func (nb *mapBuilder) Build(pool pool.BuffPool) (node tree.Node) {
-	msg := message.SerializeProllyMap(pool, nb.keys, nb.values, nb.level, nb.subtrees)
-	nb.reset()
+	serializer := message.ProllyMapSerializer{Pool: pool}
+	msg := serializer.Serialize(nil, nil, nil, 0)
 	return tree.NodeFromBytes(msg)
 }
 

@@ -44,7 +44,17 @@ func TestEndToEnd(t *testing.T) {
 	id := uuid.MustParse("00000000-0000-0000-0000-000000000000")
 	tableName := "people"
 
-	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\nCREATE TABLE `people` (\n  `id` char(36) character set ascii collate ascii_bin NOT NULL,\n  `name` varchar(16383) NOT NULL,\n  `age` bigint unsigned NOT NULL,\n  `is_married` bit(1) NOT NULL,\n  `title` varchar(16383),\n  PRIMARY KEY (`id`),\n  KEY `idx_name` (`name`),\n  CONSTRAINT `test-check` CHECK ((`age` < 123))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
+	dropCreateStatement := sqlfmt.DropTableIfExistsStmt(tableName) + "\n" +
+		"CREATE TABLE `people` (\n" +
+		"  `id` varchar(16383) NOT NULL,\n" +
+		"  `name` varchar(16383) NOT NULL,\n" +
+		"  `age` bigint unsigned NOT NULL,\n" +
+		"  `is_married` bigint NOT NULL,\n" +
+		"  `title` varchar(16383),\n" +
+		"  PRIMARY KEY (`id`),\n" +
+		"  KEY `idx_name` (`name`),\n" +
+		"  CONSTRAINT `test-check` CHECK ((`age` < 123))\n" +
+		") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"
 
 	type test struct {
 		name           string
@@ -62,9 +72,9 @@ func TestEndToEnd(t *testing.T) {
 			sch: dtestutils.TypedSchema,
 			expectedOutput: dropCreateStatement + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');` + "\n" +
+				`VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,'normie');` + "\n" +
 				"INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) " +
-				`VALUES ('00000000-0000-0000-0000-000000000000','guy personson',0,TRUE,'officially a person');` + "\n",
+				`VALUES ('00000000-0000-0000-0000-000000000000','guy personson',0,1,'officially a person');` + "\n",
 		},
 		{
 			name:           "no rows",

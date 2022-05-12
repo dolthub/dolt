@@ -16,18 +16,12 @@ package types
 
 import (
 	"errors"
-	"os"
 	"sync"
 
 	"github.com/dolthub/dolt/go/store/constants"
 )
 
 func init() {
-	// check for new format feature flag
-	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
-		constants.FormatDefaultString = constants.FormatDolt1String
-	}
-
 	nbf, err := GetFormatForVersionString(constants.FormatDefaultString)
 	if err != nil {
 		panic("unrecognized value for DOLT_DEFAULT_BIN_FORMAT " + constants.FormatDefaultString)
@@ -36,10 +30,6 @@ func init() {
 	defer nbfLock.Unlock()
 	Format_Default = nbf
 }
-
-const (
-	doltFormatFeatureFlag = "DOLT_FORMAT_FEATURE_FLAG"
-)
 
 type NomsBinFormat struct {
 	tag *formatTag
@@ -80,19 +70,6 @@ func IsFormat_DOLT_1(nbf *NomsBinFormat) bool {
 	return nbf.tag == formatTag_DOLT_1
 }
 
-func TestFormatDolt1(cb func() error) error {
-	nbfLock.Lock()
-	defer nbfLock.Unlock()
-
-	var stash *NomsBinFormat
-	stash, Format_Default = Format_Default, Format_DOLT_1
-	defer func() {
-		Format_Default = stash
-	}()
-
-	return cb()
-}
-
 func GetFormatForVersionString(s string) (*NomsBinFormat, error) {
 	if s == constants.Format718String {
 		return Format_7_18, nil
@@ -119,4 +96,8 @@ func (nbf *NomsBinFormat) VersionString() string {
 	} else {
 		panic("unrecognized NomsBinFormat tag value")
 	}
+}
+
+func (nbf *NomsBinFormat) UsesFlatbuffers() bool {
+	return nbf.tag == formatTag_DOLT_1 || nbf.tag == formatTag_DOLT_DEV
 }

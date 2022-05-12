@@ -25,28 +25,24 @@ import (
 
 type Message []byte
 
-func GetKeys(msg Message) val.SlicedBuffer {
-	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapKeys(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapKeys(msg)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
-	}
+type Serializer interface {
+	Serialize(keys, values [][]byte, subtrees []uint64, level int) Message
 }
 
-func GetValues(msg Message) val.SlicedBuffer {
+func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
 	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapValues(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapValues(msg)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
+
+	if id == serial.ProllyTreeNodeFileID {
+		return getProllyMapKeysAndValues(msg)
 	}
+	if id == serial.AddressMapFileID {
+		keys = getAddressMapKeys(msg)
+		values = getAddressMapValues(msg)
+		cnt = getAddressMapCount(msg)
+		return
+	}
+
+	panic(fmt.Sprintf("unknown message id %s", id))
 }
 
 func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
@@ -56,18 +52,6 @@ func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context
 		return walkProllyMapAddresses(ctx, msg, cb)
 	case serial.AddressMapFileID:
 		return walkAddressMapAddresses(ctx, msg, cb)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
-	}
-}
-
-func GetCount(msg Message) uint16 {
-	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapCount(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapCount(msg)
 	default:
 		panic(fmt.Sprintf("unknown message id %s", id))
 	}

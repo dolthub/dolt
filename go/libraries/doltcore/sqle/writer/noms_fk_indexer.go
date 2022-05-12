@@ -44,7 +44,7 @@ func (n nomsFkIndexer) Schema() sql.Schema {
 }
 
 func (n nomsFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	return sql.PartitionsToPartitionIter(nomsFkDummyPartition{}), nil
+	return sql.PartitionsToPartitionIter(fkDummyPartition{}), nil
 }
 
 func (n nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
@@ -62,13 +62,13 @@ func (n nomsFkIndexer) PartitionRows(ctx *sql.Context, partition sql.Partition) 
 	return sql.RowsToRowIter(rows...), err
 }
 
-// nomsFkDummyPartition is used to return a partition that will be ignored, as nomsFkIndexer does not handle partitioning,
-// however a partition must be used in order to retrieve rows.
-type nomsFkDummyPartition struct{}
+// fkDummyPartition is used to return a partition that will be ignored, as a foreign key indexer does not handle
+// partitioning, however a partition must be used in order to retrieve rows.
+type fkDummyPartition struct{}
 
-var _ sql.Partition = nomsFkDummyPartition{}
+var _ sql.Partition = fkDummyPartition{}
 
 // Key implements the interface sql.Partition.
-func (n nomsFkDummyPartition) Key() []byte {
+func (n fkDummyPartition) Key() []byte {
 	return nil
 }

@@ -250,7 +250,7 @@ func (r nomsRvStorage) nomsValue() types.Value {
 func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) {
 	var storage rvStorage
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), 0)
 		storage = fbRvStorage{srv}
 	} else {
@@ -278,7 +278,7 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
 			return string(serial.GetFileID([]byte(sm))) == serial.RootValueFileID
 		}
@@ -291,7 +291,7 @@ func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 }
 
 func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
 		var empty hash.Hash
 		serial.RefMapStart(builder)
@@ -470,7 +470,10 @@ func (root *RootValue) GenerateTagsForNewColumns(
 	if headRoot != nil {
 		for _, col := range existingCols {
 			for i := range newColNames {
-				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+				// Only re-use tags if the noms kind didn't change
+				// TODO: revisit this when new storage format is further along
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 					newTags[i] = col.Tag
 					break
 				}
@@ -1307,6 +1310,10 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	return nil
 }
 
+type debugStringer interface {
+	DebugString(ctx context.Context) string
+}
+
 // DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
 // all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 // when debugging tests.
@@ -1317,11 +1324,14 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 	if transitive {
 		buf.WriteString("\nTables:")
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
-			buf.WriteString("\nName:")
+			buf.WriteString("\nTable ")
 			buf.WriteString(name)
 			buf.WriteString("\n")
 
-			buf.WriteString("Data:\n")
+			buf.WriteString("Struct:\n")
+			buf.WriteString(table.DebugString(ctx))
+
+			buf.WriteString("\ndata:\n")
 			data, err := table.GetNomsRowData(ctx)
 			if err != nil {
 				panic(err)

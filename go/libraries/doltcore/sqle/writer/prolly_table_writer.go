@@ -23,6 +23,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -36,13 +38,14 @@ type prollyTableWriter struct {
 	primary   indexWriter
 	secondary []prollyIndexWriter
 
-	tbl *doltdb.Table
-	sch schema.Schema
+	tbl    *doltdb.Table
+	sch    schema.Schema
+	sqlSch sql.Schema
 
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
 
-	sess    WriteSession
+	flusher WriteSessionFlusher
 	setter  SessionRootSetter
 	batched bool
 }
@@ -85,6 +88,9 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
+			if sql.ErrUniqueKeyViolation.Is(err) {
+				return w.primary.UniqueKeyError(ctx, sqlRow)
+			}
 			return err
 		}
 	}
@@ -111,6 +117,9 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
+			if sql.ErrUniqueKeyViolation.Is(err) {
+				return w.primary.UniqueKeyError(ctx, newRow)
+			}
 			return err
 		}
 	}
@@ -153,25 +162,73 @@ func (w *prollyTableWriter) Close(ctx *sql.Context) error {
 
 // StatementBegin implements TableWriter.
 func (w *prollyTableWriter) StatementBegin(ctx *sql.Context) {
-	// todo(andy)
 	return
 }
 
 // DiscardChanges implements TableWriter.
 func (w *prollyTableWriter) DiscardChanges(ctx *sql.Context, errorEncountered error) error {
-	// todo(andy)
-	return nil
+	err := w.primary.Discard(ctx)
+	for _, secondary := range w.secondary {
+		sErr := secondary.Discard(ctx)
+		if sErr != nil && err == nil {
+			err = sErr
+		}
+	}
+	return err
 }
 
 // StatementComplete implements TableWriter.
 func (w *prollyTableWriter) StatementComplete(ctx *sql.Context) error {
-	// todo(andy)
-	return nil
+	err := w.primary.Commit(ctx)
+	for _, secondary := range w.secondary {
+		sErr := secondary.Commit(ctx)
+		if sErr != nil && err == nil {
+			err = sErr
+		}
+	}
+	return err
 }
 
 // WithIndexLookup implements TableWriter.
 func (w *prollyTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
-	panic("prolly table writer does not yet support index lookups")
+	idx := index.IndexFromIndexLookup(lookup)
+	return prollyFkIndexer{
+		writer: w,
+		index:  idx,
+		pRange: index.ProllyRangesFromIndexLookup(lookup)[0],
+	}
+}
+
+// Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
+func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
+	sqlSch, err := sqlutil.FromDoltSchema(w.tableName, sch)
+	if err != nil {
+		return err
+	}
+	aiCol := autoIncrementColFromSchema(sch)
+	var newPrimary indexWriter
+	if _, ok := w.primary.(prollyKeylessWriter); ok {
+		newPrimary, err = getKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+	} else {
+		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+	}
+	if err != nil {
+		return err
+	}
+	newSecondaries, err := getSecondaryProllyIndexWriters(ctx, tbl, sqlSch.Schema, sch)
+	if err != nil {
+		return err
+	}
+
+	w.tbl = tbl
+	w.sch = sch
+	w.sqlSch = sqlSch.Schema
+	w.primary = newPrimary
+	w.secondary = newSecondaries
+	w.aiCol = aiCol
+	w.flusher = sess
+
+	return nil
 }
 
 func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
@@ -222,7 +279,10 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	ws, err := w.sess.Flush(ctx)
+	if !w.primary.HasEdits(ctx) {
+		return nil
+	}
+	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err
 	}

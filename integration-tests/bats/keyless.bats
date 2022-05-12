@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE keyless (
@@ -184,7 +185,7 @@ CSV
     [[ "${lines[1]}" = "CREATE TABLE \`keyless\` ("          ]] || false
     [[ "${lines[2]}" = "  \`c0\` int,"  ]] || false
     [[ "${lines[3]}" = "  \`c1\` int"   ]] || false
-    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"     ]] || false
+    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"     ]] || false
     [[ "${lines[5]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
     [[ "${lines[6]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
     [[ "${lines[7]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false

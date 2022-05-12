@@ -49,6 +49,10 @@ type Index interface {
 	// AddColumnToRows adds the column given to the rows data and returns the resulting rows.
 	// The |newCol| is present in |newSchema|.
 	AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error)
+
+	// Returns the serialized bytes of the (top of the) index.
+	// Non-public. Used for flatbuffers Table persistence.
+	bytes() ([]byte, error)
 }
 
 // IndexSet stores a collection secondary Indexes.
@@ -178,6 +182,15 @@ func (i nomsIndex) Format() *types.NomsBinFormat {
 	return i.vrw.Format()
 }
 
+// bytes implements Index.
+func (i nomsIndex) bytes() ([]byte, error) {
+	rowschunk, err := types.EncodeValue(i.index, i.vrw.Format())
+	if err != nil {
+		return nil, err
+	}
+	return rowschunk.Data(), nil
+}
+
 func (i nomsIndex) AddColumnToRows(ctx context.Context, newCol string, newSchema schema.Schema) (Index, error) {
 	// no-op for noms indexes because of tag-based mapping
 	return i, nil
@@ -217,6 +230,11 @@ func (i prollyIndex) Empty() bool {
 // Format implements Index.
 func (i prollyIndex) Format() *types.NomsBinFormat {
 	return i.index.Format()
+}
+
+// bytes implements Index.
+func (i prollyIndex) bytes() ([]byte, error) {
+	return []byte(prolly.ValueFromMap(i.index).(types.TupleRowStorage)), nil
 }
 
 var _ Index = prollyIndex{}
@@ -286,7 +304,7 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 
 // NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(24)
 		serial.RefMapStart(builder)
 		builder.Finish(serial.RefMapEnd(builder))
@@ -298,6 +316,21 @@ func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 		indexes: empty,
 		vrw:     vrw,
 	}
+}
+
+func NewIndexSetWithEmptyIndexes(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (IndexSet, error) {
+	s := NewIndexSet(ctx, vrw)
+	for _, index := range sch.Indexes().AllIndexes() {
+		empty, err := NewEmptyIndex(ctx, vrw, index.Schema())
+		if err != nil {
+			return nil, err
+		}
+		s, err = s.PutIndex(ctx, index.Name(), empty)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return s, nil
 }
 
 type nomsIndexSet struct {

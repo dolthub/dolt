@@ -79,27 +79,33 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "Two column index",
+			Name: "Multialter DDL with ADD/DROP Primary Key",
 			SetUpScript: []string{
-				`CREATE TABLE a (x int primary key, y int)`,
-				`CREATE TABLE b (x int primary key, y int)`,
-				`insert into a values (0,0), (1,1)`,
-				`insert into b values (0,0), (1,1)`,
+				"CREATE TABLE t(pk int primary key, v1 int)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: `UPDATE a INNER JOIN b on a.x = b.x SET a.y = b.y + 1`,
-					Expected: []sql.Row{{sql.OkResult{
-						RowsAffected: uint64(2),
-						Info:         plan.UpdateInfo{Matched: 1, Updated: 2},
-					}}},
+					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
 				},
 				{
-					Query: "SELECT * FROM a;",
-
+					Query: "DESCRIBE t",
 					Expected: []sql.Row{
-						{0, 1},
-						{1, 2},
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v3 int), drop primary key, add primary key (notacolumn)",
+					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
 					},
 				},
 			},
@@ -111,8 +117,8 @@ func TestSingleScript(t *testing.T) {
 		myDb := harness.NewDatabase("mydb")
 		databases := []sql.Database{myDb}
 		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		engine.Analyzer.Debug = true
-		engine.Analyzer.Verbose = true
+		//engine.Analyzer.Debug = true
+		//engine.Analyzer.Verbose = true
 		enginetest.TestScriptWithEngine(t, engine, harness, test)
 	}
 }
@@ -191,6 +197,14 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 }
 
 func TestInsertInto(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(enginetest.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: test uses keyless foreign key logic which is not yet fully implemented
+			if enginetest.InsertScripts[i].Name == "Insert on duplicate key" {
+				enginetest.InsertScripts = append(enginetest.InsertScripts[:i], enginetest.InsertScripts[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
@@ -244,7 +258,6 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
@@ -340,7 +353,6 @@ func TestJoinQueries(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
@@ -385,7 +397,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
@@ -409,7 +420,6 @@ func TestCreateForeignKeys(t *testing.T) {
 }
 
 func TestDropForeignKeys(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropForeignKeys(t, newDoltHarness(t))
 }
 
@@ -419,7 +429,6 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -552,11 +561,16 @@ func TestStoredProcedures(t *testing.T) {
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
 	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 
 	for _, script := range DoltSqlFuncTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+
+	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -567,6 +581,10 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: add prolly path for index verification
+		t.Skip("new format using old noms path, need to update")
+	}
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
 		enginetest.TestScript(t, harness, script)
@@ -601,24 +619,29 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestDoltReset(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t)
+	for _, script := range DoltReset {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
 	t.Skip()
 
 	script := enginetest.TransactionTest{
-		Name: "rollback",
+		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
-			"create table t (x int primary key, y int)",
-			"insert into t values (1, 1)",
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
-				Query:    "/* client a */ set autocommit = off",
-				Expected: []sql.Row{{}},
-			},
-			{
-				Query:    "/* client b */ set autocommit = off",
+				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
 			},
 			{
@@ -626,60 +649,74 @@ func TestSingleTransactionScript(t *testing.T) {
 				Expected: []sql.Row{},
 			},
 			{
+				Query:    "/* client b */ set autocommit = off, dolt_allow_commit_conflicts = on",
+				Expected: []sql.Row{{}},
+			},
+			{
 				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ insert into t values (2, 2)",
+				Query:    "/* client a */ insert into test values (1, 1)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client b */ insert into t values (3, 3)",
+				Query:            "/* client b */ call dolt_checkout('-b', 'new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:            "/* client a */ call dolt_commit('-am', 'commit on main')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ insert into test values (1, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:            "/* client b */ call dolt_commit('-am', 'commit on new-branch')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "/* client b */ call dolt_merge('main')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 2}},
+			},
+			{ // no error because of our session settings
+				Query:    "/* client b */ commit",
+				Expected: []sql.Row{},
+			},
+			{ // TODO: it should be possible to do this without specifying a literal in the subselect, but it's not working
+				Query: "/* client b */ update test t set val = (select their_val from dolt_conflicts_test where our_pk = 1) where pk = 1",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: 1,
+					Info: plan.UpdateInfo{
+						Matched: 1,
+						Updated: 1,
+					},
+				}}},
+			},
+			{
+				Query:    "/* client b */ delete from dolt_conflicts_test",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
 			},
 			{
 				Query:    "/* client b */ commit",
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}},
+				Query:    "/* client b */ select * from test order by 1",
+				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
 			{
-				Query:    "/* client a */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client a */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client a */ insert into t values (2, 2)",
-				Expected: []sql.Row{{sql.NewOkResult(1)}},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client a */ commit",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {3, 3}},
-			},
-			{
-				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
-				Query:    "/* client b */ select * from t order by x",
-				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	}
@@ -862,37 +899,31 @@ func TestScriptsPrepared(t *testing.T) {
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }
@@ -927,6 +958,10 @@ func TestPrepared(t *testing.T) {
 
 func TestPreparedInsert(t *testing.T) {
 	skipPreparedTests(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: test uses keyless foreign key logic which is not yet fully implemented
+		t.Skip("test uses keyless foreign key logic which is not yet fully implemented")
+	}
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
@@ -957,7 +992,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `c1` int,\n" +
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1007,7 +1042,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  PRIMARY KEY (`id`),\n" +
 							"  KEY `c1_idx` (`c1`),\n" +
 							"  CONSTRAINT `test_check` CHECK ((`c1` > 0))\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},
@@ -1071,7 +1106,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							"  `id` int NOT NULL,\n" +
 							"  `c1` int,\n" +
 							"  KEY `c1_idx` (`c1`)\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"},
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
 			},

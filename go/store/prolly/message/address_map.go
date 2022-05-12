@@ -34,14 +34,20 @@ const (
 
 var addressMapFileID = []byte(serial.AddressMapFileID)
 
-func SerializeAddressMap(pool pool.BuffPool, keys, addrs [][]byte, level int, subtrees []uint64) Message {
+type AddressMapSerializer struct {
+	Pool pool.BuffPool
+}
+
+var _ Serializer = AddressMapSerializer{}
+
+func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64, level int) Message {
 	var (
 		keyArr, keyOffs  fb.UOffsetT
 		addrArr, cardArr fb.UOffsetT
 	)
 
 	keySz, addrSz, totalSz := estimateAddressMapSize(keys, addrs, subtrees)
-	b := getFlatbufferBuilder(pool, totalSz)
+	b := getFlatbufferBuilder(s.Pool, totalSz)
 
 	// keys
 	keyArr = writeItemBytes(b, keys, keySz)
@@ -118,9 +124,9 @@ func getAddressMapTreeCount(msg Message) int {
 }
 
 func getAddressMapSubtrees(msg Message) []uint64 {
-	cnt := getAddressMapCount(msg)
+	counts := make([]uint64, getAddressMapCount(msg))
 	am := serial.GetRootAsAddressMap(msg, 0)
-	return readSubtreeCounts(int(cnt), am.SubtreeCountsBytes())
+	return decodeVarints(am.SubtreeCountsBytes(), counts)
 }
 
 func getAddressMapKeyOffsets(pm *serial.AddressMap) []byte {

@@ -75,7 +75,7 @@ func init() {
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(AllowCommitConflicts),
-			Default:           int8(1),
+			Default:           int8(0),
 		},
 	})
 }

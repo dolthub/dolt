@@ -38,6 +38,15 @@ type Cursor struct {
 	nrw      NodeStore
 }
 
+type SubtreeCounts []uint64
+
+func (sc SubtreeCounts) Sum() (s uint64) {
+	for _, count := range sc {
+		s += count
+	}
+	return
+}
+
 type CompareFn func(left, right Item) int
 
 type SearchFn func(nd Node) (idx int)

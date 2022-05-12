@@ -105,15 +105,6 @@ func (v Linestring) isPrimitive() bool {
 	return true
 }
 
-func (v Linestring) WalkValues(ctx context.Context, cb ValueCallback) error {
-	for _, p := range v.Points {
-		if err := p.WalkValues(ctx, cb); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (v Linestring) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }

@@ -20,6 +20,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -75,11 +76,16 @@ func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader,
 		return nil, err
 	}
 
-	_, confData, err := tbl.GetConflicts(ctx)
+	_, confIdx, err := tbl.GetConflicts(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	if confIdx.Format() == types.Format_DOLT_1 {
+		panic("conflict reader not implemented for new storage format")
+	}
+
+	confData := durable.NomsMapFromConflictIndex(confIdx)
 	confItr, err := confData.Iterator(ctx)
 	if err != nil {
 		return nil, err

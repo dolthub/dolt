@@ -85,7 +85,7 @@ func init() {
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = EmptyTuple(Format_Default)
+	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
@@ -175,6 +175,18 @@ func IsPrimitiveKind(k NomsKind) bool {
 // isKindOrderedByValue determines if a value is ordered by its value instead of its hash.
 func isKindOrderedByValue(k NomsKind) bool {
 	return k <= StringKind || k >= UUIDKind
+}
+
+func IsGeometryKind(k NomsKind) bool {
+	switch k {
+	case PointKind,
+		LinestringKind,
+		PolygonKind,
+		GeometryKind:
+		return true
+	default:
+		return false
+	}
 }
 
 func (k NomsKind) writeTo(w nomsWriter, nbf *NomsBinFormat) error {

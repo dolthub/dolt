@@ -189,10 +189,6 @@ func (r Ref) Value(ctx context.Context) (Value, error) {
 	return r, nil
 }
 
-func (r Ref) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
 func (r Ref) typeOf() (*Type, error) {
 	t, err := r.TargetType()
 

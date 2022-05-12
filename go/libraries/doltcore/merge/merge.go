@@ -33,13 +33,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/atomicerr"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -77,8 +73,14 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	var ancRows durable.Index
+	// only used by new storage format
+	var ancIndexSet durable.IndexSet
 	if ancHasTable {
 		ancRows, err = ancTbl.GetRowData(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		ancIndexSet, err = ancTbl.GetIndexSet(ctx)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -104,7 +106,14 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 					// If both added the same table, pretend it was in the ancestor all along with no data
 					// Don't touch ancHash to avoid triggering other short-circuit logic below
 					ancHasTable, ancSchema, ancTbl = true, rootSchema, tbl
-					ancRows, _ = durable.NewEmptyIndex(ctx, merger.vrw, ancSchema)
+					ancRows, err = durable.NewEmptyIndex(ctx, merger.vrw, ancSchema)
+					if err != nil {
+						return nil, nil, err
+					}
+					ancIndexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, merger.vrw, ancSchema)
+					if err != nil {
+						return nil, nil, err
+					}
 				} else {
 					return nil, nil, ErrSameTblAddedTwice
 				}
@@ -165,10 +174,18 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if updatedTbl.Format() == types.Format_DOLT_1 {
-		var stats *MergeStats
-		updatedTbl, stats, err = mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, updatedTbl)
+		mergeRes, err := mergeTableData(ctx, merger.vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, ancIndexSet)
 		if err != nil {
 			return nil, nil, err
+		}
+		updatedTbl = mergeRes.tbl
+		cons, stats := mergeRes.cons, mergeRes.stats
+
+		if cons.Count() > 0 {
+			updatedTbl, err = setConflicts(ctx, cons, tbl, mergeTbl, ancTbl, updatedTbl)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 
 		updatedTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, updatedTbl)
@@ -218,24 +235,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if cons.Len() > 0 {
-		ancSch, err := ancTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		sch, err := tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		mergeSch, err := mergeTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
-
-		resultTbl, err = resultTbl.SetConflicts(ctx, cs, cons)
+		resultTbl, err = setConflicts(ctx, durable.ConflictIndexFromNomsMap(cons, merger.vrw), tbl, mergeTbl, ancTbl, resultTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -249,254 +249,30 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	return resultTbl, stats, nil
 }
 
-func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
-	// TODO (dhruv): update this function definition to return any conflicts
-	updatedTable, mergedData, err := mergeProllyRowData(ctx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, tableToUpdate)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, ancTbl, updatedTable)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO (dhruv): populate merge stats
-	return updatedTable, &MergeStats{Operation: TableModified}, nil
-}
-
-// mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
-// and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, durable.Index, error) {
-	rootR, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	mergeR, err := mergeTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	ancR, err := ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-	rootRP := durable.ProllyMapFromIndex(rootR)
-	mergeRP := durable.ProllyMapFromIndex(mergeR)
-	ancRP := durable.ProllyMapFromIndex(ancR)
-
-	//vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch)
-
-	conflicted := false
-	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
-		conflicted = true
-		return tree.Diff{}, false
-		//merged, ok := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
-		//if !ok {
-		//	conflicted = true
-		//	return tree.Diff{}, false
-		//}
-		//
-		//return tree.Diff{
-		//	Type: tree.ModifiedDiff,
-		//	Key:  left.Key,
-		//	From: left.From,
-		//	To:   tree.NodeItem(merged),
-		//}, true
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-	if conflicted {
-		return nil, nil, errors.New("row conflicts not supported yet")
-	}
-
-	updatedTbl, err := tableToUpdate.UpdateRows(ctx, durable.IndexFromProllyMap(mergedRP))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
-}
-
-var syncPool = pool.NewBuffPool()
-
-//type valueMerger struct {
-//	numCols                                int
-//	vD, lVD, rVD, bVD                      val.TupleDesc
-//	leftMapping, rightMapping, baseMapping map[int]int
-//}
-//
-//func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema) *valueMerger {
-//	n := merged.GetNonPKCols().Size()
-//	leftMapping := make(map[int]int, n)
-//	rightMapping := make(map[int]int, n)
-//	baseMapping := make(map[int]int, n)
-//
-//	for i, tag := range merged.GetNonPKCols().Tags {
-//		if j, ok := leftSch.GetNonPKCols().TagToIdx[tag]; ok {
-//			leftMapping[i] = j
-//		}
-//		if j, ok := rightSch.GetNonPKCols().TagToIdx[tag]; ok {
-//			rightMapping[i] = j
-//		}
-//		if j, ok := baseSch.GetNonPKCols().TagToIdx[tag]; ok {
-//			baseMapping[i] = j
-//		}
-//	}
-//
-//	return &valueMerger{
-//		n,
-//		prolly.ValueDescriptorFromSchema(merged),
-//		prolly.ValueDescriptorFromSchema(leftSch),
-//		prolly.ValueDescriptorFromSchema(rightSch),
-//		prolly.ValueDescriptorFromSchema(baseSch),
-//		leftMapping,
-//		rightMapping,
-//		baseMapping,
-//	}
-//}
-//
-//// tryMerge performs a cell-wise merge given left, right, and base cell value
-//// tuples. It returns the merged cell value taple and an ok bool.
-//func (m *valueMerger) tryMerge(left, right, base val.Tuple) (merged val.Tuple, ok bool) {
-//	processColumnFunc := func(i int) (resultVal []byte, isConflict bool) {
-//		var leftVal []byte
-//		if l, ok := m.leftMapping[i]; ok {
-//			leftVal = m.lVD.GetField(l, left)
-//		}
-//		var rightVal []byte
-//		if r, ok := m.rightMapping[i]; ok {
-//			rightVal = m.rVD.GetField(r, right)
-//		}
-//		var baseVal []byte
-//		if b, ok := m.baseMapping[i]; ok {
-//			baseVal = m.bVD.GetField(b, base)
-//		}
-//
-//		// bytes.Equal?? What about nil vs empty slices??
-//		leftModified := m.vD.Comparator().CompareValues(leftVal, baseVal, m.vD.Types[i]) != 0
-//		rightModified := m.vD.Comparator().CompareValues(rightVal, baseVal, m.vD.Types[i]) != 0
-//
-//		switch {
-//		case leftModified && rightModified:
-//			return nil, true
-//		case leftModified:
-//			return leftVal, false
-//		default:
-//			return rightVal, false
-//		}
-//	}
-//
-//	mergedValues := make([][]byte, m.numCols)
-//	for i := 0; i < m.numCols; i++ {
-//		v, isConflict := processColumnFunc(i)
-//		if isConflict {
-//			return nil, false
-//		}
-//		mergedValues[i] = v
-//	}
-//
-//	return val.NewTuple(syncPool, mergedValues...), true
-//}
-
-// mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
-// |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
-// and returns its updated value.
-func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
-	rootSet, err := tbl.GetIndexSet(ctx)
+func setConflicts(ctx context.Context, cons durable.ConflictIndex, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+	ancSch, err := ancTbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-	mergeSet, err := mergeTbl.GetIndexSet(ctx)
+
+	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ancSet, err := ancTbl.GetIndexSet(ctx)
+
+	mergeSch, err := mergeTbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
-	mergedSet, err := mergeProllyIndexSets(ctx, vrw, postMergeSchema, rootSch, mergeSch, ancSch, mergedData, rootSet, mergeSet, ancSet)
+
+	cs := conflict.NewConflictSchema(ancSch, sch, mergeSch)
+
+	tableToUpdate, err = tableToUpdate.SetConflicts(ctx, cs, cons)
 	if err != nil {
 		return nil, err
 	}
-	updatedTbl, err := tableToUpdate.SetIndexSet(ctx, mergedSet)
-	if err != nil {
-		return nil, err
-	}
-	return updatedTbl, nil
-}
 
-// mergeProllyIndexSets merges the |root|, |merge|, and |anc| index sets based
-// on the provided |postMergeSchema|. It returns the merged index set.
-func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, root, merge, anc durable.IndexSet) (durable.IndexSet, error) {
-	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
-
-	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (idx durable.Index, ok bool, err error) {
-		ok = sch.Indexes().Contains(indexName)
-		if ok {
-			idx, err = iS.GetIndex(ctx, sch, indexName)
-			if err != nil {
-				return nil, false, err
-			}
-			return idx, true, nil
-		}
-		return nil, false, nil
-	}
-
-	// Based on the indexes in the post merge schema, merge the root, merge,
-	// and ancestor indexes.
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
-
-		rootI, rootOK, err := tryGetIdx(rootSch, root, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		mergeI, mergeOK, err := tryGetIdx(mergeSch, merge, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		ancI, ancOK, err := tryGetIdx(ancSch, anc, index.Name())
-		if err != nil {
-			return nil, err
-		}
-
-		mergedIndex, err := func() (durable.Index, error) {
-			if !rootOK || !mergeOK || !ancOK {
-				mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, postMergeSchema, index, durable.ProllyMapFromIndex(mergedData))
-				if err != nil {
-					return nil, err
-				}
-				return mergedIndex, nil
-			}
-
-			left := durable.ProllyMapFromIndex(rootI)
-			right := durable.ProllyMapFromIndex(mergeI)
-			base := durable.ProllyMapFromIndex(ancI)
-
-			var collision = false
-			merged, err := prolly.MergeMaps(ctx, left, right, base, func(left, right tree.Diff) (tree.Diff, bool) {
-				collision = true
-				return tree.Diff{}, true
-			})
-			if err != nil {
-				return nil, err
-			}
-			if collision {
-				return nil, errors.New("collisions not implemented")
-			}
-			return durable.IndexFromProllyMap(merged), nil
-		}()
-		if err != nil {
-			return nil, err
-		}
-
-		mergedIndexSet, err = mergedIndexSet.PutIndex(ctx, index.Name(), mergedIndex)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return mergedIndexSet, nil
+	return tableToUpdate, nil
 }
 
 func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.RootValue) (
@@ -1009,6 +785,7 @@ func nomsPkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 		return rowMergeResult{}, err
 	}
 
+	var didMerge bool
 	processTagFunc := func(tag uint64) (resultVal types.Value, isConflict bool) {
 		baseVal, _ := baseVals.Get(tag)
 		val, _ := rowVals.Get(tag)
@@ -1023,8 +800,10 @@ func nomsPkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 			case modified && mergeModified:
 				return nil, true
 			case modified:
+				didMerge = true
 				return val, false
 			default:
+				didMerge = true
 				return mergeVal, false
 			}
 		}
@@ -1057,7 +836,7 @@ func nomsPkRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Sc
 		return rowMergeResult{}, err
 	}
 
-	return rowMergeResult{v, true, false}, nil
+	return rowMergeResult{v, didMerge, false}, nil
 }
 
 func keylessRowMerge(ctx context.Context, nbf *types.NomsBinFormat, sch schema.Schema, val, mergeVal, ancVal types.Value) (rowMergeResult, error) {

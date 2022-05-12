@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -53,7 +54,8 @@ func testNewCursorAtItem(t *testing.T, count int) {
 func randomTree(t *testing.T, count int) (Node, [][2]Item, NodeStore) {
 	ctx := context.Background()
 	ns := NewTestNodeStore()
-	chkr, err := newEmptyChunker(ctx, ns, newTestBuilder)
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool()}
+	chkr, err := newEmptyChunker(ctx, ns, serializer)
 	require.NoError(t, err)
 
 	items := randomTupleItemPairs(count / 2)

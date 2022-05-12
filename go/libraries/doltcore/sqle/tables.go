@@ -469,25 +469,7 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	}
 	numOfRows := int(rowData.Count())
 
-	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), t.sch)
-	if err != nil {
-		return 0, err
-	}
-
-	idxSet, err := table.GetIndexSet(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	for _, idx := range sch.Indexes().AllIndexes() {
-		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
-		if err != nil {
-			return 0, err
-		}
-	}
-
-	// truncate table resets auto-increment value
-	newTable, err := doltdb.NewTable(ctx, table.ValueReadWriter(), t.sch, empty, idxSet, nil)
+	newTable, err := truncate(ctx, table, sch)
 	if err != nil {
 		return 0, err
 	}
@@ -500,12 +482,37 @@ func (t *WritableDoltTable) Truncate(ctx *sql.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	err = t.setRoot(ctx, newRoot)
 	if err != nil {
 		return 0, err
 	}
 
 	return numOfRows, nil
+}
+
+// truncate returns an empty copy of the table given by setting the rows and indexes to empty. The schema can be
+// updated at the same time.
+func truncate(ctx *sql.Context, table *doltdb.Table, sch schema.Schema) (*doltdb.Table, error) {
+	empty, err := durable.NewEmptyIndex(ctx, table.ValueReadWriter(), sch)
+	if err != nil {
+		return nil, err
+	}
+
+	idxSet, err := table.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, idx := range sch.Indexes().AllIndexes() {
+		idxSet, err = idxSet.PutIndex(ctx, idx.Name(), empty)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// truncate table resets auto-increment value
+	return doltdb.NewTable(ctx, table.ValueReadWriter(), sch, empty, idxSet, nil)
 }
 
 // Updater implements sql.UpdatableTable
@@ -585,10 +592,6 @@ func checksInSchema(sch schema.Schema) []sql.CheckDefinition {
 
 // GetDeclaredForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil, nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -641,10 +644,6 @@ func (t *DoltTable) GetDeclaredForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyCo
 
 // GetReferencedForeignKeys implements sql.ForeignKeyTable
 func (t *DoltTable) GetReferencedForeignKeys(ctx *sql.Context) ([]sql.ForeignKeyConstraint, error) {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil, nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return nil, err
@@ -884,6 +883,7 @@ type doltAlterableTableInterface interface {
 }
 
 var _ doltAlterableTableInterface = (*AlterableDoltTable)(nil)
+var _ sql.RewritableTable = (*AlterableDoltTable)(nil)
 
 func (t *AlterableDoltTable) WithProjections(colNames []string) sql.Table {
 	return &AlterableDoltTable{WritableDoltTable: *t.WritableDoltTable.WithProjections(colNames).(*WritableDoltTable)}
@@ -952,6 +952,105 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
+}
+
+func (t *AlterableDoltTable) ShouldRewriteTable(
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	modifiedColumn *sql.Column,
+) bool {
+	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in either format
+	return types.IsFormat_DOLT_1(t.nbf)
+}
+
+func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
+	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("database %s not found in session", t.db.Name())
+	}
+
+	ws := dbState.WorkingSet
+
+	head, err := sess.GetHeadCommit(ctx, t.db.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	headRoot, err := head.GetRootValue(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dt, err := t.doltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	oldSch, err := dt.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newSch, err := sqlutil.ToDoltSchema(ctx, ws.WorkingRoot(), t.Name(), newSchema, headRoot)
+	if err != nil {
+		return nil, err
+	}
+
+	newSch, err = schema.Adapt(oldSch, newSch) // improvise, overcome
+	if err != nil {
+		return nil, err
+	}
+
+	// If we have an auto increment column, we need to set it here before we begin the rewrite process
+	if schema.HasAutoIncrement(newSch) {
+		newSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			if col.AutoIncrement {
+				t.autoIncCol = col
+				return true, nil
+			}
+			return false, nil
+		})
+	}
+
+	dt, err = truncate(ctx, dt, newSch)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can't just call getTableEditor here because it uses the session state, which we can't update until after the
+	// rewrite operation
+	opts := dbState.WriteSession.GetOptions()
+	opts.ForeignKeyChecksDisabled = true
+
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, t.Name(), dt)
+	if err != nil {
+		return nil, err
+	}
+
+	newWs := ws.WithWorkingRoot(newRoot)
+
+	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
+	//  do the same. We're messing with global auto-increment values here and it's not safe.
+	ait, err := t.db.gs.GetAutoIncrementTracker(ctx, newWs)
+	if err != nil {
+		return nil, err
+	}
+
+	writeSession := writer.NewWriteSession(dt.Format(), newWs, ait, opts)
+	ed, err := writeSession.GetTableWriter(ctx, t.Name(), t.db.Name(), sess.SetRoot, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return ed, nil
 }
 
 // DropColumn implements sql.AlterableTable
@@ -1353,11 +1452,6 @@ func (t *AlterableDoltTable) RenameIndex(ctx *sql.Context, fromIndexName string,
 
 // AddForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKeyConstraint) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy)
-		return nil
-	}
-
 	if sqlFk.Name != "" && !doltdb.IsValidForeignKeyName(sqlFk.Name) {
 		return fmt.Errorf("invalid foreign key name `%s` as it must match the regular expression %s", sqlFk.Name, doltdb.ForeignKeyNameRegexStr)
 	}
@@ -1545,11 +1639,6 @@ func (t *AlterableDoltTable) AddForeignKey(ctx *sql.Context, sqlFk sql.ForeignKe
 
 // DropForeignKey implements sql.ForeignKeyTable
 func (t *AlterableDoltTable) DropForeignKey(ctx *sql.Context, fkName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		// todo(andy)
-		return nil
-	}
-
 	root, err := t.getRoot(ctx)
 	if err != nil {
 		return err

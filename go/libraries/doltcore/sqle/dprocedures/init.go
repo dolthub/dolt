@@ -17,18 +17,30 @@ package dprocedures
 import "github.com/dolthub/go-mysql-server/sql"
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
-	{Name: "dolt_add", Schema: int64Schema("failed"), Function: dolt_add},
-	{Name: "dolt_branch", Schema: int64Schema("failed"), Function: dolt_branch},
-	{Name: "dolt_checkout", Schema: int64Schema("failed"), Function: dolt_checkout},
+	{Name: "dolt_add", Schema: int64Schema("status"), Function: dolt_add},
+	{Name: "dolt_branch", Schema: int64Schema("status"), Function: dolt_branch},
+	{Name: "dolt_checkout", Schema: int64Schema("status"), Function: dolt_checkout},
 	{Name: "dolt_commit", Schema: stringSchema("hash"), Function: dolt_commit},
 	{Name: "dolt_fetch", Schema: int64Schema("success"), Function: dolt_fetch},
 	{Name: "dolt_merge", Schema: int64Schema("no_conflicts"), Function: dolt_merge},
 	{Name: "dolt_pull", Schema: int64Schema("no_conflicts"), Function: dolt_pull},
 	{Name: "dolt_push", Schema: int64Schema("success"), Function: dolt_push},
-	{Name: "dolt_reset", Schema: int64Schema("failed"), Function: dolt_reset},
-	{Name: "dolt_revert", Schema: int64Schema("failed"), Function: dolt_revert},
+	{Name: "dolt_reset", Schema: int64Schema("status"), Function: dolt_reset},
+	{Name: "dolt_revert", Schema: int64Schema("status"), Function: dolt_revert},
 	{Name: "dolt_verify_constraints", Schema: int64Schema("no_violations"), Function: dolt_verify_constraints},
 	{Name: "dolt_verify_all_constraints", Schema: int64Schema("no_violations"), Function: dolt_verify_all_constraints},
+	{Name: "dadd", Schema: int64Schema("status"), Function: dolt_add},
+	{Name: "dbranch", Schema: int64Schema("status"), Function: dolt_branch},
+	{Name: "dcheckout", Schema: int64Schema("status"), Function: dolt_checkout},
+	{Name: "dcommit", Schema: stringSchema("hash"), Function: dolt_commit},
+	{Name: "dfetch", Schema: int64Schema("success"), Function: dolt_fetch},
+	{Name: "dmerge", Schema: int64Schema("no_conflicts"), Function: dolt_merge},
+	{Name: "dpull", Schema: int64Schema("no_conflicts"), Function: dolt_pull},
+	{Name: "dpush", Schema: int64Schema("success"), Function: dolt_push},
+	{Name: "dreset", Schema: int64Schema("status"), Function: dolt_reset},
+	{Name: "drevert", Schema: int64Schema("status"), Function: dolt_revert},
+	{Name: "dverify_constraints", Schema: int64Schema("no_violations"), Function: dolt_verify_constraints},
+	{Name: "dverify_all_constraints", Schema: int64Schema("no_violations"), Function: dolt_verify_all_constraints},
 }
 
 // stringSchema returns a non-nullable schema with all columns as LONGTEXT.
