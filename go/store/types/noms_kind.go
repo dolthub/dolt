@@ -85,7 +85,7 @@ func init() {
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = EmptyTuple(Format_Default)
+	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}

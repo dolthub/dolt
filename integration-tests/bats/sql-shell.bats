@@ -57,6 +57,7 @@ teardown() {
 }
 
 @test "sql-shell: validate string formatting" {
+      skip_nbf_dolt_1
       dolt sql <<SQL
 CREATE TABLE test2 (
   str varchar(256) NOT NULL,

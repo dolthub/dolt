@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     cat <<DELIM > 1pk5col-ints.csv
 pk,c1,c2,c3,c4,c5
@@ -80,7 +81,7 @@ teardown() {
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
     [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int unsigned" ]] || false
     [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
@@ -105,7 +106,7 @@ DELIM
     [[ "$output" =~ "\`pk\` int" ]] || false
     [[ "$output" =~ "\`int\` int" ]] || false
     [[ "$output" =~ "\`string\` varchar(16383)" ]] || false
-    [[ "$output" =~ "\`boolean\` bit(1)" ]] || false
+    [[ "$output" =~ "\`boolean\` tinyint" ]] || false
     [[ "$output" =~ "\`float\` float" ]] || false
     [[ "$output" =~ "\`uint\` int" ]] || false
     [[ "$output" =~ "\`uuid\` char(36) character set ascii collate ascii_bin" ]] || false
@@ -313,7 +314,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  `a` varchar(16383) NOT NULL,' ]] || false
     [[ "$output" =~ '-  `b` float NOT NULL,' ]] || false
-    [[ "$output" =~ '-  `c` bit(1) NOT NULL,' ]] || false
+    [[ "$output" =~ '-  `c` tinyint NOT NULL,' ]] || false
     # assert no columns were added
     [[ ! "$output" = "+    \`" ]] || false
 }

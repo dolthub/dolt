@@ -79,27 +79,33 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []enginetest.ScriptTest{
 		{
-			Name: "Two column index",
+			Name: "Multialter DDL with ADD/DROP Primary Key",
 			SetUpScript: []string{
-				`CREATE TABLE a (x int primary key, y int)`,
-				`CREATE TABLE b (x int primary key, y int)`,
-				`insert into a values (0,0), (1,1)`,
-				`insert into b values (0,0), (1,1)`,
+				"CREATE TABLE t(pk int primary key, v1 int)",
 			},
 			Assertions: []enginetest.ScriptTestAssertion{
 				{
-					Query: `UPDATE a INNER JOIN b on a.x = b.x SET a.y = b.y + 1`,
-					Expected: []sql.Row{{sql.OkResult{
-						RowsAffected: uint64(2),
-						Info:         plan.UpdateInfo{Matched: 1, Updated: 2},
-					}}},
+					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
+					Expected: []sql.Row{{sql.NewOkResult(0)}},
 				},
 				{
-					Query: "SELECT * FROM a;",
-
+					Query: "DESCRIBE t",
 					Expected: []sql.Row{
-						{0, 1},
-						{1, 2},
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
+					},
+				},
+				{
+					Query:       "ALTER TABLE t ADD COLUMN (v3 int), drop primary key, add primary key (notacolumn)",
+					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
+				},
+				{
+					Query: "DESCRIBE t",
+					Expected: []sql.Row{
+						{"pk", "int", "NO", "", "", ""},
+						{"v1", "int", "YES", "", "", ""},
+						{"v2", "int", "NO", "PRI", "", ""},
 					},
 				},
 			},
@@ -252,7 +258,6 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestTruncate(t, newDoltHarness(t))
 }
 
@@ -348,7 +353,6 @@ func TestJoinQueries(t *testing.T) {
 }
 
 func TestUserPrivileges(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestUserPrivileges(t, newDoltHarness(t))
 }
 
@@ -393,7 +397,6 @@ func TestAddColumn(t *testing.T) {
 }
 
 func TestModifyColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestModifyColumn(t, newDoltHarness(t))
 }
 
@@ -412,6 +415,7 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
@@ -420,19 +424,11 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(enginetest.ForeignKeyTests) - 1; i >= 0; i-- {
-			//TODO: test uses ALTER TABLE MODIFY COLUMN which is not yet supported in new format
-			if enginetest.ForeignKeyTests[i].Name == "ALTER TABLE SET NULL on non-nullable column" {
-				enginetest.ForeignKeyTests = append(enginetest.ForeignKeyTests[:i], enginetest.ForeignKeyTests[i+1:]...)
-			}
-		}
-	}
+	skipNewFormat(t)
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraints(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateCheckConstraints(t, newDoltHarness(t))
 }
 
@@ -619,6 +615,14 @@ func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, script := range DoltMerge {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
+func TestDoltReset(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t)
+	for _, script := range DoltReset {
 		enginetest.TestScript(t, harness, script)
 	}
 }
@@ -895,37 +899,31 @@ func TestScriptsPrepared(t *testing.T) {
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestComplexIndexQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestComplexIndexQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestJsonScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestJsonScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestCreateCheckConstraintsScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestCreateCheckConstraintsScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertIgnoreScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertIgnoreScriptsPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertErrorScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }

@@ -49,6 +49,7 @@ teardown() {
 }
 
 @test "sql-status: status properly works with staged and not staged doc diffs" {
+    skip_nbf_dolt_1
     echo readme-text > README.md
     echo license-text > LICENSE.md
 
@@ -61,6 +62,7 @@ teardown() {
 }
 
 @test "sql-status: status works property with working tables in conflict" {
+    skip_nbf_dolt_1
     # Start by causing the conflict.
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     dolt add test
@@ -84,6 +86,7 @@ teardown() {
 }
 
 @test "sql-status: status works properly with working docs in conflict" {
+     skip_nbf_dolt_1
      echo "a readme" > README.md
      dolt add .
      dolt commit -m "Committing initial docs"

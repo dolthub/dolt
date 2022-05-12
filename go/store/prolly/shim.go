@@ -35,12 +35,25 @@ func ValueFromMap(m Map) types.Value {
 	return tree.ValueFromNode(m.tuples.root)
 }
 
+func ValueFromConflictMap(m ConflictMap) types.Value {
+	return tree.ValueFromNode(m.conflicts.root)
+}
+
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
 	root := NodeFromValue(v)
 	kd := KeyDescriptorFromSchema(sch)
 	vd := ValueDescriptorFromSchema(sch)
 	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
 	return NewMap(root, ns, kd, vd)
+}
+
+func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) ConflictMap {
+	root := NodeFromValue(v)
+	kd, ourVD := MapDescriptorsFromScheam(ourSchema)
+	theirVD := ValueDescriptorFromSchema(theirSchema)
+	baseVD := ValueDescriptorFromSchema(baseSchema)
+	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
+	return NewConflictMap(root, ns, kd, ourVD, theirVD, baseVD)
 }
 
 func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {

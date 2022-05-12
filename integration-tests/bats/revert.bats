@@ -71,6 +71,7 @@ teardown() {
 }
 
 @test "revert: constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
@@ -242,6 +243,7 @@ SQL
 }
 
 @test "revert: SQL constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
@@ -262,6 +264,7 @@ SQL
 }
 
 @test "revert: Stored Procedure constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
