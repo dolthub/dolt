@@ -147,7 +147,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 // TODO: merge this with the cmd/sql.go code, which is what this was modified from
 func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, rowData types.Map) error {
-	nbf := types.Format_Default
+	nbf := rowData.Format()
 
 	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
 	if err != nil {

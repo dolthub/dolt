@@ -601,6 +601,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
+    skip_nbf_dolt_1
     cd repo1
     start_sql_server repo1
 
@@ -655,6 +656,7 @@ SQL
 
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
+    skip_nbf_dolt_1
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1

@@ -68,7 +68,7 @@ func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
 // Exec implements the interface cli.Command.
 func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateRevertArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// This command creates a commit, so we need user identity

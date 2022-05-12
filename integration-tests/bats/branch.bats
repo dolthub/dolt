@@ -11,6 +11,7 @@ teardown() {
 }
 
 @test "branch: deleting a branch deletes its working set" {
+    skip_nbf_dolt_1
     dolt checkout -b to_delete
 
     root=$(noms root .dolt/noms)

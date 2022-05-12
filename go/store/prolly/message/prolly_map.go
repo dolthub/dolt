@@ -89,23 +89,26 @@ func (s ProllyMapSerializer) Serialize(keys, values [][]byte, subtrees []uint64,
 	return b.FinishedBytes()
 }
 
-func getProllyMapKeys(msg Message) (keys val.SlicedBuffer) {
+func getProllyMapKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
 	pm := serial.GetRootAsProllyTreeNode(msg, 0)
+
 	keys.Buf = pm.KeyItemsBytes()
 	keys.Offs = getProllyMapKeyOffsets(pm)
-	return
-}
+	if len(keys.Buf) == 0 {
+		cnt = 0
+	} else {
+		cnt = 1 + uint16(len(keys.Offs)/2)
+	}
 
-func getProllyMapValues(msg Message) (values val.SlicedBuffer) {
-	pm := serial.GetRootAsProllyTreeNode(msg, 0)
-	items := pm.ValueItemsBytes()
-	if items != nil {
-		values.Buf = items
+	vv := pm.ValueItemsBytes()
+	if vv != nil {
+		values.Buf = vv
 		values.Offs = getProllyMapValueOffsets(pm)
 	} else {
 		values.Buf = pm.AddressArrayBytes()
 		values.Offs = offsetsForAddressArray(values.Buf)
 	}
+
 	return
 }
 

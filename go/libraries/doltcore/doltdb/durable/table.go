@@ -81,11 +81,11 @@ type Table interface {
 	SetIndexes(ctx context.Context, indexes IndexSet) (Table, error)
 
 	// GetConflicts returns the merge conflicts for this table.
-	GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error)
+	GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error)
 	// HasConflicts returns true if this table has conflicts.
 	HasConflicts(ctx context.Context) (bool, error)
 	// SetConflicts sets the merge conflicts for this table.
-	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts types.Map) (Table, error)
+	SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error)
 	// ClearConflicts removes all merge conflicts for this table.
 	ClearConflicts(ctx context.Context) (Table, error)
 
@@ -106,26 +106,6 @@ type Table interface {
 type nomsTable struct {
 	vrw         types.ValueReadWriter
 	tableStruct types.Struct
-}
-
-func (t nomsTable) DebugString(ctx context.Context) string {
-	var buf bytes.Buffer
-
-	buf.WriteString("\tStruct:\n")
-	types.WriteEncodedValue(ctx, &buf, t.tableStruct)
-
-	buf.WriteString("\n\tRows:\n")
-	data, err := t.GetTableRows(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	err = types.WriteEncodedValue(ctx, &buf, NomsMapFromIndex(data))
-	if err != nil {
-		panic(err)
-	}
-
-	return buf.String()
 }
 
 var _ Table = nomsTable{}
@@ -369,44 +349,52 @@ func (t nomsTable) HasConflicts(ctx context.Context) (bool, error) {
 }
 
 // GetConflicts implements Table.
-func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
+func (t nomsTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
 	schemasVal, ok, err := t.tableStruct.MaybeGet(conflictSchemasKey)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 	if !ok {
-		confMap, _ := types.NewMap(ctx, t.valueReadWriter())
-		return conflict.ConflictSchema{}, confMap, nil
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		empty, err := NewEmptyConflictIndex(ctx, t.vrw, sch, sch, sch)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		return conflict.ConflictSchema{}, empty, nil
 	}
 
 	schemas, err := conflict.ConflictSchemaFromValue(ctx, t.vrw, schemasVal)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 
 	conflictsVal, _, err := t.tableStruct.MaybeGet(conflictsKey)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.EmptyMap, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 
-	confMap := types.EmptyMap
-	if conflictsVal != nil {
-		confMapRef := conflictsVal.(types.Ref)
-		v, err := confMapRef.TargetValue(ctx, t.vrw)
-
+	if conflictsVal == nil {
+		confIndex, err := NewEmptyConflictIndex(ctx, t.vrw, schemas.Schema, schemas.MergeSchema, schemas.Base)
 		if err != nil {
-			return conflict.ConflictSchema{}, types.EmptyMap, err
+			return conflict.ConflictSchema{}, nil, err
 		}
-
-		confMap = v.(types.Map)
+		return conflict.ConflictSchema{}, confIndex, nil
 	}
 
-	return schemas, confMap, nil
+	i, err := conflictIndexFromRef(ctx, t.vrw, schemas.Schema, schemas.MergeSchema, schemas.Base, conflictsVal.(types.Ref))
+	if err != nil {
+		return conflict.ConflictSchema{}, nil, err
+	}
+
+	return schemas, i, nil
 }
 
 // SetConflicts implements Table.
-func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData types.Map) (Table, error) {
-	conflictsRef, err := refFromNomsValue(ctx, t.vrw, conflictData)
+func (t nomsTable) SetConflicts(ctx context.Context, schemas conflict.ConflictSchema, conflictData ConflictIndex) (Table, error) {
+	conflictsRef, err := RefFromConflictIndex(ctx, t.vrw, conflictData)
 	if err != nil {
 		return nil, err
 	}
@@ -546,6 +534,47 @@ func (t nomsTable) SetAutoIncrement(ctx context.Context, val uint64) (Table, err
 		return nil, err
 	}
 	return nomsTable{t.vrw, st}, nil
+}
+
+func (t nomsTable) DebugString(ctx context.Context) string {
+	var buf bytes.Buffer
+	err := types.WriteEncodedValue(ctx, &buf, t.tableStruct)
+	if err != nil {
+		panic(err)
+	}
+
+	schemaRefVal, _, _ := t.tableStruct.MaybeGet(schemaRefKey)
+	schemaRef := schemaRefVal.(types.Ref)
+	schemaVal, err := schemaRef.TargetValue(ctx, t.vrw)
+	if err != nil {
+		panic(err)
+	}
+
+	buf.WriteString("\nschema: ")
+	err = types.WriteEncodedValue(ctx, &buf, schemaVal)
+	if err != nil {
+		panic(err)
+	}
+
+	iv, ok, err := t.tableStruct.MaybeGet(indexesKey)
+	if err != nil {
+		panic(err)
+	}
+
+	if ok {
+		buf.WriteString("\nindexes: ")
+		im, err := iv.(types.Ref).TargetValue(ctx, t.vrw)
+		if err != nil {
+			panic(err)
+		}
+
+		err = types.WriteEncodedValue(ctx, &buf, im)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return buf.String()
 }
 
 func refFromNomsValue(ctx context.Context, vrw types.ValueReadWriter, val types.Value) (types.Ref, error) {
@@ -768,7 +797,7 @@ func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, 
 	return doltDevTable{t.vrw, msg}, nil
 }
 
-func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, types.Map, error) {
+func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema, ConflictIndex, error) {
 	conflicts := t.msg.Conflicts(nil)
 
 	ouraddr := hash.New(conflicts.OurSchemaBytes())
@@ -776,21 +805,28 @@ func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema
 	baseaddr := hash.New(conflicts.AncestorSchemaBytes())
 
 	if ouraddr.IsEmpty() {
-		m, err := types.NewMap(ctx, t.vrw)
-		return conflict.ConflictSchema{}, m, err
+		sch, err := t.GetSchema(ctx)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		empty, err := NewEmptyConflictIndex(ctx, t.vrw, sch, sch, sch)
+		if err != nil {
+			return conflict.ConflictSchema{}, nil, err
+		}
+		return conflict.ConflictSchema{}, empty, nil
 	}
 
 	ourschema, err := getSchemaAtAddr(ctx, t.vrw, ouraddr)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.Map{}, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 	theirschema, err := getSchemaAtAddr(ctx, t.vrw, theiraddr)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.Map{}, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 	baseschema, err := getSchemaAtAddr(ctx, t.vrw, baseaddr)
 	if err != nil {
-		return conflict.ConflictSchema{}, types.Map{}, err
+		return conflict.ConflictSchema{}, nil, err
 	}
 
 	conflictschema := conflict.ConflictSchema{
@@ -800,21 +836,20 @@ func (t doltDevTable) GetConflicts(ctx context.Context) (conflict.ConflictSchema
 	}
 
 	mapaddr := hash.New(conflicts.DataBytes())
-	var datamap types.Map
+	var conflictIdx ConflictIndex
 	if mapaddr.IsEmpty() {
-		datamap, err = types.NewMap(ctx, t.vrw)
+		conflictIdx, err = NewEmptyConflictIndex(ctx, t.vrw, ourschema, theirschema, baseschema)
 		if err != nil {
-			return conflict.ConflictSchema{}, types.Map{}, err
+			return conflict.ConflictSchema{}, nil, err
 		}
 	} else {
-		mapval, err := t.vrw.ReadValue(ctx, mapaddr)
+		conflictIdx, err = conflictIndexFromAddr(ctx, t.vrw, ourschema, theirschema, baseschema, mapaddr)
 		if err != nil {
-			return conflict.ConflictSchema{}, types.Map{}, err
+			return conflict.ConflictSchema{}, nil, err
 		}
-		datamap = mapval.(types.Map)
 	}
 
-	return conflictschema, datamap, nil
+	return conflictschema, conflictIdx, nil
 }
 
 func (t doltDevTable) HasConflicts(ctx context.Context) (bool, error) {
@@ -823,8 +858,8 @@ func (t doltDevTable) HasConflicts(ctx context.Context) (bool, error) {
 	return !addr.IsEmpty(), nil
 }
 
-func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts types.Map) (Table, error) {
-	conflictsRef, err := refFromNomsValue(ctx, t.vrw, conflicts)
+func (t doltDevTable) SetConflicts(ctx context.Context, sch conflict.ConflictSchema, conflicts ConflictIndex) (Table, error) {
+	conflictsRef, err := RefFromConflictIndex(ctx, t.vrw, conflicts)
 	if err != nil {
 		return nil, err
 	}

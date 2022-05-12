@@ -388,7 +388,7 @@ func TestInsert(t *testing.T) {
 				for _, expectedid := range test.expectedIds {
 					tbl, _, err := root.GetTable(ctx, tableName)
 					assert.NoError(t, err)
-					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
+					taggedVals := row.TaggedValues{dtestutils.IdTag: types.String(expectedid.String())}
 					key := taggedVals.NomsTupleForPKCols(types.Format_Default, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)
@@ -472,7 +472,7 @@ func TestUpdate(t *testing.T) {
 				for i, expectedid := range test.expectedIds {
 					tbl, _, err := root.GetTable(ctx, tableName)
 					assert.NoError(t, err)
-					taggedVals := row.TaggedValues{dtestutils.IdTag: types.UUID(expectedid)}
+					taggedVals := row.TaggedValues{dtestutils.IdTag: types.String(expectedid.String())}
 					key := taggedVals.NomsTupleForPKCols(types.Format_Default, dtestutils.TypedSchema.GetPKCols())
 					kv, err := key.Value(ctx)
 					assert.NoError(t, err)

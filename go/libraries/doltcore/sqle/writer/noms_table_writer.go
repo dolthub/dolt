@@ -57,7 +57,7 @@ type nomsTableWriter struct {
 	vrw         types.ValueReadWriter
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
-	sess        WriteSession
+	flusher     WriteSessionFlusher
 	batched     bool
 
 	autoInc globalstate.AutoIncrementTracker
@@ -171,7 +171,7 @@ func (te *nomsTableWriter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (te *nomsTableWriter) flush(ctx *sql.Context) error {
-	ws, err := te.sess.Flush(ctx)
+	ws, err := te.flusher.Flush(ctx)
 	if err != nil {
 		return err
 	}
