@@ -50,7 +50,7 @@ var _ sql.RowIter = prollyIndexIter{}
 var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
-func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dsecondary, dprimary durable.Index) (prollyIndexIter, error) {
+func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprimary, dsecondary durable.Index) (prollyIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {

@@ -66,7 +66,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range,
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch, secondary)
 	} else {
-		return newProllyIndexIter(ctx, idx, ranges, secondary, primary)
+		return newProllyIndexIter(ctx, idx, ranges, primary, secondary)
 	}
 }
 
@@ -141,10 +141,10 @@ type rangePartitionIter struct {
 	prollyRanges []prolly.Range
 	curr         int
 	mu           *sync.Mutex
-	// the rows of the index itself
-	secondary    durable.Index
 	// the rows of the table the index references
-	primary      durable.Index
+	primary durable.Index
+	// the rows of the index itself
+	secondary durable.Index
 }
 
 // Close is required by the sql.PartitionIter interface. Does nothing.
@@ -176,8 +176,8 @@ func (itr *rangePartitionIter) nextProllyPartition() (sql.Partition, error) {
 	return rangePartition{
 		prollyRange: pr,
 		key:         bytes[:],
-		secondary:   itr.secondary,
 		primary:     itr.primary,
+		secondary:   itr.secondary,
 	}, nil
 }
 
@@ -194,8 +194,8 @@ func (itr *rangePartitionIter) nextNomsPartition() (sql.Partition, error) {
 	return rangePartition{
 		nomsRange: nr,
 		key:       bytes[:],
-		secondary: itr.secondary,
 		primary:   itr.primary,
+		secondary: itr.secondary,
 	}, nil
 }
 
@@ -203,10 +203,10 @@ type rangePartition struct {
 	nomsRange   *noms.ReadRange
 	prollyRange prolly.Range
 	key         []byte
-	// the index entries
-	secondary   durable.Index
 	// the rows of the table the index refers to
-	primary     durable.Index
+	primary durable.Index
+	// the index entries
+	secondary durable.Index
 }
 
 func (rp rangePartition) Key() []byte {
