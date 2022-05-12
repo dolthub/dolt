@@ -58,6 +58,9 @@ func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 		return Map{}, err
 	}
 
+	// release buffer
+	mut.tuples.edits.Close()
+
 	return Map{
 		tuples: orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
 			root:  root,
