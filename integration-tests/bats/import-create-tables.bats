@@ -552,7 +552,7 @@ DELIM
     [[ "$output" =~ "\`pk\` int" ]]
     [[ "$output" =~ "\`str\` varchar(16383)" ]]
     [[ "$output" =~ "\`int\` int unsigned" ]]
-    [[ "$output" =~ "\`bool\` bit(1)" ]]
+    [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
     [[ "$output" =~ "\`time\` time" ]]
