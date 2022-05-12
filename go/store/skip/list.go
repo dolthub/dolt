@@ -17,7 +17,6 @@ package skip
 import (
 	"math"
 	"math/rand"
-	"sync"
 
 	"github.com/zeebo/xxh3"
 )
@@ -58,7 +57,7 @@ type skipNode struct {
 }
 
 func NewSkipList(cmp ValueCmp) *List {
-	nodes := getNodes()
+	nodes := make([]skipNode, 0, 8)
 
 	// initialize sentinel node
 	nodes = append(nodes, skipNode{
@@ -100,11 +99,6 @@ func (l *List) Truncate() {
 	s.prev = sentinelId
 	l.updateNode(s)
 	l.count = 0
-}
-
-func (l *List) Close() {
-	putNodes(l.nodes)
-	l.nodes = nil
 }
 
 func (l *List) Count() int {
@@ -381,20 +375,4 @@ func rollHeight(key []byte, salt uint64) (h uint8) {
 	}
 
 	return
-}
-
-var skipNodePool = sync.Pool{
-	New: func() any {
-		return make([]skipNode, 0, 128)
-	},
-}
-
-func getNodes() []skipNode {
-	return skipNodePool.Get().([]skipNode)
-}
-
-func putNodes(nodes []skipNode) {
-	if cap(nodes) == 128 {
-		skipNodePool.Put(nodes[:0])
-	}
 }
