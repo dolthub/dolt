@@ -85,6 +85,7 @@ SQL
 }
 
 @test "column_tags: Merging branches that use the same tag referring to different schema fails" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:1234',
@@ -137,6 +138,7 @@ SQL
 }
 
 @test "column_tags: Merging branches that both created the same column succeeds" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL COMMENT 'tag:0',
