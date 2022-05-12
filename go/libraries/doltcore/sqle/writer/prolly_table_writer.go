@@ -45,7 +45,7 @@ type prollyTableWriter struct {
 	aiCol     schema.Column
 	aiTracker globalstate.AutoIncrementTracker
 
-	sess    WriteSession
+	flusher WriteSessionFlusher
 	setter  SessionRootSetter
 	batched bool
 }
@@ -226,7 +226,8 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	w.primary = newPrimary
 	w.secondary = newSecondaries
 	w.aiCol = aiCol
-	w.sess = sess
+	w.flusher = sess
+
 	return nil
 }
 
@@ -281,7 +282,7 @@ func (w *prollyTableWriter) flush(ctx *sql.Context) error {
 	if !w.primary.HasEdits(ctx) {
 		return nil
 	}
-	ws, err := w.sess.Flush(ctx)
+	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err
 	}

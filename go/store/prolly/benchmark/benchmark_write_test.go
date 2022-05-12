@@ -19,15 +19,22 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkAllWrites(b *testing.B) {
-	benchmarkProllyMapUpdate(b, 10_000, 1)
-	benchmarkTypesMapUpdate(b, 10_000, 1)
-	benchmarkProllyMapUpdate(b, 100_000, 1)
-	benchmarkTypesMapUpdate(b, 100_000, 1)
+func BenchmarkMapUpdate(b *testing.B) {
+	b.Run("benchmark maps 10k", func(b *testing.B) {
+		benchmarkProllyMapUpdate(b, 10_000, 1)
+		benchmarkTypesMapUpdate(b, 10_000, 1)
+	})
+	b.Run("benchmark maps 100k", func(b *testing.B) {
+		benchmarkProllyMapUpdate(b, 100_000, 1)
+		benchmarkTypesMapUpdate(b, 100_000, 1)
+	})
+	b.Run("benchmark maps 1M", func(b *testing.B) {
+		benchmarkProllyMapUpdate(b, 1_000_000, 1)
+		benchmarkTypesMapUpdate(b, 1_000_000, 1)
+	})
 }
 
 func BenchmarkProllySmallWrites(b *testing.B) {
@@ -51,15 +58,13 @@ func BenchmarkProllyLargeWrites(b *testing.B) {
 }
 
 func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
-	bench := generateProllyBench(size)
+	bench := generateProllyBench(b, size)
 	b.ReportAllocs()
 	b.ResetTimer()
 
 	b.Run("benchmark prolly map writes", func(b *testing.B) {
 		ctx := context.Background()
-		iters := int(size) / 10
-
-		for i := 0; i < iters; i++ {
+		for i := 0; i < b.N; i++ {
 			mut := bench.m.Mutate()
 			for j := 0; j < int(k); j++ {
 				idx := rand.Uint64() % uint64(len(bench.tups))
@@ -70,23 +75,19 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 				err := mut.Put(ctx, key, value)
 				require.NoError(b, err)
 			}
-			mm, err := mut.Map(ctx)
-			require.NoError(b, err)
-			assert.Equal(b, int(size)+iters, mm.Count())
+			_, _ = mut.Map(ctx)
 		}
 		b.ReportAllocs()
 	})
 }
 
 func benchmarkTypesMapUpdate(b *testing.B, size, k uint64) {
-	bench := generateTypesBench(size)
+	bench := generateTypesBench(b, size)
 	b.ResetTimer()
 
 	b.Run("benchmark types map writes", func(b *testing.B) {
 		ctx := context.Background()
-		iters := int(bench.m.Len()) / 10
-
-		for i := 0; i < iters; i++ {
+		for i := 0; i < b.N; i++ {
 			edit := bench.m.Edit()
 			for j := 0; j < int(k); j++ {
 				idx := rand.Uint64() % uint64(len(bench.tups))
@@ -95,9 +96,7 @@ func benchmarkTypesMapUpdate(b *testing.B, size, k uint64) {
 				value := bench.tups[idx][0]
 				edit.Set(key, value)
 			}
-			mm, err := edit.Map(ctx)
-			require.NoError(b, err)
-			assert.Equal(b, bench.m.Len(), mm.Len())
+			_, _ = edit.Map(ctx)
 		}
 		b.ReportAllocs()
 	})

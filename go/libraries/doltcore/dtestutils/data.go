@@ -52,10 +52,10 @@ const (
 )
 
 var typedColColl = schema.NewColCollection(
-	schema.NewColumn("id", IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+	schema.NewColumn("id", IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 	schema.NewColumn("name", NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 	schema.NewColumn("age", AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-	schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+	schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 	schema.NewColumn("title", TitleTag, types.StringKind, false),
 )
 
@@ -70,12 +70,16 @@ var UntypedRows []row.Row
 func init() {
 	for i := 0; i < len(UUIDS); i++ {
 
+		married := types.Int(0)
+		if MaritalStatus[i] {
+			married = types.Int(1)
+		}
 		taggedVals := row.TaggedValues{
-			IdTag:        types.UUID(UUIDS[i]),
+			IdTag:        types.String(UUIDS[i].String()),
 			NameTag:      types.String(Names[i]),
 			AgeTag:       types.Uint(Ages[i]),
 			TitleTag:     types.String(Titles[i]),
-			IsMarriedTag: types.Bool(MaritalStatus[i]),
+			IsMarriedTag: married,
 		}
 
 		r, err := row.New(types.Format_Default, TypedSchema, taggedVals)
@@ -87,11 +91,11 @@ func init() {
 		TypedRows = append(TypedRows, r)
 
 		taggedVals = row.TaggedValues{
-			IdTag:        types.UUID(uuid.MustParse(UUIDS[i].String())),
+			IdTag:        types.String(UUIDS[i].String()),
 			NameTag:      types.String(Names[i]),
 			AgeTag:       types.Uint(Ages[i]),
 			TitleTag:     types.String(Titles[i]),
-			IsMarriedTag: types.Bool(MaritalStatus[i]),
+			IsMarriedTag: married,
 		}
 
 		r, err = row.New(types.Format_Default, TypedSchema, taggedVals)
@@ -128,11 +132,16 @@ func NewTypedRow(id uuid.UUID, name string, age uint, isMarried bool, title *str
 		titleVal = types.String(*title)
 	}
 
+	married := types.Int(0)
+	if isMarried {
+		married = types.Int(1)
+	}
+
 	taggedVals := row.TaggedValues{
-		IdTag:        types.UUID(id),
+		IdTag:        types.String(id.String()),
 		NameTag:      types.String(name),
 		AgeTag:       types.Uint(age),
-		IsMarriedTag: types.Bool(isMarried),
+		IsMarriedTag: married,
 		TitleTag:     titleVal,
 	}
 
