@@ -470,7 +470,10 @@ func (root *RootValue) GenerateTagsForNewColumns(
 	if headRoot != nil {
 		for _, col := range existingCols {
 			for i := range newColNames {
-				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+				// Only re-use tags if the noms kind didn't change
+				// TODO: revisit this when new storage format is further along
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 					newTags[i] = col.Tag
 					break
 				}
@@ -1307,6 +1310,10 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	return nil
 }
 
+type debugStringer interface {
+	DebugString(ctx context.Context) string
+}
+
 // DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
 // all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 // when debugging tests.
@@ -1319,8 +1326,21 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString(": \n")
-			buf.WriteString(table.table.DebugString(ctx))
+			buf.WriteString("\n")
+
+			buf.WriteString("Struct:\n")
+			buf.WriteString(table.DebugString(ctx))
+
+			buf.WriteString("\ndata:\n")
+			data, err := table.GetNomsRowData(ctx)
+			if err != nil {
+				panic(err)
+			}
+
+			err = types.WriteEncodedValue(ctx, &buf, data)
+			if err != nil {
+				panic(err)
+			}
 			return false, nil
 		})
 	}
