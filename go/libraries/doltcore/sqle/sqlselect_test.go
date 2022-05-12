@@ -795,7 +795,7 @@ var sqlDiffSchema = sql.Schema{
 	&sql.Column{Name: "from_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
-	&sql.Column{Name: "diff_type", Type: sql.Text},
+	&sql.Column{Name: "diff_type", Type: typeinfo.StringDefaultType.ToSqlType()},
 }
 
 var SelectDiffTests = []SelectTest{

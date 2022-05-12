@@ -118,7 +118,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		diffTableSchema = j.GetSchema()
 		colCollection = diffTableSchema.GetAllCols()
 		colCollection = colCollection.Append(
-			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false, schema.NotNullConstraint{}),
+			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
 		)
 		diffTableSchema = schema.MustSchemaFromCols(colCollection)
 	}
