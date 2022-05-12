@@ -24,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -42,8 +43,9 @@ type DiffTableFunction struct {
 	database       sql.Database
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
-	toSch          schema.Schema
 	fromSch        schema.Schema
+	toSch          schema.Schema
+	diffTableSch   schema.Schema
 }
 
 // NewInstance implements the TableFunction interface
@@ -104,7 +106,7 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		return nil, err
 	}
 
-	dtf.sqlSch, err = dtf.generateSchema(tableName, fromCommitVal, toCommitVal)
+	err = dtf.generateSchema(tableName, fromCommitVal, toCommitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -125,10 +127,6 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	tableName, fromCommitVal, toCommitVal, err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
-	}
-
-	if dtf.joiner == nil {
-		panic("schema and joiner haven't been initialized")
 	}
 
 	sqledb, ok := dtf.database.(Database)
@@ -258,9 +256,9 @@ func (dtf *DiffTableFunction) evaluateArguments() (string, interface{}, interfac
 	return tableName, fromCommitVal, toCommitVal, nil
 }
 
-func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, toCommitVal interface{}) (sql.Schema, error) {
+func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, toCommitVal interface{}) error {
 	if !dtf.Resolved() {
-		return nil, nil
+		return nil
 	}
 
 	sqledb, ok := dtf.database.(Database)
@@ -270,81 +268,87 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 
 	fromRoot, err := sqledb.rootAsOf(dtf.ctx, fromCommitVal)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	fromTable, _, ok, err := fromRoot.GetTableInsensitive(dtf.ctx, tableName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !ok {
-		return nil, sql.ErrTableNotFound.New(tableName)
+		return sql.ErrTableNotFound.New(tableName)
 	}
 
 	toRoot, err := sqledb.rootAsOf(dtf.ctx, toCommitVal)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	toTable, _, ok, err := toRoot.GetTableInsensitive(dtf.ctx, tableName)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if !ok {
-		return nil, sql.ErrTableNotFound.New(tableName)
+		return sql.ErrTableNotFound.New(tableName)
 	}
 
 	fromSchema, err := fromTable.GetSchema(dtf.ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	toSchema, err := toTable.GetSchema(dtf.ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	fromSchema = schema.MustSchemaFromCols(
-		fromSchema.GetAllCols().Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
 	dtf.fromSch = fromSchema
-
-	toSchema = schema.MustSchemaFromCols(
-		toSchema.GetAllCols().Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
 	dtf.toSch = toSchema
 
-	joiner, err := rowconv.NewJoiner(
-		[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
-		map[string]rowconv.ColNamingFunc{
-			diff.To:   diff.ToColNamer,
-			diff.From: diff.FromColNamer,
-		})
-	if err != nil {
-		return nil, err
+	var diffTableSch schema.Schema
+	if sqledb.ddb.Format() == types.Format_DOLT_1 {
+		diffTableSch, err = tablediff_prolly.CalculateDiffSchema(fromSchema, toSchema)
+		if err != nil {
+			return err
+		}
+	} else {
+		fromSchema = schema.MustSchemaFromCols(
+			fromSchema.GetAllCols().Append(
+				schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+				schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
+		toSchema = schema.MustSchemaFromCols(
+			toSchema.GetAllCols().Append(
+				schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+				schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
+		j, err := rowconv.NewJoiner(
+			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
+			map[string]rowconv.ColNamingFunc{
+				diff.To:   diff.ToColNamer,
+				diff.From: diff.FromColNamer,
+			})
+		if err != nil {
+			return err
+		}
+		diffTableSch = j.GetSchema()
+		diffTableSch = schema.MustSchemaFromCols(
+			diffTableSch.GetAllCols().Append(
+				schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)))
+		dtf.joiner = j
 	}
-
-	sch := joiner.GetSchema()
-
-	sch = schema.MustSchemaFromCols(
-		sch.GetAllCols().Append(
-			schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)))
 
 	// TODO: sql.Columns include a Source that indicates the table it came from, but we don't have a real table
 	//       when the column comes from a table function, so we omit the table name when we create these columns.
 	//       This allows column projections to work correctly with table functions, but we will need to add a
 	//       unique id (e.g. hash generated from method arguments) when we add support for aliasing and joining
 	//       table functions in order for the analyzer to determine which table function result a column comes from.
-	sqlSchema, err := sqlutil.FromDoltSchema("", sch)
+	sqlSchema, err := sqlutil.FromDoltSchema("", diffTableSch)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	dtf.joiner = joiner
+	dtf.sqlSch = sqlSchema.Schema
 
-	return sqlSchema.Schema, nil
+	return nil
 }
 
 // Schema implements the sql.Node interface

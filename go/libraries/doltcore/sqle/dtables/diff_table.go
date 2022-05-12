@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -56,11 +57,19 @@ type DiffTable struct {
 	workingRoot *doltdb.RootValue
 	head        *doltdb.Commit
 
-	targetSch        schema.Schema
-	joiner           *rowconv.Joiner
+	// from and to need to be mapped to this schema
+	targetSch schema.Schema
+
+	// the schema for the diff table itself. Once from and to are converted to
+	// targetSch, the commit names and dates are inserted.
+	diffTableSch schema.Schema
+
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 	rowFilters       []sql.Expression
+
+	// noms only
+	joiner *rowconv.Joiner
 }
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
@@ -82,37 +91,42 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	colCollection := sch.GetAllCols()
-	colCollection = colCollection.Append(
-		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-	sch = schema.MustSchemaFromCols(colCollection)
+	var diffTableSchema schema.Schema
+	// noms only
+	var j *rowconv.Joiner
 
-	if sch.GetAllCols().Size() <= 1 {
-		return nil, sql.ErrTableNotFound.New(diffTblName)
+	if ddb.Format() == types.Format_DOLT_1 {
+		diffTableSchema, err = tablediff_prolly.CalculateDiffSchema(sch, sch)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		colCollection := sch.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+		sch2 := schema.MustSchemaFromCols(colCollection)
+		j, err = rowconv.NewJoiner(
+			[]rowconv.NamedSchema{{Name: diff.To, Sch: sch2}, {Name: diff.From, Sch: sch2}},
+			map[string]rowconv.ColNamingFunc{
+				diff.To:   diff.ToColNamer,
+				diff.From: diff.FromColNamer,
+			})
+		if err != nil {
+			return nil, err
+		}
+		diffTableSchema = j.GetSchema()
+		colCollection = diffTableSchema.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false, schema.NotNullConstraint{}),
+		)
+		diffTableSchema = schema.MustSchemaFromCols(colCollection)
 	}
 
-	j, err := rowconv.NewJoiner(
-		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
-		map[string]rowconv.ColNamingFunc{
-			diff.To:   diff.ToColNamer,
-			diff.From: diff.FromColNamer,
-		})
+	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
-
-	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
-	if err != nil {
-		return nil, err
-	}
-
-	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
-		Name:     diffTypeColName,
-		Type:     sql.Text,
-		Nullable: false,
-		Source:   diffTblName,
-	})
 
 	return &DiffTable{
 		name:             tblName,
@@ -120,10 +134,11 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		workingRoot:      root,
 		head:             head,
 		targetSch:        sch,
-		joiner:           j,
+		diffTableSch:     diffTableSchema,
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
 		rowFilters:       nil,
+		joiner:           j,
 	}, nil
 }
 
@@ -270,8 +285,9 @@ type DiffPartition struct {
 	fromName string
 	toDate   *types.Timestamp
 	fromDate *types.Timestamp
-	toSch    *schema.Schema
-	fromSch  *schema.Schema
+	// fromSch and toSch are usually identical. It is the schema of the table at head.
+	toSch   *schema.Schema
+	fromSch *schema.Schema
 }
 
 func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch *schema.Schema) *DiffPartition {
@@ -293,7 +309,7 @@ func (dp DiffPartition) Key() []byte {
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
 	if types.IsFormat_DOLT_1(ddb.Format()) {
-		return newProllyDiffIter(ctx, dp)
+		return newProllyDiffIter(ctx, dp, ddb, *dp.fromSch, *dp.toSch)
 	} else {
 		return newNomsDiffIter(ctx, ddb, joiner, dp)
 	}
@@ -413,7 +429,16 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 
 	var nextPartition *DiffPartition
 	if tblHash != toInfoForCommit.tblHash {
-		partition := DiffPartition{toInfoForCommit.tbl, tbl, toInfoForCommit.name, cmHashStr, toInfoForCommit.date, &ts, &dps.toSch, &dps.fromSch}
+		partition := DiffPartition{
+			to:       toInfoForCommit.tbl,
+			from:     tbl,
+			toName:   toInfoForCommit.name,
+			fromName: cmHashStr,
+			toDate:   toInfoForCommit.date,
+			fromDate: &ts,
+			fromSch:  &dps.fromSch,
+			toSch:    &dps.toSch,
+		}
 		selected, err := dps.selectFunc(ctx, partition)
 
 		if err != nil {

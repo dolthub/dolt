@@ -16,22 +16,21 @@ package dtables
 
 import (
 	"context"
+	"io"
 	"time"
-
-	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type diffRowItr struct {
@@ -186,17 +185,39 @@ type commitInfo2 struct {
 }
 
 type prollyDiffIter struct {
-	from, to prolly.Map
-	kd, vd   val.TupleDesc
-	fromCm   commitInfo2
-	toCm     commitInfo2
+	from, to                   prolly.Map
+	fromSch, toSch             schema.Schema
+	targetFromSch, targetToSch schema.Schema
+	fromConverter, toConverter tablediff_prolly.RowConverter
 
-	rows   chan sql.Row
-	cancel context.CancelFunc
-	eg     *errgroup.Group
+	fromCm commitInfo2
+	toCm   commitInfo2
+
+	rows    chan sql.Row
+	errChan chan error
+	cancel  context.CancelFunc
 }
 
-func newProllyDiffIter(ctx *sql.Context, dp DiffPartition) (prollyDiffIter, error) {
+var _ sql.RowIter = prollyDiffIter{}
+
+// newProllyDiffIter produces dolt_diff system table and dolt_diff table
+// function rows. The rows first have the "to" columns on the left and the
+// "from" columns on the right. After the "to" and "from" columns, a commit
+// name, and commit date is also present. The final column is the diff_type
+// column.
+//
+// An example: to_pk, to_col1, to_commit, to_commit_date, from_pk, from_col1, from_commit, from_commit_date, diff_type
+//
+// |targetFromSchema| and |targetToSchema| defines what the schema should be for
+// the row data on the "from" or "to" side. In the above example, both schemas are
+// identical with two columns "pk" and "col1". The dolt diff table function for
+// example can provide two different schemas.
+//
+// The |from| and |to| tables in the DiffPartition may have different schemas
+// than |targetFromSchema| or |targetToSchema|. We convert the rows from the
+// schema of |from| to |targetFromSchema| and the schema of |to| to
+// |targetToSchema|. See the tablediff_prolly package.
+func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, targetFromSchema, targetToSchema schema.Schema) (prollyDiffIter, error) {
 	fromCm := commitInfo2{
 		name: dp.fromName,
 		ts:   (*time.Time)(dp.fromDate),
@@ -206,38 +227,50 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition) (prollyDiffIter, erro
 		ts:   (*time.Time)(dp.toDate),
 	}
 
-	f, err := dp.from.GetRowData(ctx)
+	// dp.from may be nil
+	f, fSch, err := tableData(ctx, dp.from, ddb)
 	if err != nil {
 		return prollyDiffIter{}, nil
 	}
 	from := durable.ProllyMapFromIndex(f)
 
-	t, err := dp.to.GetRowData(ctx)
+	t, tSch, err := tableData(ctx, dp.to, ddb)
 	if err != nil {
 		return prollyDiffIter{}, nil
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	kd, vd := from.Descriptors()
-
-	child, cancel := context.WithCancel(ctx)
-	eg, egCtx := errgroup.WithContext(child)
-
-	iter := prollyDiffIter{
-		from:   from,
-		to:     to,
-		kd:     kd,
-		vd:     vd,
-		fromCm: fromCm,
-		toCm:   toCm,
-		rows:   make(chan sql.Row, 64),
-		cancel: cancel,
-		eg:     eg,
+	fromConverter, err := tablediff_prolly.NewRowConverter(fSch, targetFromSchema)
+	if err != nil {
+		return prollyDiffIter{}, err
 	}
 
-	eg.Go(func() error {
-		return iter.queueRows(egCtx)
-	})
+	toConverter, err := tablediff_prolly.NewRowConverter(tSch, targetToSchema)
+	if err != nil {
+		return prollyDiffIter{}, err
+	}
+
+	child, cancel := context.WithCancel(ctx)
+
+	iter := prollyDiffIter{
+		from:          from,
+		to:            to,
+		fromSch:       fSch,
+		toSch:         tSch,
+		targetFromSch: targetFromSchema,
+		targetToSch:   targetToSchema,
+		fromConverter: fromConverter,
+		toConverter:   toConverter,
+		fromCm:        fromCm,
+		toCm:          toCm,
+		rows:          make(chan sql.Row, 64),
+		errChan:       make(chan error),
+		cancel:        cancel,
+	}
+
+	go func() {
+		iter.queueRows(child)
+	}()
 
 	return iter, nil
 }
@@ -246,18 +279,23 @@ func (itr prollyDiffIter) Next(ctx *sql.Context) (sql.Row, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case r := <-itr.rows:
+	case err := <-itr.errChan:
+		return nil, err
+	case r, ok := <-itr.rows:
+		if !ok {
+			return nil, io.EOF
+		}
 		return r, nil
 	}
 }
 
 func (itr prollyDiffIter) Close(ctx *sql.Context) error {
 	itr.cancel()
-	return itr.eg.Wait()
+	return nil
 }
 
-func (itr prollyDiffIter) queueRows(ctx context.Context) error {
-	return prolly.DiffMaps(ctx, itr.from, itr.to, func(ctx context.Context, d tree.Diff) error {
+func (itr prollyDiffIter) queueRows(ctx context.Context) {
+	err := prolly.DiffMaps(ctx, itr.from, itr.to, func(ctx context.Context, d tree.Diff) error {
 		r, err := itr.makeDiffRow(d)
 		if err != nil {
 			return err
@@ -269,55 +307,51 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) error {
 			return nil
 		}
 	})
+	if err != nil && err != io.EOF {
+		select {
+		case <-ctx.Done():
+		case itr.errChan <- err:
+		}
+		return
+	}
+	// we need to drain itr.rows before returning io.EOF
+	close(itr.rows)
 }
 
 // todo(andy): copy string fields
 func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
-	keySz, valSz := itr.kd.Count(), itr.vd.Count()
-	r = make(sql.Row, 5+(keySz+valSz)*2)
 
-	o := 0
-	if d.Type != tree.AddedDiff {
-		for j := 0; j < keySz; j++ {
-			r[j+o], err = index.GetField(itr.kd, j, val.Tuple(d.Key))
-			if err != nil {
-				return nil, err
-			}
-		}
-		o = keySz
-		for j := 0; j < valSz; j++ {
-			r[j+o], err = index.GetField(itr.vd, j, val.Tuple(d.From))
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	o = keySz + valSz
-	r[o] = itr.fromCm.name
-	r[o+1] = *itr.fromCm.ts
-	o = keySz + valSz + 2
+	n := itr.targetFromSch.GetAllCols().Size()
+	m := itr.targetToSch.GetAllCols().Size()
+	// 2 commit names, 2 commit dates, 1 diff_type
+	r = make(sql.Row, n+m+5)
+
+	// todo (dhruv): implement warnings for row column value coercions.
 
 	if d.Type != tree.RemovedDiff {
-		for j := 0; j < keySz; j++ {
-			r[j+o], err = index.GetField(itr.kd, j, val.Tuple(d.Key))
-			if err != nil {
-				return nil, err
-			}
-		}
-		o = keySz + valSz + keySz
-		for j := 0; j < valSz; j++ {
-			r[j+o], err = index.GetField(itr.vd, j, val.Tuple(d.To))
-			if err != nil {
-				return nil, err
-			}
+		err = itr.toConverter.PutConverted(val.Tuple(d.Key), val.Tuple(d.To), r[0:n])
+		if err != nil {
+			return nil, err
 		}
 	}
-	o = (keySz + valSz) * 2
+
+	o := n
 	r[o] = itr.toCm.name
-	r[o+1] = *itr.toCm.ts
+	r[o+1] = itr.toCm.ts
+
+	if d.Type != tree.AddedDiff {
+		err = itr.fromConverter.PutConverted(val.Tuple(d.Key), val.Tuple(d.From), r[n+2:n+2+m])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	o = n + 2 + m
+	r[o] = itr.fromCm.name
+	r[o+1] = itr.fromCm.ts
 	r[o+2] = diffTypeString(d)
 
-	return
+	return r, nil
 }
 
 func diffTypeString(d tree.Diff) (s string) {
