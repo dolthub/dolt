@@ -49,14 +49,14 @@ var (
 )
 
 func initmaps(vs types.ValueReadWriter) {
-	aa1  = createMap(vs, "a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
+	aa1 = createMap(vs, "a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
 	aa1x = createMap(vs, "a1", "a-one-diff", "a2", "a-two", "a3", "a-three", "a4", "a-four")
 
-	mm1  = createMap(vs, "k1", "k-one", "k2", "k-two", "k3", "k-three", "k4", aa1)
-	mm2  = createMap(vs, "l1", "l-one", "l2", "l-two", "l3", "l-three", "l4", aa1)
-	mm3  = createMap(vs, "m1", "m-one", "v2", "m-two", "m3", "m-three", "m4", aa1)
+	mm1 = createMap(vs, "k1", "k-one", "k2", "k-two", "k3", "k-three", "k4", aa1)
+	mm2 = createMap(vs, "l1", "l-one", "l2", "l-two", "l3", "l-three", "l4", aa1)
+	mm3 = createMap(vs, "m1", "m-one", "v2", "m-two", "m3", "m-three", "m4", aa1)
 	mm3x = createMap(vs, "m1", "m-one", "v2", "m-two", "m3", "m-three-diff", "m4", aa1x)
-	mm4  = createMap(vs, "n1", "n-one", "n2", "n-two", "n3", "n-three", "n4", aa1)
+	mm4 = createMap(vs, "n1", "n-one", "n2", "n-two", "n3", "n-three", "n4", aa1)
 }
 
 func valToTypesValue(v interface{}) types.Value {
