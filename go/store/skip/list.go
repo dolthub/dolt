@@ -15,10 +15,11 @@
 package skip
 
 import (
-	"github.com/zeebo/xxh3"
 	"math"
 	"math/rand"
 	"sync"
+
+	"github.com/zeebo/xxh3"
 )
 
 const (

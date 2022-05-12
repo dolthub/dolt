@@ -203,7 +203,7 @@ func estimateProllyMapSize(keys, values [][]byte, subtrees []uint64) (keySz, val
 	bufSz += len(keys)*2 + len(values)*2 // offsets
 	bufSz += 8 + 1 + 1 + 1               // metadata
 	bufSz += 72                          // vtable (approx)
-	bufSz += 100						 // padding?
+	bufSz += 100                         // padding?
 
 	return
 }
