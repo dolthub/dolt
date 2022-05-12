@@ -35,23 +35,28 @@ const (
 )
 
 var resetDocContent = cli.CommandDocumentationContent{
-	ShortDesc: "Resets staged tables to their HEAD state",
-	LongDesc: "Sets the state of a table in the staging area to be that table's value at HEAD\n\n" +
-		"{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}" +
+	ShortDesc: "Resets staged or working tables to HEAD or a specified commit",
+	LongDesc: "{{.EmphasisLeft}}dolt reset <tables>...{{.EmphasisRight}}" +
 		"\n\n" +
-		"This form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. " +
+		"The default form resets the values for all staged {{.LessThan}}tables{{.GreaterThan}} to their values at {{.EmphasisLeft}}HEAD{{.EmphasisRight}}. " +
 		"It does not affect the working tree or the current branch." +
 		"\n\n" +
 		"This means that {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} is the opposite of {{.EmphasisLeft}}dolt add <tables>{{.EmphasisRight}}." +
 		"\n\n" +
 		"After running {{.EmphasisLeft}}dolt reset <tables>{{.EmphasisRight}} to update the staged tables, you can use {{.EmphasisLeft}}dolt checkout{{.EmphasisRight}} to check the contents out of the staged tables to the working tables." +
 		"\n\n" +
+		"{{.EmphasisLeft}}dolt reset [--hard | --soft] <revision>{{.EmphasisRight}}" +
+		"\n\n" +
+		"This form resets all tables to values in the specified revision (i.e. commit, tag, working set). " +
+		"The --soft option resets HEAD to a revision without changing the current working set. " +
+		" The --hard option resets all three HEADs to a revision, deleting all uncommitted changes in the current working set." +
+		"\n\n" +
 		"{{.EmphasisLeft}}dolt reset .{{.EmphasisRight}}" +
 		"\n\n" +
 		"This form resets {{.EmphasisLeft}}all{{.EmphasisRight}} staged tables to their values at HEAD. It is the opposite of {{.EmphasisLeft}}dolt add .{{.EmphasisRight}}",
 	Synopsis: []string{
 		"{{.LessThan}}tables{{.GreaterThan}}...",
-		"[--hard | --soft]",
+		"[--hard | --soft] {{.LessThan}}revision{{.GreaterThan}}",
 	},
 }
 
