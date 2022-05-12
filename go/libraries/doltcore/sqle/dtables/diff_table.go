@@ -91,36 +91,9 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	var diffTableSchema schema.Schema
-	// noms only
-	var j *rowconv.Joiner
-
-	if ddb.Format() == types.Format_DOLT_1 {
-		diffTableSchema, err = tablediff_prolly.CalculateDiffSchema(sch, sch)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		colCollection := sch.GetAllCols()
-		colCollection = colCollection.Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-		sch2 := schema.MustSchemaFromCols(colCollection)
-		j, err = rowconv.NewJoiner(
-			[]rowconv.NamedSchema{{Name: diff.To, Sch: sch2}, {Name: diff.From, Sch: sch2}},
-			map[string]rowconv.ColNamingFunc{
-				diff.To:   diff.ToColNamer,
-				diff.From: diff.FromColNamer,
-			})
-		if err != nil {
-			return nil, err
-		}
-		diffTableSchema = j.GetSchema()
-		colCollection = diffTableSchema.GetAllCols()
-		colCollection = colCollection.Append(
-			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
-		)
-		diffTableSchema = schema.MustSchemaFromCols(colCollection)
+	diffTableSchema, j, err := getDiffTableSchemaAndJoiner(ddb, sch)
+	if err != nil {
+		return nil, err
 	}
 
 	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, diffTableSchema)
@@ -140,6 +113,41 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		rowFilters:       nil,
 		joiner:           j,
 	}, nil
+}
+
+// getDiffTableSchemaAndJoiner returns the schema for the diff table given a
+// target schema for a row |sch|. In the old storage format, it also returns the
+// associated joiner.
+func getDiffTableSchemaAndJoiner(ddb *doltdb.DoltDB, targetSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
+	if ddb.Format() == types.Format_DOLT_1 {
+		diffTableSchema, err = tablediff_prolly.CalculateDiffSchema(targetSch, targetSch)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		colCollection := targetSch.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+		sch2 := schema.MustSchemaFromCols(colCollection)
+		j, err = rowconv.NewJoiner(
+			[]rowconv.NamedSchema{{Name: diff.To, Sch: sch2}, {Name: diff.From, Sch: sch2}},
+			map[string]rowconv.ColNamingFunc{
+				diff.To:   diff.ToColNamer,
+				diff.From: diff.FromColNamer,
+			})
+		if err != nil {
+			return nil, nil, err
+		}
+		diffTableSchema = j.GetSchema()
+		colCollection = diffTableSchema.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
+		)
+		diffTableSchema = schema.MustSchemaFromCols(colCollection)
+	}
+
+	return
 }
 
 func (dt *DiffTable) Name() string {
