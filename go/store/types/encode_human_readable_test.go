@@ -148,7 +148,8 @@ func TestWriteHumanReadableNested(t *testing.T) {
 }
 
 func TestWriteHumanReadableStruct(t *testing.T) {
-	str := mustValue(NewStruct(Format_7_18, "S1", StructData{
+	vrw := newTestValueStore()
+	str := mustValue(NewStruct(vrw.Format(), "S1", StructData{
 		"x": Float(1),
 		"y": Float(2),
 	}))
@@ -158,13 +159,13 @@ func TestWriteHumanReadableStruct(t *testing.T) {
 func TestWriteHumanReadableListOfStruct(t *testing.T) {
 	vrw := newTestValueStore()
 
-	str1 := mustValue(NewStruct(Format_7_18, "S3", StructData{
+	str1 := mustValue(NewStruct(vrw.Format(), "S3", StructData{
 		"x": Float(1),
 	}))
-	str2 := mustValue(NewStruct(Format_7_18, "S3", StructData{
+	str2 := mustValue(NewStruct(vrw.Format(), "S3", StructData{
 		"x": Float(2),
 	}))
-	str3 := mustValue(NewStruct(Format_7_18, "S3", StructData{
+	str3 := mustValue(NewStruct(vrw.Format(), "S3", StructData{
 		"x": Float(3),
 	}))
 	l := mustValue(NewList(context.Background(), vrw, str1, str2, str3))
@@ -343,7 +344,7 @@ func TestEmptyCollections(t *testing.T) {
 	a, err := MakeStructType("Nothing")
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "Struct Nothing {}", a)
-	b, err := NewStruct(Format_7_18, "Rien", StructData{})
+	b, err := NewStruct(vrw.Format(), "Rien", StructData{})
 	require.NoError(t, err)
 	assertWriteHRSEqual(t, "struct Rien {}", b)
 	c, err := MakeMapType(PrimitiveTypeMap[BlobKind], PrimitiveTypeMap[FloatKind])
@@ -364,7 +365,7 @@ func TestEncodedValueMaxLines(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	l1, err := NewList(context.Background(), vrw, generateNumbersAsValues(11)...)
+	l1, err := NewList(context.Background(), vrw, generateNumbersAsValues(vrw.Format(), 11)...)
 	require.NoError(t, err)
 	expected := strings.Join(strings.SplitAfterN(mustString(EncodedValue(context.Background(), l1)), "\n", 6)[:5], "")
 	actual, err := EncodedValueMaxLines(context.Background(), l1, 5)
@@ -403,10 +404,11 @@ func (c TestCommenter) Comment(ctx context.Context, v Value) string {
 
 func TestRegisterCommenter(t *testing.T) {
 	a := assert.New(t)
+	vrw := newTestValueStore()
 
-	tt, err := NewStruct(Format_7_18, "TestType1", StructData{"Name": String("abc-123")})
+	tt, err := NewStruct(vrw.Format(), "TestType1", StructData{"Name": String("abc-123")})
 	a.NoError(err)
-	nt, err := NewStruct(Format_7_18, "TestType2", StructData{"Name": String("abc-123")})
+	nt, err := NewStruct(vrw.Format(), "TestType2", StructData{"Name": String("abc-123")})
 	a.NoError(err)
 
 	RegisterHRSCommenter("TestType1", "mylib1", TestCommenter{prefix: "MyTest: ", testType: mustType(tt.typeOf())})

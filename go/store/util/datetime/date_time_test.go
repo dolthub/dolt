@@ -48,7 +48,7 @@ func TestBasics(t *testing.T) {
 	assert.NoError(err)
 
 	var dt2 DateTime
-	err = marshal.Unmarshal(context.Background(), types.Format_7_18, nomsValue, &dt2)
+	err = marshal.Unmarshal(context.Background(), types.Format_Default, nomsValue, &dt2)
 	assert.NoError(err)
 
 	assert.True(dt.Equal(dt2.Time))
@@ -64,18 +64,18 @@ func TestUnmarshal(t *testing.T) {
 
 	test := func(v types.Struct, t time.Time) {
 		var dt DateTime
-		err := marshal.Unmarshal(context.Background(), types.Format_7_18, v, &dt)
+		err := marshal.Unmarshal(context.Background(), types.Format_Default, v, &dt)
 		assert.NoError(err)
 		assert.True(dt.Equal(t))
 	}
 
 	for _, name := range []string{"DateTime", "Date", "xxx", ""} {
-		test(mustStruct(types.NewStruct(types.Format_7_18, name, types.StructData{
+		test(mustStruct(types.NewStruct(types.Format_Default, name, types.StructData{
 			"secSinceEpoch": types.Float(42),
 		})), time.Unix(42, 0))
 	}
 
-	test(mustStruct(types.NewStruct(types.Format_7_18, "", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_Default, "", types.StructData{
 		"secSinceEpoch": types.Float(42),
 		"extra":         types.String("field"),
 	})), time.Unix(42, 0))
@@ -86,19 +86,19 @@ func TestUnmarshalInvalid(t *testing.T) {
 
 	test := func(v types.Value) {
 		var dt DateTime
-		err := marshal.Unmarshal(context.Background(), types.Format_7_18, v, &dt)
+		err := marshal.Unmarshal(context.Background(), types.Format_Default, v, &dt)
 		assert.Error(err)
 	}
 
 	test(types.Float(42))
-	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{})))
-	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_Default, "DateTime", types.StructData{})))
+	test(mustStruct(types.NewStruct(types.Format_Default, "DateTime", types.StructData{
 		"secSinceEpoch": types.String("42"),
 	})))
-	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_Default, "DateTime", types.StructData{
 		"SecSinceEpoch": types.Float(42),
 	})))
-	test(mustStruct(types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+	test(mustStruct(types.NewStruct(types.Format_Default, "DateTime", types.StructData{
 		"msSinceEpoch": types.Float(42),
 	})))
 }
@@ -112,7 +112,7 @@ func TestMarshal(t *testing.T) {
 	test := func(dt DateTime, expected float64) {
 		v, err := marshal.Marshal(context.Background(), vs, dt)
 		assert.NoError(err)
-		st, err := types.NewStruct(types.Format_7_18, "DateTime", types.StructData{
+		st, err := types.NewStruct(types.Format_Default, "DateTime", types.StructData{
 			"secSinceEpoch": types.Float(expected),
 		})
 		assert.NoError(err)
@@ -135,7 +135,7 @@ func TestMarshalType(t *testing.T) {
 	defer vs.Close()
 
 	dt := DateTime{time.Unix(0, 0)}
-	typ, err := marshal.MarshalType(types.Format_7_18, dt)
+	typ, err := marshal.MarshalType(types.Format_Default, dt)
 	assert.NoError(err)
 	assert.Equal(DateTimeType, typ)
 
@@ -148,7 +148,7 @@ func TestMarshalType(t *testing.T) {
 
 func newTestValueStore() *types.ValueStore {
 	st := &chunks.TestStorage{}
-	return types.NewValueStore(st.NewView())
+	return types.NewValueStore(st.NewViewWithDefaultFormat())
 }
 
 func TestZeroValues(t *testing.T) {
@@ -163,11 +163,11 @@ func TestZeroValues(t *testing.T) {
 	nomsDate, _ := dt1.MarshalNoms(vs)
 
 	dt2 := DateTime{}
-	marshal.Unmarshal(context.Background(), types.Format_7_18, nomsDate, &dt2)
+	marshal.Unmarshal(context.Background(), types.Format_Default, nomsDate, &dt2)
 	assert.True(dt2.IsZero())
 
 	dt3 := DateTime{}
-	dt3.UnmarshalNoms(context.Background(), types.Format_7_18, nomsDate)
+	dt3.UnmarshalNoms(context.Background(), types.Format_Default, nomsDate)
 	assert.True(dt3.IsZero())
 }
 

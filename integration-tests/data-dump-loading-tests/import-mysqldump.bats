@@ -305,3 +305,157 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "GENERATED ALWAYS AS" ]] || false
 }
+
+@test "import mysqldump: string byte length is more than defined varchar character length" {
+    run dolt sql <<SQL
+CREATE TABLE city (
+  ID int NOT NULL AUTO_INCREMENT,
+  Name char(35) NOT NULL DEFAULT '',
+  CountryCode char(3) NOT NULL DEFAULT '',
+  District char(20) NOT NULL DEFAULT '',
+  Population int NOT NULL DEFAULT '0',
+  PRIMARY KEY (ID)
+);
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "INSERT INTO city VALUES (1,'San Pedro de Macorís','DOM','San Pedro de Macorís',124735);"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM city;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,San Pedro de Macorís,DOM,San Pedro de Macorís,124735" ]] || false
+}
+
+@test "import mysqldump: show create table on table with geometry type" {
+    run dolt sql <<SQL
+CREATE TABLE geometry_type (
+  pk int NOT NULL,
+  g geometry DEFAULT (point(1,2)),
+  PRIMARY KEY (pk)
+);
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show create table geometry_type;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`g\` geometry DEFAULT (POINT(1, 2))," ]] || false
+
+    run dolt sql <<SQL
+CREATE TABLE polygon_type (
+  pk int NOT NULL,
+  p polygon DEFAULT polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0))),
+  PRIMARY KEY (pk)
+);
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show create table polygon_type;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`p\` polygon DEFAULT (POLYGON(LINESTRING(POINT(0, 0),POINT(8, 0),POINT(12, 9),POINT(0, 9),POINT(0, 0))))," ]] || false
+}
+
+@test "import mysqldump: select into syntax in procedure" {
+    run dolt sql <<SQL
+CREATE TABLE inventory (item_id int primary key, shelf_id int, item varchar(10));
+INSERT INTO inventory VALUES (1, 1, 'a'), (2, 1, 'b'), (3, 2, 'c'), (4, 1, 'd'), (5, 4, 'e');
+DELIMITER $$ ;
+CREATE PROCEDURE count_and_print(IN p_shelf_id INT, OUT p_count INT) BEGIN
+  SELECT item FROM inventory WHERE shelf_id = p_shelf_id ORDER BY item ASC;
+  SELECT COUNT(*) INTO p_count FROM inventory WHERE shelf_id = p_shelf_id;
+END$$
+DELIMITER ; $$
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -r csv <<SQL
+CALL count_and_print(1, @total);
+SELECT @total;
+SQL
+    [ "$status" -eq 0 ]
+    [ "$output" = "item
+a
+b
+d
+@total
+3" ]
+}
+
+@test "import mysqldump: allow non-existent table in create trigger" {
+    run dolt sql <<SQL
+CREATE TABLE film (
+  film_id smallint unsigned NOT NULL AUTO_INCREMENT,
+  title varchar(128) NOT NULL,
+  description text,
+  PRIMARY KEY (film_id)
+);
+DELIMITER $$ ;
+CREATE TRIGGER ins_film AFTER INSERT ON film FOR EACH ROW BEGIN
+  INSERT INTO film_text (film_id, title, description) VALUES (new.film_id, new.title, new.description);
+END$$
+DELIMITER ; $$
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "INSERT INTO film VALUES (1,'ACADEMY DINOSAUR','A Epic Drama in The Canadian Rockies')"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table not found: film_text" ]] || false
+
+    run dolt sql <<SQL
+CREATE TABLE film_text (
+  film_id smallint NOT NULL,
+  title varchar(255) NOT NULL,
+  description text,
+  PRIMARY KEY (film_id)
+);
+INSERT INTO film VALUES (1,'ACADEMY DINOSAUR','A Epic Drama in The Canadian Rockies')
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM film;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,ACADEMY DINOSAUR,A Epic Drama in The Canadian Rockies" ]] || false
+}
+
+@test "import mysqldump: allow non-existent procedure in create trigger" {
+    run dolt sql <<SQL
+CREATE TABLE t0 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
+CREATE TABLE t1 (id INT PRIMARY KEY AUTO_INCREMENT, v1 INT, v2 TEXT);
+INSERT INTO t0 VALUES (1, 2, 'abc'), (2, 3, 'def');
+DELIMITER $$ ;
+CREATE PROCEDURE add_entry(i INT, s TEXT) BEGIN
+  IF i > 50 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'too big number';
+  END IF;
+  INSERT INTO t0 (v1, v2) VALUES (i, s);
+END$$
+CREATE TRIGGER trig AFTER INSERT ON t0 FOR EACH ROW BEGIN
+  CALL back_up(NEW.v1, NEW.v2);
+END$$
+DELIMITER ; $$
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "CALL add_entry(5, 'xyz');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "stored procedure \"back_up\" does not exist" ]] || false
+
+    run dolt sql <<SQL
+CREATE PROCEDURE back_up(num INT, msg TEXT) INSERT INTO t1 (v1, v2) VALUES (num*2, msg);
+CALL add_entry(6, 'lmn');
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SELECT * FROM t0;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "6,lmn" ]] || false
+    [[ ! "$output" =~ "5,xyz" ]] || false
+
+    run dolt sql -q "SELECT * FROM t1;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "12,lmn" ]] || false
+
+    run dolt sql -q "CALL add_entry(55, 'kkk');"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "too big number" ]] || false
+}

@@ -38,15 +38,26 @@ import (
 )
 
 var (
-	aa1  = createMap("a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
-	aa1x = createMap("a1", "a-one-diff", "a2", "a-two", "a3", "a-three", "a4", "a-four")
+	aa1  types.Map
+	aa1x types.Map
 
-	mm1  = createMap("k1", "k-one", "k2", "k-two", "k3", "k-three", "k4", aa1)
-	mm2  = createMap("l1", "l-one", "l2", "l-two", "l3", "l-three", "l4", aa1)
-	mm3  = createMap("m1", "m-one", "v2", "m-two", "m3", "m-three", "m4", aa1)
-	mm3x = createMap("m1", "m-one", "v2", "m-two", "m3", "m-three-diff", "m4", aa1x)
-	mm4  = createMap("n1", "n-one", "n2", "n-two", "n3", "n-three", "n4", aa1)
+	mm1  types.Map
+	mm2  types.Map
+	mm3  types.Map
+	mm3x types.Map
+	mm4  types.Map
 )
+
+func initmaps(vs types.ValueReadWriter) {
+	aa1 = createMap(vs, "a1", "a-one", "a2", "a-two", "a3", "a-three", "a4", "a-four")
+	aa1x = createMap(vs, "a1", "a-one-diff", "a2", "a-two", "a3", "a-three", "a4", "a-four")
+
+	mm1 = createMap(vs, "k1", "k-one", "k2", "k-two", "k3", "k-three", "k4", aa1)
+	mm2 = createMap(vs, "l1", "l-one", "l2", "l-two", "l3", "l-three", "l4", aa1)
+	mm3 = createMap(vs, "m1", "m-one", "v2", "m-two", "m3", "m-three", "m4", aa1)
+	mm3x = createMap(vs, "m1", "m-one", "v2", "m-two", "m3", "m-three-diff", "m4", aa1x)
+	mm4 = createMap(vs, "n1", "n-one", "n2", "n-two", "n3", "n-three", "n4", aa1)
+}
 
 func valToTypesValue(v interface{}) types.Value {
 	var v1 types.Value
@@ -70,39 +81,33 @@ func valsToTypesValues(kv ...interface{}) []types.Value {
 	return keyValues
 }
 
-func createMap(kv ...interface{}) types.Map {
-	vs := newTestValueStore()
-	defer vs.Close()
+func createMap(vs types.ValueReadWriter, kv ...interface{}) types.Map {
 	keyValues := valsToTypesValues(kv...)
 	m, err := types.NewMap(context.Background(), vs, keyValues...)
 	d.PanicIfError(err)
 	return m
 }
 
-func createSet(kv ...interface{}) types.Set {
-	vs := newTestValueStore()
-	defer vs.Close()
+func createSet(vs types.ValueReadWriter, kv ...interface{}) types.Set {
 	keyValues := valsToTypesValues(kv...)
 	s, err := types.NewSet(context.Background(), vs, keyValues...)
 	d.PanicIfError(err)
 	return s
 }
 
-func createList(kv ...interface{}) types.List {
-	vs := newTestValueStore()
-	defer vs.Close()
+func createList(vs types.ValueReadWriter, kv ...interface{}) types.List {
 	keyValues := valsToTypesValues(kv...)
 	l, err := types.NewList(context.Background(), vs, keyValues...)
 	d.PanicIfError(err)
 	return l
 }
 
-func createStruct(name string, kv ...interface{}) types.Struct {
+func createStruct(vs types.ValueReadWriter, name string, kv ...interface{}) types.Struct {
 	fields := types.StructData{}
 	for i := 0; i < len(kv); i += 2 {
 		fields[kv[i].(string)] = valToTypesValue(kv[i+1])
 	}
-	st, err := types.NewStruct(types.Format_7_18, name, fields)
+	st, err := types.NewStruct(vs.Format(), name, fields)
 	d.PanicIfError(err)
 	return st
 }
@@ -134,6 +139,10 @@ func mustParsePath(assert *assert.Assertions, s string) types.Path {
 
 func TestNomsDiffPrintMap(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
+
 	expected := `["map-3"] {
 -   "m3": "m-three"
 +   "m3": "m-three-diff"
@@ -149,8 +158,8 @@ func TestNomsDiffPrintMap(t *testing.T) {
 	}
 
 	tf := func(leftRight bool) {
-		m1 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
-		m2 := createMap("map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
+		m1 := createMap(vs, "map-1", mm1, "map-2", mm2, "map-3", mm3, "map-4", mm4)
+		m2 := createMap(vs, "map-1", mm1, "map-2", mm2, "map-3", mm3x, "map-4", mm4)
 		buf := &bytes.Buffer{}
 		PrintDiff(context.Background(), buf, m1, m2, leftRight)
 		assert.Equal(expected, buf.String())
@@ -166,6 +175,8 @@ func TestNomsDiffPrintMap(t *testing.T) {
 
 func TestNomsDiffPrintSet(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
 
 	expected1 := `(root) {
 -   "five"
@@ -202,19 +213,19 @@ func TestNomsDiffPrintSet(t *testing.T) {
 +   }
   }
 `
-	h3, err := mm3.Hash(types.Format_7_18)
+	h3, err := mm3.Hash(vs.Format())
 	require.NoError(t, err)
-	h3x, err := mm3x.Hash(types.Format_7_18)
+	h3x, err := mm3x.Hash(vs.Format())
 	require.NoError(t, err)
 	expectedPaths2 := []string{
 		fmt.Sprintf("[#%s]", h3),
 		fmt.Sprintf("[#%s]", h3x),
 	}
 
-	s1 := createSet("one", "three", "five", "seven", "nine")
-	s2 := createSet("one", "three", "five-diff", "seven", "nine")
-	s3 := createSet(mm1, mm2, mm3, mm4)
-	s4 := createSet(mm1, mm2, mm3x, mm4)
+	s1 := createSet(vs, "one", "three", "five", "seven", "nine")
+	s2 := createSet(vs, "one", "three", "five-diff", "seven", "nine")
+	s3 := createSet(vs, mm1, mm2, mm3, mm4)
+	s4 := createSet(vs, mm1, mm2, mm3x, mm4)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
@@ -242,6 +253,9 @@ func TestNomsDiffPrintSet(t *testing.T) {
 // This function tests stop functionality in PrintDiff and Diff.
 func TestNomsDiffPrintStop(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
 
 	expected1 := `(root) {
 -   "five"
@@ -251,10 +265,10 @@ func TestNomsDiffPrintStop(t *testing.T) {
 -   map {  // 4 items
 `
 
-	s1 := createSet("one", "three", "five", "seven", "nine")
-	s2 := createSet("one", "three", "five-diff", "seven", "nine")
-	s3 := createSet(mm1, mm2, mm3, mm4)
-	s4 := createSet(mm1, mm2, mm3x, mm4)
+	s1 := createSet(vs, "one", "three", "five", "seven", "nine")
+	s2 := createSet(vs, "one", "three", "five-diff", "seven", "nine")
+	s3 := createSet(vs, mm1, mm2, mm3, mm4)
+	s4 := createSet(vs, mm1, mm2, mm3x, mm4)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
@@ -274,6 +288,9 @@ func TestNomsDiffPrintStop(t *testing.T) {
 
 func TestNomsDiffPrintStruct(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
 
 	expected1 := `(root) {
 -   "four": "four"
@@ -311,22 +328,22 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 		`.three.field4`,
 	}
 
-	s1 := createStruct("TestData",
+	s1 := createStruct(vs, "TestData",
 		"field1", "field1-data",
 		"field2", "field2-data",
 		"field3", "field3-data",
 	)
-	s2 := createStruct("TestData",
+	s2 := createStruct(vs, "TestData",
 		"field2", "field2-data",
 		"field3", "field3-data-diff",
 		"field4", "field4-data",
 	)
 
-	m1 := createMap("one", 1, "two", 2, "three", s1, "four", "four")
-	m2 := createMap("one", 1, "two", 2, "three", s2, "four", "four-diff")
+	m1 := createMap(vs, "one", 1, "two", 2, "three", s1, "four", "four")
+	m2 := createMap(vs, "one", 1, "two", 2, "three", s2, "four", "four-diff")
 
-	s3 := createStruct("", "one", 1, "two", 2, "three", s1, "four", "four")
-	s4 := createStruct("", "one", 1, "two", 2, "three", s2, "four", "four-diff")
+	s3 := createStruct(vs, "", "one", 1, "two", 2, "three", s1, "four", "four")
+	s4 := createStruct(vs, "", "one", 1, "two", 2, "three", s2, "four", "four-diff")
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
@@ -353,11 +370,11 @@ func TestNomsDiffPrintStruct(t *testing.T) {
 
 func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 	a := assert.New(t)
-
 	vs := newTestValueStore()
 	defer vs.Close()
+	initmaps(vs)
 
-	k1 := createStruct("TestKey", "name", "n1", "label", "l1")
+	k1 := createStruct(vs, "TestKey", "name", "n1", "label", "l1")
 
 	expected1 := `(root) {
 -   struct TestKey {
@@ -386,6 +403,9 @@ func TestNomsDiffPrintMapWithStructKeys(t *testing.T) {
 
 func TestNomsDiffPrintList(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
 
 	expected1 := `(root) {
 -   2
@@ -398,8 +418,8 @@ func TestNomsDiffPrintList(t *testing.T) {
 		`[4]`,
 	}
 
-	l1 := createList(1, 2, 3, 4, 44, 5, 6)
-	l2 := createList(1, 22, 3, 4, 5, 6)
+	l1 := createList(vs, 1, 2, 3, 4, 44, 5, 6)
+	l2 := createList(vs, 1, 22, 3, 4, 5, 6)
 
 	expected2 := `(root) {
 +   "seven"
@@ -409,8 +429,8 @@ func TestNomsDiffPrintList(t *testing.T) {
 		`[6]`,
 	}
 
-	l3 := createList("one", "two", "three", "four", "five", "six")
-	l4 := createList("one", "two", "three", "four", "five", "six", "seven")
+	l3 := createList(vs, "one", "two", "three", "four", "five", "six")
+	l4 := createList(vs, "one", "two", "three", "four", "five", "six", "seven")
 
 	expected3 := `[2] {
 -   "m3": "m-three"
@@ -426,8 +446,8 @@ func TestNomsDiffPrintList(t *testing.T) {
 		`[2]["m4"]["a1"]`,
 	}
 
-	l5 := createList(mm1, mm2, mm3, mm4)
-	l6 := createList(mm1, mm2, mm3x, mm4)
+	l5 := createList(vs, mm1, mm2, mm3, mm4)
+	l6 := createList(vs, mm1, mm2, mm3x, mm4)
 
 	tf := func(leftRight bool) {
 		buf := &bytes.Buffer{}
@@ -464,9 +484,9 @@ func TestNomsDiffPrintList(t *testing.T) {
 
 func TestNomsDiffPrintBlob(t *testing.T) {
 	assert := assert.New(t)
-
 	vs := newTestValueStore()
 	defer vs.Close()
+	initmaps(vs)
 
 	expected := "-   Blob (2.0 kB)\n+   Blob (11 B)\n"
 	expectedPaths1 := []string{``}
@@ -492,6 +512,9 @@ func TestNomsDiffPrintBlob(t *testing.T) {
 
 func TestNomsDiffPrintType(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
 
 	expected1 := "-   List<Float>\n+   List<String>\n"
 	expectedPaths1 := []string{""}
@@ -533,14 +556,17 @@ func TestNomsDiffPrintType(t *testing.T) {
 
 func TestNomsDiffPrintRef(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
+	initmaps(vs)
 
 	expected := "-   #fckcbt7nk5jl4arco2dk7r9nj7abb6ci\n+   #i7d3u5gekm48ot419t2cot6cnl7ltcah\n"
 	expectedPaths1 := []string{``}
-	l1 := createList(1)
-	l2 := createList(2)
-	r1, err := types.NewRef(l1, types.Format_7_18)
+	l1 := createList(vs, 1)
+	l2 := createList(vs, 2)
+	r1, err := types.NewRef(l1, vs.Format())
 	require.NoError(t, err)
-	r2, err := types.NewRef(l2, types.Format_7_18)
+	r2, err := types.NewRef(l2, vs.Format())
 	require.NoError(t, err)
 
 	tf := func(leftRight bool) {
