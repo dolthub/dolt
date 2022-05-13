@@ -23,6 +23,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db/serial"
 )
 
 var (
@@ -84,26 +85,23 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 }
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
-func LoadData() (*mysql_db.MySQLDataJSON, error) {
+func LoadData() (*serial.MySQLDb, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
 	// TODO: right filepath?
-	fileContents, err := ioutil.ReadFile(mysqlDbFilePath)
+	buf, err := ioutil.ReadFile(mysqlDbFilePath)
 	if err != nil {
 		return nil, nil
 	}
-	if len(fileContents) == 0 {
+	if len(buf) == 0 {
 		return nil, nil
 	}
 
 	// TODO: Flat buffers?
-	res := &mysql_db.MySQLDataJSON{}
-	err = json.Unmarshal(fileContents, res)
-	if err != nil {
-		return nil, err
-	}
-	return res, nil
+	mysqlDb := serial.GetRootAsMySQLDb(buf, 0)
+
+	return mysqlDb, nil
 }
 
 var _ mysql_db.PrivilegePersistCallback = SavePrivileges
