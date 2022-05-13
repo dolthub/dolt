@@ -57,6 +57,10 @@ func (cmd ReadTablesCmd) Description() string {
 	return readTablesDocs.ShortDesc
 }
 
+func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ReadTablesCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()

@@ -71,6 +71,10 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
+func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 func (cmd CatCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }

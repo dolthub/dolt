@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -55,6 +56,10 @@ func (cmd VerifyConstraintsCmd) Name() string {
 
 func (cmd VerifyConstraintsCmd) Description() string {
 	return "Command to verify that the constraints on the given table(s) are satisfied."
+}
+
+func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
