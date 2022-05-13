@@ -44,7 +44,7 @@ func TestAbsolutePathToAndFromString(t *testing.T) {
 		assert.Equal(str, p.String())
 	}
 
-	h, err := types.Float(42).Hash(types.Format_7_18) // arbitrary hash
+	h, err := types.Float(42).Hash(types.Format_Default) // arbitrary hash
 	assert.NoError(err)
 	test(fmt.Sprintf("foo.bar[#%s]", h.String()))
 	test(fmt.Sprintf("#%s.bar[42]", h.String()))
@@ -95,19 +95,19 @@ func TestAbsolutePaths(t *testing.T) {
 	resolvesTo(list, "ds.value")
 	resolvesTo(s0, "ds.value[0]")
 	resolvesTo(s1, "ds.value[1]")
-	resolvesTo(head, "#"+mustHash(head.Hash(types.Format_7_18)).String())
-	resolvesTo(list, "#"+mustHash(list.Hash(types.Format_7_18)).String())
-	resolvesTo(s0, "#"+mustHash(s0.Hash(types.Format_7_18)).String())
-	resolvesTo(s1, "#"+mustHash(s1.Hash(types.Format_7_18)).String())
-	resolvesTo(s0, "#"+mustHash(list.Hash(types.Format_7_18)).String()+"[0]")
-	resolvesTo(s1, "#"+mustHash(list.Hash(types.Format_7_18)).String()+"[1]")
+	resolvesTo(head, "#"+mustHash(head.Hash(vs.Format())).String())
+	resolvesTo(list, "#"+mustHash(list.Hash(vs.Format())).String())
+	resolvesTo(s0, "#"+mustHash(s0.Hash(vs.Format())).String())
+	resolvesTo(s1, "#"+mustHash(s1.Hash(vs.Format())).String())
+	resolvesTo(s0, "#"+mustHash(list.Hash(vs.Format())).String()+"[0]")
+	resolvesTo(s1, "#"+mustHash(list.Hash(vs.Format())).String()+"[1]")
 
 	resolvesTo(nil, "foo")
 	resolvesTo(nil, "foo.parents")
 	resolvesTo(nil, "foo.value")
 	resolvesTo(nil, "foo.value[0]")
-	resolvesTo(nil, "#"+mustHash(types.String("baz").Hash(types.Format_7_18)).String())
-	resolvesTo(nil, "#"+mustHash(types.String("baz").Hash(types.Format_7_18)).String()+"[0]")
+	resolvesTo(nil, "#"+mustHash(types.String("baz").Hash(vs.Format())).String())
+	resolvesTo(nil, "#"+mustHash(types.String("baz").Hash(vs.Format())).String()+"[0]")
 }
 
 func TestReadAbsolutePaths(t *testing.T) {

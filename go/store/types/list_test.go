@@ -81,8 +81,8 @@ func (tl testList) toList(vrw ValueReadWriter) (List, error) {
 	return NewList(context.Background(), vrw, tl...)
 }
 
-func newTestList(length int) testList {
-	return generateNumbersAsValues(length)
+func newTestList(nbf *NomsBinFormat, length int) testList {
+	return generateNumbersAsValues(nbf, length)
 }
 
 func validateList(t *testing.T, vrw ValueReadWriter, l List, values ValueSlice) {
@@ -107,7 +107,7 @@ func newListTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff in
 	vrw := newTestValueStore()
 
 	length := 1 << size
-	elems := newTestList(length)
+	elems := newTestList(vrw.Format(), length)
 	tr, err := MakeListType(PrimitiveTypeMap[FloatKind])
 	d.PanicIfError(err)
 	list, err := NewList(context.Background(), vrw, elems...)
@@ -191,11 +191,11 @@ func (suite *listTestSuite) TestIterRange() {
 }
 
 func TestListSuite4K(t *testing.T) {
-	suite.Run(t, newListTestSuite(12, 8, 2, 2))
+	suite.Run(t, newListTestSuite(12, 5, 2, 2))
 }
 
 func TestListSuite8K(t *testing.T) {
-	suite.Run(t, newListTestSuite(14, 22, 2, 2))
+	suite.Run(t, newListTestSuite(14, 42, 2, 2))
 }
 
 func TestListInsert(t *testing.T) {
@@ -205,7 +205,7 @@ func TestListInsert(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tl := newTestList(1024)
+	tl := newTestList(vrw.Format(), 1024)
 	list, err := tl.toList(vrw)
 	require.NoError(t, err)
 
@@ -226,7 +226,7 @@ func TestListRemove(t *testing.T) {
 
 	assert := assert.New(t)
 
-	tl := newTestList(1024)
+	tl := newTestList(vrw.Format(), 1024)
 	list, err := tl.toList(vrw)
 	require.NoError(t, err)
 
@@ -398,7 +398,7 @@ func TestListValidateInsertAscending(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	values := generateNumbersAsValues(1000)
+	values := generateNumbersAsValues(vrw.Format(), 1000)
 
 	s, err := NewList(context.Background(), vrw)
 	require.NoError(t, err)
@@ -419,7 +419,7 @@ func TestListValidateInsertAtZero(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	values := generateNumbersAsValues(1000)
+	values := generateNumbersAsValues(vrw.Format(), 1000)
 	s, err := NewList(context.Background(), vrw)
 	require.NoError(t, err)
 	count := len(values)
@@ -780,7 +780,7 @@ func TestListSet(t *testing.T) {
 func TestListFirstNNumbers(t *testing.T) {
 	vrw := newTestValueStore()
 
-	nums := generateNumbersAsValues(testListSize)
+	nums := generateNumbersAsValues(vrw.Format(), testListSize)
 	_, err := NewList(context.Background(), vrw, nums...)
 	require.NoError(t, err)
 }
@@ -859,7 +859,7 @@ func TestListDiffIdentical(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums := generateNumbersAsValues(5)
+	nums := generateNumbersAsValues(vrw.Format(), 5)
 	l1, err := NewList(context.Background(), vrw, nums...)
 	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw, nums...)
@@ -879,7 +879,7 @@ func TestListDiffVersusEmpty(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5)
 	l1, err := NewList(context.Background(), vrw, nums1...)
 	require.NoError(t, err)
 	l2, err := NewList(context.Background(), vrw)
@@ -905,7 +905,7 @@ func TestListDiffReverse(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5000)
 	nums2 := reverseValues(nums1)
 	l1, err := NewList(context.Background(), vrw, nums1...)
 	require.NoError(t, err)
@@ -933,7 +933,7 @@ func TestListDiffReverseWithLargerLimit(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5000)
 	nums2 := reverseValues(nums1)
 
 	l1, err := NewList(context.Background(), vrw, nums1...)
@@ -966,8 +966,8 @@ func TestListDiffRemove5x100(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5000)
-	nums2 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5000)
+	nums2 := generateNumbersAsValues(vrw.Format(), 5000)
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 100)
 	}
@@ -1001,8 +1001,8 @@ func TestListDiffAdd5x5(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5000)
-	nums2 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5000)
+	nums2 := generateNumbersAsValues(vrw.Format(), 5000)
 	for count := 5; count > 0; count-- {
 		nums2 = spliceValues(nums2, (count-1)*1000, 0, Float(0), Float(1), Float(2), Float(3), Float(4))
 	}
@@ -1036,8 +1036,8 @@ func TestListDiffReplaceReverse5x100(t *testing.T) {
 	vrw := newTestValueStore()
 
 	assert := assert.New(t)
-	nums1 := generateNumbersAsValues(5000)
-	nums2 := generateNumbersAsValues(5000)
+	nums1 := generateNumbersAsValues(vrw.Format(), 5000)
+	nums2 := generateNumbersAsValues(vrw.Format(), 5000)
 	for count := 5; count > 0; count-- {
 		out := reverseValues(nums2[(count-1)*1000 : (count-1)*1000+100])
 		nums2 = spliceValues(nums2, (count-1)*1000, 100, out...)
@@ -1134,7 +1134,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 
 	cs1 := storage.NewView()
 	vs1 := NewValueStore(cs1)
-	nums1 := generateNumbersAsValues(4000)
+	nums1 := generateNumbersAsValues(vs1.Format(), 4000)
 	l1, err := NewList(context.Background(), vs1, nums1...)
 	require.NoError(t, err)
 	ref, err := vs1.WriteValue(context.Background(), l1)
@@ -1151,7 +1151,7 @@ func TestListDiffLargeWithSameMiddle(t *testing.T) {
 
 	cs2 := storage.NewView()
 	vs2 := NewValueStore(cs2)
-	nums2 := generateNumbersAsValuesFromToBy(5, 3550, 1)
+	nums2 := generateNumbersAsValuesFromToBy(vs2.Format(), 5, 3550, 1)
 	l2, err := NewList(context.Background(), vs2, nums2...)
 	require.NoError(t, err)
 	ref, err = vs2.WriteValue(context.Background(), l2)
@@ -1194,7 +1194,7 @@ func TestListDiffAllValuesInSequenceRemoved(t *testing.T) {
 		list := newList(seq)
 		ref, err := vrw.WriteValue(context.Background(), list)
 		require.NoError(t, err)
-		ordKey, err := orderedKeyFromInt(len(vs), Format_7_18)
+		ordKey, err := orderedKeyFromInt(len(vs), vrw.Format())
 		require.NoError(t, err)
 		mt, err := newMetaTuple(ref, ordKey, uint64(len(vs)))
 		require.NoError(t, err)
@@ -1230,7 +1230,7 @@ func TestListTypeAfterMutations(t *testing.T) {
 
 	test := func(n int, c interface{}) {
 		vrw := newTestValueStore()
-		values := generateNumbersAsValues(n)
+		values := generateNumbersAsValues(vrw.Format(), n)
 
 		l, err := NewList(context.Background(), vrw, values...)
 		require.NoError(t, err)
@@ -1251,7 +1251,7 @@ func TestListTypeAfterMutations(t *testing.T) {
 		assert.True(mustType(TypeOf(l)).Equals(mustType(MakeListType(PrimitiveTypeMap[FloatKind]))))
 	}
 
-	test(15, listLeafSequence{})
+	test(1, listLeafSequence{})
 	test(1500, metaSequence{})
 }
 
@@ -1270,7 +1270,7 @@ func TestListRemoveLastWhenNotLoaded(t *testing.T) {
 		return v.(List)
 	}
 
-	tl := newTestList(1024)
+	tl := newTestList(vs.Format(), 1024)
 	nl, err := tl.toList(vs)
 	require.NoError(t, err)
 
@@ -1343,8 +1343,8 @@ func TestListConcatDifferentTypes(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	fst := generateNumbersAsValuesFromToBy(0, testListSize/2, 1)
-	snd := generateNumbersAsStructsFromToBy(testListSize/2, testListSize, 1)
+	fst := generateNumbersAsValuesFromToBy(vrw.Format(), 0, testListSize/2, 1)
+	snd := generateNumbersAsStructsFromToBy(vrw.Format(), testListSize/2, testListSize, 1)
 
 	var whole ValueSlice
 	whole = append(whole, fst...)
@@ -1364,10 +1364,10 @@ func TestListWithStructShouldHaveOptionalFields(t *testing.T) {
 	vrw := newTestValueStore()
 
 	list, err := NewList(context.Background(), vrw,
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(1),
 		})),
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		})),
@@ -1403,12 +1403,12 @@ func TestListOfListsDoesNotWriteRoots(t *testing.T) {
 	l3, err := NewList(context.Background(), vrw, l1, l2)
 	require.NoError(t, err)
 
-	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
-	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
-	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l3.Hash(Format_7_18)))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(vrw.Format())))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(vrw.Format())))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l3.Hash(vrw.Format())))))
 
 	_, err = vrw.WriteValue(context.Background(), l3)
 	require.NoError(t, err)
-	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(Format_7_18)))))
-	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(Format_7_18)))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l1.Hash(vrw.Format())))))
+	assert.Nil(mustValue(vrw.ReadValue(context.Background(), mustHash(l2.Hash(vrw.Format())))))
 }

@@ -71,9 +71,7 @@ func validateTreeItems(t *testing.T, ns NodeStore, nd Node, expected [][2]Item) 
 	i := 0
 	ctx := context.Background()
 	err := iterTree(ctx, ns, nd, func(actual Item) (err error) {
-		if !assert.Equal(t, expected[i/2][i%2], actual) {
-			panic("here")
-		}
+		assert.Equal(t, expected[i/2][i%2], actual)
 		i++
 		return
 	})

@@ -56,7 +56,7 @@ type ThreeWayMergeSuite struct {
 
 func (s *ThreeWayMergeSuite) SetupTest() {
 	storage := &chunks.MemoryStorage{}
-	s.vs = types.NewValueStore(storage.NewView())
+	s.vs = types.NewValueStore(storage.NewViewWithDefaultFormat())
 }
 
 func (s *ThreeWayMergeSuite) TearDownTest() {
