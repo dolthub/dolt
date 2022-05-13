@@ -743,7 +743,6 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")

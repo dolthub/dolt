@@ -16,6 +16,7 @@ package dtables
 
 import (
 	"context"
+	"errors"
 	"io"
 	"time"
 
@@ -27,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -189,7 +189,7 @@ type prollyDiffIter struct {
 	from, to                   prolly.Map
 	fromSch, toSch             schema.Schema
 	targetFromSch, targetToSch schema.Schema
-	fromConverter, toConverter tablediff_prolly.RowConverter
+	fromConverter, toConverter ProllyRowConverter
 
 	fromCm commitInfo2
 	toCm   commitInfo2
@@ -219,6 +219,10 @@ var _ sql.RowIter = prollyDiffIter{}
 // schema of |from| to |targetFromSchema| and the schema of |to| to
 // |targetToSchema|. See the tablediff_prolly package.
 func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, targetFromSchema, targetToSchema schema.Schema) (prollyDiffIter, error) {
+	if schema.IsKeyless(targetToSchema) {
+		return prollyDiffIter{}, errors.New("diffs with keyless schema have not been implemented yet")
+	}
+
 	fromCm := commitInfo2{
 		name: dp.fromName,
 		ts:   (*time.Time)(dp.fromDate),
@@ -241,12 +245,12 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	fromConverter, err := tablediff_prolly.NewRowConverter(fSch, targetFromSchema)
+	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := tablediff_prolly.NewRowConverter(tSch, targetToSchema)
+	toConverter, err := NewProllyRowConverter(tSch, targetToSchema)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}

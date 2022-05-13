@@ -18,13 +18,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -305,36 +303,11 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 	dtf.fromSch = fromSchema
 	dtf.toSch = toSchema
 
-	var diffTableSch schema.Schema
-	if sqledb.ddb.Format() == types.Format_DOLT_1 {
-		diffTableSch, err = tablediff_prolly.CalculateDiffSchema(fromSchema, toSchema)
-		if err != nil {
-			return err
-		}
-	} else {
-		fromSchema = schema.MustSchemaFromCols(
-			fromSchema.GetAllCols().Append(
-				schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-				schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
-		toSchema = schema.MustSchemaFromCols(
-			toSchema.GetAllCols().Append(
-				schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-				schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
-		j, err := rowconv.NewJoiner(
-			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSchema}, {Name: diff.From, Sch: fromSchema}},
-			map[string]rowconv.ColNamingFunc{
-				diff.To:   diff.ToColNamer,
-				diff.From: diff.FromColNamer,
-			})
-		if err != nil {
-			return err
-		}
-		diffTableSch = j.GetSchema()
-		diffTableSch = schema.MustSchemaFromCols(
-			diffTableSch.GetAllCols().Append(
-				schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)))
-		dtf.joiner = j
+	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(toTable.Format(), fromSchema, toSchema)
+	if err != nil {
+		return err
 	}
+	dtf.joiner = j
 
 	// TODO: sql.Columns include a Source that indicates the table it came from, but we don't have a real table
 	//       when the column comes from a table function, so we omit the table name when we create these columns.

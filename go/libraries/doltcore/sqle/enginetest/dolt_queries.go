@@ -1418,9 +1418,9 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 		Name: "table with commit column should maintain its data in diff",
 		SetUpScript: []string{
 			"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
-			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"CALL dolt_commit('-am', 'creating table t');",
 			"INSERT INTO t VALUES (1, 'hi');",
-			"set @Commit2 = dolt_commit('-am', 'insert data');",
+			"CALL dolt_commit('-am', 'insert data');",
 		},
 		Assertions: []enginetest.ScriptTestAssertion{
 			{

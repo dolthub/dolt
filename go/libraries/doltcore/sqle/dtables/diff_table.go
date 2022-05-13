@@ -30,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/tablediff_prolly"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -91,7 +90,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		return nil, err
 	}
 
-	diffTableSchema, j, err := getDiffTableSchemaAndJoiner(ddb, sch)
+	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
 	}
@@ -113,41 +112,6 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		rowFilters:       nil,
 		joiner:           j,
 	}, nil
-}
-
-// getDiffTableSchemaAndJoiner returns the schema for the diff table given a
-// target schema for a row |sch|. In the old storage format, it also returns the
-// associated joiner.
-func getDiffTableSchemaAndJoiner(ddb *doltdb.DoltDB, targetSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
-	if ddb.Format() == types.Format_DOLT_1 {
-		diffTableSchema, err = tablediff_prolly.CalculateDiffSchema(targetSch, targetSch)
-		if err != nil {
-			return nil, nil, err
-		}
-	} else {
-		colCollection := targetSch.GetAllCols()
-		colCollection = colCollection.Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-		sch2 := schema.MustSchemaFromCols(colCollection)
-		j, err = rowconv.NewJoiner(
-			[]rowconv.NamedSchema{{Name: diff.To, Sch: sch2}, {Name: diff.From, Sch: sch2}},
-			map[string]rowconv.ColNamingFunc{
-				diff.To:   diff.ToColNamer,
-				diff.From: diff.FromColNamer,
-			})
-		if err != nil {
-			return nil, nil, err
-		}
-		diffTableSchema = j.GetSchema()
-		colCollection = diffTableSchema.GetAllCols()
-		colCollection = colCollection.Append(
-			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
-		)
-		diffTableSchema = schema.MustSchemaFromCols(colCollection)
-	}
-
-	return
 }
 
 func (dt *DiffTable) Name() string {
@@ -530,4 +494,97 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 	}
 
 	return rowconv.NewRowConverter(ctx, vrw, fm)
+}
+
+// GetDiffTableSchemaAndJoiner returns the schema for the diff table given a
+// target schema for a row |sch|. In the old storage format, it also returns the
+// associated joiner.
+func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromTargetSch, toTargetSch schema.Schema) (diffTableSchema schema.Schema, j *rowconv.Joiner, err error) {
+	if format == types.Format_DOLT_1 {
+		diffTableSchema, err = CalculateDiffSchema(fromTargetSch, toTargetSch)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		colCollection := toTargetSch.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+		toTargetSch = schema.MustSchemaFromCols(colCollection)
+
+		colCollection = fromTargetSch.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+		fromTargetSch = schema.MustSchemaFromCols(colCollection)
+
+		j, err = rowconv.NewJoiner(
+			[]rowconv.NamedSchema{{Name: diff.To, Sch: toTargetSch}, {Name: diff.From, Sch: fromTargetSch}},
+			map[string]rowconv.ColNamingFunc{
+				diff.To:   diff.ToColNamer,
+				diff.From: diff.FromColNamer,
+			})
+		if err != nil {
+			return nil, nil, err
+		}
+		diffTableSchema = j.GetSchema()
+		colCollection = diffTableSchema.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn(diffTypeColName, schema.DiffTypeTag, types.StringKind, false),
+		)
+		diffTableSchema = schema.MustSchemaFromCols(colCollection)
+	}
+
+	return
+}
+
+// CalculateDiffSchema returns the schema for the dolt_diff table based on the
+// schemas from the from and to tables.
+func CalculateDiffSchema(fromSch schema.Schema, toSch schema.Schema) (schema.Schema, error) {
+	colCollection := fromSch.GetAllCols()
+	colCollection = colCollection.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	fromSch = schema.MustSchemaFromCols(colCollection)
+
+	colCollection = toSch.GetAllCols()
+	colCollection = colCollection.Append(
+		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+	toSch = schema.MustSchemaFromCols(colCollection)
+
+	cols := make([]schema.Column, toSch.GetAllCols().Size()+fromSch.GetAllCols().Size()+1)
+
+	i := 0
+	err := toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		toCol, err := schema.NewColumnWithTypeInfo("to_"+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+		if err != nil {
+			return true, err
+		}
+		cols[i] = toCol
+		i++
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	j := toSch.GetAllCols().Size()
+	err = fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		fromCol, err := schema.NewColumnWithTypeInfo("from_"+col.Name, uint64(i), col.TypeInfo, false, col.Default, false, col.Comment)
+		if err != nil {
+			return true, err
+		}
+		cols[j] = fromCol
+
+		j++
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	cols[len(cols)-1] = schema.NewColumn("diff_type", schema.DiffTypeTag, types.StringKind, false)
+
+	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }
