@@ -613,7 +613,7 @@ func (p *Parser) parseStruct(ctx context.Context) (types.Struct, error) {
 		v, err := p.parseValue(ctx)
 
 		if err != nil {
-			return types.EmptyStruct(types.Format_Default), err
+			return types.Struct{}, err
 		}
 
 		data[fieldName] = v

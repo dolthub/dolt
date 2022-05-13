@@ -31,7 +31,7 @@ func TestReadWriteValueFile(t *testing.T) {
 	const numMapValues = 1
 
 	ctx := context.Background()
-	store, err := NewFileValueStore(types.Format_7_18)
+	store, err := NewFileValueStore(types.Format_Default)
 	require.NoError(t, err)
 
 	var values []types.Value

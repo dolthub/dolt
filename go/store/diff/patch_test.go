@@ -33,6 +33,8 @@ import (
 
 func TestPatchPathPartCompare(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
 
 	fieldPath1 := mustParsePath(assert, `.field1`)[0]
 	fieldPath2 := mustParsePath(assert, `.field2`)[0]
@@ -60,11 +62,11 @@ func TestPatchPathPartCompare(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		res01, err := pathPartCompare(types.Format_7_18, tc[0], tc[1])
+		res01, err := pathPartCompare(vs.Format(), tc[0], tc[1])
 		require.NoError(t, err)
-		res00, err := pathPartCompare(types.Format_7_18, tc[0], tc[0])
+		res00, err := pathPartCompare(vs.Format(), tc[0], tc[0])
 		require.NoError(t, err)
-		res10, err := pathPartCompare(types.Format_7_18, tc[1], tc[0])
+		res10, err := pathPartCompare(vs.Format(), tc[1], tc[0])
 		require.NoError(t, err)
 
 		assert.Equal(-1, res01, "test case %d failed, pp0: %s, pp1: %s", i, tc[0], tc[1])
@@ -75,6 +77,8 @@ func TestPatchPathPartCompare(t *testing.T) {
 
 func TestPatchPathIsLess(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
 
 	testCases := [][]string{
 		{``, `["field1"]`},
@@ -88,11 +92,11 @@ func TestPatchPathIsLess(t *testing.T) {
 	for i, tc := range testCases {
 		p0 := mustParsePath(assert, tc[0])
 		p1 := mustParsePath(assert, tc[1])
-		zeroLTOne, err := pathIsLess(types.Format_7_18, p0, p1)
+		zeroLTOne, err := pathIsLess(vs.Format(), p0, p1)
 		require.NoError(t, err)
-		zeroLTZero, err := pathIsLess(types.Format_7_18, p0, p0)
+		zeroLTZero, err := pathIsLess(vs.Format(), p0, p0)
 		require.NoError(t, err)
-		oneLTZero, err := pathIsLess(types.Format_7_18, p1, p0)
+		oneLTZero, err := pathIsLess(vs.Format(), p1, p0)
 		require.NoError(t, err)
 		assert.True(zeroLTOne, "test case %d failed", i)
 		assert.False(zeroLTZero, "test case %d failed", i)
@@ -104,6 +108,8 @@ func TestPatchPathIsLess(t *testing.T) {
 
 func TestPatchSort(t *testing.T) {
 	assert := assert.New(t)
+	vs := newTestValueStore()
+	defer vs.Close()
 
 	sortedPaths := Patch{
 		{Path: mustParsePath(assert, `["field1"]`)},
@@ -121,6 +127,6 @@ func TestPatchSort(t *testing.T) {
 		shuffledPaths = append(shuffledPaths, sortedPaths[idx])
 	}
 
-	types.SortWithErroringLess(PatchSort{shuffledPaths, types.Format_7_18})
+	types.SortWithErroringLess(PatchSort{shuffledPaths, vs.Format()})
 	assert.Equal(sortedPaths, shuffledPaths)
 }

@@ -33,7 +33,7 @@ func TestListIterator(t *testing.T) {
 	assert := assert.New(t)
 	vrw := newTestValueStore()
 
-	numbers := append(generateNumbersAsValues(10), Float(20), Float(25))
+	numbers := append(generateNumbersAsValues(vrw.Format(), 10), Float(20), Float(25))
 	l, err := NewList(context.Background(), vrw, numbers...)
 	require.NoError(t, err)
 	i, err := l.Iterator(context.Background())
