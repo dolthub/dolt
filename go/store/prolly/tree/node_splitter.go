@@ -24,7 +24,6 @@ package tree
 import (
 	"crypto/sha512"
 	"encoding/binary"
-	"fmt"
 	"math"
 
 	"github.com/kch42/buzhash"
@@ -64,7 +63,7 @@ type nodeSplitter interface {
 	// Append provides more nodeItems to the splitter. Splitter's make chunk
 	// boundary decisions based on the Item contents. Upon return, callers
 	// can use CrossedBoundary() to see if a chunk boundary has crossed.
-	Append(items ...Item) error
+	Append(key, values Item) error
 
 	// CrossedBoundary returns true if the provided nodeItems have caused a chunk
 	// boundary to be crossed.
@@ -113,11 +112,12 @@ func newRollingHashSplitter(salt uint8) nodeSplitter {
 var _ splitterFactory = newRollingHashSplitter
 
 // Append implements NodeSplitter
-func (sns *rollingHashSplitter) Append(items ...Item) (err error) {
-	for _, it := range items {
-		for _, byt := range it {
-			_ = sns.hashByte(byt)
-		}
+func (sns *rollingHashSplitter) Append(key, value Item) (err error) {
+	for _, byt := range key {
+		_ = sns.hashByte(byt)
+	}
+	for _, byt := range value {
+		_ = sns.hashByte(byt)
 	}
 	return nil
 }
@@ -189,13 +189,9 @@ func newKeySplitter(level uint8) nodeSplitter {
 
 var _ splitterFactory = newKeySplitter
 
-func (ks *keySplitter) Append(items ...Item) error {
-	if len(items) != 2 {
-		return fmt.Errorf("expected 2 nodeItems, %d were passed", len(items))
-	}
-
+func (ks *keySplitter) Append(key, value Item) error {
 	// todo(andy): account for key/value offsets, vtable, etc.
-	thisSize := uint32(len(items[0]) + len(items[1]))
+	thisSize := uint32(len(key) + len(value))
 	ks.size += thisSize
 
 	if ks.size < minChunkSize {
@@ -206,7 +202,7 @@ func (ks *keySplitter) Append(items ...Item) error {
 		return nil
 	}
 
-	h := xxHash32(items[0], ks.salt)
+	h := xxHash32(key, ks.salt)
 	ks.crossedBoundary = weibullCheck(ks.size, thisSize, h)
 	return nil
 }
