@@ -6,6 +6,8 @@ setup() {
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{rem1,bac1,repo1}
 
+    skip_nbf_dolt_1
+
     # repo1 -> rem1 -> repo2
     cd $TMPDIRS/repo1
     dolt init

@@ -33,7 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var mergeDocs = cli.CommandDocumentationContent{
@@ -62,10 +61,6 @@ func (cmd MergeCmd) Name() string {
 // Description returns a description of the command
 func (cmd MergeCmd) Description() string {
 	return "Merge a branch."
-}
-
-func (cmd MergeCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
