@@ -889,7 +889,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: doltdb.ErrUnresolvedConflictsAutocommit.Error(),
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results

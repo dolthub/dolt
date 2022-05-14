@@ -1195,7 +1195,7 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: doltdb.ErrUnresolvedConflictsAutocommit.Error(),
 			},
 			{ // client rolled back on merge with conflicts
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
