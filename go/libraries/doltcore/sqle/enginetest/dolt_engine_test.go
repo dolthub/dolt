@@ -743,7 +743,6 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
 		databases := harness.NewDatabases("mydb")
@@ -829,6 +828,10 @@ func TestKeylessUniqueIndex(t *testing.T) {
 func TestQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestPreparedStaticIndexQuery(t *testing.T) {
+	enginetest.TestPreparedStaticIndexQuery(t, newDoltHarness(t))
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
