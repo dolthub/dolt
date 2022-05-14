@@ -154,6 +154,11 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 		return ws, noConflicts, fmt.Errorf("failed to get dbData")
 	}
 
+	autocommit, err := isSessionAutocommit(ctx)
+	if err != nil {
+		return ws, noConflicts, err
+	}
+
 	canFF, err := spec.HeadC.CanFastForwardTo(ctx, spec.MergeC)
 	if err != nil {
 		switch err {
@@ -175,7 +180,14 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 					return ws, hasConflicts, wsErr
 				}
 
-				ctx.Warn(DoltMergeWarningCode, err.Error())
+				// Give a better error message for unresolved conflicts when autocommit is on. This is because the transaction
+				// gets aborted when merge conflicts arise during autocommit and the dolt_conflicts table is not actually
+				// written to.
+				if autocommit {
+					ctx.Warn(DoltMergeWarningCode, doltdb.ErrUnresolvedConflictsAutocommit.Error())
+				} else {
+					ctx.Warn(DoltMergeWarningCode, err.Error())
+				}
 
 				// Return 0 indicating there are conflicts
 				return ws, hasConflicts, nil
@@ -203,7 +215,12 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 			return ws, hasConflicts, wsErr
 		}
 
-		ctx.Warn(DoltMergeWarningCode, err.Error())
+		// Give a better error message for unresolved conflicts or constraint violations when autocommit is on. This is because the transaction
+		// gets aborted when merge conflicts arise during autocommit and the dolt_conflicts table is not actually
+		// written to.
+		errorForWarning := returnCorrectConflictsOrViolationsError(err, autocommit)
+
+		ctx.Warn(DoltMergeWarningCode, errorForWarning.Error())
 
 		return ws, hasConflicts, nil
 	} else if err != nil {
@@ -435,6 +452,36 @@ func checkForConflicts(tblToStats map[string]*merge.MergeStats) bool {
 	}
 
 	return false
+}
+
+// returnCorrectConflictsOrViolationsError is a utility method that converts generic ErrUnresolvedConflicts and
+// ErrUnresolvedConstraintViolations into more targeted errors messages when autocommit is on.
+func returnCorrectConflictsOrViolationsError(err error, autocommit bool) error {
+	if errors.Is(err, doltdb.ErrUnresolvedConflicts) {
+		if autocommit {
+			return doltdb.ErrUnresolvedConstraintViolationsAutocommit
+		} else {
+			return doltdb.ErrUnresolvedConflicts
+		}
+	}
+
+	if errors.Is(err, doltdb.ErrUnresolvedConstraintViolations) {
+		if autocommit {
+			return doltdb.ErrUnresolvedConstraintViolationsAutocommit
+		} else {
+			return doltdb.ErrUnresolvedConflicts
+		}
+	}
+
+	return err
+}
+
+func isSessionAutocommit(ctx *sql.Context) (bool, error) {
+	autoCommitSessionVar, err := ctx.GetSessionVariable(ctx, sql.AutoCommitSessionVar)
+	if err != nil {
+		return false, err
+	}
+	return sql.ConvertToBool(autoCommitSessionVar)
 }
 
 func (d DoltMergeFunc) String() string {
