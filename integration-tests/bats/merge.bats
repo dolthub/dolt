@@ -743,3 +743,23 @@ SQL
     run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
     [[ "$output" =~ "foreign key,1,2" ]]
 }
+
+@test "merge: violated check constraint" {
+    skip "merge doesn't respect check constraints"
+    dolt sql -q "CREATE table t (pk int PRIMARY KEY, col1 int);"
+    dolt commit -am "create table"
+    dolt branch other
+
+    dolt sql -q "ALTER TABLE t ADD CHECK (col1 % 2 = 0);"
+    dolt commit -am "add check constraint"
+
+    dolt checkout other
+    dolt sql -q "INSERT into t values (1, 1);"
+    dolt commit -am "add row"
+
+    dolt checkout main
+
+    dolt merge other
+    run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
+    [[ "$output" =~ "t,1" ]]
+}
