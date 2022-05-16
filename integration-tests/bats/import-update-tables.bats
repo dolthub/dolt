@@ -805,6 +805,7 @@ DELIM
 }
 
 @test "import-update-tables: successfully update child table in multi-key fk relationship " {
+    skip_nbf_dolt_1
     dolt sql -q "drop table objects"
     dolt sql -q "drop table colors"
 
@@ -885,6 +886,7 @@ DELIM
 }
 
 @test "import-update-tables: import update with CASCADE ON UPDATE" {
+   skip_nbf_dolt_1
    dolt sql <<SQL
 CREATE TABLE one (
   pk int PRIMARY KEY,
@@ -988,6 +990,7 @@ DELIM
 }
 
 @test "import-update-tables: disable foreign key checks" {
+    skip_nbf_dolt_1
     cat <<DELIM > objects-bad.csv
 id,name,color
 4,laptop,blue
