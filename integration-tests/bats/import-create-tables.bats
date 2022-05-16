@@ -539,6 +539,7 @@ DELIM
 }
 
 @test "import-create-tables: table import -c infers types from data" {
+    skip_nbf_dolt_1
     cat <<DELIM > types.csv
 pk,str,int,bool,float, date, time, datetime
 0,abc,123,false,3.14,2020-02-02,12:12:12.12,2020-02-02 12:12:12
@@ -551,7 +552,7 @@ DELIM
     [[ "$output" =~ "\`pk\` int" ]]
     [[ "$output" =~ "\`str\` varchar(16383)" ]]
     [[ "$output" =~ "\`int\` int unsigned" ]]
-    [[ "$output" =~ "\`bool\` bit(1)" ]]
+    [[ "$output" =~ "\`bool\` tinyint" ]]
     [[ "$output" =~ "\`float\` float" ]]
     [[ "$output" =~ "\`date\` date" ]]
     [[ "$output" =~ "\`time\` time" ]]

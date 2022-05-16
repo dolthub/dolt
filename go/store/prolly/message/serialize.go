@@ -28,8 +28,8 @@ const (
 
 func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	b = fb.NewBuilder(0)
-	buf := pool.Get(uint64(sz))
-	b.Bytes = buf[:0]
+	b.Bytes = pool.Get(uint64(sz))
+	b.Reset()
 	return
 }
 

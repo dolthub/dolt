@@ -37,7 +37,7 @@ func TestValueReadWriteRead(t *testing.T) {
 
 	s := String("hello")
 	vs := newTestValueStore()
-	assert.Nil(vs.ReadValue(context.Background(), mustHash(s.Hash(Format_7_18)))) // nil
+	assert.Nil(vs.ReadValue(context.Background(), mustHash(s.Hash(vs.Format())))) // nil
 	h := mustRef(vs.WriteValue(context.Background(), s)).TargetHash()
 	rt, err := vs.Root(context.Background())
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestValueReadMany(t *testing.T) {
 	}
 
 	// Get one Value into vs's Value cache
-	_, err := vs.ReadValue(context.Background(), mustHash(vals[0].Hash(Format_7_18)))
+	_, err := vs.ReadValue(context.Background(), mustHash(vals[0].Hash(vs.Format())))
 	require.NoError(t, err)
 
 	// Get one Value into vs's pendingPuts
@@ -101,10 +101,10 @@ func TestValueReadMany(t *testing.T) {
 	vals = append(vals, three)
 	_, err = vs.WriteValue(context.Background(), three)
 	require.NoError(t, err)
-	hashes = append(hashes, mustHash(three.Hash(Format_7_18)))
+	hashes = append(hashes, mustHash(three.Hash(vs.Format())))
 
 	// Add one Value to request that's not in vs
-	hashes = append(hashes, mustHash(Bool(false).Hash(Format_7_18)))
+	hashes = append(hashes, mustHash(Bool(false).Hash(vs.Format())))
 
 	found := map[hash.Hash]Value{}
 	readValues, err := vs.ReadManyValues(context.Background(), hashes)
@@ -118,7 +118,7 @@ func TestValueReadMany(t *testing.T) {
 
 	assert.Len(found, len(vals))
 	for _, v := range vals {
-		assert.True(v.Equals(found[mustHash(v.Hash(Format_7_18))]))
+		assert.True(v.Equals(found[mustHash(v.Hash(vs.Format()))]))
 	}
 }
 
@@ -271,7 +271,7 @@ func TestTolerateTopDown(t *testing.T) {
 
 	assert.Zero(len(vs.bufferedChunks))
 
-	ST, err := NewStruct(Format_7_18, "", StructData{"r": mlr})
+	ST, err := NewStruct(vs.Format(), "", StructData{"r": mlr})
 	require.NoError(t, err)
 	str, err := vs.WriteValue(context.Background(), ST) // ST into bufferedChunks
 	require.NoError(t, err)
@@ -317,7 +317,7 @@ func TestPanicIfDangling(t *testing.T) {
 	assert := assert.New(t)
 	vs := newTestValueStore()
 
-	r, err := NewRef(Bool(true), Format_7_18)
+	r, err := NewRef(Bool(true), vs.Format())
 	require.NoError(t, err)
 	l, err := NewList(context.Background(), vs, r)
 	require.NoError(t, err)
@@ -336,7 +336,7 @@ func TestSkipEnforceCompleteness(t *testing.T) {
 	vs := newTestValueStore()
 	vs.SetEnforceCompleteness(false)
 
-	r, err := NewRef(Bool(true), Format_7_18)
+	r, err := NewRef(Bool(true), vs.Format())
 	require.NoError(t, err)
 	l, err := NewList(context.Background(), vs, r)
 	require.NoError(t, err)

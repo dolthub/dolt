@@ -125,10 +125,11 @@ func testASE(t *testing.T, rng *rand.Rand) {
 	sortConcurrency := int(minSortCon + rng.Int31n(maxSortCon-minSortCon))
 
 	name := fmt.Sprintf("kvps_%d_bs_%d_asc_%d_sc_%d", numKVPs, buffSize, asyncSortConcurrency, sortConcurrency)
+	nbf := types.Format_Default
 
 	t.Run(name, func(t *testing.T) {
-		kvps := createKVPs(t, types.Format_Default, rng, numKVPs)
-		asyncSorted := NewAsyncSortedEdits(types.Format_7_18, buffSize, asyncSortConcurrency, sortConcurrency)
+		kvps := createKVPs(t, nbf, rng, numKVPs)
+		asyncSorted := NewAsyncSortedEdits(types.Format_Default, buffSize, asyncSortConcurrency, sortConcurrency)
 
 		for _, kvp := range kvps {
 			asyncSorted.AddEdit(kvp.Key, kvp.Val)
@@ -142,7 +143,7 @@ func testASE(t *testing.T, rng *rand.Rand) {
 			t.Error("Invalid count", asyncSorted.Size(), "!=", numKVPs)
 		}
 
-		inOrder, count, err := IsInOrder(itr)
+		inOrder, count, err := IsInOrder(nbf, itr)
 
 		assert.NoError(t, err)
 

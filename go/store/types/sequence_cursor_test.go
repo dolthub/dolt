@@ -80,7 +80,7 @@ func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) error {
 }
 
 func (ts testSequence) format() *NomsBinFormat {
-	return Format_7_18
+	return Format_Default
 }
 
 func (ts testSequence) getChildSequence(_ context.Context, idx int) (sequence, error) {

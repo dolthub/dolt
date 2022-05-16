@@ -142,6 +142,10 @@ func tempDirDB(ctx context.Context) (types.ValueReadWriter, datas.Database, erro
 }
 
 func TestPuller(t *testing.T) {
+	ctx := context.Background()
+	vs, db, err := tempDirDB(ctx)
+	require.NoError(t, err)
+
 	deltas := []struct {
 		name       string
 		sets       map[string][]types.Value
@@ -158,12 +162,12 @@ func TestPuller(t *testing.T) {
 			"employees",
 			map[string][]types.Value{
 				"employees": {
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Hendriks"), types.String("Brian"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Software Engineer"), types.Int(39))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Sehn"), types.String("Timothy"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("CEO"), types.Int(39))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Son"), types.String("Aaron"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Software Engineer"), types.Int(36))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Hendriks"), types.String("Brian"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.Int(39))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Sehn"), types.String("Timothy"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("CEO"), types.Int(39))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Son"), types.String("Aaron"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.Int(36))),
 				},
 			},
 			map[string][]types.Value{},
@@ -198,12 +202,12 @@ func TestPuller(t *testing.T) {
 			"more employees",
 			map[string][]types.Value{
 				"employees": {
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Jesuele"), types.String("Matt"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Software Engineer"), types.NullValue)),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Wilkins"), types.String("Daylon"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Software Engineer"), types.NullValue)),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Katie"), types.String("McCulloch"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Software Engineer"), types.NullValue)),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Jesuele"), types.String("Matt"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Wilkins"), types.String("Daylon"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Katie"), types.String("McCulloch"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Software Engineer"), types.NullValue)),
 				},
 			},
 			map[string][]types.Value{},
@@ -220,18 +224,15 @@ func TestPuller(t *testing.T) {
 			map[string][]types.Value{},
 			map[string][]types.Value{
 				"employees": {
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Hendriks"), types.String("Brian"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Sehn"), types.String("Timothy"))),
-					mustTuple(types.NewTuple(types.Format_Default, types.String("Son"), types.String("Aaron"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Hendriks"), types.String("Brian"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Sehn"), types.String("Timothy"))),
+					mustTuple(types.NewTuple(vs.Format(), types.String("Son"), types.String("Aaron"))),
 				},
 			},
 			[]string{},
 		},
 	}
 
-	ctx := context.Background()
-	vs, db, err := tempDirDB(ctx)
-	require.NoError(t, err)
 	ds, err := db.GetDataset(ctx, "ds")
 	require.NoError(t, err)
 	rootMap, err := types.NewMap(ctx, vs)

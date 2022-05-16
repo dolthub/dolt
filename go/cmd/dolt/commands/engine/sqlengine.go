@@ -314,7 +314,7 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		init.Err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+		init.Err = fmt.Errorf("failed to connect to dolt_default_branch='%s' on database '%s'; %w", branch, db.Name(), err)
 	} else {
 		init.Err = nil
 	}

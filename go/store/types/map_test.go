@@ -44,7 +44,7 @@ import (
 
 const testMapSize = 8000
 
-type genValueFn func(i int) (Value, error)
+type genValueFn func(nbf *NomsBinFormat, i int) (Value, error)
 
 type testMap struct {
 	entries     mapEntrySlice
@@ -141,13 +141,13 @@ func (tm testMap) FlattenAll() []Value {
 	return tm.Flatten(0, len(tm.entries.entries))
 }
 
-func newSortedTestMap(length int, gen genValueFn) testMap {
+func newSortedTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
 	keys := make(ValueSlice, 0, length)
 	for i := 0; i < length; i++ {
-		keys = append(keys, mustValue(gen(i)))
+		keys = append(keys, mustValue(gen(nbf, i)))
 	}
 
-	err := SortWithErroringLess(ValueSort{keys, Format_7_18})
+	err := SortWithErroringLess(ValueSort{keys, nbf})
 	d.PanicIfError(err)
 
 	entries := make([]mapEntry, 0, len(keys))
@@ -155,7 +155,7 @@ func newSortedTestMap(length int, gen genValueFn) testMap {
 		entries = append(entries, mapEntry{k, Float(i * 2)})
 	}
 
-	return testMap{mapEntrySlice{entries, Format_7_18}, Float(length + 2)}
+	return testMap{mapEntrySlice{entries, nbf}, Float(length + 2)}
 }
 
 func newTestMapFromMap(m Map) testMap {
@@ -167,10 +167,10 @@ func newTestMapFromMap(m Map) testMap {
 
 	d.PanicIfError(err)
 
-	return testMap{mapEntrySlice{entries, Format_7_18}, Float(-0)}
+	return testMap{mapEntrySlice{entries, m.Format()}, Float(-0)}
 }
 
-func newRandomTestMap(length int, gen genValueFn) testMap {
+func newRandomTestMap(nbf *NomsBinFormat, length int, gen genValueFn) testMap {
 	s := rand.NewSource(4242)
 	used := map[int]bool{}
 
@@ -179,13 +179,13 @@ func newRandomTestMap(length int, gen genValueFn) testMap {
 	for len(entries) < length {
 		v := int(s.Int63()) & mask
 		if _, ok := used[v]; !ok {
-			entry := mapEntry{mustValue(gen(v)), mustValue(gen(v * 2))}
+			entry := mapEntry{mustValue(gen(nbf, v)), mustValue(gen(nbf, v*2))}
 			entries = append(entries, entry)
 			used[v] = true
 		}
 	}
 
-	return testMap{mapEntrySlice{entries, Format_7_18}, mustValue(gen(mask + 1))}
+	return testMap{mapEntrySlice{entries, nbf}, mustValue(gen(nbf, mask+1))}
 }
 
 func validateMap(t *testing.T, vrw ValueReadWriter, m Map, entries mapEntrySlice) {
@@ -211,9 +211,9 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 	vrw := newTestValueStore()
 
 	length := 1 << size
-	keyType, err := TypeOf(mustValue(gen(0)))
+	keyType, err := TypeOf(mustValue(gen(vrw.Format(), 0)))
 	d.PanicIfError(err)
-	elems := newSortedTestMap(length, gen)
+	elems := newSortedTestMap(vrw.Format(), length, gen)
 	tr, err := MakeMapType(keyType, PrimitiveTypeMap[FloatKind])
 	d.PanicIfError(err)
 	tmap, err := NewMap(context.Background(), vrw, elems.FlattenAll()...)
@@ -242,7 +242,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 							return false, err
 						}
 
-						h1, err := entry.key.Hash(Format_7_18)
+						h1, err := entry.key.Hash(vrw.Format())
 
 						if err != nil {
 							return false, err
@@ -254,7 +254,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 							return false, err
 						}
 
-						h2, err := entry.key.Hash(Format_7_18)
+						h2, err := entry.key.Hash(vrw.Format())
 
 						if err != nil {
 							return false, err
@@ -270,7 +270,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 							return false, err
 						}
 
-						h1, err := value.Hash(Format_7_18)
+						h1, err := value.Hash(vrw.Format())
 
 						if err != nil {
 							return false, err
@@ -282,7 +282,7 @@ func newMapTestSuite(size uint, expectChunkCount int, expectPrependChunkDiff int
 							return false, err
 						}
 
-						h2, err := entry.value.Hash(Format_7_18)
+						h2, err := entry.value.Hash(vrw.Format())
 
 						if err != nil {
 							return false, err
@@ -346,7 +346,7 @@ func (suite *mapTestSuite) TestStreamingMapOrder() {
 	vs := newTestValueStore()
 	defer vs.Close()
 
-	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries)), Format_7_18}
+	entries := mapEntrySlice{make([]mapEntry, len(suite.elems.entries.entries)), vs.Format()}
 	copy(entries.entries, suite.elems.entries.entries)
 	entries.entries[0], entries.entries[1] = entries.entries[1], entries.entries[0]
 
@@ -384,37 +384,37 @@ func (suite *mapTestSuite) TestStreamingMap2() {
 }
 
 func TestMapSuite4K(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 4, 2, 2, newNumber))
+	suite.Run(t, newMapTestSuite(12, 5, 2, 2, newNumber))
 }
 
 func TestMapSuite4KStructs(t *testing.T) {
-	suite.Run(t, newMapTestSuite(12, 11, 2, 2, newNumberStruct))
+	suite.Run(t, newMapTestSuite(12, 22, 2, 2, newNumberStruct))
 }
 
-func newNumber(i int) (Value, error) {
+func newNumber(nbf *NomsBinFormat, i int) (Value, error) {
 	return Float(i), nil
 }
 
-func newNumberStruct(i int) (Value, error) {
-	return NewStruct(Format_7_18, "", StructData{"n": Float(i)})
+func newNumberStruct(nbf *NomsBinFormat, i int) (Value, error) {
+	return NewStruct(nbf, "", StructData{"n": Float(i)})
 }
 
 func getTestNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(64*scale, newNumber)
+	return newRandomTestMap(vrw.Format(), 64*scale, newNumber)
 }
 
 func getTestRefValueOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(64*scale, newNumber)
+	return newRandomTestMap(vrw.Format(), 64*scale, newNumber)
 }
 
 func getTestRefToNativeOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(64*scale, func(i int) (Value, error) {
+	return newRandomTestMap(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
 		return vrw.WriteValue(context.Background(), Float(i))
 	})
 }
 
 func getTestRefToValueOrderMap(scale int, vrw ValueReadWriter) testMap {
-	return newRandomTestMap(64*scale, func(i int) (Value, error) {
+	return newRandomTestMap(vrw.Format(), 64*scale, func(nbf *NomsBinFormat, i int) (Value, error) {
 		s, err := NewSet(context.Background(), vrw, Float(i))
 
 		if err != nil {
@@ -470,8 +470,8 @@ func TestMapDiff(t *testing.T) {
 
 	vrw := newTestValueStore()
 
-	testMap1 := newRandomTestMap(64*2, newNumber)
-	testMap2 := newRandomTestMap(64*2, newNumber)
+	testMap1 := newRandomTestMap(vrw.Format(), 64*2, newNumber)
+	testMap2 := newRandomTestMap(vrw.Format(), 64*2, newNumber)
 	testMapAdded, testMapRemoved, testMapModified := testMap1.Diff(testMap2)
 	map1 := testMap1.toMap(vrw)
 	map2 := testMap2.toMap(vrw)
@@ -489,18 +489,18 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	// TODO: We are currently un-reasonable.
 	temp := MakeStructTemplate("Foo", []string{"Bool", "Number", "String1", "String2"})
 
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
+	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
+
 	newLargeStruct := func(i int) (Value, error) {
-		return temp.NewStruct(Format_7_18, []Value{
+		return temp.NewStruct(vs.Format(), []Value{
 			Bool(i%2 == 0),
 			Float(i),
 			String(fmt.Sprintf("I AM A REALLY REALY REALL SUPER CALIFRAGILISTICLY CRAZY-ASSED LONGTASTIC String %d", i)),
 			String(fmt.Sprintf("I am a bit shorter and also more chill: %d", i)),
 		})
 	}
-
-	ts := &chunks.TestStorage{}
-	cs := ts.NewView()
-	vs := newValueStoreWithCacheAndPending(cs, 0, 0)
 
 	numEdits := 10000
 	vals := make([]Value, 0, numEdits)
@@ -553,7 +553,7 @@ func TestMapMutationReadWriteCount(t *testing.T) {
 	_, err = vs.Commit(context.Background(), rt, rt)
 	require.NoError(t, err)
 
-	ref, err := NewRef(m, Format_7_18)
+	ref, err := NewRef(m, vs.Format())
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), ref.Height())
 	assert.Equal(t, 105, cs.Reads()-rdCnt)
@@ -1005,8 +1005,7 @@ func TestMapSetGet(t *testing.T) {
 	assert.True(m.Len() == 0)
 }
 
-func validateMapInsertion(t *testing.T, tm testMap) {
-	vrw := newTestValueStore()
+func validateMapInsertion(t *testing.T, vrw ValueReadWriter, tm testMap) {
 	ctx := context.Background()
 
 	allMap, err := NewMap(context.Background(), vrw)
@@ -1042,7 +1041,8 @@ func TestMapValidateInsertAscending(t *testing.T) {
 	smallTestChunks()
 	defer normalProductionChunks()
 
-	validateMapInsertion(t, newSortedTestMap(300, newNumber))
+	vrw := newTestValueStore()
+	validateMapInsertion(t, vrw, newSortedTestMap(vrw.Format(), 300, newNumber))
 }
 
 func TestMapSet(t *testing.T) {
@@ -1388,9 +1388,9 @@ func testMapOrder(assert *assert.Assertions, vrw ValueReadWriter, keyType, value
 	assert.NoError(err)
 	i := 0
 	err = m.IterAll(context.Background(), func(key, value Value) error {
-		hi, err := expectOrdering[i].Hash(Format_7_18)
+		hi, err := expectOrdering[i].Hash(vrw.Format())
 		assert.NoError(err)
-		kh, err := key.Hash(Format_7_18)
+		kh, err := key.Hash(vrw.Format())
 		assert.NoError(err)
 		assert.Equal(hi.String(), kh.String())
 		i++
@@ -1753,21 +1753,21 @@ func TestMapChunks(t *testing.T) {
 
 	l1, err := NewMap(context.Background(), vrw, Float(0), Float(1))
 	require.NoError(t, err)
-	c1 := getChunks(l1)
+	c1 := getChunks(vrw.Format(), l1)
 	assert.Len(c1, 0)
 
-	ref1, err := NewRef(Float(0), Format_7_18)
+	ref1, err := NewRef(Float(0), vrw.Format())
 	require.NoError(t, err)
 	l2, err := NewMap(context.Background(), vrw, ref1, Float(1))
 	require.NoError(t, err)
-	c2 := getChunks(l2)
+	c2 := getChunks(vrw.Format(), l2)
 	assert.Len(c2, 1)
 
-	ref2, err := NewRef(Float(1), Format_7_18)
+	ref2, err := NewRef(Float(1), vrw.Format())
 	require.NoError(t, err)
 	l3, err := NewMap(context.Background(), vrw, Float(0), ref2)
 	require.NoError(t, err)
-	c3 := getChunks(l3)
+	c3 := getChunks(vrw.Format(), l3)
 	assert.Len(c3, 1)
 }
 
@@ -1798,9 +1798,9 @@ func TestMapRefOfStructFirstNNumbers(t *testing.T) {
 
 	kvs := []Value{}
 	for i := 0; i < testMapSize; i++ {
-		k, err := vs.WriteValue(context.Background(), mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i)})))
+		k, err := vs.WriteValue(context.Background(), mustValue(NewStruct(vs.Format(), "num", StructData{"n": Float(i)})))
 		require.NoError(t, err)
-		v, err := vs.WriteValue(context.Background(), mustValue(NewStruct(Format_7_18, "num", StructData{"n": Float(i + 1)})))
+		v, err := vs.WriteValue(context.Background(), mustValue(NewStruct(vs.Format(), "num", StructData{"n": Float(i + 1)})))
 		require.NoError(t, err)
 		assert.NotNil(k)
 		assert.NotNil(v)
@@ -1895,16 +1895,16 @@ func TestCompoundMapWithValuesOfEveryType(t *testing.T) {
 		mustValue(NewSet(context.Background(), vrw, Bool(true))), v,
 		mustValue(NewList(context.Background(), vrw, Bool(true))), v,
 		mustValue(NewMap(context.Background(), vrw, Bool(true), Float(0))), v,
-		mustValue(NewStruct(Format_7_18, "", StructData{"field": Bool(true)})), v,
+		mustValue(NewStruct(vrw.Format(), "", StructData{"field": Bool(true)})), v,
 		// Refs of values
-		mustValue(NewRef(Bool(true), Format_7_18)), v,
-		mustValue(NewRef(Float(0), Format_7_18)), v,
-		mustValue(NewRef(String("hello"), Format_7_18)), v,
-		mustValue(NewRef(mustValue(NewBlob(context.Background(), vrw, bytes.NewBufferString("buf"))), Format_7_18)), v,
-		mustValue(NewRef(mustValue(NewSet(context.Background(), vrw, Bool(true))), Format_7_18)), v,
-		mustValue(NewRef(mustValue(NewList(context.Background(), vrw, Bool(true))), Format_7_18)), v,
-		mustValue(NewRef(mustValue(NewMap(context.Background(), vrw, Bool(true), Float(0))), Format_7_18)), v,
-		mustValue(NewRef(mustValue(NewStruct(Format_7_18, "", StructData{"field": Bool(true)})), Format_7_18)), v,
+		mustValue(NewRef(Bool(true), vrw.Format())), v,
+		mustValue(NewRef(Float(0), vrw.Format())), v,
+		mustValue(NewRef(String("hello"), vrw.Format())), v,
+		mustValue(NewRef(mustValue(NewBlob(context.Background(), vrw, bytes.NewBufferString("buf"))), vrw.Format())), v,
+		mustValue(NewRef(mustValue(NewSet(context.Background(), vrw, Bool(true))), vrw.Format())), v,
+		mustValue(NewRef(mustValue(NewList(context.Background(), vrw, Bool(true))), vrw.Format())), v,
+		mustValue(NewRef(mustValue(NewMap(context.Background(), vrw, Bool(true), Float(0))), vrw.Format())), v,
+		mustValue(NewRef(mustValue(NewStruct(vrw.Format(), "", StructData{"field": Bool(true)})), vrw.Format())), v,
 	}
 
 	m, err := NewMap(context.Background(), vrw, kvs...)
@@ -1991,7 +1991,7 @@ func TestMapIterFrom(t *testing.T) {
 	test := func(m Map, start, end Value) ValueSlice {
 		res := ValueSlice{}
 		err := m.IterFrom(context.Background(), start, func(k, v Value) (bool, error) {
-			isLess, err := end.Less(Format_7_18, k)
+			isLess, err := end.Less(vrw.Format(), k)
 
 			if err != nil {
 				return false, err
@@ -2007,7 +2007,7 @@ func TestMapIterFrom(t *testing.T) {
 		return res
 	}
 
-	kvs := generateNumbersAsValuesFromToBy(-50, 50, 1)
+	kvs := generateNumbersAsValuesFromToBy(vrw.Format(), -50, 50, 1)
 	m1, err := NewMap(context.Background(), vrw, kvs...)
 	require.NoError(t, err)
 	assert.True(kvs.Equals(test(m1, nil, Float(1000))))
@@ -2048,11 +2048,11 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	list := mustMap(NewMap(context.Background(), vrw,
 		String("one"),
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(1),
 		})),
 		String("two"),
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		}))),
@@ -2067,11 +2067,11 @@ func TestMapWithStructShouldHaveOptionalFields(t *testing.T) {
 
 	// transpose
 	list = mustMap(NewMap(context.Background(), vrw,
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(1),
 		})),
 		String("one"),
-		mustValue(NewStruct(Format_7_18, "Foo", StructData{
+		mustValue(NewStruct(vrw.Format(), "Foo", StructData{
 			"a": Float(2),
 			"b": String("bar"),
 		})),

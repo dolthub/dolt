@@ -19,7 +19,6 @@ RUN apt update -y && \
         wget \
         pkg-config \
         mysql-client \
-        mysql-server \
         libmysqlclient-dev \
         openjdk-8-jdk \
         ant \

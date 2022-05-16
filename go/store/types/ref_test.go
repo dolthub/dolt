@@ -36,7 +36,7 @@ func TestRefInList(t *testing.T) {
 
 	l, err := NewList(context.Background(), vs)
 	require.NoError(t, err)
-	r, err := NewRef(l, Format_7_18)
+	r, err := NewRef(l, vs.Format())
 	require.NoError(t, err)
 	l, err = l.Edit().Append(r).List(context.Background())
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestRefInSet(t *testing.T) {
 
 	s, err := NewSet(context.Background(), vs)
 	require.NoError(t, err)
-	r, err := NewRef(s, Format_7_18)
+	r, err := NewRef(s, vs.Format())
 	require.NoError(t, err)
 	se, err := s.Edit().Insert(r)
 	require.NoError(t, err)
@@ -70,7 +70,7 @@ func TestRefInMap(t *testing.T) {
 
 	m, err := NewMap(context.Background(), vs)
 	require.NoError(t, err)
-	r, err := NewRef(m, Format_7_18)
+	r, err := NewRef(m, vs.Format())
 	require.NoError(t, err)
 	m, err = m.Edit().Set(Float(0), r).Set(r, Float(1)).Map(context.Background())
 	require.NoError(t, err)
@@ -92,8 +92,8 @@ func TestRefChunks(t *testing.T) {
 
 	l, err := NewList(context.Background(), vs)
 	require.NoError(t, err)
-	r, err := NewRef(l, Format_7_18)
+	r, err := NewRef(l, vs.Format())
 	require.NoError(t, err)
-	assert.Len(getChunks(r), 1)
-	assert.Equal(r, getChunks(r)[0])
+	assert.Len(getChunks(vs.Format(), r), 1)
+	assert.Equal(r, getChunks(vs.Format(), r)[0])
 }

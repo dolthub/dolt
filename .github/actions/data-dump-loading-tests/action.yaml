@@ -1,0 +1,5 @@
+name: 'Dolt loading dump file integration tests'
+description: 'Smoke tests for loading dump file into Dolt'
+runs:
+  using: 'docker'
+  image: '../../../integration-tests/DataDumpLoadDockerfile'
