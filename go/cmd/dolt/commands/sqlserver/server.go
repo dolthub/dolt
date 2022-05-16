@@ -180,6 +180,7 @@ func Serve(
 		return err, nil
 	}
 
+	// TODO: look at users from MySQL DB
 	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
 	if len(users) == 0 && len(serverConfig.User()) > 0 {

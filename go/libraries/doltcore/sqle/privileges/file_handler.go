@@ -17,6 +17,7 @@ package privileges
 import (
 	"encoding/json"
 	"errors"
+	flatbuffers "github.com/google/flatbuffers/go"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -31,6 +32,7 @@ var (
 	fileMutex = &sync.Mutex{}
 )
 
+// TODO: decide on the right path
 const mysqlDbFilePath = "mysql.db"
 
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
@@ -128,13 +130,40 @@ func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.
 	return ioutil.WriteFile(filePath, jsonData, 0777)
 }
 
-func SaveData(ctx *sql.Context, data *mysql_db.MySQLDataJSON) error {
+func SaveData(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
+	// TODO: just completely rewrite the whole thing I guess
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
+	b := flatbuffers.NewBuilder(0)
+
+	// TODO: write users
+
+	// This is needlessly complicated...
+	// Start writing role_edges
+	serial.MySQLDbStartRoleEdgesVector(b, len(roles))
+	for _, roleEdge := range roles {
+		// Serialize each of the member vars in RoleEdge and save their offsets
+		fromHost := b.CreateString(roleEdge.FromHost)
+		fromUser := b.CreateString(roleEdge.FromUser)
+		toHost := b.CreateString(roleEdge.ToHost)
+		toUser := b.CreateString(roleEdge.ToUser)
+
+		// Write their offsets to flatbuffer builder
+		serial.RoleEdgeAddFromHost(b, fromHost)
+		serial.RoleEdgeAddFromUser(b, fromUser)
+		serial.RoleEdgeAddToHost(b, toHost)
+		serial.RoleEdgeAddToUser(b, toUser)
+
+		// Write WithAdminOption (boolean value doesn't need offset)
+		serial.RoleEdgeAddWithAdminOption(b, roleEdge.WithAdminOption)
 	}
+	// Save where the vector ends for mysql db
+	roleEdgeOffset := b.EndVector(len(roles))
+
+	// Start writing the MySQL DB
+	serial.MySQLDbStart(b)
+	serial.MySQLDbAddRoleEdges(b, roleEdgeOffset)
+
 	return ioutil.WriteFile(mysqlDbFilePath, jsonData, 0777)
 }
