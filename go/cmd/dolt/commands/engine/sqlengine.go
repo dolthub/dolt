@@ -287,7 +287,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(dsqle.DefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
 		if ok && val != "" {
 			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
@@ -314,7 +314,7 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		init.Err = fmt.Errorf("failed to connect to dolt_default_branch='%s' on database '%s'; %w", branch, db.Name(), err)
+		init.Err = fmt.Errorf("failed to connect to database default branch: '%s/%s'; %w", db.Name(), branch, err)
 	} else {
 		init.Err = nil
 	}
