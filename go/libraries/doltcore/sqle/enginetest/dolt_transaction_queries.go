@@ -27,7 +27,7 @@ import (
 var DoltTransactionTests = []enginetest.TransactionTest{
 	{
 		// Repro for https://github.com/dolthub/dolt/issues/3402
-		Name: "Changes from transactions are available before analyzing statements in other sessions (autocommit on)",
+		Name: "DDL changes from transactions are available before analyzing statements in other sessions (autocommit on)",
 		Assertions: []enginetest.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ select @@autocommit;",
