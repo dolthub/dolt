@@ -655,3 +655,91 @@ SQL
     [[ "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
 }
+
+@test "merge: non-conflicting merge can be performed even when existing conflicts and constraint violations exist" {
+    dolt sql <<SQL
+CREATE table parent (pk int PRIMARY KEY, col1 int);
+CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
+INSERT INTO parent VALUES (1, 1), (2, 1);
+SQL
+    dolt commit -am "create table with data";
+    dolt branch other
+    dolt branch other2
+    dolt sql -q "UPDATE parent SET col1 = 2 where pk = 1;"
+    dolt sql -q "DELETE FROM parent where pk = 2;"
+    dolt commit -am "updating col1 to 2 and remove pk = 2";
+
+    dolt checkout other
+    dolt sql -q "UPDATE parent SET col1 = 3 where pk = 1;"
+    dolt sql -q "INSERT INTO child VALUES (1, 2);"
+    dolt commit -am "updating col1 to 3 and adding child of pk 2";
+
+    dolt checkout other2
+    dolt sql -q "INSERT INTO parent values (3, 1);"
+    dolt commit -am "insert parent with pk 3"
+
+    dolt checkout main
+    # Create a conflicted state by merging other into main
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]]
+    dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
+    [[ "$output" =~ "1,1,2,1,3,1" ]]
+    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
+    [[ "$output" =~ "foreign key,1,2" ]]
+
+    # merge should be allowed and previous conflicts and violations should be retained
+    run dolt merge other2
+    [ "$status" -eq 0 ]
+    run dolt sql -r csv -q "SELECT * from parent where pk = 1;"
+    [[ $output =~ "1,2" ]]
+    run dolt sql -r csv -q "SELECT * from parent where pk = 2;"
+    [[ $output =~ "2,1" ]]
+    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
+    [[ $output =~ "1,1,2,1,3,1" ]]
+    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
+    [[ "$output" =~ "foreign key,1,2" ]]
+}
+
+@test "merge: conflicting merge should retain previous conflicts and constraint violations" {
+    dolt sql <<SQL
+CREATE table parent (pk int PRIMARY KEY, col1 int);
+CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
+INSERT INTO parent VALUES (1, 1), (2, 1);
+SQL
+    dolt commit -am "create table with data";
+    dolt branch other
+    dolt branch other2
+    dolt sql -q "UPDATE parent SET col1 = 2 where pk = 1;"
+    dolt sql -q "DELETE FROM parent where pk = 2;"
+    dolt commit -am "updating col1 to 2 and remove pk = 2";
+
+    dolt checkout other
+    dolt sql -q "UPDATE parent SET col1 = 3 where pk = 1;"
+    dolt sql -q "INSERT INTO child VALUES (1, 2);"
+    dolt commit -am "updating col1 to 3 and adding child of pk 2";
+
+    dolt checkout other2
+    dolt sql -q "UPDATE parent SET col1 = 4 where pk = 1;"
+    dolt commit -am "insert pk 2"
+
+    dolt checkout main
+    # Create a conflicted state by merging other into main
+    run dolt merge other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "CONFLICT" ]]
+    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
+    [[ "$output" =~ "1,1,2,1,3,1" ]]
+    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
+    [[ "$output" =~ "foreign key,1,2" ]]
+
+    # Merge should fail due to conflict and previous conflict and violation state should be retained
+    run dolt merge other2
+    sql -q ""
+    run dolt sql -r csv -q "SELECT * from t";
+    [[ $output =~ "1,1" ]]
+    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
+    [[ $output =~ "1,1,2,1,3,1" ]]
+    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
+    [[ "$output" =~ "foreign key,1,2" ]]
+}
