@@ -130,135 +130,124 @@ func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.
 	return ioutil.WriteFile(filePath, jsonData, 0777)
 }
 
-// SaveData writes Catalog data to a flatbuffer file
-// TODO: change input arguments
-func SaveData(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
-	// TODO: just completely rewrite the whole thing I guess
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
+// serializePrivilegeTypes writes the given PrivilegeTypes into the flatbuffer Builder using the given flatbuffer start function, and returns the offset
+// This helper function is used by PrivilegeSetColumn, PrivilegeSetTable, and PrivilegeSetDatabase
+func serializePrivilegeTypes(b *flatbuffers.Builder, StartPTVector func(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT, pts []sql.PrivilegeType) flatbuffers.UOffsetT {
+	// Order doesn't matter since it's a set of indexes
+	StartPTVector(b, len(pts))
+	for _, gs := range pts {
+		b.PrependInt32(int32(gs))
+	}
+	return b.EndVector(len(pts))
+}
 
-	b := flatbuffers.NewBuilder(0)
+// serializeVectorOffsets writes the given offsets slice to the flatbuffer Builder using the given start vector function, and returns the offset
+func serializeVectorOffsets(b *flatbuffers.Builder, StartVector func(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT, offsets []flatbuffers.UOffsetT) flatbuffers.UOffsetT {
+	// Expect the given offsets slice to already be in reverse order
+	StartVector(b, len(offsets))
+	for _, offset := range offsets {
+		b.PrependUOffsetT(offset)
+	}
+	return b.EndVector(len(offsets))
+}
 
-	// TODO: write users
+func serializeColumns(b *flatbuffers.Builder, columns []mysql_db.PrivilegeSetColumn) flatbuffers.UOffsetT {
+	// Write column variables, and save offsets
+	offsets := make([]flatbuffers.UOffsetT, len(columns))
+	for i, column := range columns {
+		name := b.CreateString(column.Name())
+		privs := serializePrivilegeTypes(b, serial.PrivilegeSetColumnStartPrivsVector, column.ToSlice())
 
-	// Serialize users
-	userOffsets := make([]flatbuffers.UOffsetT, len(users))
+		serial.PrivilegeSetColumnStart(b)
+		serial.PrivilegeSetColumnAddName(b, name)
+		serial.PrivilegeSetColumnAddPrivs(b, privs)
+		offsets[len(offsets)-i-1] = serial.PrivilegeSetColumnEnd(b) // reverse order
+	}
+	// Write column offsets (already reversed)
+	return serializeVectorOffsets(b, serial.PrivilegeSetTableStartColumnsVector, offsets)
+}
+
+func serializeTables(b *flatbuffers.Builder, tables []mysql_db.PrivilegeSetTable) flatbuffers.UOffsetT {
+	// Write table variables, and save offsets
+	offsets := make([]flatbuffers.UOffsetT, len(tables))
+	for i, table := range tables {
+		name := b.CreateString(table.Name())
+		privs := serializePrivilegeTypes(b, serial.PrivilegeSetTableStartPrivsVector, table.ToSlice())
+		cols := serializeColumns(b, table.GetColumns())
+
+		serial.PrivilegeSetTableStart(b)
+		serial.PrivilegeSetTableAddName(b, name)
+		serial.PrivilegeSetTableAddPrivs(b, privs)
+		serial.PrivilegeSetTableAddColumns(b, cols)
+		offsets[len(offsets)-i-1] = serial.PrivilegeSetTableEnd(b) // reverse order
+	}
+	// Write table offsets (order already reversed)
+	return serializeVectorOffsets(b, serial.PrivilegeSetDatabaseStartTablesVector, offsets)
+}
+
+// serializeDatabases writes the given Privilege Set Databases into the flatbuffer Builder, and returns the offset
+func serializeDatabases(b *flatbuffers.Builder, databases []mysql_db.PrivilegeSetDatabase) flatbuffers.UOffsetT {
+	// Write database variables, and save offsets
+	offsets := make([]flatbuffers.UOffsetT, len(databases))
+	for i, database := range databases {
+		name := b.CreateString(database.Name())
+		privs := serializePrivilegeTypes(b, serial.PrivilegeSetDatabaseStartPrivsVector, database.ToSlice())
+		tables := serializeTables(b, database.GetTables())
+
+		serial.PrivilegeSetDatabaseStart(b)
+		serial.PrivilegeSetDatabaseAddName(b, name)
+		serial.PrivilegeSetDatabaseAddPrivs(b, privs)
+		serial.PrivilegeSetDatabaseAddTables(b, tables)
+		offsets[len(offsets)-i-1] = serial.PrivilegeSetDatabaseEnd(b)
+	}
+
+	// Write database offsets (order already reversed)
+	return serializeVectorOffsets(b, serial.PrivilegeSetStartDatabasesVector, offsets)
+}
+
+func serializePrivilegeSet(b *flatbuffers.Builder, ps *mysql_db.PrivilegeSet) flatbuffers.UOffsetT {
+	// Write privilege set variables, and save offsets
+	globalStatic := serializePrivilegeTypes(b, serial.PrivilegeSetStartGlobalStaticVector, ps.ToSlice())
+	// TODO: Serialize global_dynamic (it seems like it's currently not used?)
+	databases := serializeDatabases(b, ps.GetDatabases())
+
+	// Write PrivilegeSet
+	serial.PrivilegeSetStart(b)
+	serial.PrivilegeSetAddGlobalStatic(b, globalStatic)
+	serial.PrivilegeSetAddDatabases(b, databases)
+	return serial.PrivilegeSetEnd(b)
+}
+
+func serializeUser(b *flatbuffers.Builder, users []*mysql_db.User) flatbuffers.UOffsetT {
+	// Write user variables, and save offsets
+	offsets := make([]flatbuffers.UOffsetT, len(users))
 	for i, user := range users {
-		// Serialize global_static; order doesn't matter since it's a set of indexes
-		globalStatics := user.PrivilegeSet.ToSlice()
-		serial.PrivilegeSetStartGlobalStaticVector(b, len(globalStatics))
-		for _, globalStatic := range globalStatics {
-			b.PrependInt32(int32(globalStatic))
-		}
-		globalStaticVectorOffset := b.EndVector(len(globalStatics))
-
-		// TODO: Serialize global_dynamic
-
-		// Serialize databases
-		databases := user.PrivilegeSet.GetDatabases()
-		for _, db := range databases {
-			// Serialize database name
-			dbNameOffset := b.CreateString(db.Name())
-
-			// Serialize database privs
-			dbPrivs := db.ToSlice()
-			serial.PrivilegeSetDatabaseStartPrivsVector(b, len(dbPrivs))
-			for _, priv := range dbPrivs {
-				b.PrependInt32(int32(priv))
-			}
-			dbPrivsOffset := b.EndVector(len(dbPrivs))
-
-			// Serialize database tables
-			tables := db.GetTables()
-			tableOffsets := make([]flatbuffers.UOffsetT, len(tables))
-			for _, table := range tables {
-				// Serialize table name
-				tableNameOffset := b.CreateString(table.Name())
-
-				// Serialize table privs
-				tablePrivs := table.ToSlice()
-				serial.PrivilegeSetTableStartPrivsVector(b, len(tablePrivs))
-				for _, priv := range tablePrivs {
-					b.PrependInt32(int32(priv))
-				}
-				tablePrivsOffset := b.EndVector(len(tablePrivs))
-
-				// Serialize table columns
-				tableCols := table.GetColumns()
-				tableColOffsets := make([]flatbuffers.UOffsetT, len(tableCols))
-				for i, col := range tableCols {
-					// Serialize column name
-					colNameOffset := b.CreateString(col.Name())
-
-					// Serialize column privs
-					colPrivs := col.ToSlice()
-					for _, priv := range colPrivs {
-						b.PrependInt32(int32(priv))
-					}
-					colPrivsOffset := b.EndVector(len(colPrivs))
-
-					// Write column, and save offset
-					serial.PrivilegeSetColumnStart(b)
-					serial.PrivilegeSetColumnAddName(b, colNameOffset)
-					serial.PrivilegeSetColumnAddPrivs(b, colPrivsOffset)
-					tableColOffsets[i] = serial.PrivilegeSetColumnEnd(b)
-				}
-
-				// Write table column offsets
-				serial.PrivilegeSetTableStartColumnsVector(b, len(tableColOffsets))
-				for _, colOffset := range tableColOffsets {
-					b.PrependUOffsetT(colOffset)
-				}
-				tableColsOffset := b.EndVector(len(tableColOffsets))
-
-				// Write table, and save offset
-				serial.PrivilegeSetTableStart(b)
-				serial.PrivilegeSetTableAddName(b, tableNameOffset)
-				serial.PrivilegeSetTableAddPrivs(b, tablePrivsOffset)
-				serial.PrivilegeSetTableAddColumns(b, tableColsOffset)
-				tableOffsets[i] = serial.PrivilegeSetTableEnd(b)
-			}
-
-			// Serialize table
-
-			serial.PrivilegeSetDatabaseStart(b)
-			serial.PrivilegeSetDatabaseAddName(b, dbNameOffset)
-			serial.PrivilegeSetDatabaseAddPrivs(b, dbPrivsOffset)
-			serial.PrivilegeSetDatabaseAddTables(b, tableOffsets)
-			serial.PrivilegeSetDatabaseEnd(b)
-		}
-
-		privSetDbPrivs := []int{}
-
-		serial.PrivilegeSetStartDatabasesVector(b)
-
-		serial.PrivilegeSetStart(b)
-		serial.PrivilegeSetEnd(b)
-		privilegeSet := 0
-
-		// Serialize string member variables
 		userName := b.CreateString(user.User)
 		host := b.CreateString(user.Host)
+		privilegeSet := serializePrivilegeSet(b, &user.PrivilegeSet)
 		plugin := b.CreateString(user.Plugin)
 		password := b.CreateString(user.Password)
 		attributes := b.CreateString(*user.Attributes)
 
-		// Write user, and save offset
 		serial.UserStart(b)
 		serial.UserAddUser(b, userName)
 		serial.UserAddHost(b, host)
-		serial.UserAddPrivilegeSet(b)
+		serial.UserAddPrivilegeSet(b, privilegeSet)
 		serial.UserAddPlugin(b, plugin)
 		serial.UserAddPassword(b, password)
+		serial.UserAddPasswordLastChanged(b, user.PasswordLastChanged.Unix())
+		serial.UserAddLocked(b, user.Locked)
 		serial.UserAddAttributes(b, attributes)
-		userOffsets[len(users)-i+1] = serial.UserEnd(b)
+		offsets[len(users)-i-1] = serial.UserEnd(b) // reverse order
 	}
 
-	serial.MySQLDbStartUserVector(b, len(users))
+	// Write user offsets (already in reverse order)
+	return serializeVectorOffsets(b, serial.MySQLDbStartUserVector, offsets)
+}
 
-	// Serialize role_edges
-	roleEdgeOffsets := make([]flatbuffers.UOffsetT, len(roles))
-	for i, roleEdge := range roles {
+func serializeRoleEdge(b *flatbuffers.Builder, roleEdges []*mysql_db.RoleEdge) flatbuffers.UOffsetT {
+	offsets := make([]flatbuffers.UOffsetT, len(roleEdges))
+	for i, roleEdge := range roleEdges {
 		// Serialize each of the member vars in RoleEdge and save their offsets
 		fromHost := b.CreateString(roleEdge.FromHost)
 		fromUser := b.CreateString(roleEdge.FromUser)
@@ -279,23 +268,33 @@ func SaveData(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEd
 
 		// End RoleEdge
 		offset := serial.RoleEdgeEnd(b)
-		roleEdgeOffsets[len(roles)-i+1] = offset // reverse order
+		offsets[len(roleEdges)-i-1] = offset // reverse order
 	}
 
-	// Write role_edges vector; slice is already reversed
-	serial.MySQLDbStartRoleEdgesVector(b, len(roles))
-	for _, offset := range roleEdgeOffsets {
-		b.PrependUOffsetT(offset)
-	}
-	roleEdgeVectorOffset := b.EndVector(len(roles))
+	// Write role_edges vector (already in reversed order)
+	return serializeVectorOffsets(b, serial.MySQLDbStartRoleEdgesVector, offsets)
+}
+
+// SaveData writes Catalog data to a flatbuffer file
+// TODO: change input arguments
+func SaveData(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
+	// TODO: just completely rewrite the whole thing I guess
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+
+	b := flatbuffers.NewBuilder(0)
+	user := serializeUser(b, users)
+	roleEdge := serializeRoleEdge(b, roles)
 
 	// Write MySQL DB
 	serial.MySQLDbStart(b)
-	serial.MySQLDbAddRoleEdges(b, roleEdgeVectorOffset)
+	serial.MySQLDbAddUser(b, user)
+	serial.MySQLDbAddRoleEdges(b, roleEdge)
 	mysqlDbOffset := serial.MySQLDbEnd(b)
+
+	// Finish writing
 	b.Finish(mysqlDbOffset)
 
 	// Save to file
-	buf := b.FinishedBytes()
-	return ioutil.WriteFile(mysqlDbFilePath, buf, 0777)
+	return ioutil.WriteFile(mysqlDbFilePath, b.FinishedBytes(), 0777)
 }
