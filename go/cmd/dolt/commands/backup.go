@@ -234,6 +234,9 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	backupName := strings.TrimSpace(apr.Arg(1))
 
 	backups, err := dEnv.GetBackups()
+	if err != nil {
+		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
+	}
 	b, ok := backups[backupName]
 	if !ok {
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
