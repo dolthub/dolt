@@ -62,6 +62,7 @@ const (
 	fileTypeParam     = "file-type"
 	delimParam        = "delim"
 	ignoreSkippedRows = "ignore-skipped-rows"
+	disableFkChecks   = "disable-fk-checks"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -85,7 +86,7 @@ A mapping file can be used to map fields between the file being imported and the
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
@@ -102,6 +103,7 @@ type importOptions struct {
 	src               mvdata.DataLocation
 	srcOptions        interface{}
 	ignoreSkippedRows bool
+	disableFkChecks   bool
 }
 
 func (m importOptions) IsBatched() bool {
@@ -164,6 +166,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
 	ignore := apr.Contains(ignoreSkippedRows)
+	disableFks := apr.Contains(disableFkChecks)
 
 	val, _ := apr.GetValue(primaryKeyParam)
 	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
@@ -229,15 +232,6 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		if !exists {
 			return nil, errhand.BuildDError("The following table could not be found: %s", tableName).Build()
 		}
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		decFks, refFks := fkc.KeysForTable(tableName)
-		if len(decFks) > 0 || len(refFks) > 0 {
-			return nil, errhand.BuildDError("The following table is used in a foreign key and does not work "+
-				"with import: %s\nThe recommended alternative is LOAD DATA", tableName).Build()
-		}
 	}
 
 	return &importOptions{
@@ -251,6 +245,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		src:               srcLoc,
 		srcOptions:        srcOpts,
 		ignoreSkippedRows: ignore,
+		disableFkChecks:   disableFks,
 	}, nil
 
 }
@@ -341,6 +336,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
+	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
@@ -462,7 +458,7 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 }
 
 func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
-	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation, DisableFks: imOpts.disableFkChecks}
 
 	// Returns the schema of the table to be created or the existing schema
 	tableSchema, dmce := getImportSchema(ctx, dEnv, imOpts)

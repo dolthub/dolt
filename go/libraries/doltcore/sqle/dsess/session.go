@@ -171,7 +171,7 @@ func (sess *Session) Flush(ctx *sql.Context, dbName string) error {
 	return sess.SetRoot(ctx, dbName, ws.WorkingRoot())
 }
 
-// CommitTransaction commits the in-progress transaction for the database named
+// StartTransaction refreshes the state of this session and starts a new transaction.
 func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacteristic sql.TransactionCharacteristic) (sql.Transaction, error) {
 	if TransactionsDisabled(ctx) {
 		return DisabledTransaction{}, nil

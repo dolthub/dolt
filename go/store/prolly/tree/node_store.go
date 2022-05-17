@@ -16,14 +16,11 @@ package tree
 
 import (
 	"context"
-	"fmt"
-	"sync"
-
-	"github.com/dolthub/dolt/go/store/types"
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -47,7 +44,7 @@ type NodeStore interface {
 
 type nodeStore struct {
 	store chunks.ChunkStore
-	cache *chunkCache
+	cache chunkCache
 	bp    pool.BuffPool
 }
 
@@ -104,176 +101,4 @@ func (ns nodeStore) Pool() pool.BuffPool {
 func (ns nodeStore) Format() *types.NomsBinFormat {
 	// todo(andy): read from |ns.store|
 	return types.Format_DOLT_1
-}
-
-type centry struct {
-	c    chunks.Chunk
-	i    int
-	prev *centry
-	next *centry
-}
-
-type chunkCache struct {
-	mu     *sync.Mutex
-	chunks map[hash.Hash]*centry
-	head   *centry
-	sz     int
-	maxSz  int
-	rev    int
-}
-
-func newChunkCache(maxSize int) *chunkCache {
-	return &chunkCache{
-		&sync.Mutex{},
-		make(map[hash.Hash]*centry),
-		nil,
-		0,
-		maxSize,
-		0,
-	}
-}
-
-func removeFromCList(e *centry) {
-	e.prev.next = e.next
-	e.next.prev = e.prev
-	e.prev = e
-	e.next = e
-}
-
-func (mc *chunkCache) moveToFront(e *centry) {
-	e.i = mc.rev
-	mc.rev++
-	if mc.head == e {
-		return
-	}
-	if mc.head != nil {
-		removeFromCList(e)
-		e.next = mc.head
-		e.prev = mc.head.prev
-		mc.head.prev = e
-		e.prev.next = e
-	}
-	mc.head = e
-}
-
-func (mc *chunkCache) get(h hash.Hash) (chunks.Chunk, bool) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	if e, ok := mc.chunks[h]; ok {
-		mc.moveToFront(e)
-		return e.c, true
-	} else {
-		return chunks.EmptyChunk, false
-	}
-}
-
-func (mc *chunkCache) getMany(hs hash.HashSet) ([]chunks.Chunk, hash.HashSet) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	absent := make(map[hash.Hash]struct{})
-	var found []chunks.Chunk
-	for h, _ := range hs {
-		if e, ok := mc.chunks[h]; ok {
-			mc.moveToFront(e)
-			found = append(found, e.c)
-		} else {
-			absent[h] = struct{}{}
-		}
-	}
-	return found, absent
-}
-
-func (mc *chunkCache) insert(c chunks.Chunk) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	mc.addIfAbsent(c)
-}
-
-func (mc *chunkCache) insertMany(cs []chunks.Chunk) {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	for _, c := range cs {
-		mc.addIfAbsent(c)
-	}
-}
-
-func (mc *chunkCache) addIfAbsent(c chunks.Chunk) {
-	if e, ok := mc.chunks[c.Hash()]; !ok {
-		e := &centry{c, 0, nil, nil}
-		e.next = e
-		e.prev = e
-		mc.moveToFront(e)
-		mc.chunks[c.Hash()] = e
-		mc.sz += c.Size()
-		mc.shrinkToMaxSz()
-	} else {
-		mc.moveToFront(e)
-	}
-}
-
-func (mc *chunkCache) Len() int {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	return len(mc.chunks)
-}
-
-func (mc *chunkCache) Size() int {
-	mc.mu.Lock()
-	defer mc.mu.Unlock()
-	return mc.sz
-}
-
-func (mc *chunkCache) shrinkToMaxSz() {
-	for mc.sz > mc.maxSz {
-		if mc.head != nil {
-			t := mc.head.prev
-			removeFromCList(t)
-			if t == mc.head {
-				mc.head = nil
-			}
-			delete(mc.chunks, t.c.Hash())
-			mc.sz -= t.c.Size()
-		} else {
-			panic("cache is empty but cache Size is > than max Size")
-		}
-	}
-}
-
-func (mc *chunkCache) sanityCheck() {
-	if mc.head != nil {
-		p := mc.head.next
-		i := 1
-		sz := mc.head.c.Size()
-		lasti := mc.head.i
-		for p != mc.head {
-			i++
-			sz += p.c.Size()
-			if p.i >= lasti {
-				panic("encountered lru list entry with higher rev later in the list.")
-			}
-			p = p.next
-		}
-		if i != len(mc.chunks) {
-			panic(fmt.Sprintf("cache lru list has different Size than cache.chunks. %d vs %d", i, len(mc.chunks)))
-		}
-		if sz != mc.sz {
-			panic("entries reachable from lru list have different Size than cache.sz.")
-		}
-		j := 1
-		p = mc.head.prev
-		for p != mc.head {
-			j++
-			p = p.prev
-		}
-		if j != i {
-			panic("length of list backwards is not equal to length of list forward")
-		}
-	} else {
-		if len(mc.chunks) != 0 {
-			panic("lru list is empty but mc.chunks is not")
-		}
-		if mc.sz != 0 {
-			panic("lru list is empty but mc.sz is not 0")
-		}
-	}
 }

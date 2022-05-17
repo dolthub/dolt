@@ -17,6 +17,8 @@ package skip
 import (
 	"math"
 	"math/rand"
+
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -33,9 +35,8 @@ type List struct {
 	count uint32
 
 	checkpoint nodeId
-
-	cmp ValueCmp
-	src rand.Source
+	cmp        ValueCmp
+	salt       uint64
 }
 
 type ValueCmp func(left, right []byte) int
@@ -56,23 +57,22 @@ type skipNode struct {
 }
 
 func NewSkipList(cmp ValueCmp) *List {
-	// todo(andy): buffer pool
-	nodes := make([]skipNode, 1, 128)
+	nodes := make([]skipNode, 0, 8)
 
 	// initialize sentinel node
-	nodes[sentinelId] = skipNode{
+	nodes = append(nodes, skipNode{
 		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
 		next:   skipPointer{},
 		prev:   sentinelId,
-	}
+	})
 
 	return &List{
 		nodes:      nodes,
 		checkpoint: nodeId(1),
 		cmp:        cmp,
-		src:        rand.NewSource(0),
+		salt:       rand.Uint64(),
 	}
 }
 
@@ -190,7 +190,7 @@ func (l *List) insert(key, value []byte, path skipPointer) {
 		key:    key,
 		val:    value,
 		id:     l.nextNodeId(),
-		height: rollHeight(l.src),
+		height: rollHeight(key, l.salt),
 	}
 	l.nodes = append(l.nodes, novel)
 
@@ -358,8 +358,8 @@ const (
 	pattern3 = uint64(1<<12 - 1)
 )
 
-func rollHeight(r rand.Source) (h uint8) {
-	roll := r.Int63()
+func rollHeight(key []byte, salt uint64) (h uint8) {
+	roll := xxh3.HashSeed(key, salt)
 	patterns := []uint64{
 		pattern0,
 		pattern1,
@@ -375,10 +375,4 @@ func rollHeight(r rand.Source) (h uint8) {
 	}
 
 	return
-}
-
-func assertTrue(b bool) {
-	if !b {
-		panic("expected true")
-	}
 }
