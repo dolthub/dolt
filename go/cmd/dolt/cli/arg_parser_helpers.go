@@ -77,6 +77,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
+	DryRunFlag       = "dry-run"
 	SetUpstreamFlag  = "set-upstream"
 	AllFlag          = "all"
 	HardResetParam   = "hard"
@@ -135,6 +136,12 @@ func CreateResetArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(HardResetParam, "", "Resets the working tables and staged tables. Any changes to tracked tables in the working tree since {{.LessThan}}commit{{.GreaterThan}} are discarded.")
 	ap.SupportsFlag(SoftResetParam, "", "Does not touch the working tables, but removes all tables staged to be committed.")
+	return ap
+}
+
+func CreateCleanArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")
 	return ap
 }
 
