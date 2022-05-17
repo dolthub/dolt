@@ -391,7 +391,7 @@ func execShell(
 	}
 	defer se.Close()
 
-	// TODO: Load MySQL db here
+	// Load MySQL db
 	se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
 	err = se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), nil, nil)
 	if err != nil {
