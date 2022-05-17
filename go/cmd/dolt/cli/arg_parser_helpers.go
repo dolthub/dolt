@@ -94,6 +94,14 @@ const (
 	DeleteForceFlag  = "D"
 )
 
+const (
+	SyncBackupId        = "sync"
+	RestoreBackupId     = "restore"
+	AddBackupId         = "add"
+	RemoveBackupId      = "remove"
+	RemoveBackupShortId = "rm"
+)
+
 var mergeAbortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
 
 If there were uncommitted working set changes present when the merge started, {{.EmphasisLeft}}dolt merge --abort{{.EmphasisRight}} will be unable to reconstruct these changes. It is therefore recommended to always commit or stash your changes before running dolt merge.

@@ -853,7 +853,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData
 	sessionState.tmpFileDir = dbState.DbData.Rsw.TempTableFilesDir()
-	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches)
+	adapter := NewSessionStateAdapter(sess, db.Name(), dbState.Remotes, dbState.Branches, dbState.Backups)
 	sessionState.dbData.Rsr = adapter
 	sessionState.dbData.Rsw = adapter
 	sessionState.readOnly, sessionState.readReplica = dbState.ReadOnly, dbState.ReadReplica

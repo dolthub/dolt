@@ -73,14 +73,6 @@ Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}
 
 type BackupCmd struct{}
 
-const (
-	syncBackupId        = "sync"
-	restoreBackupId     = "restore"
-	addBackupId         = "add"
-	removeBackupId      = "remove"
-	removeBackupShortId = "rm"
-)
-
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd BackupCmd) Name() string {
 	return "backup"
@@ -121,15 +113,15 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	switch {
 	case apr.NArg() == 0:
 		verr = printBackups(dEnv, apr)
-	case apr.Arg(0) == addBackupId:
+	case apr.Arg(0) == cli.AddBackupId:
 		verr = addBackup(dEnv, apr)
-	case apr.Arg(0) == removeBackupId:
+	case apr.Arg(0) == cli.RemoveBackupId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == removeBackupShortId:
+	case apr.Arg(0) == cli.RemoveBackupShortId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == syncBackupId:
+	case apr.Arg(0) == cli.SyncBackupId:
 		verr = syncBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == restoreBackupId:
+	case apr.Arg(0) == cli.RestoreBackupId:
 		verr = restoreBackup(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()

@@ -22,6 +22,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/store/datas/pull"
 )
 
 const DoltBackupFuncName = "dolt_backup"
@@ -64,15 +67,59 @@ func (d DoltBackupFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error)
 
 func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 	dbName := ctx.GetCurrentDatabase()
-
 	if len(dbName) == 0 {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
-	_, err := cli.CreateBackupArgParser().Parse(args)
+	apr, err := cli.CreateBackupArgParser().Parse(args)
 	if err != nil {
 		return 1, err
 	}
 
-	return 1, fmt.Errorf("unimplemented")
+	switch {
+	case apr.NArg() == 0:
+		return 1, fmt.Errorf("listing existing backups endpoints in sql is unimplemented.")
+	case apr.Arg(0) == cli.AddBackupId:
+		return 1, fmt.Errorf("adding backup endpoint in sql is unimplemented.")
+	case apr.Arg(0) == cli.RemoveBackupId:
+		return 1, fmt.Errorf("removing backup endpoint in sql is unimplemented.")
+	case apr.Arg(0) == cli.RemoveBackupShortId:
+		return 1, fmt.Errorf("removing backup endpoint in sql is unimplemented.")
+	case apr.Arg(0) == cli.RestoreBackupId:
+		return 1, fmt.Errorf("restoring backup endpoint in sql is unimplemented.")
+	case apr.Arg(0) == cli.SyncBackupId:
+		if apr.NArg() != 2 {
+			return 1, fmt.Errorf("usage: dolt_backup('sync', BACKUP_NAME)")
+		}
+
+		backupName := strings.TrimSpace(apr.Arg(1))
+
+		sess := dsess.DSessFromSess(ctx.Session)
+		dbData, ok := sess.GetDbData(ctx, dbName)
+		if !ok {
+			return 1, sql.ErrDatabaseNotFound.New(dbName)
+		}
+
+		backups, err := dbData.Rsr.GetBackups()
+		if err != nil {
+			return 1, err
+		}
+		b, ok := backups[backupName]
+		if !ok {
+			return 1, fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
+		}
+
+		destDb, err := b.GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format())
+		if err != nil {
+			return 1, fmt.Errorf("error loading backup destination: %w", err)
+		}
+
+		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dbData.Rsw.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
+		if err != nil && err != pull.ErrDBUpToDate {
+			return 1, fmt.Errorf("error syncing backup: %w", err)
+		}
+		return 0, nil
+	default:
+		return 1, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
+	}
 }
