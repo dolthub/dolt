@@ -17,10 +17,11 @@ package privileges
 import (
 	"encoding/json"
 	"errors"
-	flatbuffers "github.com/google/flatbuffers/go"
 	"io/ioutil"
 	"os"
 	"sync"
+
+	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
