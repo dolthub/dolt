@@ -102,16 +102,7 @@ func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 }
 
 func (cmd BackupCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this backup."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
-	ap.SupportsFlag(verboseFlag, "v", "When printing the list of backups adds additional details.")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
-	return ap
+	return cli.CreateBackupArgParser()
 }
 
 // EventType returns the type of the event to log
