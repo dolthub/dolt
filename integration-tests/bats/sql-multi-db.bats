@@ -98,6 +98,7 @@ seed_repos_with_tables_with_use_statements() {
 }
 
 @test "sql-multi-db: fetch multiple databases with appropriate tempdir" {
+    skip_nbf_dolt_1
     seed_repos_with_tables_with_use_statements
     mkdir remote1
     mkdir -p subremotes/repo1

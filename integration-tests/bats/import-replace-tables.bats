@@ -308,6 +308,7 @@ SQL
     dolt add .
     dolt commit --allow-empty -m "update table from parquet file"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false

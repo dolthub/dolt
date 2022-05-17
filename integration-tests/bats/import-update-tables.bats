@@ -328,6 +328,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Modifications: 3" ]] || falsa
 
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 0 ]
@@ -415,6 +416,7 @@ DELIM
     dolt add .
     dolt commit --allow-empty -m "update table from parquet file"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false

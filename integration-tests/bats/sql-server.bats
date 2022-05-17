@@ -978,6 +978,7 @@ END""")
 
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir rem1
     cd repo1
@@ -997,6 +998,7 @@ END""")
 
 @test "sql-server: replicate to backup after sql-session commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir bac1
     cd repo1
@@ -1181,6 +1183,7 @@ END""")
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir remote1
     cd repo2
