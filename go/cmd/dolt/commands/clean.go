@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,15 +31,15 @@ const (
 
 var cleanDocContent = cli.CommandDocumentationContent{
 	ShortDesc: "Deletes untracked working tables",
-	LongDesc: "{{.EmphasisLeft}}dolt clean <tables>...{{.EmphasisRight}}" +
-		"\n\n" +
+	LongDesc: "{{.EmphasisLeft}}dolt clean [--dry-run]{{.EmphasisRight}}\n\n" +
 		"The default (parameterless) form clears the values for all untracked working {{.LessThan}}tables{{.GreaterThan}} ." +
 		"This command permanently deletes unstaged or uncommitted tables.\n\n" +
 		"The {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} flag can be used to test whether the clean can succeed without " +
 		"deleting any tables from the current working set.\n\n" +
-		"If {{.LessThan}}tables{{.GreaterThan}} is specified, only those table names are considered for deleting. " +
-		"Can be used with the {{.EmphasisLeft}}--dry-run{{.EmphasisRight}} flag.\n\n",
+		"{{.EmphasisLeft}}dolt clean [--dry-run] {{.LessThan}}tables{{.GreaterThan}}...{{.EmphasisRight}}\n\n" +
+		"If {{.LessThan}}tables{{.GreaterThan}} is specified, only those table names are considered for deleting.\n\n",
 	Synopsis: []string{
+		"[--dry-run]",
 		"[--dry-run] {{.LessThan}}tables{{.GreaterThan}}...",
 	},
 }

@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// dolt_commit is the stored procedure version of the functions `commit` and `dolt_commit`.
-func dolt_commit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltCommit is the stored procedure version of the functions `commit` and `dolt_commit`.
+func doltCommit(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltCommit(ctx, args)
 	if err != nil {
 		return nil, err

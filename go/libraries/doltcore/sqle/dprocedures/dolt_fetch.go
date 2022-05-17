@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_fetch is the stored procedure version of the function `dolt_fetch`.
-func dolt_fetch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltFetch is the stored procedure version of the function `dolt_fetch`.
+func doltFetch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltFetch(ctx, args)
 	if err != nil {
 		return nil, err

@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_reset is the stored procedure version of the function `dolt_reset`.
-func dolt_clean(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltClean is the stored procedure version of the function `dolt_clean`.
+func doltClean(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltClean(ctx, args)
 	if err != nil {
 		return nil, err
