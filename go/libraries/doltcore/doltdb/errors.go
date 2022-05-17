@@ -46,10 +46,8 @@ var ErrUpToDate = errors.New("up to date")
 var ErrIsAhead = errors.New("current fast forward from a to b. a is ahead of b already")
 var ErrIsBehind = errors.New("cannot reverse from b to a. b is a is behind a already")
 
-var ErrUnresolvedConflictsAutocommit = errors.New("merge conflict with autocommit on. Aborting merge. To resolve conflicts with dolt_merge, do so in a single transaction. To SQL commit conflicts set @@dolt_allow_commit_conflicts=1")
 var ErrUnresolvedConflicts = errors.New("merge has unresolved conflicts. please use the dolt_conflicts table to resolve")
 var ErrUnresolvedConstraintViolations = errors.New("merge has unresolved constraint violations. please use the dolt_constraint_violations table to resolve")
-var ErrUnresolvedConstraintViolationsAutocommit = errors.New("merge has constraint violations with autocommit on. Aborting merge. To resolve constraint violations with dolt_merge, do so in a single transaction. To SQL commit conflicts set @@dolt_allow_commit_conflicts=1")
 var ErrMergeActive = errors.New("merging is not possible because you have not committed an active merge")
 
 type ErrClientOutOfDate struct {

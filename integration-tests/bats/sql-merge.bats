@@ -642,7 +642,7 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge conflict with autocommit on. Aborting merge. To resolve conflicts with dolt_merge, do so in a single transaction. To SQL commit conflicts set @@dolt_allow_commit_conflicts=1" ]] || false
+    [[ $output =~ "Merge conflict detected, aborting merge. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
@@ -693,7 +693,7 @@ CALL DOLT_CHECKOUT('main');
 CALL DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge conflict with autocommit on. Aborting merge. To resolve conflicts with dolt_merge, do so in a single transaction. To SQL commit conflicts set @@dolt_allow_commit_conflicts=1" ]] || false
+    [[ $output =~ "Merge conflict detected, aborting merge. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
@@ -743,7 +743,7 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge conflict with autocommit on. Aborting merge. To resolve conflicts with dolt_merge, do so in a single transaction. To SQL commit conflicts set @@dolt_allow_commit_conflicts=1" ]] || false
+    [[ $output =~ "Merge conflict detected, aborting merge. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     # back on the command line, our session state is clean
     run dolt status
