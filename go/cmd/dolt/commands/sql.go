@@ -448,16 +448,32 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	// temporary user
+	tempUsers := []gms.TemporaryUser{{
+		Username: "root",
+		Password: "",
+	}}
+
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, tempUsers, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 	defer se.Close()
 
+	// Load MySQL db
+	se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
+	err = se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), nil, nil)
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
+
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
