@@ -36,7 +36,7 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_default_branch = 'to_keep'"
+    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'"
 
     server_query "dolt_repo_$$"  1 'delete from dolt_branches where name = "main"' ""
 
@@ -63,7 +63,7 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_default_branch = 'this_branch_does_not_exist'"
+    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'"
 
     # Against the default branch it fails
     run server_query "dolt_repo_$$" 1 "SELECT * FROM test" ""
@@ -78,7 +78,7 @@ make_it() {
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_default_branch = 'this_branch_does_not_exist'"
+    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_repo_$$_default_branch = 'this_branch_does_not_exist'"
 
     multi_query "dolt_repo_$$/main" 1 "
 SELECT * FROM test;
@@ -101,14 +101,14 @@ SELECT DOLT_CHECKOUT('to_checkout');
 SELECT * FROM test;"
 }
 
-@test "deleted-branches: can DOLT_CHECKOUT on SQL connecttion with dolt_default_branch set to existing branch when checked out branch is deleted" {
+@test "deleted-branches: can DOLT_CHECKOUT on SQL connection with dolt_default_branch set to existing branch when checked out branch is deleted" {
     make_it
 
     dolt branch -c to_keep to_checkout
 
     start_sql_server "dolt_repo_$$"
 
-    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_default_branch = 'to_keep'"
+    server_query "dolt_repo_$$" 1 "SET @@GLOBAL.dolt_repo_$$_default_branch = 'to_keep'"
 
     server_query "dolt_repo_$$"  1 'delete from dolt_branches where name = "main"' ""
 

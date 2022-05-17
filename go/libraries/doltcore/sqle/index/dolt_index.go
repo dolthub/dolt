@@ -34,9 +34,8 @@ type DoltIndex interface {
 	sql.FilteredIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
-	TableData() durable.Index
-	IndexRowData() durable.Index
 	Format() *types.NomsBinFormat
+	GetDurableIndexes(*sql.Context, *doltdb.Table) (durable.Index, durable.Index, error)
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -69,23 +68,21 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	if err != nil {
 		return nil, err
 	}
-
-	cols := sch.GetPKCols().GetColumns()
 	keyBld := maybeGetKeyBuilder(tableRows)
 
+	cols := sch.GetPKCols().GetColumns()
+
 	return doltIndex{
-		id:        "PRIMARY",
-		tblName:   tbl,
-		dbName:    db,
-		columns:   cols,
-		indexSch:  sch,
-		tableSch:  sch,
-		unique:    true,
-		comment:   "",
-		indexRows: tableRows,
-		tableRows: tableRows,
-		vrw:       t.ValueReadWriter(),
-		keyBld:    keyBld,
+		id:       "PRIMARY",
+		tblName:  tbl,
+		dbName:   db,
+		columns:  cols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
 	}, nil
 }
 
@@ -94,32 +91,24 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	if err != nil {
 		return nil, err
 	}
-
-	tableRows, err := t.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
+	keyBld := maybeGetKeyBuilder(indexRows)
 
 	cols := make([]schema.Column, idx.Count())
 	for i, tag := range idx.IndexedColumnTags() {
 		cols[i], _ = idx.GetColumn(tag)
 	}
 
-	keyBld := maybeGetKeyBuilder(indexRows)
-
 	return doltIndex{
-		id:        idx.Name(),
-		tblName:   tbl,
-		dbName:    db,
-		columns:   cols,
-		indexSch:  idx.Schema(),
-		tableSch:  sch,
-		unique:    idx.IsUnique(),
-		comment:   idx.Comment(),
-		indexRows: indexRows,
-		tableRows: tableRows,
-		vrw:       t.ValueReadWriter(),
-		keyBld:    keyBld,
+		id:       idx.Name(),
+		tblName:  tbl,
+		dbName:   db,
+		columns:  cols,
+		indexSch: idx.Schema(),
+		tableSch: sch,
+		unique:   idx.IsUnique(),
+		comment:  idx.Comment(),
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
 	}, nil
 }
 
@@ -130,12 +119,10 @@ type doltIndex struct {
 
 	columns []schema.Column
 
-	indexSch  schema.Schema
-	tableSch  schema.Schema
-	indexRows durable.Index
-	tableRows durable.Index
-	unique    bool
-	comment   string
+	indexSch schema.Schema
+	tableSch schema.Schema
+	unique   bool
+	comment  string
 
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
@@ -166,6 +153,22 @@ func (di doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexL
 	}
 
 	return di.newNomsLookup(ctx, ranges...)
+}
+
+func (di doltIndex) GetDurableIndexes(ctx *sql.Context, t *doltdb.Table) (primary, secondary durable.Index, err error) {
+	primary, err = t.GetRowData(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if di.ID() == "PRIMARY" {
+		secondary = primary
+	} else {
+		secondary, err = t.GetIndexRowData(ctx, di.ID())
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return
 }
 
 func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
@@ -355,16 +358,6 @@ func (di doltIndex) IndexSchema() schema.Schema {
 // Table implements sql.Index
 func (di doltIndex) Table() string {
 	return di.tblName
-}
-
-// TableData returns the map of Table data for this index (the map of the target Table, not the index storage Table)
-func (di doltIndex) TableData() durable.Index {
-	return di.tableRows
-}
-
-// IndexRowData returns the map of index row data.
-func (di doltIndex) IndexRowData() durable.Index {
-	return di.indexRows
 }
 
 func (di doltIndex) Format() *types.NomsBinFormat {

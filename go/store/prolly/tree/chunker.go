@@ -61,7 +61,6 @@ func newChunker[S message.Serializer](ctx context.Context, cur *Cursor, level in
 
 	splitter := defaultSplitterFactory(uint8(level % 256))
 	builder := newNodeBuilder(serializer, level)
-	builder.startNode()
 
 	sc := &chunker[S]{
 		cur:        cur,
@@ -324,7 +323,6 @@ func (tc *chunker[S]) handleChunkBoundary(ctx context.Context) error {
 	}
 
 	tc.splitter.Reset()
-	tc.builder.startNode()
 
 	return nil
 }

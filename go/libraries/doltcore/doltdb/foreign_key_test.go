@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestForeignKeys(t *testing.T) {
@@ -37,6 +38,7 @@ func TestForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeyErrors(t *testing.T) {
+	skipNewFormat(t)
 	cmds := []testCommand{
 		{commands.SqlCmd{}, []string{"-q", `CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));`}},
 		{commands.SqlCmd{}, []string{"-q", `CREATE TABLE test2(pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1),` +
@@ -55,6 +57,12 @@ func TestForeignKeyErrors(t *testing.T) {
 	require.Equal(t, 1, exitCode)
 	exitCode = commands.SqlCmd{}.Exec(ctx, commands.SqlCmd{}.Name(), []string{"-q", `ALTER TABLE test2 MODIFY v1 INT;`}, dEnv)
 	require.Equal(t, 1, exitCode)
+}
+
+func skipNewFormat(t *testing.T) {
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 }
 
 type foreignKeyTest struct {

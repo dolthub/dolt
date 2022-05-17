@@ -80,7 +80,7 @@ func accumulateOrderedSequenceDiffChanges(o1, o2 orderedSequence, df diffFn) (ad
 func (suite *diffTestSuite) TestDiff() {
 	vs := newTestValueStore()
 
-	type valFn func(int, int, int) ValueSlice
+	type valFn func(*NomsBinFormat, int, int, int) ValueSlice
 	type colFn func([]Value) (Collection, error)
 
 	notNil := func(vs []Value) bool {
@@ -93,9 +93,9 @@ func (suite *diffTestSuite) TestDiff() {
 	}
 
 	runTestDf := func(name string, vf valFn, cf colFn, df diffFn) {
-		col1, err := cf(vf(suite.from1, suite.to1, suite.by1))
+		col1, err := cf(vf(vs.Format(), suite.from1, suite.to1, suite.by1))
 		suite.NoError(err)
-		col2, err := cf(vf(suite.from2, suite.to2, suite.by2))
+		col2, err := cf(vf(vs.Format(), suite.from2, suite.to2, suite.by2))
 		suite.NoError(err)
 		suite.added, suite.removed, suite.modified, err = accumulateOrderedSequenceDiffChanges(
 			col1.asSequence().(orderedSequence),
@@ -223,7 +223,7 @@ func TestOrderedSequencesDiffCloseWithoutReading(t *testing.T) {
 		require.NoError(t, err)
 		s1 := set1.orderedSequence
 		// A single item should be enough, but generate lots anyway.
-		set2, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(0, 1000, 1)...)
+		set2, err := NewSet(context.Background(), vs, generateNumbersAsValuesFromToBy(vs.Format(), 0, 1000, 1)...)
 		require.NoError(t, err)
 		s2 := set2.orderedSequence
 
@@ -266,7 +266,7 @@ func TestOrderedSequenceDiffWithMetaNodeGap(t *testing.T) {
 			return metaTuple{}, err
 		}
 
-		ordKey, err := newOrderedKey(v[len(v)-1], Format_7_18)
+		ordKey, err := newOrderedKey(v[len(v)-1], vrw.Format())
 
 		if err != nil {
 			return metaTuple{}, err

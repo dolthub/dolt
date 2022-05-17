@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -66,35 +65,15 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		return nil, err
 	}
 
-	sch = schema.MustSchemaFromCols(sch.GetAllCols().Append(
-		schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-		schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false)))
-
-	if sch.GetAllCols().Size() <= 1 {
-		return nil, sql.ErrTableNotFound.New(diffTblName)
-	}
-
-	j, err := rowconv.NewJoiner(
-		[]rowconv.NamedSchema{{Name: diff.To, Sch: sch}, {Name: diff.From, Sch: sch}},
-		map[string]rowconv.ColNamingFunc{
-			diff.To:   diff.ToColNamer,
-			diff.From: diff.FromColNamer,
-		})
+	diffTableSchema, j, err := GetDiffTableSchemaAndJoiner(ddb.Format(), sch, sch)
 	if err != nil {
 		return nil, err
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, j.GetSchema())
+	sqlSch, err := sqlutil.FromDoltSchema(diffTblName, diffTableSchema)
 	if err != nil {
 		return nil, err
 	}
-
-	sqlSch.Schema = append(sqlSch.Schema, &sql.Column{
-		Name:     diffTypeColName,
-		Type:     sql.Text,
-		Nullable: false,
-		Source:   diffTblName,
-	})
 
 	return &CommitDiffTable{
 		name:         tblName,

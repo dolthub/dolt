@@ -44,7 +44,7 @@ func (coll *KVPCollection) String() string {
 		d.PanicIfError(err)
 	}
 
-	tpl, err := types.NewTuple(types.Format_7_18, keys...)
+	tpl, err := types.NewTuple(coll.nbf, keys...)
 	d.PanicIfError(err)
 
 	str, err := types.EncodedValue(ctx, tpl)
@@ -55,13 +55,14 @@ func (coll *KVPCollection) String() string {
 
 func TestKVPCollection(t *testing.T) {
 	rng := rand.New(rand.NewSource(0))
-	testKVPCollection(t, rng)
+	nbf := types.Format_Default
+	testKVPCollection(t, nbf, rng)
 
 	for i := 0; i < 64; i++ {
 		seed := time.Now().UnixNano()
 		t.Log(seed)
 		rng := rand.New(rand.NewSource(seed))
-		testKVPCollection(t, rng)
+		testKVPCollection(t, nbf, rng)
 	}
 }
 
@@ -109,7 +110,7 @@ func TestKVPCollectionDestructiveMergeStable(t *testing.T) {
 	assert.Equal(t, io.EOF, err)
 }
 
-func testKVPCollection(t *testing.T, rng *rand.Rand) {
+func testKVPCollection(t *testing.T, nbf *types.NomsBinFormat, rng *rand.Rand) {
 	const (
 		maxSize = 1024
 		minSize = 4
@@ -125,12 +126,12 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 	t.Log("num collections:", numColls, "- buffer size", size)
 
 	for i := 0; i < numColls; i++ {
-		colls[i] = createKVPColl(rng, size)
+		colls[i] = createKVPColl(nbf, rng, size)
 	}
 
 	for len(colls) > 1 {
 		for i, coll := range colls {
-			inOrder, _, err := IsInOrder(NewItr(types.Format_7_18, coll))
+			inOrder, _, err := IsInOrder(nbf, NewItr(nbf, coll))
 			assert.NoError(t, err)
 			if !inOrder {
 				t.Fatal(i, "not in order")
@@ -162,7 +163,7 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 		colls = newColls
 	}
 
-	inOrder, numItems, err := IsInOrder(NewItr(types.Format_7_18, colls[0]))
+	inOrder, numItems, err := IsInOrder(nbf, NewItr(nbf, colls[0]))
 	assert.NoError(t, err)
 	if !inOrder {
 		t.Fatal("collection not in order")
@@ -171,14 +172,14 @@ func testKVPCollection(t *testing.T, rng *rand.Rand) {
 	}
 }
 
-func createKVPColl(rng *rand.Rand, size int) *KVPCollection {
+func createKVPColl(nbf *types.NomsBinFormat, rng *rand.Rand, size int) *KVPCollection {
 	kvps := make(types.KVPSlice, size)
 
 	for i := 0; i < size; i++ {
 		kvps[i] = types.KVP{Key: types.Uint(rng.Uint64() % 10000), Val: types.NullValue}
 	}
 
-	types.SortWithErroringLess(types.KVPSort{Values: kvps, NBF: types.Format_7_18})
+	types.SortWithErroringLess(types.KVPSort{Values: kvps, NBF: nbf})
 
-	return NewKVPCollection(types.Format_7_18, kvps)
+	return NewKVPCollection(nbf, kvps)
 }

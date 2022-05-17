@@ -117,7 +117,7 @@ func (s *ThreeWayStructMergeSuite) SetupSuite() {
 				fields[kv[i].(string)], err = valToTypesValue(s.create, kv[i+1])
 				s.NoError(err)
 			}
-			val, err = types.NewStruct(types.Format_7_18, "TestStruct", fields)
+			val, err = types.NewStruct(types.Format_Default, "TestStruct", fields)
 		}
 		return val, err
 	}
@@ -149,7 +149,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RecursiveMerge() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefMerge() {
-	st, err := types.NewStruct(types.Format_7_18, "Foo", types.StructData{"life": types.Float(42)})
+	st, err := types.NewStruct(types.Format_Default, "Foo", types.StructData{"life": types.Float(42)})
 	s.NoError(err)
 	strRef, err := s.vs.WriteValue(context.Background(), st)
 	s.NoError(err)
@@ -243,7 +243,7 @@ func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_ImmediateConflict() {
 }
 
 func (s *ThreeWayKeyValMergeSuite) TestThreeWayMerge_RefConflict() {
-	strRef, err := s.vs.WriteValue(context.Background(), mustValue(types.NewStruct(types.Format_7_18, "Foo", types.StructData{"life": types.Float(42)})))
+	strRef, err := s.vs.WriteValue(context.Background(), mustValue(types.NewStruct(types.Format_Default, "Foo", types.StructData{"life": types.Float(42)})))
 	s.NoError(err)
 	numRef, err := s.vs.WriteValue(context.Background(), types.Float(7))
 	s.NoError(err)

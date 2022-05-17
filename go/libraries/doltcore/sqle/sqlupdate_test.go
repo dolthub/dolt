@@ -327,11 +327,6 @@ var BasicUpdateTests = []UpdateTest{
 		ExpectedErr: "Type mismatch",
 	},
 	{
-		Name:        "type mismatch int -> uuid",
-		UpdateQuery: `update people set uuid = 0 where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
 		Name:        "type mismatch string -> int",
 		UpdateQuery: `update people set age = "pretty old" where id = 0`,
 		ExpectedErr: "Type mismatch",
@@ -344,16 +339,6 @@ var BasicUpdateTests = []UpdateTest{
 	{
 		Name:        "type mismatch string -> uint",
 		UpdateQuery: `update people set num_episodes = "all of them" where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name:        "type mismatch string -> uuid",
-		UpdateQuery: `update people set uuid = "not a uuid string" where id = 0`,
-		ExpectedErr: "Type mismatch",
-	},
-	{
-		Name:        "type mismatch bool -> uuid",
-		UpdateQuery: `update people set uuid = false where id = 0`,
 		ExpectedErr: "Type mismatch",
 	},
 }
@@ -462,7 +447,6 @@ func testUpdateQuery(t *testing.T, test UpdateTest) {
 			} else {
 				assert.Equal(t, test.ExpectedRows[i][j], actualRows[i][j])
 			}
-
 		}
 	}
 

@@ -169,13 +169,7 @@ func ReadFromReader(ctx context.Context, rd io.Reader) ([]types.Value, error) {
 		return nil, err
 	}
 
-	commitSt, ok := v.(types.Struct)
-
-	if !ok {
-		return nil, ErrCorruptNVF
-	}
-
-	rootVal, err := datas.GetCommittedValue(ctx, vrw, commitSt)
+	rootVal, err := datas.GetCommittedValue(ctx, vrw, v)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +220,10 @@ func read(ctx context.Context, rd io.Reader) (hash.Hash, *FileValueStore, error)
 		nbf = types.Format_7_18
 	case types.Format_LD_1.VersionString():
 		nbf = types.Format_LD_1
-	// todo(andy): add types.Format_DOLT_1
+	case types.Format_DOLT_DEV.VersionString():
+		nbf = types.Format_DOLT_DEV
+	case types.Format_DOLT_1.VersionString():
+		nbf = types.Format_DOLT_1
 	default:
 		return hash.Hash{}, nil, fmt.Errorf("unknown noms format: %s", string(data))
 	}

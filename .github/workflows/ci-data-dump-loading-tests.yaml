@@ -1,0 +1,20 @@
+name: Test Data Dump Loading integrations
+
+on:
+  pull_request:
+    paths:
+      - 'go/**'
+      - 'integration-tests/**'
+
+jobs:
+  data_dump_laoding_integrations_job:
+    runs-on: ubuntu-18.04
+    timeout-minutes: 30
+    name: Run tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Copy go package
+        run: cp -r ./go ./integration-tests/go
+      - name: Test data dump loading integrations
+        uses: ./.github/actions/data-dump-loading-tests
