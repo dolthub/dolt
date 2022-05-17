@@ -333,11 +333,6 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		return err
 	}
 
-	autocommit, err := isSessionAutocommit(ctx)
-	if err != nil {
-		return err
-	}
-
 	workingRoot := workingSet.WorkingRoot()
 	hasConflicts, err := workingRoot.HasConflicts(ctx)
 	if err != nil {
@@ -364,11 +359,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			if autocommit {
-				return ErrUnresolvedConflictsCommit
-			}
-
-			return doltdb.ErrUnresolvedConflicts
+			return ErrUnresolvedConflictsCommit
 		}
 	}
 
@@ -380,11 +371,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 			return err
 		}
 		if hasConstraintViolations {
-			if autocommit {
-				return ErrUnresolvedConstraintViolationsCommit
-			}
-
-			return doltdb.ErrUnresolvedConstraintViolations
+			return ErrUnresolvedConstraintViolationsCommit
 		}
 	}
 
@@ -480,12 +467,4 @@ func rootsEqual(left, right *doltdb.RootValue) bool {
 	}
 
 	return lh == rh
-}
-
-func isSessionAutocommit(ctx *sql.Context) (bool, error) {
-	autoCommitSessionVar, err := ctx.GetSessionVariable(ctx, sql.AutoCommitSessionVar)
-	if err != nil {
-		return false, err
-	}
-	return sql.ConvertToBool(autoCommitSessionVar)
 }
