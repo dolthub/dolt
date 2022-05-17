@@ -931,6 +931,11 @@ DELIM
     [ $status -eq 0 ]
     [[ "$output" =~ "pk,v1,v2" ]] || false
     [[ "$output" =~ "2,2,1" ]] || false
+
+    run dolt sql -r csv -q "select * from three where pk = 3"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk,v1,v2" ]] || false
+    [[ "$output" =~ "3,2,1" ]] || false
 }
 
 @test "import-update-tables: unsuccessfully update parent table in fk relationship" {
