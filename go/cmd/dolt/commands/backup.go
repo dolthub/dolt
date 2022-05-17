@@ -248,10 +248,15 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	}
 
 	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	if err != nil {
+		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
+	}
 	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, dEnv.TempTableFilesDir(), buildProgStarter(defaultLanguage), stopProgFuncs)
 
 	switch err {
 	case nil:
+		return nil
+	case pull.ErrDBUpToDate:
 		return nil
 	case env.ErrBackupAlreadyExists:
 		return errhand.BuildDError("error: a backup named '%s' already exists.", b.Name).AddDetails("remove it before running this command again").Build()
@@ -261,8 +266,6 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
 	case env.ErrInvalidBackupName:
 		return errhand.BuildDError("error: invalid backup name: " + b.Name).Build()
-	case pull.ErrDBUpToDate:
-		return errhand.BuildDError("error: backup already up to date").Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
