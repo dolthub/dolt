@@ -227,7 +227,7 @@ func serializeUser(b *flatbuffers.Builder, users []*mysql_db.User) flatbuffers.U
 		privilegeSet := serializePrivilegeSet(b, &user.PrivilegeSet)
 		plugin := b.CreateString(user.Plugin)
 		password := b.CreateString(user.Password)
-		attributes := b.CreateString(*user.Attributes)
+		//attributes := b.CreateString(*user.Attributes)
 
 		serial.UserStart(b)
 		serial.UserAddUser(b, userName)
@@ -237,7 +237,7 @@ func serializeUser(b *flatbuffers.Builder, users []*mysql_db.User) flatbuffers.U
 		serial.UserAddPassword(b, password)
 		serial.UserAddPasswordLastChanged(b, user.PasswordLastChanged.Unix())
 		serial.UserAddLocked(b, user.Locked)
-		serial.UserAddAttributes(b, attributes)
+		//serial.UserAddAttributes(b, attributes)
 		offsets[len(users)-i-1] = serial.UserEnd(b) // reverse order
 	}
 
