@@ -40,14 +40,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "new table:      test2" ]] || false
 
-    # select dolt_fn
-    dolt sql -q "select dolt_clean('test2')"
-    [ $status -eq 0 ]
-
-    run dolt status
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "On branch main" ]] || false
-    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+    dolt sql -q "call dclean('test2')"
 
     # dolt cli
     dolt sql -q "create table test2 (pk int primary key)"
