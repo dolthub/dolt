@@ -11,6 +11,7 @@ import (
 )
 
 const clients = 16
+const iters = 10
 
 var sqlScript = []string{
 	"call dolt_checkout('main');",
@@ -25,6 +26,8 @@ var (
 	port     = "3306"
 )
 
+// Runs |sqlScript| concurrently on multiple clients.
+// Useful for repoducing concurrency bugs.
 func main() {
 	connStr := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s",
 		user, pass, host, port, database)
@@ -46,7 +49,7 @@ func main() {
 					err = cerr
 				}
 			}()
-			for j := 0; j < 10; j++ {
+			for j := 0; j < iters; j++ {
 				if err = query(ctx, conn); err != nil {
 					return err
 				}
