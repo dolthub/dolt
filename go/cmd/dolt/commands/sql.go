@@ -17,6 +17,8 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
+	gms "github.com/dolthub/go-mysql-server"
 	"io"
 	"os"
 	"os/signal"
@@ -377,11 +379,24 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	// temporary user
+	tempUsers := []gms.TemporaryUser{{
+		Username: "root",
+		Password: "",
+	}}
+
+	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, tempUsers, true)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 	defer se.Close()
+
+	// TODO: Load MySQL db here
+	se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
+	err = se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), nil, nil)
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
+	}
 
 	err = runShell(ctx, se, mrEnv)
 	if err != nil {
@@ -739,6 +754,9 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv.GetEnv(currentDB)
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())
