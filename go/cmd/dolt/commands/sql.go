@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
-	gms "github.com/dolthub/go-mysql-server"
 	"io"
 	"os"
 	"os/signal"
@@ -28,6 +26,7 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -49,6 +48,7 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
