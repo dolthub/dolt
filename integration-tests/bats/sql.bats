@@ -39,6 +39,13 @@ teardown() {
     teardown_common
 }
 
+@test "sql: dolt sql -q has mysql db" {
+    run dolt sql -q "show tables from mysql;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+}
+
 @test "sql: errors do not write incomplete rows" {
     skip_nbf_dolt_1
     dolt sql <<"SQL"

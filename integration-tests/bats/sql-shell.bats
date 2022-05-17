@@ -42,6 +42,13 @@ teardown() {
     [[ "$output" =~ "+---------------------" ]] || false
 }
 
+@test "sql-shell: dolt sql shell has mysql db" {
+    run dolt sql <<< "show tables from mysql;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+}
+
 @test "sql-shell: bad sql in sql shell should error" {
     run dolt sql <<< "This is bad sql"
     [ $status -eq 1 ]
