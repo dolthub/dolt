@@ -215,6 +215,24 @@ var DoltScripts = []enginetest.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "SHOW CREATE PROCEDURE works with Dolt external procedures",
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SHOW CREATE PROCEDURE dolt_checkout;",
+				Expected: []sql.Row{
+					{
+						"dolt_checkout",
+						"",
+						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure defined by mydb';",
+						"utf8mb4",
+						"utf8mb4_0900_bin",
+						"utf8mb4_0900_bin",
+					},
+				},
+			},
+		},
+	},
 }
 
 func makeLargeInsert(sz int) string {
