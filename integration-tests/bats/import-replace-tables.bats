@@ -370,3 +370,34 @@ DELIM
     [ "${#lines[@]}" -eq 2 ]
     [ "${lines[1]}" = "0,1,2,3" ]
 }
+
+@test "import-replace-tables: Replace that breaks fk constraints correctly errors" {
+    dolt sql <<SQL
+CREATE TABLE colors (
+    id INT NOT NULL,
+    color VARCHAR(32) NOT NULL,
+
+    PRIMARY KEY (id),
+    INDEX color_index(color)
+);
+CREATE TABLE objects (
+    id INT NOT NULL,
+    name VARCHAR(64) NOT NULL,
+    color VARCHAR(32),
+
+    PRIMARY KEY(id),
+    FOREIGN KEY (color) REFERENCES colors(color)
+);
+INSERT INTO colors (id,color) VALUES (1,'red'),(2,'green'),(3,'blue'),(4,'purple');
+INSERT INTO objects (id,name,color) VALUES (1,'truck','red'),(2,'ball','green'),(3,'shoe','blue');
+SQL
+
+    cat <<DELIM > colors-bad.csv
+id,name
+1,'red'
+DELIM
+
+    run dolt table import -r colors colors-bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "cannot truncate table colors as it is referenced in foreign key" ]] || false
+}

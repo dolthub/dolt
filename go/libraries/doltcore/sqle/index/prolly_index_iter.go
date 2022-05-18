@@ -50,14 +50,14 @@ var _ sql.RowIter = prollyIndexIter{}
 var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
-func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
+func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprimary, dsecondary durable.Index) (prollyIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(dsecondary)
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyIndexIter{}, err
 	}
 
-	primary := durable.ProllyMapFromIndex(idx.TableData())
+	primary := durable.ProllyMapFromIndex(dprimary)
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := ordinalMappingFromIndex(idx)
@@ -211,8 +211,8 @@ type prollyCoveringIndexIter struct {
 var _ sql.RowIter = prollyCoveringIndexIter{}
 var _ sql.RowIter2 = prollyCoveringIndexIter{}
 
-func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema) (prollyCoveringIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
+func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, indexdata durable.Index) (prollyCoveringIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(indexdata)
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyCoveringIndexIter{}, err

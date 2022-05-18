@@ -38,7 +38,19 @@ func BenchmarkMapGet(b *testing.B) {
 	})
 }
 
-func BenchmarkMapGetParallel(b *testing.B) {
+func BenchmarkStepMapGet(b *testing.B) {
+	b.Skip()
+	step := uint64(100_000)
+	for sz := step; sz < step*20; sz += step {
+		nm := fmt.Sprintf("benchmark maps %d", sz)
+		b.Run(nm, func(b *testing.B) {
+			benchmarkProllyMapGet(b, sz)
+			benchmarkTypesMapGet(b, sz)
+		})
+	}
+}
+
+func BenchmarkParallelMapGet(b *testing.B) {
 	b.Run("benchmark maps 10k", func(b *testing.B) {
 		benchmarkProllyMapGetParallel(b, 10_000)
 		benchmarkTypesMapGetParallel(b, 10_000)
@@ -53,12 +65,32 @@ func BenchmarkMapGetParallel(b *testing.B) {
 	})
 }
 
+func BenchmarkStepParallelMapGet(b *testing.B) {
+	b.Skip()
+	step := uint64(100_000)
+	for sz := step; sz < step*20; sz += step {
+		nm := fmt.Sprintf("benchmark maps parallel %d", sz)
+		b.Run(nm, func(b *testing.B) {
+			benchmarkProllyMapGetParallel(b, sz)
+			benchmarkTypesMapGetParallel(b, sz)
+		})
+	}
+}
+
 func BenchmarkProllyGetLarge(b *testing.B) {
 	benchmarkProllyMapGet(b, 1_000_000)
 }
 
 func BenchmarkNomsGetLarge(b *testing.B) {
 	benchmarkTypesMapGet(b, 1_000_000)
+}
+
+func BenchmarkProllyParallelGetLarge(b *testing.B) {
+	benchmarkProllyMapGetParallel(b, 1_000_000)
+}
+
+func BenchmarkNomsParallelGetLarge(b *testing.B) {
+	benchmarkTypesMapGetParallel(b, 1_000_000)
 }
 
 func benchmarkProllyMapGet(b *testing.B, size uint64) {
@@ -94,8 +126,9 @@ func benchmarkProllyMapGetParallel(b *testing.B, size uint64) {
 	b.Run(fmt.Sprintf("benchmark prolly map %d", size), func(b *testing.B) {
 		b.RunParallel(func(b *testing.PB) {
 			ctx := context.Background()
+			rnd := rand.NewSource(0)
 			for b.Next() {
-				idx := rand.Uint64() % uint64(len(bench.tups))
+				idx := int(rnd.Int63()) % len(bench.tups)
 				key := bench.tups[idx][0]
 				_ = bench.m.Get(ctx, key, func(_, _ val.Tuple) (e error) {
 					return
@@ -111,8 +144,9 @@ func benchmarkTypesMapGetParallel(b *testing.B, size uint64) {
 	b.Run(fmt.Sprintf("benchmark types map %d", size), func(b *testing.B) {
 		b.RunParallel(func(pb *testing.PB) {
 			ctx := context.Background()
+			rnd := rand.NewSource(0)
 			for pb.Next() {
-				idx := rand.Uint64() % uint64(len(bench.tups))
+				idx := int(rnd.Int63()) % len(bench.tups)
 				_, _, _ = bench.m.MaybeGet(ctx, bench.tups[idx][0])
 			}
 		})

@@ -755,8 +755,8 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
+    server_query repo1 1 "set GLOBAL repo1_default_branch = 'refs/heads/new';" ""
+    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }
@@ -775,8 +775,8 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
+    server_query repo1 1 "set GLOBAL repo1_default_branch = 'new';" ""
+    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }

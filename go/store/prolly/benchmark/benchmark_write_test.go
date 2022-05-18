@@ -18,8 +18,6 @@ import (
 	"context"
 	"math/rand"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
 
 func BenchmarkMapUpdate(b *testing.B) {
@@ -38,11 +36,11 @@ func BenchmarkMapUpdate(b *testing.B) {
 }
 
 func BenchmarkProllySmallWrites(b *testing.B) {
-	benchmarkProllyMapUpdate(b, 10_000, 10)
+	benchmarkProllyMapUpdate(b, 10_000, 1)
 }
 
 func BenchmarkTypesSmallWrites(b *testing.B) {
-	benchmarkTypesMapUpdate(b, 10_000, 10)
+	benchmarkTypesMapUpdate(b, 10_000, 1)
 }
 
 func BenchmarkProllyMediumWrites(b *testing.B) {
@@ -72,8 +70,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 				idx = rand.Uint64() % uint64(len(bench.tups))
 				value := bench.tups[idx][0]
 
-				err := mut.Put(ctx, key, value)
-				require.NoError(b, err)
+				_ = mut.Put(ctx, key, value)
 			}
 			_, _ = mut.Map(ctx)
 		}

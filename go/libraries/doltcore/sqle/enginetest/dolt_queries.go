@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -889,7 +888,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
@@ -1414,6 +1413,21 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "table with commit column should maintain its data in diff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
+			"CALL dolt_commit('-am', 'creating table t');",
+			"INSERT INTO t VALUES (1, 'hi');",
+			"CALL dolt_commit('-am', 'insert data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff_t;",
+				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
+			},
+		},
+	},
 }
 
 var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
@@ -1771,6 +1785,21 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 					{3, "three", nil, nil, nil, nil, "added"},
 					{4, "four", -4, nil, nil, nil, "added"},
 				},
+			},
+		},
+	},
+	{
+		Name: "table with commit column should maintain its data in diff",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
+			"set @Commit1 = dolt_commit('-am', 'creating table t');",
+			"INSERT INTO t VALUES (1, 'hi');",
+			"set @Commit2 = dolt_commit('-am', 'insert data');",
+		},
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
 			},
 		},
 	},
