@@ -16,10 +16,12 @@ package enginetest
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
@@ -45,8 +47,12 @@ type DoltHarness struct {
 	session              *dsess.DoltSession
 	databases            []sqle.Database
 	databaseGlobalStates []globalstate.GlobalState
+	hashes               []string
 	parallelism          int
 	skippedQueries       []string
+	setupData            []enginetest.Testdata
+	resetData            []enginetest.Testdata
+	engine               *gms.Engine
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -94,17 +100,79 @@ var defaultSkippedQueries = []string{
 	"show global variables like", // we set extra variables
 }
 
+func (d *DoltHarness) Setup(setupData ...[]enginetest.Testdata) {
+	d.engine = nil
+	d.setupData = nil
+	for i := range setupData {
+		d.setupData = append(d.setupData, setupData[i]...)
+	}
+}
+
+func resetScripts(dbs []string) []enginetest.Testdata {
+	var resetCmds []enginetest.Testdata
+	for i := range dbs {
+		db := dbs[i]
+		resetCmds = append(resetCmds, enginetest.NewTestdataExec(fmt.Sprintf("use %s", db)))
+		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dclean()"))
+		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dreset('--hard', 'head')"))
+	}
+	resetCmds = append(resetCmds, enginetest.NewTestdataExec("use mydb"))
+	return resetCmds
+}
+
+func commitScripts(dbs []string) []enginetest.Testdata {
+	var commitCmds []enginetest.Testdata
+	for i := range dbs {
+		db := dbs[i]
+		commitCmds = append(commitCmds, enginetest.NewTestdataExec(fmt.Sprintf("use %s", db)))
+		commitCmds = append(commitCmds, enginetest.NewTestdataExec(fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db)))
+	}
+	commitCmds = append(commitCmds, enginetest.NewTestdataExec("use mydb"))
+	return commitCmds
+}
+
+func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
+	if d.engine == nil {
+		e, err := enginetest.NewEngineWithSetup(t, d, d.setupData)
+		if err != nil {
+			return nil, err
+		}
+		d.engine = e
+		ctx := enginetest.NewContext(d)
+
+		res := enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		var dbs []string
+		for i := range res {
+			dbs = append(dbs, res[i][0].(string))
+		}
+
+		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
+		if err != nil {
+			return nil, err
+		}
+
+		d.resetData = resetScripts(dbs)
+
+		return e, nil
+	}
+
+	ctx := enginetest.NewContext(d)
+	return enginetest.RunEngineScripts(ctx, d.engine, d.resetData, d.SupportsNativeIndexCreation())
+}
+
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
-func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
-	d.parallelism = parallelism
-	return &d
+func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+	nd := *d
+	nd.parallelism = parallelism
+	return &nd
 }
 
 // WithSkippedQueries returns a copy of the harness with the given queries skipped
-func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
-	d.skippedQueries = append(d.skippedQueries, queries...)
-	return &d
+func (d *DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
+	nd := *d
+	nd.skippedQueries = append(d.skippedQueries, queries...)
+	return &nd
 }
 
 // SkipQueryTest returns whether to skip a query

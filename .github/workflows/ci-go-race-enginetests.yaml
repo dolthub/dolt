@@ -29,6 +29,6 @@ jobs:
     - name: Test All
       working-directory: ./go
       run: |
-        DOLT_SKIP_PREPARED_ENGINETESTS=1 go test -race -timeout 30m github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest
+        GMS_ENABLE_PARALLEL_ENGINETESTS=0 DOLT_SKIP_PREPARED_ENGINETESTS=1 go test -race -timeout 30m github.com/dolthub/dolt/go/libraries/doltcore/sqle/enginetest
       env:
         DOLT_DEFAULT_BIN_FORMAT: ${{ matrix.dolt_fmt }}

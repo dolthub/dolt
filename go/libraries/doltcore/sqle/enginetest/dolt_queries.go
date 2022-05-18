@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
@@ -26,7 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
-var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
+var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 	Name: "Show create table as of",
 	SetUpScript: []string{
 		"set @Commit0 = hashof('main');",
@@ -38,7 +38,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 		"alter table a add constraint unique_c2 unique(c2);",
 		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
 	},
-	Assertions: []enginetest.ScriptTestAssertion{
+	Assertions: []queries.ScriptTestAssertion{
 		{
 			Query:       "show create table a as of @Commit0;",
 			ExpectedErr: sql.ErrTableNotFound,
@@ -81,7 +81,7 @@ var ShowCreateTableAsOfScriptTest = enginetest.ScriptTest{
 	},
 }
 
-var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
+var DescribeTableAsOfScriptTest = queries.ScriptTest{
 	Name: "Describe table as of",
 	SetUpScript: []string{
 		"set @Commit0 = dolt_commit('--allow-empty', '-m', 'before creating table a');",
@@ -92,7 +92,7 @@ var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
 		"alter table a drop column c1;",
 		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
 	},
-	Assertions: []enginetest.ScriptTestAssertion{
+	Assertions: []queries.ScriptTestAssertion{
 		{
 			Query:       "describe a as of @Commit0;",
 			ExpectedErr: sql.ErrTableNotFound,
@@ -124,7 +124,7 @@ var DescribeTableAsOfScriptTest = enginetest.ScriptTest{
 
 // DoltScripts are script tests specific to Dolt (not the engine in general), e.g. by involving Dolt functions. Break
 // this slice into others with good names as it grows.
-var DoltScripts = []enginetest.ScriptTest{
+var DoltScripts = []queries.ScriptTest{
 	{
 		Name: "test as of indexed join (https://github.com/dolthub/dolt/issues/2189)",
 		SetUpScript: []string{
@@ -136,7 +136,7 @@ var DoltScripts = []enginetest.ScriptTest{
 			"set @second_commit = (select commit_hash from dolt_log order by date desc limit 1)",
 			"set @first_commit = (select commit_hash from dolt_log order by date desc limit 1,1)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select a1.* from a as of @second_commit a1 " +
 					"left join a as of @first_commit a2 on a1.pk = a2.pk where a2.pk is null order by 1",
@@ -163,7 +163,7 @@ var DoltScripts = []enginetest.ScriptTest{
 			"alter table t2 add constraint fk1 foreign key (d) references t1 (b)",
 			"alter table t2 add constraint t2du unique (d)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "show create table t1",
 				Expected: []sql.Row{
@@ -196,7 +196,7 @@ var DoltScripts = []enginetest.ScriptTest{
 			"create table bigTable (pk int primary key, c0 int);",
 			makeLargeInsert(10_000),
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "select count(*) from bigTable;",
 				Expected: []sql.Row{
@@ -217,7 +217,7 @@ var DoltScripts = []enginetest.ScriptTest{
 	},
 	{
 		Name: "SHOW CREATE PROCEDURE works with Dolt external procedures",
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SHOW CREATE PROCEDURE dolt_checkout;",
 				Expected: []sql.Row{
@@ -246,7 +246,7 @@ func makeLargeInsert(sz int) string {
 }
 
 // DoltUserPrivTests are tests for Dolt-specific functionality that includes privilege checking logic.
-var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
+var DoltUserPrivTests = []queries.UserPrivilegeTest{
 	{
 		Name: "dolt_diff table function privilege checking",
 		SetUpScript: []string{
@@ -257,7 +257,7 @@ var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
 			"SELECT DOLT_COMMIT('-am', 'inserting into test');",
 			"CREATE USER tester@localhost;",
 		},
-		Assertions: []enginetest.UserPrivilegeTestAssertion{
+		Assertions: []queries.UserPrivilegeTestAssertion{
 			{
 				// Without access to the database, dolt_diff should fail with a database access error
 				User:        "tester",
@@ -360,14 +360,14 @@ var DoltUserPrivTests = []enginetest.UserPrivilegeTest{
 	},
 }
 
-var HistorySystemTableScriptTests = []enginetest.ScriptTest{
+var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "empty table",
 		SetUpScript: []string{
 			"create table t (n int, c text);",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from DOLT_HISTORY_t;",
 				Expected: []sql.Row{{0}},
@@ -387,7 +387,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into foo1 values (4, 'Vier');",
 			"set @Commit3 = dolt_commit('-am', 'inserting data in foo1');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from DOLT_HISTORY_foO1;",
 				Expected: []sql.Row{{10}},
@@ -420,7 +420,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"update foo1 set fr='Un' where n=1;",
 			"set @Commit3 = dolt_commit('-am', 'updating data in foo1');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from Dolt_History_Foo1;",
 				Expected: []sql.Row{{11}},
@@ -452,7 +452,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"alter table t rename column c1 to c2;",
 			"set @Commit3 = DOLT_COMMIT('-am', 'renaming c1 to c2');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "select count(*) from dolt_history_t;",
 				Expected: []sql.Row{{6}},
@@ -488,7 +488,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"alter table t rename to t2;",
 			"set @Commit2 = DOLT_COMMIT('-am', 'renaming table to t2');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "select count(*) from dolt_history_t;",
 				ExpectedErr: sql.ErrTableNotFound,
@@ -516,7 +516,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 			"create table t (pk int primary key, c1 int);",
 			"set @Commit3 = DOLT_COMMIT('-am', 'recreating table t');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// TODO: The history system table processes history in parallel and pulls the rows for the
 				//       user table at all commits. This means we can't currently detect when a table was dropped
@@ -532,7 +532,7 @@ var HistorySystemTableScriptTests = []enginetest.ScriptTest{
 	},
 }
 
-var DoltMerge = []enginetest.ScriptTest{
+var MergeScripts = []queries.ScriptTest{
 	{
 		Name: "DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
@@ -546,7 +546,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// FF-Merge
 				Query:    "SELECT DOLT_MERGE('feature-branch')",
@@ -579,7 +579,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
@@ -591,7 +591,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}}, // includes the merge commit created by no-ff
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
@@ -618,7 +618,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"INSERT INTO test VALUES (5),(6),(7);",
 			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{1}},
@@ -629,7 +629,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
@@ -656,7 +656,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"UPDATE test SET val=1001 WHERE pk=0;",
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{0}},
@@ -667,7 +667,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
@@ -708,7 +708,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
 				Expected: []sql.Row{{1}},
@@ -719,7 +719,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{2}},
+				Expected: []sql.Row{{3}},
 			},
 			{
 				Query:    "SELECT * FROM test order by pk",
@@ -740,7 +740,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
 				Expected: []sql.Row{{1}},
@@ -767,7 +767,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// FF-Merge
 				Query:    "SELECT DOLT_MERGE('feature-branch')",
@@ -799,7 +799,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
@@ -811,7 +811,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{4}}, // includes the merge commit created by no-ff
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
@@ -837,7 +837,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"INSERT INTO test VALUES (5),(6),(7);",
 			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{1}},
@@ -848,7 +848,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
@@ -875,7 +875,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
 			"set dolt_allow_commit_conflicts = on",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch')",
 				Expected: []sql.Row{{0}},
@@ -929,7 +929,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"UPDATE test SET val=1001 WHERE pk=0;",
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				Expected: []sql.Row{{0}},
@@ -952,7 +952,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:    "SELECT COUNT(*) FROM dolt_log",
-				Expected: []sql.Row{{3}},
+				Expected: []sql.Row{{4}},
 			},
 			{
 				Query:    "SELECT * FROM test ORDER BY pk",
@@ -978,7 +978,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			"SELECT DOLT_CHECKOUT('main');",
 			"UPDATE test SET val=1001 WHERE pk=0;",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErr: dfunctions.ErrUncommittedChanges,
@@ -987,7 +987,7 @@ var DoltMerge = []enginetest.ScriptTest{
 	},
 }
 
-var DoltReset = []enginetest.ScriptTest{
+var DoltReset = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
 		SetUpScript: []string{
@@ -1007,7 +1007,7 @@ var DoltReset = []enginetest.ScriptTest{
 
 			"CALL DOLT_RESET('--hard');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('--abort')",
 				ExpectedErrStr: "fatal: There is no merge to abort",
@@ -1033,7 +1033,7 @@ var DoltReset = []enginetest.ScriptTest{
 			"CALL DOLT_MERGE('merge_branch');",
 			"CALL DOLT_RESET('--hard');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "CALL DOLT_MERGE('--abort')",
 				ExpectedErrStr: "fatal: There is no merge to abort",
@@ -1042,7 +1042,7 @@ var DoltReset = []enginetest.ScriptTest{
 	},
 }
 
-var DiffSystemTableScriptTests = []enginetest.ScriptTest{
+var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "base case: added rows",
 		SetUpScript: []string{
@@ -1050,7 +1050,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{2}},
@@ -1074,7 +1074,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"update t set c2=0 where pk=1",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{3}},
@@ -1097,7 +1097,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"delete from t where pk=1",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'modifying row'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{3}},
@@ -1125,7 +1125,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 200), (300, 400);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'recreating table t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t",
 				Expected: []sql.Row{{2}},
@@ -1150,7 +1150,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"alter table t drop column c1;",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{4}},
@@ -1186,7 +1186,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{5}},
@@ -1228,7 +1228,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{5}},
@@ -1271,7 +1271,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, '101');",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{5}},
@@ -1312,7 +1312,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{5}},
@@ -1364,7 +1364,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, '101');",
 			"set @Commit4 = (select DOLT_COMMIT('-am', 'recreating column c2'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
 				Expected: []sql.Row{{5}},
@@ -1413,7 +1413,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (7, 8);",
 			"set @Commit4 = (select DOLT_COMMIT('-am', 'adding more data'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:                           "select * from dolt_diff_t;",
 				ExpectedWarning:                 1105,
@@ -1439,7 +1439,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"INSERT INTO t VALUES (1, 'hi');",
 			"CALL dolt_commit('-am', 'insert data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff_t;",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
@@ -1448,7 +1448,7 @@ var DiffSystemTableScriptTests = []enginetest.ScriptTest{
 	},
 }
 
-var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
+var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
@@ -1458,7 +1458,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
 			"set @Commit2 = dolt_commit('-am', 'inserting into t');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "SELECT * from dolt_diff('t');",
 				ExpectedErr: sql.ErrInvalidArgumentNumber,
@@ -1532,7 +1532,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"update t set c1='uno', c2='dos' where pk=1;",
 			"set @Commit4 = dolt_commit('-am', 'inserting into table t');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
 				Expected: []sql.Row{{1, "one", "two", nil, nil, nil, "added"}},
@@ -1596,7 +1596,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"insert into t values (2, 'two', 'three');",
 			"set @Commit6 = dolt_commit('-am', 'inserting row 2 in main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', 'main', 'branch1');",
 				Expected: []sql.Row{
@@ -1637,7 +1637,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"update t set c2='foo' where pk=1;",
 			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
 				Expected: []sql.Row{
@@ -1699,7 +1699,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"insert into t values (4, 'four', -4);",
 			"set @Commit5 = dolt_commit('-am', 'renaming column c3 to c2, and inserting data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
 				Expected: []sql.Row{
@@ -1767,7 +1767,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"insert into t values (4, 'four', -4);",
 			"set @Commit5 = dolt_commit('-am', 'adding column c2, and inserting data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit1, @Commit2);",
 				Expected: []sql.Row{
@@ -1814,7 +1814,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 			"INSERT INTO t VALUES (1, 'hi');",
 			"set @Commit2 = dolt_commit('-am', 'insert data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff('t', @Commit1, @Commit2);",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
@@ -1823,7 +1823,7 @@ var DiffTableFunctionScriptTests = []enginetest.ScriptTest{
 	},
 }
 
-var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
+var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "basic case with three tables",
 		SetUpScript: []string{
@@ -1843,7 +1843,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"alter table y add column d int;",
 			"set @Commit4 = (select DOLT_COMMIT('-am', 'Modify schema of table y'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{6}},
@@ -1881,7 +1881,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"rename table x1 to x2",
 			"set @Commit4 = (select DOLT_COMMIT('-am', 'Renaming table x1 to x2'))",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{5}},
@@ -1918,7 +1918,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"drop table y",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Dropping empty table y'))",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{4}},
@@ -1950,7 +1950,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into y values (-1, -2, -3), (-2, -3, -4)",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into table y'))",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{3}},
@@ -1987,7 +1987,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into z values (101, 102, 103)",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Inserting into tables y and z'))",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{5}},
@@ -2026,7 +2026,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"select DOLT_MERGE('branch1')",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'Merging branch1 into branch2'))",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT COUNT(*) FROM DOLT_DIFF",
 				Expected: []sql.Row{{3}},
@@ -2047,7 +2047,7 @@ var UnscopedDiffSystemTableScriptTests = []enginetest.ScriptTest{
 	},
 }
 
-var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
+var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "error handling",
 		SetUpScript: []string{
@@ -2055,7 +2055,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (1, 2, 3), (4, 5, 6);",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "SELECT * FROM DOLT_COMMIT_DIFF_t;",
 				ExpectedErrStr: "error querying table dolt_commit_diff_t: dolt_commit_diff_* tables must be filtered to a single 'to_commit'",
@@ -2090,7 +2090,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"delete from t where pk=1",
 			"set @Commit5 = (select DOLT_COMMIT('-am', 'modifying row'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0;",
 				Expected: []sql.Row{
@@ -2136,7 +2136,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"alter table t drop column c1;",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c2, from_pk, from_c2 FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
@@ -2169,7 +2169,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 'inserting into t'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
@@ -2208,7 +2208,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = DOLT_COMMIT('-am', 'inserting into t');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
@@ -2249,7 +2249,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, '101');",
 			"set @Commit3 = DOLT_COMMIT('-am', 're-adding column c');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
@@ -2287,7 +2287,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (100, 101);",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "SELECT to_pk, to_c, from_pk, from_c, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
@@ -2334,7 +2334,7 @@ var CommitDiffSystemTableScriptTests = []enginetest.ScriptTest{
 			"insert into t values (7, 8);",
 			"set @Commit4 = DOLT_COMMIT('-am', 'adding more data');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:                           "select * from dolt_commit_diff_t where from_commit=@Commit1 and to_commit=@Commit4;",
 				ExpectedWarning:                 1105,
