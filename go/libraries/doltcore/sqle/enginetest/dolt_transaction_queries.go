@@ -20,8 +20,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
 var DoltTransactionTests = []enginetest.TransactionTest{
@@ -1141,7 +1139,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // our transaction got rolled back, so we lose the above insert
 				Query:    "/* client b */ select * from test order by 1",
@@ -1225,7 +1223,7 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // client rolled back on merge with conflicts
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",

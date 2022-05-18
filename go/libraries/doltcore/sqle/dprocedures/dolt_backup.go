@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_backup is the stored procedure version of the function `dolt_backup`.
-func dolt_backup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltBackup is the stored procedure version of the function `dolt_backup`.
+func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltBackup(ctx, args)
 	if err != nil {
 		return nil, err

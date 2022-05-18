@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_checkout is the stored procedure version of the function `dolt_checkout`.
-func dolt_checkout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltCheckout is the stored procedure version of the function `dolt_checkout`.
+func doltCheckout(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltCheckout(ctx, args)
 	if err != nil {
 		return nil, err
