@@ -88,7 +88,16 @@ func LoadData() ([]byte, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
-	return ioutil.ReadFile(mysqlDbFilePath)
+	buf, err := ioutil.ReadFile(mysqlDbFilePath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
+
+	if len(buf) == 0 {
+		return nil, nil
+	}
+
+	return buf, nil
 }
 
 var _ mysql_db.PrivilegePersistCallback = SavePrivileges
