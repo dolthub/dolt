@@ -2271,9 +2271,9 @@ func TestUnionMaps(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			var cnfKeys []Value
-			unioned, err := UnionMaps(ctx, test.a, test.b, func(key Value, aValue Value, bValue Value) error {
+			unioned, err := UnionMaps(ctx, test.a, test.b, func(key Value, aValue Value, bValue Value) (Value, error) {
 				cnfKeys = append(cnfKeys, key)
-				return nil
+				return aValue, nil
 			})
 			require.NoError(t, err)
 

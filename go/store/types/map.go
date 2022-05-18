@@ -822,7 +822,9 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 	return idx, nil
 }
 
-type MapUnionConflictCB func(key Value, aValue Value, bValue Value) error
+// MapUnionConflictCB is a callback that is used to resolve a key collision.
+// Callers should pass a callback that returns the resolved value.
+type MapUnionConflictCB func(key Value, aValue Value, bValue Value) (Value, error)
 
 // UnionMaps unions |a| and |b|. Conflicting keys are returned to |cb| and are
 // kept in the union-ed map. As currently implemented, keys of |b| are inserted into |a|.
@@ -864,10 +866,13 @@ func UnionMaps(ctx context.Context, a Map, b Map, cb MapUnionConflictCB) (Map, e
 		}
 
 		if aKey.Equals(bKey) {
-			// conflict, delegate behavior to callee
-			err := cb(aKey, aVal, bVal)
+			// collision, delegate behavior to caller
+			chosen, err := cb(aKey, aVal, bVal)
 			if err != nil {
 				return EmptyMap, nil
+			}
+			if !chosen.Equals(aVal) {
+				editor.Set(aKey, chosen)
 			}
 			// advance a and b
 			aKey, aVal, err = aIter.Next(ctx)
