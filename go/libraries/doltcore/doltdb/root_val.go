@@ -1055,7 +1055,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 			return nil, err
 		}
 		if a.IsEmpty() {
-			return nil, ErrTableNotFound
+			return nil, fmt.Errorf("%w: '%s'", ErrTableNotFound, name)
 		}
 		edits[i].name = name
 	}

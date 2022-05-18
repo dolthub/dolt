@@ -21,7 +21,6 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
@@ -212,6 +211,24 @@ var DoltScripts = []enginetest.ScriptTest{
 					{int64(9992), int64(9992)},
 					{int64(9993), int64(9993)},
 					{int64(9994), int64(9994)},
+				},
+			},
+		},
+	},
+	{
+		Name: "SHOW CREATE PROCEDURE works with Dolt external procedures",
+		Assertions: []enginetest.ScriptTestAssertion{
+			{
+				Query: "SHOW CREATE PROCEDURE dolt_checkout;",
+				Expected: []sql.Row{
+					{
+						"dolt_checkout",
+						"",
+						"CREATE PROCEDURE dolt_checkout() SELECT 'External stored procedure defined by mydb';",
+						"utf8mb4",
+						"utf8mb4_0900_bin",
+						"utf8mb4_0900_bin",
+					},
 				},
 			},
 		},
@@ -889,7 +906,7 @@ var DoltMerge = []enginetest.ScriptTest{
 			},
 			{
 				Query:          "SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results

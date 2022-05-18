@@ -803,7 +803,6 @@ SQL
 }
 
 @test "foreign-keys: dolt table import" {
-    # Foreign key processing was moved to the engine, therefore you must import data through LOAD DATA now
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (v1) REFERENCES parent(v1) ON DELETE CASCADE ON UPDATE CASCADE;
 INSERT INTO parent VALUES (1, 1, 1), (2, 2, 2);
@@ -812,8 +811,20 @@ SQL
 
     echo $'id,v1,v2\n1,3,3\n2,4,4' > update_parent.csv
     run dolt table import -u parent update_parent.csv
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "foreign key" ]] || false
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 2, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from parent order by id"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,3,3" ]] || false
+    [[ "$output" =~ "2,4,4" ]] || false
+
+    run dolt sql -r csv -q "select * from child order by id"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "id,v1,v2" ]] || false
+    [[ "$output" =~ "1,3,1" ]] || false
+    [[ "$output" =~ "2,4,2" ]] || false
 }
 
 @test "foreign-keys: Commit all" {
@@ -1616,7 +1627,6 @@ SQL
 }
 
 @test "foreign-keys: dolt table import with null in nullable FK field should work (issue #2108)" {
-    # Foreign key processing was moved to the engine, therefore you must import data through LOAD DATA now
     dolt sql <<SQL
 CREATE TABLE naics (
   naics_2017 char(6) NOT NULL,
@@ -1635,7 +1645,14 @@ SQL
     echo $'name,naics_2017\n"test",\n"test2","100"' > fk_test.csv
 
     run dolt table import -u businesses fk_test.csv
-    [ "$status" -eq "1" ]
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0' ]] || false
+
+    run dolt sql -r csv -q "SELECT * FROM businesses order by name"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ 'name,naics_2017' ]] || false
+    [[ "$output" =~ 'test,' ]] || false
+    [[ "$output" =~ 'test2,100' ]] || false
 }
 
 @test "foreign-keys: Delayed foreign key resolution" {

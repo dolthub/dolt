@@ -65,7 +65,7 @@ const (
 	moveFlag        = "move"
 	deleteFlag      = "delete"
 	deleteForceFlag = "D"
-	verboseFlag     = "verbose"
+	verboseFlag     = cli.VerboseFlag
 	allFlag         = "all"
 	remoteFlag      = "remote"
 	showCurrentFlag = "show-current"

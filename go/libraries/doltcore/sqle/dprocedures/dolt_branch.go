@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_branch is the stored procedure version of the function `dolt_branch`.
-func dolt_branch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltBranch is the stored procedure version of the function `dolt_branch`.
+func doltBranch(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltBranch(ctx, args)
 	if err != nil {
 		return nil, err

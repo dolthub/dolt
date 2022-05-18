@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_merge is the stored procedure version of the functions `merge` and `dolt_merge`.
-func dolt_merge(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltMerge is the stored procedure version of the functions `merge` and `dolt_merge`.
+func doltMerge(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltMerge(ctx, args)
 	if err != nil {
 		return nil, err

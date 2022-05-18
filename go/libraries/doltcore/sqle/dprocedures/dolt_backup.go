@@ -15,14 +15,14 @@
 package dprocedures
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// doltAdd is the stored procedure version of the function `dolt_add`.
-func doltAdd(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltAdd(ctx, args)
+// doltBackup is the stored procedure version of the function `dolt_backup`.
+func doltBackup(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	res, err := dfunctions.DoDoltBackup(ctx, args)
 	if err != nil {
 		return nil, err
 	}
