@@ -18,6 +18,7 @@ import "github.com/dolthub/go-mysql-server/sql"
 
 var DoltProcedures = []sql.ExternalStoredProcedureDetails{
 	{Name: "dolt_add", Schema: int64Schema("status"), Function: doltAdd},
+	{Name: "dolt_backup", Schema: int64Schema("success"), Function: doltBackup},
 	{Name: "dolt_branch", Schema: int64Schema("status"), Function: doltBranch},
 	{Name: "dolt_checkout", Schema: int64Schema("status"), Function: doltCheckout},
 	{Name: "dolt_clean", Schema: int64Schema("status"), Function: doltClean},
