@@ -666,14 +666,6 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}
-				if err != nil {
-					verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-					cli.PrintErrln(verr.Verbose())
-					// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-					if !continueOnErr {
-						return err
-					}
-				}
 			}
 		}
 		query = ""

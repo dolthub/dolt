@@ -115,24 +115,27 @@ func (s *Stage) start(eg *errgroup.Group, ctx context.Context) {
 // which move through the pipeline.
 func (s *Stage) runFirstStageInPipeline(ctx context.Context) error {
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return nil
-		default:
 		}
 
 		iwp, err := s.stageFunc(ctx, nil)
-
-		if err != nil {
-			if err != io.EOF {
-				return err
+		if err == io.EOF {
+			// We send one last `nil` as an end-of-stream sentinel
+			// before we close the channel.
+			select {
+			case <-ctx.Done():
+				return nil
+			case s.outCh <- nil:
+				return nil
 			}
-
-			return nil
+		}
+		if err != nil {
+			return err
 		}
 
 		select {
-		case <-ctx.Done(): // prevents potential write deadlock
+		case <-ctx.Done():
 			return nil
 		case s.outCh <- iwp:
 		}
@@ -145,14 +148,14 @@ func (s *Stage) runPipelineStage(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return nil
-
 		case inBatch, ok := <-s.inCh:
-			err := s.transformBatch(ctx, inBatch)
-
-			if !ok && (err == io.EOF || err == nil) {
+			if !ok {
 				return nil
 			}
-
+			err := s.transformBatch(ctx, inBatch)
+			if err == io.EOF {
+				return nil
+			}
 			if err != nil {
 				return err
 			}
@@ -162,7 +165,6 @@ func (s *Stage) runPipelineStage(ctx context.Context) error {
 
 func (s *Stage) transformBatch(ctx context.Context, inBatch []ItemWithProps) error {
 	outBatch, err := s.stageFunc(ctx, inBatch)
-
 	if err != nil {
 		return err
 	}
