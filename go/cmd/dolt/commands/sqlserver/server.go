@@ -33,7 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_db"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -166,21 +166,21 @@ func Serve(
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	// Load in MySQL Db from file, if it exists
-	mysqlDbData, err := privileges.LoadData()
+	data, err := mysql_db.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
 	// Load in privileges from server
 	if serverConfig.PrivilegeFilePath() != "" {
-		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
+		mysql_db.SetFilePath(serverConfig.PrivilegeFilePath())
 	}
-	users, roles, err := privileges.LoadPrivileges()
+	users, roles, err := mysql_db.LoadPrivileges()
 	if err != nil {
 		return err, nil
 	}
 
-	// TODO: look at users from MySQL DB
+	// TODO: probably always want to create temporary user
 	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
 	if len(users) == 0 && len(serverConfig.User()) > 0 {
@@ -198,7 +198,7 @@ func Serve(
 	defer sqlEngine.Close()
 
 	// Load in MySQL DB information
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadMySQLData(sql.NewEmptyContext(), mysqlDbData)
+	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data)
 	if err != nil {
 		return err, nil
 	}
@@ -210,7 +210,7 @@ func Serve(
 	}
 
 	// Set persist callbacks
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallbacks(privileges.SavePrivileges, privileges.SaveData)
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_db.SaveData)
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
 	defer listener.Close()
