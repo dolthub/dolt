@@ -4,7 +4,7 @@ load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
     setup_common
-    exit_nbf_dolt_1
+    skip_nbf_dolt_1
     TMPDIRS=$(pwd)/tmpdirs
 
     init_helper $TMPDIRS
