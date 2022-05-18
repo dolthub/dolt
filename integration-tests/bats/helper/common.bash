@@ -61,6 +61,12 @@ skip_nbf_dolt_1() {
   fi
 }
 
+exit_nbf_dolt_1() {
+  if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+    exit 0
+  fi
+}
+
 setup_common() {
     setup_no_dolt_init
     dolt init
