@@ -41,7 +41,8 @@ const (
 
 type DoltHarness struct {
 	t                    *testing.T
-	env                  *env.DoltEnv
+	multiRepoEnv         *env.MultiRepoEnv
+	createdEnvs          map[string]*env.DoltEnv
 	session              *dsess.DoltSession
 	databases            []sqle.Database
 	databaseGlobalStates []globalstate.GlobalState
@@ -75,6 +76,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		t:              t,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
+		createdEnvs:    make(map[string]*env.DoltEnv),
 	}
 
 	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
@@ -151,11 +153,12 @@ func (d *DoltHarness) NewSession() *sql.Context {
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
 	states := make([]dsess.InitialDbState, len(d.databases))
 	for i, db := range d.databases {
-		states[i] = getDbState(d.t, db, d.env)
+		env := d.multiRepoEnv.GetEnv(db.Name())
+		states[i] = getDbState(d.t, db, env)
 	}
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
-	localConfig := d.env.Config.WriteableConfig()
+	localConfig := d.multiRepoEnv.Config()
 
 	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
@@ -173,7 +176,13 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
-	if types.IsFormat_DOLT_1(d.env.DoltDB.Format()) {
+	var firstEnv *env.DoltEnv
+	d.multiRepoEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		firstEnv = dEnv
+		return true, nil
+	})
+
+	if types.IsFormat_DOLT_1(firstEnv.DoltDB.Format()) {
 		return false
 	}
 	return true
@@ -187,19 +196,32 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	return d.NewDatabases(name)[0]
 }
 
-func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
+func (d *DoltHarness) initializeNewMultiRepoEnv() {
 	dEnv := dtestutils.CreateTestEnv()
-	d.env = dEnv
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	require.NoError(d.t, err)
+	d.multiRepoEnv = mrEnv
+}
+
+func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
+	if d.multiRepoEnv == nil {
+		d.initializeNewMultiRepoEnv()
+	}
 
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
+		dEnv := dtestutils.CreateTestEnv()
+
 		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		d.databases = append(d.databases, db)
 
 		globalState := globalstate.NewGlobalStateStore()
 		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
+
+		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
+		d.createdEnvs[db.Name()] = dEnv
 	}
 
 	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
@@ -219,13 +241,15 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	if d.env == nil {
-		d.env = dtestutils.CreateTestEnv()
+	// Because NewDatabases is called before NewDatabaseProvider, we need to re-add the
+	// test DoltEnvs created in NewDatabases to the new MultiRepo created here.
+	d.initializeNewMultiRepoEnv()
+	for _, db := range dbs {
+		d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
 	}
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
-	require.NoError(d.t, err)
-	b := env.GetDefaultInitBranch(d.env.Config)
-	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), dbs...)
+
+	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
+	pro := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), dbs...)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 
