@@ -53,7 +53,7 @@ import (
 )
 
 const (
-	Version = "0.40.2"
+	Version = "0.40.3"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -64,6 +64,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.AddCmd{},
 	commands.DiffCmd{},
 	commands.ResetCmd{},
+	commands.CleanCmd{},
 	commands.CommitCmd{},
 	commands.SqlCmd{VersionStr: Version},
 	sqlserver.SqlServerCmd{VersionStr: Version},

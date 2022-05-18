@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_verify_constraints is the stored procedure version of the function `constraints_verify`.
-func dolt_verify_constraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltVerifyConstraints is the stored procedure version of the function `constraints_verify`.
+func doltVerifyConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltConstraintsVerify(ctx, false, args)
 	if err != nil {
 		return nil, err
@@ -29,8 +29,8 @@ func dolt_verify_constraints(ctx *sql.Context, args ...string) (sql.RowIter, err
 	return rowToIter(int64(res)), nil
 }
 
-// dolt_verify_all_constraints is the stored procedure version of the function `constraints_verify_all`.
-func dolt_verify_all_constraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltVerifyAllConstraints is the stored procedure version of the function `constraints_verify_all`.
+func doltVerifyAllConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltConstraintsVerify(ctx, true, args)
 	if err != nil {
 		return nil, err

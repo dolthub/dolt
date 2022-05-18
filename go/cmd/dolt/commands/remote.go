@@ -71,7 +71,7 @@ const (
 )
 
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
-var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
+var credTypes = dbfactory.AWSCredTypes
 
 type RemoteCmd struct{}
 
