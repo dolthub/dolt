@@ -227,7 +227,8 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		defer stop()
 	}
 
-	if fgc, ok := cmd.(FormatGatedCommand); ok && fgc.GatedForNBF(dEnv.DoltDB.Format()) {
+	fgc, ok := cmd.(FormatGatedCommand)
+	if ok && dEnv.DoltDB != nil && fgc.GatedForNBF(dEnv.DoltDB.Format()) {
 		vs := dEnv.DoltDB.Format().VersionString()
 		err := fmt.Sprintf("Dolt command '%s' is not supported in format %s", cmd.Name(), vs)
 		PrintErrln(color.YellowString(err))
