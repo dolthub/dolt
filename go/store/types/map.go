@@ -826,8 +826,8 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 // Callers should pass a callback that returns the resolved value.
 type MapUnionConflictCB func(key Value, aValue Value, bValue Value) (Value, error)
 
-// UnionMaps unions |a| and |b|. Conflicting keys are returned to |cb| and are
-// kept in the union-ed map. As currently implemented, keys of |b| are inserted into |a|.
+// UnionMaps unions |a| and |b|. Colliding keys are returned to |cb|. As
+// currently implemented, keys of |b| are inserted into |a|.
 func UnionMaps(ctx context.Context, a Map, b Map, cb MapUnionConflictCB) (Map, error) {
 	editor := NewMapEditor(a)
 
