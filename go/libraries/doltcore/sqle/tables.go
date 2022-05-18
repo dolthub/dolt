@@ -960,8 +960,8 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 	newSchema sql.PrimaryKeySchema,
 	modifiedColumn *sql.Column,
 ) bool {
-	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in either format
-	return types.IsFormat_DOLT_1(t.nbf)
+	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in the new format
+	return types.IsFormat_DOLT_1(t.nbf) || len(oldSchema.Schema) < len(newSchema.Schema)
 }
 
 func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
