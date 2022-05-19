@@ -429,6 +429,9 @@ func execBatch(
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 	err = runBatchMode(sqlCtx, se, batchInput, continueOnErr)
