@@ -99,6 +99,9 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return nil, err
 	}
 
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
 	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)

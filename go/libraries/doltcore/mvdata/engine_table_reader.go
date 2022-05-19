@@ -71,6 +71,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return nil, err
 	}
 
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {
 		return nil, err
