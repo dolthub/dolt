@@ -65,7 +65,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
-	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
@@ -76,6 +75,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		t:              t,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
+		multiRepoEnv:   mrEnv,
 		createdEnvs:    make(map[string]*env.DoltEnv),
 	}
 
@@ -196,18 +196,7 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 	return d.NewDatabases(name)[0]
 }
 
-func (d *DoltHarness) initializeNewMultiRepoEnv() {
-	dEnv := dtestutils.CreateTestEnv()
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
-	require.NoError(d.t, err)
-	d.multiRepoEnv = mrEnv
-}
-
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
-	if d.multiRepoEnv == nil {
-		d.initializeNewMultiRepoEnv()
-	}
-
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
@@ -241,9 +230,14 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	// Because NewDatabases is called before NewDatabaseProvider, we need to re-add the
-	// test DoltEnvs created in NewDatabases to the new MultiRepo created here.
-	d.initializeNewMultiRepoEnv()
+	// When NewDatabaseProvider is called, we create a new MultiRepoEnv in order to ensure
+	// that only the specified sql.Databases are available for tests to use. Because
+	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
+	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
+	dEnv := dtestutils.CreateTestEnv()
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
+	require.NoError(d.t, err)
+	d.multiRepoEnv = mrEnv
 	for _, db := range dbs {
 		d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
 	}
