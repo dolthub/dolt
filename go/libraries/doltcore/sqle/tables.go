@@ -974,10 +974,6 @@ func (t *AlterableDoltTable) RewriteInserter(
 ) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	if len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0 {
-		return dropPkRewriter(ctx, newSchema)
-	}
-
 	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
 	dbState, ok, err := sess.LookupDbState(ctx, t.db.Name())
 	if err != nil {
@@ -1046,6 +1042,13 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
+	if len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0 {
+		newRoot, err = t.adjustForeignKeysForDroppedPk(ctx, newRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newWs := ws.WithWorkingRoot(newRoot)
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
@@ -1064,8 +1067,32 @@ func (t *AlterableDoltTable) RewriteInserter(
 	return ed, nil
 }
 
-func dropPkRewriter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
-	return nil
+func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	if t.autoIncCol.AutoIncrement {
+		return nil, sql.ErrWrongAutoKey.New()
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
+	if err != nil {
+		return nil, err
+	}
+
+	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
 }
 
 // DropColumn implements sql.AlterableTable
@@ -2203,12 +2230,12 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	fkcUpdates, err := t.backupFkcIndexesForPkDrop(ctx, root)
+	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
 	}
 
-	fkc, err := root.GetForeignKeyCollection(ctx)
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
 	if err != nil {
 		return err
 	}
@@ -2245,75 +2272,6 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
-}
-
-// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
-// key drop. If multiple indexes are valid, we sort by unique and select the first.
-// This will not work with a non-pk index drop without an additional index filter argument.
-func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]doltdb.FkIndexUpdate, error) {
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes := t.sch.Indexes().AllIndexes()
-	if err != nil {
-		return nil, err
-	}
-
-	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
-	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
-	for tag, _ := range t.sch.GetPKCols().TagToIdx {
-		pkBackups[tag] = nil
-	}
-
-	// prefer unique key backups
-	sort.Slice(indexes[:], func(i, j int) bool {
-		return indexes[i].IsUnique() && !indexes[j].IsUnique()
-	})
-
-	for _, idx := range indexes {
-		if !idx.IsUserDefined() {
-			continue
-		}
-
-		for _, tag := range idx.AllTags() {
-			if _, ok := pkBackups[tag]; ok {
-				pkBackups[tag] = append(pkBackups[tag], idx)
-			}
-		}
-	}
-
-	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
-	for _, fk := range fkc.AllKeys() {
-		// check if this FK references a parent PK tag we are trying to change
-		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
-			covered := false
-			for _, idx := range backups {
-				idxTags := idx.AllTags()
-				if len(fk.TableColumns) > len(idxTags) {
-					continue
-				}
-				failed := false
-				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
-					if idxTags[i] != fk.ReferencedTableColumns[i] {
-						failed = true
-						break
-					}
-				}
-				if failed {
-					continue
-				}
-				fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: idx.Name()})
-				covered = true
-				break
-			}
-			if !covered {
-				return nil, sql.ErrCantDropIndex.New("PRIMARY")
-			}
-		}
-	}
-	return fkUpdates, nil
 }
 
 func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {
