@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/enginetest/queries/scriptgen/setup"
 	"os"
 	"strings"
 	"testing"
@@ -619,7 +620,7 @@ func TestShowCreateTableAsOf(t *testing.T) {
 func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
-	harness.Setup(enginetest.MydbData)
+	harness.Setup(setup.MydbData)
 	for _, script := range MergeScripts {
 		harness.engine = nil
 		enginetest.TestScript(t, harness, script)

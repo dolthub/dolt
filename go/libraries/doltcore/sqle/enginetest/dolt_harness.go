@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/enginetest/queries/scriptgen/setup"
 	"runtime"
 	"strings"
 	"testing"
@@ -51,8 +52,8 @@ type DoltHarness struct {
 	hashes               []string
 	parallelism          int
 	skippedQueries       []string
-	setupData            []enginetest.Testdata
-	resetData            []enginetest.Testdata
+	setupData            []setup.SetupScript
+	resetData            []setup.SetupScript
 	engine               *gms.Engine
 }
 
@@ -102,7 +103,7 @@ var defaultSkippedQueries = []string{
 	"show global variables like", // we set extra variables
 }
 
-func (d *DoltHarness) Setup(setupData ...[]enginetest.Testdata) {
+func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	d.engine = nil
 	d.setupData = nil
 	for i := range setupData {
@@ -110,30 +111,30 @@ func (d *DoltHarness) Setup(setupData ...[]enginetest.Testdata) {
 	}
 }
 
-func resetScripts(dbs []string, autoInc bool) []enginetest.Testdata {
-	var resetCmds []enginetest.Testdata
+func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
+	var resetCmds setup.SetupScript
 	for i := range dbs {
 		db := dbs[i]
-		resetCmds = append(resetCmds, enginetest.NewTestdataExec(fmt.Sprintf("use %s", db)))
-		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dclean()"))
-		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dreset('--hard', 'head')"))
+		resetCmds = append(resetCmds, fmt.Sprintf("use %s", db))
+		resetCmds = append(resetCmds, "call dclean()")
+		resetCmds = append(resetCmds, "call dreset('--hard', 'head')")
 		if autoInc {
-			resetCmds = append(resetCmds, enginetest.AutoincrementData...)
+			resetCmds = append(resetCmds, setup.AutoincrementData[0]...)
 		}
 	}
-	resetCmds = append(resetCmds, enginetest.NewTestdataExec("use mydb"))
-	return resetCmds
+	resetCmds = append(resetCmds, "use mydb")
+	return []setup.SetupScript{resetCmds}
 }
 
-func commitScripts(dbs []string) []enginetest.Testdata {
-	var commitCmds []enginetest.Testdata
+func commitScripts(dbs []string) []setup.SetupScript {
+	var commitCmds setup.SetupScript
 	for i := range dbs {
 		db := dbs[i]
-		commitCmds = append(commitCmds, enginetest.NewTestdataExec(fmt.Sprintf("use %s", db)))
-		commitCmds = append(commitCmds, enginetest.NewTestdataExec(fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db)))
+		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
 	}
-	commitCmds = append(commitCmds, enginetest.NewTestdataExec("use mydb"))
-	return commitCmds
+	commitCmds = append(commitCmds, "use mydb")
+	return []setup.SetupScript{commitCmds}
 }
 
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
