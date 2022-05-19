@@ -47,7 +47,25 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		return tw, nil
 	}
 
-	t, ok, err := s.workingSet.WorkingRoot().GetTable(ctx, table)
+	twr, err := makeTableWriter(ctx, s.workingSet, table, db, s.tracker, s, setter, batched)
+	if err != nil {
+		return nil, err
+	}
+
+	s.tables[table] = twr
+	return twr, nil
+}
+
+func makeTableWriter(
+	ctx context.Context,
+	ws *doltdb.WorkingSet,
+	table, db string,
+	tracker globalstate.AutoIncrementTracker,
+	flusher *prollyWriteSession,
+	setter SessionRootSetter,
+	batched bool,
+) (*prollyTableWriter, error) {
+	t, ok, err := ws.WorkingRoot().GetTable(ctx, table)
 	if err != nil {
 		return nil, err
 	}
@@ -89,12 +107,11 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		sch:       sch,
 		sqlSch:    pkSch.Schema,
 		aiCol:     autoCol,
-		aiTracker: s.tracker,
-		flusher:   s,
+		aiTracker: tracker,
+		flusher:   flusher,
 		setter:    setter,
 		batched:   batched,
 	}
-	s.tables[table] = twr
 
 	return twr, nil
 }
@@ -189,25 +206,15 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	root := ws.WorkingRoot()
-	for tableName, tableWriter := range s.tables {
-		t, ok, err := root.GetTable(ctx, tableName)
-		if err != nil {
-			return err
-		}
-		if !ok { // table was removed in newer root
-			delete(s.tables, tableName)
-			continue
-		}
-		tSch, err := t.GetSchema(ctx)
-		if err != nil {
-			return err
-		}
+	current := s.tables
+	s.tables = make(map[string]*prollyTableWriter, len(current))
 
-		err = tableWriter.Reset(ctx, s, t, tSch)
+	for name, prev := range current {
+		tableWriter, err := makeTableWriter(ctx, ws, name, prev.dbName, s.tracker, s, prev.setter, prev.batched)
 		if err != nil {
 			return err
 		}
+		s.tables[name] = tableWriter
 	}
 	s.workingSet = ws
 	return nil

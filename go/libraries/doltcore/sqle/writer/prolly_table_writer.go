@@ -24,7 +24,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -197,38 +196,6 @@ func (w *prollyTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 		index:  idx,
 		pRange: index.ProllyRangesFromIndexLookup(lookup)[0],
 	}
-}
-
-// Reset puts the writer into a fresh state, updating the schema and index writers according to the newly given table.
-func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession, tbl *doltdb.Table, sch schema.Schema) error {
-	sqlSch, err := sqlutil.FromDoltSchema(w.tableName, sch)
-	if err != nil {
-		return err
-	}
-	aiCol := autoIncrementColFromSchema(sch)
-	var newPrimary indexWriter
-	if _, ok := w.primary.(prollyKeylessWriter); ok {
-		newPrimary, err = getKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
-	} else {
-		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, sqlSch.Schema, sch)
-	}
-	if err != nil {
-		return err
-	}
-	newSecondaries, err := getSecondaryProllyIndexWriters(ctx, tbl, sqlSch.Schema, sch)
-	if err != nil {
-		return err
-	}
-
-	w.tbl = tbl
-	w.sch = sch
-	w.sqlSch = sqlSch.Schema
-	w.primary = newPrimary
-	w.secondary = newSecondaries
-	w.aiCol = aiCol
-	w.flusher = sess
-
-	return nil
 }
 
 func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
