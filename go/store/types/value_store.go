@@ -354,6 +354,28 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
+	if lvs.Format().UsesFlatbuffers() {
+		// We do not do write buffering in the new format.
+		// Ref heights are not universally known, and the
+		// invariants mentioned above cannot be maintained
+		// in the general case.
+		//
+		// Buffering with full dependency tracking would be
+		// possible, and in __DOLT_1__, WalkAddrs may be
+		// cheap enough that it would be possible to get back
+		// cache-locality in our flushes without ref heights.
+		if lvs.enforceCompleteness {
+			err := v.walkRefs(lvs.nbf, func(r Ref) error {
+				lvs.unresolvedRefs.Insert(r.TargetHash())
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return lvs.cs.Put(ctx, c)
+	}
+
 	d.PanicIfTrue(height == 0)
 	h := c.Hash()
 	if _, present := lvs.bufferedChunks[h]; !present {
