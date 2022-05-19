@@ -103,6 +103,7 @@ teardown() {
 }
 
 @test "commit_tags: push/pull tags to/from a remote" {
+    skip_nbf_dolt_1
     # reset env
     rm -rf .dolt
     mkdir repo remote

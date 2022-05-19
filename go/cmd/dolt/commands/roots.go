@@ -64,6 +64,10 @@ func (cmd RootsCmd) Description() string {
 	return "Displays the current Dolt cli version."
 }
 
+func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RootsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	return nil

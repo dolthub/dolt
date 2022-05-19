@@ -20,6 +20,8 @@ import (
 	"io"
 	"os"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -47,6 +49,10 @@ func (cmd *DumpDocsCmd) Name() string {
 // Description returns a description of the command
 func (cmd *DumpDocsCmd) Description() string {
 	return "dumps all documentation in md format to a directory"
+}
+
+func (cmd *DumpDocsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // Hidden should return true if this command should be hidden from the help text

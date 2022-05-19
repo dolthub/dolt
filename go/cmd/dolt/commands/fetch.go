@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -52,6 +54,10 @@ func (cmd FetchCmd) Name() string {
 // Description returns a description of the command
 func (cmd FetchCmd) Description() string {
 	return "Update the database from a remote data repository."
+}
+
+func (cmd FetchCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // EventType returns the type of the event to log
