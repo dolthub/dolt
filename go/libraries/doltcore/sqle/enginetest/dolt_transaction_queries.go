@@ -851,6 +851,10 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 				Query:    "/* client b */ select * from test order by 1",
 				Expected: []sql.Row{{0, 0}, {1, 1}},
 			},
+			{ // no conflicts, transaction got rolled back
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
 		},
 	},
 	{
@@ -896,6 +900,10 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			{ // We see the merge value from a's commit here because we were rolled back and a new transaction begun
 				Query:    "/* client b */ select * from test order by 1",
 				Expected: []sql.Row{{0, 0}, {1, 1}},
+			},
+			{ // no conflicts, transaction got rolled back
+				Query:    "/* client b */ select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
 			},
 		},
 	},

@@ -951,7 +951,7 @@ SQL
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
 @test "sql-merge: CALL DOLT_MERGE can commit unresolved conflicts with dolt_allow_commit_conflicts on" {
@@ -980,7 +980,7 @@ SQL
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE during an active merge throws an error" {

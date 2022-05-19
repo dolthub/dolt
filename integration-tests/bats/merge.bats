@@ -656,7 +656,38 @@ SQL
     [[ ! "$output" =~ "test2" ]] || false
 }
 
-@test "merge: non-conflicting merge can be performed even when existing conflicts and constraint violations exist" {
+@test "merge: non-violating merge succeeds when violations already exist" {
+    dolt sql <<SQL
+CREATE table parent (pk int PRIMARY KEY, col1 int);
+CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
+CREATE table other (pk int);
+INSERT INTO parent VALUES (1, 1);
+SQL
+    dolt commit -am "create table with data";
+    dolt branch right
+    dolt sql -q "DELETE FROM parent where pk = 1;"
+    dolt commit -am "delete pk = 1 from left";
+
+    dolt checkout right
+    dolt sql -q "INSERT INTO child VALUES (1, 1);"
+    dolt commit -am "add child of 1 to right"
+    dolt branch other
+
+    dolt checkout other
+    dolt sql -q "INSERT INTO other VALUES (1);"
+    dolt commit -am "non-fk insert"
+
+    dolt checkout main
+    run dolt merge right
+    dolt commit -afm "commit constraint violations"
+
+    dolt merge other
+
+    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;";
+    [[ "${lines[1]}" = "foreign key,1,1" ]]
+}
+
+@test "merge: non-conflicting / non-violating merge succeeds when conflicts and violations already exist" {
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -665,6 +696,7 @@ SQL
     dolt commit -am "create table with data";
     dolt branch other
     dolt branch other2
+
     dolt sql -q "UPDATE parent SET col1 = 2 where pk = 1;"
     dolt sql -q "DELETE FROM parent where pk = 2;"
     dolt commit -am "updating col1 to 2 and remove pk = 2";
@@ -680,25 +712,38 @@ SQL
 
     dolt checkout main
     # Create a conflicted state by merging other into main
-    run dolt merge other
-    [ "$status" -eq 0 ]
+    dolt merge other
     [[ "$output" =~ "CONFLICT" ]]
-    dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
+
+    run dolt sql -r csv -q "SELECT * FROM parent;"
+    [[ "${lines[1]}" = "1,2" ]]
+
+    run dolt sql -r csv -q "SELECT * from child;"
+    [[ "${lines[1]}" = "1,2" ]]
+
+    run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
     [[ "$output" =~ "1,1,2,1,3,1" ]]
-    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
+
+    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
     [[ "$output" =~ "foreign key,1,2" ]]
 
+    # commit it so we can merge again
+    dolt commit -afm "committing merge conflicts"
+
     # merge should be allowed and previous conflicts and violations should be retained
-    run dolt merge other2
-    [ "$status" -eq 0 ]
-    run dolt sql -r csv -q "SELECT * from parent where pk = 1;"
-    [[ $output =~ "1,2" ]]
-    run dolt sql -r csv -q "SELECT * from parent where pk = 2;"
-    [[ $output =~ "2,1" ]]
+    dolt merge other2
+    run dolt sql -r csv -q "SELECT * FROM parent;"
+    [[ "${lines[1]}" = "1,2" ]]
+    [[ "${lines[2]}" = "3,1" ]]
+
+    run dolt sql -r csv -q "SELECT * from child;"
+    [[ "${lines[1]}" = "1,2" ]]
+
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ $output =~ "1,1,2,1,3,1" ]]
-    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
-    [[ "$output" =~ "foreign key,1,2" ]]
+    [[ "${lines[1]}" =~ "1,1,2,1,3,1" ]]
+
+    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
+    [[ "${lines[1]}" =~ "foreign key,1,2" ]]
 }
 
 @test "merge: conflicting merge should retain previous conflicts and constraint violations" {
@@ -721,27 +766,45 @@ SQL
 
     dolt checkout other2
     dolt sql -q "UPDATE parent SET col1 = 4 where pk = 1;"
-    dolt commit -am "insert pk 2"
+    dolt commit -am "updating col1 to 4"
 
     dolt checkout main
+
     # Create a conflicted state by merging other into main
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]]
+
+    run dolt sql -r csv -q "SELECT * FROM parent;"
+    [[ "${lines[1]}" = "1,2" ]]
+
+    run dolt sql -r csv -q "SELECT * from child;"
+    [[ "${lines[1]}" = "1,2" ]]
+
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ "$output" =~ "1,1,2,1,3,1" ]]
-    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
-    [[ "$output" =~ "foreign key,1,2" ]]
+    [[ "${lines[1]}" = "1,1,2,1,3,1" ]]
+
+    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
+    [[ "${lines[1]}" = "foreign key,1,2" ]]
+
+    # commit it so we can merge again
+    dolt commit -afm "committing merge conflicts"
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
-    sql -q ""
-    run dolt sql -r csv -q "SELECT * from t";
-    [[ $output =~ "1,1" ]]
+    [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]]
+
+    run dolt sql -r csv -q "SELECT * FROM parent;"
+    [[ "${lines[1]}" = "1,2" ]]
+
+    run dolt sql -r csv -q "SELECT * from child;"
+    [[ "${lines[1]}" = "1,2" ]]
+
     run dolt sql -r csv -q "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;"
-    [[ $output =~ "1,1,2,1,3,1" ]]
-    run dolt sql -r csv -q "SELECT violation_type, pl, parent_fk from dolt_constraint_violations_child;"
-    [[ "$output" =~ "foreign key,1,2" ]]
+    [[ "${lines[1]}" = "1,1,2,1,3,1" ]]
+
+    run dolt sql -r csv -q "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;"
+    [[ "${lines[1]}" = "foreign key,1,2" ]]
 }
 
 @test "merge: violated check constraint" {
