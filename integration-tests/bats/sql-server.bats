@@ -1080,7 +1080,8 @@ END""")
 
 @test "sql-server: drop database with active connections" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
+    skip_nbf_dolt_1
+    
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
