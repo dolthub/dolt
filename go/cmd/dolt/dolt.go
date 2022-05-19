@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -54,7 +53,7 @@ import (
 )
 
 const (
-	Version = "0.40.3"
+	Version = "0.40.4"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -363,50 +362,6 @@ func seedGlobalRand() {
 		panic("failed to initial rand " + err.Error())
 	}
 	rand.Seed(int64(binary.LittleEndian.Uint64(bs)))
-}
-
-// These subcommands cannot be performed if a migration is needed
-func commandNeedsMigrationCheck(args []string) bool {
-	if len(args) == 0 {
-		return false
-	}
-
-	// special case for -h, --help
-	for _, arg := range args {
-		if arg == "-h" || arg == "--help" {
-			return false
-		}
-	}
-
-	subCommandStr := strings.ToLower(strings.TrimSpace(args[0]))
-	for _, cmd := range []cli.Command{
-		commands.ResetCmd{},
-		commands.CommitCmd{},
-		commands.RevertCmd{},
-		commands.SqlCmd{},
-		sqlserver.SqlServerCmd{},
-		sqlserver.SqlClientCmd{},
-		commands.DiffCmd{},
-		commands.MergeCmd{},
-		commands.BranchCmd{},
-		commands.CheckoutCmd{},
-		commands.RemoteCmd{},
-		commands.BackupCmd{},
-		commands.PushCmd{},
-		commands.PullCmd{},
-		commands.FetchCmd{},
-		commands.CloneCmd{},
-		schcmds.ImportCmd{},
-		tblcmds.ImportCmd{},
-		tblcmds.RmCmd{},
-		tblcmds.MvCmd{},
-		tblcmds.CpCmd{},
-	} {
-		if subCommandStr == strings.ToLower(cmd.Name()) {
-			return true
-		}
-	}
-	return false
 }
 
 // processEventsDir runs the dolt send-metrics command in a new process

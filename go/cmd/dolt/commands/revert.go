@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -53,6 +55,10 @@ func (cmd RevertCmd) Name() string {
 // Description implements the interface cli.Command.
 func (cmd RevertCmd) Description() string {
 	return "Undo the changes introduced in a commit."
+}
+
+func (cmd RevertCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown implements the interface cli.Command.

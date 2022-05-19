@@ -85,11 +85,21 @@ func (s *Stage) start(eg *errgroup.Group, ctx context.Context) {
 	for i := 0; i < parallelism; i++ {
 		routineIndex := i
 		routineCtx := context.WithValue(ctx, localStorageKey, LocalStorage{})
-		eg.Go(func() error {
+		eg.Go(func() (rerr error) {
 			defer func() {
 				if atomic.AddInt32(&stageWorkers, -1) == 0 {
 					if s.outCh != nil {
-						close(s.outCh)
+						if rerr == nil {
+							close(s.outCh)
+						} else {
+							// In the error case, we do not want to close the
+							// channel until we are certain our consumer will
+							// see the failure in the context Err().
+							go func() {
+								<-ctx.Done()
+								close(s.outCh)
+							}()
+						}
 					}
 				}
 			}()
@@ -115,25 +125,21 @@ func (s *Stage) start(eg *errgroup.Group, ctx context.Context) {
 // which move through the pipeline.
 func (s *Stage) runFirstStageInPipeline(ctx context.Context) error {
 	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		default:
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
 
 		iwp, err := s.stageFunc(ctx, nil)
-
-		if err != nil {
-			if err != io.EOF {
-				return err
-			}
-
+		if err == io.EOF {
 			return nil
+		}
+		if err != nil {
+			return err
 		}
 
 		select {
-		case <-ctx.Done(): // prevents potential write deadlock
-			return nil
+		case <-ctx.Done():
+			return ctx.Err()
 		case s.outCh <- iwp:
 		}
 	}
@@ -144,17 +150,17 @@ func (s *Stage) runPipelineStage(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil
-
+			return ctx.Err()
 		case inBatch, ok := <-s.inCh:
-			err := s.transformBatch(ctx, inBatch)
-
-			if !ok && (err == io.EOF || err == nil) {
-				return nil
+			if ctx.Err() != nil {
+				return ctx.Err()
 			}
-
+			err := s.transformBatch(ctx, inBatch)
 			if err != nil {
 				return err
+			}
+			if !ok {
+				return nil
 			}
 		}
 	}
@@ -162,7 +168,6 @@ func (s *Stage) runPipelineStage(ctx context.Context) error {
 
 func (s *Stage) transformBatch(ctx context.Context, inBatch []ItemWithProps) error {
 	outBatch, err := s.stageFunc(ctx, inBatch)
-
 	if err != nil {
 		return err
 	}
@@ -176,7 +181,7 @@ func (s *Stage) transformBatch(ctx context.Context, inBatch []ItemWithProps) err
 
 		select {
 		case <-ctx.Done():
-			return nil
+			return ctx.Err()
 		case s.outCh <- currBatch:
 		}
 	}
