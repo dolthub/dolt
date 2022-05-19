@@ -96,6 +96,7 @@ func repoStateLegacyFromRepoState(rs *RepoState) *repoStateLegacy {
 	return &repoStateLegacy{
 		Head:     rs.Head,
 		Remotes:  rs.Remotes,
+		Backups:  rs.Backups,
 		Branches: rs.Branches,
 		Staged:   rs.staged,
 		Working:  rs.working,

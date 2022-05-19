@@ -38,6 +38,8 @@ const (
 )
 
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+var ErrUnresolvedConstraintViolationsCommit = errors.New("Constraint violation from merge detected, cannot commit transaction. Constraint violations from a merge must be resolved using the dolt_constraint_violations table before committing a transaction. To commit transactions with constraint violations set @@dolt_force_transaction_commit=1")
 
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
@@ -357,7 +359,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return doltdb.ErrUnresolvedConflicts
+			return ErrUnresolvedConflictsCommit
 		}
 	}
 
@@ -369,7 +371,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 			return err
 		}
 		if hasConstraintViolations {
-			return doltdb.ErrUnresolvedConstraintViolations
+			return ErrUnresolvedConstraintViolationsCommit
 		}
 	}
 

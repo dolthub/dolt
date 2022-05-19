@@ -133,7 +133,7 @@ func TestParallelProcessingPipeline(t *testing.T) {
 
 	transform := func(ctx context.Context, in []ItemWithProps) ([]ItemWithProps, error) {
 		if in == nil {
-			return nil, io.EOF
+			return nil, nil
 		}
 
 		routineIdex, ok := GetLocalStorage(ctx).Get(localStoreRoutineIndexID)
@@ -295,7 +295,7 @@ func TestMassParallelism(t *testing.T) {
 
 		transform := func(_ context.Context, in []ItemWithProps) ([]ItemWithProps, error) {
 			if in == nil {
-				return nil, io.EOF
+				return nil, nil
 			}
 
 			out := make([]ItemWithProps, len(in))

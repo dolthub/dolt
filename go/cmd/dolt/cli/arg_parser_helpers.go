@@ -20,8 +20,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
+
+const VerboseFlag = "verbose"
 
 // we are more permissive than what is documented.
 var SupportedLayouts = []string{
@@ -77,6 +80,7 @@ const (
 	CommitMessageArg = "message"
 	AuthorParam      = "author"
 	ForceFlag        = "force"
+	DryRunFlag       = "dry-run"
 	SetUpstreamFlag  = "set-upstream"
 	AllFlag          = "all"
 	HardResetParam   = "hard"
@@ -89,6 +93,14 @@ const (
 	MoveFlag         = "move"
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
+)
+
+const (
+	SyncBackupId        = "sync"
+	RestoreBackupId     = "restore"
+	AddBackupId         = "add"
+	RemoveBackupId      = "remove"
+	RemoveBackupShortId = "rm"
 )
 
 var mergeAbortDetails = `Abort the current conflict resolution process, and try to reconstruct the pre-merge state.
@@ -138,6 +150,12 @@ func CreateResetArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCleanArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(DryRunFlag, "", "Tests removing untracked tables without modifying the working set.")
+	return ap
+}
+
 func CreateCheckoutArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsString(CheckoutCoBranch, "", "branch", "Create a new branch named {{.LessThan}}new_branch{{.GreaterThan}} and start it at {{.LessThan}}start_point{{.GreaterThan}}.")
@@ -177,5 +195,18 @@ func CreateBranchArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(DeleteFlag, "d", "Delete a branch. The branch must be fully merged in its upstream branch.")
 	ap.SupportsFlag(DeleteForceFlag, "", "Shortcut for {{.EmphasisLeft}}--delete --force{{.EmphasisRight}}.")
 
+	return ap
+}
+
+func CreateBackupArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this backup."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
+	ap.SupportsFlag(VerboseFlag, "v", "When printing the list of backups adds additional details.")
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	return ap
 }

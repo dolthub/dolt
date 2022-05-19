@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_push is the stored procedure version of the function `dolt_push`.
-func dolt_push(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltPush is the stored procedure version of the function `dolt_push`.
+func doltPush(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltPush(ctx, args)
 	if err != nil {
 		return nil, err

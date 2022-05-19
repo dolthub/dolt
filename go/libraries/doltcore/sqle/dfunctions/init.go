@@ -35,6 +35,7 @@ var DoltFunctions = []sql.Function{
 	sql.FunctionN{Name: DoltFetchFuncName, Fn: NewFetchFunc},
 	sql.FunctionN{Name: DoltPushFuncName, Fn: NewPushFunc},
 	sql.FunctionN{Name: DoltBranchFuncName, Fn: NewDoltBranchFunc},
+	sql.FunctionN{Name: DoltBackupFuncName, Fn: NewDoltBackupFunc},
 }
 
 // DolthubApiFunctions are the DoltFunctions that get exposed to Dolthub Api.

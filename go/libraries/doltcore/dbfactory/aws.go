@@ -48,6 +48,8 @@ const (
 	AWSCredsProfile = "aws-creds-profile"
 )
 
+var AWSCredTypes = []string{RoleCS.String(), EnvCS.String(), FileCS.String()}
+
 // AWSCredentialSource is an enum type representing the different credential sources (auto, role, env, file, or invalid)
 type AWSCredentialSource int
 

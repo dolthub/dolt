@@ -33,6 +33,7 @@ type InitialDbState struct {
 	ReadReplica *env.Remote
 	Remotes     map[string]env.Remote
 	Branches    map[string]env.BranchConfig
+	Backups     map[string]env.Remote
 
 	// If err is set, this InitialDbState is partially invalid, but may be
 	// usable to initialize a database at a revision specifier, for
