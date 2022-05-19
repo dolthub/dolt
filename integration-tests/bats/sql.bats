@@ -654,6 +654,39 @@ SQL
     cd ../
 }
 
+@test "sql: drop database with branches in use" {
+    mkdir new && cd new
+
+    # this works fine, no attempt to use a dropped database
+    dolt sql  <<SQL
+CREATE DATABASE test1;
+CREATE DATABASE test2;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newbranch');
+USE \`test1/newBranch\`;
+USE test2;
+DROP DATABASE test1;
+SHOW TABLES;
+SQL
+
+    # this fails, we're using test1 after dropping it
+    run dolt sql  <<SQL
+CREATE DATABASE test1;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newbranch');
+USE \`test1/newBranch\`;
+USE test2;
+DROP DATABASE test1;
+SHOW TABLES;
+USE \`test1/newBranch\`;
+SQL
+
+    [ $status -ne 0 ]
+    [[ "$output" =~ "database not found: test1/newbranch" ]] || false
+
+    cd ../
+}
+
 @test "sql: bad dolt db" {
     mkdir new && cd new
 
