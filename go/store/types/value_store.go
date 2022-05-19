@@ -328,12 +328,15 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	}
 
 	r, err := constructRef(lvs.nbf, h, t, height)
-
 	if err != nil {
 		return Ref{}, err
 	}
 
-	lvs.bufferChunk(ctx, v, c, height)
+	err = lvs.bufferChunk(ctx, v, c, height)
+	if err != nil {
+		return Ref{}, err
+	}
+
 	return r, nil
 }
 
@@ -347,7 +350,7 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 //    flushed).
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
-func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
+func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
 
@@ -415,8 +418,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		})
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Enforce invariant (2)
@@ -438,8 +442,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 			err := put(tallest, chunk)
 
-			// TODO: fix panics
-			d.PanicIfError(err)
+			if err != nil {
+				return err
+			}
 
 			continue
 		}
@@ -447,8 +452,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		err := putChildren(tallest)
 
 		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (lvs *ValueStore) Root(ctx context.Context) (hash.Hash, error) {
