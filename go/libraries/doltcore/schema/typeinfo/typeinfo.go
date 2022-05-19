@@ -273,13 +273,13 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 	case JSONTypeIdentifier:
 		return JSONType, nil
 	case GeometryTypeIdentifier:
-		return GeometryType, nil
+		return CreateGeometryTypeFromParams(params)
 	case PointTypeIdentifier:
-		return PointType, nil
+		return CreatePointTypeFromParams(params)
 	case LinestringTypeIdentifier:
-		return LinestringType, nil
+		return CreateLinestringTypeFromParams(params)
 	case PolygonTypeIdentifier:
-		return PolygonType, nil
+		return CreatePolygonTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:

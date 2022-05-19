@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,14 +46,17 @@ func ConvertTypesLinestringToSQLLinestring(l types.Linestring) sql.Linestring {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Linestring, return a sql.Linestring
-	if val, ok := v.(types.Linestring); ok {
-		return ConvertTypesLinestringToSQLLinestring(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.Linestring, return a sql.Linestring
+	if val, ok := v.(types.Linestring); ok {
+		if err := ti.sqlLinestringType.MatchSRID(val); err == nil {
+			return ConvertTypesLinestringToSQLLinestring(val), nil
+		}
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
@@ -129,7 +133,8 @@ func (ti *linestringType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *linestringType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlLinestringType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlLinestringType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -213,4 +218,19 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateLinestringTypeFromParams(params map[string]string) (TypeInfo, error) {
+	sridVal, err := strconv.ParseInt(params["SRID"], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
+	if err != nil {
+		return nil, err
+	}
+
+	LinestringType = &linestringType{sqlLinestringType: sql.LinestringType{SRID: uint32(sridVal), DefinedSRID: dSRID}}
+	return LinestringType, nil
 }

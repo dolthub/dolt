@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -58,16 +59,23 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	// Expect a Geometry type, return a sql.Geometry
 	switch val := v.(type) {
 	case types.Geometry:
-		return ConvertTypesGeometryToSQLGeometry(val), nil
+		if err := ti.sqlGeometryType.MatchSRID(val); err == nil {
+			return ConvertTypesGeometryToSQLGeometry(val), nil
+		}
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
+		if err := ti.sqlGeometryType.MatchSRID(val); err == nil {
+			return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
+		}
 	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
+		if err := ti.sqlGeometryType.MatchSRID(val); err == nil {
+			return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
+		}
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
-	default:
-		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+		if err := ti.sqlGeometryType.MatchSRID(val); err == nil {
+			return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
+		}
 	}
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
@@ -163,7 +171,8 @@ func (ti *geometryType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *geometryType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeometryType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlGeometryType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -253,4 +262,18 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateGeometryTypeFromParams(params map[string]string) (TypeInfo, error) {
+	sridVal, err := strconv.ParseInt(params["SRID"], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
+	if err != nil {
+		return nil, err
+	}
+	GeometryType = &geometryType{sqlGeometryType: sql.GeometryType{InnerType: nil, SRID: uint32(sridVal), DefinedSRID: dSRID}}
+	return GeometryType, nil
 }

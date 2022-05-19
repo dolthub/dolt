@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,14 +46,17 @@ func ConvertTypesPolygonToSQLPolygon(p types.Polygon) sql.Polygon {
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Polygon, return a sql.Polygon
-	if val, ok := v.(types.Polygon); ok {
-		return ConvertTypesPolygonToSQLPolygon(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.Polygon, return a sql.Polygon
+	if val, ok := v.(types.Polygon); ok {
+		if err := ti.sqlPolygonType.MatchSRID(val); err == nil {
+			return ConvertTypesPolygonToSQLPolygon(val), nil
+		}
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
@@ -133,7 +137,8 @@ func (ti *polygonType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *polygonType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPolygonType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlPolygonType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -217,4 +222,19 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreatePolygonTypeFromParams(params map[string]string) (TypeInfo, error) {
+	sridVal, err := strconv.ParseInt(params["SRID"], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
+	if err != nil {
+		return nil, err
+	}
+
+	PolygonType = &polygonType{sqlPolygonType: sql.PolygonType{SRID: uint32(sridVal), DefinedSRID: dSRID}}
+	return PolygonType, nil
 }

@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,10 +46,11 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
-		return ConvertTypesPointToSQLPoint(val), nil
+		if err := ti.sqlPointType.MatchSRID(val); err == nil {
+			return ConvertTypesPointToSQLPoint(val), nil
+		}
 	}
 
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
@@ -123,7 +125,8 @@ func (ti *pointType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *pointType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPointType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlPointType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -207,4 +210,18 @@ func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (t
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreatePointTypeFromParams(params map[string]string) (TypeInfo, error) {
+	sridVal, err := strconv.ParseInt(params["SRID"], 10, 32)
+	if err != nil {
+		return nil, err
+	}
+
+	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
+	if err != nil {
+		return nil, err
+	}
+	PointType = &pointType{sqlPointType: sql.PointType{SRID: uint32(sridVal), DefinedSRID: dSRID}}
+	return PointType, nil
 }
