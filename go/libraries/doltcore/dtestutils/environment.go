@@ -28,20 +28,28 @@ import (
 )
 
 const (
-	TestHomeDir = "/user/bheni"
-	WorkingDir  = "/user/bheni/datasets/states"
+	TestHomeDirPrefix = "/user/dolt/"
+	WorkingDirPrefix  = "/user/dolt/datasets/"
 )
 
-func testHomeDirFunc() (string, error) {
-	return TestHomeDir, nil
+// CreateTestEnv creates a new DoltEnv suitable for testing. The CreateTestEnvWithName
+// function should generally be preferred over this method, especially when working
+// with tests using multiple databases within a MultiRepoEnv.
+func CreateTestEnv() *env.DoltEnv {
+	return CreateTestEnvWithName("test")
 }
 
-func CreateTestEnv() *env.DoltEnv {
+// CreateTestEnvWithName creates a new DoltEnv suitable for testing and uses
+// the specified name to distinguish it from other test envs. This function
+// should generally be preferred over CreateTestEnv, especially when working with
+// tests using multiple databases within a MultiRepoEnv.
+func CreateTestEnvWithName(envName string) *env.DoltEnv {
 	const name = "billy bob"
 	const email = "bigbillieb@fake.horse"
-	initialDirs := []string{TestHomeDir, WorkingDir}
-	fs := filesys.NewInMemFS(initialDirs, nil, WorkingDir)
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.InMemDoltDB, "test")
+	initialDirs := []string{TestHomeDirPrefix + envName, WorkingDirPrefix + envName}
+	homeDirFunc := func() (string, error) { return TestHomeDirPrefix + envName, nil }
+	fs := filesys.NewInMemFS(initialDirs, nil, WorkingDirPrefix+envName)
+	dEnv := env.Load(context.Background(), homeDirFunc, fs, doltdb.InMemDoltDB+envName, "test")
 	cfg, _ := dEnv.Config.GetConfig(env.GlobalConfig)
 	cfg.SetStrings(map[string]string{
 		env.UserNameKey:  name,

@@ -9,6 +9,7 @@ setup() {
     cd $BATS_TMPDIR
     cd dolt-repo-$$
     mkdir "dolt-repo-clones"
+    skip_nbf_dolt_1
 }
 
 teardown() {
