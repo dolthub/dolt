@@ -45,6 +45,7 @@ SQL
 }
 
 setup_remote_tests() {
+    skip_nbf_dolt_1
     # remote repo from top-level test directory
     rm -rf .dolt/
 

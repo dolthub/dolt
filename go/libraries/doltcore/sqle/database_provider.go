@@ -198,8 +198,14 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// get the case-sensitive name for case-sensitive file systems
+	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
+	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
+	//  name in all cases, or else keep a mapping from database name to directory on disk.
+	db := p.databases[strings.ToLower(name)]
+
 	// Get the DB's directory
-	exists, isDir := p.fs.Exists(name)
+	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
 		// engine should already protect against this
 		return sql.ErrDatabaseNotFound.New(name)
@@ -213,6 +219,15 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	}
 
 	// TODO: delete database in current dir
+
+	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
+	// connection strings
+	derivativeNamePrefix := strings.ToLower(name) + "/"
+	for dbName := range p.databases {
+		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
+			delete(p.databases, strings.ToLower(dbName))
+		}
+	}
 
 	delete(p.databases, strings.ToLower(name))
 	return nil
