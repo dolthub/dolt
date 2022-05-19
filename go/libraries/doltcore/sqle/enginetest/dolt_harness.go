@@ -108,13 +108,16 @@ func (d *DoltHarness) Setup(setupData ...[]enginetest.Testdata) {
 	}
 }
 
-func resetScripts(dbs []string) []enginetest.Testdata {
+func resetScripts(dbs []string, autoInc bool) []enginetest.Testdata {
 	var resetCmds []enginetest.Testdata
 	for i := range dbs {
 		db := dbs[i]
 		resetCmds = append(resetCmds, enginetest.NewTestdataExec(fmt.Sprintf("use %s", db)))
 		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dclean()"))
 		resetCmds = append(resetCmds, enginetest.NewTestdataExec("call dreset('--hard', 'head')"))
+		if autoInc {
+			resetCmds = append(resetCmds, enginetest.AutoincrementData...)
+		}
 	}
 	resetCmds = append(resetCmds, enginetest.NewTestdataExec("use mydb"))
 	return resetCmds
@@ -146,12 +149,15 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 			dbs = append(dbs, res[i][0].(string))
 		}
 
+		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+		autoInc := res[0][0].(int64) > 0
+
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 		if err != nil {
 			return nil, err
 		}
 
-		d.resetData = resetScripts(dbs)
+		d.resetData = resetScripts(dbs, autoInc)
 
 		return e, nil
 	}
