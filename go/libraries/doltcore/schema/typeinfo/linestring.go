@@ -52,8 +52,10 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	}
 	// Expect a types.Linestring, return a sql.Linestring
 	if val, ok := v.(types.Linestring); ok {
-		if err := ti.sqlLinestringType.MatchSRID(val); err == nil {
-			return ConvertTypesLinestringToSQLLinestring(val), nil
+		sqlVal := ConvertTypesLinestringToSQLLinestring(val)
+		err := ti.sqlLinestringType.MatchSRID(val)
+		if err == nil {
+			return sqlVal, nil
 		}
 	}
 

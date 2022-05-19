@@ -52,8 +52,10 @@ func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, erro
 	}
 	// Expect a types.Polygon, return a sql.Polygon
 	if val, ok := v.(types.Polygon); ok {
-		if err := ti.sqlPolygonType.MatchSRID(val); err == nil {
-			return ConvertTypesPolygonToSQLPolygon(val), nil
+		sqlVal := ConvertTypesPolygonToSQLPolygon(val)
+		err := ti.sqlPolygonType.MatchSRID(val)
+		if err == nil {
+			return sqlVal, nil
 		}
 	}
 

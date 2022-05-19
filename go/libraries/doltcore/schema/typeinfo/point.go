@@ -48,8 +48,10 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 	}
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
-		if err := ti.sqlPointType.MatchSRID(val); err == nil {
-			return ConvertTypesPointToSQLPoint(val), nil
+		sqlVal := ConvertTypesPointToSQLPoint(val)
+		err := ti.sqlPointType.MatchSRID(val)
+		if err == nil {
+			return sqlVal, nil
 		}
 	}
 
