@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package mysql_db
+package mysql_file_handler
 
 import (
 	"encoding/json"
@@ -100,32 +100,9 @@ func LoadData() ([]byte, error) {
 	return buf, nil
 }
 
-var _ mysql_db.PrivilegePersistCallback = SavePrivileges
 var _ mysql_db.PersistCallback = SaveData
 
-// SavePrivileges implements the interface mysql_db.PrivilegePersistCallback. This is used to save privileges to disk. If the
-// file path has not been previously set, this returns without error. This is so that the logic path can retain the
-// calls regardless of whether a user wants privileges to be loaded or persisted.
-func SavePrivileges(ctx *sql.Context, users []*mysql_db.User, roles []*mysql_db.RoleEdge) error {
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
-	if filePath == "" {
-		return nil
-	}
-
-	data := &privDataJson{
-		Users: users,
-		Roles: roles,
-	}
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-	return ioutil.WriteFile(filePath, jsonData, 0777)
-}
-
 // SaveData writes the provided []byte (in valid flatbuffer format) to a the mysql db file
-// TODO: receive a []byte from some method instead, and just write that to file
 func SaveData(ctx *sql.Context, data []byte) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()

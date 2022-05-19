@@ -17,6 +17,7 @@ package sqlserver
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"net"
 	"net/http"
 	"strconv"
@@ -33,7 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_db"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -166,21 +167,26 @@ func Serve(
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	// Load in MySQL Db from file, if it exists
-	data, err := mysql_db.LoadData()
+	data, err := mysql_file_handler.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
 	// Load in privileges from server
 	if serverConfig.PrivilegeFilePath() != "" {
-		mysql_db.SetFilePath(serverConfig.PrivilegeFilePath())
-	}
-	users, roles, err := mysql_db.LoadPrivileges()
-	if err != nil {
-		return err, nil
+		mysql_file_handler.SetFilePath(serverConfig.PrivilegeFilePath())
 	}
 
-	// TODO: probably always want to create temporary user
+	// Ignore privilege file if mysql.db exists
+	var users []*mysql_db.User
+	var roles []*mysql_db.RoleEdge
+	if data == nil {
+		users, roles, err = mysql_file_handler.LoadPrivileges()
+		if err != nil {
+			return err, nil
+		}
+	}
+
 	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
 	if len(users) == 0 && len(serverConfig.User()) > 0 {
@@ -210,7 +216,7 @@ func Serve(
 	}
 
 	// Set persist callbacks
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_db.SaveData)
+	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
 	defer listener.Close()
