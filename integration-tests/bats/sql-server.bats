@@ -1087,8 +1087,9 @@ END""")
 
     server_query "" 1 "create database test1"
     server_query "" 1 "create database test2"
+    server_query "" 1 "create database test3"
     
-    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2"
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
     server_query "test1" 1 "create table a(x int)"
     server_query "test1" 1 "insert into a values (1), (2)"
     run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
@@ -1096,17 +1097,35 @@ END""")
     server_query "test2" 1 "create table a(x int)"
     server_query "test2" 1 "insert into a values (3), (4)"
     run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    server_query "test3" 1 "create table a(x int)"
+    server_query "test3" 1 "insert into a values (5), (6)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
     
     run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
-    server_query "test1/newbranch" 1 "select * from a" "x\n1\n2" 
+    server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
+
+    run server_query "test2" 1 "select dolt_checkout('-b', 'newbranch')"
+    server_query "test2/newbranch" 1 "select * from a" "x\n3\n4"
 
     server_query "" 1 "drop database TEST1"
 
-    run server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
+    run server_query "test1/newbranch" 1 "select * from a"
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database not found: test1/newbranch" ]] || false
 
-    server_query "test2" 1 "select * from a" "x\n3\n4"
+    # can't drop a branch-qualified database name
+    run server_query "" 1 "drop database \`test2/newbranch\`"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+
+    server_query "" 1 "drop database TEST2"
+
+    run server_query "test2/newbranch" 1 "select * from a"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    
+    server_query "test3" 1 "select * from a" "x\n5\n6"
 }
 
 @test "sql-server: create and drop database with --multi-db-dir" {
