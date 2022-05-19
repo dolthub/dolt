@@ -26,7 +26,6 @@ import (
 	"syscall"
 
 	"github.com/abiosoft/readline"
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -48,7 +47,6 @@ import (
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/osutil"
@@ -379,24 +377,21 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	// temporary user
-	tempUsers := []gms.TemporaryUser{{
-		Username: "root",
-		Password: "",
-	}}
-
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, tempUsers, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 	defer se.Close()
-
-	// Load MySQL db
-	se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), nil, nil)
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
 
 	err = runShell(ctx, se, mrEnv)
 	if err != nil {
@@ -413,7 +408,17 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -448,24 +453,21 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	// temporary user
-	tempUsers := []gms.TemporaryUser{{
-		Username: "root",
-		Password: "",
-	}}
-
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, tempUsers, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 	defer se.Close()
-
-	// Load MySQL db
-	se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = se.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), nil, nil)
-	if err != nil {
-		return errhand.BuildDError(err.Error()).Build()
-	}
 
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
@@ -486,7 +488,17 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}

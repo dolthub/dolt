@@ -51,7 +51,17 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		dbName,
+		false,
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return nil, err
 	}

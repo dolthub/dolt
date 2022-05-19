@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
 	"os"
 	"runtime"
 	"strings"
@@ -53,7 +54,9 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	initialDb string,
 	isReadOnly bool,
-	tempUsers []gms.TemporaryUser,
+	privFilePath string,
+	serverUser string,
+	serverPass string,
 	autocommit bool) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -75,7 +78,26 @@ func NewSqlEngine(
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
+	// Set up privileges
+	if privFilePath != "" {
+		privileges.SetFilePath(privFilePath)
+	}
+	users, roles, err := privileges.LoadPrivileges()
+	if err != nil {
+		return nil, err
+	}
+	var tempUsers []gms.TemporaryUser
+	if len(users) == 0 && len(serverUser) > 0 {
+		tempUsers = append(tempUsers, gms.TemporaryUser{
+			Username: serverUser,
+			Password: serverPass,
+		})
+	}
+
+	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine.Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
+	engine.Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true

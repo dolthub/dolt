@@ -78,7 +78,17 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	})
 
 	// Simplest path would have our import path be a layer over load data
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		dbName,
+		false,
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return nil, err
 	}

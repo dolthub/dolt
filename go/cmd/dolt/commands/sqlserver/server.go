@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
@@ -33,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -165,31 +163,21 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	if serverConfig.PrivilegeFilePath() != "" {
-		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
-	}
-	users, roles, err := privileges.LoadPrivileges()
-	if err != nil {
-		return err, nil
-	}
-	var tempUsers []gms.TemporaryUser
-	if len(users) == 0 && len(serverConfig.User()) > 0 {
-		tempUsers = append(tempUsers, gms.TemporaryUser{
-			Username: serverConfig.User(),
-			Password: serverConfig.Password(),
-		})
-	}
-	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", isReadOnly, tempUsers, serverConfig.AutoCommit())
+	sqlEngine, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatTabular,
+		"",
+		isReadOnly,
+		serverConfig.PrivilegeFilePath(),
+		serverConfig.User(),
+		serverConfig.Password(),
+		serverConfig.AutoCommit(),
+	)
 	if err != nil {
 		return err, nil
 	}
 	defer sqlEngine.Close()
-
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles)
-	if err != nil {
-		return err, nil
-	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
