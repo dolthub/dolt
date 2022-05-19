@@ -66,19 +66,19 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 		}
 	case types.Point:
 		sqlVal := ConvertTypesPointToSQLPoint(val)
-		err = ti.sqlGeometryType.MatchSRID(val)
+		err = ti.sqlGeometryType.MatchSRID(sqlVal)
 		if err == nil {
 			return sql.Geometry{Inner: sqlVal}, nil
 		}
 	case types.Linestring:
 		sqlVal := ConvertTypesLinestringToSQLLinestring(val)
-		err = ti.sqlGeometryType.MatchSRID(val)
+		err = ti.sqlGeometryType.MatchSRID(sqlVal)
 		if err == nil {
 			return sql.Geometry{Inner: sqlVal}, nil
 		}
 	case types.Polygon:
 		sqlVal := ConvertTypesPolygonToSQLPolygon(val)
-		err = ti.sqlGeometryType.MatchSRID(val)
+		err = ti.sqlGeometryType.MatchSRID(sqlVal)
 		if err == nil {
 			return sql.Geometry{Inner: sqlVal}, nil
 		}
