@@ -16,13 +16,13 @@ package enginetest
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/enginetest/queries/scriptgen/setup"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/enginetest/queries/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
