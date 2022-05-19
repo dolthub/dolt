@@ -17,7 +17,6 @@ package sqlserver
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"net"
 	"net/http"
 	"strconv"
@@ -26,6 +25,7 @@ import (
 	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
