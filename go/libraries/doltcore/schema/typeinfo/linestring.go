@@ -50,16 +50,17 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	var err = fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	// Expect a types.Linestring, return a sql.Linestring
 	if val, ok := v.(types.Linestring); ok {
 		sqlVal := ConvertTypesLinestringToSQLLinestring(val)
-		err := ti.sqlLinestringType.MatchSRID(val)
+		err = ti.sqlLinestringType.MatchSRID(sqlVal)
 		if err == nil {
 			return sqlVal, nil
 		}
 	}
 
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+	return nil, err
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly

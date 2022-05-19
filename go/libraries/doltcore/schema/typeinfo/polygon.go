@@ -50,16 +50,17 @@ func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, erro
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	var err = fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	// Expect a types.Polygon, return a sql.Polygon
 	if val, ok := v.(types.Polygon); ok {
 		sqlVal := ConvertTypesPolygonToSQLPolygon(val)
-		err := ti.sqlPolygonType.MatchSRID(val)
+		err = ti.sqlPolygonType.MatchSRID(sqlVal)
 		if err == nil {
 			return sqlVal, nil
 		}
 	}
 
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+	return nil, err
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly

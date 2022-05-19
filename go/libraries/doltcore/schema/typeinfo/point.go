@@ -46,16 +46,17 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	var err = fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
 		sqlVal := ConvertTypesPointToSQLPoint(val)
-		err := ti.sqlPointType.MatchSRID(val)
+		err = ti.sqlPointType.MatchSRID(sqlVal)
 		if err == nil {
 			return sqlVal, nil
 		}
 	}
 
-	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+	return nil, err
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
