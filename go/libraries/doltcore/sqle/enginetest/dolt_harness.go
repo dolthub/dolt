@@ -17,7 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
-	"github.com/dolthub/go-mysql-server/enginetest/queries/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"runtime"
 	"strings"
 	"testing"
