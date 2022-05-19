@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/datas/pull"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 var pushDocs = cli.CommandDocumentationContent{
@@ -64,6 +65,10 @@ func (cmd PushCmd) Name() string {
 // Description returns a description of the command
 func (cmd PushCmd) Description() string {
 	return "Push to a dolt remote."
+}
+
+func (cmd PushCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

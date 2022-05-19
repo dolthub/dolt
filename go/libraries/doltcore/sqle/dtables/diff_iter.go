@@ -342,7 +342,7 @@ func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 
 	o := n
 	r[o] = itr.toCm.name
-	r[o+1] = itr.toCm.ts
+	r[o+1] = maybeTime(itr.toCm.ts)
 
 	if d.Type != tree.AddedDiff {
 		err = itr.fromConverter.PutConverted(val.Tuple(d.Key), val.Tuple(d.From), r[n+2:n+2+m])
@@ -353,7 +353,7 @@ func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 
 	o = n + 2 + m
 	r[o] = itr.fromCm.name
-	r[o+1] = itr.fromCm.ts
+	r[o+1] = maybeTime(itr.fromCm.ts)
 	r[o+2] = diffTypeString(d)
 
 	return r, nil
@@ -369,4 +369,11 @@ func diffTypeString(d tree.Diff) (s string) {
 		s = diffTypeRemoved
 	}
 	return
+}
+
+func maybeTime(t *time.Time) interface{} {
+	if t != nil {
+		return *t
+	}
+	return nil
 }

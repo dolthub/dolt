@@ -603,6 +603,10 @@ func fromNamer(name string) string {
 }
 
 func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw types.ValueReadWriter) errhand.VerboseError {
+	if types.IsFormat_DOLT_1(vrw.Format()) {
+		return errhand.BuildDError("dolt diff is not supported in format %s", vrw.Format().VersionString()).Build()
+	}
+
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -845,6 +849,11 @@ func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch sche
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
+	nbf := dEnv.DoltDB.Format()
+	if types.IsFormat_DOLT_1(nbf) {
+		return fmt.Errorf("dolt diff is not supported in format %s", nbf.VersionString())
+	}
+
 	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
 
 	if err != nil {

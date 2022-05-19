@@ -20,16 +20,6 @@ teardown() {
     teardown_common
 }
 
-@test "keyless: feature gate add/drop column" {
-    run dolt sql -q "ALTER TABLE keyless DROP COLUMN c0;"
-    [ $status -ne 0 ]
-    [[ ! "$output" =~ "panic" ]] || false
-
-    run dolt sql -q "ALTER TABLE keyless ADD COLUMN c2 int;"
-    [ $status -ne 0 ]
-    [[ ! "$output" =~ "panic" ]] || false
-}
-
 @test "keyless: feature indexes and foreign keys" {
     run dolt sql -q "ALTER TABLE keyless ADD INDEX (c1);"
     [ $status -eq 0 ]

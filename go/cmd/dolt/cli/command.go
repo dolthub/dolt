@@ -16,6 +16,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/signal"
@@ -29,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/events"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 func isHelp(str string) bool {
@@ -109,6 +111,12 @@ type EventMonitoredCommand interface {
 type HiddenCommand interface {
 	// Hidden should return true if this command should be hidden from the help text
 	Hidden() bool
+}
+
+type FormatGatedCommand interface {
+	Command
+
+	GatedForNBF(nbf *types.NomsBinFormat) bool
 }
 
 // SubCommandHandler is a command implementation which holds subcommands which can be called
@@ -217,6 +225,14 @@ func (hc SubCommandHandler) handleCommand(ctx context.Context, commandStr string
 		var stop context.CancelFunc
 		ctx, stop = signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
+	}
+
+	fgc, ok := cmd.(FormatGatedCommand)
+	if ok && dEnv.DoltDB != nil && fgc.GatedForNBF(dEnv.DoltDB.Format()) {
+		vs := dEnv.DoltDB.Format().VersionString()
+		err := fmt.Sprintf("Dolt command '%s' is not supported in format %s", cmd.Name(), vs)
+		PrintErrln(color.YellowString(err))
+		return 1
 	}
 
 	ret := cmd.Exec(ctx, commandStr, args, dEnv)
