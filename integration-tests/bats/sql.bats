@@ -655,6 +655,8 @@ SQL
 }
 
 @test "sql: drop database with branches in use" {
+    skiponwindows "Dropping databases can fail on windows due to file in use errors, need to fix"
+    
     mkdir new && cd new
 
     # this works fine, no attempt to use a dropped database
