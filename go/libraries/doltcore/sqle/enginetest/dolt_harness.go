@@ -284,7 +284,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 		globalState := globalstate.NewGlobalStateStore()
 		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
 
-		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
+		d.multiRepoEnv.AddEnv(name, dEnv)
 		d.createdEnvs[db.Name()] = dEnv
 	}
 

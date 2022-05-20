@@ -107,11 +107,7 @@ func TestDoltEnvAsMultiEnv(t *testing.T) {
 	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 1)
-
-	for _, e := range mrEnv.envs {
-		assert.Equal(t, "test_name_123", e.name)
-		assert.Equal(t, dEnv, e.env)
-	}
+	assert.Equal(t, dEnv, mrEnv.envs["test_name_123"])
 }
 
 func TestDoltEnvAsMultiEnvWithMultipleRepos(t *testing.T) {
@@ -127,36 +123,9 @@ func TestDoltEnvAsMultiEnvWithMultipleRepos(t *testing.T) {
 	mrEnv, err := DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(t, err)
 	assert.Len(t, mrEnv.envs, 3)
-
-	type envCmp struct {
-		name    string
-		doltDir string
-	}
-
-	expected := []envCmp{
-		{
-			name:    "test_name_123",
-			doltDir: dEnv.GetDoltDir(),
-		},
-		{
-			name:    "abc",
-			doltDir: subEnv1.GetDoltDir(),
-		},
-		{
-			name:    "def",
-			doltDir: subEnv2.GetDoltDir(),
-		},
-	}
-
-	var actual []envCmp
-	for _, env := range mrEnv.envs {
-		actual = append(actual, envCmp{
-			name:    env.name,
-			doltDir: env.env.GetDoltDir(),
-		})
-	}
-
-	assert.Equal(t, expected, actual)
+	assert.Equal(t, dEnv.GetDoltDir(), mrEnv.envs["test_name_123"].GetDoltDir())
+	assert.Equal(t, subEnv2.GetDoltDir(), mrEnv.envs["def"].GetDoltDir())
+	assert.Equal(t, subEnv1.GetDoltDir(), mrEnv.envs["abc"].GetDoltDir())
 }
 
 func initMultiEnv(t *testing.T, testName string, names []string) (string, HomeDirProvider, map[string]*DoltEnv) {

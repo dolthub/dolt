@@ -42,14 +42,9 @@ type EnvNameAndPath struct {
 
 // MultiRepoEnv is a type used to store multiple environments which can be retrieved by name
 type MultiRepoEnv struct {
-	envs []NamedEnv
+	envs map[string]*DoltEnv
 	fs   filesys.Filesys
 	cfg  config.ReadWriteConfig
-}
-
-type NamedEnv struct {
-	name string
-	env  *DoltEnv
 }
 
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
@@ -61,46 +56,21 @@ func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 }
 
 // TODO: un export
-// AddEnv adds an environment to the MultiRepoEnv by name
+// AddEnv adds an environment to the MultiRepoEnv by name, replacing any
+// existing environment with the same name.
 func (mrEnv *MultiRepoEnv) AddEnv(name string, dEnv *DoltEnv) {
-	mrEnv.envs = append(mrEnv.envs, NamedEnv{
-		name: name,
-		env:  dEnv,
-	})
-}
-
-// AddOrReplaceEnvs adds the specified DoltEnv to this MultiRepoEnv, replacing
-// any existing environment in the MultiRepoEnv with the same name.
-func (mrEnv *MultiRepoEnv) AddOrReplaceEnv(name string, dEnv *DoltEnv) {
-	// TODO: Modeling NamedEnvs as a map could probably simplify this file
-	newNamedEnvs := make([]NamedEnv, 0, len(mrEnv.envs))
-	for _, namedEnv := range mrEnv.envs {
-		if namedEnv.name != name {
-			newNamedEnvs = append(newNamedEnvs, namedEnv)
-		}
-	}
-	newNamedEnvs = append(newNamedEnvs, NamedEnv{name: name, env: dEnv})
-
-	mrEnv.envs = newNamedEnvs
+	mrEnv.envs[name] = dEnv
 }
 
 // GetEnv returns the env with the name given, or nil if no such env exists
 func (mrEnv *MultiRepoEnv) GetEnv(name string) *DoltEnv {
-	var found *DoltEnv
-	mrEnv.Iter(func(n string, dEnv *DoltEnv) (stop bool, err error) {
-		if n == name {
-			found = dEnv
-			return true, nil
-		}
-		return false, nil
-	})
-	return found
+	return mrEnv.envs[name]
 }
 
 // Iter iterates over all environments in the MultiRepoEnv
 func (mrEnv *MultiRepoEnv) Iter(cb func(name string, dEnv *DoltEnv) (stop bool, err error)) error {
-	for _, e := range mrEnv.envs {
-		stop, err := cb(e.name, e.env)
+	for name, env := range mrEnv.envs {
+		stop, err := cb(name, env)
 
 		if err != nil {
 			return err
@@ -215,7 +185,7 @@ func DoltEnvAsMultiEnv(ctx context.Context, dEnv *DoltEnv) (*MultiRepoEnv, error
 	localCfg := dEnv.Config.WriteableConfig()
 
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
+		envs: make(map[string]*DoltEnv),
 		fs:   dEnv.FS,
 		cfg:  localCfg,
 	}
@@ -254,7 +224,7 @@ func MultiEnvForDirectory(
 	version string,
 ) (*MultiRepoEnv, error) {
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
+		envs: make(map[string]*DoltEnv),
 		fs:   fs,
 		cfg:  config,
 	}
@@ -309,7 +279,7 @@ func LoadMultiEnv(
 	}
 
 	mrEnv := &MultiRepoEnv{
-		envs: make([]NamedEnv, 0),
+		envs: make(map[string]*DoltEnv),
 		fs:   fs,
 		cfg:  cfg,
 	}
