@@ -458,7 +458,7 @@ func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx typ
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
 	builder := flatbuffers.NewBuilder(1024)
-	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name}})
+	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name, Addr: hash.Hash{}}})
 	builder.Finish(off)
 	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
 	return doltDevIndexSet{is.vrw, msg}, nil
