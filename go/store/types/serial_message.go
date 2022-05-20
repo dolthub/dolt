@@ -62,7 +62,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		for i := 0; i < refs.NamesLength(); i++ {
 			name := refs.Names(i)
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "\t%s: %s\n", name, addr.String())
+			fmt.Fprintf(ret, "\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "}")
 		return ret.String()
@@ -76,8 +76,8 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Desc())
 		fmt.Fprintf(ret, "\tEmail: %s\n", msg.Email())
 		fmt.Fprintf(ret, "\tTime: %s\n", time.UnixMilli((int64)(msg.TimestampMillis())).String())
-		fmt.Fprintf(ret, "\tWorkingRootAddr: %s\n", hash.New(msg.WorkingRootAddrBytes()).String())
-		fmt.Fprintf(ret, "\tStagedRootAddr: %s\n", hash.New(msg.StagedRootAddrBytes()).String())
+		fmt.Fprintf(ret, "\tWorkingRootAddr: #%s\n", hash.New(msg.WorkingRootAddrBytes()).String())
+		fmt.Fprintf(ret, "\tStagedRootAddr: #%s\n", hash.New(msg.StagedRootAddrBytes()).String())
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.CommitFileID:
@@ -94,7 +94,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes := msg.ParentAddrsBytes()
 		for i := 0; i < msg.ParentAddrsLength() / hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "\t\t%s\n", addr.String())
+			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
 
@@ -102,7 +102,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes = msg.ParentClosureBytes()
 		for i := 0; i < msg.ParentClosureLength() / hash.ByteLen; i++ {
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "\t\t%s\n", addr.String())
+			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
 
@@ -113,15 +113,15 @@ func (sm SerialMessage) HumanReadableString() string {
 		ret := &strings.Builder{}
 		fmt.Fprintf(ret, "{\n")
 		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
-		fmt.Fprintf(ret, "\tForeignKeys: %s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
-		fmt.Fprintf(ret, "\tSuperSchema: %s\n", hash.New(msg.SuperSchemasAddrBytes()).String())
+		fmt.Fprintf(ret, "\tForeignKeys: #%s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
+		fmt.Fprintf(ret, "\tSuperSchema: #%s\n", hash.New(msg.SuperSchemasAddrBytes()).String())
 		fmt.Fprintf(ret, "\tTables: {\n")
 		tableRefs := msg.Tables(nil)
 		hashes := tableRefs.RefArrayBytes()
 		for i := 0; i < tableRefs.NamesLength(); i++ {
 			name := tableRefs.Names(i)
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "\t\t%s: %s\n", name, addr.String())
+			fmt.Fprintf(ret, "\t\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
@@ -131,8 +131,8 @@ func (sm SerialMessage) HumanReadableString() string {
 		ret := &strings.Builder{}
 
 		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tSchema: %s\n",  hash.New(msg.SchemaBytes()).String())
-		fmt.Fprintf(ret, "\tViolations: %s\n",  hash.New(msg.ViolationsBytes()).String())
+		fmt.Fprintf(ret, "\tSchema: #%s\n",  hash.New(msg.SchemaBytes()).String())
+		fmt.Fprintf(ret, "\tViolations: #%s\n",  hash.New(msg.ViolationsBytes()).String())
 		// TODO: merge conflicts, not stable yet
 
 		fmt.Fprintf(ret, "\tAutoinc: %d\n", msg.AutoIncrementValue())
@@ -146,7 +146,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		for i := 0; i < idxRefs.NamesLength(); i++ {
 			name := idxRefs.Names(i)
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "\t\t%s: %s\n", name, addr.String())
+			fmt.Fprintf(ret, "\t\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
