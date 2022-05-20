@@ -25,6 +25,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+// resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
+// resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
+// Commit and Roots.
 func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
