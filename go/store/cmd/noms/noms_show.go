@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
@@ -179,7 +180,46 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 	case tree.Node:
 		return tree.OutputProllyNode(w, value)
 	case types.Value:
-		return types.WriteEncodedValue(ctx, w, value)
+		switch value := value.(type) {
+		// Some types of serial message need to be output here because of dependency cycles between type / tree package
+		case types.SerialMessage:
+			switch serial.GetFileID(value) {
+			case serial.TableFileID:
+				msg := serial.GetRootAsTable(value, 0)
+
+				fmt.Fprintf(w, "{\n")
+				fmt.Fprintf(w, "\tSchema: %s\n",  hash.New(msg.SchemaBytes()).String())
+				fmt.Fprintf(w, "\tViolations: %s\n",  hash.New(msg.ViolationsBytes()).String())
+				// TODO: merge conflicts, not stable yet
+
+				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
+
+				fmt.Fprintf(w, "\tPrimary index: {\n")
+				node := tree.NodeFromBytes(msg.PrimaryIndexBytes())
+				tree.OutputProllyNode(w, node)
+				fmt.Fprintf(w, "\t}\n")
+
+				fmt.Fprintf(w, "\tSecondary indexes: {\n")
+				idxRefs := msg.SecondaryIndexes(nil)
+				hashes := idxRefs.RefArrayBytes()
+				for i := 0; i < idxRefs.NamesLength(); i++ {
+					name := idxRefs.Names(i)
+					addr := hash.New(hashes[i*20:(i+1)*20])
+					fmt.Fprintf(w, "\t\t%s: %s\n", name, addr.String())
+				}
+				fmt.Fprintf(w, "\t}\n")
+				fmt.Fprintf(w, "}")
+
+				return nil
+			case serial.ProllyTreeNodeFileID:
+				node := prolly.NodeFromValue(value)
+				return tree.OutputProllyNode(w, node)
+			default:
+				return types.WriteEncodedValue(ctx, w, value)
+			}
+		default:
+			return types.WriteEncodedValue(ctx, w, value)
+		}
 	default:
 		_, err := w.Write([]byte(fmt.Sprintf("unknown value type %T: %v", value, value)))
 		return err
