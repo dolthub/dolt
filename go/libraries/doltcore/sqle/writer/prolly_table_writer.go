@@ -15,8 +15,12 @@
 package writer
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"os"
 
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -207,7 +211,8 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	}
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
-	if _, ok := w.primary.(prollyKeylessWriter); ok {
+
+	if schema.IsKeyless(sch) {
 		newPrimary, err = getKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
 	} else {
 		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, sqlSch.Schema, sch)
@@ -237,6 +242,12 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 	if err != nil {
 		return nil, err
 	}
+
+	var b bytes.Buffer
+	m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+		return tree.OutputProllyNode(&b, nd)
+	})
+	fmt.Fprintf(os.Stderr, "table data is %s", b.String())
 
 	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(m))
 	if err != nil {

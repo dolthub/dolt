@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -894,6 +895,8 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
 
+	fmt.Fprintf(os.Stderr, "putTable: %s has hash %s\n", tName, ref.TargetHash())
+
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
 		return nil, err
@@ -1326,21 +1329,10 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString("\n")
+			buf.WriteString(":\n")
 
-			buf.WriteString("Struct:\n")
 			buf.WriteString(table.DebugString(ctx))
 
-			buf.WriteString("\ndata:\n")
-			data, err := table.GetNomsRowData(ctx)
-			if err != nil {
-				panic(err)
-			}
-
-			err = types.WriteEncodedValue(ctx, &buf, data)
-			if err != nil {
-				panic(err)
-			}
 			return false, nil
 		})
 	}

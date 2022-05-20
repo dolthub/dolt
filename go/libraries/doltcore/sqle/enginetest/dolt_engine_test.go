@@ -795,7 +795,6 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 }
 
 func TestAddDropPks(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 

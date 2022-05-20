@@ -59,7 +59,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes := refs.RefArrayBytes()
 		for i := 0; i < refs.NamesLength(); i++ {
 			name := refs.Names(i)
-			addr := hash.New(hashes[:20])
+			addr := hash.New(hashes[i*20:(i+1)*20])
 			fmt.Fprintf(ret, "  %s: %s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "}")

@@ -85,7 +85,7 @@ sub print_show {
     
     my $noms_show_output = show($hash);
     for my $line (split /\n/, $noms_show_output) {
-        if ($line =~ /#([a-z0-9]{32})/) {
+        if ($line =~ /([a-z0-9]{32})/) {
             $hashes{$label} = $1;
             print "$label)   $line\n";
             $label++;

@@ -563,6 +563,8 @@ func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bo
 // Data changes contained in the |newRoot| aren't persisted until this session is committed.
 // TODO: rename to SetWorkingRoot
 func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	fmt.Fprintf(os.Stderr, "setroot, value is %s", newRoot.DebugString(ctx, true))
+
 	// TODO: this is redundant with work done in setRoot
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
@@ -638,6 +640,8 @@ func (sess *Session) SetWorkingSet(ctx *sql.Context, dbName string, ws *doltdb.W
 	if err != nil {
 		return err
 	}
+
+	ctx.GetLogger().Warnf("setting working set with root %s", ws.WorkingRoot().DebugString(ctx, true))
 
 	err = sessionState.WriteSession.SetWorkingSet(ctx, ws)
 	if err != nil {
