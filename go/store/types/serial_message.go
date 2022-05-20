@@ -61,7 +61,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		for i := 0; i < refs.NamesLength(); i++ {
 			name := refs.Names(i)
 			addr := hash.New(hashes[i*20:(i+1)*20])
-			fmt.Fprintf(ret, "  %s: %s\n", name, addr.String())
+			fmt.Fprintf(ret, "\t%s: %s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "}")
 		return ret.String()
@@ -81,7 +81,23 @@ func (sm SerialMessage) HumanReadableString() string {
 	case serial.CommitFileID:
 		return "Commit"
 	case serial.RootValueFileID:
-		return "RootValue"
+		msg := serial.GetRootAsRootValue(sm, 0)
+		ret := &strings.Builder{}
+		fmt.Fprintf(ret, "{\n")
+		fmt.Fprintf(ret, "\tFeatureVersion: %d\n", msg.FeatureVersion())
+		fmt.Fprintf(ret, "\tForeignKeys: %s\n", hash.New(msg.ForeignKeyAddrBytes()).String())
+		fmt.Fprintf(ret, "\tSuperSchema: %s\n", hash.New(msg.SuperSchemasAddrBytes()).String())
+		fmt.Fprintf(ret, "\tTables: {\n")
+		tableRefs := msg.Tables(nil)
+		hashes := tableRefs.RefArrayBytes()
+		for i := 0; i < tableRefs.NamesLength(); i++ {
+			name := tableRefs.Names(i)
+			addr := hash.New(hashes[i*20:(i+1)*20])
+			fmt.Fprintf(ret, "\t\t%s: %s\n", name, addr.String())
+		}
+		fmt.Fprintf(ret, "\t}\n")
+		fmt.Fprintf(ret, "}")
+		return ret.String()
 	case serial.TableFileID:
 		return "TableFile"
 	case serial.ProllyTreeNodeFileID:
