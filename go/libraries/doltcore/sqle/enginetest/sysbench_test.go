@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
@@ -30,7 +31,7 @@ func TestSysbenchTransactionCV(t *testing.T) {
 	}
 
 	harness := newDoltHarness(t)
-	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "Sysbench Transactions Shouldn't Cause Constraint Violations",
 		SetUpScript: []string{
 			`SET FOREIGN_KEY_CHECKS=0;`,
@@ -103,7 +104,7 @@ s_dist_07, s_dist_08, s_dist_09, s_dist_10, s_ytd, s_order_cnt, s_remote_cnt, s_
 (88405, 1, 60,'c24','o24','u24','k24','n24','d24','u24','q24','t24','s24',0,0,0,'n46');`,
 			`SET FOREIGN_KEY_CHECKS=1;`,
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET SESSION transaction_isolation='REPEATABLE-READ';",
 				Expected: []sql.Row{{}},

@@ -162,17 +162,9 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	}
 	newKey := m.keyBld.Build(sharePool)
 
-	ok, err := m.mut.Has(ctx, newKey)
+	_, err := m.mut.Has(ctx, newKey)
 	if err != nil {
 		return err
-	} else if ok {
-		// All secondary writers have a name, while the primary does not. If this is a secondary writer, then we can
-		// bypass the keyError() call as it will be done in the calling primary writer.
-		if m.name == "" {
-			return m.keyError(ctx, newKey, true)
-		} else {
-			return sql.ErrUniqueKeyViolation.New()
-		}
 	}
 
 	for to := range m.valMap {
