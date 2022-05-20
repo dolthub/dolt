@@ -232,6 +232,9 @@ SQL
     run dolt sql -q "ALTER TABLE test MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
     [ "$status" -eq 0 ]
 
+    run dolt sql -q "SHOW CREATE TABLE test"
+    [[ "$output" =~ "\`p\` geometry NOT NULL SRID 4326" ]] || false
+
     skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
