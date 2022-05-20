@@ -166,15 +166,20 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
+	// Set mysql.db file path from server
+	if serverConfig.MySQLDbFilePath() != "" {
+		mysql_file_handler.SetMySQLDbFilePath(serverConfig.MySQLDbFilePath())
+	}
+
 	// Load in MySQL Db from file, if it exists
 	data, err := mysql_file_handler.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
-	// Load in privileges from server
+	// Set privilege file path from server
 	if serverConfig.PrivilegeFilePath() != "" {
-		mysql_file_handler.SetFilePath(serverConfig.PrivilegeFilePath())
+		mysql_file_handler.SetPrivilegeFilePath(serverConfig.PrivilegeFilePath())
 	}
 
 	// Ignore privilege file if mysql.db exists
@@ -209,10 +214,12 @@ func Serve(
 		return err, nil
 	}
 
-	// Load in Privilege data
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
-	if err != nil {
-		return err, nil
+	// Load in Privilege data iff mysql db didn't exist
+	if len(data) == 0 {
+		err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
+		if err != nil {
+			return err, nil
+		}
 	}
 
 	// Set persist callbacks

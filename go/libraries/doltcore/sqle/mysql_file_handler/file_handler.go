@@ -25,12 +25,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
-var (
-	filePath  string
-	fileMutex = &sync.Mutex{}
-)
-
-const mysqlDbFilePath = "mysql.db"
+var fileMutex = &sync.Mutex{}
+var mysqlDbFilePath string
+var privsFilePath string
 
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
 type privDataJson struct {
@@ -38,8 +35,8 @@ type privDataJson struct {
 	Roles []*mysql_db.RoleEdge
 }
 
-// SetFilePath sets the file path that will be used for saving and loading privileges.
-func SetFilePath(fp string) {
+// SetPrivilegeFilePath sets the file path that will be used for loading privileges.
+func SetPrivilegeFilePath(fp string) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -55,7 +52,27 @@ func SetFilePath(fp string) {
 			panic(err)
 		}
 	}
-	filePath = fp
+	privsFilePath = fp
+}
+
+// SetMySQLDbFilePath sets the file path that will be used for saving and loading MySQL Db tables.
+func SetMySQLDbFilePath(fp string) {
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
+
+	_, err := os.Stat(fp)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			if err := ioutil.WriteFile(fp, []byte{}, 0644); err != nil {
+				// If we can't create the file it's a catastrophic error
+				panic(err)
+			}
+		} else {
+			// Some strange unknown failure, okay to panic here
+			panic(err)
+		}
+	}
+	mysqlDbFilePath = fp
 }
 
 // LoadPrivileges reads the file previously set on the file path and returns the privileges and role connections. If the
@@ -64,11 +81,11 @@ func SetFilePath(fp string) {
 func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
-	if filePath == "" {
+	if privsFilePath == "" {
 		return nil, nil, nil
 	}
 
-	fileContents, err := ioutil.ReadFile(filePath)
+	fileContents, err := ioutil.ReadFile(privsFilePath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -87,6 +104,9 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 func LoadData() ([]byte, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
+	if mysqlDbFilePath == "" {
+		return nil, nil
+	}
 
 	buf, err := ioutil.ReadFile(mysqlDbFilePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -102,7 +122,7 @@ func LoadData() ([]byte, error) {
 
 var _ mysql_db.PersistCallback = SaveData
 
-// SaveData writes the provided []byte (in valid flatbuffer format) to a the mysql db file
+// SaveData writes the provided []byte (in valid flatbuffer format) to the mysql db file
 func SaveData(ctx *sql.Context, data []byte) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()

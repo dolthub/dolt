@@ -49,6 +49,8 @@ const (
 	defaultDataDir             = "."
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
+	defaultMySQLDbFilePath     = "mysql.db"
+	defaultPrivilegeFilePath   = "privs.json"
 )
 
 const (
@@ -125,9 +127,8 @@ type ServerConfig interface {
 	// PrivilegeFilePath returns the path to the file which contains all needed privilege information in the form of a
 	// JSON string.
 	PrivilegeFilePath() string
-
 	// MySQLDbFilePath returns the path to the file which contains the information for a MySQL db.
-	//MySQLDbFilePath() string
+	MySQLDbFilePath() string
 }
 
 type commandLineServerConfig struct {
@@ -148,6 +149,7 @@ type commandLineServerConfig struct {
 	requireSecureTransport bool
 	persistenceBehavior    string
 	privilegeFilePath      string
+	mysqlDbFilePath        string
 }
 
 var _ ServerConfig = (*commandLineServerConfig)(nil)
@@ -245,7 +247,7 @@ func (cfg *commandLineServerConfig) PrivilegeFilePath() string {
 }
 
 func (cfg *commandLineServerConfig) MySQLDbFilePath() string {
-	return "mysql-db"
+	return cfg.mysqlDbFilePath
 }
 
 // DatabaseNamesAndPaths returns an array of env.EnvNameAndPathObjects corresponding to the databases to be loaded in
@@ -349,6 +351,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
 		dataDir:             defaultDataDir,
+		mysqlDbFilePath:     defaultMySQLDbFilePath,
 	}
 }
 

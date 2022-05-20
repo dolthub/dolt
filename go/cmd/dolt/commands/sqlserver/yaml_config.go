@@ -118,6 +118,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
+	MySQLDbFile       *string               `yaml:"mysql_db_file"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -325,7 +326,10 @@ func (cfg YAMLConfig) PrivilegeFilePath() string {
 }
 
 func (cfg YAMLConfig) MySQLDbFilePath() string {
-	return "mysql-db"
+	if cfg.MySQLDbFile != nil {
+		return *cfg.MySQLDbFile
+	}
+	return ""
 }
 
 // QueryParallelism returns the parallelism that should be used by the go-mysql-server analyzer
