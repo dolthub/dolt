@@ -13,10 +13,6 @@ expect -i client "select * from mysql.user;\r"
 
 expect -i first -re "\rdolt_repo_.*> "
 
-
-
-
-
 send -i client "quit\r"
 expect -i client "quit\r"
 
