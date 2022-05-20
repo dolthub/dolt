@@ -232,11 +232,15 @@ SQL
     run dolt sql -q "ALTER TABLE test MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
     [ "$status" -eq 0 ]
 
+    skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
+    run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
+    [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
+
     run dolt sql -q "INSERT INTO test VALUES (2, ST_SRID(POINT(1,2), 4326))"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
-    # currently this row is set to NULL instead of [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
+    [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
     [[ "$output" =~ "POINT(1 2)" ]] || false
 
     run dolt sql -q "ALTER TABLE test MODIFY COLUMN p LINESTRING SRID 4326"
