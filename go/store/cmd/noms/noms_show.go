@@ -188,8 +188,8 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				msg := serial.GetRootAsTable(value, 0)
 
 				fmt.Fprintf(w, "{\n")
-				fmt.Fprintf(w, "\tSchema: %s\n",  hash.New(msg.SchemaBytes()).String())
-				fmt.Fprintf(w, "\tViolations: %s\n",  hash.New(msg.ViolationsBytes()).String())
+				fmt.Fprintf(w, "\tSchema: #%s\n",  hash.New(msg.SchemaBytes()).String())
+				fmt.Fprintf(w, "\tViolations: #%s\n",  hash.New(msg.ViolationsBytes()).String())
 				// TODO: merge conflicts, not stable yet
 
 				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
@@ -205,7 +205,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				for i := 0; i < idxRefs.NamesLength(); i++ {
 					name := idxRefs.Names(i)
 					addr := hash.New(hashes[i*20:(i+1)*20])
-					fmt.Fprintf(w, "\t\t%s: %s\n", name, addr.String())
+					fmt.Fprintf(w, "\t\t%s: #%s\n", name, addr.String())
 				}
 				fmt.Fprintf(w, "\t}\n")
 				fmt.Fprintf(w, "}")
