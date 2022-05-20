@@ -99,7 +99,27 @@ func (sm SerialMessage) HumanReadableString() string {
 		fmt.Fprintf(ret, "}")
 		return ret.String()
 	case serial.TableFileID:
-		return "TableFile"
+		msg := serial.GetRootAsTable(sm, 0)
+		ret := &strings.Builder{}
+
+		fmt.Fprintf(ret, "{\n")
+		fmt.Fprintf(ret, "\tSchema: %s\n",  hash.New(msg.SchemaBytes()).String())
+		fmt.Fprintf(ret, "\tViolations: %s\n",  hash.New(msg.ViolationsBytes()).String())
+		// TODO: can't use tree package to print here, creates a cycle
+		fmt.Fprintf(ret, "Autoinc: %d\n", msg.AutoIncrementValue())
+		fmt.Fprintf(ret, "\tPrimary index: prolly tree\n")
+
+		fmt.Fprintf(ret, "\tSecondary indexes: {\n")
+		idxRefs := msg.SecondaryIndexes(nil)
+		hashes := idxRefs.RefArrayBytes()
+		for i := 0; i < idxRefs.NamesLength(); i++ {
+			name := idxRefs.Names(i)
+			addr := hash.New(hashes[i*20:(i+1)*20])
+			fmt.Fprintf(ret, "\t\t%s: %s\n", name, addr.String())
+		}
+		fmt.Fprintf(ret, "\t}\n")
+		fmt.Fprintf(ret, "}")
+		return ret.String()
 	case serial.ProllyTreeNodeFileID:
 		return "ProllyTreeNode"
 	case serial.AddressMapFileID:
