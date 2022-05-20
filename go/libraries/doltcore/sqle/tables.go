@@ -960,8 +960,8 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 	newSchema sql.PrimaryKeySchema,
 	modifiedColumn *sql.Column,
 ) bool {
-	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in either format
-	return types.IsFormat_DOLT_1(t.nbf)
+	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in the new format
+	return types.IsFormat_DOLT_1(t.nbf) || len(oldSchema.Schema) < len(newSchema.Schema)
 }
 
 func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
@@ -1384,10 +1384,6 @@ func (t *AlterableDoltTable) CreateIndex(
 
 // DropIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	// We disallow removing internal dolt_ tables from SQL directly
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")

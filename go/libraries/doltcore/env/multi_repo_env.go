@@ -69,6 +69,21 @@ func (mrEnv *MultiRepoEnv) AddEnv(name string, dEnv *DoltEnv) {
 	})
 }
 
+// AddOrReplaceEnvs adds the specified DoltEnv to this MultiRepoEnv, replacing
+// any existing environment in the MultiRepoEnv with the same name.
+func (mrEnv *MultiRepoEnv) AddOrReplaceEnv(name string, dEnv *DoltEnv) {
+	// TODO: Modeling NamedEnvs as a map could probably simplify this file
+	newNamedEnvs := make([]NamedEnv, 0, len(mrEnv.envs))
+	for _, namedEnv := range mrEnv.envs {
+		if namedEnv.name != name {
+			newNamedEnvs = append(newNamedEnvs, namedEnv)
+		}
+	}
+	newNamedEnvs = append(newNamedEnvs, NamedEnv{name: name, env: dEnv})
+
+	mrEnv.envs = newNamedEnvs
+}
+
 // GetEnv returns the env with the name given, or nil if no such env exists
 func (mrEnv *MultiRepoEnv) GetEnv(name string) *DoltEnv {
 	var found *DoltEnv

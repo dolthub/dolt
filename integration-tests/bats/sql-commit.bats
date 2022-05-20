@@ -84,6 +84,7 @@ teardown() {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -99,6 +100,7 @@ teardown() {
     run dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'Commit1')"
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -116,6 +118,7 @@ teardown() {
     DCOMMIT=$output
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]

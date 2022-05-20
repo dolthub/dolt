@@ -73,6 +73,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -107,6 +108,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -391,6 +393,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -417,6 +420,7 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
+    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -527,6 +531,7 @@ teardown() {
 
     dolt checkout new_branch
 
+    skip_nbf_dolt_1
     import_tables "json"
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
@@ -553,6 +558,7 @@ teardown() {
 
     import_tables "json"
 
+    skip_nbf_dolt_1
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
