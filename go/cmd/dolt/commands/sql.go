@@ -512,6 +512,9 @@ func execQuery(
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
