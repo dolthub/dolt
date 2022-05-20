@@ -996,7 +996,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_BRANCH('branch1');",
 			"CALL DOLT_BRANCH('branch2');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				// we need dolt_force_transaction_commit because we want to
 				// transaction commit constraint violations that occur as a
@@ -1143,7 +1143,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'updating col1 to 4');",
 			"CALL DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1",
 				Expected: []sql.Row{{}},
@@ -1216,7 +1216,7 @@ var MergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'insert parent with pk 3');",
 			"CALL DOLT_CHECKOUT('main');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SET dolt_force_transaction_commit = 1;",
 				Expected: []sql.Row{{}},
