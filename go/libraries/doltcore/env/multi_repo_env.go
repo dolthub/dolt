@@ -47,6 +47,13 @@ type MultiRepoEnv struct {
 	cfg  config.ReadWriteConfig
 }
 
+// NewMultiRepoEnv returns a new MultiRepoEnv initialized and ready for use.
+func NewMultiRepoEnv() MultiRepoEnv {
+	return MultiRepoEnv{
+		envs: make(map[string]*DoltEnv),
+	}
+}
+
 func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
 	return mrEnv.fs
 }

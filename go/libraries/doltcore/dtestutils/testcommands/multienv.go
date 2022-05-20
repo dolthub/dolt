@@ -72,7 +72,7 @@ func NewMultiRepoTestSetup(errhand func(args ...interface{})) *MultiRepoTestSetu
 	}
 
 	return &MultiRepoTestSetup{
-		MrEnv:   env.MultiRepoEnv{},
+		MrEnv:   env.NewMultiRepoEnv(),
 		Remotes: make(map[string]env.Remote),
 		DoltDBs: make(map[string]*doltdb.DoltDB, 0),
 		DbNames: make([]string, 0),
