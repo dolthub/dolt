@@ -29,6 +29,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	flag "github.com/juju/gnuflag"
 
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
@@ -139,9 +140,31 @@ func outputType(value interface{}) {
 	case tree.Node:
 		typeString = "prolly.Node"
 	case types.Value:
-		t, err := types.TypeOf(value)
-		typeString = t.HumanReadableString()
-		util.CheckError(err)
+		switch value := value.(type) {
+		case types.SerialMessage:
+			switch serial.GetFileID(value) {
+			case serial.StoreRootFileID:
+				typeString = "StoreRoot"
+			case serial.TagFileID:
+				typeString = "Tag"
+			case serial.WorkingSetFileID:
+				typeString = "WorkingSet"
+			case serial.CommitFileID:
+				typeString = "Commit"
+			case serial.RootValueFileID:
+				typeString = "RootValue"
+			case serial.TableFileID:
+				typeString = "TableFile"
+			case serial.ProllyTreeNodeFileID:
+				typeString = "ProllyTreeNode"
+			case serial.AddressMapFileID:
+				typeString = "AddressMap"
+			default:
+				t, err := types.TypeOf(value)
+				typeString = t.HumanReadableString()
+				util.CheckError(err)
+			}
+		}
 	default:
 		typeString = fmt.Sprintf("unknown type %T", value)
 	}

@@ -51,7 +51,8 @@ func (sm SerialMessage) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 }
 
 func (sm SerialMessage) HumanReadableString() string {
-	if serial.GetFileID([]byte(sm)) == serial.StoreRootFileID {
+	switch serial.GetFileID(sm) {
+	case serial.StoreRootFileID:
 		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
 		ret := &strings.Builder{}
 		refs := msg.Refs(nil)
@@ -64,8 +65,32 @@ func (sm SerialMessage) HumanReadableString() string {
 		}
 		fmt.Fprintf(ret, "}")
 		return ret.String()
+	case serial.TagFileID:
+		return "Tag"
+	case serial.WorkingSetFileID:
+		msg := serial.GetRootAsWorkingSet(sm, 0)
+		ret := &strings.Builder{}
+		fmt.Fprintf(ret, "{\n")
+		fmt.Fprintf(ret, "\tName: %s\n", msg.Name())
+		fmt.Fprintf(ret, "\tDesc: %s\n", msg.Desc())
+		fmt.Fprintf(ret, "\tEmail: %s\n", msg.Email())
+		fmt.Fprintf(ret, "\tWorkingRootAddr: %s\n", hash.New(msg.WorkingRootAddrBytes()).String())
+		fmt.Fprintf(ret, "\tStagedRootAddr: %s\n", hash.New(msg.StagedRootAddrBytes()).String())
+		fmt.Fprintf(ret, "}")
+		return ret.String()
+	case serial.CommitFileID:
+		return "Commit"
+	case serial.RootValueFileID:
+		return "RootValue"
+	case serial.TableFileID:
+		return "TableFile"
+	case serial.ProllyTreeNodeFileID:
+		return "ProllyTreeNode"
+	case serial.AddressMapFileID:
+		return "AddressMap"
+	default:
+		return "SerialMessage (HumanReadableString not implemented)"
 	}
-	return "SerialMessage"
 }
 
 func (sm SerialMessage) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
