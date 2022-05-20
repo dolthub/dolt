@@ -67,3 +67,21 @@ teardown() {
     [ "${lines[6]}" = '| test            |' ]
     [ "${lines[7]}" = '+-----------------+' ]
 }
+
+@test "sql-client: test no local mysql.db and no local privs.json" {
+    skiponwindows "Need to install expect and make this script work on windows."
+    run $BATS_TEST_DIRNAME/sql-client.expect
+
+}
+
+@test "sql-client: uses privs.json when mysql.db is not present" {
+
+}
+
+@test "sql-client: ignores privs.json if mysql.db is present" {
+
+}
+
+@test "sql-client: works without privs.json" {
+
+}

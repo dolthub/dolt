@@ -351,6 +351,7 @@ func DefaultServerConfig() *commandLineServerConfig {
 		queryParallelism:    defaultQueryParallelism,
 		persistenceBehavior: defaultPersistenceBahavior,
 		dataDir:             defaultDataDir,
+		privilegeFilePath:   defaultPrivilegeFilePath,
 		mysqlDbFilePath:     defaultMySQLDbFilePath,
 	}
 }

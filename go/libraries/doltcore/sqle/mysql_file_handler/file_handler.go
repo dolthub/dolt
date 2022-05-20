@@ -42,13 +42,8 @@ func SetPrivilegeFilePath(fp string) {
 
 	_, err := os.Stat(fp)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			if err := ioutil.WriteFile(fp, []byte{}, 0644); err != nil {
-				// If we can't create the file it's a catastrophic error
-				panic(err)
-			}
-		} else {
-			// Some strange unknown failure, okay to panic here
+		// Some strange unknown failure, okay to panic here
+		if !errors.Is(err, os.ErrNotExist) {
 			panic(err)
 		}
 	}
