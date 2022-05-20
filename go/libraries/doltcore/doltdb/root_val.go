@@ -887,6 +887,14 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 		return nil, err
 	}
 
+	fmt.Fprintf(os.Stderr, "after getting ref table is %s", table.DebugString(ctx))
+
+	deReffedTable, _ := durable.TableFromAddr(ctx, table.ValueReadWriter(), tableRef.TargetHash())
+
+	fmt.Fprintf(os.Stderr, "dereffed table is %s", deReffedTable.DebugString(ctx))
+
+	//fmt.Fprintf(os.Stderr, "after getting ref table is %v", reffedTable)
+
 	return putTable(ctx, root, tName, tableRef)
 }
 
