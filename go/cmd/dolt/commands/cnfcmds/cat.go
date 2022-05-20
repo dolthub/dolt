@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -53,6 +55,10 @@ func (cmd CatCmd) Name() string {
 // Description returns a description of the command
 func (cmd CatCmd) Description() string {
 	return "Writes out the table conflicts."
+}
+
+func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

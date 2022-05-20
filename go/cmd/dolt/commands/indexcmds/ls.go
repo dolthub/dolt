@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -44,6 +46,10 @@ func (cmd LsCmd) Name() string {
 
 func (cmd LsCmd) Description() string {
 	return "Internal debugging command to display the list of indexes."
+}
+
+func (cmd LsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd LsCmd) CreateMarkdown(_ io.Writer, _ string) error {
