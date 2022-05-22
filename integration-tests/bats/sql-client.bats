@@ -25,7 +25,7 @@ SQL
 }
 
 show_tables() {
-    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt =<<SQL
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
 USE repo1;
 SHOW TABLES;
 SQL
@@ -69,9 +69,11 @@ teardown() {
 }
 
 @test "sql-client: test no local mysql.db and no local privs.json" {
-    skiponwindows "Need to install expect and make this script work on windows."
-    run $BATS_TEST_DIRNAME/sql-client.expect
-
+    cd repo1
+    run dolt sql-client --host=0.0.0.0 --port=3307 <<SQL
+create user test_user;
+SQL
+    [[]]
 }
 
 @test "sql-client: uses privs.json when mysql.db is not present" {

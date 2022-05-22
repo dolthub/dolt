@@ -82,6 +82,9 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 
 	fileContents, err := ioutil.ReadFile(privsFilePath)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, nil
+		}
 		return nil, nil, err
 	}
 	if len(fileContents) == 0 {
