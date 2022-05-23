@@ -1443,10 +1443,6 @@ func (t *AlterableDoltTable) CreateIndex(
 
 // DropIndex implements sql.IndexAlterableTable
 func (t *AlterableDoltTable) DropIndex(ctx *sql.Context, indexName string) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	// We disallow removing internal dolt_ tables from SQL directly
 	if strings.HasPrefix(indexName, "dolt_") {
 		return fmt.Errorf("dolt internal indexes may not be dropped")

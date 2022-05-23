@@ -21,9 +21,10 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-	"github.com/pkg/profile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,7 +38,8 @@ import (
 )
 
 var skipPrepared bool
-var skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
+
+const skipPreparedFlag = "DOLT_SKIP_PREPARED_ENGINETESTS"
 
 func init() {
 	sqle.MinRowsPerPartition = 8
@@ -49,15 +51,14 @@ func init() {
 }
 
 func TestQueries(t *testing.T) {
-	defer profile.Start().Stop()
 	enginetest.TestQueries(t, newDoltHarness(t))
 }
 
 func TestSingleQuery(t *testing.T) {
 	t.Skip()
 
-	var test enginetest.QueryTest
-	test = enginetest.QueryTest{
+	var test queries.QueryTest
+	test = queries.QueryTest{
 		Query: `select i from mytable where i = 1`,
 		Expected: []sql.Row{
 			{1},
@@ -70,20 +71,20 @@ func TestSingleQuery(t *testing.T) {
 	//engine.Analyzer.Debug = true
 	//engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, test.ExpectedColumns)
+	enginetest.TestQuery(t, harness, test.Query, test.Expected, test.ExpectedColumns, nil)
 }
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
 	t.Skip()
 
-	var scripts = []enginetest.ScriptTest{
+	var scripts = []queries.ScriptTest{
 		{
 			Name: "Multialter DDL with ADD/DROP Primary Key",
 			SetUpScript: []string{
 				"CREATE TABLE t(pk int primary key, v1 int)",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
 					Expected: []sql.Row{{sql.NewOkResult(0)}},
@@ -126,8 +127,8 @@ func TestSingleScript(t *testing.T) {
 func TestSingleQueryPrepared(t *testing.T) {
 	t.Skip()
 
-	var test enginetest.QueryTest
-	test = enginetest.QueryTest{
+	var test queries.QueryTest
+	test = queries.QueryTest{
 		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
 		Expected: []sql.Row{
 			{sql.Point{X: 1, Y: 2}},
@@ -146,7 +147,7 @@ func TestSingleQueryPrepared(t *testing.T) {
 	engine.Analyzer.Debug = true
 	engine.Analyzer.Verbose = true
 
-	enginetest.TestQuery(t, harness, engine, test.Query, test.Expected, nil)
+	enginetest.TestQuery(t, harness, test.Query, test.Expected, nil, nil)
 }
 
 func TestVersionedQueries(t *testing.T) {
@@ -198,10 +199,10 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 
 func TestInsertInto(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(enginetest.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: test uses keyless foreign key logic which is not yet fully implemented
-			if enginetest.InsertScripts[i].Name == "Insert on duplicate key" {
-				enginetest.InsertScripts = append(enginetest.InsertScripts[:i], enginetest.InsertScripts[i+1:]...)
+		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: on duplicate key broken for foreign keys in new format
+			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
+				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
 			}
 		}
 	}
@@ -232,10 +233,10 @@ func TestReplaceIntoErrors(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip update ffor join
+		// skip update for join
 		patternToSkip := "join"
 		skipped = make([]string, 0)
-		for _, q := range enginetest.UpdateTests {
+		for _, q := range queries.UpdateTests {
 			if strings.Contains(strings.ToLower(q.WriteQuery), patternToSkip) {
 				skipped = append(skipped, q.WriteQuery)
 			}
@@ -255,6 +256,16 @@ func TestDeleteFrom(t *testing.T) {
 
 func TestDeleteFromErrors(t *testing.T) {
 	enginetest.TestDeleteErrors(t, newDoltHarness(t))
+}
+
+func TestSpatialDelete(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestSpatialDelete(t, newDoltHarness(t))
+}
+
+func TestSpatialScripts(t *testing.T) {
+	skipNewFormat(t)
+	enginetest.TestSpatialScripts(t, newDoltHarness(t))
 }
 
 func TestTruncate(t *testing.T) {
@@ -415,6 +426,7 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	//TODO: fix table alteration so that foreign keys may work once again
 	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
@@ -424,7 +436,27 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	skipNewFormat(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: fix table alteration so that foreign keys may work once again
+		skippedQueries := []string{
+			"ALTER TABLE SET NULL on non-nullable column",
+			"ALTER TABLE RENAME COLUMN",
+			"ALTER TABLE MODIFY COLUMN type change not allowed",
+			"ALTER TABLE MODIFY COLUMN type change allowed when lengthening string",
+			"ALTER TABLE MODIFY COLUMN type change only cares about foreign key columns",
+			"DROP COLUMN parent",
+			"DROP COLUMN child",
+			"Disallow change column to nullable with ON UPDATE SET NULL",
+			"Disallow change column to nullable with ON DELETE SET NULL",
+		}
+		for i := len(queries.ForeignKeyTests) - 1; i >= 0; i-- {
+			for _, skippedQuery := range skippedQueries {
+				if queries.ForeignKeyTests[i].Name == skippedQuery {
+					queries.ForeignKeyTests = append(queries.ForeignKeyTests[:i], queries.ForeignKeyTests[i+1:]...)
+				}
+			}
+		}
+	}
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
@@ -446,11 +478,6 @@ func TestDisallowedCheckConstraints(t *testing.T) {
 
 func TestDropCheckConstraints(t *testing.T) {
 	enginetest.TestDropCheckConstraints(t, newDoltHarness(t))
-}
-
-func TestExplode(t *testing.T) {
-	t.Skipf("Unsupported types")
-	enginetest.TestExplode(t, newDoltHarness(t))
 }
 
 func TestReadOnly(t *testing.T) {
@@ -546,14 +573,14 @@ func TestRollbackTriggers(t *testing.T) {
 }
 
 func TestStoredProcedures(t *testing.T) {
-	tests := make([]enginetest.ScriptTest, 0, len(enginetest.ProcedureLogicTests))
-	for _, test := range enginetest.ProcedureLogicTests {
+	tests := make([]queries.ScriptTest, 0, len(queries.ProcedureLogicTests))
+	for _, test := range queries.ProcedureLogicTests {
 		//TODO: fix REPLACE always returning a successful deletion
 		if test.Name != "Parameters resolve inside of REPLACE" {
 			tests = append(tests, test)
 		}
 	}
-	enginetest.ProcedureLogicTests = tests
+	queries.ProcedureLogicTests = tests
 
 	enginetest.TestStoredProcedures(t, newDoltHarness(t))
 }
@@ -614,7 +641,9 @@ func TestShowCreateTableAsOf(t *testing.T) {
 func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
-	for _, script := range DoltMerge {
+	harness.Setup(setup.MydbData)
+	for _, script := range MergeScripts {
+		harness.engine = nil
 		enginetest.TestScript(t, harness, script)
 	}
 }
@@ -623,6 +652,7 @@ func TestDoltReset(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	for _, script := range DoltReset {
+		harness.engine = nil
 		enginetest.TestScript(t, harness, script)
 	}
 }
@@ -632,14 +662,14 @@ func TestDoltReset(t *testing.T) {
 func TestSingleTransactionScript(t *testing.T) {
 	t.Skip()
 
-	script := enginetest.TransactionTest{
+	script := queries.TransactionTest{
 		Name: "allow commit conflicts on, conflict on dolt_merge",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
@@ -819,7 +849,6 @@ func TestPersist(t *testing.T) {
 }
 
 func TestKeylessUniqueIndex(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
@@ -858,7 +887,7 @@ func TestUpdateQueriesPrepared(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip select join for update
 		skipped = make([]string, 0)
-		for _, q := range enginetest.UpdateTests {
+		for _, q := range queries.UpdateTests {
 			if strings.Contains(strings.ToLower(q.WriteQuery), "join") {
 				skipped = append(skipped, q.WriteQuery)
 			}
@@ -874,7 +903,7 @@ func TestInsertQueriesPrepared(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		// skip keyless
 		skipped = make([]string, 0)
-		for _, q := range enginetest.UpdateTests {
+		for _, q := range queries.UpdateTests {
 			if strings.Contains(strings.ToLower(q.WriteQuery), "keyless") {
 				skipped = append(skipped, q.WriteQuery)
 			}
@@ -902,6 +931,14 @@ func TestScriptsPrepared(t *testing.T) {
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: on duplicate key broken for foreign keys in new format
+			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
+				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
@@ -930,19 +967,13 @@ func TestInsertErrorScriptsPrepared(t *testing.T) {
 	enginetest.TestInsertErrorScriptsPrepared(t, newDoltHarness(t))
 }
 
-func TestExplodePrepared(t *testing.T) {
-	t.Skip("feature not supported")
-	skipPreparedTests(t)
-	enginetest.TestExplodePrepared(t, newDoltHarness(t))
-}
-
 func TestViewsPrepared(t *testing.T) {
 	skipPreparedTests(t)
 	enginetest.TestViewsPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedViewsPrepared(t *testing.T) {
-	t.Skip("unsupported for prepareds")
+	t.Skip("not supported for prepareds")
 	skipPreparedTests(t)
 	enginetest.TestVersionedViewsPrepared(t, newDoltHarness(t))
 }
@@ -959,11 +990,9 @@ func TestPrepared(t *testing.T) {
 }
 
 func TestPreparedInsert(t *testing.T) {
+	//TODO: on duplicate key broken for foreign keys in new format
+	skipNewFormat(t)
 	skipPreparedTests(t)
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		//TODO: test uses keyless foreign key logic which is not yet fully implemented
-		t.Skip("test uses keyless foreign key logic which is not yet fully implemented")
-	}
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
@@ -971,7 +1000,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	skipNewFormat(t)
 	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
 		harness := newDoltHarness(t)
-		addPkScript := enginetest.ScriptTest{
+		addPkScript := queries.ScriptTest{
 			Name: "add primary keys",
 			SetUpScript: []string{
 				"create table test (id int not null, c1 int);",
@@ -985,7 +1014,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				"ALTER TABLE test DROP PRIMARY KEY",
 				"ALTER TABLE test ADD PRIMARY KEY(id)",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
 					Expected: []sql.Row{
@@ -1025,7 +1054,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 
 	t.Run("Add primary key to table with index", func(t *testing.T) {
 		harness := newDoltHarness(t)
-		script := enginetest.ScriptTest{
+		script := queries.ScriptTest{
 			Name: "add primary keys to table with index",
 			SetUpScript: []string{
 				"create table test (id int not null, c1 int);",
@@ -1034,7 +1063,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				"ALTER TABLE test ADD constraint test_check CHECK (c1 > 0)",
 				"ALTER TABLE test ADD PRIMARY KEY(id)",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
 					Expected: []sql.Row{
@@ -1070,7 +1099,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 
 	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
 		harness := newDoltHarness(t)
-		script := enginetest.ScriptTest{
+		script := queries.ScriptTest{
 			Name: "Add primary key when one more cells contain NULL",
 			SetUpScript: []string{
 				"create table test (id int not null, c1 int);",
@@ -1080,7 +1109,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				"ALTER TABLE test ADD COLUMN (c2 INT NULL)",
 				"ALTER TABLE test DROP PRIMARY KEY",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query:          "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
 					ExpectedErrStr: "primary key cannot have NULL values",
@@ -1092,7 +1121,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 
 	t.Run("Drop primary key from table with index", func(t *testing.T) {
 		harness := newDoltHarness(t)
-		script := enginetest.ScriptTest{
+		script := queries.ScriptTest{
 			Name: "Drop primary key from table with index",
 			SetUpScript: []string{
 				"create table test (id int not null primary key, c1 int);",
@@ -1100,7 +1129,7 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				"insert into test values (1,1),(2,2)",
 				"ALTER TABLE test DROP PRIMARY KEY",
 			},
-			Assertions: []enginetest.ScriptTestAssertion{
+			Assertions: []queries.ScriptTestAssertion{
 				{
 					Query: "show create table test",
 					Expected: []sql.Row{

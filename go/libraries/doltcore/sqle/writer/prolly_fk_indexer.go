@@ -55,19 +55,15 @@ func (n prollyFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 
 // PartitionRows implements the interface sql.Table.
 func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
-	var idxWriter prollyIndexWriter
+	var idxWriter indexWriter
 	for _, secondaryWriter := range n.writer.secondary {
-		if secondaryWriter.name == n.index.ID() {
+		if secondaryWriter.Name() == n.index.ID() {
 			idxWriter = secondaryWriter
 			break
 		}
 	}
-	if idxWriter.name == "" {
+	if idxWriter == nil {
 		return nil, fmt.Errorf("unable to find writer for index `%s`", n.index.ID())
-	}
-	rangeIter, err := idxWriter.mut.IterRange(ctx, n.pRange)
-	if err != nil {
-		return nil, err
 	}
 
 	idxToPkMap := make(map[int]int)
@@ -82,12 +78,20 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 	}
 
 	if primary, ok := n.writer.primary.(prollyIndexWriter); ok {
+		rangeIter, err := idxWriter.(prollyIndexWriter).mut.IterRange(ctx, n.pRange)
+		if err != nil {
+			return nil, err
+		}
 		return &prollyFkPkRowIter{
 			rangeIter:  rangeIter,
 			idxToPkMap: idxToPkMap,
 			primary:    primary,
 		}, nil
 	} else {
+		rangeIter, err := idxWriter.(prollyKeylessSecondaryWriter).mut.IterRange(ctx, n.pRange)
+		if err != nil {
+			return nil, err
+		}
 		return &prollyFkKeylessRowIter{
 			rangeIter: rangeIter,
 			primary:   n.writer.primary.(prollyKeylessWriter),
@@ -161,9 +165,12 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if k == nil {
 		return nil, io.EOF
 	}
+	hashId := k.GetField(k.Count() - 1)
+	iter.primary.valBld.PutHash128(0, hashId)
+	primaryKey := iter.primary.valBld.Build(sharePool)
 
 	nextRow := make(sql.Row, len(iter.primary.valMap))
-	err = iter.primary.mut.Get(ctx, k, func(tblKey, tblVal val.Tuple) error {
+	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
 			if nextRow[to], err = index.GetField(iter.primary.valBld.Desc, from+1, tblVal); err != nil {

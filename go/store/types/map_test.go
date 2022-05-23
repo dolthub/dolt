@@ -2210,3 +2210,78 @@ func TestMapIndexForKey(t *testing.T) {
 		})
 	}
 }
+
+func intMap(vrw ValueReadWriter, keys ...int) Map {
+	kVs := make([]Value, len(keys)*2)
+	for i, key := range keys {
+		kVs[2*i], kVs[2*i+1] = Int(key), Bool(true)
+	}
+	return mustMap(NewMap(context.Background(), vrw, kVs...))
+}
+
+func TestUnionMaps(t *testing.T) {
+	vrw := newTestValueStore()
+	ctx := context.Background()
+	tests := []struct {
+		name            string
+		a               Map
+		b               Map
+		expected        Map
+		expectedCnfKeys []Value
+	}{
+		{
+			name:     "union of two empty maps is an empty map",
+			a:        intMap(vrw),
+			b:        intMap(vrw),
+			expected: intMap(vrw),
+		},
+		{
+			name:     "empty b produces a",
+			a:        intMap(vrw, 1),
+			b:        intMap(vrw),
+			expected: intMap(vrw, 1),
+		},
+		{
+			name:     "empty a produces b",
+			a:        intMap(vrw),
+			b:        intMap(vrw, 1),
+			expected: intMap(vrw, 1),
+		},
+		{
+			name:     "has all of a",
+			a:        intMap(vrw, 1, 3, 5, 6),
+			b:        intMap(vrw, 2, 4),
+			expected: intMap(vrw, 1, 2, 3, 4, 5, 6),
+		},
+		{
+			name:     "has all of b",
+			a:        intMap(vrw, 2, 4),
+			b:        intMap(vrw, 1, 3, 5, 6),
+			expected: intMap(vrw, 1, 2, 3, 4, 5, 6),
+		},
+		{
+			name:            "conflicts",
+			a:               intMap(vrw, 1, 3),
+			b:               intMap(vrw, 2, 3, 5),
+			expected:        intMap(vrw, 1, 2, 3, 5),
+			expectedCnfKeys: []Value{Int(3)},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var cnfKeys []Value
+			unioned, err := UnionMaps(ctx, test.a, test.b, func(key Value, aValue Value, bValue Value) (Value, error) {
+				cnfKeys = append(cnfKeys, key)
+				return aValue, nil
+			})
+			require.NoError(t, err)
+
+			if !unioned.Equals(test.expected) {
+				t.Error(mustString(EncodedValue(ctx, test.expected)), "\n!=\n", mustString(EncodedValue(ctx, unioned)))
+			}
+
+			require.Equal(t, test.expectedCnfKeys, cnfKeys, "conflicts do not match")
+		})
+	}
+}

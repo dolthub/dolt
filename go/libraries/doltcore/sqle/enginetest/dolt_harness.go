@@ -16,11 +16,14 @@ package enginetest
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
 
+	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -41,12 +44,17 @@ const (
 
 type DoltHarness struct {
 	t                    *testing.T
-	env                  *env.DoltEnv
+	multiRepoEnv         *env.MultiRepoEnv
+	createdEnvs          map[string]*env.DoltEnv
 	session              *dsess.DoltSession
 	databases            []sqle.Database
 	databaseGlobalStates []globalstate.GlobalState
+	hashes               []string
 	parallelism          int
 	skippedQueries       []string
+	setupData            []setup.SetupScript
+	resetData            []setup.SetupScript
+	engine               *gms.Engine
 }
 
 var _ enginetest.Harness = (*DoltHarness)(nil)
@@ -64,7 +72,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	require.NoError(t, err)
 	b := env.GetDefaultInitBranch(dEnv.Config)
 	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem())
-	require.NoError(t, err)
 	pro = pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 
 	localConfig := dEnv.Config.WriteableConfig()
@@ -75,6 +82,8 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		t:              t,
 		session:        session,
 		skippedQueries: defaultSkippedQueries,
+		multiRepoEnv:   mrEnv,
+		createdEnvs:    make(map[string]*env.DoltEnv),
 	}
 
 	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
@@ -94,17 +103,85 @@ var defaultSkippedQueries = []string{
 	"show global variables like", // we set extra variables
 }
 
+func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
+	d.engine = nil
+	d.setupData = nil
+	for i := range setupData {
+		d.setupData = append(d.setupData, setupData[i]...)
+	}
+}
+
+func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
+	var resetCmds setup.SetupScript
+	for i := range dbs {
+		db := dbs[i]
+		resetCmds = append(resetCmds, fmt.Sprintf("use %s", db))
+		resetCmds = append(resetCmds, "call dclean()")
+		resetCmds = append(resetCmds, "call dreset('--hard', 'head')")
+		if autoInc {
+			resetCmds = append(resetCmds, setup.AutoincrementData[0]...)
+		}
+	}
+	resetCmds = append(resetCmds, "use mydb")
+	return []setup.SetupScript{resetCmds}
+}
+
+func commitScripts(dbs []string) []setup.SetupScript {
+	var commitCmds setup.SetupScript
+	for i := range dbs {
+		db := dbs[i]
+		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
+	}
+	commitCmds = append(commitCmds, "use mydb")
+	return []setup.SetupScript{commitCmds}
+}
+
+func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
+	if d.engine == nil {
+		e, err := enginetest.NewEngineWithSetup(t, d, d.setupData)
+		if err != nil {
+			return nil, err
+		}
+		d.engine = e
+		ctx := enginetest.NewContext(d)
+
+		res := enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		var dbs []string
+		for i := range res {
+			dbs = append(dbs, res[i][0].(string))
+		}
+
+		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+		autoInc := res[0][0].(int64) > 0
+
+		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
+		if err != nil {
+			return nil, err
+		}
+
+		d.resetData = resetScripts(dbs, autoInc)
+
+		return e, nil
+	}
+
+	ctx := enginetest.NewContext(d)
+	return enginetest.RunEngineScripts(ctx, d.engine, d.resetData, d.SupportsNativeIndexCreation())
+}
+
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
 // less means to use the system parallelism settings.
-func (d DoltHarness) WithParallelism(parallelism int) *DoltHarness {
-	d.parallelism = parallelism
-	return &d
+func (d *DoltHarness) WithParallelism(parallelism int) *DoltHarness {
+	nd := *d
+	nd.parallelism = parallelism
+	return &nd
 }
 
 // WithSkippedQueries returns a copy of the harness with the given queries skipped
-func (d DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
-	d.skippedQueries = append(d.skippedQueries, queries...)
-	return &d
+func (d *DoltHarness) WithSkippedQueries(queries []string) *DoltHarness {
+	nd := *d
+	nd.skippedQueries = append(d.skippedQueries, queries...)
+	return &nd
 }
 
 // SkipQueryTest returns whether to skip a query
@@ -151,11 +228,12 @@ func (d *DoltHarness) NewSession() *sql.Context {
 func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession {
 	states := make([]dsess.InitialDbState, len(d.databases))
 	for i, db := range d.databases {
-		states[i] = getDbState(d.t, db, d.env)
+		env := d.multiRepoEnv.GetEnv(db.Name())
+		states[i] = getDbState(d.t, db, env)
 	}
 	dbs := dsqleDBsAsSqlDBs(d.databases)
 	pro := d.NewDatabaseProvider(dbs...)
-	localConfig := d.env.Config.WriteableConfig()
+	localConfig := d.multiRepoEnv.Config()
 
 	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
@@ -173,7 +251,13 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
-	if types.IsFormat_DOLT_1(d.env.DoltDB.Format()) {
+	var firstEnv *env.DoltEnv
+	d.multiRepoEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
+		firstEnv = dEnv
+		return true, nil
+	})
+
+	if types.IsFormat_DOLT_1(firstEnv.DoltDB.Format()) {
 		return false
 	}
 	return true
@@ -188,18 +272,20 @@ func (d *DoltHarness) NewDatabase(name string) sql.Database {
 }
 
 func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
-	dEnv := dtestutils.CreateTestEnv()
-	d.env = dEnv
-
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
+		dEnv := dtestutils.CreateTestEnvWithName(name)
+
 		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		d.databases = append(d.databases, db)
 
 		globalState := globalstate.NewGlobalStateStore()
 		d.databaseGlobalStates = append(d.databaseGlobalStates, globalState)
+
+		d.multiRepoEnv.AddOrReplaceEnv(name, dEnv)
+		d.createdEnvs[db.Name()] = dEnv
 	}
 
 	// TODO(zachmu): it should be safe to reuse a session with a new database, but it isn't in all cases. Particularly, if you
@@ -219,13 +305,20 @@ func (d *DoltHarness) NewReadOnlyDatabases(names ...string) (dbs []sql.ReadOnlyD
 }
 
 func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDatabaseProvider {
-	if d.env == nil {
-		d.env = dtestutils.CreateTestEnv()
-	}
-	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), d.env)
+	// When NewDatabaseProvider is called, we create a new MultiRepoEnv in order to ensure
+	// that only the specified sql.Databases are available for tests to use. Because
+	// NewDatabases must be called before NewDatabaseProvider, we grab the DoltEnvs
+	// previously created by NewDatabases and re-add them to the new MultiRepoEnv.
+	dEnv := dtestutils.CreateTestEnv()
+	mrEnv, err := env.DoltEnvAsMultiEnv(context.Background(), dEnv)
 	require.NoError(d.t, err)
-	b := env.GetDefaultInitBranch(d.env.Config)
-	pro := sqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), dbs...)
+	d.multiRepoEnv = mrEnv
+	for _, db := range dbs {
+		d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+	}
+
+	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
+	pro := sqle.NewDoltDatabaseProvider(b, d.multiRepoEnv.FileSystem(), dbs...)
 	return pro.WithDbFactoryUrl(doltdb.InMemDoltDB)
 }
 

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
@@ -36,13 +37,13 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
-	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit one client",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
 				Expected: []sql.Row{{}},
@@ -175,13 +176,13 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	// In this test, we're setting both clients to match transaction commits to dolt commits.
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
-	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit two clients",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
 				Expected: []sql.Row{{}},
@@ -307,13 +308,13 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	// In this test, each insertion from both clients cause a commit as autocommit is enabled.
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
-	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit with autocommit",
 		SetUpScript: []string{
 			"CREATE TABLE x (y BIGINT PRIMARY KEY, z BIGINT);",
 			"INSERT INTO x VALUES (1,1);",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			// these SET statements currently commit a transaction (since autocommit is on)
 			{
 				Query:    "/* client a */ SET @@dolt_transaction_commit=1;",
@@ -383,7 +384,7 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 	}
 
 	harness := newDoltHarness(t)
-	enginetest.TestTransactionScript(t, harness, enginetest.TransactionTest{
+	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "delayed foreign key resolution with transaction commits",
 		SetUpScript: []string{
 			"SET foreign_key_checks=0;",
@@ -392,7 +393,7 @@ func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
 			"CREATE TABLE parent (pk BIGINT PRIMARY KEY);",
 			"INSERT INTO parent VALUES (1), (2);",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ SET @@autocommit=0;",
 				Expected: []sql.Row{{}},
