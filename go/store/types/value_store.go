@@ -160,7 +160,7 @@ func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
 	lvs.enforceCompleteness = enforce
 }
 
-func (lvs *ValueStore) SetCheckContentAddress(validate bool) {
+func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
 	lvs.validateContentAddr = validate
 }
 
