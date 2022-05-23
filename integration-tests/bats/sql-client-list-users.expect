@@ -6,13 +6,15 @@ spawn dolt sql-client --host=0.0.0.0 --port=$PORT
 set client $spawn_id
 
 # list all users
-expect -i client -re "\rmysql> "
-send -i client "select user from mysql.user;\r"
-expect -i client -re "root\r"
+expect {
+    "mysql> " { send "select user from mysql.user;\r"; }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
 
 # quit
-expect -i first -re "\rmysql> "
-send -i client "quit\r"
-expect -i client "quit\r"
-
-expect -i client eof
+expect {
+    "mysql> " { send "quit\r" }
+    timeout { exit 1; }
+    failed { exit 1; }
+}
