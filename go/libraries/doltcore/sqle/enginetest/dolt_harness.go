@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/grant_tables"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -54,6 +56,8 @@ type DoltHarness struct {
 	skippedQueries       []string
 	setupData            []setup.SetupScript
 	resetData            []setup.SetupScript
+	initDbs              map[string]struct{}
+	autoInc              bool
 	engine               *gms.Engine
 }
 
@@ -131,7 +135,7 @@ func commitScripts(dbs []string) []setup.SetupScript {
 	for i := range dbs {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
-		commitCmds = append(commitCmds, fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
 	return []setup.SetupScript{commitCmds}
@@ -139,7 +143,8 @@ func commitScripts(dbs []string) []setup.SetupScript {
 
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
-		e, err := enginetest.NewEngineWithSetup(t, d, d.setupData)
+		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
 			return nil, err
 		}
@@ -153,20 +158,34 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		}
 
 		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
-		autoInc := res[0][0].(int64) > 0
-
+		d.autoInc = res[0][0].(int64) > 0
+		//
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 		if err != nil {
 			return nil, err
 		}
 
-		d.resetData = resetScripts(dbs, autoInc)
+		//d.resetData = resetScripts(dbs, autoInc)
 
 		return e, nil
 	}
 
+	d.engine.Analyzer.Catalog.GrantTables = grant_tables.CreateEmptyGrantTables()
+	d.engine.Analyzer.Catalog.GrantTables.AddRootAccount()
 	ctx := enginetest.NewContext(d)
-	return enginetest.RunEngineScripts(ctx, d.engine, d.resetData, d.SupportsNativeIndexCreation())
+
+	res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+	var dbs []string
+	for i := range res {
+		dbs = append(dbs, res[i][0].(string))
+	}
+
+	enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, d.autoInc), d.SupportsNativeIndexCreation())
+
+	res = enginetest.MustQuery(ctx, d.engine, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+	autoInc := res[0][0].(int64) > 0
+
+	return enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, autoInc), d.SupportsNativeIndexCreation())
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
@@ -314,7 +333,9 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 	for _, db := range dbs {
-		d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+		if db.Name() != information_schema.InformationSchemaDatabaseName {
+			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+		}
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())
