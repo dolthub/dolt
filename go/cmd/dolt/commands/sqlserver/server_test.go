@@ -35,6 +35,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
+//TODO: server tests need to expose a higher granularity for server interactions:
+// - replication readers and writers that are connected through configs
+// - configs need to be dynamic
+// - interleave inter and intra-session queries
+// - simulate server/connection failures
+// - load balancing?
+// - multi-master?
+
 type testPerson struct {
 	Name       string
 	Age        int

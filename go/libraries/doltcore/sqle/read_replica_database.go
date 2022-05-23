@@ -32,10 +32,9 @@ import (
 
 type ReadReplicaDatabase struct {
 	Database
-	remoteTrackRef ref.DoltRef
-	remote         env.Remote
-	srcDB          *doltdb.DoltDB
-	tmpDir         string
+	remote env.Remote
+	srcDB  *doltdb.DoltDB
+	tmpDir string
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
