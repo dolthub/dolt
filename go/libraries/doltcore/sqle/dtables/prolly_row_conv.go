@@ -70,7 +70,7 @@ func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, err
 		}
 	}
 
-	kd, vd := prolly.MapDescriptorsFromScheam(inSch)
+	kd, vd := prolly.MapDescriptorsFromSchema(inSch)
 	return ProllyRowConverter{
 		inSchema:         inSch,
 		outSchema:        outSch,

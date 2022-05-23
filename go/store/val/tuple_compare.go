@@ -103,6 +103,8 @@ func compare(typ Type, left, right []byte) int {
 		return compareString(readString(left), readString(right))
 	case ByteStringEnc:
 		return compareByteString(readByteString(left), readByteString(right))
+	case Hash128Enc:
+		return compareHash128(readHash128(left), readHash128(right))
 	default:
 		panic("unknown encoding")
 	}

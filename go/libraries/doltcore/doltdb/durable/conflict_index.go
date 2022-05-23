@@ -56,7 +56,7 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, oursS
 		return ConflictIndexFromNomsMap(m, vrw), nil
 
 	case types.Format_DOLT_1:
-		kd, oursVD := prolly.MapDescriptorsFromScheam(oursSch)
+		kd, oursVD := prolly.MapDescriptorsFromSchema(oursSch)
 		theirsVD := prolly.ValueDescriptorFromSchema(theirsSch)
 		baseVD := prolly.ValueDescriptorFromSchema(baseSch)
 		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))

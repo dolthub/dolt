@@ -200,7 +200,7 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 func TestInsertInto(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: test uses keyless foreign key logic which is not yet fully implemented
+			//TODO: on duplicate key broken for foreign keys in new format
 			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
 				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
 			}
@@ -426,6 +426,7 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	//TODO: fix table alteration so that foreign keys may work once again
 	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
@@ -435,7 +436,27 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	skipNewFormat(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: fix table alteration so that foreign keys may work once again
+		skippedQueries := []string{
+			"ALTER TABLE SET NULL on non-nullable column",
+			"ALTER TABLE RENAME COLUMN",
+			"ALTER TABLE MODIFY COLUMN type change not allowed",
+			"ALTER TABLE MODIFY COLUMN type change allowed when lengthening string",
+			"ALTER TABLE MODIFY COLUMN type change only cares about foreign key columns",
+			"DROP COLUMN parent",
+			"DROP COLUMN child",
+			"Disallow change column to nullable with ON UPDATE SET NULL",
+			"Disallow change column to nullable with ON DELETE SET NULL",
+		}
+		for i := len(queries.ForeignKeyTests) - 1; i >= 0; i-- {
+			for _, skippedQuery := range skippedQueries {
+				if queries.ForeignKeyTests[i].Name == skippedQuery {
+					queries.ForeignKeyTests = append(queries.ForeignKeyTests[:i], queries.ForeignKeyTests[i+1:]...)
+				}
+			}
+		}
+	}
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
@@ -829,7 +850,6 @@ func TestPersist(t *testing.T) {
 }
 
 func TestKeylessUniqueIndex(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
@@ -912,6 +932,14 @@ func TestScriptsPrepared(t *testing.T) {
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: on duplicate key broken for foreign keys in new format
+			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
+				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
@@ -963,11 +991,9 @@ func TestPrepared(t *testing.T) {
 }
 
 func TestPreparedInsert(t *testing.T) {
+	//TODO: on duplicate key broken for foreign keys in new format
+	skipNewFormat(t)
 	skipPreparedTests(t)
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		//TODO: test uses keyless foreign key logic which is not yet fully implemented
-		t.Skip("test uses keyless foreign key logic which is not yet fully implemented")
-	}
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
