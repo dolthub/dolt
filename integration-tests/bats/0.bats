@@ -51,7 +51,7 @@ teardown() {
     # check that mysql.db file exists, and privs.json doesn't
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
-    ![[ "$output" =~ "privs.json" ]] || false
+    [[ !"$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -131,7 +131,7 @@ teardown() {
     # check that mysql.db exists, and privs.json doesn't
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
-    ![[ "$output" =~ "privs.json" ]] || false
+    [[ !"$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
