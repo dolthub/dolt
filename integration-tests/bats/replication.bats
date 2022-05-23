@@ -255,7 +255,6 @@ teardown() {
     dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
     # repo2 pulls on read
-    dolt branch
     run dolt sql -r csv -b <<SQL
 call dolt_checkout('feat');
 show tables;
