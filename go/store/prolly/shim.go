@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -49,7 +50,7 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 
 func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) ConflictMap {
 	root := NodeFromValue(v)
-	kd, ourVD := MapDescriptorsFromScheam(ourSchema)
+	kd, ourVD := MapDescriptorsFromSchema(ourSchema)
 	theirVD := ValueDescriptorFromSchema(theirSchema)
 	baseVD := ValueDescriptorFromSchema(baseSchema)
 	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
@@ -66,7 +67,7 @@ func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 	panic("unknown ValueReadWriter")
 }
 
-func MapDescriptorsFromScheam(sch schema.Schema) (kd, vd val.TupleDesc) {
+func MapDescriptorsFromSchema(sch schema.Schema) (kd, vd val.TupleDesc) {
 	kd = KeyDescriptorFromSchema(sch)
 	vd = ValueDescriptorFromSchema(sch)
 	return
@@ -80,7 +81,7 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
+			Enc:      encodingFromTypeInfo(col.TypeInfo),
 			Nullable: columnNullable(col),
 		})
 		return
@@ -105,7 +106,7 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
+			Enc:      encodingFromTypeInfo(col.TypeInfo),
 			Nullable: col.IsNullable(),
 		})
 		return
@@ -113,8 +114,28 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	return val.NewTupleDescriptor(tt...)
 }
 
+// ConvertToKeylessIndex converts the given map to a keyless index map.
+func ConvertToKeylessIndex(m Map) Map {
+	newTypes := make([]val.Type, len(m.keyDesc.Types)+1)
+	copy(newTypes, m.keyDesc.Types)
+	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
+	newKeyDesc := val.NewTupleDescriptorWithComparator(m.keyDesc.Comparator(), newTypes...)
+	newTuples := m.tuples
+	newTuples.order = newKeyDesc
+	return Map{
+		tuples:  newTuples,
+		keyDesc: newKeyDesc,
+		valDesc: m.valDesc,
+	}
+}
+
 // todo(andy): move this to typeinfo
-func encodingFromSqlType(typ query.Type) val.Encoding {
+func encodingFromTypeInfo(ti typeinfo.TypeInfo) val.Encoding {
+	if ti.GetTypeIdentifier() == typeinfo.UuidTypeIdentifier {
+		return val.Hash128Enc
+	}
+
+	typ := ti.ToSqlType().Type()
 	// todo(andy): replace temp encodings
 	switch typ {
 	case query.Type_DECIMAL:
