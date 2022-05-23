@@ -768,12 +768,9 @@ func TestHistorySystemTable(t *testing.T) {
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
-		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScript(t, harness, test)
+			enginetest.TestScript(t, newDoltHarness(t), test)
 		})
 	}
 }
