@@ -50,5 +50,5 @@ const FormatDolt1String = "__DOLT_1__"
 // data maps.
 const FormatDoltDevString = "__DOLT_DEV__"
 
-// var FormatDefaultString = FormatLD1String
-var FormatDefaultString = FormatDolt1String
+var FormatDefaultString = FormatLD1String
+// var FormatDefaultString = FormatDolt1String
