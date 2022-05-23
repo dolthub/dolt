@@ -15,6 +15,12 @@ SELECT user from mysql.user order by user;
 SQL
 }
 
+create_user() {
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+CREATE USER new_user;
+SQL
+}
+
 setup() {
     setup_no_dolt_init
     make_repo repo1
@@ -47,6 +53,22 @@ teardown() {
     [ "${lines[5]}" = '+------+' ]
     [ "${lines[6]}" = '| dolt |' ]
     [ "${lines[7]}" = '+------+' ]
+
+    # create user
+    run create_user
+    [ "$status" -eq 0 ]
+
+    # expect dolt and new_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+----------+' ]
+    [ "${lines[4]}" = '| User     |' ]
+    [ "${lines[5]}" = '+----------+' ]
+    [ "${lines[6]}" = '| dolt     |' ]
+    [ "${lines[7]}" = '| new_user |' ]
+    [ "${lines[8]}" = '+----------+' ]
 
     # check that mysql.db file exists, and privs.json doesn't
     run ls
@@ -86,7 +108,26 @@ teardown() {
     [ "${lines[7]}" = '| privs_user |' ]
     [ "${lines[8]}" = '+------------+' ]
 
-    # TODO: create user
+    # create user
+    run create_user
+    [ "$status" -eq 0 ]
+
+    # expect dolt, privs_user, and new_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| new_user   |' ]
+    [ "${lines[8]}" = '| privs_user |' ]
+    [ "${lines[9]}" = '+------------+' ]
+
+    # new user didn't persist to privs.json
+    cat privs.json
+    [[ !"$output" =~ "new_user" ]] || false
 
     # check that mysql.db and privs.json exist
     run ls
@@ -126,7 +167,22 @@ teardown() {
     [ "${lines[7]}" = '| mysql_user |' ]
     [ "${lines[8]}" = '+------------+' ]
 
-    # TODO: create user
+    # create user
+    run create_user
+    [ "$status" -eq 0 ]
+
+    # expect dolt, new_user, and mysql_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| new_user   |' ]
+    [ "${lines[8]}" = '| mysql_user |' ]
+    [ "${lines[9]}" = '+------------+' ]
 
     # check that mysql.db exists, and privs.json doesn't
     run ls
@@ -167,9 +223,28 @@ teardown() {
     [ "${lines[7]}" = '| mysql_user |' ]
     [ "${lines[8]}" = '+------------+' ]
 
-    # TODO: create user
+    # create user
+    run create_user
+    [ "$status" -eq 0 ]
 
-    # check that mysql.db exists, and privs.json doesn't
+    # expect dolt, new_user, and mysql_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| new_user   |' ]
+    [ "${lines[8]}" = '| mysql_user |' ]
+    [ "${lines[9]}" = '+------------+' ]
+
+    # new user didn't persist to privs.json
+    cat privs.json
+    [[ !"$output" =~ "new_user" ]] || false
+
+    # check that mysql.db and privs.json exist
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
