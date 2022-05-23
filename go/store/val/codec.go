@@ -127,6 +127,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return timestampSize, true
 	case YearEnc:
 		return int16Size, true
+	case Hash128Enc:
+		return hash128Size, true
 	default:
 		return 0, false
 	}
@@ -403,6 +405,20 @@ func writeByteString(buf, val []byte) {
 }
 
 func compareByteString(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
+func readHash128(val []byte) []byte {
+	expectSize(val, hash128Size)
+	return val
+}
+
+func writeHash128(buf, val []byte) {
+	expectSize(buf, hash128Size)
+	copy(buf, val)
+}
+
+func compareHash128(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 

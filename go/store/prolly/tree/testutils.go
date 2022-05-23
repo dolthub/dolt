@@ -227,6 +227,10 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 		buf := make([]byte, (testRand.Int63()%40)+10)
 		testRand.Read(buf)
 		tb.PutByteString(idx, buf)
+	case val.Hash128Enc:
+		buf := make([]byte, 16)
+		testRand.Read(buf)
+		tb.PutHash128(idx, buf)
 	default:
 		panic("unknown encoding")
 	}
