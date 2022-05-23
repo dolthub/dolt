@@ -126,7 +126,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     # new user didn't persist to privs.json
-    cat privs.json
+    run cat privs.json
     ! [[ "$output" =~ "new_user" ]] || false
 
     # check that mysql.db and privs.json exist
@@ -241,7 +241,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     # new user didn't persist to privs.json
-    cat privs.json
+    run cat privs.json
     ! [[ "$output" =~ "new_user" ]] || false
 
     # check that mysql.db and privs.json exist
