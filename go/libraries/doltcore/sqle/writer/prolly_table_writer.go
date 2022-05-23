@@ -288,7 +288,7 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 	}
 
 	var b bytes.Buffer
-	m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+	pm.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
 		return tree.OutputProllyNode(&b, nd)
 	})
 	fmt.Fprintf(os.Stderr, "table data is %s", b.String())

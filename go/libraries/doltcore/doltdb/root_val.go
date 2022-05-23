@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -887,14 +886,6 @@ func (root *RootValue) PutTable(ctx context.Context, tName string, table *Table)
 		return nil, err
 	}
 
-	fmt.Fprintf(os.Stderr, "after getting ref table is %s", table.DebugString(ctx))
-
-	deReffedTable, _ := durable.TableFromAddr(ctx, table.ValueReadWriter(), tableRef.TargetHash())
-
-	fmt.Fprintf(os.Stderr, "dereffed table is %s", deReffedTable.DebugString(ctx))
-
-	//fmt.Fprintf(os.Stderr, "after getting ref table is %v", reffedTable)
-
 	return putTable(ctx, root, tName, tableRef)
 }
 
@@ -902,8 +893,6 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
-
-	fmt.Fprintf(os.Stderr, "putTable: %s has hash %s\n", tName, ref.TargetHash())
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
