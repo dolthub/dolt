@@ -107,6 +107,7 @@ var defaultSkippedQueries = []string{
 	"show global variables like", // we set extra variables
 }
 
+// Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	d.engine = nil
 	d.setupData = nil
@@ -115,6 +116,9 @@ func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	}
 }
 
+// resetScripts returns a set of queries that will reset the given database
+// names. If [autoInc], the queries for resetting autoincrement tables are
+// included.
 func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
 	var resetCmds setup.SetupScript
 	for i := range dbs {
@@ -130,6 +134,8 @@ func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
 	return []setup.SetupScript{resetCmds}
 }
 
+// commitScripts returns a set of queries that will commit the workingsets
+// of the given database names
 func commitScripts(dbs []string) []setup.SetupScript {
 	var commitCmds setup.SetupScript
 	for i := range dbs {
@@ -141,6 +147,8 @@ func commitScripts(dbs []string) []setup.SetupScript {
 	return []setup.SetupScript{commitCmds}
 }
 
+// NewEngine creates a new *gms.Engine or calls reset and clear scripts on the existing
+// engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
 		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
@@ -149,43 +157,40 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 			return nil, err
 		}
 		d.engine = e
-		ctx := enginetest.NewContext(d)
 
-		res := enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		var res []sql.Row
+		// todo(max): need better way to reset autoincrement regardless of test type
+		ctx := enginetest.NewContext(d)
+		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+		d.autoInc = res[0][0].(int64) > 0
+
+		res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 		var dbs []string
 		for i := range res {
 			dbs = append(dbs, res[i][0].(string))
 		}
 
-		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
-		d.autoInc = res[0][0].(int64) > 0
-		//
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 		if err != nil {
 			return nil, err
 		}
 
-		//d.resetData = resetScripts(dbs, autoInc)
-
 		return e, nil
 	}
 
+	// grants are files that can only be manually reset
 	d.engine.Analyzer.Catalog.GrantTables = grant_tables.CreateEmptyGrantTables()
 	d.engine.Analyzer.Catalog.GrantTables.AddRootAccount()
-	ctx := enginetest.NewContext(d)
 
+	//todo(max): easier if tests specify their databases ahead of time
+	ctx := enginetest.NewContext(d)
 	res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 	var dbs []string
 	for i := range res {
 		dbs = append(dbs, res[i][0].(string))
 	}
 
-	enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, d.autoInc), d.SupportsNativeIndexCreation())
-
-	res = enginetest.MustQuery(ctx, d.engine, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
-	autoInc := res[0][0].(int64) > 0
-
-	return enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, autoInc), d.SupportsNativeIndexCreation())
+	return enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, d.autoInc), d.SupportsNativeIndexCreation())
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
