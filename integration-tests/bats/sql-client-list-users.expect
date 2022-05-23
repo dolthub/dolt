@@ -3,7 +3,6 @@
 # start client
 set timeout 2
 spawn dolt sql-client --host=0.0.0.0 --port=$PORT
-set client $spawn_id
 
 # list all users
 expect {

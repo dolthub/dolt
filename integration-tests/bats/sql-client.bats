@@ -69,12 +69,13 @@ teardown() {
 }
 
 # TODO: show that changes are saved to mysql.db
+# todo don't even use expect
 @test "sql-client: no privs.json and no mysql.db, create mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     cd repo1
 
     run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    [[ "$status" -eq 0 ]]
+    echo "$output"
     [[ "$output" =~ "root" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
@@ -95,7 +96,7 @@ teardown() {
     cp $BATS_TEST_DIRNAME/privs.json .
 
     run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    [[ "$status" -eq 0 ]]
+    echo "$output"
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
@@ -116,7 +117,7 @@ teardown() {
     cp $BATS_TEST_DIRNAME/mysql.db .
 
     run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    [[ "$status" -eq 0 ]]
+    echo "$output"
     [[ "$output" =~ "root" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
