@@ -73,7 +73,7 @@ teardown() {
     # check that mysql.db file exists, and privs.json doesn't
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
-    [[ "$output" =~ "privs.json" ]] || false
+    ! [[ "$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -127,7 +127,7 @@ teardown() {
 
     # new user didn't persist to privs.json
     cat privs.json
-    [[ !"$output" =~ "new_user" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
 
     # check that mysql.db and privs.json exist
     run ls
@@ -187,7 +187,7 @@ teardown() {
     # check that mysql.db exists, and privs.json doesn't
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
-    [[ !"$output" =~ "privs.json" ]] || false
+    ! [[ "$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -242,7 +242,7 @@ teardown() {
 
     # new user didn't persist to privs.json
     cat privs.json
-    [[ !"$output" =~ "new_user" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
 
     # check that mysql.db and privs.json exist
     run ls
