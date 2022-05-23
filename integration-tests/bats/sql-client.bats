@@ -37,6 +37,12 @@ SELECT user from mysql.user;
 SQL
 }
 
+create_user() {
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+CREATE USER new_user;
+SQL
+}
+
 setup() {
     setup_no_dolt_init
     make_repo repo1
@@ -74,8 +80,6 @@ teardown() {
     [ "${lines[7]}" = '+-----------------+' ]
 }
 
-# TODO: show that changes are saved to mysql.db
-# todo don't even use expect
 @test "sql-client: no privs.json and no mysql.db, create mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
@@ -85,7 +89,7 @@ teardown() {
 
     run show_users
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
 
@@ -109,9 +113,17 @@ teardown() {
 
     run show_users
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
+
+    # make a new user, triggering persist
+    run create_user
+    [ "$status" -eq 0 ]
+
+    # ensure changes did not save to privs.json
+    run cat privs.json
+    [[ !"$output" =~ "new_user" ]]
 
     # check that mysql.db and privs.json exist
     run ls
@@ -133,7 +145,7 @@ teardown() {
 
     run show_users
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
 
@@ -156,9 +168,22 @@ teardown() {
 
     run show_users
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "dolt" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
+
+    # make a new user, triggering persist
+    run create_user
+    [ "$status" -eq 0 ]
+
+    # ensure changes did not save to privs.json
+    run cat privs.json
+    [[ !"$output" =~ "new_user" ]]
+
+    # check that mysql.db and privs.json exist
+    run ls
+    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
