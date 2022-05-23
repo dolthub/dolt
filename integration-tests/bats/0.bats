@@ -73,7 +73,7 @@ teardown() {
     # check that mysql.db file exists, and privs.json doesn't
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
-    [[ !"$output" =~ "privs.json" ]] || false
+    [[ "$output" =~ "privs.json" ]] || false
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -180,8 +180,8 @@ teardown() {
     [ "${lines[4]}" = '| User       |' ]
     [ "${lines[5]}" = '+------------+' ]
     [ "${lines[6]}" = '| dolt       |' ]
-    [ "${lines[7]}" = '| new_user   |' ]
-    [ "${lines[8]}" = '| mysql_user |' ]
+    [ "${lines[7]}" = '| mysql_user |' ]
+    [ "${lines[8]}" = '| new_user   |' ]
     [ "${lines[9]}" = '+------------+' ]
 
     # check that mysql.db exists, and privs.json doesn't
@@ -236,8 +236,8 @@ teardown() {
     [ "${lines[4]}" = '| User       |' ]
     [ "${lines[5]}" = '+------------+' ]
     [ "${lines[6]}" = '| dolt       |' ]
-    [ "${lines[7]}" = '| new_user   |' ]
-    [ "${lines[8]}" = '| mysql_user |' ]
+    [ "${lines[7]}" = '| mysql_user |' ]
+    [ "${lines[8]}" = '| new_user   |' ]
     [ "${lines[9]}" = '+------------+' ]
 
     # new user didn't persist to privs.json
