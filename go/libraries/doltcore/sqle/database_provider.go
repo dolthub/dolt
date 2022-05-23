@@ -49,10 +49,10 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl string
 }
 
-var _ sql.DatabaseProvider = DoltDatabaseProvider{}
-var _ sql.FunctionProvider = DoltDatabaseProvider{}
-var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
-var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
+var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.RevisionDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
@@ -233,7 +233,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
+func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	revDB = strings.ToLower(revDB)
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
@@ -298,7 +298,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	return nil, dsess.InitialDbState{}, false, nil
 }
 
-func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string) (dsess.InitialDbState, error) {
+func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, error) {
 	_, init, ok, err := p.databaseForRevision(ctx, revDB)
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -333,7 +333,7 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote. If the target branch is not a replication
 // head, the new branch will not be continuously fetched.
-func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplicaDatabase) error {
+func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
 	branchRef := ref.NewBranchRef(branch)
 
 	var branchExists bool
@@ -361,13 +361,6 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplic
 		if err != nil {
 			return err
 		}
-	}
-
-	// update ReadReplicaRemote with new HEAD
-	// dolt_replicate_heads configuration remains unchanged
-	db, err = db.SetHeadRef(branchRef)
-	if err != nil {
-		return err
 	}
 
 	// create workingSets/heads/branch and update the working set
@@ -459,7 +452,6 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
-			headRef:        v.headRef,
 			remoteTrackRef: v.remoteTrackRef,
 			remote:         v.remote,
 			srcDB:          v.srcDB,
