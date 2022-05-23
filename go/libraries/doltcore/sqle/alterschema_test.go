@@ -926,7 +926,7 @@ func TestModifyColumn(t *testing.T) {
 			assert.NoError(t, err)
 
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
+			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

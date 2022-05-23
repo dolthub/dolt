@@ -1253,7 +1253,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		}
 	}
 
-	updatedTable, err := modifyColumn(ctx, table, existingCol, col, order, t.opts)
+	updatedTable, err := modifyColumn(ctx, table, existingCol, col, order)
 	if err != nil {
 		return err
 	}
