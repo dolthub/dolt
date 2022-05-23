@@ -90,8 +90,8 @@ teardown() {
     run show_users
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt" ]] || false
-    [[ !"$output" =~ "privs_user" ]] || false
-    [[ !"$output" =~ "mysql_user" ]] || false
+    ![[ "$output" =~ "privs_user" ]] || false
+    ![[ "$output" =~ "mysql_user" ]] || false
 
     # check that mysql.db file exists, and privs.json doesn't
     run ls
@@ -106,16 +106,16 @@ teardown() {
 @test "sql-client: has privs.json and no mysql.db, read from privs.json and create mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
+    cp $BATS_TEST_DIRNAME/privs.json repo1/.
     cd repo1
-    cp $BATS_TEST_DIRNAME/privs.json .
 
     start_sql_server repo1
 
     run show_users
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt" ]] || false
-    [[ !"$output" =~ "privs_user" ]] || false
-    [[ !"$output" =~ "mysql_user" ]] || false
+    [[ "$output" =~ "privs_user" ]] || false
+    ![[ "$output" =~ "mysql_user" ]] || false
 
     # make a new user, triggering persist
     run create_user
@@ -138,15 +138,15 @@ teardown() {
 @test "sql-client: no privs.json and has mysql.db, read from mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
+    cp $BATS_TEST_DIRNAME/mysql.db repo1/.
     cd repo1
-    cp $BATS_TEST_DIRNAME/mysql.db .
 
     start_sql_server repo1
 
     run show_users
     [ "$status" -eq 0 ]
     [[ "$output" =~ "dolt" ]] || false
-    [[ !"$output" =~ "privs_user" ]] || false
+    ![[ "$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
 
     # check that only mysql.db exists
@@ -162,9 +162,9 @@ teardown() {
 @test "sql-client: has privs.json and has mysql.db, only reads from mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
+    cp $BATS_TEST_DIRNAME/privs.json repo1/.
+    cp $BATS_TEST_DIRNAME/mysql.db repo1/.
     cd repo1
-    cp $BATS_TEST_DIRNAME/privs.json .
-    cp $BATS_TEST_DIRNAME/mysql.db .
 
     run show_users
     [ "$status" -eq 0 ]
