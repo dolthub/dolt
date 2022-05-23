@@ -31,18 +31,6 @@ SHOW TABLES;
 SQL
 }
 
-show_users() {
-    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
-SELECT user from mysql.user;
-SQL
-}
-
-create_user() {
-    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
-CREATE USER new_user;
-SQL
-}
-
 setup() {
     setup_no_dolt_init
     make_repo repo1
@@ -53,7 +41,7 @@ teardown() {
     teardown_common
 }
 
-@test "0-sql-client: test sql-client shows tables" {
+@test "sql-client: test sql-client shows tables" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     cd repo1
     start_sql_server repo1
