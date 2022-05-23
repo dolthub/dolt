@@ -49,8 +49,9 @@ func ReadKeylessCardinality(value Tuple) uint64 {
 	return readUint64(value[:keylessCardSz])
 }
 
-func ModifyKeylessCardinality(value Tuple, delta int64) (after uint64) {
-	buf := value[:keylessCardSz]
+func ModifyKeylessCardinality(pool pool.BuffPool, value Tuple, delta int64) (updated Tuple, after uint64) {
+	updated = cloneTuple(pool, value)
+	buf := updated[:keylessCardSz]
 	after = uint64(int64(readUint64(buf)) + delta)
 	writeUint64(buf, after)
 	return
