@@ -1111,8 +1111,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
-					ExpectedErrStr: "primary key cannot have NULL values",
+					Query:       "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
+					ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
 				},
 			},
 		}
