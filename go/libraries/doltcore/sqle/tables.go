@@ -1210,12 +1210,9 @@ func (t *AlterableDoltTable) dropColumnData(ctx *sql.Context, updatedTable *dolt
 	return updatedTable.UpdateNomsRows(ctx, newMapData)
 }
 
-// ModifyColumn implements sql.AlterableTable
+// ModifyColumn implements sql.AlterableTable. ModifyColumn operations are only used for operations that change only
+// the schema of a table, not the data. For those operations, |RewriteInserter| is used.
 func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, column *sql.Column, order *sql.ColumnOrder) error {
-	if types.IsFormat_DOLT_1(t.nbf) {
-		return nil
-	}
-
 	ws, err := t.db.GetWorkingSet(ctx)
 	if err != nil {
 		return err
@@ -1242,6 +1239,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		return err
 	}
 
+	// TODO: move this logic into ShouldRewrite
 	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
 		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
 			tags, err := root.GenerateTagsForNewColumns(ctx, t.tableName, []string{col.Name}, []types.NomsKind{col.Kind}, nil)
@@ -1262,48 +1260,10 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 	// For auto columns modified to be auto increment, we have more work to do
 	if !existingCol.AutoIncrement && col.AutoIncrement {
-		updatedSch, err := updatedTable.GetSchema(ctx)
+		seq, err := t.getFirstAutoIncrementValue(ctx, columnName, column.Type, updatedTable)
 		if err != nil {
 			return err
 		}
-
-		rowData, err := updatedTable.GetRowData(ctx)
-		if err != nil {
-			return err
-		}
-
-		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
-		// root, which hasn't been updated yet
-		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, index.SinglePartition{RowData: rowData})
-		if err != nil {
-			return err
-		}
-
-		initialValue := column.Type.Zero()
-		colIdx := updatedSch.GetAllCols().IndexOf(columnName)
-
-		for {
-			r, err := rowIter.Next(ctx)
-			if err == io.EOF {
-				break
-			} else if err != nil {
-				return err
-			}
-
-			cmp, err := column.Type.Compare(initialValue, r[colIdx])
-			if err != nil {
-				return err
-			}
-			if cmp < 0 {
-				initialValue = r[colIdx]
-			}
-		}
-
-		seq, err := globalstate.CoerceAutoIncrementValue(initialValue)
-		if err != nil {
-			return err
-		}
-		seq++
 
 		updatedTable, err = updatedTable.SetAutoIncrementValue(ctx, seq)
 		if err != nil {
@@ -1314,6 +1274,8 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 		if err != nil {
 			return err
 		}
+
+		// TODO: this isn't transactional, and it should be
 		ait.AddNewTable(t.tableName)
 		ait.Set(t.tableName, seq)
 	}
@@ -1333,6 +1295,61 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 	//  a default value, and one of those two passes will have the old name for the column. Fix this by not analyzing
 	//  column defaults in NewDoltTable.
 	// return t.updateFromRoot(ctx, newRoot)
+}
+
+// getFirstAutoIncrementValue returns the next auto increment value for a table that just acquired one through an
+// ALTER statement.
+// TODO: this could use an index and avoid a full table scan in many cases
+func (t *AlterableDoltTable) getFirstAutoIncrementValue(
+		ctx *sql.Context,
+		columnName string,
+		columnType sql.Type,
+		table *doltdb.Table,
+) (uint64, error) {
+	updatedSch, err := table.GetSchema(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	rowData, err := table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
+	// root, which hasn't been updated yet
+	rowIter, err := partitionRows(ctx, table, t.projectedCols, index.SinglePartition{RowData: rowData})
+	if err != nil {
+		return 0, err
+	}
+
+	initialValue := columnType.Zero()
+	colIdx := updatedSch.GetAllCols().IndexOf(columnName)
+
+	for {
+		r, err := rowIter.Next(ctx)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			return 0, err
+		}
+
+		cmp, err := columnType.Compare(initialValue, r[colIdx])
+		if err != nil {
+			return 0, err
+		}
+		if cmp < 0 {
+			initialValue = r[colIdx]
+		}
+	}
+
+	seq, err := globalstate.CoerceAutoIncrementValue(initialValue)
+	if err != nil {
+		return 0, err
+	}
+	seq++
+
+	return seq, nil
 }
 
 func increment(val types.Value) types.Value {
