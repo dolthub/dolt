@@ -85,6 +85,10 @@ teardown() {
 
     cd repo1
 
+    # remove mysql.db and privs.json if they exist
+    rm -f mysql.db
+    rm -f privs.json
+
     start_sql_server repo1
     cd ../
 
@@ -114,6 +118,12 @@ teardown() {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
+
+    # remove mysql.db and privs.json if they exist
+    rm -f mysql.db
+    rm -f privs.json
+
+    # copy premade privs.json
     cp $BATS_TEST_DIRNAME/privs.json .
 
     start_sql_server repo1
@@ -131,14 +141,7 @@ teardown() {
     [ "${lines[7]}" = '| privs_user |' ]
     [ "${lines[8]}" = '+------------+' ]
 
-    # make a new user, triggering persist
-    run create_user
-    [ "$status" -eq 0 ]
-
-    # ensure changes did not save to privs.json
     cd repo1
-    run cat privs.json
-    ![[ "$output" =~ "new_user" ]]
 
     # check that mysql.db and privs.json exist
     run ls
