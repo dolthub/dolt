@@ -714,7 +714,7 @@ SQL
 
     dolt checkout main
     # Create a conflicted state by merging other into main
-    dolt merge other
+    run dolt merge other
     [[ "$output" =~ "CONFLICT" ]]
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
