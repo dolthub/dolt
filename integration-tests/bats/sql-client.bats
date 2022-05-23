@@ -31,6 +31,12 @@ SHOW TABLES;
 SQL
 }
 
+show_users() {
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
+SELECT user from mysql.user;
+SQL
+}
+
 setup() {
     setup_no_dolt_init
     make_repo repo1
@@ -72,10 +78,13 @@ teardown() {
 # todo don't even use expect
 @test "sql-client: no privs.json and no mysql.db, create mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
     cd repo1
 
-    run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    echo "$output"
+    start_sql_server repo1
+
+    run show_users
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
@@ -92,13 +101,16 @@ teardown() {
 
 @test "sql-client: has privs.json and no mysql.db, read from privs.json and create mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
     cd repo1
     cp $BATS_TEST_DIRNAME/privs.json .
 
-    run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    echo "$output"
+    start_sql_server repo1
+
+    run show_users
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
-    [[ "$output" =~ "privs_user" ]] || false
+    [[ !"$output" =~ "privs_user" ]] || false
     [[ !"$output" =~ "mysql_user" ]] || false
 
     # check that mysql.db and privs.json exist
@@ -113,11 +125,14 @@ teardown() {
 
 @test "sql-client: no privs.json and has mysql.db, read from mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
     cd repo1
     cp $BATS_TEST_DIRNAME/mysql.db .
 
-    run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    echo "$output"
+    start_sql_server repo1
+
+    run show_users
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
@@ -134,12 +149,13 @@ teardown() {
 
 @test "sql-client: has privs.json and has mysql.db, only reads from mysql.db" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+
     cd repo1
     cp $BATS_TEST_DIRNAME/privs.json .
     cp $BATS_TEST_DIRNAME/mysql.db .
 
-    run $BATS_TEST_DIRNAME/sql-client-list-users.expect
-    [[ "$status" -eq 0 ]]
+    run show_users
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "root" ]] || false
     [[ !"$output" =~ "privs_user" ]] || false
     [[ "$output" =~ "mysql_user" ]] || false
