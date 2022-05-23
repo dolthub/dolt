@@ -26,16 +26,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
 type ReadReplicaDatabase struct {
 	Database
-	remoteTrackRef ref.DoltRef
-	remote         env.Remote
-	srcDB          *doltdb.DoltDB
-	headRef        ref.DoltRef
-	tmpDir         string
+	remote env.Remote
+	srcDB  *doltdb.DoltDB
+	tmpDir string
 }
 
 var _ SqlDatabase = ReadReplicaDatabase{}
@@ -76,7 +75,6 @@ func NewReadReplicaDatabase(ctx context.Context, db Database, remoteName string,
 		remote:   remote,
 		tmpDir:   dEnv.TempTableFilesDir(),
 		srcDB:    srcDB,
-		headRef:  dEnv.RepoStateReader().CWBHeadRef(),
 	}, nil
 }
 
@@ -96,7 +94,7 @@ func (rrd ReadReplicaDatabase) StartTransaction(ctx *sql.Context, tCharacteristi
 	return rrd.Database.StartTransaction(ctx, tCharacteristic)
 }
 
-func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
+func (rrd ReadReplicaDatabase) PullFromRemote(ctx *sql.Context) error {
 	_, headsArg, ok := sql.SystemVariables.GetGlobal(ReplicateHeadsKey)
 	if !ok {
 		return sql.ErrUnknownSystemVariable.New(ReplicateHeadsKey)
@@ -150,12 +148,7 @@ func (rrd ReadReplicaDatabase) PullFromRemote(ctx context.Context) error {
 	return nil
 }
 
-func (rrd ReadReplicaDatabase) SetHeadRef(head ref.DoltRef) (ReadReplicaDatabase, error) {
-	rrd.headRef = head
-	return rrd, nil
-}
-
-func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []string) error {
+func pullBranches(ctx *sql.Context, rrd ReadReplicaDatabase, branches []string) error {
 	refSpecs, err := env.ParseRSFromArgs(rrd.remote.Name, branches)
 	if err != nil {
 		return err
@@ -178,7 +171,7 @@ func pullBranches(ctx context.Context, rrd ReadReplicaDatabase, branches []strin
 	return nil
 }
 
-func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
+func fetchRef(ctx *sql.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.DoltRef) error {
 	srcDBCommit, err := actions.FetchRemoteBranch(ctx, rrd.tmpDir, rrd.remote, rrd.srcDB, rrd.ddb, headRef, actions.NoopRunProgFuncs, actions.NoopStopProgFuncs)
 	if err != nil {
 		return err
@@ -194,7 +187,14 @@ func fetchRef(ctx context.Context, rrd ReadReplicaDatabase, headRef, rtRef ref.D
 		return err
 	}
 
-	if headRef == rrd.headRef {
+	dSess := dsess.DSessFromSess(ctx.Session)
+
+	currentBranchRef, err := dSess.CWBHeadRef(ctx, rrd.name)
+	if err != nil {
+		return err
+	}
+
+	if headRef == currentBranchRef {
 		wsRef, err := ref.WorkingSetRefForHead(headRef)
 		if err != nil {
 			return err
