@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -36,7 +37,7 @@ type prollyTableWriter struct {
 	dbName    string
 
 	primary   indexWriter
-	secondary []prollyIndexWriter
+	secondary []indexWriter
 
 	tbl    *doltdb.Table
 	sch    schema.Schema
@@ -52,14 +53,14 @@ type prollyTableWriter struct {
 
 var _ TableWriter = &prollyTableWriter{}
 
-func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) ([]prollyIndexWriter, error) {
+func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) ([]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	definitions := sch.Indexes().AllIndexes()
-	writers := make([]prollyIndexWriter, len(definitions))
+	writers := make([]indexWriter, len(definitions))
 
 	for i, def := range definitions {
 		idxRows, err := s.GetIndex(ctx, sch, def.Name())
@@ -78,6 +79,41 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 			keyMap: keyMap,
 			valBld: val.NewTupleBuilder(valDesc),
 			valMap: valMap,
+		}
+	}
+
+	return writers, nil
+}
+
+func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema, primary prollyKeylessWriter) ([]indexWriter, error) {
+	s, err := t.GetIndexSet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	definitions := sch.Indexes().AllIndexes()
+	writers := make([]indexWriter, len(definitions))
+
+	for i, def := range definitions {
+		idxRows, err := s.GetIndex(ctx, sch, def.Name())
+		if err != nil {
+			return nil, err
+		}
+		m := durable.ProllyMapFromIndex(idxRows)
+		m = prolly.ConvertToKeylessIndex(m)
+
+		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
+		keyDesc, valDesc := m.Descriptors()
+
+		writers[i] = prollyKeylessSecondaryWriter{
+			name:    def.Name(),
+			mut:     m.Mutate(),
+			primary: primary,
+			unique:  def.IsUnique(),
+			keyBld:  val.NewTupleBuilder(keyDesc),
+			keyMap:  keyMap,
+			valBld:  val.NewTupleBuilder(valDesc),
+			valMap:  valMap,
 		}
 	}
 
@@ -207,17 +243,25 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	}
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
+	var newSecondaries []indexWriter
 	if _, ok := w.primary.(prollyKeylessWriter); ok {
-		newPrimary, err = getKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
+		if err != nil {
+			return err
+		}
+		newSecondaries, err = getSecondaryKeylessProllyWriters(ctx, tbl, sqlSch.Schema, sch, newPrimary.(prollyKeylessWriter))
+		if err != nil {
+			return err
+		}
 	} else {
 		newPrimary, err = getPrimaryProllyWriter(ctx, tbl, sqlSch.Schema, sch)
-	}
-	if err != nil {
-		return err
-	}
-	newSecondaries, err := getSecondaryProllyIndexWriters(ctx, tbl, sqlSch.Schema, sch)
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		newSecondaries, err = getSecondaryProllyIndexWriters(ctx, tbl, sqlSch.Schema, sch)
+		if err != nil {
+			return err
+		}
 	}
 
 	w.tbl = tbl
@@ -233,12 +277,12 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 
 func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err error) {
 	// flush primary row storage
-	m, err := w.primary.Map(ctx)
+	pm, err := w.primary.Map(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(m))
+	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(pm))
 	if err != nil {
 		return nil, err
 	}
@@ -249,14 +293,14 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 		return nil, err
 	}
 
-	for _, wr := range w.secondary {
-		m, err := wr.mut.Map(ctx)
+	for _, wrSecondary := range w.secondary {
+		sm, err := wrSecondary.Map(ctx)
 		if err != nil {
 			return nil, err
 		}
-		idx := durable.IndexFromProllyMap(m)
+		idx := durable.IndexFromProllyMap(sm)
 
-		s, err = s.PutIndex(ctx, wr.name, idx)
+		s, err = s.PutIndex(ctx, wrSecondary.Name(), idx)
 		if err != nil {
 			return nil, err
 		}
