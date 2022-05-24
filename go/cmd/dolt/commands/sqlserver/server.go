@@ -192,7 +192,7 @@ func Serve(
 		if err != nil {
 			return err, nil
 		}
-		
+
 		// Create temporary users if no privileges in config
 		if len(users) == 0 && len(serverConfig.User()) > 0 {
 			tempUsers = append(tempUsers, gms.TemporaryUser{
