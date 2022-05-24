@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -81,7 +80,7 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromTypeInfo(col.TypeInfo),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: columnNullable(col),
 		})
 		return
@@ -106,7 +105,7 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromTypeInfo(col.TypeInfo),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: col.IsNullable(),
 		})
 		return
@@ -129,13 +128,8 @@ func ConvertToKeylessIndex(m Map) Map {
 	}
 }
 
-// todo(andy): move this to typeinfo
-func encodingFromTypeInfo(ti typeinfo.TypeInfo) val.Encoding {
-	if ti.GetTypeIdentifier() == typeinfo.UuidTypeIdentifier {
-		return val.Hash128Enc
-	}
+func encodingFromSqlType(typ query.Type) val.Encoding {
 
-	typ := ti.ToSqlType().Type()
 	// todo(andy): replace temp encodings
 	switch typ {
 	case query.Type_DECIMAL:
