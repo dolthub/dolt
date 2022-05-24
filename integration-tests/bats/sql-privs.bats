@@ -32,6 +32,7 @@ teardown() {
 }
 
 @test "sql-privs: no privs.json and no mysql.db, create mysql.db" {
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
@@ -73,6 +74,22 @@ teardown() {
     [[ "$output" =~ "mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
 
+    # restart server
+    stop_sql_server
+    start_sql_server repo1
+
+    # check for new_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+----------+' ]
+    [ "${lines[4]}" = '| User     |' ]
+    [ "${lines[5]}" = '+----------+' ]
+    [ "${lines[6]}" = '| dolt     |' ]
+    [ "${lines[7]}" = '| new_user |' ]
+    [ "${lines[8]}" = '+----------+' ]
+
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
     rm -f privs.json
@@ -83,7 +100,6 @@ teardown() {
 
 @test "sql-privs: has privs.json and no mysql.db, read from privs.json and create mysql.db" {
     skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
-
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
@@ -131,6 +147,23 @@ teardown() {
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
+
+    # restart server
+    stop_sql_server
+    start_sql_server repo1
+
+    # expect dolt, privs_user, and new_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| new_user   |' ]
+    [ "${lines[8]}" = '| privs_user |' ]
+    [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -186,6 +219,23 @@ teardown() {
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
+
+    # restart server
+    stop_sql_server
+    start_sql_server repo1
+
+    # expect dolt and mysql_user
+    run show_users
+    [ "$status" -eq 0 ]
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| mysql_user |' ]
+    [ "${lines[8]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
@@ -246,6 +296,23 @@ teardown() {
     run ls
     [[ "$output" =~ "mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
+
+    # restart server
+    stop_sql_server
+    start_sql_server repo1
+
+    # expect dolt, new_user, and mysql_user
+    run show_users
+    [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
+    [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
+    [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
+    [ "${lines[3]}" = '+------------+' ]
+    [ "${lines[4]}" = '| User       |' ]
+    [ "${lines[5]}" = '+------------+' ]
+    [ "${lines[6]}" = '| dolt       |' ]
+    [ "${lines[7]}" = '| mysql_user |' ]
+    [ "${lines[8]}" = '| new_user   |' ]
+    [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
