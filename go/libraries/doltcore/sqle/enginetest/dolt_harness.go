@@ -25,8 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/grant_tables"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -179,8 +179,8 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	}
 
 	// grants are files that can only be manually reset
-	d.engine.Analyzer.Catalog.GrantTables = grant_tables.CreateEmptyGrantTables()
-	d.engine.Analyzer.Catalog.GrantTables.AddRootAccount()
+	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
+	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
 	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)

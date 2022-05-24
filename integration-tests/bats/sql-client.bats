@@ -25,7 +25,7 @@ SQL
 }
 
 show_tables() {
-    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt =<<SQL
+    dolt sql-client --host=0.0.0.0 --port=$PORT --user=dolt <<SQL
 USE repo1;
 SHOW TABLES;
 SQL
