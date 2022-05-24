@@ -301,6 +301,9 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	for _, name := range names {
 		dEnv := dtestutils.CreateTestEnvWithName(name)
 
+		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
+		store.SetValidateContentAddresses(true)
+
 		opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 		db := sqle.NewDatabase(name, dEnv.DbData(), opts)
 		d.databases = append(d.databases, db)

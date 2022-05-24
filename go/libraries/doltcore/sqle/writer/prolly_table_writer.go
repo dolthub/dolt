@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
 
 type prollyTableWriter struct {
