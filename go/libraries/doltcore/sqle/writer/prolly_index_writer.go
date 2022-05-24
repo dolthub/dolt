@@ -269,9 +269,9 @@ func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	}
 
 	// increment cardinality
-	val.ModifyKeylessCardinality(value, int64(1))
+	updated, _ := val.ModifyKeylessCardinality(sharePool, value, int64(1))
 
-	return k.mut.Put(ctx, hashId, value)
+	return k.mut.Put(ctx, hashId, updated)
 }
 
 func (k prollyKeylessWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
@@ -296,9 +296,9 @@ func (k prollyKeylessWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 	}
 
 	// decrement cardinality
-	after := val.ModifyKeylessCardinality(value, int64(-1))
+	updated, after := val.ModifyKeylessCardinality(sharePool, value, int64(-1))
 	if after > 0 {
-		return k.mut.Put(ctx, hashId, value)
+		return k.mut.Put(ctx, hashId, updated)
 	} else {
 		return k.mut.Delete(ctx, hashId)
 	}
