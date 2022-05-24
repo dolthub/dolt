@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/grant_tables"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -61,7 +61,7 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		var sqlDb SqlDatabase
 		if sqlDatabase, ok := db.(SqlDatabase); ok {
 			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(grant_tables.PrivilegedDatabase); ok {
+		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
 			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
 				sqlDb = sqlDatabase
 			}
@@ -209,6 +209,11 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		return dsess.InitialDbState{}, err
 	}
 
+	backups, err := rsr.GetBackups()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
 	branches, err := rsr.GetBranches()
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -221,6 +226,7 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		DbData:     db.DbData(),
 		Remotes:    remotes,
 		Branches:   branches,
+		Backups:    backups,
 		Err:        retainedErr,
 	}, nil
 }
@@ -364,7 +370,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}, map[string]env.Remote{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil

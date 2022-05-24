@@ -301,7 +301,7 @@ func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 		}
 	}
 	if !matched {
-		return nil, fmt.Errorf("database: fetched head at %v by it was not a commit, tag or working set.", addr)
+		return nil, fmt.Errorf("database: fetched head at %v but it was not a commit, tag or working set.", addr)
 	}
 
 	return nomsHead{head.(types.Struct), addr}, nil

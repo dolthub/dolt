@@ -73,14 +73,6 @@ Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}
 
 type BackupCmd struct{}
 
-const (
-	syncBackupId        = "sync"
-	restoreBackupId     = "restore"
-	addBackupId         = "add"
-	removeBackupId      = "remove"
-	removeBackupShortId = "rm"
-)
-
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd BackupCmd) Name() string {
 	return "backup"
@@ -95,6 +87,10 @@ func (cmd BackupCmd) RequiresRepo() bool {
 	return false
 }
 
+func (cmd BackupCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()
@@ -102,16 +98,7 @@ func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 }
 
 func (cmd BackupCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"region", "cloud provider region associated with this backup."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"creds-type", "credential type.  Valid options are role, env, and file.  See the help section for additional details."})
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"profile", "AWS profile to use."})
-	ap.SupportsFlag(verboseFlag, "v", "When printing the list of backups adds additional details.")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
-	return ap
+	return cli.CreateBackupArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -130,15 +117,15 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 	switch {
 	case apr.NArg() == 0:
 		verr = printBackups(dEnv, apr)
-	case apr.Arg(0) == addBackupId:
+	case apr.Arg(0) == cli.AddBackupId:
 		verr = addBackup(dEnv, apr)
-	case apr.Arg(0) == removeBackupId:
+	case apr.Arg(0) == cli.RemoveBackupId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == removeBackupShortId:
+	case apr.Arg(0) == cli.RemoveBackupShortId:
 		verr = removeBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == syncBackupId:
+	case apr.Arg(0) == cli.SyncBackupId:
 		verr = syncBackup(ctx, dEnv, apr)
-	case apr.Arg(0) == restoreBackupId:
+	case apr.Arg(0) == cli.RestoreBackupId:
 		verr = restoreBackup(ctx, dEnv, apr)
 	default:
 		verr = errhand.BuildDError("").SetPrintUsage().Build()
@@ -251,16 +238,24 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	backupName := strings.TrimSpace(apr.Arg(1))
 
 	backups, err := dEnv.GetBackups()
+	if err != nil {
+		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
+	}
 	b, ok := backups[backupName]
 	if !ok {
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
 	}
 
 	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
+	if err != nil {
+		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
+	}
 	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, dEnv.TempTableFilesDir(), buildProgStarter(defaultLanguage), stopProgFuncs)
 
 	switch err {
 	case nil:
+		return nil
+	case pull.ErrDBUpToDate:
 		return nil
 	case env.ErrBackupAlreadyExists:
 		return errhand.BuildDError("error: a backup named '%s' already exists.", b.Name).AddDetails("remove it before running this command again").Build()
@@ -270,8 +265,6 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 		return errhand.BuildDError("error: '%s' is not valid.", b.Url).AddCause(err).Build()
 	case env.ErrInvalidBackupName:
 		return errhand.BuildDError("error: invalid backup name: " + b.Name).Build()
-	case pull.ErrDBUpToDate:
-		return errhand.BuildDError("error: backup already up to date").Build()
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}

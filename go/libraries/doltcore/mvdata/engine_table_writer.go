@@ -85,6 +85,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		dbName,
 		false,
 		"",
+		"",
 		"root",
 		"",
 		false,

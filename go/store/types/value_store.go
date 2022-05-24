@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -80,6 +81,7 @@ type ValueStore struct {
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
 	unresolvedRefs       hash.HashSet
 	enforceCompleteness  bool
+	validateContentAddr  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
@@ -158,6 +160,10 @@ func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
 	lvs.enforceCompleteness = enforce
 }
 
+func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
+	lvs.validateContentAddr = validate
+}
+
 func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 	return lvs.cs
 }
@@ -177,7 +183,13 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 			return nil, errors.New("value present but empty")
 		}
 
-		return v.(Value), nil
+		nv := v.(Value)
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+				return nil, err
+			}
+		}
+		return nv, nil
 	}
 
 	chunk := func() chunks.Chunk {
@@ -211,6 +223,12 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		return nil, errors.New("decoded value is empty")
 	}
 
+	if lvs.validateContentAddr {
+		if err = validateContentAddress(lvs.nbf, h, v); err != nil {
+			return nil, err
+		}
+	}
+
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v, nil
 }
@@ -230,6 +248,11 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		if v == nil {
 			return nil, errors.New("decoded value is empty")
 		}
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, v); err != nil {
+				return nil, err
+			}
+		}
 
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v, nil
@@ -243,7 +266,14 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	for _, h := range hashes {
 		if v, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
-			foundValues[h] = v.(Value)
+
+			nv := v.(Value)
+			if lvs.validateContentAddr {
+				if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+					return nil, err
+				}
+			}
+			foundValues[h] = nv
 			continue
 		}
 
@@ -328,12 +358,15 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 	}
 
 	r, err := constructRef(lvs.nbf, h, t, height)
-
 	if err != nil {
 		return Ref{}, err
 	}
 
-	lvs.bufferChunk(ctx, v, c, height)
+	err = lvs.bufferChunk(ctx, v, c, height)
+	if err != nil {
+		return Ref{}, err
+	}
+
 	return r, nil
 }
 
@@ -347,9 +380,31 @@ func (lvs *ValueStore) WriteValue(ctx context.Context, v Value) (Ref, error) {
 //    flushed).
 // 2. The total data occupied by buffered chunks does not exceed
 //    lvs.bufferedChunksMax
-func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) {
+func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk, height uint64) error {
 	lvs.bufferMu.Lock()
 	defer lvs.bufferMu.Unlock()
+
+	if lvs.Format().UsesFlatbuffers() {
+		// We do not do write buffering in the new format.
+		// Ref heights are not universally known, and the
+		// invariants mentioned above cannot be maintained
+		// in the general case.
+		//
+		// Buffering with full dependency tracking would be
+		// possible, and in __DOLT_1__, WalkAddrs may be
+		// cheap enough that it would be possible to get back
+		// cache-locality in our flushes without ref heights.
+		if lvs.enforceCompleteness {
+			err := v.walkRefs(lvs.nbf, func(r Ref) error {
+				lvs.unresolvedRefs.Insert(r.TargetHash())
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return lvs.cs.Put(ctx, c)
+	}
 
 	d.PanicIfTrue(height == 0)
 	h := c.Hash()
@@ -415,8 +470,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 			return nil
 		})
 
-		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Enforce invariant (2)
@@ -438,8 +494,9 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 
 			err := put(tallest, chunk)
 
-			// TODO: fix panics
-			d.PanicIfError(err)
+			if err != nil {
+				return err
+			}
 
 			continue
 		}
@@ -447,8 +504,12 @@ func (lvs *ValueStore) bufferChunk(ctx context.Context, v Value, c chunks.Chunk,
 		err := putChildren(tallest)
 
 		// TODO: fix panics
-		d.PanicIfError(err)
+		if err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (lvs *ValueStore) Root(ctx context.Context) (hash.Hash, error) {
@@ -773,4 +834,16 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 // Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
 	return lvs.cs.Close()
+}
+
+func validateContentAddress(nbf *NomsBinFormat, h hash.Hash, v Value) (err error) {
+	var actual hash.Hash
+	actual, err = v.Hash(nbf)
+	if err != nil {
+		return
+	} else if actual != h {
+		err = fmt.Errorf("incorrect hash for value %s (%s != %s)",
+			v.HumanReadableString(), actual.String(), h.String())
+	}
+	return
 }

@@ -384,6 +384,7 @@ func execShell(
 		initialDb,
 		false,
 		"",
+		"",
 		"root",
 		"",
 		true,
@@ -414,6 +415,7 @@ func execBatch(
 		format,
 		initialDb,
 		false,
+		"",
 		"",
 		"root",
 		"",
@@ -463,6 +465,7 @@ func execMultiStatements(
 		initialDb,
 		false,
 		"",
+		"",
 		"root",
 		"",
 		true,
@@ -497,6 +500,7 @@ func execQuery(
 		format,
 		initialDb,
 		false,
+		"",
 		"",
 		"root",
 		"",
@@ -714,14 +718,6 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
-				}
-				if err != nil {
-					verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-					cli.PrintErrln(verr.Verbose())
-					// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-					if !continueOnErr {
-						return err
-					}
 				}
 			}
 		}

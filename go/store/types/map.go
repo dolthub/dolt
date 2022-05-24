@@ -821,3 +821,93 @@ func indexForKeyWithinSubtree(ctx context.Context, key orderedKey, metaSeq metaS
 
 	return idx, nil
 }
+
+// MapUnionConflictCB is a callback that is used to resolve a key collision.
+// Callers should pass a callback that returns the resolved value.
+type MapUnionConflictCB func(key Value, aValue Value, bValue Value) (Value, error)
+
+// UnionMaps unions |a| and |b|. Colliding keys are returned to |cb|. As
+// currently implemented, keys of |b| are inserted into |a|.
+func UnionMaps(ctx context.Context, a Map, b Map, cb MapUnionConflictCB) (Map, error) {
+	editor := NewMapEditor(a)
+
+	aIter, err := a.Iterator(ctx)
+	if err != nil {
+		return EmptyMap, nil
+	}
+	bIter, err := b.Iterator(ctx)
+	if err != nil {
+		return EmptyMap, nil
+	}
+
+	aKey, aVal, err := aIter.Next(ctx)
+	if err != nil {
+		return EmptyMap, nil
+	}
+	bKey, bVal, err := bIter.Next(ctx)
+	if err != nil {
+		return EmptyMap, nil
+	}
+
+	for aKey != nil && bKey != nil {
+
+		aLess, err := aKey.Less(a.Format(), bKey)
+		if err != nil {
+			return EmptyMap, nil
+		}
+
+		if aLess {
+			// take from a (which we already have)
+			aKey, aVal, err = aIter.Next(ctx)
+			if err != nil {
+				return EmptyMap, nil
+			}
+			continue
+		}
+
+		if aKey.Equals(bKey) {
+			// collision, delegate behavior to caller
+			chosen, err := cb(aKey, aVal, bVal)
+			if err != nil {
+				return EmptyMap, nil
+			}
+			if !chosen.Equals(aVal) {
+				editor.Set(aKey, chosen)
+			}
+			// advance a and b
+			aKey, aVal, err = aIter.Next(ctx)
+			if err != nil {
+				return EmptyMap, nil
+			}
+			bKey, aVal, err = bIter.Next(ctx)
+			if err != nil {
+				return EmptyMap, nil
+			}
+			continue
+		}
+
+		// take from b
+		editor.Set(bKey, bVal)
+		bKey, bVal, err = bIter.Next(ctx)
+		if err != nil {
+			return EmptyMap, nil
+		}
+	}
+
+	if aKey == nil && bKey == nil {
+		return editor.Map(ctx)
+	}
+
+	if aKey == nil {
+		// |a| is finished, take rest from |b|.
+		for bKey != nil {
+			editor.Set(bKey, bVal)
+			bKey, bVal, err = bIter.Next(ctx)
+			if err != nil {
+				return EmptyMap, nil
+			}
+		}
+	}
+
+	return editor.Map(ctx)
+}

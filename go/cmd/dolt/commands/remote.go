@@ -21,6 +21,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -69,7 +71,7 @@ const (
 )
 
 var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
-var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
+var credTypes = dbfactory.AWSCredTypes
 
 type RemoteCmd struct{}
 
@@ -81,6 +83,10 @@ func (cmd RemoteCmd) Name() string {
 // Description returns a description of the command
 func (cmd RemoteCmd) Description() string {
 	return "Manage set of tracked repositories."
+}
+
+func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

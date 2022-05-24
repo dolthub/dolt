@@ -163,12 +163,14 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
+	// Create SQL Engine with users
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
 		engine.FormatTabular,
 		"",
 		isReadOnly,
+		serverConfig.MySQLDbFilePath(),
 		serverConfig.PrivilegeFilePath(),
 		serverConfig.User(),
 		serverConfig.Password(),

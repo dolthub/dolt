@@ -88,6 +88,10 @@ func (cmd BlameCmd) Description() string {
 	return "Show what revision and author last modified each row of a table."
 }
 
+func (cmd BlameCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd BlameCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()

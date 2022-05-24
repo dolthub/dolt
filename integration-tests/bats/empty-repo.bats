@@ -61,6 +61,7 @@ teardown() {
 }
 
 @test "empty-repo: dolt diff in new repository" {
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]

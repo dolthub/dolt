@@ -127,6 +127,11 @@ func TestValueWriteFlush(t *testing.T) {
 
 	vals := ValueSlice{String("hello"), Bool(true), Float(42)}
 	vs := newTestValueStore()
+
+	if vs.Format().UsesFlatbuffers() {
+		t.Skip()
+	}
+
 	hashes := hash.HashSet{}
 	for _, v := range vals {
 		hashes.Insert(mustRef(vs.WriteValue(context.Background(), v)).TargetHash())

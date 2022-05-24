@@ -3,6 +3,8 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
+
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{bac1,rem1,repo1}
 
@@ -228,6 +230,40 @@ teardown() {
     run dolt checkout new_feature
     [ "$status" -eq 1 ]
     [[ ! "$output" =~ "panic" ]] || false
+}
+
+@test "replication: pull all heads from feat" {
+    cd repo1
+    dolt branch -c main feat
+    dolt push remote1 feat
+    cd ..
+    # clone repo2 from repo1
+    dolt clone file://./rem1 repo2
+    cd repo2
+    dolt checkout feat
+    dolt checkout main
+    # add tables to repo1
+    cd ../repo1
+    dolt checkout feat
+    dolt sql -q "create table t1 (a int)"
+    dolt sql -q "create table t2 (a int)"
+    dolt commit -am "cm"
+    # remote1 has tables
+    dolt push remote1 feat
+    # repo2 replication config
+    cd ../repo2
+    dolt config --local --add sqlserver.global.dolt_replicate_all_heads 1
+    dolt config --local --add sqlserver.global.dolt_read_replica_remote origin
+    # repo2 pulls on read
+    run dolt sql -r csv -b <<SQL
+call dolt_checkout('feat');
+show tables;
+SQL
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 4 ]
+    [[ "${lines[0]}" =~ "Tables_in_repo2" ]] || false
+    [[ "${lines[1]}" =~ "t1" ]] || false
+    [[ "${lines[2]}" =~ "t2" ]] || false
 }
 
 @test "replication: pull all heads" {

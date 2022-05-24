@@ -15,23 +15,51 @@
 package enginetest
 
 import (
-	"github.com/dolthub/go-mysql-server/enginetest"
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 )
 
-var DoltTransactionTests = []enginetest.TransactionTest{
+var DoltTransactionTests = []queries.TransactionTest{
+	{
+		// Repro for https://github.com/dolthub/dolt/issues/3402
+		Name: "DDL changes from transactions are available before analyzing statements in other sessions (autocommit on)",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ select @@autocommit;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "/* client b */ select @@autocommit;",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:       "/* client a */ select * from t;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:       "/* client b */ select * from t;",
+				ExpectedErr: sql.ErrTableNotFound,
+			},
+			{
+				Query:    "/* client a */ create table t(pk int primary key);",
+				Expected: []sql.Row{{sql.OkResult{}}},
+			},
+			{
+				Query:    "/* client b */ select count(*) from t;",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 	{
 		Name: "duplicate inserts, autocommit on",
 		SetUpScript: []string{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ insert into t values (2, 2)",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
@@ -48,7 +76,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -89,7 +117,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -138,7 +166,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query: "/* client a */ update t set y = 2",
 				Expected: []sql.Row{{sql.OkResult{
@@ -175,7 +203,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -228,7 +256,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -289,7 +317,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -342,7 +370,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int, z int)",
 			"insert into t values (1, 1, 1), (2, 2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -395,7 +423,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ delete from t where y = 2",
 				Expected: []sql.Row{{sql.NewOkResult(1)}},
@@ -420,7 +448,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -461,7 +489,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2), (3, 3)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -502,7 +530,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -553,7 +581,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int)",
 			"insert into t values (1, 1), (2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -598,7 +626,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table t (x int primary key, y int, z int)",
 			"insert into t values (1, 1, 1), (2, 2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -679,7 +707,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 			"create table test (x int, y int, z int, primary key(z, y))",
 			"insert into test values (1, 1, 1), (2, 2, 2)",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client b */ start transaction",
 				Expected: []sql.Row{},
@@ -728,7 +756,7 @@ var DoltTransactionTests = []enginetest.TransactionTest{
 	},
 }
 
-var DoltConflictHandlingTests = []enginetest.TransactionTest{
+var DoltConflictHandlingTests = []queries.TransactionTest{
 	{
 		Name: "default behavior (rollback on commit conflict)",
 		SetUpScript: []string{
@@ -736,7 +764,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
 				Expected: []sql.Row{{}},
@@ -786,7 +814,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
@@ -832,7 +860,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
 				Expected: []sql.Row{{}},
@@ -878,7 +906,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_allow_commit_conflicts = on",
 				Expected: []sql.Row{{}},
@@ -968,7 +996,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off, dolt_force_transaction_commit = on",
 				Expected: []sql.Row{{}},
@@ -1056,7 +1084,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			"INSERT INTO test VALUES (0, 0)",
 			"SELECT DOLT_COMMIT('-a', '-m', 'initial table');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ set autocommit = off",
 				Expected: []sql.Row{{}},
@@ -1111,7 +1139,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client b */ commit",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // our transaction got rolled back, so we lose the above insert
 				Query:    "/* client b */ select * from test order by 1",
@@ -1121,7 +1149,7 @@ var DoltConflictHandlingTests = []enginetest.TransactionTest{
 	},
 }
 
-var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
+var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 	{
 		Name: "committed conflicts are seen by other sessions",
 		SetUpScript: []string{
@@ -1136,7 +1164,7 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 			"UPDATE test SET val=1001 WHERE pk=0;",
 			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
 		},
-		Assertions: []enginetest.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "/* client a */ start transaction",
 				Expected: []sql.Row{},
@@ -1195,7 +1223,7 @@ var DoltSqlFuncTransactionTests = []enginetest.TransactionTest{
 			},
 			{
 				Query:          "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				ExpectedErrStr: doltdb.ErrUnresolvedConflicts.Error(),
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
 			},
 			{ // client rolled back on merge with conflicts
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",

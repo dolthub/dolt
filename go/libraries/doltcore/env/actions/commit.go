@@ -247,6 +247,9 @@ func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.C
 		idx++
 	}
 
+	//todo(max): toposort this, two commits can have the same timestamp,
+	// and if the founding commit has the same timestamp as its ancestors
+	// this can cause diff errors.
 	var sortErr error
 	var metaI, metaJ *datas.CommitMeta
 	sort.Slice(uniqueCommits, func(i, j int) bool {

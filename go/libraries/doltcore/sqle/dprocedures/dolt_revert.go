@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_revert is the stored procedure version of the function `revert`.
-func dolt_revert(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltRevert is the stored procedure version of the function `revert` and `dolt_revert`.
+func doltRevert(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltRevert(ctx, nil, args)
 	if err != nil {
 		return nil, err

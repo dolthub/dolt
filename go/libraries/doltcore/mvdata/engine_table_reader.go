@@ -58,6 +58,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		dbName,
 		false,
 		"",
+		"",
 		"root",
 		"",
 		false,

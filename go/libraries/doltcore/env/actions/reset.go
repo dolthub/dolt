@@ -17,6 +17,7 @@ package actions
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
@@ -24,6 +25,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 )
 
+// resetHardTables resolves a new HEAD commit from a refSpec and updates working set roots by
+// resetting the table contexts for tracked tables. New tables are ignored. Returns new HEAD
+// Commit and Roots.
 func resetHardTables(ctx context.Context, dbData env.DbData, cSpecStr string, roots doltdb.Roots) (*doltdb.Commit, doltdb.Roots, error) {
 	ddb := dbData.Ddb
 	rsr := dbData.Rsr
@@ -271,4 +275,56 @@ func ValidateIsRef(ctx context.Context, cSpecStr string, ddb *doltdb.DoltDB, rsr
 	}
 
 	return true
+}
+
+// CleanUntracked deletes untracked tables from the working root.
+// Evaluates untracked tables as: all working tables - all staged tables.
+func CleanUntracked(ctx context.Context, roots doltdb.Roots, tables []string, dryrun bool) (doltdb.Roots, error) {
+	untrackedTables := make(map[string]struct{})
+
+	var err error
+	if len(tables) == 0 {
+		tables, err = roots.Working.GetTableNames(ctx)
+		if err != nil {
+			return doltdb.Roots{}, nil
+		}
+	}
+
+	for i := range tables {
+		name := tables[i]
+		_, _, err = roots.Working.GetTable(ctx, name)
+		if err != nil {
+			return doltdb.Roots{}, err
+		}
+		untrackedTables[name] = struct{}{}
+	}
+
+	// untracked tables = working tables - staged tables
+	headTblNames, err := roots.Staged.GetTableNames(ctx)
+	if err != nil {
+		return doltdb.Roots{}, err
+	}
+
+	for _, name := range headTblNames {
+		delete(untrackedTables, name)
+	}
+	delete(untrackedTables, doltdb.DocTableName)
+
+	newRoot := roots.Working
+	var toDelete []string
+	for t := range untrackedTables {
+		toDelete = append(toDelete, t)
+	}
+
+	newRoot, err = newRoot.RemoveTables(ctx, false, false, toDelete...)
+	if err != nil {
+		return doltdb.Roots{}, fmt.Errorf("failed to remove tables; %w", err)
+	}
+
+	if dryrun {
+		return roots, nil
+	}
+	roots.Working = newRoot
+
+	return roots, nil
 }
