@@ -962,9 +962,43 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 ) bool {
 	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in the new format
 	return types.IsFormat_DOLT_1(t.nbf) ||
-		len(oldSchema.Schema) < len(newSchema.Schema) ||
-		(len(newSchema.PkOrdinals) != len(oldSchema.PkOrdinals))
+		t.isIncompatibleTypeChange(modifiedColumn) ||
+		isColumnDrop(oldSchema, newSchema) ||
+		isPrimaryKeyChange(oldSchema, newSchema)
 }
+
+// TODO: this doesn't work for renames
+func (t *AlterableDoltTable) isIncompatibleTypeChange(column *sql.Column) bool {
+	if column == nil {
+		return false
+	}
+
+	existingCol, _ := t.sch.GetAllCols().GetByNameCaseInsensitive(column.Name)
+	col, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, column)
+	if err != nil {
+		panic(err) // should be impossible, we check compatibility before this point
+	}
+
+	// TODO: this check should look different for DOLT_1
+	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
+		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
+			return true
+		}
+	}
+
+	return false
+}
+
+func isColumnDrop(	oldSchema sql.PrimaryKeySchema,
+		newSchema sql.PrimaryKeySchema) bool {
+	return len(oldSchema.Schema) < len(newSchema.Schema)
+}
+
+func isPrimaryKeyChange(	oldSchema sql.PrimaryKeySchema,
+		newSchema sql.PrimaryKeySchema) bool {
+	return len(newSchema.PkOrdinals) != len(oldSchema.PkOrdinals)
+}
+
 
 func (t *AlterableDoltTable) RewriteInserter(
 		ctx *sql.Context,
