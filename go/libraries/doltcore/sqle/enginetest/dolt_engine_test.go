@@ -372,17 +372,14 @@ func TestComplexIndexQueries(t *testing.T) {
 }
 
 func TestCreateTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestCreateTable(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDDL(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDDL(t, newDoltHarness(t))
 }
 
 func TestPkOrdinalsDML(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestPkOrdinalsDML(t, newDoltHarness(t))
 }
 
@@ -395,7 +392,6 @@ func TestRenameTable(t *testing.T) {
 }
 
 func TestRenameColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestRenameColumn(t, newDoltHarness(t))
 }
 
@@ -408,7 +404,6 @@ func TestModifyColumn(t *testing.T) {
 }
 
 func TestDropColumn(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestDropColumn(t, newDoltHarness(t))
 }
 
@@ -522,12 +517,10 @@ func TestInnerNestedInNaturalJoins(t *testing.T) {
 }
 
 func TestColumnDefaults(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestColumnDefaults(t, newDoltHarness(t))
 }
 
 func TestAlterTable(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAlterTable(t, newDoltHarness(t))
 }
 
