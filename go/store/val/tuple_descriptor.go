@@ -256,7 +256,7 @@ func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, YearEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readInt16(b), true
+		v, ok = readYear(b), true
 	}
 	return
 }

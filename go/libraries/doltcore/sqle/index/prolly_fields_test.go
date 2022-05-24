@@ -113,7 +113,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "date",
 			typ:   val.Type{Enc: val.DateEnc},
-			value: time.Now().UTC(),
+			value: dateFromTime(time.Now().UTC()),
 		},
 		{
 			name:  "datetime",
@@ -122,7 +122,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "timestamp",
-			typ:   val.Type{Enc: val.TimestampEnc},
+			typ:   val.Type{Enc: val.DatetimeEnc},
 			value: time.Now().UTC(),
 		},
 		{
@@ -195,4 +195,9 @@ func mustParseJson(t *testing.T, s string) sql.JSONDocument {
 	err := json.Unmarshal([]byte(s), &v)
 	require.NoError(t, err)
 	return sql.JSONDocument{Val: v}
+}
+
+func dateFromTime(t time.Time) time.Time {
+	y, m, d := t.Year(), t.Month(), t.Day()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
 }
