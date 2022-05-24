@@ -44,9 +44,12 @@ const (
 	float32Size ByteSize = 4
 	float64Size ByteSize = 8
 
-	// todo(andy): experimental encoding
-	timestampSize ByteSize = 8
-	hash128Size   ByteSize = 16
+	hash128Size ByteSize = 16
+
+	yearSize ByteSize = 1
+	dateSize ByteSize = 4
+	//timeSize     ByteSize = 8
+	datetimeSize ByteSize = 8
 )
 
 type Encoding uint8
@@ -65,12 +68,12 @@ const (
 	Float32Enc Encoding = 11
 	Float64Enc Encoding = 12
 
-	// todo(andy): experimental encodings
-	TimestampEnc Encoding = 14
-	DateEnc      Encoding = 15
-	DatetimeEnc  Encoding = 16
-	YearEnc      Encoding = 17
-	Hash128Enc   Encoding = 18
+	Hash128Enc Encoding = 13
+
+	YearEnc Encoding = 14
+	DateEnc Encoding = 15
+	// TimeEnc     Encoding = 16
+	DatetimeEnc Encoding = 17
 
 	sentinel Encoding = 127
 )
@@ -123,10 +126,14 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float32Size, true
 	case Float64Enc:
 		return float64Size, true
-	case DateEnc, DatetimeEnc, TimestampEnc:
-		return timestampSize, true
 	case YearEnc:
-		return int16Size, true
+		return yearSize, true
+	case DateEnc:
+		return dateSize, true
+	//case TimeEnc:
+	//	return timeSize, true
+	case DatetimeEnc:
+		return datetimeSize, true
 	case Hash128Enc:
 		return hash128Size, true
 	default:
@@ -359,18 +366,69 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func readTimestamp(buf []byte) (t time.Time) {
-	expectSize(buf, timestampSize)
+func readString(val []byte) string {
+	// todo(andy): fix allocation
+	return string(readByteString(val))
+}
+
+const minYear int16 = 1901
+
+func readYear(val []byte) int16 {
+	expectSize(val, yearSize)
+	return int16(readUint8(val)) + minYear
+}
+
+func writeYear(buf []byte, val int16) {
+	expectSize(buf, yearSize)
+	writeUint8(buf, uint8(val-minYear))
+}
+
+func compareYear(l, r int16) int {
+	return compareInt16(l, r)
+}
+
+// adapted from:
+// https://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html
+const (
+	yearShift  uint32 = 16
+	monthShift uint32 = 8
+	monthMask  uint32 = 255 << monthShift
+	dayMask    uint32 = 255
+)
+
+func readDate(val []byte) (date time.Time) {
+	expectSize(val, dateSize)
+	t := readUint32(val)
+	y := t >> yearShift
+	m := (t & monthMask) >> monthShift
+	d := (t & dayMask)
+	return time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, time.UTC)
+}
+
+func writeDate(buf []byte, val time.Time) {
+	expectSize(buf, dateSize)
+	t := uint32(val.Year() << yearShift)
+	t += uint32(val.Month() << monthShift)
+	t += uint32(val.Day())
+	writeUint32(buf, t)
+}
+
+func compareDate(l, r time.Time) int {
+	return compareDatetime(l, r)
+}
+
+func readDatetime(buf []byte) (t time.Time) {
+	expectSize(buf, datetimeSize)
 	t = time.Unix(0, readInt64(buf)).UTC()
 	return
 }
 
-func writeTimestamp(buf []byte, val time.Time) {
-	expectSize(buf, timestampSize)
+func writeDatetime(buf []byte, val time.Time) {
+	expectSize(buf, datetimeSize)
 	writeInt64(buf, val.UnixNano())
 }
 
-func compareTimestamp(l, r time.Time) int {
+func compareDatetime(l, r time.Time) int {
 	if l.Equal(r) {
 		return 0
 	} else if l.Before(r) {
@@ -378,11 +436,6 @@ func compareTimestamp(l, r time.Time) int {
 	} else {
 		return 1
 	}
-}
-
-func readString(val []byte) string {
-	// todo(andy): fix allocation
-	return string(readByteString(val))
 }
 
 func writeString(buf []byte, val string) {

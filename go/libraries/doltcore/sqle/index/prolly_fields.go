@@ -51,12 +51,14 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		v, ok = td.GetFloat64(i, tup)
 	case val.DecimalEnc:
 		v, ok = td.GetDecimal(i, tup)
-	case val.TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
 	case val.YearEnc:
 		v, ok = td.GetYear(i, tup)
-	case val.TimestampEnc, val.DateEnc, val.DatetimeEnc:
-		v, ok = td.GetTimestamp(i, tup)
+	case val.DateEnc:
+		v, ok = td.GetDate(i, tup)
+	case val.TimeEnc:
+		v, ok = td.GetSqlTime(i, tup)
+	case val.DatetimeEnc:
+		v, ok = td.GetDatetime(i, tup)
 	case val.StringEnc:
 		v, ok = td.GetString(i, tup)
 	case val.ByteStringEnc:
@@ -116,12 +118,14 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutFloat64(i, v.(float64))
 	case val.DecimalEnc:
 		tb.PutDecimal(i, v.(string))
-	case val.TimeEnc:
-		tb.PutSqlTime(i, v.(string))
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
-	case val.DateEnc, val.DatetimeEnc, val.TimestampEnc:
-		tb.PutTimestamp(i, v.(time.Time))
+	case val.DateEnc:
+		tb.PutDate(i, v.(time.Time))
+	case val.TimeEnc:
+		tb.PutSqlTime(i, v.(string))
+	case val.DatetimeEnc:
+		tb.PutDatetime(i, v.(time.Time))
 	case val.StringEnc:
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:

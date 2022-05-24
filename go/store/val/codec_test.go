@@ -17,6 +17,7 @@ package val
 import (
 	"math"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -27,7 +28,7 @@ func TestCompare(t *testing.T) {
 		l, r []byte
 		cmp  int
 	}{
-		// ints
+		// int
 		{
 			typ: Type{Enc: Int64Enc},
 			l:   encInt(0), r: encInt(0),
@@ -43,7 +44,7 @@ func TestCompare(t *testing.T) {
 			l:   encInt(1), r: encInt(0),
 			cmp: 1,
 		},
-		// uints
+		// uint
 		{
 			typ: Type{Enc: Uint64Enc},
 			l:   encUint(0), r: encUint(0),
@@ -59,7 +60,7 @@ func TestCompare(t *testing.T) {
 			l:   encUint(1), r: encUint(0),
 			cmp: 1,
 		},
-		// floats
+		// float
 		{
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(0), r: encFloat(0),
@@ -75,7 +76,58 @@ func TestCompare(t *testing.T) {
 			l:   encFloat(1), r: encFloat(0),
 			cmp: 1,
 		},
-		// strings
+		// year
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2022), r: encYear(2022),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2022), r: encYear(1999),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2000), r: encYear(2022),
+			cmp: -1,
+		},
+		// date
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(2022, 05, 24), r: encDate(2022, 05, 24),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(2022, 12, 24), r: encDate(2022, 05, 24),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(1999, 04, 24), r: encDate(2022, 05, 24),
+			cmp: -1,
+		},
+		// datetime
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: -1,
+		},
+		// string
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr(""), r: encStr(""),
@@ -110,24 +162,27 @@ func TestCompare(t *testing.T) {
 
 	for _, test := range tests {
 		act := compare(test.typ, test.l, test.r)
-		assert.Equal(t, test.cmp, act)
+		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
+			formatValue(test.typ.Enc, test.l),
+			fmtComparator(test.cmp),
+			formatValue(test.typ.Enc, test.r))
 	}
 }
 
 func encInt(i int64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, uint64Size)
 	writeInt64(buf, i)
 	return buf
 }
 
 func encUint(u uint64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, int64Size)
 	writeUint64(buf, u)
 	return buf
 }
 
 func encFloat(f float64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, float64Size)
 	writeFloat64(buf, f)
 	return buf
 }
@@ -135,6 +190,26 @@ func encFloat(f float64) []byte {
 func encStr(s string) []byte {
 	buf := make([]byte, len(s)+1)
 	writeString(buf, s)
+	return buf
+}
+
+func encYear(y int16) []byte {
+	buf := make([]byte, yearSize)
+	writeYear(buf, y)
+	return buf
+}
+
+func encDate(y, m, d int) []byte {
+	var date time.Time
+	date = date.AddDate(y, m, d)
+	buf := make([]byte, dateSize)
+	writeDate(buf, date)
+	return buf
+}
+
+func encDatetime(dt time.Time) []byte {
+	buf := make([]byte, datetimeSize)
+	writeDatetime(buf, dt)
 	return buf
 }
 
@@ -150,6 +225,15 @@ func TestCodecRoundTrip(t *testing.T) {
 	})
 	t.Run("round trip floats", func(t *testing.T) {
 		roundTripFloats(t)
+	})
+	t.Run("round trip years", func(t *testing.T) {
+		roundTripYears(t)
+	})
+	t.Run("round trip dates", func(t *testing.T) {
+		roundTripDates(t)
+	})
+	t.Run("round trip datetimes", func(t *testing.T) {
+		roundTripDatetimes(t)
 	})
 }
 
@@ -259,8 +343,65 @@ func roundTripFloats(t *testing.T) {
 	}
 }
 
+func roundTripYears(t *testing.T) {
+	years := []int16{
+		1901,
+		2022,
+		2155,
+	}
+
+	buf := make([]byte, yearSize)
+	for _, y := range years {
+		writeYear(buf, y)
+		assert.Equal(t, y, readYear(buf))
+		zero(buf)
+	}
+}
+
+func roundTripDates(t *testing.T) {
+	dates := []time.Time{
+		testDate(1000, 01, 01),
+		testDate(2022, 05, 24),
+		testDate(9999, 12, 31),
+	}
+
+	buf := make([]byte, dateSize)
+	for _, d := range dates {
+		writeDate(buf, d)
+		assert.Equal(t, d, readDate(buf))
+		zero(buf)
+	}
+}
+
+func roundTripDatetimes(t *testing.T) {
+	datetimes := []time.Time{
+		time.Now().UTC(),
+	}
+
+	buf := make([]byte, datetimeSize)
+	for _, dt := range datetimes {
+		writeDatetime(buf, dt)
+		assert.Equal(t, dt, readDatetime(buf))
+		zero(buf)
+	}
+}
+
+func testDate(y, m, d int) (date time.Time) {
+	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+}
+
 func zero(buf []byte) {
 	for i := range buf {
 		buf[i] = 0
+	}
+}
+
+func fmtComparator(c int) string {
+	if c == 0 {
+		return "="
+	} else if c < 0 {
+		return "<"
+	} else {
+		return ">"
 	}
 }
