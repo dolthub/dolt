@@ -325,9 +325,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	if !w.primary.HasEdits(ctx) {
-		return nil
-	}
 	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err
