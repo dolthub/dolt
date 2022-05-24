@@ -165,6 +165,10 @@ func outputType(value interface{}) {
 				typeString = t.HumanReadableString()
 				util.CheckError(err)
 			}
+		default:
+			t, err := types.TypeOf(value)
+			typeString = t.HumanReadableString()
+			util.CheckError(err)
 		}
 	default:
 		typeString = fmt.Sprintf("unknown type %T", value)

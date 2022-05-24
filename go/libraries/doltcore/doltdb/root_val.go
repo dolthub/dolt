@@ -19,7 +19,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	flatbuffers "github.com/google/flatbuffers/go"
@@ -894,8 +893,6 @@ func putTable(ctx context.Context, root *RootValue, tName string, ref types.Ref)
 	if !IsValidTableName(tName) {
 		panic("Don't attempt to put a table with a name that fails the IsValidTableName check")
 	}
-
-	fmt.Fprintf(os.Stderr, "putTable: %s has hash %s\n", tName, ref.TargetHash())
 
 	newStorage, err := root.st.EditTablesMap(ctx, root.vrw, []tableEdit{{name: tName, ref: &ref}})
 	if err != nil {
