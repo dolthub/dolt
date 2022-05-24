@@ -16,8 +16,6 @@ package writer
 
 import (
 	"context"
-	"fmt"
-	"os"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -186,13 +184,11 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 
 	flushed := s.workingSet.WorkingRoot()
 	for name, tbl := range tables {
-		fmt.Fprintf(os.Stderr, "putting table %s", tbl.DebugString(ctx))
 		flushed, err = flushed.PutTable(ctx, name, tbl)
 		if err != nil {
 			return nil, err
 		}
 	}
-	fmt.Fprintf(os.Stderr, "session writer flush, root is %s", flushed.DebugString(ctx, true))
 
 	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 

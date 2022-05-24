@@ -203,13 +203,6 @@ func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
 	}
 	ddt := table.(doltDevTable)
 
-	// var b bytes.Buffer
-	// rows, _ := ddt.GetTableRows(ctx)
-	// ProllyMapFromIndex(rows).WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-	// 	return tree.OutputProllyNode(&b, nd)
-	// })
-	// fmt.Fprintf(os.Stderr, "ref from noms table, data is %s", b.String())
-
 	return refFromNomsValue(ctx, ddt.vrw, ddt.nomsValue())
 }
 
