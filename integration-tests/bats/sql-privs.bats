@@ -224,9 +224,8 @@ teardown() {
     stop_sql_server
     start_sql_server repo1
 
-    # expect dolt and mysql_user
+    # expect dolt, new_user, and mysql_user
     run show_users
-    [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
@@ -235,7 +234,8 @@ teardown() {
     [ "${lines[5]}" = '+------------+' ]
     [ "${lines[6]}" = '| dolt       |' ]
     [ "${lines[7]}" = '| mysql_user |' ]
-    [ "${lines[8]}" = '+------------+' ]
+    [ "${lines[8]}" = '| new_user   |' ]
+    [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
