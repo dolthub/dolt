@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -32,6 +33,7 @@ type prollyIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
 	primary   prolly.Map
+	keyless   bool
 
 	// pkMap transforms indexRows index keys
 	// into primary index keys
@@ -61,7 +63,8 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprim
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := ordinalMappingFromIndex(idx)
-	km, vm := projectionMappings(idx.Schema(), idx.Schema().GetAllCols().GetColumnNames())
+	sch := idx.Schema()
+	km, vm := projectionMappings(sch, sch.GetAllCols().GetColumnNames())
 
 	eg, c := errgroup.WithContext(ctx)
 
@@ -69,6 +72,7 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprim
 		idx:       idx,
 		indexIter: indexIter,
 		primary:   primary,
+		keyless:   schema.IsKeyless(sch),
 		pkBld:     pkBld,
 		pkMap:     pkMap,
 		eg:        eg,
@@ -113,6 +117,12 @@ func (p prollyIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 func (p prollyIndexIter) queueRows(ctx context.Context) error {
 	defer close(p.rowChan)
 
+	// Keyless rows have hash and cardinality values which will not be included, but are a part of the keyMap/valMap
+	rLen := len(p.keyMap) + len(p.valMap)
+	if p.keyless {
+		rLen -= 2
+	}
+
 	for {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {
@@ -125,7 +135,7 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 		}
 		pk := p.pkBld.Build(sharePool)
 
-		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
+		r := make(sql.Row, rLen)
 		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 			return p.rowFromTuples(key, value, r)
 		})
@@ -182,6 +192,12 @@ func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
 
 	def := idx.Schema().Indexes().GetByName(idx.ID())
 	pks := def.PrimaryKeyTags()
+	if len(pks) == 0 { // keyless index
+		m = make(val.OrdinalMapping, 1)
+		m[0] = len(def.AllTags())
+		return m
+	}
+
 	m = make(val.OrdinalMapping, len(pks))
 
 	for i, pk := range pks {

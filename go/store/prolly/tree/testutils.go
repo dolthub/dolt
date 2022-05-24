@@ -15,22 +15,21 @@
 package tree
 
 import (
+	"context"
+	"fmt"
 	"math"
 	"math/rand"
 	"sort"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
-
 	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 var testRand = rand.New(rand.NewSource(1))
-
-func NewTestNodeStore() NodeStore {
-	ts := &chunks.TestStorage{}
-	return NewNodeStore(ts.NewView())
-}
 
 func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	ks := make([]Item, len(keys))
@@ -227,7 +226,57 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 		buf := make([]byte, (testRand.Int63()%40)+10)
 		testRand.Read(buf)
 		tb.PutByteString(idx, buf)
+	case val.Hash128Enc:
+		buf := make([]byte, 16)
+		testRand.Read(buf)
+		tb.PutHash128(idx, buf)
 	default:
 		panic("unknown encoding")
 	}
+}
+
+func NewTestNodeStore() NodeStore {
+	ts := &chunks.TestStorage{}
+	ns := NewNodeStore(ts.NewView())
+	return nodeStoreValidator{ns: ns}
+}
+
+type nodeStoreValidator struct {
+	ns NodeStore
+}
+
+func (v nodeStoreValidator) Read(ctx context.Context, ref hash.Hash) (Node, error) {
+	nd, err := v.ns.Read(ctx, ref)
+	if err != nil {
+		return Node{}, err
+	}
+
+	actual := hash.Of(nd.msg)
+	if ref != actual {
+		err = fmt.Errorf("incorrect node hash (%s != %s)", ref, actual)
+		return Node{}, err
+	}
+	return nd, nil
+}
+
+func (v nodeStoreValidator) Write(ctx context.Context, nd Node) (hash.Hash, error) {
+	h, err := v.ns.Write(ctx, nd)
+	if err != nil {
+		return hash.Hash{}, err
+	}
+
+	actual := hash.Of(nd.msg)
+	if h != actual {
+		err = fmt.Errorf("incorrect node hash (%s != %s)", h, actual)
+		return hash.Hash{}, err
+	}
+	return h, nil
+}
+
+func (v nodeStoreValidator) Pool() pool.BuffPool {
+	return v.ns.Pool()
+}
+
+func (v nodeStoreValidator) Format() *types.NomsBinFormat {
+	return v.ns.Format()
 }
