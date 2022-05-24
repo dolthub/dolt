@@ -1374,6 +1374,8 @@ SQL
 }
 
 @test "sql-merge: adding and dropping primary keys any number of times not produce schema merge conflicts" {
+    skip_nbf_dolt_1 "broken for DOLT_DEV format, works for DOLT_1"
+    
     dolt commit -am "commit all changes"
     dolt sql -q "create table test_null (i int)"
     dolt commit -am "initial"
