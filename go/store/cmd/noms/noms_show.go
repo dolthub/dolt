@@ -29,12 +29,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
-	"github.com/dolthub/dolt/go/store/hash"
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -165,6 +165,10 @@ func outputType(value interface{}) {
 				typeString = t.HumanReadableString()
 				util.CheckError(err)
 			}
+		default:
+			t, err := types.TypeOf(value)
+			typeString = t.HumanReadableString()
+			util.CheckError(err)
 		}
 	default:
 		typeString = fmt.Sprintf("unknown type %T", value)
@@ -188,8 +192,8 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				msg := serial.GetRootAsTable(value, 0)
 
 				fmt.Fprintf(w, "{\n")
-				fmt.Fprintf(w, "\tSchema: #%s\n",  hash.New(msg.SchemaBytes()).String())
-				fmt.Fprintf(w, "\tViolations: #%s\n",  hash.New(msg.ViolationsBytes()).String())
+				fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
+				fmt.Fprintf(w, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
 				// TODO: merge conflicts, not stable yet
 
 				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
@@ -204,7 +208,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				hashes := idxRefs.RefArrayBytes()
 				for i := 0; i < idxRefs.NamesLength(); i++ {
 					name := idxRefs.Names(i)
-					addr := hash.New(hashes[i*20:(i+1)*20])
+					addr := hash.New(hashes[i*20 : (i+1)*20])
 					fmt.Fprintf(w, "\t\t%s: #%s\n", name, addr.String())
 				}
 				fmt.Fprintf(w, "\t}\n")

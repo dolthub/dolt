@@ -61,7 +61,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes := refs.RefArrayBytes()
 		for i := 0; i < refs.NamesLength(); i++ {
 			name := refs.Names(i)
-			addr := hash.New(hashes[i*20:(i+1)*20])
+			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "}")
@@ -92,16 +92,16 @@ func (sm SerialMessage) HumanReadableString() string {
 
 		fmt.Fprintf(ret, "\tParents: {\n")
 		hashes := msg.ParentAddrsBytes()
-		for i := 0; i < msg.ParentAddrsLength() / hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20:(i+1)*20])
+		for i := 0; i < msg.ParentAddrsLength()/hash.ByteLen; i++ {
+			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
 
 		fmt.Fprintf(ret, "\tParentClosure: {\n")
 		hashes = msg.ParentClosureBytes()
-		for i := 0; i < msg.ParentClosureLength() / hash.ByteLen; i++ {
-			addr := hash.New(hashes[i*20:(i+1)*20])
+		for i := 0; i < msg.ParentClosureLength()/hash.ByteLen; i++ {
+			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t\t#%s\n", addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
@@ -120,7 +120,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes := tableRefs.RefArrayBytes()
 		for i := 0; i < tableRefs.NamesLength(); i++ {
 			name := tableRefs.Names(i)
-			addr := hash.New(hashes[i*20:(i+1)*20])
+			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")
@@ -131,8 +131,8 @@ func (sm SerialMessage) HumanReadableString() string {
 		ret := &strings.Builder{}
 
 		fmt.Fprintf(ret, "{\n")
-		fmt.Fprintf(ret, "\tSchema: #%s\n",  hash.New(msg.SchemaBytes()).String())
-		fmt.Fprintf(ret, "\tViolations: #%s\n",  hash.New(msg.ViolationsBytes()).String())
+		fmt.Fprintf(ret, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
+		fmt.Fprintf(ret, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
 		// TODO: merge conflicts, not stable yet
 
 		fmt.Fprintf(ret, "\tAutoinc: %d\n", msg.AutoIncrementValue())
@@ -145,7 +145,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		hashes := idxRefs.RefArrayBytes()
 		for i := 0; i < idxRefs.NamesLength(); i++ {
 			name := idxRefs.Names(i)
-			addr := hash.New(hashes[i*20:(i+1)*20])
+			addr := hash.New(hashes[i*20 : (i+1)*20])
 			fmt.Fprintf(ret, "\t\t%s: #%s\n", name, addr.String())
 		}
 		fmt.Fprintf(ret, "\t}\n")

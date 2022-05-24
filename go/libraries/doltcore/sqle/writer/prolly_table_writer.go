@@ -15,12 +15,8 @@
 package writer
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"os"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -34,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// todo(andy): get from NodeStore
 var sharePool = pool.NewBuffPool()
 
 type prollyTableWriter struct {
@@ -126,6 +123,9 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+	if err := w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
+	}
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {
@@ -133,9 +133,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			}
 			return err
 		}
-	}
-	if err := w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
 	}
 	return nil
 }
@@ -248,7 +245,7 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
 
-var newSecondaries []indexWriter
+	var newSecondaries []indexWriter
 	if schema.IsKeyless(sch) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
 		if err != nil {
@@ -286,12 +283,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 	if err != nil {
 		return nil, err
 	}
-
-	var b bytes.Buffer
-	pm.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-		return tree.OutputProllyNode(&b, nd)
-	})
-	fmt.Fprintf(os.Stderr, "table data is %s", b.String())
 
 	t, err = w.tbl.UpdateRows(ctx, durable.IndexFromProllyMap(pm))
 	if err != nil {
@@ -334,9 +325,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	if !w.primary.HasEdits(ctx) {
-		return nil
-	}
 	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err

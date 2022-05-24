@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -202,13 +202,6 @@ func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
 		return refFromNomsValue(ctx, nt.vrw, nt.tableStruct)
 	}
 	ddt := table.(doltDevTable)
-
-	// var b bytes.Buffer
-	// rows, _ := ddt.GetTableRows(ctx)
-	// ProllyMapFromIndex(rows).WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
-	// 	return tree.OutputProllyNode(&b, nd)
-	// })
-	// fmt.Fprintf(os.Stderr, "ref from noms table, data is %s", b.String())
 
 	return refFromNomsValue(ctx, ddt.vrw, ddt.nomsValue())
 }

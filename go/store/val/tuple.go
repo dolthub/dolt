@@ -111,7 +111,7 @@ func NewTuple(pool pool.BuffPool, values ...[]byte) Tuple {
 	return tup
 }
 
-func CloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
+func cloneTuple(pool pool.BuffPool, tup Tuple) Tuple {
 	buf := pool.Get(uint64(len(tup)))
 	copy(buf, tup)
 	return buf

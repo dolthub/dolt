@@ -20,10 +20,12 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -37,6 +39,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "dolt commit on transaction commit one client",
 		SetUpScript: []string{
@@ -147,8 +150,13 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 			},
 		},
 	})
+	_, err := harness.NewEngine(t)
 
-	db := harness.databases[0].GetDoltDB()
+	ctx := enginetest.NewContext(harness)
+	db, ok := ctx.Session.(*dsess.DoltSession).GetDoltDB(ctx, "mydb")
+	if !ok {
+		t.Fatal("'mydb' database not found")
+	}
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
@@ -165,7 +173,7 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 	require.NoError(t, err)
 	icm, err := initialCommit.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "Initialize data repository", icm.Description)
+	require.Equal(t, "checkpoint enginetest database mydb", icm.Description)
 }
 
 func TestDoltTransactionCommitTwoClients(t *testing.T) {
@@ -274,7 +282,13 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 			},
 		},
 	})
-	db := harness.databases[0].GetDoltDB()
+	_, err := harness.NewEngine(t)
+
+	ctx := enginetest.NewContext(harness)
+	db, ok := ctx.Session.(*dsess.DoltSession).GetDoltDB(ctx, "mydb")
+	if !ok {
+		t.Fatal("'mydb' database not found")
+	}
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
@@ -297,7 +311,7 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 	require.NoError(t, err)
 	cm0, err := commit0.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "Initialize data repository", cm0.Description)
+	require.Equal(t, "checkpoint enginetest database mydb", cm0.Description)
 }
 
 func TestDoltTransactionCommitAutocommit(t *testing.T) {
@@ -346,7 +360,13 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 			},
 		},
 	})
-	db := harness.databases[0].GetDoltDB()
+	_, err := harness.NewEngine(t)
+
+	ctx := enginetest.NewContext(harness)
+	db, ok := ctx.Session.(*dsess.DoltSession).GetDoltDB(ctx, "mydb")
+	if !ok {
+		t.Fatal("'mydb' database not found")
+	}
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	require.NoError(t, err)
 	headRefs, err := db.GetHeadRefs(context.Background())
@@ -375,7 +395,7 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 	require.NoError(t, err)
 	cm0, err := commit0.GetCommitMeta(context.Background())
 	require.NoError(t, err)
-	require.Equal(t, "Initialize data repository", cm0.Description)
+	require.Equal(t, "checkpoint enginetest database mydb", cm0.Description)
 }
 
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
