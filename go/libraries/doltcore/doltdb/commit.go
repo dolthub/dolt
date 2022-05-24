@@ -42,7 +42,7 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commit *datas.Com
 	return &Commit{vrw, parents, commit}, nil
 }
 
-// HashOf returns the hash of the commit
+// Commit returns the datas.Commit
 func (c *Commit) Commit() *datas.Commit {
 	return c.dCommit
 }
