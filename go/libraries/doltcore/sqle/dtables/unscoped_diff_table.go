@@ -182,6 +182,10 @@ func (itr *UnscopedDiffTableItr) loadTableChanges(ctx context.Context, commit *d
 // calculateTableChanges calculates the tables that changed in the specified commit, by comparing that
 // commit with its immediate ancestor commit.
 func (itr *UnscopedDiffTableItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]tableChange, error) {
+	if len(commit.DatasParents()) == 0 {
+		return nil, nil
+	}
+
 	toRootValue, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
