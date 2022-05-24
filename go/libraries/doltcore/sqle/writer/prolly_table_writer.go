@@ -245,7 +245,7 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
 
-var newSecondaries []indexWriter
+	var newSecondaries []indexWriter
 	if schema.IsKeyless(sch) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
 		if err != nil {

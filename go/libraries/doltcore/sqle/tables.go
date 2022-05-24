@@ -967,10 +967,10 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 }
 
 func (t *AlterableDoltTable) RewriteInserter(
-		ctx *sql.Context,
-		oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema,
-		modifiedColumn *sql.Column,
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	modifiedColumn *sql.Column,
 ) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 

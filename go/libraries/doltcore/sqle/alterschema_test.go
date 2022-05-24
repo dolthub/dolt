@@ -446,10 +446,10 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 
 func TestDropPks(t *testing.T) {
 	var dropTests = []struct {
-		name           string
-		setup          []string
-		expectedErr    *errors.Kind
-		fkIdxName      string
+		name        string
+		setup       []string
+		expectedErr *errors.Kind
+		fkIdxName   string
 	}{
 		{
 			name: "no error on drop pk",
@@ -536,8 +536,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (id) references parent (id))",
 			},
-			expectedErr:  sql.ErrCantDropIndex,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if FK ref but bad backup index",
@@ -545,8 +545,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id), key `bad_backup2` (age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			expectedErr:  sql.ErrCantDropIndex,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if misordered compound backup index for FK",
@@ -554,8 +554,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (id), key `backup` (age, id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			expectedErr:  sql.ErrCantDropIndex,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if incomplete compound backup index for FK",
@@ -563,8 +563,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (age, id), key `backup` (age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age, id) references parent (age,  id))",
 			},
-			expectedErr:  sql.ErrCantDropIndex,
-			fkIdxName: "ageid",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "ageid",
 		},
 	}
 
@@ -765,7 +765,7 @@ func TestNewPkOrdinals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := modifyPkOrdinals(oldSch, tt.newSch)
 			if tt.err != nil {
-				require.True(t, goerrors.Is(err,  tt.err))
+				require.True(t, goerrors.Is(err, tt.err))
 			} else {
 				require.Equal(t, res, tt.expPkOrdinals)
 			}
