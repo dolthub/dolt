@@ -108,6 +108,22 @@ func TestCompare(t *testing.T) {
 			l:   encDate(1999, 04, 24), r: encDate(2022, 05, 24),
 			cmp: -1,
 		},
+		// time
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(978220860), r: encTime(978220860),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(599529660), r: encTime(-11644473600),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(-11644473600), r: encTime(599529660),
+			cmp: -1,
+		},
 		// datetime
 		{
 			typ: Type{Enc: DatetimeEnc},
@@ -200,10 +216,15 @@ func encYear(y int16) []byte {
 }
 
 func encDate(y, m, d int) []byte {
-	var date time.Time
-	date = date.AddDate(y, m, d)
+	date := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
 	buf := make([]byte, dateSize)
 	writeDate(buf, date)
+	return buf
+}
+
+func encTime(t int64) []byte {
+	buf := make([]byte, timeSize)
+	writeTime(buf, t)
 	return buf
 }
 
@@ -231,6 +252,9 @@ func TestCodecRoundTrip(t *testing.T) {
 	})
 	t.Run("round trip dates", func(t *testing.T) {
 		roundTripDates(t)
+	})
+	t.Run("round trip times", func(t *testing.T) {
+		roundTripTimes(t)
 	})
 	t.Run("round trip datetimes", func(t *testing.T) {
 		roundTripDatetimes(t)
@@ -369,6 +393,22 @@ func roundTripDates(t *testing.T) {
 	for _, d := range dates {
 		writeDate(buf, d)
 		assert.Equal(t, d, readDate(buf))
+		zero(buf)
+	}
+}
+
+func roundTripTimes(t *testing.T) {
+	times := []int64{
+		-1221681866,
+		-11644473600,
+		599529660,
+		978220860,
+	}
+
+	buf := make([]byte, timeSize)
+	for _, d := range times {
+		writeTime(buf, d)
+		assert.Equal(t, d, readTime(buf))
 		zero(buf)
 	}
 }

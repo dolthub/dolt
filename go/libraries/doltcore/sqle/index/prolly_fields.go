@@ -21,7 +21,9 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	geo "github.com/dolthub/dolt/go/store/geometry"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -56,7 +58,11 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 	case val.DateEnc:
 		v, ok = td.GetDate(i, tup)
 	case val.TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
+		var t int64
+		t, ok = td.GetSqlTime(i, tup)
+		if ok {
+			v, err = deserializeTime(t)
+		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
 	case val.StringEnc:
@@ -123,7 +129,11 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.DateEnc:
 		tb.PutDate(i, v.(time.Time))
 	case val.TimeEnc:
-		tb.PutSqlTime(i, v.(string))
+		t, err := serializeTime(v)
+		if err != nil {
+			return err
+		}
+		tb.PutSqlTime(i, t)
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
 	case val.StringEnc:
@@ -236,4 +246,16 @@ func serializeGeometry(v interface{}) []byte {
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
 	}
+}
+
+func serializeTime(v interface{}) (int64, error) {
+	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
+	if err != nil {
+		return 0, err
+	}
+	return int64(i.(types.Int)), nil
+}
+
+func deserializeTime(v int64) (interface{}, error) {
+	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
 }

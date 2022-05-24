@@ -46,9 +46,9 @@ const (
 
 	hash128Size ByteSize = 16
 
-	yearSize ByteSize = 1
-	dateSize ByteSize = 4
-	//timeSize     ByteSize = 8
+	yearSize     ByteSize = 1
+	dateSize     ByteSize = 4
+	timeSize     ByteSize = 8
 	datetimeSize ByteSize = 8
 )
 
@@ -70,9 +70,9 @@ const (
 
 	Hash128Enc Encoding = 13
 
-	YearEnc Encoding = 14
-	DateEnc Encoding = 15
-	// TimeEnc     Encoding = 16
+	YearEnc     Encoding = 14
+	DateEnc     Encoding = 15
+	TimeEnc     Encoding = 16
 	DatetimeEnc Encoding = 17
 
 	sentinel Encoding = 127
@@ -86,7 +86,6 @@ const (
 	// todo(andy): experimental encodings
 	DecimalEnc  Encoding = 130
 	JSONEnc     Encoding = 131
-	TimeEnc     Encoding = 132
 	GeometryEnc Encoding = 133
 
 	// TODO
@@ -415,6 +414,20 @@ func writeDate(buf []byte, val time.Time) {
 
 func compareDate(l, r time.Time) int {
 	return compareDatetime(l, r)
+}
+
+func readTime(val []byte) int64 {
+	expectSize(val, timeSize)
+	return readInt64(val)
+}
+
+func writeTime(buf []byte, val int64) {
+	expectSize(buf, timeSize)
+	writeInt64(buf, val)
+}
+
+func compareTime(l, r int64) int {
+	return compareInt64(l, r)
 }
 
 func readDatetime(buf []byte) (t time.Time) {

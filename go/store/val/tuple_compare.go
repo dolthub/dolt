@@ -95,7 +95,7 @@ func compare(typ Type, left, right []byte) int {
 	case DateEnc:
 		return compareDate(readDate(left), readDate(right))
 	case TimeEnc:
-		panic("unimplemented")
+		return compareTime(readTime(left), readTime(right))
 	case DatetimeEnc:
 		return compareDatetime(readDatetime(left), readDatetime(right))
 	case DecimalEnc:
