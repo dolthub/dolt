@@ -37,6 +37,11 @@ type privDataJson struct {
 
 // SetPrivilegeFilePath sets the file path that will be used for loading privileges.
 func SetPrivilegeFilePath(fp string) {
+	// do nothing for empty file path
+	if len(fp) == 0 {
+		return
+	}
+
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -52,6 +57,11 @@ func SetPrivilegeFilePath(fp string) {
 
 // SetMySQLDbFilePath sets the file path that will be used for saving and loading MySQL Db tables.
 func SetMySQLDbFilePath(fp string) {
+	// do nothing for empty file path
+	if len(fp) == 0 {
+		return
+	}
+
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
@@ -74,11 +84,13 @@ func SetMySQLDbFilePath(fp string) {
 // file path has not been set, returns an empty slice for both, but does not error. This is so that the logic path can
 // retain the calls regardless of whether a user wants privileges to be loaded or persisted.
 func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
-	if privsFilePath == "" {
+	// return nil for empty path
+	if len(privsFilePath) == 0 {
 		return nil, nil, nil
 	}
+
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
 
 	fileContents, err := ioutil.ReadFile(privsFilePath)
 	if err != nil {
@@ -100,11 +112,13 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
 func LoadData() ([]byte, error) {
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
-	if mysqlDbFilePath == "" {
+	// return nil for empty path
+	if len(mysqlDbFilePath) == 0 {
 		return nil, nil
 	}
+
+	fileMutex.Lock()
+	defer fileMutex.Unlock()
 
 	buf, err := ioutil.ReadFile(mysqlDbFilePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -32,8 +32,6 @@ teardown() {
 }
 
 @test "sql-privs: no privs.json and no mysql.db, create mysql.db" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
-
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
@@ -84,7 +82,7 @@ teardown() {
 }
 
 @test "sql-privs: has privs.json and no mysql.db, read from privs.json and create mysql.db" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
 
     cd repo1
 
@@ -143,7 +141,7 @@ teardown() {
 }
 
 @test "sql-privs: no privs.json and has mysql.db, read from mysql.db" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
 
     cd repo1
 
@@ -198,7 +196,7 @@ teardown() {
 }
 
 @test "sql-privs: has privs.json and has mysql.db, only reads from mysql.db" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
 
     cd repo1
 

@@ -177,28 +177,29 @@ func Serve(
 		return nil, err
 	}
 
-	// Set privilege file path from server
-	if serverConfig.PrivilegeFilePath() != "" {
-		mysql_file_handler.SetPrivilegeFilePath(serverConfig.PrivilegeFilePath())
-	}
-
-	// Ignore privilege file if mysql.db exists
+	// Use privilege file iff mysql.db file DNE
 	var users []*mysql_db.User
 	var roles []*mysql_db.RoleEdge
-	if data == nil {
+	var tempUsers []gms.TemporaryUser
+	if len(data) == 0 {
+		// Set privilege file path from server
+		if serverConfig.PrivilegeFilePath() != "" {
+			mysql_file_handler.SetPrivilegeFilePath(serverConfig.PrivilegeFilePath())
+		}
+
+		// Load privileges from privilege file
 		users, roles, err = mysql_file_handler.LoadPrivileges()
 		if err != nil {
 			return err, nil
 		}
-	}
-
-	// Create temporary users if no privileges in config
-	var tempUsers []gms.TemporaryUser
-	if len(users) == 0 && len(serverConfig.User()) > 0 {
-		tempUsers = append(tempUsers, gms.TemporaryUser{
-			Username: serverConfig.User(),
-			Password: serverConfig.Password(),
-		})
+		
+		// Create temporary users if no privileges in config
+		if len(users) == 0 && len(serverConfig.User()) > 0 {
+			tempUsers = append(tempUsers, gms.TemporaryUser{
+				Username: serverConfig.User(),
+				Password: serverConfig.Password(),
+			})
+		}
 	}
 
 	// Create SQL Engine with users
