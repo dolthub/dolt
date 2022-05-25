@@ -31,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -201,6 +202,7 @@ func RefFromNomsTable(ctx context.Context, table Table) (types.Ref, error) {
 		return refFromNomsValue(ctx, nt.vrw, nt.tableStruct)
 	}
 	ddt := table.(doltDevTable)
+
 	return refFromNomsValue(ctx, ddt.vrw, ddt.nomsValue())
 }
 
@@ -574,6 +576,17 @@ func (t nomsTable) DebugString(ctx context.Context) string {
 		}
 	}
 
+	buf.WriteString("\ndata:\n")
+	data, err := t.GetTableRows(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	err = types.WriteEncodedValue(ctx, &buf, NomsMapFromIndex(data))
+	if err != nil {
+		panic(err)
+	}
+
 	return buf.String()
 }
 
@@ -625,7 +638,24 @@ type doltDevTable struct {
 }
 
 func (t doltDevTable) DebugString(ctx context.Context) string {
-	return "doltDevTable has no DebugString" // TODO: fill in
+	rows, err := t.GetTableRows(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	if t.vrw.Format() == types.Format_DOLT_DEV {
+		m := NomsMapFromIndex(rows)
+		var b bytes.Buffer
+		_ = types.WriteEncodedValue(ctx, &b, m)
+		return b.String()
+	} else {
+		m := ProllyMapFromIndex(rows)
+		var b bytes.Buffer
+		m.WalkNodes(ctx, func(ctx context.Context, nd tree.Node) error {
+			return tree.OutputProllyNode(&b, nd)
+		})
+		return b.String()
+	}
 }
 
 var _ Table = doltDevTable{}

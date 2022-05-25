@@ -189,6 +189,7 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			return nil, err
 		}
 	}
+
 	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 
 	return s.workingSet, nil
