@@ -227,21 +227,3 @@ func GetCommitStaged(
 
 	return ddb.NewPendingCommit(ctx, roots, rsr.CWBHeadRef(), mergeParents, meta)
 }
-
-// TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.
-// Passing a negative value for `n` will result in all ancestors being returned.
-func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
-	commits, err := datas.TopologicallySortCommits(ctx, ddb.ValueReadWriter(), commit.Commit(), n)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]*doltdb.Commit, len(commits))
-	for i := range commits {
-		out[i], err = doltdb.NewCommit(ctx, ddb.ValueReadWriter(), commits[i])
-		if err != nil {
-			return nil, err
-		}
-	}
-	return out, nil
-}

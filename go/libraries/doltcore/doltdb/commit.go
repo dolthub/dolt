@@ -42,11 +42,6 @@ func NewCommit(ctx context.Context, vrw types.ValueReadWriter, commit *datas.Com
 	return &Commit{vrw, parents, commit}, nil
 }
 
-// Commit returns the datas.Commit
-func (c *Commit) Commit() *datas.Commit {
-	return c.dCommit
-}
-
 // HashOf returns the hash of the commit
 func (c *Commit) HashOf() (hash.Hash, error) {
 	return c.dCommit.Addr(), nil
