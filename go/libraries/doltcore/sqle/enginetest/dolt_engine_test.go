@@ -114,13 +114,9 @@ func TestSingleScript(t *testing.T) {
 	}
 
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range scripts {
-		myDb := harness.NewDatabase("mydb")
-		databases := []sql.Database{myDb}
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		//engine.Analyzer.Debug = true
-		//engine.Analyzer.Verbose = true
-		enginetest.TestScriptWithEngine(t, engine, harness, test)
+		enginetest.TestScript(t, harness, test)
 	}
 }
 
@@ -200,7 +196,7 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 func TestInsertInto(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: test uses keyless foreign key logic which is not yet fully implemented
+			//TODO: on duplicate key broken for foreign keys in new format
 			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
 				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
 			}
@@ -302,16 +298,16 @@ func TestDoltUserPrivileges(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltUserPrivTests {
 		t.Run(script.Name, func(t *testing.T) {
-			myDb := harness.NewDatabase("mydb")
-			databases := []sql.Database{myDb}
-			engine := enginetest.NewEngineWithDbs(t, harness, databases)
+			harness.Setup(setup.MydbData)
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
 			defer engine.Close()
 
 			ctx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.GrantTables.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -426,6 +422,7 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
+	//TODO: fix table alteration so that foreign keys may work once again
 	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
@@ -435,7 +432,27 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	skipNewFormat(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		//TODO: fix table alteration so that foreign keys may work once again
+		skippedQueries := []string{
+			"ALTER TABLE SET NULL on non-nullable column",
+			"ALTER TABLE RENAME COLUMN",
+			"ALTER TABLE MODIFY COLUMN type change not allowed",
+			"ALTER TABLE MODIFY COLUMN type change allowed when lengthening string",
+			"ALTER TABLE MODIFY COLUMN type change only cares about foreign key columns",
+			"DROP COLUMN parent",
+			"DROP COLUMN child",
+			"Disallow change column to nullable with ON UPDATE SET NULL",
+			"Disallow change column to nullable with ON DELETE SET NULL",
+		}
+		for i := len(queries.ForeignKeyTests) - 1; i >= 0; i-- {
+			for _, skippedQuery := range skippedQueries {
+				if queries.ForeignKeyTests[i].Name == skippedQuery {
+					queries.ForeignKeyTests = append(queries.ForeignKeyTests[:i], queries.ForeignKeyTests[i+1:]...)
+				}
+			}
+		}
+	}
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 
@@ -566,7 +583,9 @@ func TestStoredProcedures(t *testing.T) {
 
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
-	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+	for _, script := range queries.TransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -619,20 +638,17 @@ func TestShowCreateTableAsOf(t *testing.T) {
 
 func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
 	for _, script := range MergeScripts {
-		harness.engine = nil
-		enginetest.TestScript(t, harness, script)
+		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
 func TestDoltReset(t *testing.T) {
 	skipNewFormat(t)
-	harness := newDoltHarness(t)
 	for _, script := range DoltReset {
-		harness.engine = nil
-		enginetest.TestScript(t, harness, script)
+		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
@@ -742,22 +758,19 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 func TestHistorySystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, newDoltHarness(t), test)
 		})
 	}
 }
@@ -765,12 +778,11 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 func TestDiffTableFunction(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
-
+	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -778,11 +790,11 @@ func TestDiffTableFunction(t *testing.T) {
 func TestCommitDiffSystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -790,11 +802,11 @@ func TestCommitDiffSystemTable(t *testing.T) {
 func TestDiffSystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -829,7 +841,6 @@ func TestPersist(t *testing.T) {
 }
 
 func TestKeylessUniqueIndex(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
@@ -912,6 +923,14 @@ func TestScriptsPrepared(t *testing.T) {
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
+			//TODO: on duplicate key broken for foreign keys in new format
+			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
+				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
+			}
+		}
+	}
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
@@ -963,11 +982,9 @@ func TestPrepared(t *testing.T) {
 }
 
 func TestPreparedInsert(t *testing.T) {
+	//TODO: on duplicate key broken for foreign keys in new format
+	skipNewFormat(t)
 	skipPreparedTests(t)
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		//TODO: test uses keyless foreign key logic which is not yet fully implemented
-		t.Skip("test uses keyless foreign key logic which is not yet fully implemented")
-	}
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
 
