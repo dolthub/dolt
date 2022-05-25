@@ -80,34 +80,29 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Multialter DDL with ADD/DROP Primary Key",
+			Name: "Drop and add primary key on two branches converges to same schema",
 			SetUpScript: []string{
-				"CREATE TABLE t(pk int primary key, v1 int)",
+				"create table t1 (i int);",
+				"call dolt_commit('-am', 't1 table')",
+				"call dolt_checkout('-b', 'b1')",
+				"alter table t1 add primary key(i)",
+				"alter table t1 drop primary key",
+				"alter table t1 add primary key(i)",
+				"alter table t1 drop primary key",
+				"alter table t1 add primary key(i)",
+				"call dolt_commit('-am', 'b1 primary key changes')",
+				"call dolt_checkout('main')",
+				"alter table t1 add primary key(i)",
+				"call dolt_commit('-am', 'main primary key change')",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
+					Query:    "call dolt_merge('b1')",
+					Expected: []sql.Row{{1}},
 				},
 				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "NO", "PRI", "", ""},
-					},
-				},
-				{
-					Query:       "ALTER TABLE t ADD COLUMN (v3 int), drop primary key, add primary key (notacolumn)",
-					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "NO", "PRI", "", ""},
-					},
+					Query:    "select count(*) from dolt_conflicts",
+					Expected: []sql.Row{{0}},
 				},
 			},
 		},
@@ -816,7 +811,6 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 }
 
 func TestAddDropPks(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
@@ -1103,8 +1097,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
-					ExpectedErrStr: "primary key cannot have NULL values",
+					Query:       "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
+					ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
 				},
 			},
 		}
