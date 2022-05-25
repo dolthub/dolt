@@ -985,6 +985,33 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Drop and add primary key on two branches converges to same schema",
+		SetUpScript: []string{
+			"create table t1 (i int);",
+			"call dolt_commit('-am', 't1 table')",
+			"call dolt_checkout('-b', 'b1')",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'b1 primary key changes')",
+			"call dolt_checkout('main')",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'main primary key change')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('b1')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
