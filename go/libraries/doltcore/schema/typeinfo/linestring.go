@@ -219,14 +219,22 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 }
 
 func CreateLinestringTypeFromParams(params map[string]string) (TypeInfo, error) {
-	sridVal, err := strconv.ParseInt(params["SRID"], 10, 32)
-	if err != nil {
-		return nil, err
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
 	}
-	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
-	if err != nil {
-		return nil, err
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	return &linestringType{sqlLinestringType: sql.LinestringType{SRID: uint32(sridVal), DefinedSRID: dSRID}}, nil
+	return &linestringType{sqlLinestringType: sql.LinestringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

@@ -221,39 +221,46 @@ teardown() {
 
 @test "sql-spatial-types: SRID defined in column definition in ALTER TABLE" {
     run dolt sql << SQL
-CREATE TABLE test (i int primary key, p LINESTRING NOT NULL SRID 4326);
-INSERT INTO test VALUES (1, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(0,0),POINT(1,2))), 4326));
+CREATE TABLE table1 (i int primary key, p LINESTRING NOT NULL SRID 4326);
+INSERT INTO table1 VALUES (1, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(0,0),POINT(1,2))), 4326));
 SQL
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
+    run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 
-    run dolt sql -q "ALTER TABLE test MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY SRID 4326"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SHOW CREATE TABLE test"
+    run dolt sql -q "SHOW CREATE TABLE table1"
+    [[ "$output" =~ "\`p\` geometry SRID 4326" ]] || false
+
+    skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "SHOW CREATE TABLE table1"
     [[ "$output" =~ "\`p\` geometry NOT NULL SRID 4326" ]] || false
 
     skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
-    run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
+    run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 
-    run dolt sql -q "INSERT INTO test VALUES (2, ST_SRID(POINT(1,2), 4326))"
+    run dolt sql -q "INSERT INTO table1 VALUES (2, ST_SRID(POINT(1,2), 4326))"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
+    run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
     [[ "$output" =~ "POINT(1 2)" ]] || false
 
-    run dolt sql -q "ALTER TABLE test MODIFY COLUMN p LINESTRING SRID 4326"
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p LINESTRING SRID 4326"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "Cannot get geometry object from data you send to the GEOMETRY field" ]] || false
 
-    dolt sql -q "DELETE FROM test WHERE i = 1"
+    dolt sql -q "DELETE FROM table1 WHERE i = 1"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
     [[ ! "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 
-    run dolt sql -q "ALTER TABLE test MODIFY COLUMN p POINT SRID 4326"
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p POINT SRID 4326"
     [ "$status" -eq 0 ]
 }
