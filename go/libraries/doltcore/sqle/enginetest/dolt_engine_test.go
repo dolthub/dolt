@@ -652,6 +652,12 @@ func TestDoltReset(t *testing.T) {
 	}
 }
 
+func TestDoltBranch(t *testing.T) {
+	for _, script := range DoltBranchScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {

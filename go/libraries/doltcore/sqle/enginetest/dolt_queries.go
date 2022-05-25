@@ -987,6 +987,144 @@ var MergeScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltBranchScripts = []queries.ScriptTest{
+	{
+		Name: "Create branches from HEAD with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Trying to recreate that branch fails without the force flag
+				Query:          "CALL DOLT_BRANCH('myNewBranch1')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch1' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-f', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Rename branches with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Renaming to an existing name fails without the force flag
+				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "already exists",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Copy branches from other branches using dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-c')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch2')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', '', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch2';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch2' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Delete branches with dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+			"CALL DOLT_BRANCH('myNewBranch2')",
+			"CALL DOLT_BRANCH('myNewBranch3')",
+			"CALL DOLT_BRANCH('myNewBranchWithCommit')",
+			"CALL DOLT_CHECKOUT('myNewBranchWithCommit')",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'empty commit')",
+			"CALL DOLT_CHECKOUT('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-d')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', 'branchDoesNotExist')",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Trying to delete a branch with unpushed changes fails without force option
+				Query:          "CALL DOLT_BRANCH('-d', 'myNewBranchWithCommit')",
+				ExpectedErrStr: "attempted to delete a branch that is not fully merged into its parent; use `-f` to force",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
 var DoltReset = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
