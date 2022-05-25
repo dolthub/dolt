@@ -90,7 +90,8 @@ func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
 
 		return "", err
 	}
-	return templBuffer.String(), nil
+	ret := strings.Replace(templBuffer.String(), "HEAD~", "HEAD\\~", -1)
+	return ret, nil
 }
 
 // A struct that represents all the data structures required to create the documentation for a command.

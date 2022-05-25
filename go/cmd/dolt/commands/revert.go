@@ -32,8 +32,8 @@ import (
 var revertDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Undo the changes introduced in a commit",
 	LongDesc: `Removes the changes made in a commit (or series of commits) from the working set, and then automatically commits the
-result. This is done by way of a three-way merge. Given a specific commit (e.g. HEAD\~1), this is similar to applying the
-patch from HEAD\~1..HEAD\~2, giving us a patch of what to remove to effectively remove the influence of the specified
+result. This is done by way of a three-way merge. Given a specific commit (e.g. HEAD~1), this is similar to applying the
+patch from HEAD~1..HEAD~2, giving us a patch of what to remove to effectively remove the influence of the specified
 commit. If multiple commits are specified, then this process is repeated for each commit in the order specified. This
 requires a clean working set.
 
