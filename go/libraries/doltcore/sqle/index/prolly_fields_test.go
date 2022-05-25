@@ -118,12 +118,12 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "datetime",
 			typ:   val.Type{Enc: val.DatetimeEnc},
-			value: time.Now().UTC(),
+			value: time.UnixMicro(time.Now().UTC().UnixMicro()).UTC(),
 		},
 		{
 			name:  "timestamp",
 			typ:   val.Type{Enc: val.DatetimeEnc},
-			value: time.Now().UTC(),
+			value: time.UnixMicro(time.Now().UTC().UnixMicro()).UTC(),
 		},
 		{
 			name:  "json",
