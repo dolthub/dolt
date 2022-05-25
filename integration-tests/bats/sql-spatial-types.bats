@@ -229,18 +229,11 @@ SQL
     run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 
-    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY SRID 4326"
+    dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SHOW CREATE TABLE table1"
-    [[ "$output" =~ "\`p\` geometry SRID 4326" ]] || false
-
-    skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
-    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
-    [ "$status" -eq 0 ]
-
-    run dolt sql -q "SHOW CREATE TABLE table1"
-    [[ "$output" =~ "\`p\` geometry NOT NULL SRID 4326" ]] || false
+    [[ "$output" =~ "\`p\` geometry SRID NOT NULL 4326" ]] || false
 
     skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
