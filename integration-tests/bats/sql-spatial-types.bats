@@ -229,7 +229,7 @@ SQL
     run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 
-    dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p GEOMETRY NOT NULL SRID 4326"
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SHOW CREATE TABLE table1"
