@@ -18,8 +18,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/go-mysql-server/sql"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -80,12 +78,6 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
-			if err = validateSpatialTypeSRID(col, val); err != nil {
-				if sql.ErrNotMatchingSRID.Is(err) {
-					err = sql.ErrNotMatchingSRIDWithColName.New(col.Name, err)
-				}
-				return false, err
-			}
 			// Column is GeometryKind and received PointKind, LinestringKind, or PolygonKind
 			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
 				filteredVals[tag] = val
@@ -353,14 +345,4 @@ func IterPkTuple(tvs types.TupleValueSlice, cb func(tag uint64, val types.Value)
 	}
 
 	return nil
-}
-
-func validateSpatialTypeSRID(c schema.Column, v types.Value) error {
-	_, ok := c.TypeInfo.ToSqlType().(sql.SpatialColumnType)
-	if !ok {
-		return nil
-	}
-	// Converting the value will check SRID match
-	_, err := c.TypeInfo.ConvertNomsValueToValue(v)
-	return err
 }

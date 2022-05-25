@@ -50,17 +50,12 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	var err = fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	// Expect a types.Linestring, return a sql.Linestring
 	if val, ok := v.(types.Linestring); ok {
-		sqlVal := ConvertTypesLinestringToSQLLinestring(val)
-		err = ti.sqlLinestringType.MatchSRID(sqlVal)
-		if err == nil {
-			return sqlVal, nil
-		}
+		return ConvertTypesLinestringToSQLLinestring(val), nil
 	}
 
-	return nil, err
+	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
@@ -228,12 +223,10 @@ func CreateLinestringTypeFromParams(params map[string]string) (TypeInfo, error) 
 	if err != nil {
 		return nil, err
 	}
-
 	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
 	if err != nil {
 		return nil, err
 	}
 
-	LinestringType = &linestringType{sqlLinestringType: sql.LinestringType{SRID: uint32(sridVal), DefinedSRID: dSRID}}
-	return LinestringType, nil
+	return &linestringType{sqlLinestringType: sql.LinestringType{SRID: uint32(sridVal), DefinedSRID: dSRID}}, nil
 }

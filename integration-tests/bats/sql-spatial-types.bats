@@ -225,7 +225,7 @@ CREATE TABLE test (i int primary key, p LINESTRING NOT NULL SRID 4326);
 INSERT INTO test VALUES (1, ST_GEOMFROMTEXT(ST_ASWKT(LINESTRING(POINT(0,0),POINT(1,2))), 4326));
 SQL
     [ "$status" -eq 0 ]
-git status
+
     run dolt sql -q "SELECT ST_ASWKT(p) FROM test"
     [[ "$output" =~ "LINESTRING(0 0,1 2)" ]] || false
 

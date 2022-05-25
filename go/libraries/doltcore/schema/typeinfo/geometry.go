@@ -55,35 +55,20 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	var err = fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
+
 	// Expect a Geometry type, return a sql.Geometry
 	switch val := v.(type) {
 	case types.Geometry:
-		sqlVal := ConvertTypesGeometryToSQLGeometry(val)
-		err = ti.sqlGeometryType.MatchSRID(sqlVal)
-		if err == nil {
-			return sqlVal, nil
-		}
+		return ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
-		sqlVal := ConvertTypesPointToSQLPoint(val)
-		err = ti.sqlGeometryType.MatchSRID(sqlVal)
-		if err == nil {
-			return sql.Geometry{Inner: sqlVal}, nil
-		}
+		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
 	case types.Linestring:
-		sqlVal := ConvertTypesLinestringToSQLLinestring(val)
-		err = ti.sqlGeometryType.MatchSRID(sqlVal)
-		if err == nil {
-			return sql.Geometry{Inner: sqlVal}, nil
-		}
+		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
 	case types.Polygon:
-		sqlVal := ConvertTypesPolygonToSQLPolygon(val)
-		err = ti.sqlGeometryType.MatchSRID(sqlVal)
-		if err == nil {
-			return sql.Geometry{Inner: sqlVal}, nil
-		}
+		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
+	default:
+		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
-	return nil, err
 }
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
@@ -277,11 +262,10 @@ func CreateGeometryTypeFromParams(params map[string]string) (TypeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	dSRID, err := strconv.ParseBool(params["DefinedSRID"])
 	if err != nil {
 		return nil, err
 	}
-	GeometryType = &geometryType{sqlGeometryType: sql.GeometryType{InnerType: nil, SRID: uint32(sridVal), DefinedSRID: dSRID}}
-	return GeometryType, nil
+
+	return &geometryType{sqlGeometryType: sql.GeometryType{InnerType: nil, SRID: uint32(sridVal), DefinedSRID: dSRID}}, nil
 }

@@ -260,6 +260,9 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
 		if err != nil {
+			if sql.ErrNotMatchingSRID.Is(err) {
+				err = sql.ErrNotMatchingSRIDWithColName.New(modifiedCol.Name, err)
+			}
 			return nil, err
 		}
 	} else if !modifiedCol.IsNullable() {
@@ -271,6 +274,8 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			val, ok := r.GetColVal(modifiedCol.Tag)
 			if !ok || val == nil || val == types.NullValue {
 				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
+			} else if err = validateSpatialTypeSRID(modifiedCol, val); err != nil {
+				return true, err
 			}
 			return false, nil
 		})
@@ -871,4 +876,22 @@ func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat,
 	}
 
 	return mapEditor.Map(ctx)
+}
+
+func validateSpatialTypeSRID(c schema.Column, v types.Value) error {
+	sc, ok := c.TypeInfo.ToSqlType().(sql.SpatialColumnType)
+	if !ok {
+		return nil
+	}
+	sqlVal, err := c.TypeInfo.ConvertNomsValueToValue(v)
+	if err != nil {
+		return err
+	}
+	err = sc.MatchSRID(sqlVal)
+	if err != nil {
+		if sql.ErrNotMatchingSRID.Is(err) {
+			return sql.ErrNotMatchingSRIDWithColName.New(c.Name, err)
+		}
+	}
+	return nil
 }
