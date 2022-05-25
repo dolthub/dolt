@@ -27,6 +27,7 @@ import (
 )
 
 func init() {
+	// todo: multiple query types can map to a single encoding
 	encodingToType[val.Int8Enc] = query.Type_INT8
 	encodingToType[val.Uint8Enc] = query.Type_UINT8
 	encodingToType[val.Int16Enc] = query.Type_INT16
@@ -38,9 +39,7 @@ func init() {
 	encodingToType[val.Float32Enc] = query.Type_FLOAT32
 	encodingToType[val.Float64Enc] = query.Type_FLOAT64
 	encodingToType[val.DecimalEnc] = query.Type_DECIMAL
-	encodingToType[val.TimeEnc] = query.Type_TIME
 	encodingToType[val.YearEnc] = query.Type_YEAR
-	encodingToType[val.TimestampEnc] = query.Type_TIMESTAMP
 	encodingToType[val.DateEnc] = query.Type_TIMESTAMP
 	encodingToType[val.DatetimeEnc] = query.Type_TIMESTAMP
 	encodingToType[val.StringEnc] = query.Type_VARCHAR

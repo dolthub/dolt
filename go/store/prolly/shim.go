@@ -20,7 +20,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -81,7 +80,7 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromTypeInfo(col.TypeInfo),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: columnNullable(col),
 		})
 		return
@@ -106,7 +105,7 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 
 	_ = sch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
-			Enc:      encodingFromTypeInfo(col.TypeInfo),
+			Enc:      encodingFromSqlType(col.TypeInfo.ToSqlType().Type()),
 			Nullable: col.IsNullable(),
 		})
 		return
@@ -129,29 +128,26 @@ func ConvertToKeylessIndex(m Map) Map {
 	}
 }
 
-// todo(andy): move this to typeinfo
-func encodingFromTypeInfo(ti typeinfo.TypeInfo) val.Encoding {
-	if ti.GetTypeIdentifier() == typeinfo.UuidTypeIdentifier {
-		return val.Hash128Enc
-	}
+func encodingFromSqlType(typ query.Type) val.Encoding {
 
-	typ := ti.ToSqlType().Type()
 	// todo(andy): replace temp encodings
 	switch typ {
 	case query.Type_DECIMAL:
 		return val.DecimalEnc
-	case query.Type_DATE:
-		return val.DateEnc
-	case query.Type_DATETIME:
-		return val.DatetimeEnc
-	case query.Type_TIME:
-		return val.TimeEnc
-	case query.Type_TIMESTAMP:
-		return val.TimestampEnc
-	case query.Type_YEAR:
-		return val.YearEnc
 	case query.Type_GEOMETRY:
 		return val.GeometryEnc
+	case query.Type_BIT:
+		return val.Uint64Enc
+	case query.Type_BLOB:
+		return val.ByteStringEnc
+	case query.Type_TEXT:
+		return val.StringEnc
+	case query.Type_ENUM:
+		return val.StringEnc
+	case query.Type_SET:
+		return val.StringEnc
+	case query.Type_JSON:
+		return val.JSONEnc
 	}
 
 	switch typ {
@@ -179,25 +175,23 @@ func encodingFromTypeInfo(ti typeinfo.TypeInfo) val.Encoding {
 		return val.Float32Enc
 	case query.Type_FLOAT64:
 		return val.Float64Enc
-	case query.Type_BIT:
-		return val.Uint64Enc
+	case query.Type_YEAR:
+		return val.YearEnc
+	case query.Type_DATE:
+		return val.DateEnc
+	case query.Type_TIME:
+		return val.TimeEnc
+	case query.Type_TIMESTAMP:
+		return val.DatetimeEnc
+	case query.Type_DATETIME:
+		return val.DatetimeEnc
 	case query.Type_BINARY:
 		return val.ByteStringEnc
 	case query.Type_VARBINARY:
 		return val.ByteStringEnc
-	case query.Type_BLOB:
-		return val.ByteStringEnc
 	case query.Type_CHAR:
 		return val.StringEnc
 	case query.Type_VARCHAR:
-		return val.StringEnc
-	case query.Type_TEXT:
-		return val.StringEnc
-	case query.Type_JSON:
-		return val.JSONEnc
-	case query.Type_ENUM:
-		return val.StringEnc
-	case query.Type_SET:
 		return val.StringEnc
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
