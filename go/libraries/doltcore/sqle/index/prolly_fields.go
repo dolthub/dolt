@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	geo "github.com/dolthub/dolt/go/store/geometry"
@@ -52,7 +53,11 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 	case val.Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
 	case val.DecimalEnc:
-		v, ok = td.GetDecimal(i, tup)
+		var d decimal.Decimal
+		d, ok = td.GetDecimal(i, tup)
+		if ok {
+			v = deserializeDecimal(d)
+		}
 	case val.YearEnc:
 		v, ok = td.GetYear(i, tup)
 	case val.DateEnc:
@@ -123,7 +128,11 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.Float64Enc:
 		tb.PutFloat64(i, v.(float64))
 	case val.DecimalEnc:
-		tb.PutDecimal(i, v.(string))
+		d, err := serializeDecimal(v.(string))
+		if err != nil {
+			return nil
+		}
+		tb.PutDecimal(i, d)
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
 	case val.DateEnc:
@@ -258,4 +267,12 @@ func serializeTime(v interface{}) (int64, error) {
 
 func deserializeTime(v int64) (interface{}, error) {
 	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
+}
+
+func serializeDecimal(v interface{}) (decimal.Decimal, error) {
+	return decimal.NewFromString(v.(string))
+}
+
+func deserializeDecimal(v decimal.Decimal) interface{} {
+	return v.String()
 }

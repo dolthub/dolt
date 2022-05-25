@@ -18,7 +18,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"math/big"
+	"math/bits"
 	"time"
+	"unsafe"
+
+	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -365,9 +370,31 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func readString(val []byte) string {
-	// todo(andy): fix allocation
-	return string(readByteString(val))
+func readDecimal(val []byte) decimal.Decimal {
+	e := readInt32(val[:int32Size])
+	s := readInt8(val[int32Size : int32Size+int8Size])
+	b := big.NewInt(0).SetBytes(val[int32Size+int8Size:])
+	if s < 0 {
+		b = b.Neg(b)
+	}
+	return decimal.NewFromBigInt(b, e)
+}
+
+func writeDecimal(buf []byte, val decimal.Decimal) {
+	expectSize(buf, sizeOfDecimal(val))
+	writeInt32(buf[:int32Size], val.Exponent())
+	b := val.Coefficient()
+	writeInt8(buf[int32Size:int32Size+int8Size], int8(b.Sign()))
+	b.FillBytes(buf[int32Size+int8Size:])
+}
+
+func sizeOfDecimal(val decimal.Decimal) ByteSize {
+	bsz := len(val.Coefficient().Bits()) * (bits.UintSize / 8)
+	return int32Size + int8Size + ByteSize(bsz)
+}
+
+func compareDecimal(l, r decimal.Decimal) int {
+	return l.Cmp(r)
 }
 
 const minYear int16 = 1901
@@ -451,6 +478,10 @@ func compareDatetime(l, r time.Time) int {
 	}
 }
 
+func readString(val []byte) string {
+	return stringFromBytes(readByteString(val))
+}
+
 func writeString(buf []byte, val string) {
 	writeByteString(buf, []byte(val))
 }
@@ -499,14 +530,7 @@ func expectSize(buf []byte, sz ByteSize) {
 	}
 }
 
-func expectTrue(b bool) {
-	if !b {
-		panic("expected true")
-	}
-}
-
-func expectFalse(b bool) {
-	if b {
-		panic("expected false")
-	}
+// stringFromBytes converts a []byte to string without a heap allocation.
+func stringFromBytes(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }
