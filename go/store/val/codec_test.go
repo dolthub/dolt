@@ -415,7 +415,9 @@ func roundTripTimes(t *testing.T) {
 
 func roundTripDatetimes(t *testing.T) {
 	datetimes := []time.Time{
+		time.Date(1000, 01, 01, 0, 0, 0, 0, time.UTC),
 		time.Now().UTC(),
+		time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
 	}
 
 	buf := make([]byte, datetimeSize)

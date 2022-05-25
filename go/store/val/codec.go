@@ -432,13 +432,13 @@ func compareTime(l, r int64) int {
 
 func readDatetime(buf []byte) (t time.Time) {
 	expectSize(buf, datetimeSize)
-	t = time.Unix(0, readInt64(buf)).UTC()
+	t = time.UnixMicro(readInt64(buf)).UTC()
 	return
 }
 
 func writeDatetime(buf []byte, val time.Time) {
 	expectSize(buf, datetimeSize)
-	writeInt64(buf, val.UnixNano())
+	writeInt64(buf, val.UnixMicro())
 }
 
 func compareDatetime(l, r time.Time) int {
