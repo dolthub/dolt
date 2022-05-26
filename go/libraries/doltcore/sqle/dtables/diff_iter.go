@@ -88,47 +88,48 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
-	//rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
+	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
 
-	// TODO: determine correct starting and ending value; assume we somehow got it and it is 1 and 2
-	startVals := []int{1}
-	endVals := []int{2}
-
-	// TODO: use to or from schema?
-	// Create values for tuple, need to alternate column tags and value
-	tupVal := make([]types.Value, 2*len(toSch.GetPKCols().SortedTags))
-	for i, tag := range toSch.GetPKCols().SortedTags {
-		tupVal[i] = types.Uint(tag)
-		tupVal[i+1] = types.Int(startVals[i])
-	}
-	// Create starting tuple
-	startTup, err := types.NewTuple(types.Format_Default, tupVal...)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: how to deal with types other than int?
-	// TODO: determine correct range function
-	rangeFunc := func(value types.Value) (bool, error) {
-		// must be tuple because we are using maps
-		val, ok := value.(types.Tuple)
-		if !ok {
-			return false, err
-		}
-
-		// Go through each primary key column
-		for i := uint64(0); i < val.Len()/2; i++ {
-			tmp, err := val.Get(2*i + 1) // only look at odd indexes (skip col tags)
-			if err != nil {
-				return false, err
-			}
-			if int64(tmp.(types.Int)) > int64(endVals[i]) {
-				return false, nil
-			}
-		}
-		return true, nil
-	}
-	rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), startTup, rangeFunc)
+	//// TODO: extract these from filter probably
+	//// TODO: determine correct starting and ending value; assume we somehow got it and it is 1 and 2
+	//startVals := []int{1}
+	//endVals := []int{2}
+	//
+	//// TODO: use to or from schema?
+	//// Create values for tuple, need to alternate column tags and value
+	//tupVal := make([]types.Value, 2*len(toSch.GetPKCols().SortedTags))
+	//for i, tag := range toSch.GetPKCols().SortedTags {
+	//	tupVal[i] = types.Uint(tag)
+	//	tupVal[i+1] = types.Int(startVals[i])
+	//}
+	//// Create starting tuple
+	//startTup, err := types.NewTuple(types.Format_Default, tupVal...)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//// TODO: how to deal with types other than int?
+	//// TODO: determine correct range function
+	//rangeFunc := func(value types.Value) (bool, error) {
+	//	// must be tuple because we are using maps
+	//	val, ok := value.(types.Tuple)
+	//	if !ok {
+	//		return false, err
+	//	}
+	//
+	//	// Go through each primary key column
+	//	for i := uint64(0); i < val.Len()/2; i++ {
+	//		tmp, err := val.Get(2*i + 1) // only look at odd indexes (skip col tags)
+	//		if err != nil {
+	//			return false, err
+	//		}
+	//		if int64(tmp.(types.Int)) > int64(endVals[i]) {
+	//			return false, nil
+	//		}
+	//	}
+	//	return true, nil
+	//}
+	//rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), startTup, rangeFunc)
 
 	warnFn := func(code int, message string, args ...string) {
 		ctx.Warn(code, message, args)
