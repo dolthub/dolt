@@ -39,8 +39,8 @@ func ConvertTypesGeometryToSQLGeometry(g types.Geometry) interface{} {
 	switch inner := g.Inner.(type) {
 	case types.Point:
 		return ConvertTypesPointToSQLPoint(inner)
-	case types.Linestring:
-		return ConvertTypesLinestringToSQLLinestring(inner)
+	case types.LineString:
+		return ConvertTypesLineStringToSQLLineString(inner)
 	case types.Polygon:
 		return ConvertTypesPolygonToSQLPolygon(inner)
 	default:
@@ -61,8 +61,8 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 		return ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
 		return ConvertTypesPointToSQLPoint(val), nil
-	case types.Linestring:
-		return ConvertTypesLinestringToSQLLinestring(val), nil
+	case types.LineString:
+		return ConvertTypesLineStringToSQLLineString(val), nil
 	case types.Polygon:
 		return ConvertTypesPolygonToSQLPolygon(val), nil
 	default:
@@ -81,8 +81,8 @@ func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRea
 		if val, err = reader.ReadPoint(); err != nil {
 			return nil, err
 		}
-	case types.LinestringKind:
-		if val, err = reader.ReadLinestring(); err != nil {
+	case types.LineStringKind:
+		if val, err = reader.ReadLineString(); err != nil {
 			return nil, err
 		}
 	case types.PolygonKind:
@@ -108,8 +108,8 @@ func ConvertSQLGeometryToTypesGeometry(p interface{}) types.Value {
 	switch inner := p.(type) {
 	case sql.Point:
 		return ConvertSQLPointToTypesPoint(inner)
-	case sql.Linestring:
-		return ConvertSQLLinestringToTypesLinestring(inner)
+	case sql.LineString:
+		return ConvertSQLLineStringToTypesLineString(inner)
 	case sql.Polygon:
 		return ConvertSQLPolygonToTypesPolygon(inner)
 	default:
@@ -153,16 +153,16 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 	switch val := v.(type) {
 	case types.Point:
 		return PointType.FormatValue(val)
-	case types.Linestring:
-		return LinestringType.FormatValue(val)
+	case types.LineString:
+		return LineStringType.FormatValue(val)
 	case types.Polygon:
 		return PolygonType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
 			return PointType.FormatValue(inner)
-		case types.Linestring:
-			return LinestringType.FormatValue(inner)
+		case types.LineString:
+			return LineStringType.FormatValue(inner)
 		case types.Polygon:
 			return PolygonType.FormatValue(inner)
 		default:
@@ -193,7 +193,7 @@ func (ti *geometryType) IsValid(v types.Value) bool {
 	switch v.(type) {
 	case types.Geometry,
 		types.Point,
-		types.Linestring,
+		types.LineString,
 		types.Polygon:
 		return true
 	default:

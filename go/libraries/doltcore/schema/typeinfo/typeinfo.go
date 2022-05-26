@@ -49,7 +49,7 @@ const (
 	YearTypeIdentifier       Identifier = "year"
 	GeometryTypeIdentifier   Identifier = "geometry"
 	PointTypeIdentifier      Identifier = "point"
-	LinestringTypeIdentifier Identifier = "linestring"
+	LineStringTypeIdentifier Identifier = "linestring"
 	PolygonTypeIdentifier    Identifier = "polygon"
 )
 
@@ -75,7 +75,7 @@ var Identifiers = map[Identifier]struct{}{
 	YearTypeIdentifier:       {},
 	GeometryTypeIdentifier:   {},
 	PointTypeIdentifier:      {},
-	LinestringTypeIdentifier: {},
+	LineStringTypeIdentifier: {},
 	PolygonTypeIdentifier:    {},
 }
 
@@ -168,8 +168,8 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		switch sqlType.String() {
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
-		case sql.LinestringType{}.String():
-			return &linestringType{sqlType.(sql.LinestringType)}, nil
+		case sql.LineStringType{}.String():
+			return &linestringType{sqlType.(sql.LineStringType)}, nil
 		case sql.PolygonType{}.String():
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
 		case sql.GeometryType{}.String():
@@ -275,8 +275,8 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 		return CreateGeometryTypeFromParams(params)
 	case PointTypeIdentifier:
 		return CreatePointTypeFromParams(params)
-	case LinestringTypeIdentifier:
-		return CreateLinestringTypeFromParams(params)
+	case LineStringTypeIdentifier:
+		return CreateLineStringTypeFromParams(params)
 	case PolygonTypeIdentifier:
 		return CreatePolygonTypeFromParams(params)
 	case SetTypeIdentifier:
@@ -315,8 +315,8 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Int64Type
 	case types.JSONKind:
 		return JSONType
-	case types.LinestringKind:
-		return LinestringType
+	case types.LineStringKind:
+		return LineStringType
 	case types.NullKind:
 		return UnknownType
 	case types.GeometryKind:

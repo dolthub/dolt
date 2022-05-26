@@ -383,7 +383,7 @@ func updateRowDataWithNewType(
 			return true, err
 		}
 		// convFunc returns types.NullValue rather than nil so it's always safe to compare
-		if newVal.Equals(val) {
+		if newCol.Tag == oldCol.Tag && newVal.Equals(val) {
 			newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
 			if err != nil {
 				return true, err

@@ -131,6 +131,9 @@ func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.
 	}
 
 	if conv.valsFromVal > 0 {
+		s := v.HumanReadableString()
+		if s == "" {
+		}
 		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, v, tupItr)
 
 		if err != nil {
@@ -231,7 +234,6 @@ func NewDoltMapIter(keyValGet KVGetFunc, closeKVGetter func() error, conv *KVToS
 // Next returns the next sql.Row until all rows are returned at which point (nil, io.EOF) is returned.
 func (dmi *DoltMapIter) Next(ctx *sql.Context) (sql.Row, error) {
 	k, v, err := dmi.kvGet(ctx)
-
 	if err != nil {
 		return nil, err
 	}

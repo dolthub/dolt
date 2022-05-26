@@ -268,7 +268,7 @@ func WriteEWKBHeader(v interface{}, buf []byte) {
 		// Write SRID and type
 		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
 		binary.LittleEndian.PutUint32(buf[5:9], 1)
-	case sql.Linestring:
+	case sql.LineString:
 		binary.LittleEndian.PutUint32(buf[0:4], v.SRID)
 		binary.LittleEndian.PutUint32(buf[5:9], 2)
 	case sql.Polygon:
@@ -285,7 +285,7 @@ func WriteEWKBPointData(p sql.Point, buf []byte) {
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l sql.Linestring, buf []byte) {
+func WriteEWKBLineData(l sql.LineString, buf []byte) {
 	// Write length of linestring
 	binary.LittleEndian.PutUint32(buf[:4], uint32(len(l.Points)))
 	// Append each point
@@ -351,7 +351,7 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPointData(typedCol, buf[9:])
 			return SqlColToStr(ctx, buf)
-		case sql.Linestring:
+		case sql.LineString:
 			buf := make([]byte, 9+4+16*len(typedCol.Points))
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBLineData(typedCol, buf[9:])

@@ -35,11 +35,11 @@ var _ TypeInfo = (*polygonType)(nil)
 
 var PolygonType = &polygonType{sql.PolygonType{}}
 
-// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.Linestring
+// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.LineString
 func ConvertTypesPolygonToSQLPolygon(p types.Polygon) sql.Polygon {
-	lines := make([]sql.Linestring, len(p.Lines))
+	lines := make([]sql.LineString, len(p.Lines))
 	for i, l := range p.Lines {
-		lines[i] = ConvertTypesLinestringToSQLLinestring(l)
+		lines[i] = ConvertTypesLineStringToSQLLineString(l)
 	}
 	return sql.Polygon{SRID: p.SRID, Lines: lines}
 }
@@ -76,9 +76,9 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 }
 
 func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) types.Polygon {
-	lines := make([]types.Linestring, len(p.Lines))
+	lines := make([]types.LineString, len(p.Lines))
 	for i, l := range p.Lines {
-		lines[i] = ConvertSQLLinestringToTypesLinestring(l)
+		lines[i] = ConvertSQLLineStringToTypesLineString(l)
 	}
 	return types.Polygon{SRID: p.SRID, Lines: lines}
 }
