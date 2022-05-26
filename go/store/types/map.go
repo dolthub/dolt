@@ -214,6 +214,7 @@ func (m Map) DiffLeftRightInRange(ctx context.Context, last Map, start Value, in
 		return nil
 	}
 
+	// Create key based off of start value, empty key if null
 	startKey := emptyKey
 	if !IsNull(start) {
 		var err error

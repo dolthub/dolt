@@ -32,6 +32,9 @@ type RowDiffer interface {
 	// Start starts the RowDiffer.
 	Start(ctx context.Context, from, to types.Map)
 
+	// StartWithRange starts the row differ, given a filter
+	StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange)
+
 	// GetDiffs returns the requested number of diff.Differences, or times out.
 	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
 
@@ -156,6 +159,8 @@ func hasChangeTypePredicate(changeType types.DiffChangeType) diffPredicate {
 }
 
 func (ad *AsyncDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
+	// TODO: delete this
+	return ad.GetDiffsWithoutTimeout(numDiffs)
 	if timeout < 0 {
 		return ad.GetDiffsWithoutTimeout(numDiffs)
 	}
@@ -296,6 +301,9 @@ type EmptyRowDiffer struct {
 var _ RowDiffer = &EmptyRowDiffer{}
 
 func (e EmptyRowDiffer) Start(ctx context.Context, from, to types.Map) {
+}
+
+func (e EmptyRowDiffer) StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange) {
 }
 
 func (e EmptyRowDiffer) GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error) {
