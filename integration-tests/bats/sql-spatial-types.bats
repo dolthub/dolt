@@ -233,7 +233,7 @@ SQL
     [ "$status" -eq 0 ]
 
     run dolt sql -q "SHOW CREATE TABLE table1"
-    [[ "$output" =~ "\`p\` geometry SRID NOT NULL 4326" ]] || false
+    [[ "$output" =~ "\`p\` geometry NOT NULL SRID 4326" ]] || false
 
     skip "currently this row value LINESTRING(0 0,1 2) is set to NULL after the query above"
     run dolt sql -q "SELECT ST_ASWKT(p) FROM table1"
