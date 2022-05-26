@@ -209,7 +209,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestSpatialQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialQueries(t, newDoltHarness(t))
 }
 
@@ -847,7 +846,6 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
