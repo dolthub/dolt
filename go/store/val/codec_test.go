@@ -467,7 +467,9 @@ func roundTripDatetimes(t *testing.T) {
 
 func roundTripDecimal(t *testing.T) {
 	decimals := []decimal.Decimal{
+		decimalFromString("0"),
 		decimalFromString("1"),
+		decimalFromString("-1"),
 		decimalFromString("-3.7e0"),
 		decimalFromString("0.00000000000000000003e20"),
 		decimalFromString(".22"),
