@@ -172,7 +172,6 @@ func TestQueryErrors(t *testing.T) {
 }
 
 func TestInfoSchema(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestInfoSchema(t, newDoltHarness(t))
 }
 
@@ -288,8 +287,6 @@ func TestScripts(t *testing.T) {
 
 // TestDoltUserPrivileges tests Dolt-specific code that needs to handle user privilege checking
 func TestDoltUserPrivileges(t *testing.T) {
-	skipNewFormat(t)
-
 	harness := newDoltHarness(t)
 	for _, script := range DoltUserPrivTests {
 		t.Run(script.Name, func(t *testing.T) {
@@ -452,7 +449,6 @@ func TestViews(t *testing.T) {
 }
 
 func TestVersionedViews(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestVersionedViews(t, newDoltHarness(t))
 }
 
@@ -524,12 +520,10 @@ func TestJsonScripts(t *testing.T) {
 }
 
 func TestTriggers(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestTriggers(t, newDoltHarness(t))
 }
 
 func TestRollbackTriggers(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestRollbackTriggers(t, newDoltHarness(t))
 }
 
@@ -582,22 +576,10 @@ func TestDoltScripts(t *testing.T) {
 }
 
 func TestDescribeTableAsOf(t *testing.T) {
-	// This test relies on altering schema in order to describe the table at different revisions
-	// and see changes. Until the new storage format supports altering schema, we need to skip them.
-	// Once the new storage format supports altering schema, we can move these ScriptTests back into
-	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
-	skipNewFormat(t)
-
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
 }
 
 func TestShowCreateTableAsOf(t *testing.T) {
-	// This test relies on altering schema in order to show the create table statement at different revisions
-	// and see changes. Until the new storage format supports altering schema, we need to skip them.
-	// Once the new storage format supports altering schema, we can move these ScriptTests back into
-	// the DoltScripts var so they get picked up by the TestDoltScripts method and remove this method.
-	skipNewFormat(t)
-
 	enginetest.TestScript(t, newDoltHarness(t), ShowCreateTableAsOfScriptTest)
 }
 
@@ -610,7 +592,6 @@ func TestDoltMerge(t *testing.T) {
 }
 
 func TestDoltReset(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range DoltReset {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
@@ -826,7 +807,6 @@ func TestSpatialQueriesPrepared(t *testing.T) {
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestVersionedQueriesPrepared(t, newDoltHarness(t))
 }
@@ -940,7 +920,6 @@ func TestShowTableStatusPrepared(t *testing.T) {
 }
 
 func TestPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestPrepared(t, newDoltHarness(t))
 }
