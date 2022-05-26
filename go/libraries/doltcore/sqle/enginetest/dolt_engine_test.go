@@ -412,8 +412,6 @@ func TestDropDatabase(t *testing.T) {
 }
 
 func TestCreateForeignKeys(t *testing.T) {
-	//TODO: fix table alteration so that foreign keys may work once again
-	skipNewFormat(t)
 	enginetest.TestCreateForeignKeys(t, newDoltHarness(t))
 }
 
@@ -422,27 +420,6 @@ func TestDropForeignKeys(t *testing.T) {
 }
 
 func TestForeignKeys(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		//TODO: fix table alteration so that foreign keys may work once again
-		skippedQueries := []string{
-			"ALTER TABLE SET NULL on non-nullable column",
-			"ALTER TABLE RENAME COLUMN",
-			"ALTER TABLE MODIFY COLUMN type change not allowed",
-			"ALTER TABLE MODIFY COLUMN type change allowed when lengthening string",
-			"ALTER TABLE MODIFY COLUMN type change only cares about foreign key columns",
-			"DROP COLUMN parent",
-			"DROP COLUMN child",
-			"Disallow change column to nullable with ON UPDATE SET NULL",
-			"Disallow change column to nullable with ON DELETE SET NULL",
-		}
-		for i := len(queries.ForeignKeyTests) - 1; i >= 0; i-- {
-			for _, skippedQuery := range skippedQueries {
-				if queries.ForeignKeyTests[i].Name == skippedQuery {
-					queries.ForeignKeyTests = append(queries.ForeignKeyTests[:i], queries.ForeignKeyTests[i+1:]...)
-				}
-			}
-		}
-	}
 	enginetest.TestForeignKeys(t, newDoltHarness(t))
 }
 

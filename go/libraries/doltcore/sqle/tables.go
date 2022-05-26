@@ -989,9 +989,17 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(column *sql.Column) bool {
 	return false
 }
 
-func isColumnDrop(	oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema) bool {
-	return len(oldSchema.Schema) < len(newSchema.Schema)
+func isColumnDrop(oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) bool {
+	return len(oldSchema.Schema) > len(newSchema.Schema)
+}
+
+func getDroppedColumn(	oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) *sql.Column {
+	for _, col := range oldSchema.Schema {
+		if newSchema.IndexOf(col.Name, col.Source) < 0 {
+			return col
+		}
+	}
+	return nil
 }
 
 func isPrimaryKeyChange(	oldSchema sql.PrimaryKeySchema,
@@ -1048,6 +1056,16 @@ func (t *AlterableDoltTable) RewriteInserter(
 	newSch, err = schema.Adapt(oldSch, newSch) // improvise, overcome
 	if err != nil {
 		return nil, err
+	}
+
+	if isColumnDrop(oldSchema, newSchema) {
+		droppedCol := getDroppedColumn(oldSchema, newSchema)
+		for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
+			_, err = newSch.Indexes().RemoveIndex(index.Name())
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)
