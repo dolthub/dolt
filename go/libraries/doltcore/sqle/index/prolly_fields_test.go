@@ -16,6 +16,7 @@ package index
 
 import (
 	"encoding/json"
+	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 	"time"
@@ -103,7 +104,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
-			value: "0.263419374632932747932030573792",
+			value: mustParseDecimal("0.263419374632932747932030573792"),
 		},
 		{
 			name:  "string",
@@ -125,11 +126,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.DateEnc},
 			value: dateFromTime(time.Now().UTC()),
 		},
-		//{
-		//	name:  "time",
-		//	typ:   val.Type{Enc: val.DateEnc},
-		//	value: dateFromTime(time.Now().UTC()),
-		//},
+		{
+			name:  "time",
+			typ:   val.Type{Enc: val.TimeEnc},
+			value: int64(123456),
+		},
 		{
 			name:  "datetime",
 			typ:   val.Type{Enc: val.DatetimeEnc},
@@ -210,6 +211,14 @@ func mustParseJson(t *testing.T, s string) sql.JSONDocument {
 	err := json.Unmarshal([]byte(s), &v)
 	require.NoError(t, err)
 	return sql.JSONDocument{Val: v}
+}
+
+func mustParseDecimal(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func dateFromTime(t time.Time) time.Time {
