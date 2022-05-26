@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -314,6 +315,37 @@ func (fkc *ForeignKeyCollection) GetByNameCaseInsensitive(foreignKeyName string)
 		}
 	}
 	return ForeignKey{}, false
+}
+
+type FkIndexUpdate struct {
+	FkName  string
+	FromIdx string
+	ToIdx   string
+}
+
+// UpdateIndexes updates the indexes used by the foreign keys as outlined by the update structs given. All foreign
+// keys updated in this manner must belong to the same table, whose schema is provided.
+func (fkc *ForeignKeyCollection) UpdateIndexes(ctx context.Context, tableSchema schema.Schema, updates []FkIndexUpdate) error {
+	for _, u := range updates {
+		fk, ok := fkc.GetByNameCaseInsensitive(u.FkName)
+		if !ok {
+			return errors.New("foreign key not found")
+		}
+		fkc.RemoveKeys(fk)
+		fk.ReferencedTableIndex = u.ToIdx
+
+		err := fkc.AddKeys(fk)
+		if err != nil {
+			return err
+		}
+
+		err = fk.ValidateReferencedTableSchema(tableSchema)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetByTags gets the ForeignKey defined over the parent and child columns corresponding to their tags.

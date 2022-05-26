@@ -961,10 +961,17 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 	modifiedColumn *sql.Column,
 ) bool {
 	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in the new format
-	return types.IsFormat_DOLT_1(t.nbf) || len(oldSchema.Schema) < len(newSchema.Schema)
+	return types.IsFormat_DOLT_1(t.nbf) ||
+		len(oldSchema.Schema) < len(newSchema.Schema) ||
+		(len(newSchema.PkOrdinals) != len(oldSchema.PkOrdinals))
 }
 
-func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.PrimaryKeySchema) (sql.RowInserter, error) {
+func (t *AlterableDoltTable) RewriteInserter(
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	modifiedColumn *sql.Column,
+) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
@@ -1009,7 +1016,7 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
-	// If we have an auto increment column, we need to set it here before we begin the rewrite process
+	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)
 	if schema.HasAutoIncrement(newSch) {
 		newSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 			if col.AutoIncrement {
@@ -1035,6 +1042,13 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 		return nil, err
 	}
 
+	if len(oldSchema.PkOrdinals) > 0 && len(newSchema.PkOrdinals) == 0 {
+		newRoot, err = t.adjustForeignKeysForDroppedPk(ctx, newRoot)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	newWs := ws.WithWorkingRoot(newRoot)
 
 	// TODO: figure out locking. Other DBs automatically lock a table during this kind of operation, we should probably
@@ -1051,6 +1065,34 @@ func (t *AlterableDoltTable) RewriteInserter(ctx *sql.Context, newSchema sql.Pri
 	}
 
 	return ed, nil
+}
+
+func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
+	if t.autoIncCol.AutoIncrement {
+		return nil, sql.ErrWrongAutoKey.New()
+	}
+
+	fkc, err := root.GetForeignKeyCollection(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
+	if err != nil {
+		return nil, err
+	}
+
+	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
+	if err != nil {
+		return nil, err
+	}
+
+	root, err = root.PutForeignKeyCollection(ctx, fkc)
+	if err != nil {
+		return nil, err
+	}
+
+	return root, nil
 }
 
 // DropColumn implements sql.AlterableTable
@@ -2184,12 +2226,22 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 		return err
 	}
 
-	fkcUpdates, err := t.backupFkcIndexesForPkDrop(ctx, root)
+	fkc, err := root.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return err
 	}
 
-	newRoot, err := t.updateFkcIndex(ctx, root, fkcUpdates)
+	fkcUpdates, err := backupFkcIndexesForPkDrop(ctx, t.sch, fkc)
+	if err != nil {
+		return err
+	}
+
+	err = fkc.UpdateIndexes(ctx, t.sch, fkcUpdates)
+	if err != nil {
+		return err
+	}
+
+	newRoot, err := root.PutForeignKeyCollection(ctx, fkc)
 	if err != nil {
 		return err
 	}
@@ -2216,109 +2268,6 @@ func (t *AlterableDoltTable) DropPrimaryKey(ctx *sql.Context) error {
 	}
 
 	return t.updateFromRoot(ctx, newRoot)
-}
-
-type fkIndexUpdate struct {
-	fkName  string
-	fromIdx string
-	toIdx   string
-}
-
-// updateFkcIndex applies a list of fkIndexUpdates to a ForeignKeyCollection and returns a new root value
-func (t *AlterableDoltTable) updateFkcIndex(ctx *sql.Context, root *doltdb.RootValue, updates []fkIndexUpdate) (*doltdb.RootValue, error) {
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, u := range updates {
-		fk, ok := fkc.GetByNameCaseInsensitive(u.fkName)
-		if !ok {
-			return nil, errors.New("foreign key not found")
-		}
-		fkc.RemoveKeys(fk)
-		fk.ReferencedTableIndex = u.toIdx
-		fkc.AddKeys(fk)
-		err := fk.ValidateReferencedTableSchema(t.sch)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	root, err = root.PutForeignKeyCollection(ctx, fkc)
-	if err != nil {
-		return nil, err
-	}
-	return root, nil
-}
-
-// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
-// key drop. If multiple indexes are valid, we sort by unique and select the first.
-// This will not work with a non-pk index drop without an additional index filter argument.
-func (t *AlterableDoltTable) backupFkcIndexesForPkDrop(ctx *sql.Context, root *doltdb.RootValue) ([]fkIndexUpdate, error) {
-	fkc, err := root.GetForeignKeyCollection(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	indexes := t.sch.Indexes().AllIndexes()
-	if err != nil {
-		return nil, err
-	}
-
-	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
-	pkBackups := make(map[uint64][]schema.Index, len(t.sch.GetPKCols().TagToIdx))
-	for tag, _ := range t.sch.GetPKCols().TagToIdx {
-		pkBackups[tag] = nil
-	}
-
-	// prefer unique key backups
-	sort.Slice(indexes[:], func(i, j int) bool {
-		return indexes[i].IsUnique() && !indexes[j].IsUnique()
-	})
-
-	for _, idx := range indexes {
-		if !idx.IsUserDefined() {
-			continue
-		}
-
-		for _, tag := range idx.AllTags() {
-			if _, ok := pkBackups[tag]; ok {
-				pkBackups[tag] = append(pkBackups[tag], idx)
-			}
-		}
-	}
-
-	fkUpdates := make([]fkIndexUpdate, 0)
-	for _, fk := range fkc.AllKeys() {
-		// check if this FK references a parent PK tag we are trying to change
-		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
-			covered := false
-			for _, idx := range backups {
-				idxTags := idx.AllTags()
-				if len(fk.TableColumns) > len(idxTags) {
-					continue
-				}
-				failed := false
-				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
-					if idxTags[i] != fk.ReferencedTableColumns[i] {
-						failed = true
-						break
-					}
-				}
-				if failed {
-					continue
-				}
-				fkUpdates = append(fkUpdates, fkIndexUpdate{fk.Name, fk.ReferencedTableIndex, idx.Name()})
-				covered = true
-				break
-			}
-			if !covered {
-				return nil, sql.ErrCantDropIndex.New("PRIMARY")
-			}
-		}
-	}
-	return fkUpdates, nil
 }
 
 func findIndexWithPrefix(sch schema.Schema, prefixCols []string) (schema.Index, bool, error) {

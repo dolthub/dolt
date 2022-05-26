@@ -17,6 +17,8 @@ package val
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
@@ -157,37 +159,41 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
-func (tb *TupleBuilder) PutTimestamp(i int, v time.Time) {
-	tb.Desc.expectEncoding(i, DateEnc, DatetimeEnc, TimestampEnc)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+timestampSize]
-	writeTimestamp(tb.fields[i], v)
-	tb.pos += timestampSize
-}
-
-// PutSqlTime writes a string to the ith field of the Tuple being built.
-func (tb *TupleBuilder) PutSqlTime(i int, v string) {
-	tb.Desc.expectEncoding(i, TimeEnc)
-	sz := ByteSize(len(v)) + 1
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v)
-	tb.pos += sz
-}
-
 // PutYear writes an int16-encoded year to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutYear(i int, v int16) {
-	// todo(andy): yearSize, etc?
 	tb.Desc.expectEncoding(i, YearEnc)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+int16Size]
-	writeInt16(tb.fields[i], v)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+yearSize]
+	writeYear(tb.fields[i], v)
 	tb.pos += int16Size
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v string) {
+func (tb *TupleBuilder) PutDate(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DateEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+dateSize]
+	writeDate(tb.fields[i], v)
+	tb.pos += dateSize
+}
+
+// PutSqlTime writes a string to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutSqlTime(i int, v int64) {
+	tb.Desc.expectEncoding(i, TimeEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+timeSize]
+	writeTime(tb.fields[i], v)
+	tb.pos += timeSize
+}
+
+func (tb *TupleBuilder) PutDatetime(i int, v time.Time) {
+	tb.Desc.expectEncoding(i, DatetimeEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+datetimeSize]
+	writeDatetime(tb.fields[i], v)
+	tb.pos += datetimeSize
+}
+
+func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
-	// todo(andy): temporary implementation
-	sz := ByteSize(len(v)) + 1
+	sz := sizeOfDecimal(v)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v)
+	writeDecimal(tb.fields[i], v)
 	tb.pos += sz
 }
 

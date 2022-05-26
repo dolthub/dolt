@@ -20,8 +20,11 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	geo "github.com/dolthub/dolt/go/store/geometry"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -50,13 +53,23 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 	case val.Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
 	case val.DecimalEnc:
-		v, ok = td.GetDecimal(i, tup)
-	case val.TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
+		var d decimal.Decimal
+		d, ok = td.GetDecimal(i, tup)
+		if ok {
+			v = deserializeDecimal(d)
+		}
 	case val.YearEnc:
 		v, ok = td.GetYear(i, tup)
-	case val.TimestampEnc, val.DateEnc, val.DatetimeEnc:
-		v, ok = td.GetTimestamp(i, tup)
+	case val.DateEnc:
+		v, ok = td.GetDate(i, tup)
+	case val.TimeEnc:
+		var t int64
+		t, ok = td.GetSqlTime(i, tup)
+		if ok {
+			v, err = deserializeTime(t)
+		}
+	case val.DatetimeEnc:
+		v, ok = td.GetDatetime(i, tup)
 	case val.StringEnc:
 		v, ok = td.GetString(i, tup)
 	case val.ByteStringEnc:
@@ -115,13 +128,23 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.Float64Enc:
 		tb.PutFloat64(i, v.(float64))
 	case val.DecimalEnc:
-		tb.PutDecimal(i, v.(string))
-	case val.TimeEnc:
-		tb.PutSqlTime(i, v.(string))
+		d, err := serializeDecimal(v.(string))
+		if err != nil {
+			return nil
+		}
+		tb.PutDecimal(i, d)
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
-	case val.DateEnc, val.DatetimeEnc, val.TimestampEnc:
-		tb.PutTimestamp(i, v.(time.Time))
+	case val.DateEnc:
+		tb.PutDate(i, v.(time.Time))
+	case val.TimeEnc:
+		t, err := serializeTime(v)
+		if err != nil {
+			return err
+		}
+		tb.PutSqlTime(i, t)
+	case val.DatetimeEnc:
+		tb.PutDatetime(i, v.(time.Time))
 	case val.StringEnc:
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:
@@ -232,4 +255,24 @@ func serializeGeometry(v interface{}) []byte {
 	default:
 		panic(fmt.Sprintf("unknown geometry %v", v))
 	}
+}
+
+func serializeTime(v interface{}) (int64, error) {
+	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
+	if err != nil {
+		return 0, err
+	}
+	return int64(i.(types.Int)), nil
+}
+
+func deserializeTime(v int64) (interface{}, error) {
+	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
+}
+
+func serializeDecimal(v interface{}) (decimal.Decimal, error) {
+	return decimal.NewFromString(v.(string))
+}
+
+func deserializeDecimal(v decimal.Decimal) interface{} {
+	return v.String()
 }
