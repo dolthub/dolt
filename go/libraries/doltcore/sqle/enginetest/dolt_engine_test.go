@@ -80,29 +80,27 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Drop and add primary key on two branches converges to same schema",
+			Name: "Create table with BIT, ENUM, and SET types",
 			SetUpScript: []string{
-				"create table t1 (i int);",
-				"call dolt_commit('-am', 't1 table')",
-				"call dolt_checkout('-b', 'b1')",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'b1 primary key changes')",
-				"call dolt_checkout('main')",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'main primary key change')",
+				"create table my_types (" +
+					"pk int primary key, " +
+					"c0 bit(64), " +
+					"c1 set('a','b','c'), " +
+					"c2 enum('x','y','z'));",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "call dolt_merge('b1')",
-					Expected: []sql.Row{{1}},
+					Query: "insert into my_types values " +
+						"(1, b'010101', 'a,b', 'x')," +
+						"(2, b'101010', 'b,c', 'z');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 0}}},
 				},
 				{
-					Query:    "select count(*) from dolt_conflicts",
-					Expected: []sql.Row{{0}},
+					Query: "select * from my_types",
+					Expected: []sql.Row{
+						{int64(1), uint64(21), "a,b", "x"},
+						{int64(2), uint64(42), "b,c", "z"},
+					},
 				},
 			},
 		},

@@ -96,6 +96,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: float64(-math.Pi),
 		},
 		{
+			name:  "bit",
+			typ:   val.Type{Enc: val.Bit64Enc},
+			value: uint64(42),
+		},
+		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
 			value: "0.263419374632932747932030573792",

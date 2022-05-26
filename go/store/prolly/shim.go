@@ -132,8 +132,6 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 
 	// todo(andy): replace temp encodings
 	switch typ {
-	case query.Type_BIT:
-		return val.Uint64Enc
 	case query.Type_BLOB:
 		// todo: temporary hack for enginetests
 		return val.StringEnc
@@ -168,6 +166,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.Float32Enc
 	case query.Type_FLOAT64:
 		return val.Float64Enc
+	case query.Type_BIT:
+		return val.Uint64Enc
 	case query.Type_DECIMAL:
 		return val.DecimalEnc
 	case query.Type_YEAR:
