@@ -135,7 +135,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 	case query.Type_BIT:
 		return val.Uint64Enc
 	case query.Type_BLOB:
-		return val.ByteStringEnc
+		// todo: temporary hack for enginetests
+		return val.StringEnc
 	case query.Type_TEXT:
 		return val.StringEnc
 	case query.Type_JSON:
