@@ -250,12 +250,10 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestSpatialDelete(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialDelete(t, newDoltHarness(t))
 }
 
 func TestSpatialScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialScripts(t, newDoltHarness(t))
 }
 
