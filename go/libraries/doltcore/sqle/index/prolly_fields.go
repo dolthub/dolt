@@ -70,6 +70,10 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
+	case val.EnumEnc:
+		v, ok = td.GetEnum(i, tup)
+	case val.SetEnc:
+		v, ok = td.GetSet(i, tup)
 	case val.StringEnc:
 		v, ok = td.GetString(i, tup)
 	case val.ByteStringEnc:
@@ -145,6 +149,10 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutSqlTime(i, t)
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
+	case val.EnumEnc:
+		tb.PutEnum(i, v.(uint16))
+	case val.SetEnc:
+		tb.PutSet(i, v.(uint64))
 	case val.StringEnc:
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:

@@ -55,6 +55,9 @@ const (
 	dateSize     ByteSize = 4
 	timeSize     ByteSize = 8
 	datetimeSize ByteSize = 8
+
+	enumSize ByteSize = 2
+	setSize  ByteSize = 8
 )
 
 type Encoding uint8
@@ -79,6 +82,9 @@ const (
 	DateEnc     Encoding = 15
 	TimeEnc     Encoding = 16
 	DatetimeEnc Encoding = 17
+
+	EnumEnc Encoding = 18
+	SetEnc  Encoding = 19
 
 	sentinel Encoding = 127
 )
@@ -476,6 +482,30 @@ func compareDatetime(l, r time.Time) int {
 	} else {
 		return 1
 	}
+}
+
+func readEnum(val []byte) uint16 {
+	return readUint16(val)
+}
+
+func writeEnum(buf []byte, val uint16) {
+	writeUint16(buf, val)
+}
+
+func compareEnum(l, r uint16) int {
+	return compareUint16(l, r)
+}
+
+func readSet(val []byte) uint64 {
+	return readUint64(val)
+}
+
+func writeSet(buf []byte, val uint64) {
+	writeUint64(buf, val)
+}
+
+func compareSet(l, r uint64) int {
+	return compareUint64(l, r)
 }
 
 func readString(val []byte) string {

@@ -189,6 +189,20 @@ func (tb *TupleBuilder) PutDatetime(i int, v time.Time) {
 	tb.pos += datetimeSize
 }
 
+func (tb *TupleBuilder) PutEnum(i int, v uint16) {
+	tb.Desc.expectEncoding(i, EnumEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+enumSize]
+	writeEnum(tb.fields[i], v)
+	tb.pos += enumSize
+}
+
+func (tb *TupleBuilder) PutSet(i int, v uint64) {
+	tb.Desc.expectEncoding(i, SetEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+setSize]
+	writeSet(tb.fields[i], v)
+	tb.pos += setSize
+}
+
 func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
 	sz := sizeOfDecimal(v)

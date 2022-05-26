@@ -98,6 +98,10 @@ func compare(typ Type, left, right []byte) int {
 		return compareTime(readTime(left), readTime(right))
 	case DatetimeEnc:
 		return compareDatetime(readDatetime(left), readDatetime(right))
+	case EnumEnc:
+		return compareEnum(readEnum(left), readEnum(right))
+	case SetEnc:
+		return compareSet(readSet(left), readSet(right))
 	case DecimalEnc:
 		return compareDecimal(readDecimal(left), readDecimal(right))
 	case StringEnc:

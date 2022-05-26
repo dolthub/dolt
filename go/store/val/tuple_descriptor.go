@@ -296,6 +296,28 @@ func (td TupleDesc) GetDatetime(i int, tup Tuple) (v time.Time, ok bool) {
 	return
 }
 
+// GetEnum reads a uin16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetEnum(i int, tup Tuple) (v uint16, ok bool) {
+	td.expectEncoding(i, EnumEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readEnum(b), true
+	}
+	return
+}
+
+// GetSet reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSet(i int, tup Tuple) (v uint64, ok bool) {
+	td.expectEncoding(i, SetEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readSet(b), true
+	}
+	return
+}
+
 // GetString reads a string from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetString(i int, tup Tuple) (v string, ok bool) {
