@@ -68,7 +68,7 @@ require (
 )
 
 require (
-	github.com/dolthub/go-mysql-server v0.11.1-0.20220524201134-54179a8d10e7
+	github.com/dolthub/go-mysql-server v0.11.1-0.20220524215156-3b5eff887f13
 	github.com/google/flatbuffers v2.0.6+incompatible
 	github.com/gosuri/uilive v0.0.4
 	github.com/kch42/buzhash v0.0.0-20160816060738-9bdec3dec7c6
@@ -135,7 +135,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20210506142907-4a47615972c2 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776 // indirect
+	gopkg.in/yaml.v3 v3.0.0 // indirect
 )
 
 replace (

@@ -91,14 +91,15 @@ func compare(typ Type, left, right []byte) int {
 	case Float64Enc:
 		return compareFloat64(readFloat64(left), readFloat64(right))
 	case YearEnc:
-		return compareInt16(readInt16(left), readInt16(right))
-	case DateEnc, DatetimeEnc, TimestampEnc:
-		return compareTimestamp(readTimestamp(left), readTimestamp(right))
+		return compareYear(readYear(left), readYear(right))
+	case DateEnc:
+		return compareDate(readDate(left), readDate(right))
 	case TimeEnc:
-		panic("unimplemented")
+		return compareTime(readTime(left), readTime(right))
+	case DatetimeEnc:
+		return compareDatetime(readDatetime(left), readDatetime(right))
 	case DecimalEnc:
-		// todo(andy): temporary Decimal implementation
-		fallthrough
+		return compareDecimal(readDecimal(left), readDecimal(right))
 	case StringEnc:
 		return compareString(readString(left), readString(right))
 	case ByteStringEnc:
