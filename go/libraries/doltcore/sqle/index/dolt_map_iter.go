@@ -131,9 +131,6 @@ func (conv *KVToSqlRowConverter) ConvertKVTuplesToSqlRow(k, v types.Tuple) (sql.
 	}
 
 	if conv.valsFromVal > 0 {
-		s := v.HumanReadableString()
-		if s == "" {
-		}
 		err := conv.processTuple(cols, conv.valsFromVal, conv.maxValTag, v, tupItr)
 
 		if err != nil {
