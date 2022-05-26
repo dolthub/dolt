@@ -15,12 +15,11 @@
 package dtables
 
 import (
-	"io"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 )
 
@@ -72,41 +71,33 @@ func (dt *LogTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIte
 
 // LogItr is a sql.RowItr implementation which iterates over each commit as if it's a row in the table.
 type LogItr struct {
-	commits []*doltdb.Commit
-	idx     int
+	child doltdb.CommitItr
 }
 
 // NewLogItr creates a LogItr from the current environment.
 func NewLogItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*LogItr, error) {
-	commits, err := actions.TimeSortedCommits(ctx, ddb, head, -1)
-
+	hash, err := head.HashOf()
 	if err != nil {
 		return nil, err
 	}
 
-	return &LogItr{commits, 0}, nil
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LogItr{child}, nil
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *LogItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if itr.idx >= len(itr.commits) {
-		return nil, io.EOF
-	}
-
-	defer func() {
-		itr.idx++
-	}()
-
-	cm := itr.commits[itr.idx]
-	meta, err := cm.GetCommitMeta(ctx)
-
+	h, cm, err := itr.child.Next(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	h, err := cm.HashOf()
-
+	meta, err := cm.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, err
 	}
