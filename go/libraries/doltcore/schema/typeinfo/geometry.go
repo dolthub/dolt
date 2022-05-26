@@ -27,22 +27,21 @@ import (
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
-	innerType       TypeInfo         // References the actual typeinfo (pointType, linestringType, polygonType)
 }
 
 var _ TypeInfo = (*geometryType)(nil)
 
-var GeometryType = &geometryType{sql.GeometryType{}, nil}
+var GeometryType = &geometryType{sql.GeometryType{}}
 
 // ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
-func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
+func ConvertTypesGeometryToSQLGeometry(g types.Geometry) interface{} {
 	switch inner := g.Inner.(type) {
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(inner)}
+		return ConvertTypesPointToSQLPoint(inner)
 	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(inner)}
+		return ConvertTypesLinestringToSQLLinestring(inner)
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(inner)}
+		return ConvertTypesPolygonToSQLPolygon(inner)
 	default:
 		panic("used an invalid type types.Geometry.Inner")
 	}
@@ -60,11 +59,11 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	case types.Geometry:
 		return ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
+		return ConvertTypesPointToSQLPoint(val), nil
 	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
+		return ConvertTypesLinestringToSQLLinestring(val), nil
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
+		return ConvertTypesPolygonToSQLPolygon(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -72,29 +71,46 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
 func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	var val types.Value
+	var err error
+
 	k := reader.ReadKind()
 	switch k {
-	case types.GeometryKind:
-		p, err := reader.ReadGeometry()
-		if err != nil {
+	case types.PointKind:
+		if val, err = reader.ReadPoint(); err != nil {
 			return nil, err
 		}
-		return ti.ConvertNomsValueToValue(p)
+	case types.LinestringKind:
+		if val, err = reader.ReadLinestring(); err != nil {
+			return nil, err
+		}
+	case types.PolygonKind:
+		if val, err = reader.ReadPolygon(); err != nil {
+			return nil, err
+		}
+	case types.GeometryKind:
+		// Note: GeometryKind is no longer written
+		// included here for backward compatibility
+		if val, err = reader.ReadGeometry(); err != nil {
+			return nil, err
+		}
 	case types.NullKind:
 		return nil, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
+
+	return ti.ConvertNomsValueToValue(val)
 }
 
-func ConvertSQLGeometryToTypesGeometry(p sql.Geometry) types.Geometry {
-	switch inner := p.Inner.(type) {
+func ConvertSQLGeometryToTypesGeometry(p interface{}) types.Value {
+	switch inner := p.(type) {
 	case sql.Point:
-		return types.Geometry{Inner: ConvertSQLPointToTypesPoint(inner)}
+		return ConvertSQLPointToTypesPoint(inner)
 	case sql.Linestring:
-		return types.Geometry{Inner: ConvertSQLLinestringToTypesLinestring(inner)}
+		return ConvertSQLLinestringToTypesLinestring(inner)
 	case sql.Polygon:
-		return types.Geometry{Inner: ConvertSQLPolygonToTypesPolygon(inner)}
+		return ConvertSQLPolygonToTypesPolygon(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
@@ -113,7 +129,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if err != nil {
 		return nil, err
 	}
-	return ConvertSQLGeometryToTypesGeometry(geom.(sql.Geometry)), nil
+	return ConvertSQLGeometryToTypesGeometry(geom), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -190,7 +206,7 @@ func (ti *geometryType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *geometryType) Promote() TypeInfo {
-	return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), ti.innerType.Promote()}
+	return ti
 }
 
 // String implements TypeInfo interface.

@@ -173,8 +173,7 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		case sql.PolygonType{}.String():
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
 		case sql.GeometryType{}.String():
-			// TODO: not sure how to determine inner type
-			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType), innerType: &pointType{}}, nil
+			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
