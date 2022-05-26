@@ -93,6 +93,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
 		dh = dh.WithSkippedQueries([]string{
 			"SHOW CREATE TABLE child", // todo(andy): "TestForeignKeys - ALTER TABLE RENAME COLUMN"
+			"typestable",
 		})
 	}
 
