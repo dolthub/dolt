@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // TupleDesc describes a Tuple set.
@@ -241,11 +243,11 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 
 // GetDecimal reads a float64 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
+func (td TupleDesc) GetDecimal(i int, tup Tuple) (v decimal.Decimal, ok bool) {
 	td.expectEncoding(i, DecimalEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readString(b), true
+		v, ok = readDecimal(b), true
 	}
 	return
 }

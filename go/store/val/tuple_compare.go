@@ -99,8 +99,7 @@ func compare(typ Type, left, right []byte) int {
 	case DatetimeEnc:
 		return compareDatetime(readDatetime(left), readDatetime(right))
 	case DecimalEnc:
-		// todo(andy): temporary Decimal implementation
-		fallthrough
+		return compareDecimal(readDecimal(left), readDecimal(right))
 	case StringEnc:
 		return compareString(readString(left), readString(right))
 	case ByteStringEnc:

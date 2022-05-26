@@ -96,6 +96,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: float64(-math.Pi),
 		},
 		{
+			name:  "decimal",
+			typ:   val.Type{Enc: val.DecimalEnc},
+			value: "0.263419374632932747932030573792",
+		},
+		{
 			name:  "string",
 			typ:   val.Type{Enc: val.StringEnc},
 			value: "lorem ipsum",
@@ -115,6 +120,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.DateEnc},
 			value: dateFromTime(time.Now().UTC()),
 		},
+		//{
+		//	name:  "time",
+		//	typ:   val.Type{Enc: val.DateEnc},
+		//	value: dateFromTime(time.Now().UTC()),
+		//},
 		{
 			name:  "datetime",
 			typ:   val.Type{Enc: val.DatetimeEnc},
