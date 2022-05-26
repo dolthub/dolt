@@ -16,13 +16,13 @@ package index
 
 import (
 	"encoding/json"
-	"github.com/shopspring/decimal"
 	"math"
 	"testing"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
