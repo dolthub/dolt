@@ -52,6 +52,8 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		v, ok = td.GetFloat32(i, tup)
 	case val.Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
+	case val.Bit64Enc:
+		v, ok = td.GetBit(i, tup)
 	case val.DecimalEnc:
 		var d decimal.Decimal
 		d, ok = td.GetDecimal(i, tup)
@@ -131,6 +133,8 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutFloat32(i, v.(float32))
 	case val.Float64Enc:
 		tb.PutFloat64(i, v.(float64))
+	case val.Bit64Enc:
+		tb.PutBit(i, uint64(convUint(v)))
 	case val.DecimalEnc:
 		d, err := serializeDecimal(v.(string))
 		if err != nil {
