@@ -3,7 +3,7 @@ name: Format PR
 on:
   pull_request:
     branches: [ main ]
-
+  workflow_dispatch:
 jobs:
   format:
     name: Format PR

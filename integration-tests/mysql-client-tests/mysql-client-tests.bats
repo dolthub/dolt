@@ -47,15 +47,15 @@ teardown() {
 }
 
 @test "python mysql.connector client" {
-    python3 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/mysql.connector-test.py $USER $PORT $REPO_NAME
 }
 
 @test "python pymysql client" {
-    python3 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/pymysql-test.py $USER $PORT $REPO_NAME
 }
 
 @test "python sqlachemy client" {
-    python3 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
+    python3.8 $BATS_TEST_DIRNAME/python/sqlalchemy-test.py $USER $PORT $REPO_NAME
 }
 
 @test "mysql-connector-java client" {

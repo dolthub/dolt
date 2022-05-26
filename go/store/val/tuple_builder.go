@@ -17,6 +17,8 @@ package val
 import (
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
@@ -187,12 +189,11 @@ func (tb *TupleBuilder) PutDatetime(i int, v time.Time) {
 	tb.pos += datetimeSize
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v string) {
+func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
 	tb.Desc.expectEncoding(i, DecimalEnc)
-	// todo(andy): temporary implementation
-	sz := ByteSize(len(v)) + 1
+	sz := sizeOfDecimal(v)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeString(tb.fields[i], v)
+	writeDecimal(tb.fields[i], v)
 	tb.pos += sz
 }
 

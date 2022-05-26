@@ -1,4 +1,4 @@
-FROM ubuntu:18.04
+FROM --platform=linux/amd64 ubuntu:18.04
 
 # install python, libmysqlclient-dev, java, bats, git ruby, perl, cpan
 ENV DEBIAN_FRONTEND=noninteractive
@@ -74,8 +74,13 @@ RUN curl -LO https://download.visualstudio.microsoft.com/download/pr/13b9d84c-a3
     tar -C /usr/local/bin -xzf dotnet-sdk-5.0.400-linux-x64.tar.gz && \
     dotnet --version
 
+# install pip for python3.8
+RUN curl -LO https://bootstrap.pypa.io/get-pip.py && \
+  python3.8 get-pip.py && \
+  pip --version
+
 # install mysql connector and pymsql
-RUN pip3 install mysql-connector-python PyMySQL sqlalchemy
+RUN pip install mysql-connector-python PyMySQL sqlalchemy
 
 # Setup JAVA_HOME -- useful for docker commandline
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
