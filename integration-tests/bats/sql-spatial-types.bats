@@ -255,4 +255,8 @@ SQL
 
     run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p POINT SRID 4326"
     [ "$status" -eq 0 ]
+
+    run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p POINT SRID 0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]] || false
 }

@@ -266,7 +266,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			}
 			return nil, err
 		}
-	} else if !modifiedCol.IsNullable() {
+	} else if !modifiedCol.IsNullable() || schema.IsColSpatialType(modifiedCol) { //
 		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 			r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
 			if err != nil {
