@@ -169,11 +169,11 @@ var ErrPrimaryKeySetsIncompatible = errors.New("primary key sets incompatible")
 // modifyColumn modifies the column with the name given, replacing it with the new definition provided. A column with
 // the name given must exist in the schema of the table.
 func modifyColumn(
-		ctx context.Context,
-		tbl *doltdb.Table,
-		existingCol schema.Column,
-		newCol schema.Column,
-		order *sql.ColumnOrder,
+	ctx context.Context,
+	tbl *doltdb.Table,
+	existingCol schema.Column,
+	newCol schema.Column,
+	order *sql.ColumnOrder,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {

@@ -277,7 +277,7 @@ func TestScripts(t *testing.T) {
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
-			)
+		)
 	}
 
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
@@ -1024,8 +1024,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				{
 					Query: "select * from test order by id",
 					Expected: []sql.Row{
-						{1,1},
-						{2,2},
+						{1, 1},
+						{2, 2},
 					},
 				},
 			},
@@ -1093,8 +1093,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 				{
 					Query: "select * from test order by id",
 					Expected: []sql.Row{
-						{1,1},
-						{2,2},
+						{1, 1},
+						{2, 2},
 					},
 				},
 			},

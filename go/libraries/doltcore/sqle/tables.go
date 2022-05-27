@@ -993,7 +993,7 @@ func isColumnDrop(oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema
 	return len(oldSchema.Schema) > len(newSchema.Schema)
 }
 
-func getDroppedColumn(	oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) *sql.Column {
+func getDroppedColumn(oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeySchema) *sql.Column {
 	for _, col := range oldSchema.Schema {
 		if newSchema.IndexOf(col.Name, col.Source) < 0 {
 			return col
@@ -1002,11 +1002,10 @@ func getDroppedColumn(	oldSchema sql.PrimaryKeySchema, newSchema sql.PrimaryKeyS
 	return nil
 }
 
-func isPrimaryKeyChange(	oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema) bool {
+func isPrimaryKeyChange(oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema) bool {
 	return len(newSchema.PkOrdinals) != len(oldSchema.PkOrdinals)
 }
-
 
 func (t *AlterableDoltTable) RewriteInserter(
 	ctx *sql.Context,
@@ -1353,10 +1352,10 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 // ALTER statement.
 // TODO: this could use an index and avoid a full table scan in many cases
 func (t *AlterableDoltTable) getFirstAutoIncrementValue(
-		ctx *sql.Context,
-		columnName string,
-		columnType sql.Type,
-		table *doltdb.Table,
+	ctx *sql.Context,
+	columnName string,
+	columnType sql.Type,
+	table *doltdb.Table,
 ) (uint64, error) {
 	updatedSch, err := table.GetSchema(ctx)
 	if err != nil {
