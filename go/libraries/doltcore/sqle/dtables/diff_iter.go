@@ -17,6 +17,7 @@ package dtables
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
 	"io"
 	"time"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// TODO: maybe add a condition that's similar to the one in FilterIter
 type diffRowItr struct {
 	ad             diff.RowDiffer
 	diffSrc        *diff.RowDiffSource
@@ -52,7 +54,8 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition) (*diffRowItr, error) {
+// TODO: add range func argument or start and end vals (inclusive/exclusive)
+func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, rowFilters []sql.Expression) (*diffRowItr, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
 	if err != nil {
@@ -88,48 +91,69 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
-	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
+	//rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
 
-	//// TODO: extract these from filter probably
-	//// TODO: determine correct starting and ending value; assume we somehow got it and it is 1 and 2
-	//startVals := []int{1}
-	//endVals := []int{2}
+	// Create values for tuple, need to alternate column tags and value
+	//allCols := toSch.GetAllCols()
+	//allCols.IterInSortedOrder(func(tag uint64, col schema.Column) bool {
+	//	return false
+	//})
 	//
-	//// TODO: use to or from schema?
-	//// Create values for tuple, need to alternate column tags and value
-	//tupVal := make([]types.Value, 2*len(toSch.GetPKCols().SortedTags))
-	//for i, tag := range toSch.GetPKCols().SortedTags {
+	//tags := toSch.GetAllCols().SortedTags
+	//tupVal := make([]types.Value, 2*len(tags))
+	//for i, tag := range tags {
 	//	tupVal[i] = types.Uint(tag)
 	//	tupVal[i+1] = types.Int(startVals[i])
 	//}
-	//// Create starting tuple
+	//// TODO: Create starting tuple
 	//startTup, err := types.NewTuple(types.Format_Default, tupVal...)
 	//if err != nil {
 	//	return nil, err
 	//}
-	//
-	//// TODO: how to deal with types other than int?
-	//// TODO: determine correct range function
-	//rangeFunc := func(value types.Value) (bool, error) {
-	//	// must be tuple because we are using maps
-	//	val, ok := value.(types.Tuple)
-	//	if !ok {
-	//		return false, err
-	//	}
-	//
-	//	// Go through each primary key column
-	//	for i := uint64(0); i < val.Len()/2; i++ {
-	//		tmp, err := val.Get(2*i + 1) // only look at odd indexes (skip col tags)
-	//		if err != nil {
-	//			return false, err
-	//		}
-	//		if int64(tmp.(types.Int)) > int64(endVals[i]) {
-	//			return false, nil
-	//		}
-	//	}
-	//	return true, nil
-	//}
-	//rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), startTup, rangeFunc)
+
+	// Create comparison function from SQL Filter Expressions
+	// TODO: correct format?
+	exprFunc, err := expreval.ExpressionFuncFromSQLExpressions(types.Format_Default, toSch, rowFilters)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: make a new schema with the column names renamed to to_...
+	// TODO: alternatively change the GetFields to not have a to?
+	// TODO: make a new function that works without a schema, and just give them the right tag
+
+	// TODO: how to deal with types other than int?
+	// TODO: determine correct range function
+	rangeFunc := func(value types.Value) (bool, error) {
+		// must be tuple because we are using maps
+		val, ok := value.(types.Tuple)
+		if !ok {
+			return false, err
+		}
+
+		// convert tuple into a map
+		tupMap := make(map[uint64]types.Value)
+		for i := uint64(0); i < val.Len(); i += 2 {
+			tag, err := val.Get(i)
+			if err != nil {
+				return false, err
+			}
+
+			v, err := val.Get(i + 1)
+			if err != nil {
+				return false, err
+			}
+			tupMap[uint64(tag.(types.Uint))] = v
+		}
+
+		return exprFunc(ctx, tupMap)
+
+		// TODO: Need to determine which schema is right to use, just do to for now
+		//colName := rowFilters[0].(expression.Comparer).Left().(*expression.GetField).Name()
+		//if colName[:3] == "to_" {
+		//}
+	}
+	rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), types.NullValue, rangeFunc)
 
 	warnFn := func(code int, message string, args ...string) {
 		ctx.Warn(code, message, args)

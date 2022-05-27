@@ -220,6 +220,14 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 		}
 	} else if compType == VariableConstCompare {
 		colName := vars[0].Name()
+
+		// TODO: probably don't do this, but it'll work for now
+		if colName[:3] == "to_" {
+			colName = colName[3:]
+		} else if colName[:5] == "from_" {
+			colName = colName[5:]
+		}
+		
 		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
 
 		if !ok {

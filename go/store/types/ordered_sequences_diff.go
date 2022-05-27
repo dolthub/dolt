@@ -200,6 +200,7 @@ VALIDRANGES:
 		}
 	}
 
+	//first := false // true when you found first value in range
 	for currentCur.valid() {
 		currKey, err := getCurrentKey(currentCur)
 		if err != nil {

@@ -397,7 +397,8 @@ func (itr *diffTableFunctionRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 		if itr.currentRowIter == nil {
 			dp := (*itr.currentPartition).(dtables.DiffPartition)
-			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner)
+			// TODO: row filters here
+			rowIter, err := dp.GetRowIter(ctx, itr.ddb, itr.joiner, nil)
 			if err != nil {
 				return nil, err
 			}

@@ -50,6 +50,8 @@ const (
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
 
+//var _ sql.IndexedTable = (*DiffTable)(nil)
+
 type DiffTable struct {
 	name        string
 	ddb         *doltdb.DoltDB
@@ -66,6 +68,10 @@ type DiffTable struct {
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 	rowFilters       []sql.Expression
+
+	// TODO: save actual tables?
+	// TODO: copying from other tables
+	lookup sql.IndexLookup
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -180,7 +186,8 @@ func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
-	return dt.partitionFilters
+	return filters
+	//TODO: return dt.partitionFilters
 }
 
 // Filters returns the list of filters that are applied to this table.
@@ -199,8 +206,19 @@ func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.T
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.rowFilters)
 }
+
+// TODO: needs to be an indexable table, but diff table is not a dolt table
+//func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+//	return nil, nil
+//}
+//
+//func (dt *DiffTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+//	res := *dt
+//	res.lookup = lookup
+//	return &res
+//}
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
 // and the schema of the table (or EmptySchema if tbl is null).
@@ -279,11 +297,11 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, rowFilters []sql.Expression) (sql.RowIter, error) {
 	if types.IsFormat_DOLT_1(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, ddb, *dp.fromSch, *dp.toSch)
 	} else {
-		return newNomsDiffIter(ctx, ddb, joiner, dp)
+		return newNomsDiffIter(ctx, ddb, joiner, dp, rowFilters)
 	}
 }
 
