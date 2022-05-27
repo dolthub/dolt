@@ -807,7 +807,6 @@ func TestVersionedQueriesPrepared(t *testing.T) {
 }
 
 func TestInfoSchemaPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestInfoSchemaPrepared(t, newDoltHarness(t))
 }
