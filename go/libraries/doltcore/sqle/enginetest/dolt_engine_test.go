@@ -932,7 +932,6 @@ func TestPreparedInsert(t *testing.T) {
 }
 
 func TestAddDropPrimaryKeys(t *testing.T) {
-	skipNewFormat(t)
 	t.Run("adding and dropping primary keys does not result in duplicate NOT NULL constraints", func(t *testing.T) {
 		harness := newDoltHarness(t)
 		addPkScript := queries.ScriptTest{
@@ -1011,6 +1010,13 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
+				{
+					Query: "select * from test order by id",
+					Expected: []sql.Row{
+						{1,1},
+						{2,2},
+					},
+				},
 			},
 		}
 		enginetest.TestScript(t, harness, script)
@@ -1023,13 +1029,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 
-		require.NoError(t, err)
-
 		// Assert the new index map is not empty
-		newMap, err := table.GetNomsRowData(ctx)
-		assert.NoError(t, err)
-		assert.False(t, newMap.Empty())
-		assert.Equal(t, newMap.Len(), uint64(2))
+		newRows, err := table.GetIndexRowData(ctx, "c1_idx")
+		require.NoError(t, err)
+		assert.False(t, newRows.Empty())
+		assert.Equal(t, newRows.Count(), uint64(2))
 	})
 
 	t.Run("Add primary key when one more cells contain NULL", func(t *testing.T) {
@@ -1075,8 +1079,16 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 					},
 				},
+				{
+					Query: "select * from test order by id",
+					Expected: []sql.Row{
+						{1,1},
+						{2,2},
+					},
+				},
 			},
 		}
+
 		enginetest.TestScript(t, harness, script)
 
 		ctx := sql.NewContext(context.Background(), sql.WithSession(harness.session))
@@ -1087,13 +1099,11 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		require.NoError(t, err)
 		require.True(t, ok)
 
-		require.NoError(t, err)
-
 		// Assert the index map is not empty
-		newMap, err := table.GetNomsIndexRowData(ctx, "c1_idx")
+		newIdx, err := table.GetIndexRowData(ctx, "c1_idx")
 		assert.NoError(t, err)
-		assert.False(t, newMap.Empty())
-		assert.Equal(t, newMap.Len(), uint64(2))
+		assert.False(t, newIdx.Empty())
+		assert.Equal(t, newIdx.Count(), uint64(2))
 	})
 }
 
