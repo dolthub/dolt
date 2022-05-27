@@ -263,20 +263,7 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	skipped := []string{
-		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
-		"SELECT group_concat(`attribute`) FROM t where o_id=2",
-		"SELECT group_concat(o_id) FROM t WHERE `attribute`='color'",
-
-		// TODO(aaron): go-mysql-server GroupBy with grouping
-		// expressions currently has a bug where it does not insert
-		// necessary Sort nodes.  These queries used to work by
-		// accident based on the return order from the storage layer,
-		// but they no longer do.
-		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
-		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
-	}
-
+	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		skipped = append(skipped,
 			// Different error output for primary key error
@@ -865,9 +852,28 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 }
 
 func TestScriptsPrepared(t *testing.T) {
-	skipNewFormat(t)
+	var skipped []string
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		skipped = append(skipped,
+			// Different error output for primary key error
+			"failed statements data validation for INSERT, UPDATE",
+			// missing FK violation
+			"failed statements data validation for DELETE, REPLACE",
+			// wrong results
+			"Indexed Join On Keyless Table",
+			// spurious fk violation
+			"Nested Subquery projections (NTC)",
+			// Different query plans
+			"Partial indexes are used and return the expected result",
+			"Multiple indexes on the same columns in a different order",
+		)
+		for _, s := range queries.SpatialScriptTests {
+			skipped = append(skipped, s.Name)
+		}
+	}
+
 	skipPreparedTests(t)
-	enginetest.TestScriptsPrepared(t, newDoltHarness(t))
+	enginetest.TestScriptsPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
 func TestInsertScriptsPrepared(t *testing.T) {
