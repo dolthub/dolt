@@ -564,10 +564,6 @@ func TestConcurrentTransactions(t *testing.T) {
 }
 
 func TestDoltScripts(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		//TODO: add prolly path for index verification
-		t.Skip("new format using old noms path, need to update")
-	}
 	harness := newDoltHarness(t)
 	for _, script := range DoltScripts {
 		enginetest.TestScript(t, harness, script)
