@@ -263,10 +263,7 @@ func TestTruncate(t *testing.T) {
 }
 
 func TestScripts(t *testing.T) {
-	skipNewFormat(t)
-
 	skipped := []string{
-		"create index r_c0 on r (c0);",
 		// These rely on keyless tables which orders its rows by hash rather than contents, meaning changing types causes different ordering
 		"SELECT group_concat(`attribute`) FROM t where o_id=2",
 		"SELECT group_concat(o_id) FROM t WHERE `attribute`='color'",
@@ -278,10 +275,24 @@ func TestScripts(t *testing.T) {
 		// but they no longer do.
 		"SELECT pk, SUM(DISTINCT v1), MAX(v1) FROM mytable GROUP BY pk ORDER BY pk",
 		"SELECT pk, MIN(DISTINCT v1), MAX(DISTINCT v1) FROM mytable GROUP BY pk ORDER BY pk",
-
-		// no support for naming unique constraints yet, engine dependent
-		"show create table t2",
 	}
+
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		skipped = append(skipped,
+			// Different error output for primary key error
+			"failed statements data validation for INSERT, UPDATE",
+			// missing FK violation
+			"failed statements data validation for DELETE, REPLACE",
+			// wrong results
+			"Indexed Join On Keyless Table",
+			// spurious fk violation
+			"Nested Subquery projections (NTC)",
+			// Different query plans
+			"Partial indexes are used and return the expected result",
+			"Multiple indexes on the same columns in a different order",
+			)
+	}
+
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
