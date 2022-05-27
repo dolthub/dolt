@@ -560,7 +560,6 @@ func TestTransactions(t *testing.T) {
 }
 
 func TestConcurrentTransactions(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestConcurrentTransactions(t, newDoltHarness(t))
 }
 
