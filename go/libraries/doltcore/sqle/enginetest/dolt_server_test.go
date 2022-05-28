@@ -16,17 +16,17 @@ package enginetest
 
 import (
 	"context"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	gosql "database/sql"
 	"strings"
 	"testing"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
-
-	gosql "database/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
 var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
