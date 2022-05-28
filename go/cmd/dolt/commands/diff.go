@@ -232,8 +232,8 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	}
 
 	if apr.Contains(SummaryFlag) {
-		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return nil, nil, nil, fmt.Errorf("invalid Arguments: --summary cannot be combined with --schema or --data")
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) || apr.Contains(filterParam) {
+			return nil, nil, nil, fmt.Errorf("invalid Arguments: --summary cannot be combined with --schema or --data or --filter")
 		}
 		dArgs.diffParts = Summary
 	}
@@ -419,8 +419,13 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 		}
 
+		diffTypes := findDiffTypes(ctx, td)
+
 		if dArgs.diffOutput == TabularDiffOutput {
-			printTableDiffSummary(td, dArgs.filter)
+			if _, ok := diffTypes[dArgs.filter]; !ok {
+				return nil
+			}
+			printTableDiffSummary(td)
 		}
 
 		if tblName == doltdb.DocTableName {
@@ -447,6 +452,10 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
+			if _, ok := diffTypes[dArgs.filter]; !ok {
+				return nil
+			}
+
 			verr = diffRows(ctx, td, dArgs, toRoot.VRW())
 		}
 
@@ -498,11 +507,11 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta, filter st
 	}
 
 	if fromCreateStmt != toCreateStmt {
-		if fromCreateStmt == "" || toSch.GetAllCols().Size() > fromSch.GetAllCols().Size() {
+		if fromCreateStmt == "" && toSch.GetAllCols().Size() > fromSch.GetAllCols().Size() {
 			if filter == FilterInserts || filter == NoFilter {
 				cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 			}
-		} else if toCreateStmt == "" || toSch.GetAllCols().Size() < fromSch.GetAllCols().Size() {
+		} else if toCreateStmt == "" && toSch.GetAllCols().Size() < fromSch.GetAllCols().Size() {
 			if filter == FilterDeletes || filter == NoFilter {
 				cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 			}
@@ -639,10 +648,6 @@ func fromNamer(name string) string {
 }
 
 func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw types.ValueReadWriter) errhand.VerboseError {
-	diffTypes := findDiffTypeOfRows(ctx, td)
-	if _, ok := diffTypes[dArgs.filter]; !ok {
-		return nil
-	}
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -768,19 +773,25 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw type
 	return nil
 }
 
-func findDiffTypeOfRows(ctx context.Context, td diff.TableDelta) map[string]struct{} {
+func findDiffTypes(ctx context.Context, td diff.TableDelta) map[string]struct{} {
 
 	diffTypes := map[string]struct{}{NoFilter: {}}
 
+	if td.IsAdd() {
+		diffTypes[FilterInserts] = struct{}{}
+	} else if td.IsDrop() {
+		diffTypes[FilterDeletes] = struct{}{}
+	}
+
 	var fromNoRows = 0
 	var toNoRows = 0
-	var fromCols = 0
-	var toCols = 0
+	var fromColsSize = 0
+	var toColsSize = 0
 
 	if td.FromTable != nil {
 		fromSch, err := td.FromTable.GetSchema(ctx)
 		if err == nil && fromSch != nil {
-			fromCols = len(fromSch.GetAllCols().Tags)
+			fromColsSize = fromSch.GetAllCols().Size()
 		}
 		if idx, err := td.FromTable.GetRowData(ctx); err == nil {
 			fromNoRows = int(idx.Count())
@@ -789,19 +800,18 @@ func findDiffTypeOfRows(ctx context.Context, td diff.TableDelta) map[string]stru
 	if td.ToTable != nil {
 		toSch, err := td.ToTable.GetSchema(ctx)
 		if err == nil && toSch != nil {
-			toCols = len(toSch.GetAllCols().Tags)
+			toColsSize = toSch.GetAllCols().Size()
 		}
 		if idx, err := td.ToTable.GetRowData(ctx); err == nil {
 			toNoRows = int(idx.Count())
 
 		}
 	}
-
-	if fromNoRows == toNoRows && toCols == fromCols && fromNoRows == 0 {
+	if fromNoRows == toNoRows && toColsSize == fromColsSize && fromNoRows == 0 {
 		return diffTypes
 	}
 
-	if !td.IsAdd() && fromCols != toCols {
+	if !td.IsAdd() && !td.IsDrop() && fromColsSize != toColsSize {
 		diffTypes[FilterUpdates] = struct{}{}
 	}
 
@@ -810,6 +820,9 @@ func findDiffTypeOfRows(ctx context.Context, td diff.TableDelta) map[string]stru
 	} else if toNoRows < fromNoRows {
 		diffTypes[FilterDeletes] = struct{}{}
 	} else {
+		if td.FromTable == nil {
+			return diffTypes
+		}
 		nomsDataFromTable, err := td.FromTable.GetNomsRowData(ctx)
 		if err != nil {
 			return diffTypes
@@ -817,6 +830,9 @@ func findDiffTypeOfRows(ctx context.Context, td diff.TableDelta) map[string]stru
 
 		iter, err := nomsDataFromTable.Iterator(ctx)
 		if err != nil {
+			return diffTypes
+		}
+		if td.ToTable == nil {
 			return diffTypes
 		}
 
@@ -844,6 +860,9 @@ func findDiffTypeOfRows(ctx context.Context, td diff.TableDelta) map[string]stru
 
 		}
 
+	}
+	if len(diffTypes) == 1 && fromNoRows == toNoRows && fromColsSize == toColsSize && fromColsSize != 0 {
+		diffTypes[FilterUpdates] = struct{}{}
 	}
 	return diffTypes
 }
@@ -986,12 +1005,10 @@ func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter d
 	if err != nil {
 		return err
 	}
-
 	for _, doc := range docsFilter {
 		for _, comparison := range comparisons {
 			if doc.DocPk == comparison.DocName {
 				if (filter == NoFilter || filter == FilterInserts) && comparison.OldText == nil && comparison.CurrentText != nil {
-
 					printAddedDoc(bold, comparison.DocName)
 				} else if comparison.OldText != nil {
 					older := string(comparison.OldText)
@@ -1044,19 +1061,16 @@ func printDeletedDoc(bold *color.Color, pk string, lines []string) {
 	printDiffLines(bold, lines)
 }
 
-func printTableDiffSummary(td diff.TableDelta, filter string) {
+func printTableDiffSummary(td diff.TableDelta) {
 	bold := color.New(color.Bold)
 	if td.IsDrop() {
-		if filter == NoFilter || filter == FilterDeletes {
-			_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.FromName)
-			_, _ = bold.Println("deleted table")
-		}
+		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.FromName)
+		_, _ = bold.Println("deleted table")
 	} else if td.IsAdd() {
-		if filter == NoFilter || filter == FilterInserts {
-			_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.ToName, td.ToName)
-			_, _ = bold.Println("added table")
-		}
-	} else if (filter == NoFilter || filter == FilterUpdates) && td.FromTable != nil {
+		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.ToName, td.ToName)
+		_, _ = bold.Println("added table")
+	} else {
+
 		_, _ = bold.Printf("diff --dolt a/%s b/%s\n", td.FromName, td.ToName)
 		h1, err := td.FromTable.HashOf()
 

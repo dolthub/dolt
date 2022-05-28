@@ -674,3 +674,206 @@ SQL
     run dolt diff HEAD~1
     [ "${#lines[@]}" -eq 2007 ] # 2000 diffs + 6 for top rows before data + 1 for bottom row of table
 }
+
+
+@test "diff: filter table diffs" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt commit -am "create table"
+
+    run dolt diff HEAD~1 --filter=updates
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/t b/t' ]] || false
+    [[ $output =~ 'added table' ]] || false
+    [[ $output =~ '+CREATE TABLE `t` (' ]] || false
+
+
+    dolt sql -q "insert into t(pk, val) values(1,10)"
+    dolt sql -q "insert into t(pk, val) values(2,10)"
+    dolt sql -q "insert into t(pk, val) values(3,10)"
+    dolt sql -q "insert into t(pk, val) values(4,10)"
+
+    dolt commit -am "add initial rows"
+
+    run dolt diff HEAD~1 --filter=updates
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,10);' ]
+    [ "${lines[1]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (2,10);' ]
+    [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (3,10);' ]
+    [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (4,10);' ]
+
+    dolt sql -q "UPDATE t SET val=12 where pk=1"
+    
+    dolt commit -am "update row"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes 
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=updates 
+    [ "${lines[0]}" = 'UPDATE `t` SET `val`=12 WHERE (`pk`=1);' ]
+
+    dolt sql -q "DELETE from t where pk=1"
+
+    dolt commit -am "delete row"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 --filter=updates
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes 
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1);' ]
+
+    dolt sql -q  "alter table t add val2 int"
+
+    dolt commit -am "add a col"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=updates 
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` ADD `val2` INT;' ]
+
+    dolt sql -q "alter table t modify column val2 varchar(255)"
+
+    dolt commit -am "change datatype of column"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=updates
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP `val2`;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` ADD `val2` VARCHAR(255);' ]
+
+
+    dolt sql -q "alter table t rename column val2 to val3"
+
+    dolt commit -am "rename column"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=updates
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `val2` TO `val3`;' ]
+
+    dolt sql -q "alter table t drop column val3"
+
+    dolt commit -am "drop column"
+
+    run dolt diff HEAD~1 -r sql --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=updates
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP `val3`;' ]
+
+}
+
+@test "diff: filter doc diffs" {
+    touch README.md
+
+    dolt commit -am "add README.md"
+
+    run dolt diff HEAD~1  --filter=updates
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1  --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1  --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/README.md b/README.md' ]] || false
+    [[ $output =~ 'added doc' ]] || false
+
+    echo "Line 1 \n Line 2" > README.md 
+    dolt commit -am "add lines to doc"
+
+    run dolt diff HEAD~1  --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1  --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1  --filter=updates
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/dolt_docs b/dolt_docs' ]] || false
+    [[ $output =~ '--- a/dolt_docs @' ]] || false
+    [[ $output =~ '+++ b/dolt_docs @' ]] || false
+    [[ $output =~ 'diff --dolt a/README.md b/README.md' ]] || false
+    [[ $output =~ '--- a/README.md' ]] || false
+    [[ $output =~ '+++ b/README.md' ]] || false
+    [[ $output =~ '+ Line 1 \n Line 2' ]] || false
+
+    rm README.md
+    
+    dolt commit -am "delete README.md"
+
+    run dolt diff HEAD~1  --filter=inserts
+    [ $status -eq 0 ]
+    [[ $output = '' ]] || false
+
+    run dolt diff HEAD~1  --filter=updates
+    [ $status -eq 0 ]
+    [[ $output =~ 'diff --dolt a/README.md b/README.md' ]] || false
+    [[ $output =~ '--- a/README.md' ]] || false
+    [[ $output =~ '+++ b/README.md' ]] || false
+    [[ $output =~ '+++ b/README.md' ]] || false
+    [[ $output =~ '- Line 1' ]] || false
+
+    run dolt diff HEAD~1 -r sql  --filter=deletes
+    [ $status -eq 0 ]
+    [[ $output =~ 'DROP TABLE `dolt_docs`;' ]] || false
+    [[ $output =~ 'diff --dolt a/README.md b/README.md' ]] || false
+    [[ $output =~ 'deleted doc' ]] || false
+}
