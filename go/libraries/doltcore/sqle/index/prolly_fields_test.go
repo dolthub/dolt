@@ -129,7 +129,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "time",
 			typ:   val.Type{Enc: val.TimeEnc},
-			value: int64(123456),
+			value: "11:22:00",
 		},
 		{
 			name:  "datetime",
