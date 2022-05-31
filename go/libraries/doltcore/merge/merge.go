@@ -910,12 +910,12 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 // Constraint violations that exist in ancestor are stashed and merged with the
 // violations we detect when we diff the ancestor and the newly merged root.
 func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {
-	ourRoot, conflictStash, err := ourRoot.StashConflicts(ctx)
+	ourRoot, conflictStash, err := stashConflicts(ctx, ourRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	ancRoot, violationStash, err := ancRoot.StashViolations(ctx)
+	ancRoot, violationStash, err := stashViolations(ctx, ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1012,7 +1012,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 	if !conflictStash.Empty() && mergedHasConflicts {
 		return nil, nil, ErrCantOverwriteConflicts
 	} else if !conflictStash.Empty() {
-		mergedRoot, err = mergedRoot.ApplyConflictStash(ctx, conflictStash.Stash)
+		mergedRoot, err = applyConflictStash(ctx, conflictStash.Stash, mergedRoot)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1023,7 +1023,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 
 // mergeCVsWithStash merges the table constraint violations in |stash| with |root|.
 // Returns an updated root with all the merged CVs.
-func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *doltdb.ViolationStash) (*doltdb.RootValue, error) {
+func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *violationStash) (*doltdb.RootValue, error) {
 	updatedRoot := root
 	for name, stashed := range stash.Stash {
 		tbl, ok, err := root.GetTable(ctx, name)
