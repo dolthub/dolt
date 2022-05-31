@@ -289,7 +289,7 @@ var DdlScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:          "alter table people modify num_episodes bigint unsigned not null",
-				ExpectedErrStr: "cannot change column to NOT NULL",
+				ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
 			},
 		},
 	},

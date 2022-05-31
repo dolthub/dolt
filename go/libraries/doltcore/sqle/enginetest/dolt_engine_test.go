@@ -570,8 +570,11 @@ func TestDoltScripts(t *testing.T) {
 
 func TestDoltDdlScripts(t *testing.T) {
 	harness := newDoltHarness(t)
+	harness.Setup()
 	for _, script := range DdlScripts {
-		enginetest.TestScript(t, harness, script)
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
 }
 
