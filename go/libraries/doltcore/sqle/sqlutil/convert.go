@@ -124,7 +124,7 @@ func ToDoltSchema(
 // ToDoltCol returns the dolt column corresponding to the SQL column given
 func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	var constraints []schema.ColConstraint
-	if !col.Nullable {
+	if !col.Nullable || col.PrimaryKey {
 		constraints = append(constraints, schema.NotNullConstraint{})
 	}
 	typeInfo, err := typeinfo.FromSqlType(col.Type)

@@ -17,12 +17,13 @@ package dtables
 import (
 	"context"
 	"errors"
-	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
+	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -87,29 +88,27 @@ func (dt *UnscopedDiffTable) PartitionRows(ctx *sql.Context, _ sql.Partition) (s
 type UnscopedDiffTableItr struct {
 	ctx             *sql.Context
 	ddb             *doltdb.DoltDB
-	commits         []*doltdb.Commit
-	commitIdx       int
+	child           doltdb.CommitItr
+	meta            *datas.CommitMeta
+	hash            hash.Hash
 	tableChanges    []tableChange
 	tableChangesIdx int
 }
 
 // NewUnscopedDiffTableItr creates a UnscopedDiffTableItr from the current environment.
 func NewUnscopedDiffTableItr(ctx *sql.Context, ddb *doltdb.DoltDB, head *doltdb.Commit) (*UnscopedDiffTableItr, error) {
-	commits, err := actions.TimeSortedCommits(ctx, ddb, head, -1)
-
+	hash, err := head.HashOf()
 	if err != nil {
 		return nil, err
 	}
+	child, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
 
-	return &UnscopedDiffTableItr{ctx, ddb, commits, 0, nil, -1}, nil
-}
-
-// HasNext returns true if this UnscopedDiffItr has more elements left.
-func (itr *UnscopedDiffTableItr) HasNext() bool {
-	// There are more diff records to iterate over if:
-	//   1) there is more than one commit left to process, or
-	//   2) the tableChanges array isn't nilled out and has data left to process
-	return itr.commitIdx+1 < len(itr.commits) || itr.tableChanges != nil
+	return &UnscopedDiffTableItr{
+		ctx:             ctx,
+		ddb:             ddb,
+		child:           child,
+		tableChangesIdx: -1,
+	}, nil
 }
 
 // incrementIndexes increments the table changes index, and if it's the end of the table changes array, moves
@@ -119,69 +118,72 @@ func (itr *UnscopedDiffTableItr) incrementIndexes() {
 	if itr.tableChangesIdx >= len(itr.tableChanges) {
 		itr.tableChangesIdx = -1
 		itr.tableChanges = nil
-		itr.commitIdx++
 	}
 }
 
 // Next retrieves the next row. It will return io.EOF if it's the last row.
 // After retrieving the last row, Close will be automatically closed.
 func (itr *UnscopedDiffTableItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if !itr.HasNext() {
-		return nil, io.EOF
-	}
 	defer itr.incrementIndexes()
 
-	// Load table changes if we don't have them for this commit yet
 	for itr.tableChanges == nil {
-		err := itr.loadTableChanges(ctx, itr.commits[itr.commitIdx])
+		err := itr.loadTableChanges(ctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	commit := itr.commits[itr.commitIdx]
-	hash, err := commit.HashOf()
-	if err != nil {
-		return nil, err
-	}
-
-	meta, err := commit.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	tableChange := itr.tableChanges[itr.tableChangesIdx]
+	meta := itr.meta
+	h := itr.hash
 
-	return sql.NewRow(hash.String(), tableChange.tableName, meta.Name, meta.Email, meta.Time(),
-		meta.Description, tableChange.dataChange, tableChange.schemaChange), nil
+	return sql.NewRow(
+		h.String(),
+		tableChange.tableName,
+		meta.Name,
+		meta.Email,
+		meta.Time(),
+		meta.Description,
+		tableChange.dataChange,
+		tableChange.schemaChange,
+	), nil
 }
 
-// loadTableChanges loads the set of table changes for the current commit into this iterator, taking
-// care of advancing the iterator if that commit didn't mutate any tables and checking for EOF condition.
-func (itr *UnscopedDiffTableItr) loadTableChanges(ctx context.Context, commit *doltdb.Commit) error {
+// loadTableChanges loads the next commit's table changes and metadata
+// into the iterator.
+func (itr *UnscopedDiffTableItr) loadTableChanges(ctx context.Context) error {
+	hash, commit, err := itr.child.Next(ctx)
+	if err != nil {
+		return err
+	}
+
 	tableChanges, err := itr.calculateTableChanges(ctx, commit)
 	if err != nil {
 		return err
 	}
 
-	// If there are no table deltas for this commit (e.g. a "dolt doc" commit),
-	// advance to the next commit, checking for EOF condition.
+	itr.tableChanges = tableChanges
+	itr.tableChangesIdx = 0
 	if len(tableChanges) == 0 {
-		itr.commitIdx++
-		if !itr.HasNext() {
-			return io.EOF
-		}
-	} else {
-		itr.tableChanges = tableChanges
-		itr.tableChangesIdx = 0
+		return nil
 	}
 
+	meta, err := commit.GetCommitMeta(ctx)
+	if err != nil {
+		return err
+	}
+	itr.meta = meta
+	itr.hash = hash
 	return nil
 }
 
 // calculateTableChanges calculates the tables that changed in the specified commit, by comparing that
 // commit with its immediate ancestor commit.
 func (itr *UnscopedDiffTableItr) calculateTableChanges(ctx context.Context, commit *doltdb.Commit) ([]tableChange, error) {
+	if len(commit.DatasParents()) == 0 {
+		return nil, nil
+	}
+
 	toRootValue, err := commit.GetRootValue(ctx)
 	if err != nil {
 		return nil, err

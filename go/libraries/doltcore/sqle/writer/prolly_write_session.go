@@ -66,18 +66,25 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 	autoCol := autoIncrementColFromSchema(sch)
 
 	var pw indexWriter
+	var sws []indexWriter
 	if schema.IsKeyless(sch) {
-		pw, err = getKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+		if err != nil {
+			return nil, err
+		}
+		sws, err = getSecondaryKeylessProllyWriters(ctx, t, pkSch.Schema, sch, pw.(prollyKeylessWriter))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		pw, err = getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	sws, err := getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		sws, err = getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	twr := &prollyTableWriter{
@@ -182,6 +189,7 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			return nil, err
 		}
 	}
+
 	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 
 	return s.workingSet, nil

@@ -118,6 +118,7 @@ type YAMLConfig struct {
 	DataDirStr        *string               `yaml:"data_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
+	MySQLDbFile       *string               `yaml:"mysql_db_file"`
 }
 
 var _ ServerConfig = YAMLConfig{}
@@ -320,6 +321,13 @@ func (cfg YAMLConfig) MetricsPort() int {
 func (cfg YAMLConfig) PrivilegeFilePath() string {
 	if cfg.PrivilegeFile != nil {
 		return *cfg.PrivilegeFile
+	}
+	return ""
+}
+
+func (cfg YAMLConfig) MySQLDbFilePath() string {
+	if cfg.MySQLDbFile != nil {
+		return *cfg.MySQLDbFile
 	}
 	return ""
 }

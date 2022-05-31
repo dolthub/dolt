@@ -15,8 +15,6 @@
 package dsess
 
 import (
-	"context"
-
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
@@ -27,7 +25,7 @@ import (
 // databases. Revision databases for branches will be read/write.
 type RevisionDatabaseProvider interface {
 	// RevisionDbState provides the InitialDbState for a revision database.
-	RevisionDbState(ctx context.Context, revDB string) (InitialDbState, error)
+	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
 }
 
 func EmptyDatabaseProvider() RevisionDatabaseProvider {
@@ -36,6 +34,6 @@ func EmptyDatabaseProvider() RevisionDatabaseProvider {
 
 type emptyRevisionDatabaseProvider struct{}
 
-func (e emptyRevisionDatabaseProvider) RevisionDbState(_ context.Context, revDB string) (InitialDbState, error) {
+func (e emptyRevisionDatabaseProvider) RevisionDbState(_ *sql.Context, revDB string) (InitialDbState, error) {
 	return InitialDbState{}, sql.ErrDatabaseNotFound.New(revDB)
 }

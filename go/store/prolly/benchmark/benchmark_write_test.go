@@ -60,7 +60,7 @@ func benchmarkProllyMapUpdate(b *testing.B, size, k uint64) {
 	b.ReportAllocs()
 	b.ResetTimer()
 
-	b.Run("benchmark prolly map writes", func(b *testing.B) {
+	b.Run("benchmark new format writes", func(b *testing.B) {
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			mut := bench.m.Mutate()
@@ -82,7 +82,7 @@ func benchmarkTypesMapUpdate(b *testing.B, size, k uint64) {
 	bench := generateTypesBench(b, size)
 	b.ResetTimer()
 
-	b.Run("benchmark types map writes", func(b *testing.B) {
+	b.Run("benchmark old format writes", func(b *testing.B) {
 		ctx := context.Background()
 		for i := 0; i < b.N; i++ {
 			edit := bench.m.Edit()

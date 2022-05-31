@@ -49,7 +49,7 @@ func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) M
 
 func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) ConflictMap {
 	root := NodeFromValue(v)
-	kd, ourVD := MapDescriptorsFromScheam(ourSchema)
+	kd, ourVD := MapDescriptorsFromSchema(ourSchema)
 	theirVD := ValueDescriptorFromSchema(theirSchema)
 	baseVD := ValueDescriptorFromSchema(baseSchema)
 	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
@@ -66,7 +66,7 @@ func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
 	panic("unknown ValueReadWriter")
 }
 
-func MapDescriptorsFromScheam(sch schema.Schema) (kd, vd val.TupleDesc) {
+func MapDescriptorsFromSchema(sch schema.Schema) (kd, vd val.TupleDesc) {
 	kd = KeyDescriptorFromSchema(sch)
 	vd = ValueDescriptorFromSchema(sch)
 	return
@@ -113,24 +113,41 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 	return val.NewTupleDescriptor(tt...)
 }
 
-// todo(andy): move this to typeinfo
+// ConvertToKeylessIndex converts the given map to a keyless index map.
+func ConvertToKeylessIndex(m Map) Map {
+	newTypes := make([]val.Type, len(m.keyDesc.Types)+1)
+	copy(newTypes, m.keyDesc.Types)
+	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
+	newKeyDesc := val.NewTupleDescriptorWithComparator(m.keyDesc.Comparator(), newTypes...)
+	newTuples := m.tuples
+	newTuples.order = newKeyDesc
+	return Map{
+		tuples:  newTuples,
+		keyDesc: newKeyDesc,
+		valDesc: m.valDesc,
+	}
+}
+
 func encodingFromSqlType(typ query.Type) val.Encoding {
+
 	// todo(andy): replace temp encodings
 	switch typ {
 	case query.Type_DECIMAL:
 		return val.DecimalEnc
-	case query.Type_DATE:
-		return val.DateEnc
-	case query.Type_DATETIME:
-		return val.DatetimeEnc
-	case query.Type_TIME:
-		return val.TimeEnc
-	case query.Type_TIMESTAMP:
-		return val.TimestampEnc
-	case query.Type_YEAR:
-		return val.YearEnc
 	case query.Type_GEOMETRY:
 		return val.GeometryEnc
+	case query.Type_BIT:
+		return val.Uint64Enc
+	case query.Type_BLOB:
+		return val.ByteStringEnc
+	case query.Type_TEXT:
+		return val.StringEnc
+	case query.Type_ENUM:
+		return val.StringEnc
+	case query.Type_SET:
+		return val.StringEnc
+	case query.Type_JSON:
+		return val.JSONEnc
 	}
 
 	switch typ {
@@ -158,25 +175,23 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.Float32Enc
 	case query.Type_FLOAT64:
 		return val.Float64Enc
-	case query.Type_BIT:
-		return val.Uint64Enc
+	case query.Type_YEAR:
+		return val.YearEnc
+	case query.Type_DATE:
+		return val.DateEnc
+	case query.Type_TIME:
+		return val.TimeEnc
+	case query.Type_TIMESTAMP:
+		return val.DatetimeEnc
+	case query.Type_DATETIME:
+		return val.DatetimeEnc
 	case query.Type_BINARY:
 		return val.ByteStringEnc
 	case query.Type_VARBINARY:
 		return val.ByteStringEnc
-	case query.Type_BLOB:
-		return val.ByteStringEnc
 	case query.Type_CHAR:
 		return val.StringEnc
 	case query.Type_VARCHAR:
-		return val.StringEnc
-	case query.Type_TEXT:
-		return val.StringEnc
-	case query.Type_JSON:
-		return val.JSONEnc
-	case query.Type_ENUM:
-		return val.StringEnc
-	case query.Type_SET:
 		return val.StringEnc
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))

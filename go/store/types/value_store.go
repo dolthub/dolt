@@ -24,6 +24,7 @@ package types
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -80,6 +81,7 @@ type ValueStore struct {
 	withBufferedChildren map[hash.Hash]uint64 // chunk Hash -> ref height
 	unresolvedRefs       hash.HashSet
 	enforceCompleteness  bool
+	validateContentAddr  bool
 	decodedChunks        *sizecache.SizeCache
 	nbf                  *NomsBinFormat
 
@@ -158,6 +160,10 @@ func (lvs *ValueStore) SetEnforceCompleteness(enforce bool) {
 	lvs.enforceCompleteness = enforce
 }
 
+func (lvs *ValueStore) SetValidateContentAddresses(validate bool) {
+	lvs.validateContentAddr = validate
+}
+
 func (lvs *ValueStore) ChunkStore() chunks.ChunkStore {
 	return lvs.cs
 }
@@ -177,7 +183,13 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 			return nil, errors.New("value present but empty")
 		}
 
-		return v.(Value), nil
+		nv := v.(Value)
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+				return nil, err
+			}
+		}
+		return nv, nil
 	}
 
 	chunk := func() chunks.Chunk {
@@ -211,6 +223,12 @@ func (lvs *ValueStore) ReadValue(ctx context.Context, h hash.Hash) (Value, error
 		return nil, errors.New("decoded value is empty")
 	}
 
+	if lvs.validateContentAddr {
+		if err = validateContentAddress(lvs.nbf, h, v); err != nil {
+			return nil, err
+		}
+	}
+
 	lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 	return v, nil
 }
@@ -230,6 +248,11 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 		if v == nil {
 			return nil, errors.New("decoded value is empty")
 		}
+		if lvs.validateContentAddr {
+			if err := validateContentAddress(lvs.nbf, h, v); err != nil {
+				return nil, err
+			}
+		}
 
 		lvs.decodedChunks.Add(h, uint64(len(chunk.Data())), v)
 		return v, nil
@@ -243,7 +266,14 @@ func (lvs *ValueStore) ReadManyValues(ctx context.Context, hashes hash.HashSlice
 	for _, h := range hashes {
 		if v, ok := lvs.decodedChunks.Get(h); ok {
 			d.PanicIfTrue(v == nil)
-			foundValues[h] = v.(Value)
+
+			nv := v.(Value)
+			if lvs.validateContentAddr {
+				if err := validateContentAddress(lvs.nbf, h, nv); err != nil {
+					return nil, err
+				}
+			}
+			foundValues[h] = nv
 			continue
 		}
 
@@ -804,4 +834,16 @@ func (lvs *ValueStore) gcProcessRefs(ctx context.Context, visited hash.HashSet, 
 // Close closes the underlying ChunkStore
 func (lvs *ValueStore) Close() error {
 	return lvs.cs.Close()
+}
+
+func validateContentAddress(nbf *NomsBinFormat, h hash.Hash, v Value) (err error) {
+	var actual hash.Hash
+	actual, err = v.Hash(nbf)
+	if err != nil {
+		return
+	} else if actual != h {
+		err = fmt.Errorf("incorrect hash for value %s (%s != %s)",
+			v.HumanReadableString(), actual.String(), h.String())
+	}
+	return
 }
