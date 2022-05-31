@@ -955,33 +955,40 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 }
 
 func (t *AlterableDoltTable) ShouldRewriteTable(
-	ctx *sql.Context,
-	oldSchema sql.PrimaryKeySchema,
-	newSchema sql.PrimaryKeySchema,
-	modifiedColumn *sql.Column,
+		ctx *sql.Context,
+		oldSchema sql.PrimaryKeySchema,
+		newSchema sql.PrimaryKeySchema,
+		oldColumn *sql.Column,
+		newColumn *sql.Column,
 ) bool {
-	// TODO: this could be a lot more specific, we don't always need to rewrite on schema changes in the new format
-	return types.IsFormat_DOLT_1(t.nbf) ||
-		t.isIncompatibleTypeChange(modifiedColumn) ||
-		isColumnDrop(oldSchema, newSchema) ||
-		isPrimaryKeyChange(oldSchema, newSchema)
+	return t.isIncompatibleTypeChange(oldColumn, newColumn) ||
+			//orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
+			isColumnDrop(oldSchema, newSchema) ||
+			isPrimaryKeyChange(oldSchema, newSchema)
 }
 
-// TODO: this doesn't work for renames
-func (t *AlterableDoltTable) isIncompatibleTypeChange(column *sql.Column) bool {
-	if column == nil {
+func orderChanged(oldSchema, newSchema sql.PrimaryKeySchema, oldColumn, newColumn *sql.Column) bool {
+	if oldColumn == nil || newColumn == nil {
 		return false
 	}
 
-	existingCol, _ := t.sch.GetAllCols().GetByNameCaseInsensitive(column.Name)
-	col, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, column)
+	return oldSchema.Schema.IndexOfColName(oldColumn.Name) != newSchema.Schema.IndexOfColName(newColumn.Name)
+}
+
+func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, newColumn *sql.Column) bool {
+	if oldColumn == nil || newColumn == nil {
+		return false
+	}
+
+	existingCol, _ := t.sch.GetAllCols().GetByNameCaseInsensitive(oldColumn.Name)
+	col, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, oldColumn)
 	if err != nil {
 		panic(err) // should be impossible, we check compatibility before this point
 	}
 
 	// TODO: this check should look different for DOLT_1
 	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
-		if existingCol.Kind != col.Kind { // We only change the tag when the underlying Noms kind changes
+		if existingCol.Kind != col.Kind {
 			return true
 		}
 	}
@@ -1008,10 +1015,11 @@ func isPrimaryKeyChange(oldSchema sql.PrimaryKeySchema,
 }
 
 func (t *AlterableDoltTable) RewriteInserter(
-	ctx *sql.Context,
-	oldSchema sql.PrimaryKeySchema,
-	newSchema sql.PrimaryKeySchema,
-	modifiedColumn *sql.Column,
+		ctx *sql.Context,
+		oldSchema sql.PrimaryKeySchema,
+		newSchema sql.PrimaryKeySchema,
+		oldColumn *sql.Column,
+		newColumn *sql.Column,
 ) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
