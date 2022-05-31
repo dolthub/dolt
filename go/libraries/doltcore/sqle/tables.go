@@ -962,7 +962,7 @@ func (t *AlterableDoltTable) ShouldRewriteTable(
 		newColumn *sql.Column,
 ) bool {
 	return t.isIncompatibleTypeChange(oldColumn, newColumn) ||
-			//orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
+			orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
 			isColumnDrop(oldSchema, newSchema) ||
 			isPrimaryKeyChange(oldSchema, newSchema)
 }

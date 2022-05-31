@@ -605,7 +605,7 @@ func TestModifyAndChangeColumn(t *testing.T) {
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("christian_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("christian_name", 5974, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 				schema.NewColumn("age", AgeTag, types.IntKind, false),
 				schema.NewColumn("rating", RatingTag, types.FloatKind, false),
