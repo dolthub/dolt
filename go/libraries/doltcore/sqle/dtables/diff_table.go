@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -49,8 +50,7 @@ const (
 
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
-
-//var _ sql.IndexedTable = (*DiffTable)(nil)
+var _ sql.IndexedTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -72,6 +72,9 @@ type DiffTable struct {
 	// TODO: save actual tables?
 	// TODO: copying from other tables
 	lookup sql.IndexLookup
+
+	// The actual table
+	table *doltdb.Table
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -116,6 +119,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
 		rowFilters:       nil,
+		table:            table,
 		joiner:           j,
 	}, nil
 }
@@ -186,8 +190,8 @@ func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
 	dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
-	return filters
-	//TODO: return dt.partitionFilters
+	//return filters
+	return dt.partitionFilters
 }
 
 // Filters returns the list of filters that are applied to this table.
@@ -208,6 +212,25 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	dp := part.(DiffPartition)
 	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.rowFilters)
 }
+
+func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltIndexesFromTable(ctx, "how the flying fuck do i get the database name", dt.name, dt.table)
+}
+
+// what the fuck do i even do with this
+// WithIndexLookup implements the sql.IndexAddressableTable interface.
+func (dt *DiffTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	if lookup == nil {
+		return dt
+	}
+
+	nt := *dt
+	nt.lookup = lookup
+
+	return &nt
+}
+
+// TODO: make diff index?????
 
 // TODO: needs to be an indexable table, but diff table is not a dolt table
 //func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {

@@ -80,6 +80,11 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 		return nil, err
 	}
 
+	// TODO: somehow access the other indexes
+	a, _ := dp.from.GetIndexSet(ctx)
+	if a == nil {
+	}
+
 	sch := joiner.GetSchema()
 	toCol, _ := sch.GetAllCols().GetByName(toCommit)
 	fromCol, _ := sch.GetAllCols().GetByName(fromCommit)
