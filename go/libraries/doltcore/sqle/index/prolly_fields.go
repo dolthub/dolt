@@ -28,6 +28,54 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+// todo(andy): this should go in GMS
+func DenormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
+	var err error
+	for i := range row {
+		if row[i] == nil {
+			continue
+		}
+		switch typ := sch[i].Type.(type) {
+		case sql.DecimalType:
+			row[i] = row[i].(decimal.Decimal).String()
+		case sql.EnumType:
+			row[i], err = typ.Unmarshal(int64(row[i].(uint16)))
+		case sql.SetType:
+			row[i], err = typ.Unmarshal(row[i].(uint64))
+		default:
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return row, nil
+}
+
+// todo(andy): this should go in GMS
+func NormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
+	var err error
+	for i := range row {
+		if row[i] == nil {
+			continue
+		}
+		switch typ := sch[i].Type.(type) {
+		case sql.DecimalType:
+			row[i], err = decimal.NewFromString(row[i].(string))
+		case sql.EnumType:
+			var v int64
+			v, err = typ.Marshal(row[i])
+			row[i] = uint16(v)
+		case sql.SetType:
+			row[i], err = typ.Marshal(row[i])
+		default:
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return row, nil
+}
+
 // GetField reads the value from the ith field of the Tuple as an interface{}.
 func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error) {
 	var ok bool
@@ -52,12 +100,10 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		v, ok = td.GetFloat32(i, tup)
 	case val.Float64Enc:
 		v, ok = td.GetFloat64(i, tup)
+	case val.Bit64Enc:
+		v, ok = td.GetBit(i, tup)
 	case val.DecimalEnc:
-		var d decimal.Decimal
-		d, ok = td.GetDecimal(i, tup)
-		if ok {
-			v = deserializeDecimal(d)
-		}
+		v, ok = td.GetDecimal(i, tup)
 	case val.YearEnc:
 		v, ok = td.GetYear(i, tup)
 	case val.DateEnc:
@@ -70,6 +116,10 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
+	case val.EnumEnc:
+		v, ok = td.GetEnum(i, tup)
+	case val.SetEnc:
+		v, ok = td.GetSet(i, tup)
 	case val.StringEnc:
 		v, ok = td.GetString(i, tup)
 	case val.ByteStringEnc:
@@ -127,12 +177,10 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutFloat32(i, v.(float32))
 	case val.Float64Enc:
 		tb.PutFloat64(i, v.(float64))
+	case val.Bit64Enc:
+		tb.PutBit(i, uint64(convUint(v)))
 	case val.DecimalEnc:
-		d, err := serializeDecimal(v.(string))
-		if err != nil {
-			return nil
-		}
-		tb.PutDecimal(i, d)
+		tb.PutDecimal(i, v.(decimal.Decimal))
 	case val.YearEnc:
 		tb.PutYear(i, v.(int16))
 	case val.DateEnc:
@@ -145,6 +193,10 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutSqlTime(i, t)
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
+	case val.EnumEnc:
+		tb.PutEnum(i, v.(uint16))
+	case val.SetEnc:
+		tb.PutSet(i, v.(uint64))
 	case val.StringEnc:
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:
@@ -220,14 +272,6 @@ func convUint(v interface{}) uint {
 	}
 }
 
-func convJson(v interface{}) (buf []byte, err error) {
-	v, err = sql.JSON.Convert(v)
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(v.(sql.JSONDocument).Val)
-}
-
 func deserializeGeometry(buf []byte) (v interface{}) {
 	srid, _, typ := geo.ParseEWKBHeader(buf)
 	buf = buf[geo.EWKBHeaderSize:]
@@ -257,22 +301,22 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func serializeTime(v interface{}) (int64, error) {
-	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
+func convJson(v interface{}) (buf []byte, err error) {
+	v, err = sql.JSON.Convert(v)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return int64(i.(types.Int)), nil
+	return json.Marshal(v.(sql.JSONDocument).Val)
 }
 
 func deserializeTime(v int64) (interface{}, error) {
 	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
 }
 
-func serializeDecimal(v interface{}) (decimal.Decimal, error) {
-	return decimal.NewFromString(v.(string))
-}
-
-func deserializeDecimal(v decimal.Decimal) interface{} {
-	return v.String()
+func serializeTime(v interface{}) (int64, error) {
+	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
+	if err != nil {
+		return 0, err
+	}
+	return int64(i.(types.Int)), nil
 }

@@ -76,33 +76,20 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Drop and add primary key on two branches converges to same schema",
+			Name: "Create table with TIME type",
 			SetUpScript: []string{
-				"create table t1 (i int);",
-				"call dolt_commit('-am', 't1 table')",
-				"call dolt_checkout('-b', 'b1')",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'b1 primary key changes')",
-				"call dolt_checkout('main')",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'main primary key change')",
+				"create table my_types (pk int primary key, c0 time);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "call dolt_merge('b1')",
-					Expected: []sql.Row{{1}},
+					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
 				},
 				{
-					Query:    "select count(*) from dolt_conflicts",
-					Expected: []sql.Row{{0}},
+					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
 				},
 			},
 		},

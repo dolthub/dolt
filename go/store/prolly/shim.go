@@ -132,19 +132,10 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 
 	// todo(andy): replace temp encodings
 	switch typ {
-	case query.Type_DECIMAL:
-		return val.DecimalEnc
-	case query.Type_GEOMETRY:
-		return val.GeometryEnc
-	case query.Type_BIT:
-		return val.Uint64Enc
 	case query.Type_BLOB:
-		return val.ByteStringEnc
+		// todo: temporary hack for enginetests
+		return val.StringEnc
 	case query.Type_TEXT:
-		return val.StringEnc
-	case query.Type_ENUM:
-		return val.StringEnc
-	case query.Type_SET:
 		return val.StringEnc
 	case query.Type_JSON:
 		return val.JSONEnc
@@ -175,6 +166,10 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.Float32Enc
 	case query.Type_FLOAT64:
 		return val.Float64Enc
+	case query.Type_BIT:
+		return val.Uint64Enc
+	case query.Type_DECIMAL:
+		return val.DecimalEnc
 	case query.Type_YEAR:
 		return val.YearEnc
 	case query.Type_DATE:
@@ -185,6 +180,10 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.DatetimeEnc
 	case query.Type_DATETIME:
 		return val.DatetimeEnc
+	case query.Type_ENUM:
+		return val.EnumEnc
+	case query.Type_SET:
+		return val.SetEnc
 	case query.Type_BINARY:
 		return val.ByteStringEnc
 	case query.Type_VARBINARY:
@@ -193,6 +192,8 @@ func encodingFromSqlType(typ query.Type) val.Encoding {
 		return val.StringEnc
 	case query.Type_VARCHAR:
 		return val.StringEnc
+	case query.Type_GEOMETRY:
+		return val.GeometryEnc
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}
