@@ -153,6 +153,8 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 		//if colName[:3] == "to_" {
 		//}
 	}
+
+	// Get maps
 	rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), types.NullValue, rangeFunc)
 
 	warnFn := func(code int, message string, args ...string) {

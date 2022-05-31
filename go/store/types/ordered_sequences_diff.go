@@ -69,6 +69,56 @@ func orderedSequenceDiffLeftRightInRange(ctx context.Context, last orderedSequen
 		return err
 	}
 
+	// fastForward if possible
+	if lastCur.valid() && currentCur.valid() {
+		// skip to first diff, if exists
+		err := fastForward(ctx, lastCur, currentCur)
+		if err != nil {
+			return err
+		}
+	}
+
+	// TODO: if only to or from is specified, we should only advance those
+	// Advance lastCur until value is inRange, or we run out of values
+	for lastCur.valid() {
+		lastKey, err := getCurrentKey(lastCur)
+		if err != nil {
+			return err
+		}
+
+		// Advance until value is in range
+		if isInRange, err := inRange(lastKey.v); err != nil {
+			return err
+		} else if isInRange {
+			break
+		}
+
+		// go next
+		if _, err = lastCur.advance(ctx); err != nil {
+			return err
+		}
+	}
+
+	// Advance currentCur until value is inRange, or we run out of values
+	for currentCur.valid() {
+		currentKey, err := getCurrentKey(currentCur)
+		if err != nil {
+			return err
+		}
+
+		// Advance until value is in range
+		if isInRange, err := inRange(currentKey.v); err != nil {
+			return err
+		} else if isInRange {
+			break
+		}
+
+		// go next
+		if _, err = currentCur.advance(ctx); err != nil {
+			return err
+		}
+	}
+
 VALIDRANGES:
 	for lastCur.valid() && currentCur.valid() {
 		err := fastForward(ctx, lastCur, currentCur)
