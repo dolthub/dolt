@@ -568,6 +568,13 @@ func TestDoltScripts(t *testing.T) {
 	}
 }
 
+func TestDoltDdlScripts(t *testing.T) {
+	harness := newDoltHarness(t)
+	for _, script := range DdlScripts {
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 func TestDescribeTableAsOf(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), DescribeTableAsOfScriptTest)
 }

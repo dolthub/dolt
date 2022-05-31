@@ -14,7 +14,10 @@
 
 package enginetest
 
-import "github.com/dolthub/go-mysql-server/enginetest/queries"
+import (
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/sql"
+)
 
 var SimpsonsSetup = []string{
 	`create table people (id int primary key,
@@ -33,13 +36,13 @@ var SimpsonsSetup = []string{
 		episode_id int not null,
 		comments varchar(100),
 		primary key (character_id, episode_id));`,
-	`insert into people values (0, "Homer", "Simpson", 1, 40, 8.5, null, null),
+	`insert into people values 
 		(0, "Homer", "Simpson", 1, 40, 8.5, null, null),
 		(1, "Marge", "Simpson", 1, 38, 8, "00000000-0000-0000-0000-000000000001", 111),
 		(2, "Bart", "Simpson", 0, 10, 9, "00000000-0000-0000-0000-000000000002", 222),
 		(3, "Lisa", "Simpson", 0, 8, 10, "00000000-0000-0000-0000-000000000003", 333),
 		(4, "Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", 444),
-		(5, "Barney", "Gumble", 0, 40, 4, "00000000-0000-0000-0000-000000000004", 555);
+		(5, "Barney", "Gumble", 0, 40, 4, "00000000-0000-0000-0000-000000000005", 555);
 `,
 	`insert into episodes values 
 		(1, "Simpsons Roasting On an Open Fire", "1989-12-18 03:00:00", 8.0),
@@ -57,21 +60,237 @@ var SimpsonsSetup = []string{
 		(0, 3, "Homer is in every episode"),
 		(1, 3, "Marge shows up a lot too"),
 		(3, 3, "Lisa is the best Simpson"),
-		(5, 3, "I'm making this all up"),
+		(5, 3, "I'm making this all up");
 `,
 }
 
-// DdlQueries are a grab bag of DDL queries, many of them ported from older parts of the Dolt codebase before
-// enginetest adoption. Typically you shouldn't add things here instead of in the enginetest package in go-mysql-server,
-// but it's appropriate for dolt-specific tests.
-var DdlQueries = []queries.ScriptTest{
+var AllInitialSimpsonsCharacters = []sql.Row{
+	{0, "Homer", "Simpson", 1, 40, 8.5, nil, nil},
+	{1, "Marge", "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+	{2, "Bart", "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+	{3, "Lisa", "Simpson", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+	{4, "Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+	{5, "Barney", "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+}
+
+// DdlScripts are a grab bag of DDL queries, many of them ported from older parts of the Dolt codebase before
+// enginetest format adoption. Typically you shouldn't add things here instead of in the enginetest package in
+// go-mysql-server, but it's appropriate for dolt-specific tests.
+var DdlScripts = []queries.ScriptTest{
 	{
-		Name:         "",
-		SetUpScript:  nil,
-		Assertions:   nil,
-		Query:        "",
-		Expected:     nil,
-		ExpectedErr:  nil,
-		SkipPrepared: false,
+		Name:        "alter modify column reorder middle",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people modify column first_name varchar(16383) not null after last_name",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+					"  `id` int NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `first_name` varchar(16383) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by 1",
+				Expected: []sql.Row{
+					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
+					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{2, "Simpson", "Bart", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{3, "Simpson", "Lisa", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{4, "Szyslak", "Moe", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{5, "Gumble", "Barney", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column reorder first",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people modify column first_name varchar(16383) not null first",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+						"  `first_name` varchar(16383) NOT NULL,\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: []sql.Row{
+					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
+					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{"Bart", 2, "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{"Lisa", 3, "Simpson", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{"Moe", 4, "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{"Barney", 5, "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column drop null constraint",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people modify column first_name varchar(16383) null",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `first_name` varchar(16383),\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: AllInitialSimpsonsCharacters,
+			},
+		},
+	},
+	{
+		Name:        "alter change column rename and reorder",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people change first_name christian_name varchar(16383) not null after last_name",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `christian_name` varchar(16383) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: []sql.Row{
+					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
+					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{2, "Simpson", "Bart", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{3, "Simpson", "Lisa", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{4, "Szyslak", "Moe", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{5, "Gumble", "Barney", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:       "alter change column rename and reorder first",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people change column first_name christian_name varchar(16383) not null first",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+						"  `christian_name` varchar(16383) NOT NULL,\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: []sql.Row{
+					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
+					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{"Bart", 2, "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{"Lisa", 3, "Simpson", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{"Moe", 4, "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{"Barney", 5, "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:        "alter change column drop null constraint",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people change column first_name first_name varchar(16383) null",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "show create table people",
+				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `first_name` varchar(16383),\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query:    "select * from people order by id",
+				Expected: AllInitialSimpsonsCharacters,
+			},
+		},
+	},
+	{
+		Name:        "alter modify column not null with type mismatch in default",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table people modify rating double default 'not a number'",
+				ExpectedErrStr: "incompatible type for default value",
+			},
+		},
+	},
+	{
+		Name:        "alter modify column not null, existing null values",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table people modify num_episodes bigint unsigned not null",
+				ExpectedErrStr: "cannot change column to NOT NULL",
+			},
+		},
 	},
 }
