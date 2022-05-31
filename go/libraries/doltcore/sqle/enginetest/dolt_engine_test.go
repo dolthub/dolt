@@ -76,31 +76,20 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Create table with BIT, ENUM, and SET types",
+			Name: "Create table with TIME type",
 			SetUpScript: []string{
-				"create table my_types (" +
-					"pk int primary key, " +
-					"c0 bit(64), " +
-					"c1 set('a','b','c'), " +
-					"c2 enum('x','y','z'));",
+				"create table my_types (pk int primary key, c0 time);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "insert into my_types values " +
-						"(1, b'010101', 'a,b', 'x')," +
-						"(2, b'101010', 'b,c', 'z');",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 0}}},
+					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
 				},
 				{
-					Query: "select * from my_types",
-					Expected: []sql.Row{
-						{int64(1), uint64(21), "a,b", "x"},
-						{int64(2), uint64(42), "b,c", "z"},
-					},
+					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
 				},
 			},
 		},

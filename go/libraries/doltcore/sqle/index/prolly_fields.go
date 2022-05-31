@@ -22,7 +22,9 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	geo "github.com/dolthub/dolt/go/store/geometry"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -35,9 +37,7 @@ func DenormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
 		}
 		switch typ := sch[i].Type.(type) {
 		case sql.DecimalType:
-			row[i], err = decimal.NewFromString(row[i].(string))
-		case sql.TimeType:
-			row[i] = typ.Unmarshal(row[i].(int64))
+			row[i] = row[i].(decimal.Decimal).String()
 		case sql.EnumType:
 			row[i], err = typ.Unmarshal(int64(row[i].(uint16)))
 		case sql.SetType:
@@ -60,9 +60,7 @@ func NormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
 		}
 		switch typ := sch[i].Type.(type) {
 		case sql.DecimalType:
-			row[i] = row[i].(decimal.Decimal).String()
-		case sql.TimeType:
-			row[i], err = typ.Marshal(row[i])
+			row[i], err = decimal.NewFromString(row[i].(string))
 		case sql.EnumType:
 			var v int64
 			v, err = typ.Marshal(row[i])
@@ -111,7 +109,11 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 	case val.DateEnc:
 		v, ok = td.GetDate(i, tup)
 	case val.TimeEnc:
-		v, ok = td.GetSqlTime(i, tup)
+		var t int64
+		t, ok = td.GetSqlTime(i, tup)
+		if ok {
+			v, err = deserializeTime(t)
+		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
 	case val.EnumEnc:
@@ -184,7 +186,11 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.DateEnc:
 		tb.PutDate(i, v.(time.Time))
 	case val.TimeEnc:
-		tb.PutSqlTime(i, v.(int64))
+		t, err := serializeTime(v)
+		if err != nil {
+			return err
+		}
+		tb.PutSqlTime(i, t)
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
 	case val.EnumEnc:
@@ -301,4 +307,16 @@ func convJson(v interface{}) (buf []byte, err error) {
 		return nil, err
 	}
 	return json.Marshal(v.(sql.JSONDocument).Val)
+}
+
+func deserializeTime(v int64) (interface{}, error) {
+	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
+}
+
+func serializeTime(v interface{}) (int64, error) {
+	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
+	if err != nil {
+		return 0, err
+	}
+	return int64(i.(types.Int)), nil
 }
