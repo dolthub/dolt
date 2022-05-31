@@ -35,73 +35,73 @@ var ErrMergeFailedToUpdateRepoState = errors.New("unable to execute repo state u
 var ErrFailedToDetermineMergeability = errors.New("failed to determine mergeability")
 
 type MergeSpec struct {
-	HeadH        hash.Hash
-	MergeH       hash.Hash
-	HeadC        *doltdb.Commit
-	MergeC       *doltdb.Commit
-	TblNames     []string
-	WorkingDiffs map[string]hash.Hash
-	Squash       bool
-	Msg          string
-	Noff         bool
-	Force        bool
-	AllowEmpty   bool
-	Email        string
-	Name         string
-	Date         time.Time
+	HeadH           hash.Hash
+	MergeH          hash.Hash
+	HeadC           *doltdb.Commit
+	MergeC          *doltdb.Commit
+	StompedTblNames []string
+	WorkingDiffs    map[string]hash.Hash
+	Squash          bool
+	Msg             string
+	Noff            bool
+	Force           bool
+	AllowEmpty      bool
+	Email           string
+	Name            string
+	Date            time.Time
 }
 
 func NewMergeSpec(ctx context.Context, rsr env.RepoStateReader, ddb *doltdb.DoltDB, roots doltdb.Roots, name, email, msg string, commitSpecStr string, squash bool, noff bool, force bool, date time.Time) (*MergeSpec, bool, error) {
-	cs1, err := doltdb.NewCommitSpec("HEAD")
+	headCS, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, false, err
 	}
 
-	cm1, err := ddb.Resolve(context.TODO(), cs1, rsr.CWBHeadRef())
+	headCM, err := ddb.Resolve(context.TODO(), headCS, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, false, err
 	}
 
-	cs2, err := doltdb.NewCommitSpec(commitSpecStr)
+	mergeCS, err := doltdb.NewCommitSpec(commitSpecStr)
 	if err != nil {
 		return nil, false, err
 	}
 
-	cm2, err := ddb.Resolve(context.TODO(), cs2, rsr.CWBHeadRef())
+	mergeCM, err := ddb.Resolve(context.TODO(), mergeCS, rsr.CWBHeadRef())
 	if err != nil {
 		return nil, false, err
 	}
 
-	h1, err := cm1.HashOf()
+	headH, err := headCM.HashOf()
 	if err != nil {
 		return nil, false, err
 	}
 
-	h2, err := cm2.HashOf()
+	mergeH, err := mergeCM.HashOf()
 	if err != nil {
 		return nil, false, err
 
 	}
 
-	tblNames, workingDiffs, err := MergeWouldStompChanges(ctx, roots, cm2)
+	stompedTblNames, workingDiffs, err := MergeWouldStompChanges(ctx, roots, mergeCM)
 	if err != nil {
 		return nil, false, fmt.Errorf("%w; %s", ErrFailedToDetermineMergeability, err.Error())
 	}
 
 	return &MergeSpec{
-		HeadH:        h1,
-		MergeH:       h2,
-		HeadC:        cm1,
-		MergeC:       cm2,
-		TblNames:     tblNames,
-		WorkingDiffs: workingDiffs,
-		Squash:       squash,
-		Msg:          msg,
-		Noff:         noff,
-		Force:        force,
-		Email:        email,
-		Name:         name,
-		Date:         date,
+		HeadH:           headH,
+		MergeH:          mergeH,
+		HeadC:           headCM,
+		MergeC:          mergeCM,
+		StompedTblNames: stompedTblNames,
+		WorkingDiffs:    workingDiffs,
+		Squash:          squash,
+		Msg:             msg,
+		Noff:            noff,
+		Force:           force,
+		Email:           email,
+		Name:            name,
+		Date:            date,
 	}, true, nil
 }
 

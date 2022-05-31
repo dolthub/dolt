@@ -191,7 +191,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			wsHash, err := existingWs.HashOf()
+			existingWSHash, err := existingWs.HashOf()
 			if err != nil {
 				return nil, nil, err
 			}
@@ -204,7 +204,7 @@ func (tx *DoltTransaction) doCommit(
 				}
 
 				var newCommit *doltdb.Commit
-				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, wsHash)
+				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, existingWSHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -234,7 +234,7 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
-			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
+			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
