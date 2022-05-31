@@ -19,6 +19,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
+// Tests in this file are a grab bag of DDL queries, many of them ported from older parts of the Dolt codebase
+// before enginetest format adoption. Typically you shouldn't add things here instead of in the enginetest package in
+// go-mysql-server, but it's appropriate for dolt-specific tests of DDL operations.
+
 var SimpsonsSetup = []string{
 	`create table people (id int primary key,
 		first_name varchar(100) not null,
@@ -73,10 +77,7 @@ var AllInitialSimpsonsCharacters = []sql.Row{
 	{5, "Barney", "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
 }
 
-// DdlScripts are a grab bag of DDL queries, many of them ported from older parts of the Dolt codebase before
-// enginetest format adoption. Typically you shouldn't add things here instead of in the enginetest package in
-// go-mysql-server, but it's appropriate for dolt-specific tests.
-var DdlScripts = []queries.ScriptTest{
+var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 	{
 		Name:        "alter modify column reorder middle",
 		SetUpScript: SimpsonsSetup,
@@ -86,21 +87,21 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-					"  `id` int NOT NULL,\n" +
-					"  `last_name` varchar(100) NOT NULL,\n" +
-					"  `first_name` varchar(16383) NOT NULL,\n" +
-					"  `is_married` tinyint,\n" +
-					"  `age` int,\n" +
-					"  `rating` float,\n" +
-					"  `uuid` varchar(64),\n" +
-					"  `num_episodes` int unsigned,\n" +
-					"  PRIMARY KEY (`id`)\n" +
-					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+						"  `id` int NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `first_name` varchar(16383) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "select * from people order by 1",
+				Query: "select * from people order by 1",
 				Expected: []sql.Row{
 					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
 					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
@@ -121,7 +122,7 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
 						"  `first_name` varchar(16383) NOT NULL,\n" +
 						"  `id` int NOT NULL,\n" +
@@ -135,7 +136,7 @@ var DdlScripts = []queries.ScriptTest{
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "select * from people order by id",
+				Query: "select * from people order by id",
 				Expected: []sql.Row{
 					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
 					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
@@ -156,7 +157,7 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
 						"  `id` int NOT NULL,\n" +
 						"  `first_name` varchar(16383),\n" +
@@ -184,7 +185,7 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
 						"  `id` int NOT NULL,\n" +
 						"  `last_name` varchar(100) NOT NULL,\n" +
@@ -198,7 +199,7 @@ var DdlScripts = []queries.ScriptTest{
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "select * from people order by id",
+				Query: "select * from people order by id",
 				Expected: []sql.Row{
 					{0, "Simpson", "Homer", 1, 40, 8.5, nil, nil},
 					{1, "Simpson", "Marge", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
@@ -211,7 +212,7 @@ var DdlScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:       "alter change column rename and reorder first",
+		Name:        "alter change column rename and reorder first",
 		SetUpScript: SimpsonsSetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -219,7 +220,7 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
 						"  `christian_name` varchar(16383) NOT NULL,\n" +
 						"  `id` int NOT NULL,\n" +
@@ -233,7 +234,7 @@ var DdlScripts = []queries.ScriptTest{
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query:    "select * from people order by id",
+				Query: "select * from people order by id",
 				Expected: []sql.Row{
 					{"Homer", 0, "Simpson", 1, 40, 8.5, nil, nil},
 					{"Marge", 1, "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
@@ -254,7 +255,7 @@ var DdlScripts = []queries.ScriptTest{
 				SkipResultsCheck: true,
 			},
 			{
-				Query:    "show create table people",
+				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
 						"  `id` int NOT NULL,\n" +
 						"  `first_name` varchar(16383),\n" +
@@ -288,8 +289,63 @@ var DdlScripts = []queries.ScriptTest{
 		SetUpScript: SimpsonsSetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table people modify num_episodes bigint unsigned not null",
+				Query:       "alter table people modify num_episodes bigint unsigned not null",
 				ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
+			},
+		},
+	},
+}
+
+var ModifyColumTypeScripts = []queries.ScriptTest{
+	{
+		Name:        "alter modify column type similar types",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bigint, index (v1))",
+			"insert into test values (0, 3), (1, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column v1 int",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` bigint NOT NULL,\n" +
+						"  `v1` int,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `v1` (`v1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{{0, 3}, {1, 2}},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type different types",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bigint, index (v1))",
+			"insert into test values (0, 3), (1, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column v1 varchar(20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` bigint NOT NULL,\n" +
+						"  `v1` varchar(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `v1` (`v1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{{0, "3"}, {1, "2"}},
 			},
 		},
 	},
