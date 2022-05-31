@@ -108,7 +108,7 @@ func (tc *chunker[S]) resume(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, err = tc.cur.Advance(ctx)
+		err = tc.cur.Advance(ctx)
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 
 	if cmp > 0 { // Case (2)
 		for tc.cur.Compare(next) > 0 {
-			if _, err := next.Advance(ctx); err != nil {
+			if err := next.Advance(ctx); err != nil {
 				return err
 			}
 		}
@@ -198,7 +198,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 				// Here we need to Advance the chunker's cursor, but calling
 				// tc.cur.Advance() would needlessly fetch another chunk at the
 				// current Level. Instead, we only Advance the parent.
-				_, err := tc.cur.parent.advanceInBounds(ctx)
+				err := tc.cur.parent.Advance(ctx)
 				if err != nil {
 					return err
 				}
@@ -210,7 +210,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 			break
 		}
 
-		if _, err := tc.cur.Advance(ctx); err != nil {
+		if err := tc.cur.Advance(ctx); err != nil {
 			return err
 		}
 	}
@@ -240,7 +240,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 }
 
 func (tc *chunker[S]) skip(ctx context.Context) error {
-	_, err := tc.cur.Advance(ctx)
+	err := tc.cur.Advance(ctx)
 	return err
 }
 
@@ -414,14 +414,14 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 			break // boundary occurred at same place in old & new Node
 		}
 
-		_, err = tc.cur.Advance(ctx)
+		err = tc.cur.Advance(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if tc.cur.parent != nil {
-		_, err := tc.cur.parent.Advance(ctx)
+		err := tc.cur.parent.Advance(ctx)
 
 		if err != nil {
 			return err

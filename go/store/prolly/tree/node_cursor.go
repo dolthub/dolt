@@ -91,13 +91,16 @@ func NewCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 	}
 
 	// Advance |cur| past the end
-	ok, err := cur.Advance(ctx)
+	err = cur.Advance(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if ok {
+	if cur.idx != int(cur.nd.count) {
 		panic("expected |ok| to be  false")
 	}
+	//if ok {
+	//	panic("expected |ok| to be  false")
+	//}
 
 	return
 }
@@ -273,6 +276,8 @@ func (cur *Cursor) atNodeStart() bool {
 	return cur.idx == 0
 }
 
+// atNodeEnd returns true if the cursor's current |idx|
+// points to the last node item
 func (cur *Cursor) atNodeEnd() bool {
 	lastKeyIdx := int(cur.nd.count - 1)
 	return cur.idx == lastKeyIdx
@@ -287,16 +292,20 @@ func (cur *Cursor) level() uint64 {
 	return uint64(cur.nd.Level())
 }
 
-func (cur *Cursor) seek(ctx context.Context, item Item, cb CompareFn) (err error) {
+// seek updates the cursor's node to one whose range spans the key's value, or the last
+// node if the key is greater than all existing keys.
+// If a node does not contain the key, we recurse upwards to the parent cursor. If the
+// node contains a key, we recurse downwards into child nodes.
+func (cur *Cursor) seek(ctx context.Context, key Item, cb CompareFn) (err error) {
 	inBounds := true
 	if cur.parent != nil {
-		inBounds = inBounds && cb(item, cur.firstKey()) >= 0
-		inBounds = inBounds && cb(item, cur.lastKey()) <= 0
+		inBounds = inBounds && cb(key, cur.firstKey()) >= 0
+		inBounds = inBounds && cb(key, cur.lastKey()) <= 0
 	}
 
 	if !inBounds {
 		// |item| is outside the bounds of |cur.nd|, search up the tree
-		err = cur.parent.seek(ctx, item, cb)
+		err = cur.parent.seek(ctx, key, cb)
 		if err != nil {
 			return err
 		}
@@ -309,7 +318,7 @@ func (cur *Cursor) seek(ctx context.Context, item Item, cb CompareFn) (err error
 		}
 	}
 
-	cur.idx = cur.search(item, cb)
+	cur.idx = cur.search(key, cb)
 
 	return
 }
@@ -324,61 +333,75 @@ func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	return idx
 }
 
-// todo(andy): improve the combined interface of Advance() and advanceInBounds().
-//  currently the returned boolean indicates if the cursor was able to Advance,
-//  which isn't usually useful information
-
-func (cur *Cursor) Advance(ctx context.Context) (bool, error) {
-	ok, err := cur.advanceInBounds(ctx)
-	if err != nil {
-		return false, err
-	}
-	if !ok {
-		cur.idx = int(cur.nd.count)
-	}
-
-	return ok, nil
+// jumpToEnd sets the cursor's index to the node count.
+func (cur *Cursor) jumpToEnd() {
+	cur.idx = int(cur.nd.count)
 }
 
-func (cur *Cursor) advanceInBounds(ctx context.Context) (bool, error) {
-	lastKeyIdx := int(cur.nd.count - 1)
-	if cur.idx < lastKeyIdx {
-		cur.idx += 1
-		return true, nil
+// hasNext returns true if we do not need to recursively
+// check the parent to know whether the present cursor
+// has more nodes. hasNext can be false even if parent
+// cursors are not exhausted.
+func (cur *Cursor) hasNext() bool {
+	return cur.idx < int(cur.nd.count)-1
+}
+
+// outOfBounds returns true if the current cursor and
+// all parents are exhausted.
+func (cur *Cursor) outOfBounds() bool {
+	return cur.idx >= int(cur.nd.count)
+}
+
+// Advance either increments the current key index by one,
+// or has reached the end of the current node and skips to the next
+// child of the parent cursor, recursively if necessary, returning
+// either an error or nil.
+//
+// More specifically, one of three things happens:
+//
+// 1) The current chunk still has keys, iterate to
+// the next |idx|;
+//
+// 2) We've exhausted the current cursor, but there is at least
+// one |parent| cursor with more keys. We find that |parent| recursively,
+// perform step (1), and then have every child initialize itself
+// using the new |parent|.
+//
+// 3) We've exhausted the current cursor and every |parent|. Jump
+// to an end state (idx = node.count).
+func (cur *Cursor) Advance(ctx context.Context) error {
+	if cur.hasNext() {
+		cur.idx++
+		return nil
 	}
 
-	if cur.idx == int(cur.nd.count) {
-		// |cur| is already out of bounds
-		return false, nil
+	if cur.parent == nil {
+		cur.jumpToEnd()
+		return nil
 	}
 
-	assertTrue(cur.atNodeEnd())
-
-	if cur.parent != nil {
-		ok, err := cur.parent.advanceInBounds(ctx)
-
-		if err != nil {
-			return false, err
-		}
-
-		if ok {
-			// at end of currentPair chunk and there are more
-			err := cur.fetchNode(ctx)
-			if err != nil {
-				return false, err
-			}
-
-			cur.skipToNodeStart()
-			cur.subtrees = nil // lazy load
-
-			return true, nil
-		}
-		// if not |ok|, then every parent, grandparent, etc.,
-		// failed to advanceInBounds(): we're past the end
-		// of the prolly tree.
+	// recursively increment the parent
+	err := cur.parent.Advance(ctx)
+	if err != nil {
+		return err
 	}
 
-	return false, nil
+	if cur.parent.outOfBounds() {
+		// exhausted every parent cursor
+		cur.jumpToEnd()
+		return nil
+	}
+
+	// new parent cursor points to new cur node
+	err = cur.fetchNode(ctx)
+	if err != nil {
+		return err
+	}
+
+	cur.skipToNodeStart()
+	cur.subtrees = nil // lazy load
+
+	return nil
 }
 
 func (cur *Cursor) Retreat(ctx context.Context) (bool, error) {
@@ -441,6 +464,19 @@ func (cur *Cursor) fetchNode(ctx context.Context) (err error) {
 	return err
 }
 
+// Compare returns the highest relative index difference
+// between two cursor trees. A parent has a higher precedence
+// than its child.
+//
+// Ex:
+//
+// cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
+// other: L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 4
+//    res => -2 (from level 0)
+//
+// cur:   L3 -> 4, L2 -> 2, L1 -> 5, L0 -> 2
+// other: L3 -> 4, L2 -> 3, L1 -> 5, L0 -> 4
+//    res => +1 (from level 2)
 func (cur *Cursor) Compare(other *Cursor) int {
 	return compareCursors(cur, other)
 }

@@ -244,7 +244,7 @@ func (it *orderedTreeIter[K, V]) Next(ctx context.Context) (key K, value V, err 
 	k, v := tree.CurrentCursorItems(it.curr)
 	key, value = K(k), V(v)
 
-	_, err = it.curr.Advance(ctx)
+	err = it.curr.Advance(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -266,7 +266,7 @@ func (it *orderedTreeIter[K, V]) current() (key K, value V) {
 }
 
 func (it *orderedTreeIter[K, V]) iterate(ctx context.Context) (err error) {
-	_, err = it.curr.Advance(ctx)
+	err = it.curr.Advance(ctx)
 	if err != nil {
 		return err
 	}
