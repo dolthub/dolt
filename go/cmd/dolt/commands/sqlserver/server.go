@@ -237,11 +237,12 @@ func Serve(
 		newSessionBuilder(sqlEngine),
 		listener,
 	)
-	sqlserver.SetRunningServer(mySQLServer)
 
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
+	} else {
+		sqlserver.SetRunningServer(mySQLServer)
 	}
 
 	var metSrv *http.Server
