@@ -33,11 +33,9 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-
-	// TODO: Find a better package to track running server state
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -68,7 +66,7 @@ func Serve(
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)
-		dfunctions.MySQLServer = nil
+		sqlserver.SetRunningServer(nil)
 	}()
 
 	if startError = ValidateConfig(serverConfig); startError != nil {
@@ -239,7 +237,7 @@ func Serve(
 		newSessionBuilder(sqlEngine),
 		listener,
 	)
-	dfunctions.MySQLServer = mySQLServer
+	sqlserver.SetRunningServer(mySQLServer)
 
 	if startError != nil {
 		cli.PrintErr(startError)

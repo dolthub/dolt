@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -29,23 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
-
-// TODO: This shouldn't live here, but this is an easy place to try
-//       a sanity test for fixing the import cycle
-var MySQLServer *server.Server
-
-func RunningInServerMode() bool {
-	// TODO: Is there something in context that could help our code understand
-	//       if we're executing in the context of a running sql server?
-	//        - Should the engine know if it's running in a server?
-	// TODO: Can we avoid having a global variable for the server exported?
-	//       Can we use the ServerController (or a new interface?) to decouple
-	//       and avoid a global var somehow?
-	return MySQLServer != nil
-}
 
 const DoltBranchFuncName = "dolt_branch"
 
@@ -174,16 +160,20 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	if RunningInServerMode() == false {
-		return nil
-	}
-
 	dbName := ctx.GetCurrentDatabase()
 	if dbName == "" {
 		return nil
 	}
 
-	sessionManager := MySQLServer.SessionManager()
+	if sqlserver.RunningInServerMode() == false {
+		return nil
+	}
+
+	runningServer := sqlserver.GetRunningServer()
+	if runningServer == nil {
+		return nil
+	}
+	sessionManager := runningServer.SessionManager()
 	branchRef := ref.NewBranchRef(branchName)
 
 	return sessionManager.Iter(func(session sql.Session) (bool, error) {
