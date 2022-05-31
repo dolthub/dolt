@@ -50,11 +50,14 @@ const (
 	uint64Size   ByteSize = 8
 	float32Size  ByteSize = 4
 	float64Size  ByteSize = 8
+	bit64Size    ByteSize = 8
 	hash128Size  ByteSize = 16
 	yearSize     ByteSize = 1
 	dateSize     ByteSize = 4
 	timeSize     ByteSize = 8
 	datetimeSize ByteSize = 8
+	enumSize     ByteSize = 2
+	setSize      ByteSize = 8
 )
 
 type Encoding byte
@@ -72,11 +75,14 @@ const (
 	Uint64Enc   = Encoding(serial.EncodingUint64)
 	Float32Enc  = Encoding(serial.EncodingFloat32)
 	Float64Enc  = Encoding(serial.EncodingFloat64)
+	Bit64Enc    = Encoding(serial.EncodingBit64)
 	Hash128Enc  = Encoding(serial.EncodingHash128)
 	YearEnc     = Encoding(serial.EncodingYear)
 	DateEnc     = Encoding(serial.EncodingDate)
 	TimeEnc     = Encoding(serial.EncodingTime)
 	DatetimeEnc = Encoding(serial.EncodingDatetime)
+	EnumEnc     = Encoding(serial.EncodingEnum)
+	SetEnc      = Encoding(serial.EncodingSet)
 
 	sentinel Encoding = 127
 )
@@ -121,16 +127,22 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float32Size, true
 	case Float64Enc:
 		return float64Size, true
+	case Hash128Enc:
+		return hash128Size, true
 	case YearEnc:
 		return yearSize, true
 	case DateEnc:
 		return dateSize, true
-	//case TimeEnc:
-	//	return timeSize, true
+	case TimeEnc:
+		return timeSize, true
 	case DatetimeEnc:
 		return datetimeSize, true
-	case Hash128Enc:
-		return hash128Size, true
+	case EnumEnc:
+		return enumSize, true
+	case SetEnc:
+		return setSize, true
+	case Bit64Enc:
+		return bit64Size, true
 	default:
 		return 0, false
 	}
@@ -361,6 +373,18 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
+func readBit64(val []byte) uint64 {
+	return readUint64(val)
+}
+
+func writeBit64(buf []byte, val uint64) {
+	writeUint64(buf, val)
+}
+
+func compareBit64(l, r uint64) int {
+	return compareUint64(l, r)
+}
+
 func readDecimal(val []byte) decimal.Decimal {
 	e := readInt32(val[:int32Size])
 	s := readInt8(val[int32Size : int32Size+int8Size])
@@ -467,6 +491,30 @@ func compareDatetime(l, r time.Time) int {
 	} else {
 		return 1
 	}
+}
+
+func readEnum(val []byte) uint16 {
+	return readUint16(val)
+}
+
+func writeEnum(buf []byte, val uint16) {
+	writeUint16(buf, val)
+}
+
+func compareEnum(l, r uint16) int {
+	return compareUint16(l, r)
+}
+
+func readSet(val []byte) uint64 {
+	return readUint64(val)
+}
+
+func writeSet(buf []byte, val uint64) {
+	writeUint64(buf, val)
+}
+
+func compareSet(l, r uint64) int {
+	return compareUint64(l, r)
 }
 
 func readString(val []byte) string {

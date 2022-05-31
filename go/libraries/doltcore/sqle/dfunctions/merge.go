@@ -41,7 +41,7 @@ func NewMergeFunc(args ...sql.Expression) (sql.Expression, error) {
 func (mf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	args, err := getDoltArgs(ctx, row, mf.Children())
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, err
 	}
 	return DoDoltMerge(ctx, args)
 }

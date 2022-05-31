@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -54,6 +56,8 @@ type DoltHarness struct {
 	skippedQueries       []string
 	setupData            []setup.SetupScript
 	resetData            []setup.SetupScript
+	initDbs              map[string]struct{}
+	autoInc              bool
 	engine               *gms.Engine
 }
 
@@ -89,6 +93,7 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
 		dh = dh.WithSkippedQueries([]string{
 			"SHOW CREATE TABLE child", // todo(andy): "TestForeignKeys - ALTER TABLE RENAME COLUMN"
+			"typestable",
 		})
 	}
 
@@ -99,10 +104,10 @@ var defaultSkippedQueries = []string{
 	"show variables",             // we set extra variables
 	"show create table fk_tbl",   // we create an extra key for the FK that vanilla gms does not
 	"show indexes from",          // we create / expose extra indexes (for foreign keys)
-	"typestable",                 // Bit type isn't working?
 	"show global variables like", // we set extra variables
 }
 
+// Setup sets the setup scripts for this DoltHarness's engine
 func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	d.engine = nil
 	d.setupData = nil
@@ -111,6 +116,9 @@ func (d *DoltHarness) Setup(setupData ...[]setup.SetupScript) {
 	}
 }
 
+// resetScripts returns a set of queries that will reset the given database
+// names. If [autoInc], the queries for resetting autoincrement tables are
+// included.
 func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
 	var resetCmds setup.SetupScript
 	for i := range dbs {
@@ -126,47 +134,63 @@ func resetScripts(dbs []string, autoInc bool) []setup.SetupScript {
 	return []setup.SetupScript{resetCmds}
 }
 
+// commitScripts returns a set of queries that will commit the workingsets
+// of the given database names
 func commitScripts(dbs []string) []setup.SetupScript {
 	var commitCmds setup.SetupScript
 	for i := range dbs {
 		db := dbs[i]
 		commitCmds = append(commitCmds, fmt.Sprintf("use %s", db))
-		commitCmds = append(commitCmds, fmt.Sprintf("call dcommit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
+		commitCmds = append(commitCmds, fmt.Sprintf("call dolt_commit('--allow-empty', '-am', 'checkpoint enginetest database %s')", db))
 	}
 	commitCmds = append(commitCmds, "use mydb")
 	return []setup.SetupScript{commitCmds}
 }
 
+// NewEngine creates a new *gms.Engine or calls reset and clear scripts on the existing
+// engine for reuse.
 func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 	if d.engine == nil {
-		e, err := enginetest.NewEngineWithSetup(t, d, d.setupData)
+		pro := d.NewDatabaseProvider(information_schema.NewInformationSchemaDatabase())
+		e, err := enginetest.NewEngineWithProviderSetup(t, d, pro, d.setupData)
 		if err != nil {
 			return nil, err
 		}
 		d.engine = e
-		ctx := enginetest.NewContext(d)
 
-		res := enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		var res []sql.Row
+		// todo(max): need better way to reset autoincrement regardless of test type
+		ctx := enginetest.NewContext(d)
+		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+		d.autoInc = res[0][0].(int64) > 0
+
+		res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 		var dbs []string
 		for i := range res {
 			dbs = append(dbs, res[i][0].(string))
 		}
-
-		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
-		autoInc := res[0][0].(int64) > 0
 
 		e, err = enginetest.RunEngineScripts(ctx, e, commitScripts(dbs), d.SupportsNativeIndexCreation())
 		if err != nil {
 			return nil, err
 		}
 
-		d.resetData = resetScripts(dbs, autoInc)
-
 		return e, nil
 	}
 
+	// grants are files that can only be manually reset
+	d.engine.Analyzer.Catalog.MySQLDb = mysql_db.CreateEmptyMySQLDb()
+	d.engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+
+	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)
-	return enginetest.RunEngineScripts(ctx, d.engine, d.resetData, d.SupportsNativeIndexCreation())
+	res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+	var dbs []string
+	for i := range res {
+		dbs = append(dbs, res[i][0].(string))
+	}
+
+	return enginetest.RunEngineScripts(ctx, d.engine, resetScripts(dbs, d.autoInc), d.SupportsNativeIndexCreation())
 }
 
 // WithParallelism returns a copy of the harness with parallelism set to the given number of threads. A value of 0 or
@@ -317,7 +341,9 @@ func (d *DoltHarness) NewDatabaseProvider(dbs ...sql.Database) sql.MutableDataba
 	require.NoError(d.t, err)
 	d.multiRepoEnv = mrEnv
 	for _, db := range dbs {
-		d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+		if db.Name() != information_schema.InformationSchemaDatabaseName {
+			d.multiRepoEnv.AddEnv(db.Name(), d.createdEnvs[db.Name()])
+		}
 	}
 
 	b := env.GetDefaultInitBranch(d.multiRepoEnv.Config())

@@ -46,13 +46,20 @@ type prollyIndexIter struct {
 	// keyMap and valMap transform tuples from
 	// primary row storage into sql.Row's
 	keyMap, valMap val.OrdinalMapping
+	sqlSch         sql.Schema
 }
 
 var _ sql.RowIter = prollyIndexIter{}
 var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
-func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprimary, dsecondary durable.Index) (prollyIndexIter, error) {
+func newProllyIndexIter(
+	ctx *sql.Context,
+	idx DoltIndex,
+	rng prolly.Range,
+	pkSch sql.PrimaryKeySchema,
+	dprimary, dsecondary durable.Index,
+) (prollyIndexIter, error) {
 	secondary := durable.ProllyMapFromIndex(dsecondary)
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
@@ -79,6 +86,7 @@ func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, dprim
 		rowChan:   make(chan sql.Row, indexLookupBufSize),
 		keyMap:    km,
 		valMap:    vm,
+		sqlSch:    pkSch.Schema,
 	}
 
 	eg.Go(func() error {
@@ -95,7 +103,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
 		select {
 		case r, ok = <-p.rowChan:
 			if ok {
-				return r, nil
+				return DenormalizeRow(p.sqlSch, r)
 			}
 		}
 		if !ok {
@@ -222,6 +230,7 @@ type prollyCoveringIndexIter struct {
 
 	// |keyMap| and |valMap| are both of len ==
 	keyMap, valMap val.OrdinalMapping
+	sqlSch         sql.Schema
 }
 
 var _ sql.RowIter = prollyCoveringIndexIter{}
@@ -251,6 +260,7 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 		valDesc:   valDesc,
 		keyMap:    keyMap,
 		valMap:    valMap,
+		sqlSch:    pkSch.Schema,
 	}
 
 	return iter, nil
@@ -268,7 +278,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return r, nil
+	return DenormalizeRow(p.sqlSch, r)
 }
 
 func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {

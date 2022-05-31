@@ -27,11 +27,14 @@ enum Encoding : uint8 {
   Uint64   = 10,
   Float32  = 11,
   Float64  = 12,
-  Hash128  = 13,
-  Year     = 14,
-  Date     = 15,
-  Time     = 16,
-  Datetime = 17,
+  Bit64    = 13,
+  Hash128  = 14,
+  Year     = 15,
+  Date     = 16,
+  Time     = 17,
+  Datetime = 18,
+  Enum     = 19,
+  Set      = 20,
 
   // variable width
   String   = 128,
@@ -40,4 +43,3 @@ enum Encoding : uint8 {
   JSON     = 131,
   Geometry = 133,
 }
-

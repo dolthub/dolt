@@ -177,7 +177,7 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				}
 			}
 
-			err = mergePrinting(ctx, dEnv, mergeSpec)
+			err = validateMergeSpec(ctx, mergeSpec)
 			if !ok {
 				return nil
 			}

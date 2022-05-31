@@ -34,11 +34,14 @@ const (
 	EncodingUint64   Encoding = 10
 	EncodingFloat32  Encoding = 11
 	EncodingFloat64  Encoding = 12
-	EncodingHash128  Encoding = 13
-	EncodingYear     Encoding = 14
-	EncodingDate     Encoding = 15
-	EncodingTime     Encoding = 16
-	EncodingDatetime Encoding = 17
+	EncodingBit64    Encoding = 13
+	EncodingHash128  Encoding = 14
+	EncodingYear     Encoding = 15
+	EncodingDate     Encoding = 16
+	EncodingTime     Encoding = 17
+	EncodingDatetime Encoding = 18
+	EncodingEnum     Encoding = 19
+	EncodingSet      Encoding = 20
 	EncodingString   Encoding = 128
 	EncodingBytes    Encoding = 129
 	EncodingDecimal  Encoding = 130
@@ -58,11 +61,14 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingUint64:   "Uint64",
 	EncodingFloat32:  "Float32",
 	EncodingFloat64:  "Float64",
+	EncodingBit64:    "Bit64",
 	EncodingHash128:  "Hash128",
 	EncodingYear:     "Year",
 	EncodingDate:     "Date",
 	EncodingTime:     "Time",
 	EncodingDatetime: "Datetime",
+	EncodingEnum:     "Enum",
+	EncodingSet:      "Set",
 	EncodingString:   "String",
 	EncodingBytes:    "Bytes",
 	EncodingDecimal:  "Decimal",
@@ -82,11 +88,14 @@ var EnumValuesEncoding = map[string]Encoding{
 	"Uint64":   EncodingUint64,
 	"Float32":  EncodingFloat32,
 	"Float64":  EncodingFloat64,
+	"Bit64":    EncodingBit64,
 	"Hash128":  EncodingHash128,
 	"Year":     EncodingYear,
 	"Date":     EncodingDate,
 	"Time":     EncodingTime,
 	"Datetime": EncodingDatetime,
+	"Enum":     EncodingEnum,
+	"Set":      EncodingSet,
 	"String":   EncodingString,
 	"Bytes":    EncodingBytes,
 	"Decimal":  EncodingDecimal,

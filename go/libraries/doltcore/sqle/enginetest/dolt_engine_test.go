@@ -76,51 +76,29 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Multialter DDL with ADD/DROP Primary Key",
+			Name: "Create table with TIME type",
 			SetUpScript: []string{
-				"CREATE TABLE t(pk int primary key, v1 int)",
+				"create table my_types (pk int primary key, c0 time);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "ALTER TABLE t ADD COLUMN (v2 int), drop primary key, add primary key (v2)",
-					Expected: []sql.Row{{sql.NewOkResult(0)}},
+					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
 				},
 				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "NO", "PRI", "", ""},
-					},
-				},
-				{
-					Query:       "ALTER TABLE t ADD COLUMN (v3 int), drop primary key, add primary key (notacolumn)",
-					ExpectedErr: sql.ErrKeyColumnDoesNotExist,
-				},
-				{
-					Query: "DESCRIBE t",
-					Expected: []sql.Row{
-						{"pk", "int", "NO", "", "", ""},
-						{"v1", "int", "YES", "", "", ""},
-						{"v2", "int", "NO", "PRI", "", ""},
-					},
+					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
 				},
 			},
 		},
 	}
 
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range scripts {
-		myDb := harness.NewDatabase("mydb")
-		databases := []sql.Database{myDb}
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
-		//engine.Analyzer.Debug = true
-		//engine.Analyzer.Verbose = true
-		enginetest.TestScriptWithEngine(t, engine, harness, test)
+		enginetest.TestScript(t, harness, test)
 	}
 }
 
@@ -302,16 +280,16 @@ func TestDoltUserPrivileges(t *testing.T) {
 	harness := newDoltHarness(t)
 	for _, script := range DoltUserPrivTests {
 		t.Run(script.Name, func(t *testing.T) {
-			myDb := harness.NewDatabase("mydb")
-			databases := []sql.Database{myDb}
-			engine := enginetest.NewEngineWithDbs(t, harness, databases)
+			harness.Setup(setup.MydbData)
+			engine, err := harness.NewEngine(t)
+			require.NoError(t, err)
 			defer engine.Close()
 
 			ctx := enginetest.NewContextWithClient(harness, sql.Client{
 				User:    "root",
 				Address: "localhost",
 			})
-			engine.Analyzer.Catalog.GrantTables.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -587,7 +565,9 @@ func TestStoredProcedures(t *testing.T) {
 
 func TestTransactions(t *testing.T) {
 	skipNewFormat(t)
-	enginetest.TestTransactionScripts(t, newDoltHarness(t))
+	for _, script := range queries.TransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
@@ -640,20 +620,17 @@ func TestShowCreateTableAsOf(t *testing.T) {
 
 func TestDoltMerge(t *testing.T) {
 	skipNewFormat(t)
-	harness := newDoltHarness(t)
-	harness.Setup(setup.MydbData)
 	for _, script := range MergeScripts {
-		harness.engine = nil
-		enginetest.TestScript(t, harness, script)
+		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
 func TestDoltReset(t *testing.T) {
 	skipNewFormat(t)
-	harness := newDoltHarness(t)
 	for _, script := range DoltReset {
-		harness.engine = nil
-		enginetest.TestScript(t, harness, script)
+		// dolt versioning conflicts with reset harness -- use new harness every time
+		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
@@ -763,22 +740,19 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 func TestHistorySystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
 
 func TestUnscopedDiffSystemTable(t *testing.T) {
-	harness := newDoltHarness(t)
 	for _, test := range UnscopedDiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, newDoltHarness(t), test)
 		})
 	}
 }
@@ -786,12 +760,11 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 func TestDiffTableFunction(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
-
+	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -799,11 +772,11 @@ func TestDiffTableFunction(t *testing.T) {
 func TestCommitDiffSystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -811,11 +784,11 @@ func TestCommitDiffSystemTable(t *testing.T) {
 func TestDiffSystemTable(t *testing.T) {
 	skipNewFormat(t)
 	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {
-		databases := harness.NewDatabases("mydb")
-		engine := enginetest.NewEngineWithDbs(t, harness, databases)
+		harness.engine = nil
 		t.Run(test.Name, func(t *testing.T) {
-			enginetest.TestScriptWithEngine(t, engine, harness, test)
+			enginetest.TestScript(t, harness, test)
 		})
 	}
 }
@@ -825,7 +798,6 @@ func TestTestReadOnlyDatabases(t *testing.T) {
 }
 
 func TestAddDropPks(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestAddDropPks(t, newDoltHarness(t))
 }
 
@@ -1112,8 +1084,8 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
-					ExpectedErrStr: "primary key cannot have NULL values",
+					Query:       "ALTER TABLE test ADD PRIMARY KEY (id, c1, c2)",
+					ExpectedErr: sql.ErrInsertIntoNonNullableProvidedNull,
 				},
 			},
 		}

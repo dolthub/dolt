@@ -1326,21 +1326,10 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString("\n")
+			buf.WriteString(":\n")
 
-			buf.WriteString("Struct:\n")
 			buf.WriteString(table.DebugString(ctx))
 
-			buf.WriteString("\ndata:\n")
-			data, err := table.GetNomsRowData(ctx)
-			if err != nil {
-				panic(err)
-			}
-
-			err = types.WriteEncodedValue(ctx, &buf, data)
-			if err != nil {
-				panic(err)
-			}
 			return false, nil
 		})
 	}

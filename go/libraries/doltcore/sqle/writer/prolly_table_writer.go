@@ -122,7 +122,14 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 }
 
 // Insert implements TableWriter.
-func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
+		return err
+	}
+
+	if err := w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
+	}
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {
@@ -131,14 +138,15 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 	}
-	if err := w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
-	}
 	return nil
 }
 
 // Delete implements TableWriter.
-func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -152,6 +160,13 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	if oldRow, err = index.NormalizeRow(w.sqlSch, oldRow); err != nil {
+		return err
+	}
+	if newRow, err = index.NormalizeRow(w.sqlSch, newRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {
@@ -244,8 +259,9 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	}
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
+
 	var newSecondaries []indexWriter
-	if _, ok := w.primary.(prollyKeylessWriter); ok {
+	if schema.IsKeyless(sch) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
 		if err != nil {
 			return err
@@ -324,9 +340,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	if !w.primary.HasEdits(ctx) {
-		return nil
-	}
 	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err

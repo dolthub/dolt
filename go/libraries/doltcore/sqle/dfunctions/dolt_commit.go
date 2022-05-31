@@ -45,7 +45,7 @@ func NewDoltCommitFunc(args ...sql.Expression) (sql.Expression, error) {
 func (d DoltCommitFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	args, err := getDoltArgs(ctx, row, d.Children())
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, err
 	}
 	return DoDoltCommit(ctx, args)
 }

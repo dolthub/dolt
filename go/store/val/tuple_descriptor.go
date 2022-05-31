@@ -241,6 +241,17 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	return
 }
 
+// GetBit reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetBit(i int, tup Tuple) (v uint64, ok bool) {
+	td.expectEncoding(i, Bit64Enc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readBit64(b), true
+	}
+	return
+}
+
 // GetDecimal reads a float64 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
 func (td TupleDesc) GetDecimal(i int, tup Tuple) (v decimal.Decimal, ok bool) {
@@ -292,6 +303,28 @@ func (td TupleDesc) GetDatetime(i int, tup Tuple) (v time.Time, ok bool) {
 	b := td.GetField(i, tup)
 	if b != nil {
 		v, ok = readDatetime(b), true
+	}
+	return
+}
+
+// GetEnum reads a uin16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetEnum(i int, tup Tuple) (v uint16, ok bool) {
+	td.expectEncoding(i, EnumEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readEnum(b), true
+	}
+	return
+}
+
+// GetSet reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSet(i int, tup Tuple) (v uint64, ok bool) {
+	td.expectEncoding(i, SetEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readSet(b), true
 	}
 	return
 }
@@ -423,19 +456,30 @@ func formatValue(enc Encoding, value []byte) string {
 	case Float64Enc:
 		v := readFloat64(value)
 		return fmt.Sprintf("%f", v)
+	case Bit64Enc:
+		v := readUint64(value)
+		return strconv.FormatUint(v, 10)
+	case DecimalEnc:
+		v := readDecimal(value)
+		return v.String()
 	case YearEnc:
 		v := readYear(value)
 		return strconv.Itoa(int(v))
 	case DateEnc:
 		v := readDate(value)
 		return v.Format("2006-01-02")
-	//case TimeEnc:
-	//	// todo(andy)
-	//	v := readTime(value)
-	//	return v
+	case TimeEnc:
+		v := readTime(value)
+		return strconv.FormatInt(v, 10)
 	case DatetimeEnc:
 		v := readDatetime(value)
 		return v.Format(time.RFC3339)
+	case EnumEnc:
+		v := readEnum(value)
+		return strconv.Itoa(int(v))
+	case SetEnc:
+		v := readSet(value)
+		return strconv.FormatUint(v, 10)
 	case StringEnc:
 		return readString(value)
 	case ByteStringEnc:

@@ -15,7 +15,6 @@
 package index
 
 import (
-	"context"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -52,6 +51,7 @@ var encodingToType [256]query.Type
 type prollyRowIter struct {
 	iter prolly.MapIter
 
+	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	keyProj []int
@@ -63,8 +63,8 @@ var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
 func NewProllyRowIter(
-	ctx context.Context,
 	sch schema.Schema,
+	schSch sql.Schema,
 	rows prolly.Map,
 	iter prolly.MapIter,
 	projections []string,
@@ -91,6 +91,7 @@ func NewProllyRowIter(
 
 	return prollyRowIter{
 		iter:    iter,
+		sqlSch:  schSch,
 		keyDesc: kd,
 		valDesc: vd,
 		keyProj: keyProj,
@@ -159,8 +160,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 	}
-
-	return row, nil
+	return DenormalizeRow(it.sqlSch, row)
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
