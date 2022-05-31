@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
+// DoltBranchMultiSessionScriptTests contain tests that need to be run in a multi-session server environment
+// in order to fully test branch deletion and renaming logic.
 var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 	{
 		Name: "Test multi-session behavior for deleting branches",
