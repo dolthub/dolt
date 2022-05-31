@@ -23,7 +23,6 @@ package tree
 
 import (
 	"context"
-	"math"
 	"sort"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -98,9 +97,6 @@ func NewCursorPastEnd(ctx context.Context, ns NodeStore, nd Node) (cur *Cursor, 
 	if cur.idx != int(cur.nd.count) {
 		panic("expected |ok| to be  false")
 	}
-	//if ok {
-	//	panic("expected |ok| to be  false")
-	//}
 
 	return
 }
@@ -218,10 +214,6 @@ func (cur *Cursor) Valid() bool {
 		cur.idx < int(cur.nd.count)
 }
 
-func (cur *Cursor) Invalidate() {
-	cur.idx = math.MinInt32
-}
-
 func (cur *Cursor) CurrentKey() Item {
 	return cur.nd.GetKey(cur.idx)
 }
@@ -333,23 +325,30 @@ func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	return idx
 }
 
-// jumpToEnd sets the cursor's index to the node count.
-func (cur *Cursor) jumpToEnd() {
+// invalidate sets the cursor's index to the node count.
+func (cur *Cursor) invalidate() {
 	cur.idx = int(cur.nd.count)
 }
 
 // hasNext returns true if we do not need to recursively
-// check the parent to know whether the present cursor
-// has more nodes. hasNext can be false even if parent
+// check the parent to know that the current cursor
+// has more keys. hasNext can be false even if parent
 // cursors are not exhausted.
 func (cur *Cursor) hasNext() bool {
 	return cur.idx < int(cur.nd.count)-1
 }
 
+// hasPrev returns true if the current node has preceding
+// keys. hasPrev can be false even in a parent node has
+// preceding keys.
+func (cur *Cursor) hasPrev() bool {
+	return cur.idx > 0
+}
+
 // outOfBounds returns true if the current cursor and
 // all parents are exhausted.
 func (cur *Cursor) outOfBounds() bool {
-	return cur.idx >= int(cur.nd.count)
+	return cur.idx < 0 || cur.idx >= int(cur.nd.count)
 }
 
 // Advance either increments the current key index by one,
@@ -376,7 +375,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 	}
 
 	if cur.parent == nil {
-		cur.jumpToEnd()
+		cur.invalidate()
 		return nil
 	}
 
@@ -388,7 +387,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 
 	if cur.parent.outOfBounds() {
 		// exhausted every parent cursor
-		cur.jumpToEnd()
+		cur.invalidate()
 		return nil
 	}
 
@@ -404,55 +403,41 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 	return nil
 }
 
-func (cur *Cursor) Retreat(ctx context.Context) (bool, error) {
-	ok, err := cur.retreatInBounds(ctx)
+// Retreat decrements to the previous key, if necessary by
+// recursively decrementing parent nodes.
+func (cur *Cursor) Retreat(ctx context.Context) error {
+	if cur.hasPrev() {
+		cur.idx--
+		return nil
+	}
+
+	if cur.parent == nil {
+		cur.invalidate()
+		return nil
+	}
+
+	// recursively decrement the parent
+	err := cur.parent.Retreat(ctx)
 	if err != nil {
-		return false, err
-	}
-	if !ok {
-		cur.idx = -1
+		return err
 	}
 
-	return ok, nil
-}
-
-func (cur *Cursor) retreatInBounds(ctx context.Context) (bool, error) {
-	if cur.idx > 0 {
-		cur.idx -= 1
-		return true, nil
+	if cur.parent.outOfBounds() {
+		// exhausted every parent cursor
+		cur.invalidate()
+		return nil
 	}
 
-	if cur.idx == -1 {
-		// |cur| is already out of bounds
-		return false, nil
+	// new parent cursor points to new cur node
+	err = cur.fetchNode(ctx)
+	if err != nil {
+		return err
 	}
 
-	assertTrue(cur.atNodeStart())
+	cur.skipToNodeEnd()
+	cur.subtrees = nil // lazy load
 
-	if cur.parent != nil {
-		ok, err := cur.parent.retreatInBounds(ctx)
-
-		if err != nil {
-			return false, err
-		}
-
-		if ok {
-			err := cur.fetchNode(ctx)
-			if err != nil {
-				return false, err
-			}
-
-			cur.skipToNodeEnd()
-			cur.subtrees = nil // lazy load
-
-			return true, nil
-		}
-		// if not |ok|, then every parent, grandparent, etc.,
-		// failed to retreatInBounds(): we're before the start.
-		// of the prolly tree.
-	}
-
-	return false, nil
+	return nil
 }
 
 // fetchNode loads the Node that the cursor index points to.

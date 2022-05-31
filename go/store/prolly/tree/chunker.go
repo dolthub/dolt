@@ -204,7 +204,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 				}
 
 				// |tc.cur| is now inconsistent with its parent, Invalidate it.
-				tc.cur.Invalidate()
+				tc.cur.invalidate()
 			}
 
 			break
