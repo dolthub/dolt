@@ -205,7 +205,7 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:

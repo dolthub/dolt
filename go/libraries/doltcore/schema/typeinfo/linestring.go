@@ -197,7 +197,7 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:

@@ -191,7 +191,7 @@ func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (t
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:

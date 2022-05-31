@@ -244,7 +244,7 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
