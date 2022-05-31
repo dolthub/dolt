@@ -38,7 +38,6 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// TODO: branch names appear to be case sensitive? if so, fix
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
 				Expected: []sql.Row{{0}},
 			},
@@ -47,8 +46,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"branch1"}},
 			},
 			{
-				Query: "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
-				// TODO: Should this be an error type?
+				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
 				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
@@ -58,7 +56,6 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch2');",
 				Expected: []sql.Row{{0}},
-				// TODO: At this point, client a is hosed and can't do anything, right?
 			},
 		},
 	},
@@ -70,7 +67,6 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				// TODO: branch names appear to be case sensitive? if so, fix
 				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch1');",
 				Expected: []sql.Row{{0}},
 			},
@@ -79,8 +75,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{"branch1"}},
 			},
 			{
-				Query: "/* client b */ CALL DOLT_BRANCH('-m', 'branch1', 'movedBranch1');",
-				// TODO: Should this be an error type?
+				Query:          "/* client b */ CALL DOLT_BRANCH('-m', 'branch1', 'movedBranch1');",
 				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
@@ -90,7 +85,6 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			{
 				Query:    "/* client b */ CALL DOLT_BRANCH('-m', 'branch2', 'movedBranch2');",
 				Expected: []sql.Row{{0}},
-				// TODO: At this point, what is the state of client a? Can it do anything? Is it h0sed?
 			},
 		},
 	},
@@ -105,7 +99,6 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 	defer sc.StopServer()
 
 	for _, test := range tests {
-		// TODO: Should we reset the database state before each test?
 		conn1, sess1 := newConnection(t, serverConfig)
 		conn2, sess2 := newConnection(t, serverConfig)
 
