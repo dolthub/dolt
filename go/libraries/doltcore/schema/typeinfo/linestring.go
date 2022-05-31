@@ -104,8 +104,11 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*linestringType)
-	return ok
+	if o, ok := other.(*linestringType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.

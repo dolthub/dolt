@@ -96,8 +96,11 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*pointType)
-	return ok
+	if o, ok := other.(*pointType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlPointType.DefinedSRID && !o.sqlPointType.DefinedSRID) || ti.sqlPointType.SRID == o.sqlPointType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.

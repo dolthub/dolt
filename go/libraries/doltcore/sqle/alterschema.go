@@ -266,7 +266,7 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			}
 			return nil, err
 		}
-	} else if !modifiedCol.IsNullable() || schema.IsColSpatialType(modifiedCol) {
+	} else if !modifiedCol.IsNullable() {
 		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
 			r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
 			if err != nil {
@@ -275,8 +275,6 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 			val, ok := r.GetColVal(modifiedCol.Tag)
 			if !ok || val == nil || val == types.NullValue {
 				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
-			} else if err = validateSpatialTypeSRID(modifiedCol, val); err != nil {
-				return true, err
 			}
 			return false, nil
 		})

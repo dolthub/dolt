@@ -104,8 +104,11 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*polygonType)
-	return ok
+	if o, ok := other.(*polygonType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlPolygonType.DefinedSRID && !o.sqlPolygonType.DefinedSRID) || ti.sqlPolygonType.SRID == o.sqlPolygonType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
