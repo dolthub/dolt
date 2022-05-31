@@ -208,12 +208,12 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
 		// engine should already protect against this
-		return sql.ErrDatabaseNotFound.New(dbKey)
+		return sql.ErrDatabaseNotFound.New(db.Name())
 	} else if !isDir {
 		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
 
-	err := p.fs.Delete(dbKey, true)
+	err := p.fs.Delete(db.Name(), true)
 	if err != nil {
 		return err
 	}

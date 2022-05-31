@@ -412,6 +412,8 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	enginetest.TestDropDatabaseDoltOnly(t, newDoltHarness(t))
+
 	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
