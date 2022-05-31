@@ -386,8 +386,8 @@ func ConnectionString(config ServerConfig) string {
 
 // ConfigInfo returns a summary of some of the config which contains some of the more important information
 func ConfigInfo(config ServerConfig) string {
-	return fmt.Sprintf(`HP="%v:%v"|U="%v"|P="%v"|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(), config.User(),
-		config.Password(), config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
+	return fmt.Sprintf(`HP="%v:%v"|T="%v"|R="%v"|L="%v"`, config.Host(), config.Port(),
+		config.ReadTimeout(), config.ReadOnly(), config.LogLevel())
 }
 
 // LoadTLSConfig loads the certificate chain from config.TLSKey() and config.TLSCert() and returns

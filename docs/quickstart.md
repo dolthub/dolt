@@ -117,7 +117,7 @@ programming language, start a SQL server on the command line:
 
 ```sh
 % dolt sql-server
-Starting server with Config HP="localhost:3306"|U="root"|P=""|T="28800000"|R="false"|L="info"
+Starting server with Config HP="localhost:3306"|T="28800000"|R="false"|L="info"
 ```
 
 Then connect to the database with any standard MySQL connector and
