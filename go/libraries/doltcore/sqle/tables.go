@@ -325,7 +325,7 @@ func (t *DoltTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 		return nil, err
 	}
 
-	return partitionRows(ctx, table, t.projectedCols, partition)
+	return partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, partition)
 }
 
 func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter2, error) {
@@ -334,7 +334,7 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 		return nil, err
 	}
 
-	iter, err := partitionRows(ctx, table, t.projectedCols, part)
+	iter, err := partitionRows(ctx, table, t.sqlSch.Schema, t.projectedCols, part)
 	if err != nil {
 		return nil, err
 	}
@@ -342,12 +342,12 @@ func (t DoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.Row
 	return iter.(sql.RowIter2), err
 }
 
-func partitionRows(ctx *sql.Context, t *doltdb.Table, projCols []string, partition sql.Partition) (sql.RowIter, error) {
+func partitionRows(ctx *sql.Context, t *doltdb.Table, sqlSch sql.Schema, projCols []string, partition sql.Partition) (sql.RowIter, error) {
 	switch typedPartition := partition.(type) {
 	case doltTablePartition:
-		return newRowIterator(ctx, t, projCols, typedPartition)
+		return newRowIterator(ctx, t, sqlSch, projCols, typedPartition)
 	case index.SinglePartition:
-		return newRowIterator(ctx, t, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
+		return newRowIterator(ctx, t, sqlSch, projCols, doltTablePartition{rowData: typedPartition.RowData, end: NoUpperBound})
 	}
 
 	return nil, errors.New("unsupported partition type")
@@ -1274,7 +1274,7 @@ func (t *AlterableDoltTable) ModifyColumn(ctx *sql.Context, columnName string, c
 
 		// Note that we aren't calling the public PartitionRows, because it always gets the table data from the session
 		// root, which hasn't been updated yet
-		rowIter, err := partitionRows(ctx, updatedTable, t.projectedCols, index.SinglePartition{RowData: rowData})
+		rowIter, err := partitionRows(ctx, updatedTable, t.sqlSch.Schema, t.projectedCols, index.SinglePartition{RowData: rowData})
 		if err != nil {
 			return err
 		}

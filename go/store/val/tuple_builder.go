@@ -159,6 +159,21 @@ func (tb *TupleBuilder) PutFloat64(i int, v float64) {
 	tb.pos += float64Size
 }
 
+func (tb *TupleBuilder) PutBit(i int, v uint64) {
+	tb.Desc.expectEncoding(i, Bit64Enc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+bit64Size]
+	writeBit64(tb.fields[i], v)
+	tb.pos += bit64Size
+}
+
+func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
+	tb.Desc.expectEncoding(i, DecimalEnc)
+	sz := sizeOfDecimal(v)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
+	writeDecimal(tb.fields[i], v)
+	tb.pos += sz
+}
+
 // PutYear writes an int16-encoded year to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutYear(i int, v int16) {
 	tb.Desc.expectEncoding(i, YearEnc)
@@ -189,12 +204,18 @@ func (tb *TupleBuilder) PutDatetime(i int, v time.Time) {
 	tb.pos += datetimeSize
 }
 
-func (tb *TupleBuilder) PutDecimal(i int, v decimal.Decimal) {
-	tb.Desc.expectEncoding(i, DecimalEnc)
-	sz := sizeOfDecimal(v)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
-	writeDecimal(tb.fields[i], v)
-	tb.pos += sz
+func (tb *TupleBuilder) PutEnum(i int, v uint16) {
+	tb.Desc.expectEncoding(i, EnumEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+enumSize]
+	writeEnum(tb.fields[i], v)
+	tb.pos += enumSize
+}
+
+func (tb *TupleBuilder) PutSet(i int, v uint64) {
+	tb.Desc.expectEncoding(i, SetEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+setSize]
+	writeSet(tb.fields[i], v)
+	tb.pos += setSize
 }
 
 // PutString writes a string to the ith field of the Tuple being built.

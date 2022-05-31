@@ -1,6 +1,7 @@
 name: Fuzzer
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - 'go/**'
