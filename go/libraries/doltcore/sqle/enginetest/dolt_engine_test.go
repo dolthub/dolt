@@ -642,12 +642,6 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
-func TestConstraintViolations(t *testing.T) {
-	for _, script := range DoltConstraintViolationTransactionTests {
-		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
-	}
-}
-
 func TestDoltReset(t *testing.T) {
 	skipNewFormat(t)
 	for _, script := range DoltReset {
