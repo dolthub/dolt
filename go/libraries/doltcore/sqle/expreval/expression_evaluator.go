@@ -227,7 +227,7 @@ func newComparisonFunc(op CompareOp, exp expression.BinaryExpression, sch schema
 		} else if colName[:5] == "from_" {
 			colName = colName[5:]
 		}
-		
+
 		col, ok := sch.GetAllCols().GetByNameCaseInsensitive(colName)
 
 		if !ok {
