@@ -15,8 +15,9 @@
 package sqlserver
 
 import (
-	"github.com/dolthub/go-mysql-server/server"
 	"sync"
+
+	"github.com/dolthub/go-mysql-server/server"
 )
 
 var mySQLServer *server.Server
