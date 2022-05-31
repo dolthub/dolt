@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -49,6 +50,7 @@ const (
 
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
+var _ sql.IndexedTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -66,6 +68,9 @@ type DiffTable struct {
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
 	rowFilters       []sql.Expression
+
+	table  *doltdb.Table
+	lookup sql.IndexLookup
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -110,6 +115,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
 		rowFilters:       nil,
+		table:            table,
 		joiner:           j,
 	}, nil
 }
@@ -200,6 +206,22 @@ func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.T
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
 	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+}
+
+// TODO: create new index type or use modified DoltIndexes?
+func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
+}
+
+func (dt *DiffTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	if lookup == nil {
+		return dt
+	}
+
+	nt := *dt
+	nt.lookup = lookup
+
+	return &nt
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)

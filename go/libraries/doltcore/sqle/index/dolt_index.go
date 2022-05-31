@@ -38,6 +38,66 @@ type DoltIndex interface {
 	GetDurableIndexes(*sql.Context, *doltdb.Table) (durable.Index, durable.Index, error)
 }
 
+func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Currently, only support diffs on tables with primary keys, panic?
+	if schema.IsKeyless(sch) {
+		return nil, nil
+	}
+
+	// TODO: do this for other indexes?
+	tableRows, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	keyBld := maybeGetKeyBuilder(tableRows)
+
+	// TODO: two primary keys???
+	cols := sch.GetPKCols().GetColumns()
+
+	// add to_ prefix
+	toCols := make([]schema.Column, len(cols))
+	for i, col := range cols {
+		toCols[i] = col
+		toCols[i].Name = "to_" + col.Name // TODO: const?
+	}
+
+	// to_ columns
+	toIndex := doltIndex{
+		id:       "PRIMARY",
+		tblName:  doltdb.DoltDiffTablePrefix + tbl,
+		dbName:   db,
+		columns:  toCols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
+	}
+	indexes = append(indexes, toIndex)
+
+	// TODO: from_ columns
+	//indexes[1] = doltIndex{
+	//	id:       "PRIMARY",
+	//	tblName:  doltdb.DoltDiffTablePrefix + tbl,
+	//	dbName:   db,
+	//	columns:  cols,
+	//	indexSch: sch,
+	//	tableSch: sch,
+	//	unique:   true,
+	//	comment:  "",
+	//	vrw:      t.ValueReadWriter(),
+	//	keyBld:   keyBld,
+	//}
+
+	return indexes, nil
+}
+
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
