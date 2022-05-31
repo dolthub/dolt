@@ -98,7 +98,7 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
 	var ok bool
 	p.mu.RLock()
-	db, ok = p.databases[FormatDbMapKeyName(name)]
+	db, ok = p.databases[formatDbMapKeyName(name)]
 	p.mu.RUnlock()
 	if ok {
 		return db, nil
@@ -115,8 +115,8 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if found, ok := p.databases[FormatDbMapKeyName(name)]; !ok {
-		p.databases[FormatDbMapKeyName(name)] = db
+	if found, ok := p.databases[formatDbMapKeyName(name)]; !ok {
+		p.databases[formatDbMapKeyName(name)] = db
 		return db, nil
 	} else {
 		return found, nil
@@ -183,7 +183,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	db := NewDatabase(name, newEnv.DbData(), opts)
-	p.databases[FormatDbMapKeyName(db.Name())] = db
+	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
@@ -201,7 +201,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
-	dbKey := FormatDbMapKeyName(name)
+	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
 	// Get the DB's directory
@@ -229,7 +229,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 		}
 	}
 
-	delete(p.databases, strings.ToLower(dbKey))
+	delete(p.databases, dbKey)
 	return nil
 }
 
@@ -244,7 +244,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	dbName, revSpec := parts[0], parts[1]
 
 	p.mu.RLock()
-	candidate, ok := p.databases[strings.ToLower(dbName)]
+	candidate, ok := p.databases[formatDbMapKeyName(dbName)]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
@@ -520,9 +520,9 @@ func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 	return s.branch
 }
 
-// FormatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
+// formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
 // so it's stored in lower case name. Branch name is case-sensitive, so not changed.
-func FormatDbMapKeyName(name string) string {
+func formatDbMapKeyName(name string) string {
 	if !strings.Contains(name, dbRevisionDelimiter) {
 		return strings.ToLower(name)
 	}
