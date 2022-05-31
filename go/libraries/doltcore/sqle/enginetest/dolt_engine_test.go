@@ -593,6 +593,9 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+	for _, script := range DoltConstraintViolationTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 }
 
 func TestConcurrentTransactions(t *testing.T) {
@@ -636,6 +639,12 @@ func TestDoltMerge(t *testing.T) {
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
+func TestConstraintViolations(t *testing.T) {
+	for _, script := range DoltConstraintViolationTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
 
