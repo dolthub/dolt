@@ -127,9 +127,6 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 		}
 
-		var root *doltdb.RootValue
-		root, verr = GetWorkingWithVErr(dEnv)
-
 		if verr == nil {
 			mergeActive, err := dEnv.IsMergeActive(ctx)
 			if err != nil {
@@ -137,37 +134,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				return 1
 			}
 
-			// If there are any conflicts or constraint violations then we disallow the merge
-			hasCnf, err := root.HasConflicts(ctx)
-			if err != nil {
-				verr = errhand.BuildDError("error: failed to get conflicts").AddCause(err).Build()
-			}
-			hasCV, err := root.HasConstraintViolations(ctx)
-			if err != nil {
-				verr = errhand.BuildDError("error: failed to get constraint violations").AddCause(err).Build()
-			}
-
-			unmergedCnt, err := getUnmergedTableCount(ctx, root)
-			if err != nil {
-				cli.PrintErrln(err.Error())
-				return 1
-			}
-
-			if hasCnf || hasCV {
-				cli.Printf("error: A merge is already in progress, %d table(s) are unmerged due to conflicts or constraint violations.\n", unmergedCnt)
-				cli.Println("hint: Fix them up in the working tree, and then use 'dolt add <table>'")
-				cli.Println("hint: as appropriate to mark resolution and make a commit.")
-				if hasCnf && hasCV {
-					cli.Println("fatal: Exiting because of an unresolved conflict and constraint violation.\n" +
-						"fatal: Use 'dolt conflicts' to investigate and resolve conflicts.")
-				} else if hasCnf {
-					cli.Println("fatal: Exiting because of an unresolved conflict.\n" +
-						"fatal: Use 'dolt conflicts' to investigate and resolve conflicts.")
-				} else {
-					cli.Println("fatal: Exiting because of an unresolved constraint violation.")
-				}
-				return 1
-			} else if mergeActive {
+			if mergeActive {
 				cli.Println("error: Merging is not possible because you have not committed an active merge.")
 				cli.Println("hint: add affected tables using 'dolt add <table>' and commit using 'dolt commit -m <msg>'")
 				cli.Println("fatal: Exiting because of active merge")
@@ -201,7 +168,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 			}
 			spec.Msg = msg
 
-			err = mergePrinting(ctx, dEnv, spec)
+			err = validateMergeSpec(ctx, spec)
 			if err != nil {
 				return handleCommitErr(ctx, dEnv, err, usage)
 			}
@@ -213,7 +180,7 @@ func (cmd MergeCmd) Exec(ctx context.Context, commandStr string, args []string, 
 				cli.PrintErrln(err.Error())
 				return 1
 			}
-			unmergedCnt, err = getUnmergedTableCount(ctx, wRoot)
+			unmergedCnt, err := getUnmergedTableCount(ctx, wRoot)
 			if err != nil {
 				cli.PrintErrln(err.Error())
 				return 1
@@ -294,7 +261,7 @@ func getCommitMessage(ctx context.Context, apr *argparser.ArgParseResults, dEnv 
 	return "", nil
 }
 
-func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec) errhand.VerboseError {
+func validateMergeSpec(ctx context.Context, spec *merge.MergeSpec) errhand.VerboseError {
 	if spec.HeadH == spec.MergeH {
 		//TODO - why is this different for merge/pull?
 		// cli.Println("Already up to date.")
@@ -307,9 +274,9 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec
 	if spec.Squash {
 		cli.Println("Squash commit -- not updating HEAD")
 	}
-	if len(spec.TblNames) != 0 {
+	if len(spec.StompedTblNames) != 0 {
 		bldr := errhand.BuildDError("error: Your local changes to the following tables would be overwritten by merge:")
-		for _, tName := range spec.TblNames {
+		for _, tName := range spec.StompedTblNames {
 			bldr.AddDetails(tName)
 		}
 		bldr.AddDetails("Please commit your changes before you merge.")
@@ -336,6 +303,7 @@ func mergePrinting(ctx context.Context, dEnv *env.DoltEnv, spec *merge.MergeSpec
 	}
 	return nil
 }
+
 func abortMerge(ctx context.Context, doltEnv *env.DoltEnv) errhand.VerboseError {
 	roots, err := doltEnv.Roots(ctx)
 	if err != nil {
