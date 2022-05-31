@@ -222,10 +222,10 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := strings.ToLower(dbKey) + "/"
+	derivativeNamePrefix := dbKey + "/"
 	for dbName := range p.databases {
-		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
-			delete(p.databases, strings.ToLower(dbName))
+		if strings.HasPrefix(dbName, derivativeNamePrefix) {
+			delete(p.databases, dbName)
 		}
 	}
 
