@@ -17,6 +17,7 @@ package dtables
 import (
 	"context"
 	"errors"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"io"
 	"time"
 
@@ -52,7 +53,7 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition) (*diffRowItr, error) {
+func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*diffRowItr, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
 	if err != nil {
@@ -88,7 +89,22 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
-	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
+	// Use index lookup if it exists
+	if lookup == nil {
+		rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
+	} else {
+		// TODO: this is a testing method
+		ranges := index.NomsRangesFromIndexLookup(lookup)
+		rangeFunc := func(ctx context.Context, val types.Value) (bool, error) {
+			v, ok := val.(types.Tuple)
+			if !ok {
+				return false, nil
+			}
+			valid, _, err := ranges[0].Check.Check(ctx, v)
+			return valid, err
+		}
+		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
+	}
 
 	warnFn := func(code int, message string, args ...string) {
 		ctx.Warn(code, message, args)

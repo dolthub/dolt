@@ -205,7 +205,7 @@ func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.T
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
 }
 
 // TODO: create new index type or use modified DoltIndexes?
@@ -301,11 +301,11 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
 	if types.IsFormat_DOLT_1(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, ddb, *dp.fromSch, *dp.toSch)
 	} else {
-		return newNomsDiffIter(ctx, ddb, joiner, dp)
+		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
 	}
 }
 

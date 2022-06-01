@@ -52,7 +52,7 @@ func sendChange(ctx context.Context, changes chan<- ValueChanged, change ValueCh
 // Streams the diff from |last| to |current| into |changes|, using a left-right approach.
 // Left-right immediately descends to the first change and starts streaming changes, but compared to top-down it's serial and much slower to calculate the full diff.
 func orderedSequenceDiffLeftRight(ctx context.Context, last orderedSequence, current orderedSequence, changes chan<- ValueChanged) error {
-	trueFunc := func(Value) (bool, error) {
+	trueFunc := func(context.Context, Value) (bool, error) {
 		return true, nil
 	}
 	return orderedSequenceDiffLeftRightInRange(ctx, last, current, emptyKey, trueFunc, changes)
@@ -99,7 +99,7 @@ VALIDRANGES:
 			if isLess, err := currentKey.Less(last.format(), lastKey); err != nil {
 				return err
 			} else if isLess {
-				isInRange, err := inRange(currentKey.v)
+				isInRange, err := inRange(ctx, currentKey.v)
 				if err != nil {
 					return err
 				} else if !isInRange {
@@ -120,7 +120,7 @@ VALIDRANGES:
 					return err
 				}
 			} else {
-				isInRange, err := inRange(lastKey.v)
+				isInRange, err := inRange(ctx, lastKey.v)
 				if !isInRange {
 					return err
 				} else if !isInRange {
@@ -178,7 +178,7 @@ VALIDRANGES:
 			return err
 		}
 
-		isInRange, err := inRange(lastKey.v)
+		isInRange, err := inRange(ctx, lastKey.v)
 		if err != nil {
 			return err
 		} else if !isInRange {
@@ -206,7 +206,7 @@ VALIDRANGES:
 			return err
 		}
 
-		isInRange, err := inRange(currKey.v)
+		isInRange, err := inRange(ctx, currKey.v)
 		if err != nil {
 			return err
 		} else if !isInRange {

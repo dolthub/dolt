@@ -275,7 +275,7 @@ func (d differ) diffLists(ctx context.Context, p types.Path, v1, v2 types.List) 
 }
 
 func (d differ) diffMaps(ctx context.Context, p types.Path, v1, v2 types.Map) error {
-	trueFunc := func(value types.Value) (bool, error) {
+	trueFunc := func(ctx context.Context, value types.Value) (bool, error) {
 		return true, nil
 	}
 
