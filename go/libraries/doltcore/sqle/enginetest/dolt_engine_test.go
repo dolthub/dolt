@@ -396,6 +396,36 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
+		Name: "Drop database engine tests for Dolt only",
+		SetUpScript: []string{
+			"CREATE DATABASE Test1db",
+			"CREATE DATABASE TEST2db",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DROP DATABASE TeSt2DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE test2db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:    "USE TEST1DB",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "DROP DATABASE IF EXISTS test1DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE Test1db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+		},
+	})
+
 	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
