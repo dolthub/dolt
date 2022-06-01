@@ -208,7 +208,6 @@ func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.Ro
 	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
 }
 
-// TODO: create new index type or use modified DoltIndexes?
 func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
 }

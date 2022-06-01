@@ -63,7 +63,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	toCols := make([]schema.Column, len(cols))
 	for i, col := range cols {
 		toCols[i] = col
-		toCols[i].Name = "to_" + col.Name // TODO: const?
+		toCols[i].Name = "to_" + col.Name
 	}
 
 	// to_ columns
@@ -80,21 +80,29 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		keyBld:   keyBld,
 	}
 
-	// TODO: from_ columns
-	fromIndex := doltIndex{
-		id:       "PRIMARY",
-		tblName:  doltdb.DoltDiffTablePrefix + tbl,
-		dbName:   db,
-		columns:  cols,
-		indexSch: sch,
-		tableSch: sch,
-		unique:   true,
-		comment:  "",
-		vrw:      t.ValueReadWriter(),
-		keyBld:   keyBld,
-	}
+	// TODO: need to add from_ columns
+	//// add from_ prefix
+	//fromCols := make([]schema.Column, len(cols))
+	//for i, col := range cols {
+	//	toCols[i] = col
+	//	toCols[i].Name = "from_" + col.Name
+	//}
+	//
+	//// from_ columns
+	//fromIndex := doltIndex{
+	//	id:       "PRIMARY",
+	//	tblName:  doltdb.DoltDiffTablePrefix + tbl,
+	//	dbName:   db,
+	//	columns:  fromCols,
+	//	indexSch: sch,
+	//	tableSch: sch,
+	//	unique:   true,
+	//	comment:  "",
+	//	vrw:      t.ValueReadWriter(),
+	//	keyBld:   keyBld,
+	//}
 
-	return append(indexes, toIndex, fromIndex), nil
+	return append(indexes, toIndex), nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
