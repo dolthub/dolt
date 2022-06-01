@@ -80,7 +80,7 @@ CREATE TABLE `address` (
   `city_id` smallint unsigned NOT NULL,
   `postal_code` varchar(10) DEFAULT NULL,
   `phone` varchar(20) NOT NULL,
-  `location` geometry NOT NULL /* UNSUPPORTED SYNTAX (https://github.com/dolthub/dolt/issues/3229): SRID 0 */,
+  `location` geometry NOT NULL /*!80003 SRID 0 */,
   `last_update` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`address_id`),
   KEY `idx_fk_city_id` (`city_id`),

@@ -33,7 +33,7 @@ const (
 
 const (
 	PointType      = 1
-	LinestringType = 2
+	LineStringType = 2
 	PolygonType    = 3
 )
 
@@ -59,9 +59,9 @@ func SerializePoint(p sql.Point) (buf []byte) {
 	return
 }
 
-func SerializeLinestring(l sql.Linestring) (buf []byte) {
+func SerializeLineString(l sql.LineString) (buf []byte) {
 	buf = allocateBuffer(len(l.Points), 1)
-	WriteEWKBHeader(buf[:EWKBHeaderSize], l.SRID, LinestringType)
+	WriteEWKBHeader(buf[:EWKBHeaderSize], l.SRID, LineStringType)
 	writePointSlice(buf[EWKBHeaderSize:], l.Points)
 	return
 }
@@ -86,7 +86,7 @@ func writePointSlice(buf []byte, points []sql.Point) {
 	}
 }
 
-func writeLineSlice(buf []byte, lines []sql.Linestring) {
+func writeLineSlice(buf []byte, lines []sql.LineString) {
 	writeCount(buf, uint32(len(lines)))
 	buf = buf[CountSize:]
 	for _, l := range lines {

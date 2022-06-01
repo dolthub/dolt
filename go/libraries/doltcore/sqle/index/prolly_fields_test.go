@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression/function"
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -96,9 +97,14 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: float64(-math.Pi),
 		},
 		{
+			name:  "bit",
+			typ:   val.Type{Enc: val.Bit64Enc},
+			value: uint64(42),
+		},
+		{
 			name:  "decimal",
 			typ:   val.Type{Enc: val.DecimalEnc},
-			value: "0.263419374632932747932030573792",
+			value: mustParseDecimal("0.263419374632932747932030573792"),
 		},
 		{
 			name:  "string",
@@ -120,11 +126,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.DateEnc},
 			value: dateFromTime(time.Now().UTC()),
 		},
-		//{
-		//	name:  "time",
-		//	typ:   val.Type{Enc: val.DateEnc},
-		//	value: dateFromTime(time.Now().UTC()),
-		//},
+		{
+			name:  "time",
+			typ:   val.Type{Enc: val.TimeEnc},
+			value: "11:22:00",
+		},
 		{
 			name:  "datetime",
 			typ:   val.Type{Enc: val.DatetimeEnc},
@@ -205,6 +211,14 @@ func mustParseJson(t *testing.T, s string) sql.JSONDocument {
 	err := json.Unmarshal([]byte(s), &v)
 	require.NoError(t, err)
 	return sql.JSONDocument{Val: v}
+}
+
+func mustParseDecimal(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func dateFromTime(t time.Time) time.Time {

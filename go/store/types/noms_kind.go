@@ -58,7 +58,7 @@ const (
 	JSONKind
 	GeometryKind
 	PointKind
-	LinestringKind
+	LineStringKind
 	PolygonKind
 
 	SerialMessageKind
@@ -92,7 +92,7 @@ func init() {
 	KindToType[JSONKind] = JSON{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
-	KindToType[LinestringKind] = Linestring{}
+	KindToType[LineStringKind] = LineString{}
 	KindToType[PolygonKind] = Polygon{}
 	KindToType[SerialMessageKind] = SerialMessage{}
 	KindToType[TupleRowStorageKind] = TupleRowStorage{}
@@ -121,7 +121,7 @@ func init() {
 	SupportedKinds[JSONKind] = true
 	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
-	SupportedKinds[LinestringKind] = true
+	SupportedKinds[LineStringKind] = true
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
 	SupportedKinds[TupleRowStorageKind] = true
@@ -155,7 +155,7 @@ var KindToString = map[NomsKind]string{
 	JSONKind:            "JSON",
 	GeometryKind:        "Geometry",
 	PointKind:           "Point",
-	LinestringKind:      "Linestring",
+	LineStringKind:      "LineString",
 	PolygonKind:         "Polygon",
 	SerialMessageKind:   "SerialMessage",
 	TupleRowStorageKind: "TupleRowStorage",
@@ -180,7 +180,7 @@ func isKindOrderedByValue(k NomsKind) bool {
 func IsGeometryKind(k NomsKind) bool {
 	switch k {
 	case PointKind,
-		LinestringKind,
+		LineStringKind,
 		PolygonKind,
 		GeometryKind:
 		return true

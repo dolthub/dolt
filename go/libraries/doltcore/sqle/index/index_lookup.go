@@ -66,7 +66,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range,
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch, secondary)
 	} else {
-		return newProllyIndexIter(ctx, idx, ranges, primary, secondary)
+		return newProllyIndexIter(ctx, idx, ranges, pkSch, primary, secondary)
 	}
 }
 

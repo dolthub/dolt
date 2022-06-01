@@ -68,7 +68,7 @@ type doltTableRowIter struct {
 }
 
 // Returns a new row iterator for the table given
-func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []string, partition doltTablePartition) (sql.RowIter, error) {
+func newRowIterator(ctx context.Context, tbl *doltdb.Table, sqlSch sql.Schema, projCols []string, partition doltTablePartition) (sql.RowIter, error) {
 	sch, err := tbl.GetSchema(ctx)
 
 	if err != nil {
@@ -76,7 +76,7 @@ func newRowIterator(ctx context.Context, tbl *doltdb.Table, projCols []string, p
 	}
 
 	if types.IsFormat_DOLT_1(tbl.Format()) {
-		return ProllyRowIterFromPartition(ctx, tbl, projCols, partition)
+		return ProllyRowIterFromPartition(ctx, tbl, sqlSch, projCols, partition)
 	}
 
 	if schema.IsKeyless(sch) {
@@ -168,7 +168,13 @@ func (itr *doltTableRowIter) Close(*sql.Context) error {
 	return nil
 }
 
-func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projections []string, partition doltTablePartition) (sql.RowIter, error) {
+func ProllyRowIterFromPartition(
+	ctx context.Context,
+	tbl *doltdb.Table,
+	sqlSch sql.Schema,
+	projections []string,
+	partition doltTablePartition,
+) (sql.RowIter, error) {
 	rows := durable.ProllyMapFromIndex(partition.rowData)
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
@@ -183,7 +189,7 @@ func ProllyRowIterFromPartition(ctx context.Context, tbl *doltdb.Table, projecti
 		return nil, err
 	}
 
-	return index.NewProllyRowIter(ctx, sch, rows, iter, projections)
+	return index.NewProllyRowIter(sch, sqlSch, rows, iter, projections)
 }
 
 // TableToRowIter returns a |sql.RowIter| for a full table scan for the given |table|. If
@@ -208,6 +214,7 @@ func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string
 		end:     NoUpperBound,
 		rowData: data,
 	}
+	sqlSch := table.sqlSch.Schema
 
-	return newRowIterator(ctx, t, columns, p)
+	return newRowIterator(ctx, t, sqlSch, columns, p)
 }

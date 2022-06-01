@@ -76,33 +76,20 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Drop and add primary key on two branches converges to same schema",
+			Name: "Create table with TIME type",
 			SetUpScript: []string{
-				"create table t1 (i int);",
-				"call dolt_commit('-am', 't1 table')",
-				"call dolt_checkout('-b', 'b1')",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'b1 primary key changes')",
-				"call dolt_checkout('main')",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'main primary key change')",
+				"create table my_types (pk int primary key, c0 time);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "call dolt_merge('b1')",
-					Expected: []sql.Row{{1}},
+					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
 				},
 				{
-					Query:    "select count(*) from dolt_conflicts",
-					Expected: []sql.Row{{0}},
+					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
 				},
 			},
 		},
@@ -123,11 +110,11 @@ func TestSingleQueryPrepared(t *testing.T) {
 		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
 		Expected: []sql.Row{
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 		},
 	}
 
@@ -209,7 +196,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestSpatialQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialQueries(t, newDoltHarness(t))
 }
 
@@ -250,12 +236,10 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestSpatialDelete(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialDelete(t, newDoltHarness(t))
 }
 
 func TestSpatialScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialScripts(t, newDoltHarness(t))
 }
 
@@ -879,7 +863,6 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))

@@ -49,7 +49,7 @@ const (
 	YearTypeIdentifier       Identifier = "year"
 	GeometryTypeIdentifier   Identifier = "geometry"
 	PointTypeIdentifier      Identifier = "point"
-	LinestringTypeIdentifier Identifier = "linestring"
+	LineStringTypeIdentifier Identifier = "linestring"
 	PolygonTypeIdentifier    Identifier = "polygon"
 )
 
@@ -75,7 +75,7 @@ var Identifiers = map[Identifier]struct{}{
 	YearTypeIdentifier:       {},
 	GeometryTypeIdentifier:   {},
 	PointTypeIdentifier:      {},
-	LinestringTypeIdentifier: {},
+	LineStringTypeIdentifier: {},
 	PolygonTypeIdentifier:    {},
 }
 
@@ -168,13 +168,12 @@ func FromSqlType(sqlType sql.Type) (TypeInfo, error) {
 		switch sqlType.String() {
 		case sql.PointType{}.String():
 			return &pointType{sqlType.(sql.PointType)}, nil
-		case sql.LinestringType{}.String():
-			return &linestringType{sqlType.(sql.LinestringType)}, nil
+		case sql.LineStringType{}.String():
+			return &linestringType{sqlType.(sql.LineStringType)}, nil
 		case sql.PolygonType{}.String():
 			return &polygonType{sqlType.(sql.PolygonType)}, nil
 		case sql.GeometryType{}.String():
-			// TODO: not sure how to determine inner type
-			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType), innerType: &pointType{}}, nil
+			return &geometryType{sqlGeometryType: sqlType.(sql.GeometryType)}, nil
 		default:
 			return nil, fmt.Errorf(`expected "PointTypeIdentifier" from SQL basetype "Geometry"`)
 		}
@@ -273,13 +272,13 @@ func FromTypeParams(id Identifier, params map[string]string) (TypeInfo, error) {
 	case JSONTypeIdentifier:
 		return JSONType, nil
 	case GeometryTypeIdentifier:
-		return GeometryType, nil
+		return CreateGeometryTypeFromParams(params)
 	case PointTypeIdentifier:
-		return PointType, nil
-	case LinestringTypeIdentifier:
-		return LinestringType, nil
+		return CreatePointTypeFromParams(params)
+	case LineStringTypeIdentifier:
+		return CreateLineStringTypeFromParams(params)
 	case PolygonTypeIdentifier:
-		return PolygonType, nil
+		return CreatePolygonTypeFromParams(params)
 	case SetTypeIdentifier:
 		return CreateSetTypeFromParams(params)
 	case TimeTypeIdentifier:
@@ -316,8 +315,8 @@ func FromKind(kind types.NomsKind) TypeInfo {
 		return Int64Type
 	case types.JSONKind:
 		return JSONType
-	case types.LinestringKind:
-		return LinestringType
+	case types.LineStringKind:
+		return LineStringType
 	case types.NullKind:
 		return UnknownType
 	case types.GeometryKind:

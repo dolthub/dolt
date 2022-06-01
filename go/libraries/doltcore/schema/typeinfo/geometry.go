@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,22 +28,21 @@ import (
 // within is directly reliant on the go-mysql-server implementation.
 type geometryType struct {
 	sqlGeometryType sql.GeometryType // References the corresponding GeometryType in GMS
-	innerType       TypeInfo         // References the actual typeinfo (pointType, linestringType, polygonType)
 }
 
 var _ TypeInfo = (*geometryType)(nil)
 
-var GeometryType = &geometryType{sql.GeometryType{}, nil}
+var GeometryType = &geometryType{sql.GeometryType{}}
 
 // ConvertTypesGeometryToSQLGeometry basically makes a deep copy of sql.Geometry
-func ConvertTypesGeometryToSQLGeometry(g types.Geometry) sql.Geometry {
+func ConvertTypesGeometryToSQLGeometry(g types.Geometry) interface{} {
 	switch inner := g.Inner.(type) {
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(inner)}
-	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(inner)}
+		return ConvertTypesPointToSQLPoint(inner)
+	case types.LineString:
+		return ConvertTypesLineStringToSQLLineString(inner)
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(inner)}
+		return ConvertTypesPolygonToSQLPolygon(inner)
 	default:
 		panic("used an invalid type types.Geometry.Inner")
 	}
@@ -60,11 +60,11 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 	case types.Geometry:
 		return ConvertTypesGeometryToSQLGeometry(val), nil
 	case types.Point:
-		return sql.Geometry{Inner: ConvertTypesPointToSQLPoint(val)}, nil
-	case types.Linestring:
-		return sql.Geometry{Inner: ConvertTypesLinestringToSQLLinestring(val)}, nil
+		return ConvertTypesPointToSQLPoint(val), nil
+	case types.LineString:
+		return ConvertTypesLineStringToSQLLineString(val), nil
 	case types.Polygon:
-		return sql.Geometry{Inner: ConvertTypesPolygonToSQLPolygon(val)}, nil
+		return ConvertTypesPolygonToSQLPolygon(val), nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 	}
@@ -72,29 +72,46 @@ func (ti *geometryType) ConvertNomsValueToValue(v types.Value) (interface{}, err
 
 // ReadFrom reads a go value from a noms types.CodecReader directly
 func (ti *geometryType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
+	var val types.Value
+	var err error
+
 	k := reader.ReadKind()
 	switch k {
-	case types.GeometryKind:
-		p, err := reader.ReadGeometry()
-		if err != nil {
+	case types.PointKind:
+		if val, err = reader.ReadPoint(); err != nil {
 			return nil, err
 		}
-		return ti.ConvertNomsValueToValue(p)
+	case types.LineStringKind:
+		if val, err = reader.ReadLineString(); err != nil {
+			return nil, err
+		}
+	case types.PolygonKind:
+		if val, err = reader.ReadPolygon(); err != nil {
+			return nil, err
+		}
+	case types.GeometryKind:
+		// Note: GeometryKind is no longer written
+		// included here for backward compatibility
+		if val, err = reader.ReadGeometry(); err != nil {
+			return nil, err
+		}
 	case types.NullKind:
 		return nil, nil
 	default:
 		return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 	}
+
+	return ti.ConvertNomsValueToValue(val)
 }
 
-func ConvertSQLGeometryToTypesGeometry(p sql.Geometry) types.Geometry {
-	switch inner := p.Inner.(type) {
+func ConvertSQLGeometryToTypesGeometry(p interface{}) types.Value {
+	switch inner := p.(type) {
 	case sql.Point:
-		return types.Geometry{Inner: ConvertSQLPointToTypesPoint(inner)}
-	case sql.Linestring:
-		return types.Geometry{Inner: ConvertSQLLinestringToTypesLinestring(inner)}
+		return ConvertSQLPointToTypesPoint(inner)
+	case sql.LineString:
+		return ConvertSQLLineStringToTypesLineString(inner)
 	case sql.Polygon:
-		return types.Geometry{Inner: ConvertSQLPolygonToTypesPolygon(inner)}
+		return ConvertSQLPolygonToTypesPolygon(inner)
 	default:
 		panic("used an invalid type sql.Geometry.Inner")
 	}
@@ -113,7 +130,7 @@ func (ti *geometryType) ConvertValueToNomsValue(ctx context.Context, vrw types.V
 	if err != nil {
 		return nil, err
 	}
-	return ConvertSQLGeometryToTypesGeometry(geom.(sql.Geometry)), nil
+	return ConvertSQLGeometryToTypesGeometry(geom), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -121,8 +138,11 @@ func (ti *geometryType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*geometryType)
-	return ok
+	if o, ok := other.(*geometryType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlGeometryType.DefinedSRID && !o.sqlGeometryType.DefinedSRID) || ti.sqlGeometryType.SRID == o.sqlGeometryType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
@@ -136,16 +156,16 @@ func (ti *geometryType) FormatValue(v types.Value) (*string, error) {
 	switch val := v.(type) {
 	case types.Point:
 		return PointType.FormatValue(val)
-	case types.Linestring:
-		return LinestringType.FormatValue(val)
+	case types.LineString:
+		return LineStringType.FormatValue(val)
 	case types.Polygon:
 		return PolygonType.FormatValue(val)
 	case types.Geometry:
 		switch inner := val.Inner.(type) {
 		case types.Point:
 			return PointType.FormatValue(inner)
-		case types.Linestring:
-			return LinestringType.FormatValue(inner)
+		case types.LineString:
+			return LineStringType.FormatValue(inner)
 		case types.Polygon:
 			return PolygonType.FormatValue(inner)
 		default:
@@ -163,7 +183,8 @@ func (ti *geometryType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *geometryType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlGeometryType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlGeometryType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -175,7 +196,7 @@ func (ti *geometryType) IsValid(v types.Value) bool {
 	switch v.(type) {
 	case types.Geometry,
 		types.Point,
-		types.Linestring,
+		types.LineString,
 		types.Polygon:
 		return true
 	default:
@@ -190,7 +211,7 @@ func (ti *geometryType) NomsKind() types.NomsKind {
 
 // Promote implements TypeInfo interface.
 func (ti *geometryType) Promote() TypeInfo {
-	return &geometryType{ti.sqlGeometryType.Promote().(sql.GeometryType), ti.innerType.Promote()}
+	return ti
 }
 
 // String implements TypeInfo interface.
@@ -223,7 +244,7 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	case *floatType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *geometryType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *inlineBlobType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *intType:
@@ -253,4 +274,26 @@ func geometryTypeConverter(ctx context.Context, src *geometryType, destTi TypeIn
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateGeometryTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &geometryType{sqlGeometryType: sql.GeometryType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

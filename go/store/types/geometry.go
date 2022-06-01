@@ -23,10 +23,10 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-// Geometry represents any of the types Point, Linestring, or Polygon.
+// Geometry represents any of the types Point, LineString, or Polygon.
 // TODO: Generics maybe?
 type Geometry struct {
-	Inner Value // Can be types.Point, types.Linestring, or types.Polygon
+	Inner Value // Can be types.Point, types.LineString, or types.Polygon
 }
 
 // Value interface
@@ -87,7 +87,7 @@ func (v Geometry) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 		WriteEWKBHeader(inner, buf)
 		WriteEWKBPointData(inner, buf[geometry.EWKBHeaderSize:])
 		w.writeString(string(buf))
-	case Linestring:
+	case LineString:
 		// Allocate buffer for linestring
 		buf := make([]byte, geometry.EWKBHeaderSize+LengthSize+geometry.PointSize*len(inner.Points))
 		// Write header and data to buffer
@@ -119,7 +119,7 @@ func readGeometry(nbf *NomsBinFormat, b *valueDecoder) (Geometry, error) {
 	switch geomType {
 	case geometry.PointType:
 		inner = ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid)
-	case geometry.LinestringType:
+	case geometry.LineStringType:
 		inner = ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid)
 	case geometry.PolygonType:
 		inner = ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid)
@@ -136,7 +136,7 @@ func (v Geometry) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, erro
 	switch geomType {
 	case geometry.PointType:
 		inner = ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid)
-	case geometry.LinestringType:
+	case geometry.LineStringType:
 		inner = ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid)
 	case geometry.PolygonType:
 		inner = ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid)

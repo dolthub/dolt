@@ -42,7 +42,7 @@ echo '
               "--bucket=dolt-fuzzer-runs",
               "--region=us-west-2",
               "--version-gate-job",
-              "--fuzzer-args=merge, --cycles=5"
+              "--fuzzer-args=basic, --cycles=5"
             ]
           }
         ],

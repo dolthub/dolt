@@ -459,3 +459,25 @@ SQL
     [ "$status" -eq 1 ]
     [[ "$output" =~ "too big number" ]] || false
 }
+
+@test "import mysqldump: show create table on table with geometry type with SRID value" {
+    run dolt sql <<SQL
+CREATE TABLE address (
+  address_id smallint unsigned NOT NULL AUTO_INCREMENT,
+  address varchar(50) NOT NULL,
+  address2 varchar(50) DEFAULT NULL,
+  district varchar(20) NOT NULL,
+  city_id smallint unsigned NOT NULL,
+  postal_code varchar(10) DEFAULT NULL,
+  phone varchar(20) NOT NULL,
+  location geometry NOT NULL /*!80003 SRID 0 */,
+  last_update timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (address_id)
+) ENGINE=InnoDB AUTO_INCREMENT=606 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+SQL
+    [ "$status" -eq 0 ]
+
+    run dolt sql -q "show create table address;" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
+}
