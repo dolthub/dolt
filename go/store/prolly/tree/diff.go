@@ -96,7 +96,7 @@ func sendRemoved(ctx context.Context, from *Cursor) (diff Diff, err error) {
 		From: from.CurrentValue(),
 	}
 
-	if _, err = from.Advance(ctx); err != nil {
+	if err = from.Advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -109,7 +109,7 @@ func sendAdded(ctx context.Context, to *Cursor) (diff Diff, err error) {
 		To:   to.CurrentValue(),
 	}
 
-	if _, err = to.Advance(ctx); err != nil {
+	if err = to.Advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -123,10 +123,10 @@ func sendModified(ctx context.Context, from, to *Cursor) (diff Diff, err error) 
 		To:   to.CurrentValue(),
 	}
 
-	if _, err = from.Advance(ctx); err != nil {
+	if err = from.Advance(ctx); err != nil {
 		return Diff{}, err
 	}
-	if _, err = to.Advance(ctx); err != nil {
+	if err = to.Advance(ctx); err != nil {
 		return Diff{}, err
 	}
 	return
@@ -160,10 +160,10 @@ func skipCommon(ctx context.Context, from, to *Cursor) (err error) {
 		// case we need to Compare parents again.
 		parentsAreNew = from.atNodeEnd() || to.atNodeEnd()
 
-		if _, err = from.Advance(ctx); err != nil {
+		if err = from.Advance(ctx); err != nil {
 			return err
 		}
-		if _, err = to.Advance(ctx); err != nil {
+		if err = to.Advance(ctx); err != nil {
 			return err
 		}
 	}
@@ -183,7 +183,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		}
 		from.skipToNodeStart()
 	} else {
-		from.Invalidate()
+		from.invalidate()
 	}
 
 	if to.parent.Valid() {
@@ -192,7 +192,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		}
 		to.skipToNodeStart()
 	} else {
-		to.Invalidate()
+		to.invalidate()
 	}
 
 	return
