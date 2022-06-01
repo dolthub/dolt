@@ -112,7 +112,7 @@ func TestAsyncDiffer(t *testing.T) {
 			name: "iter range starting with nil",
 			createdStarted: func(ctx context.Context, m1, m2 types.Map) *AsyncDiffer {
 				ad := NewAsyncDiffer(4)
-				ad.StartWithRange(ctx, m1, m2, nil, func(value types.Value) (bool, error) {
+				ad.StartWithRange(ctx, m1, m2, nil, func(ctx context.Context, value types.Value) (bool, error) {
 					return true, nil
 				})
 				return ad
@@ -128,7 +128,7 @@ func TestAsyncDiffer(t *testing.T) {
 			name: "iter range staring with Null Value",
 			createdStarted: func(ctx context.Context, m1, m2 types.Map) *AsyncDiffer {
 				ad := NewAsyncDiffer(4)
-				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(value types.Value) (bool, error) {
+				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(ctx context.Context, value types.Value) (bool, error) {
 					return true, nil
 				})
 				return ad
@@ -145,7 +145,7 @@ func TestAsyncDiffer(t *testing.T) {
 			createdStarted: func(ctx context.Context, m1, m2 types.Map) *AsyncDiffer {
 				ad := NewAsyncDiffer(4)
 				end := types.Uint(27)
-				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(value types.Value) (bool, error) {
+				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(ctx context.Context, value types.Value) (bool, error) {
 					return value.Less(m1.Format(), end)
 				})
 				return ad
@@ -162,7 +162,7 @@ func TestAsyncDiffer(t *testing.T) {
 			createdStarted: func(ctx context.Context, m1, m2 types.Map) *AsyncDiffer {
 				ad := NewAsyncDiffer(4)
 				end := types.Uint(15)
-				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(value types.Value) (bool, error) {
+				ad.StartWithRange(ctx, m1, m2, types.NullValue, func(ctx context.Context, value types.Value) (bool, error) {
 					return value.Less(m1.Format(), end)
 				})
 				return ad
@@ -180,7 +180,7 @@ func TestAsyncDiffer(t *testing.T) {
 				ad := NewAsyncDiffer(4)
 				start := types.Uint(10)
 				end := types.Uint(15)
-				ad.StartWithRange(ctx, m1, m2, start, func(value types.Value) (bool, error) {
+				ad.StartWithRange(ctx, m1, m2, start, func(ctx context.Context, value types.Value) (bool, error) {
 					return value.Less(m1.Format(), end)
 				})
 				return ad
