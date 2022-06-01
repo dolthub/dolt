@@ -990,6 +990,9 @@ ALTER TABLE t1 MODIFY COLUMN v1 BIGINT;
 ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2000);
 ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP;
 SQL
+
+    skip_nbf_dolt_1 "panic when selecting int64"
+
     run dolt sql -q "SELECT * FROM t1 ORDER BY pk" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
