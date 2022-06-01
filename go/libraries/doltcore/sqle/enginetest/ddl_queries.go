@@ -571,8 +571,31 @@ var DropColumnScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:       "alter table people drop column id",
-				ExpectedErr: sql.ErrPrimaryKeyViolation,
+				SkipResultsCheck: true,
 			},
-		},
+			{
+				Query: "show create table people",
+				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+						"  `first_name` varchar(100) NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `rating` float,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from people order by first_name",
+				Expected: []sql.Row{
+					{"Barney", "Gumble", 0, 40, 4.0, "00000000-0000-0000-0000-000000000005", uint(555)},
+					{"Bart", "Simpson", 0, 10, 9.0, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{"Homer", "Simpson", 1, 40, 8.5, nil, nil},
+					{"Lisa", "Simpson", 0, 8, 10.0, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{"Marge", "Simpson", 1, 38, 8.0, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{"Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
+				},
+			},
+ 		},
 	},
 }
