@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -34,25 +35,26 @@ var _ TypeInfo = (*polygonType)(nil)
 
 var PolygonType = &polygonType{sql.PolygonType{}}
 
-// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.Linestring
+// ConvertTypesPolygonToSQLPolygon basically makes a deep copy of sql.LineString
 func ConvertTypesPolygonToSQLPolygon(p types.Polygon) sql.Polygon {
-	lines := make([]sql.Linestring, len(p.Lines))
+	lines := make([]sql.LineString, len(p.Lines))
 	for i, l := range p.Lines {
-		lines[i] = ConvertTypesLinestringToSQLLinestring(l)
+		lines[i] = ConvertTypesLineStringToSQLLineString(l)
 	}
 	return sql.Polygon{SRID: p.SRID, Lines: lines}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *polygonType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Polygon, return a sql.Polygon
-	if val, ok := v.(types.Polygon); ok {
-		return ConvertTypesPolygonToSQLPolygon(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.Polygon, return a sql.Polygon
+	if val, ok := v.(types.Polygon); ok {
+		return ConvertTypesPolygonToSQLPolygon(val), nil
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
@@ -74,9 +76,9 @@ func (ti *polygonType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecRead
 }
 
 func ConvertSQLPolygonToTypesPolygon(p sql.Polygon) types.Polygon {
-	lines := make([]types.Linestring, len(p.Lines))
+	lines := make([]types.LineString, len(p.Lines))
 	for i, l := range p.Lines {
-		lines[i] = ConvertSQLLinestringToTypesLinestring(l)
+		lines[i] = ConvertSQLLineStringToTypesLineString(l)
 	}
 	return types.Polygon{SRID: p.SRID, Lines: lines}
 }
@@ -102,8 +104,11 @@ func (ti *polygonType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*polygonType)
-	return ok
+	if o, ok := other.(*polygonType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlPolygonType.DefinedSRID && !o.sqlPolygonType.DefinedSRID) || ti.sqlPolygonType.SRID == o.sqlPolygonType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
@@ -133,7 +138,8 @@ func (ti *polygonType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *polygonType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPolygonType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlPolygonType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -199,7 +205,7 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *timeType:
@@ -217,4 +223,26 @@ func polygonTypeConverter(ctx context.Context, src *polygonType, destTi TypeInfo
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreatePolygonTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &polygonType{sqlPolygonType: sql.PolygonType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

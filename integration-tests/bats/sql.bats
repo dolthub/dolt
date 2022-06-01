@@ -664,7 +664,7 @@ SQL
 CREATE DATABASE test1;
 CREATE DATABASE test2;
 USE test1;
-CALL DOLT_CHECKOUT('-b', 'newbranch');
+CALL DOLT_CHECKOUT('-b', 'newBranch');
 USE \`test1/newBranch\`;
 USE test2;
 DROP DATABASE test1;
@@ -675,16 +675,16 @@ SQL
     run dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
-CALL DOLT_CHECKOUT('-b', 'newbranch');
-USE \`test1/newBranch\`;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`TEST1/newBranch\`;
 USE test2;
-DROP DATABASE test1;
+DROP DATABASE Test1;
 SHOW TABLES;
 USE \`test1/newBranch\`;
 SQL
 
     [ $status -ne 0 ]
-    [[ "$output" =~ "database not found: test1/newbranch" ]] || false
+    [[ "$output" =~ "database not found: test1/newBranch" ]] || false
 
     cd ../
 }

@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -45,7 +46,6 @@ func (ti *pointType) ConvertNomsValueToValue(v types.Value) (interface{}, error)
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-
 	// Expect a types.Point, return a sql.Point
 	if val, ok := v.(types.Point); ok {
 		return ConvertTypesPointToSQLPoint(val), nil
@@ -96,8 +96,11 @@ func (ti *pointType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*pointType)
-	return ok
+	if o, ok := other.(*pointType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlPointType.DefinedSRID && !o.sqlPointType.DefinedSRID) || ti.sqlPointType.SRID == o.sqlPointType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
@@ -123,7 +126,8 @@ func (ti *pointType) GetTypeIdentifier() Identifier {
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *pointType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlPointType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlPointType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
@@ -187,7 +191,7 @@ func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (t
 	case *linestringType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *setType:
@@ -207,4 +211,26 @@ func pointTypeConverter(ctx context.Context, src *pointType, destTi TypeInfo) (t
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreatePointTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &pointType{sqlPointType: sql.PointType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

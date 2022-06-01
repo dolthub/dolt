@@ -110,11 +110,11 @@ func TestSingleQueryPrepared(t *testing.T) {
 		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
 		Expected: []sql.Row{
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 		},
 	}
 
@@ -196,7 +196,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestSpatialQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialQueries(t, newDoltHarness(t))
 }
 
@@ -237,12 +236,10 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestSpatialDelete(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialDelete(t, newDoltHarness(t))
 }
 
 func TestSpatialScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialScripts(t, newDoltHarness(t))
 }
 
@@ -399,6 +396,36 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
+		Name: "Drop database engine tests for Dolt only",
+		SetUpScript: []string{
+			"CREATE DATABASE Test1db",
+			"CREATE DATABASE TEST2db",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DROP DATABASE TeSt2DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE test2db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:    "USE TEST1DB",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "DROP DATABASE IF EXISTS test1DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE Test1db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+		},
+	})
+
 	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
@@ -836,7 +863,6 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))

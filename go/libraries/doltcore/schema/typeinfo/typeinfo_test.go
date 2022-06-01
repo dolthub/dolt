@@ -201,7 +201,7 @@ func testTypeInfoForeignKindHandling(t *testing.T, tiArrays [][]TypeInfo, vaArra
 					for _, vaArray := range vaArrays {
 						for _, val := range vaArray {
 							t.Run(fmt.Sprintf(`types.%v(%v)`, val.Kind().String(), humanReadableString(val)), func(t *testing.T) {
-								// Should be able to convert Point, Linestring, and Polygon to Geometry columns
+								// Should be able to convert Point, LineString, and Polygon to Geometry columns
 								if ti.NomsKind() == types.GeometryKind {
 									if types.IsGeometryKind(val.Kind()) {
 										_, err := ti.ConvertNomsValueToValue(val)
@@ -235,7 +235,7 @@ func testTypeInfoGetTypeParams(t *testing.T, tiArrays [][]TypeInfo) {
 		t.Run(tiArray[0].GetTypeIdentifier().String(), func(t *testing.T) {
 			for _, ti := range tiArray {
 				if ti.GetTypeIdentifier() == PointTypeIdentifier ||
-					ti.GetTypeIdentifier() == LinestringTypeIdentifier ||
+					ti.GetTypeIdentifier() == LineStringTypeIdentifier ||
 					ti.GetTypeIdentifier() == PolygonTypeIdentifier ||
 					ti.GetTypeIdentifier() == GeometryTypeIdentifier {
 					t.Run(ti.String(), func(t *testing.T) {
@@ -354,7 +354,7 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{DefaultInlineBlobType},
 			{Int8Type, Int16Type, Int24Type, Int32Type, Int64Type},
 			{JSONType},
-			{LinestringType},
+			{LineStringType},
 			{PointType},
 			{PolygonType},
 			{GeometryType},
@@ -390,9 +390,9 @@ func generateTypeInfoArrays(t *testing.T) ([][]TypeInfo, [][]types.Value) {
 			{types.Int(20), types.Int(215), types.Int(237493), types.Int(2035753568), types.Int(2384384576063)},                            //Int
 			{json.MustTypesJSON(`null`), json.MustTypesJSON(`[]`), json.MustTypesJSON(`"lorem ipsum"`), json.MustTypesJSON(`2.71`),
 				json.MustTypesJSON(`false`), json.MustTypesJSON(`{"a": 1, "b": []}`)}, //JSON
-			{types.Linestring{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // Linestring
+			{types.LineString{SRID: 0, Points: []types.Point{{SRID: 0, X: 1, Y: 2}, {SRID: 0, X: 3, Y: 4}}}}, // LineString
 			{types.Point{SRID: 0, X: 1, Y: 2}}, // Point
-			{types.Polygon{SRID: 0, Lines: []types.Linestring{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}}, // Polygon
+			{types.Polygon{SRID: 0, Lines: []types.LineString{{SRID: 0, Points: []types.Point{{SRID: 0, X: 0, Y: 0}, {SRID: 0, X: 0, Y: 1}, {SRID: 0, X: 1, Y: 1}, {SRID: 0, X: 0, Y: 0}}}}}}, // Polygon
 			{types.Geometry{Inner: types.Point{SRID: 0, X: 1, Y: 2}}},                                                                                                                      // Geometry holding a Point
 			{types.Uint(1), types.Uint(5), types.Uint(64), types.Uint(42), types.Uint(192)},                                                                                                //Set
 			{types.Int(0), types.Int(1000000 /*"00:00:01"*/), types.Int(113000000 /*"00:01:53"*/), types.Int(247019000000 /*"68:36:59"*/), types.Int(458830485214 /*"127:27:10.485214"*/)}, //Time
