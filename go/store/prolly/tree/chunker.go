@@ -137,31 +137,30 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
-// AdvanceTo progresses the chunker until its tracking cursor catches up
-// with |next|, a cursor indicating next key where an edit will be applied.
+// AdvanceTo progresses the chunker until its tracking cursor catches up with
+// |next|, a cursor indicating next key where an edit will be applied.
 //
-// The general structure precedes from the deepest chunker recursively into
-// its linked list parents:
+// The general structure precedes from the deepest chunker recursively into its
+// linked list parents:
 //
 //  (1) If the current cursor and all of its parents are aligned with |next|,
-//   we are done.
+//  we are done.
 //
-//  (2) In lockstep, a) append to the chunker and b) increment the cursor
-//    until we either meet condition (1) and return, or we synchronize
-//    and progress to (3) or (4). Synchronizing means that the current
-//    NodeStore has reached a chunk boundary that aligns with a chunk
-//    boundary in the old NodeStore. Synchronization means that the new
-//    NodeStore is date applying edits at the current cursor level.
+//  (2) In lockstep, a) append to the chunker and b) increment the cursor until
+//  we either meet condition (1) and return, or we synchronize and progress to
+//  (3) or (4). Synchronizing means that the current tree being built has
+//  reached a chunk boundary that aligns with a chunk boundary in the old tree
+//  being mutated. Synchronization means chunks between this boundary and
+//  |next| at the current cursor level will be unchanged and can be skipped.
 //
-//  (3) All parent cursors are (1) current or (2) synchronized, or there are
-//    no parents, and we are done.
+//  (3) All parent cursors are (1) current or (2) synchronized, or there are no
+//  parents, and we are done.
 //
-//  (4) The parent cursors are not aligned. Recurse into the parent.
-//    After parents are aligned, we need to reprocess the prefix of
-//    the current node in anticipation of impending edits that may edit
-//    the current chunk. Note that processPrefix is only necessary for
-//    the "fast forward" case where we synchronized the tree level before
-//    reaching |next|.
+//  (4) The parent cursors are not aligned. Recurse into the parent. After
+//  parents are aligned, we need to reprocess the prefix of the current node in
+//  anticipation of impending edits that may edit the current chunk. Note that
+//  processPrefix is only necessary for the "fast forward" case where we
+//  synchronized the tree level before reaching |next|.
 func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	cmp := tc.cur.Compare(next)
 	if cmp == 0 { // step (1)
@@ -206,7 +205,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	}
 
 	if tc.cur.parent.Compare(next.parent) == 0 { // step (3)
-		// (rare) new chunkstore synchronized with old chunkstore at the
+		// (rare) new tree synchronized with old tree at the
 		// same time as the cursor caught up to the next mutation point
 		tc.cur.copy(next)
 		return nil

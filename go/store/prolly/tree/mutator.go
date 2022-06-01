@@ -32,11 +32,11 @@ type MutationIter interface {
 // The algorithm is structured as follows:
 //
 // - Create a new chunker, the main interface for building a new
-//   NodeStore.
-// - Create two cursors into the previous NodeStore. Both cursors
+//   tree.
+// - Create two cursors into the previous tree. Both cursors
 //   track key indexes in the old keyspace. The first tracks where
 //   a new edit will be applied relative to the old keyspace.
-//   The second indicates the most recent edit in the new NodeStore
+//   The second indicates the most recent edit in the new tree
 //   relative to the old keyspace. The second cursor is embedded in
 //   the chunker, maintained by the chunker, and necessary precedes
 //   the first.
@@ -51,7 +51,7 @@ type MutationIter interface {
 //   old tree, but these details are internal to the chunker.
 //  - Repeat for every edit.
 //
-//  - Finalize the chunker and resolve the new NodeStore root Node.
+//  - Finalize the chunker and resolve the tree's new root Node.
 func ApplyMutations[S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,

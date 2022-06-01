@@ -272,7 +272,7 @@ func (cur *Cursor) atNodeStart() bool {
 // points to the last node item
 func (cur *Cursor) atNodeEnd() bool {
 	lastKeyIdx := int(cur.nd.count - 1)
-	return cur.idx >= lastKeyIdx
+	return cur.idx == lastKeyIdx
 }
 
 func (cur *Cursor) isLeaf() bool {
