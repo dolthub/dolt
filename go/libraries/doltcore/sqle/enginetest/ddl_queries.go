@@ -296,7 +296,7 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 	},
 }
 
-var ModifyColumTypeScripts = []queries.ScriptTest{
+var ModifyColumnTypeScripts = []queries.ScriptTest{
 	{
 		Name:        "alter modify column type similar types",
 		SetUpScript: []string{
@@ -320,6 +320,10 @@ var ModifyColumTypeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from test order by pk",
 				Expected: []sql.Row{{0, 3}, {1, 2}},
+			},
+			{
+				Query: "select * from test where v1 = 3",
+				Expected: []sql.Row{{0, 3}},
 			},
 		},
 	},
@@ -346,6 +350,95 @@ var ModifyColumTypeScripts = []queries.ScriptTest{
 			{
 				Query: "select * from test order by pk",
 				Expected: []sql.Row{{0, "3"}, {1, "2"}},
+			},
+			{
+				Query: "select * from test where v1 = '3'",
+				Expected: []sql.Row{{0, "3"}},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type different types reversed",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
+			`insert into test values (0, "3"), (1, "2")`,
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column v1 bigint",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` bigint NOT NULL,\n" +
+						"  `v1` bigint,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `v1` (`v1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{{0, 3}, {1, 2}},
+			},
+			{
+				Query: "select * from test where v1 = 3",
+				Expected: []sql.Row{{0, 3}},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type primary key",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bigint, index (v1))",
+			"insert into test values (0, 3), (1, 2)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column pk varchar(20)",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` varchar(20) NOT NULL,\n" +
+						"  `v1` bigint,\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `v1` (`v1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{{"0", 3}, {"1", 2}},
+			},
+			{
+				Query: "select * from test where v1 = 3",
+				Expected: []sql.Row{{"0", 3}},
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type incompatible types with empty table",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column pk datetime",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `pk` datetime NOT NULL,\n" +
+						"  `v1` bit(20),\n" +
+						"  PRIMARY KEY (`pk`),\n" +
+						"  KEY `v1` (`v1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{},
 			},
 		},
 	},
