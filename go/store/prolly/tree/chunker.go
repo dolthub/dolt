@@ -140,7 +140,7 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 // AdvanceTo progresses the chunker until its tracking cursor catches up with
 // |next|, a cursor indicating next key where an edit will be applied.
 //
-// The general structure precedes from the deepest chunker recursively into its
+// The method proceeds from the deepest chunker recursively into its
 // linked list parents:
 //
 //  (1) If the current cursor and all of its parents are aligned with |next|,
