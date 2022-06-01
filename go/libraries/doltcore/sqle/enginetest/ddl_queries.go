@@ -495,3 +495,84 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 		},
 	},
 }
+
+var DropColumnScripts = []queries.ScriptTest{
+	{
+		Name:        "alter drop column",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people drop rating",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table people",
+				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `first_name` varchar(100) NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from people order by 1",
+				Expected: []sql.Row{
+					{0, "Homer", "Simpson", 1, 40, nil, nil},
+					{1, "Marge", "Simpson", 1, 38, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{2, "Bart", "Simpson", 0, 10, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{3, "Lisa", "Simpson", 0, 8, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{4, "Moe", "Szyslak", 0, 48, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{5, "Barney", "Gumble", 0, 40, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:        "alter drop column with optional column keyword",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "alter table people drop column rating",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table people",
+				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
+						"  `id` int NOT NULL,\n" +
+						"  `first_name` varchar(100) NOT NULL,\n" +
+						"  `last_name` varchar(100) NOT NULL,\n" +
+						"  `is_married` tinyint,\n" +
+						"  `age` int,\n" +
+						"  `uuid` varchar(64),\n" +
+						"  `num_episodes` int unsigned,\n" +
+						"  PRIMARY KEY (`id`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from people order by 1",
+				Expected: []sql.Row{
+					{0, "Homer", "Simpson", 1, 40, nil, nil},
+					{1, "Marge", "Simpson", 1, 38, "00000000-0000-0000-0000-000000000001", uint(111)},
+					{2, "Bart", "Simpson", 0, 10, "00000000-0000-0000-0000-000000000002", uint(222)},
+					{3, "Lisa", "Simpson", 0, 8, "00000000-0000-0000-0000-000000000003", uint(333)},
+					{4, "Moe", "Szyslak", 0, 48, "00000000-0000-0000-0000-000000000004", uint(444)},
+					{5, "Barney", "Gumble", 0, 40, "00000000-0000-0000-0000-000000000005", uint(555)},
+				},
+			},
+		},
+	},
+	{
+		Name:        "drop primary key column",
+		SetUpScript: SimpsonsSetup,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table people drop column id",
+				ExpectedErr: sql.ErrPrimaryKeyViolation,
+			},
+		},
+	},
+}

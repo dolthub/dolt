@@ -583,6 +583,12 @@ func TestDoltDdlScripts(t *testing.T) {
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
 	}
+
+	for _, script := range DropColumnScripts {
+		e, err := harness.NewEngine(t)
+		require.NoError(t, err)
+		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
 }
 
 func TestDescribeTableAsOf(t *testing.T) {
