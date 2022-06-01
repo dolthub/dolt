@@ -32,6 +32,7 @@ type RowDiffer interface {
 	// Start starts the RowDiffer.
 	Start(ctx context.Context, from, to types.Map)
 
+	// StartWithRange starts the RowDiffer with the specified range
 	StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange)
 
 	// GetDiffs returns the requested number of diff.Differences, or times out.
