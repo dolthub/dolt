@@ -955,16 +955,16 @@ func (t *AlterableDoltTable) AddColumn(ctx *sql.Context, column *sql.Column, ord
 }
 
 func (t *AlterableDoltTable) ShouldRewriteTable(
-		ctx *sql.Context,
-		oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema,
-		oldColumn *sql.Column,
-		newColumn *sql.Column,
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	oldColumn *sql.Column,
+	newColumn *sql.Column,
 ) bool {
 	return t.isIncompatibleTypeChange(oldColumn, newColumn) ||
-			orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
-			isColumnDrop(oldSchema, newSchema) ||
-			isPrimaryKeyChange(oldSchema, newSchema)
+		orderChanged(oldSchema, newSchema, oldColumn, newColumn) ||
+		isColumnDrop(oldSchema, newSchema) ||
+		isPrimaryKeyChange(oldSchema, newSchema)
 }
 
 func orderChanged(oldSchema, newSchema sql.PrimaryKeySchema, oldColumn, newColumn *sql.Column) bool {
@@ -1015,11 +1015,11 @@ func isPrimaryKeyChange(oldSchema sql.PrimaryKeySchema,
 }
 
 func (t *AlterableDoltTable) RewriteInserter(
-		ctx *sql.Context,
-		oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema,
-		oldColumn *sql.Column,
-		newColumn *sql.Column,
+	ctx *sql.Context,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	oldColumn *sql.Column,
+	newColumn *sql.Column,
 ) (sql.RowInserter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
 
