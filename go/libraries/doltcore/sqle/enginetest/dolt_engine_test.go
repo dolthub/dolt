@@ -607,6 +607,9 @@ func TestTransactions(t *testing.T) {
 	for _, script := range DoltConflictHandlingTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
+	for _, script := range DoltConstraintViolationTransactionTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
 }
 
 func TestConcurrentTransactions(t *testing.T) {
