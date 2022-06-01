@@ -981,14 +981,14 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	}
 
 	existingCol, _ := t.sch.GetAllCols().GetByNameCaseInsensitive(oldColumn.Name)
-	col, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, oldColumn)
+	newCol, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, newColumn)
 	if err != nil {
 		panic(err) // should be impossible, we check compatibility before this point
 	}
 
 	// TODO: this check should look different for DOLT_1
-	if !existingCol.TypeInfo.Equals(col.TypeInfo) {
-		if existingCol.Kind != col.Kind {
+	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
+		if existingCol.Kind != newCol.Kind {
 			return true
 		}
 	}
@@ -1060,12 +1060,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch, err = schema.Adapt(oldSch, newSch) // improvise, overcome
-	if err != nil {
-		return nil, err
-	}
+	newSch = schema.CopyChecks(oldSch, newSch)
 
 	if isColumnDrop(oldSchema, newSchema) {
+		newSch = schema.CopyIndexes(oldSch, newSch)
 		droppedCol := getDroppedColumn(oldSchema, newSchema)
 		for _, index := range newSch.Indexes().IndexesWithColumn(droppedCol.Name) {
 			_, err = newSch.Indexes().RemoveIndex(index.Name())
@@ -1073,6 +1071,26 @@ func (t *AlterableDoltTable) RewriteInserter(
 				return nil, err
 			}
 		}
+	} else if newColumn != nil && oldColumn != nil { // modify column
+		// It may be possible to optimize this and not always rewrite every index, but since we're already truncating the
+		// table to rewrite it we also truncate all the indexes. Much easier to get right.
+		for _, index := range oldSch.Indexes().AllIndexes() {
+			var colNames []string
+			for _, colName := range index.ColumnNames() {
+				if strings.ToLower(oldColumn.Name) == strings.ToLower(colName) {
+					colNames = append(colNames, newColumn.Name)
+				} else {
+					colNames = append(colNames, colName)
+				}
+			}
+			newSch.Indexes().AddIndexByColNames(index.Name(), colNames, schema.IndexProperties{
+				IsUnique:      index.IsUnique(),
+				IsUserDefined: index.IsUserDefined(),
+				Comment:       index.Comment(),
+			})
+		}
+	} else {
+		newSch = schema.CopyIndexes(oldSch, newSch)
 	}
 
 	// If we have an auto increment column, we need to set it here before we begin the rewrite process (it may have changed)

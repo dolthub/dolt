@@ -232,12 +232,16 @@ func IsUsingSpatialColAsKey(sch Schema) bool {
 	return false
 }
 
-// Adapt adapts the |from| schema to the |to| schema, applying all the necessary metadata (foreign keys, constraints,
-// etc) present in |from| to |to| and returning the result.
-func Adapt(from, to Schema) (Schema, error) {
+// CopyChecks copies check constraints from the |from| schema to the |to| schema and returns it
+func CopyChecks(from, to Schema) Schema {
 	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
-	// TODO: this doesn't work in many cases, the indexes and checks themselves need to be adapted
-	toSch.indexCollection = fromSch.indexCollection
 	toSch.checkCollection = fromSch.checkCollection
-	return toSch, nil
+	return toSch
+}
+
+// CopyIndexes copies secondary indexes from the |from| schema to the |to| schema and returns it
+func CopyIndexes(from, to Schema) Schema {
+	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
+	toSch.indexCollection = fromSch.indexCollection
+	return toSch
 }
