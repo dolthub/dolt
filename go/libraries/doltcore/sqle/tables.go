@@ -990,6 +990,10 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
 		if existingCol.Kind != newCol.Kind {
 			return true
+		} else if schema.IsColSpatialType(newCol) {
+			// TODO: we need to do this because some spatial type changes require a full table check, but not all.
+			//  We could narrow this check down.
+			return true
 		}
 	}
 
