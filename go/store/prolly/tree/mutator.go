@@ -67,11 +67,7 @@ func ApplyMutations[S message.Serializer](
 		}
 
 		// check for no-op mutations
-		if oldValue == nil && newValue == nil {
-			newKey, newValue = edits.NextMutation(ctx)
-			continue // already non-present
-		}
-		if oldValue != nil && equalValues(newValue, oldValue) {
+		if equalValues(newValue, oldValue) {
 			newKey, newValue = edits.NextMutation(ctx)
 			continue // same newValue
 		}

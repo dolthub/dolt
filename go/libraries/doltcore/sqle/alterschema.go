@@ -728,3 +728,21 @@ func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat,
 
 	return mapEditor.Map(ctx)
 }
+
+func validateSpatialTypeSRID(c schema.Column, v types.Value) error {
+	sc, ok := c.TypeInfo.ToSqlType().(sql.SpatialColumnType)
+	if !ok {
+		return nil
+	}
+	sqlVal, err := c.TypeInfo.ConvertNomsValueToValue(v)
+	if err != nil {
+		return err
+	}
+	err = sc.MatchSRID(sqlVal)
+	if err != nil {
+		if sql.ErrNotMatchingSRID.Is(err) {
+			return sql.ErrNotMatchingSRIDWithColName.New(c.Name, err)
+		}
+	}
+	return nil
+}

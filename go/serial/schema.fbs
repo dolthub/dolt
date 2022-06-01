@@ -12,73 +12,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+include "encoding.fbs";
+
 namespace serial;
 
-table Column {
-  name:string (required);
-  storage_order:uint16;
-  schema_order:uint16;
-
-  type:Type (required);
-  nullable:bool;
-  primary_key:bool;
-  auto_increment:bool;
-  default:ColumnDefault;
-  constraints:[ColumnConstraint] (required);
-  comment:string (required);
-}
-
-// based on schema_marshalling.go:encodeTypeInfo()
-table Type {
-  type:string (required);
-  param_keys:[string] (required);
-  param_values:[string] (required);
-}
-
-table ColumnDefault {
-  expression:string (required);
-}
-
-table ColumnConstraint {
-  name:string (required);
-  expression:string (required);
-  enforced:bool;
-}
 
 table TableSchema {
-  columns:[Column] (required);
-  indexes:[IndexSchema] (required);
+  columns:[Column];
+  indexes:[Index];
+  checks:[string];
+
 }
 
-table IndexSchema {
+table Column {
+  // column name
   name:string (required);
-  columns:[string] (required);
+
+  // full sql column definition
+  definition:string (required);
+
+  // sql display order
+  display_order:int16;
+
+  // storage encoding
+  encoding:Encoding;
+
+  // column meta
+  primary_key:bool;
+  nullable:bool;
+  auto_increment:bool;
+  hidden:bool;
+  generated:bool;
+  virtual:bool;
+}
+
+table Index {
+  // index name
+  name:string (required);
+
+  // full sql index definition
+  definition:string (required);
+
+  // key columns of the index stored as
+  // indicies into the schema columns array
+  key_columns:[uint16] (required);
+
+  // values columns of the index stored as
+  // indicies into the schema columns array
+  value_columns:[uint16];
+
+  // index meta
   unique:bool;
   system_defined:bool;
-  comment:string (required);
-}
-
-enum ForeignKeyReferenceOption : uint8 {
-  DefaultAction,
-  Cascade,
-  NoAction,
-  Restrict,
-  SetNull,
-}
-
-table ForeignKey {
-  name:string (required);
-
-  child_table:string (required);
-  child_columns:[string] (required);
-  child_index:string (required);
-
-  parent_table:string (required);
-  parent_columns:[string] (required);
-  parent_index:string (required);
-
-  on_update:ForeignKeyReferenceOption;
-  on_delete:ForeignKeyReferenceOption;
-
-  // todo(andy): "resolved details" (consult with Daylon)
 }

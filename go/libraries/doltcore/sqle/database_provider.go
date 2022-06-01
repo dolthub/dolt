@@ -96,10 +96,9 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
-	name = strings.ToLower(name)
 	var ok bool
 	p.mu.RLock()
-	db, ok = p.databases[name]
+	db, ok = p.databases[formatDbMapKeyName(name)]
 	p.mu.RUnlock()
 	if ok {
 		return db, nil
@@ -116,8 +115,8 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if found, ok := p.databases[name]; !ok {
-		p.databases[name] = db
+	if found, ok := p.databases[formatDbMapKeyName(name)]; !ok {
+		p.databases[formatDbMapKeyName(name)] = db
 		return db, nil
 	} else {
 		return found, nil
@@ -184,7 +183,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	db := NewDatabase(name, newEnv.DbData(), opts)
-	p.databases[strings.ToLower(db.Name())] = db
+	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
@@ -202,18 +201,19 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
-	db := p.databases[strings.ToLower(name)]
+	dbKey := formatDbMapKeyName(name)
+	db := p.databases[dbKey]
 
 	// Get the DB's directory
 	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
 		// engine should already protect against this
-		return sql.ErrDatabaseNotFound.New(name)
+		return sql.ErrDatabaseNotFound.New(db.Name())
 	} else if !isDir {
-		return fmt.Errorf("unexpected error: %s exists but is not a directory", name)
+		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
 
-	err := p.fs.Delete(name, true)
+	err := p.fs.Delete(db.Name(), true)
 	if err != nil {
 		return err
 	}
@@ -222,21 +222,20 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := strings.ToLower(name) + "/"
+	derivativeNamePrefix := dbKey + "/"
 	for dbName := range p.databases {
-		if strings.HasPrefix(strings.ToLower(dbName), derivativeNamePrefix) {
-			delete(p.databases, strings.ToLower(dbName))
+		if strings.HasPrefix(dbName, derivativeNamePrefix) {
+			delete(p.databases, dbName)
 		}
 	}
 
-	delete(p.databases, strings.ToLower(name))
+	delete(p.databases, dbKey)
 	return nil
 }
 
 //TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
 // only if a non-branch revspec was indicated.
 func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
-	revDB = strings.ToLower(revDB)
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
 	}
@@ -245,7 +244,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string
 	dbName, revSpec := parts[0], parts[1]
 
 	p.mu.RLock()
-	candidate, ok := p.databases[dbName]
+	candidate, ok := p.databases[formatDbMapKeyName(dbName)]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
@@ -519,4 +518,17 @@ type staticRepoState struct {
 
 func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 	return s.branch
+}
+
+// formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
+// so it's stored in lower case name. Branch name is case-sensitive, so not changed.
+func formatDbMapKeyName(name string) string {
+	if !strings.Contains(name, dbRevisionDelimiter) {
+		return strings.ToLower(name)
+	}
+
+	parts := strings.SplitN(name, dbRevisionDelimiter, 2)
+	dbName, revSpec := parts[0], parts[1]
+
+	return strings.ToLower(dbName) + dbRevisionDelimiter + revSpec
 }

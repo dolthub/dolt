@@ -86,6 +86,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 			rangeIter:  rangeIter,
 			idxToPkMap: idxToPkMap,
 			primary:    primary,
+			sqlSch:     n.writer.sqlSch,
 		}, nil
 	} else {
 		rangeIter, err := idxWriter.(prollyKeylessSecondaryWriter).mut.IterRange(ctx, n.pRange)
@@ -95,6 +96,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 		return &prollyFkKeylessRowIter{
 			rangeIter: rangeIter,
 			primary:   n.writer.primary.(prollyKeylessWriter),
+			sqlSch:    n.writer.sqlSch,
 		}, nil
 	}
 }
@@ -104,6 +106,7 @@ type prollyFkPkRowIter struct {
 	rangeIter  prolly.MapIter
 	idxToPkMap map[int]int
 	primary    prollyIndexWriter
+	sqlSch     sql.Schema
 }
 
 var _ sql.RowIter = prollyFkPkRowIter{}
@@ -140,7 +143,10 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 		return nil
 	})
-	return nextRow, err
+	if err != nil {
+		return nil, err
+	}
+	return index.DenormalizeRow(iter.sqlSch, nextRow)
 }
 
 // Close implements the interface sql.RowIter.
@@ -152,6 +158,7 @@ func (iter prollyFkPkRowIter) Close(ctx *sql.Context) error {
 type prollyFkKeylessRowIter struct {
 	rangeIter prolly.MapIter
 	primary   prollyKeylessWriter
+	sqlSch    sql.Schema
 }
 
 var _ sql.RowIter = prollyFkKeylessRowIter{}
@@ -179,7 +186,10 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 		return nil
 	})
-	return nextRow, err
+	if err != nil {
+		return nil, err
+	}
+	return index.DenormalizeRow(iter.sqlSch, nextRow)
 }
 
 // Close implements the interface sql.RowIter.

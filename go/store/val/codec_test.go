@@ -19,6 +19,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/stretchr/testify/assert"
 )
 
@@ -75,6 +77,38 @@ func TestCompare(t *testing.T) {
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(1), r: encFloat(0),
 			cmp: 1,
+		},
+		// bit
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(1), r: encBit(0),
+			cmp: 1,
+		},
+		// decimal
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("-3.7e0")), r: encDecimal(decimalFromString("-3.7e0")),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("5.5729136e3")), r: encDecimal(decimalFromString("2634193746329327479.32030573792e-19")),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("2634193746329327479.32030573792e-19")), r: encDecimal(decimalFromString("5.5729136e3")),
+			cmp: -1,
 		},
 		// year
 		{
@@ -143,6 +177,38 @@ func TestCompare(t *testing.T) {
 			r:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
 			cmp: -1,
 		},
+		// enum
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(1), r: encEnum(0),
+			cmp: 1,
+		},
+		// set
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(1), r: encSet(0),
+			cmp: 1,
+		},
 		// string
 		{
 			typ: Type{Enc: StringEnc},
@@ -185,6 +251,16 @@ func TestCompare(t *testing.T) {
 	}
 }
 
+func fmtComparator(c int) string {
+	if c == 0 {
+		return "="
+	} else if c < 0 {
+		return "<"
+	} else {
+		return ">"
+	}
+}
+
 func encInt(i int64) []byte {
 	buf := make([]byte, uint64Size)
 	writeInt64(buf, i)
@@ -200,6 +276,18 @@ func encUint(u uint64) []byte {
 func encFloat(f float64) []byte {
 	buf := make([]byte, float64Size)
 	writeFloat64(buf, f)
+	return buf
+}
+
+func encBit(u uint64) []byte {
+	buf := make([]byte, bit64Size)
+	writeBit64(buf, u)
+	return buf
+}
+
+func encDecimal(d decimal.Decimal) []byte {
+	buf := make([]byte, sizeOfDecimal(d))
+	writeDecimal(buf, d)
 	return buf
 }
 
@@ -234,6 +322,18 @@ func encDatetime(dt time.Time) []byte {
 	return buf
 }
 
+func encEnum(u uint16) []byte {
+	buf := make([]byte, enumSize)
+	writeEnum(buf, u)
+	return buf
+}
+
+func encSet(u uint64) []byte {
+	buf := make([]byte, setSize)
+	writeSet(buf, u)
+	return buf
+}
+
 func TestCodecRoundTrip(t *testing.T) {
 	t.Run("round trip bool", func(t *testing.T) {
 		roundTripBools(t)
@@ -258,6 +358,9 @@ func TestCodecRoundTrip(t *testing.T) {
 	})
 	t.Run("round trip datetimes", func(t *testing.T) {
 		roundTripDatetimes(t)
+	})
+	t.Run("round trip decimal", func(t *testing.T) {
+		roundTripDecimal(t)
 	})
 }
 
@@ -328,6 +431,14 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
+	buf = make([]byte, enumSize)
+	for _, value := range uintegers {
+		exp := uint16(value)
+		writeEnum(buf, exp)
+		assert.Equal(t, exp, readEnum(buf))
+		zero(buf)
+	}
+
 	buf = make([]byte, uint32Size)
 	uintegers = append(uintegers, math.MaxUint32)
 	for _, value := range uintegers {
@@ -343,6 +454,22 @@ func roundTripUints(t *testing.T) {
 		exp := uint64(value)
 		writeUint64(buf, exp)
 		assert.Equal(t, exp, readUint64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, bit64Size)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeBit64(buf, exp)
+		assert.Equal(t, exp, readBit64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, setSize)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeSet(buf, exp)
+		assert.Equal(t, exp, readSet(buf))
 		zero(buf)
 	}
 }
@@ -428,22 +555,53 @@ func roundTripDatetimes(t *testing.T) {
 	}
 }
 
+func roundTripDecimal(t *testing.T) {
+	decimals := []decimal.Decimal{
+		decimalFromString("0"),
+		decimalFromString("1"),
+		decimalFromString("-1"),
+		decimalFromString("-3.7e0"),
+		decimalFromString("0.00000000000000000003e20"),
+		decimalFromString(".22"),
+		decimalFromString("-.7863294659345624"),
+		decimalFromString("2634193746329327479.32030573792e-19"),
+		decimalFromString("7742"),
+		decimalFromString("99999.999994"),
+		decimalFromString("5.5729136e3"),
+		decimalFromString("600e-2"),
+		decimalFromString("-99999.999995"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999.1"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999.99"),
+		decimalFromString("16976349273982359874209023948672021737840592720387475.2719128737543572927374503832837350563300243035038234972093785"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999.9999999999999"),
+	}
+
+	for _, dec := range decimals {
+		buf := make([]byte, sizeOfDecimal(dec))
+		writeDecimal(buf, dec)
+		actual := readDecimal(buf)
+		assert.True(t, dec.Equal(actual), "%s != %s",
+			dec.String(), actual.String())
+		assert.Equal(t, dec, actual)
+		zero(buf)
+	}
+}
+
 func testDate(y, m, d int) (date time.Time) {
 	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+}
+
+func decimalFromString(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func zero(buf []byte) {
 	for i := range buf {
 		buf[i] = 0
-	}
-}
-
-func fmtComparator(c int) string {
-	if c == 0 {
-		return "="
-	} else if c < 0 {
-		return "<"
-	} else {
-		return ">"
 	}
 }

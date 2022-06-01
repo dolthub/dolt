@@ -76,37 +76,20 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
-
 	var scripts = []queries.ScriptTest{
 		{
-			Name:        "drop first of two primary key columns",
+			Name: "Create table with TIME type",
 			SetUpScript: []string{
-				"create table test (p1 int, p2 int, c1 int, c2 int, index (c1), primary key (p1, p2))",
-				"insert into test values (0, 1, 2, 3), (4, 5, 6, 7)",
+				"create table my_types (pk int primary key, c0 time);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "alter table test drop column p1",
-					SkipResultsCheck: true,
+					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
 				},
 				{
-					Query: "show create table test",
-					Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-							"  `p2` int,\n" +
-							"  `c1` int,\n" +
-							"  `c2` int,\n" +
-							"  KEY `c1` (`c1`),\n" +
-							"  primary key (p1),\n" +
-							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
-				},
-				{
-					Query: "select * from test order by p2",
-					Expected: []sql.Row{{1, 2, 3}, {5, 6, 7}},
-				},
-				{
-					Query: "select * from test where c1 = 6",
-					Expected: []sql.Row{{5, 6, 7}},
+					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
+					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
 				},
 			},
 		},
@@ -127,11 +110,11 @@ func TestSingleQueryPrepared(t *testing.T) {
 		Query: `SELECT ST_SRID(g, 0) from geometry_table order by i`,
 		Expected: []sql.Row{
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 			{sql.Point{X: 1, Y: 2}},
-			{sql.Linestring{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
-			{sql.Polygon{Lines: []sql.Linestring{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
+			{sql.LineString{Points: []sql.Point{{X: 1, Y: 2}, {X: 3, Y: 4}}}},
+			{sql.Polygon{Lines: []sql.LineString{{Points: []sql.Point{{X: 0, Y: 0}, {X: 0, Y: 1}, {X: 1, Y: 1}, {X: 0, Y: 0}}}}}},
 		},
 	}
 
@@ -212,7 +195,6 @@ func TestInsertIntoErrors(t *testing.T) {
 }
 
 func TestSpatialQueries(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialQueries(t, newDoltHarness(t))
 }
 
@@ -253,12 +235,10 @@ func TestDeleteFromErrors(t *testing.T) {
 }
 
 func TestSpatialDelete(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialDelete(t, newDoltHarness(t))
 }
 
 func TestSpatialScripts(t *testing.T) {
-	skipNewFormat(t)
 	enginetest.TestSpatialScripts(t, newDoltHarness(t))
 }
 
@@ -406,6 +386,36 @@ func TestCreateDatabase(t *testing.T) {
 }
 
 func TestDropDatabase(t *testing.T) {
+	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
+		Name: "Drop database engine tests for Dolt only",
+		SetUpScript: []string{
+			"CREATE DATABASE Test1db",
+			"CREATE DATABASE TEST2db",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "DROP DATABASE TeSt2DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE test2db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+			{
+				Query:    "USE TEST1DB",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "DROP DATABASE IF EXISTS test1DB",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 1}}},
+			},
+			{
+				Query:       "USE Test1db",
+				ExpectedErr: sql.ErrDatabaseNotFound,
+			},
+		},
+	})
+
 	t.Skip("Dolt doesn't yet support dropping the primary database, which these tests do")
 	enginetest.TestDropDatabase(t, newDoltHarness(t))
 }
@@ -557,6 +567,9 @@ func TestTransactions(t *testing.T) {
 	}
 
 	for _, script := range DoltConflictHandlingTests {
+		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
+	}
+	for _, script := range DoltConstraintViolationTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -826,7 +839,6 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 }
 
 func TestSpatialQueriesPrepared(t *testing.T) {
-	skipNewFormat(t)
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))

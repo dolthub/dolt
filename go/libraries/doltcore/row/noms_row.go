@@ -78,7 +78,7 @@ func pkRowFromNoms(sch schema.Schema, nomsKey, nomsVal types.Tuple) (Row, error)
 		if col.IsPartOfPK {
 			return false, errors.New("writing columns that are part of the primary key to non-pk values. col:" + col.Name)
 		} else if !types.IsNull(val) {
-			// Column is GeometryKind and received PointKind, LinestringKind, or PolygonKind
+			// Column is GeometryKind and received PointKind, LineStringKind, or PolygonKind
 			if col.Kind == types.GeometryKind && types.IsGeometryKind(val.Kind()) {
 				filteredVals[tag] = val
 			} else if col.Kind == val.Kind() {
