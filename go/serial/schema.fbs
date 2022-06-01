@@ -25,7 +25,7 @@ table TableSchema {
 }
 
 table Column {
-  // lowercase column name
+  // column name
   name:string (required);
 
   // full sql column definition
@@ -53,14 +53,15 @@ table Index {
   // full sql index definition
   definition:string (required);
 
-  // columns in index key
-  key_columns:[string] (required);
+  // key columns of the index stored as
+  // indicies into the schema columns array
+  key_columns:[uint16] (required);
 
-  // columns in index value
-  value_columns:[string];
+  // values columns of the index stored as
+  // indicies into the schema columns array
+  value_columns:[uint16];
 
   // index meta
-  index_type:string;
   unique:bool;
   system_defined:bool;
 }
