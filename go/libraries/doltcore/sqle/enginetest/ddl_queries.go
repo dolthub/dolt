@@ -442,4 +442,56 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:        "alter modify column type incompatible types with non-empty table",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
+			"insert into test values (1, 1)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column pk datetime",
+				ExpectedErr: sql.ErrConvertingToTime,
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type different types incompatible values",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
+			"insert into test values (0, 3), (1, 'a')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column v1 bigint",
+				ExpectedErr: sql.ErrInvalidValue,
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type foreign key parent",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bigint, index (v1))",
+			"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test modify column v1 varchar(20)",
+				ExpectedErr: sql.ErrForeignKeyTypeChange,
+			},
+		},
+	},
+	{
+		Name:        "alter modify column type foreign key child",
+		SetUpScript: []string{
+			"create table test(pk bigint primary key, v1 bigint, index (v1))",
+			"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test2 modify column v1 varchar(20)",
+				ExpectedErr: sql.ErrForeignKeyTypeChange,
+			},
+		},
+	},
 }
