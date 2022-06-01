@@ -866,7 +866,7 @@ func TestModifyColumn(t *testing.T) {
 			name:           "name collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "A column with the name name already exists",
+			expectedErr:    "two different columns with the same name exist",
 		},
 		{
 			name:           "type change",
