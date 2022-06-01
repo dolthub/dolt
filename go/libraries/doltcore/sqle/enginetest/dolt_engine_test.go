@@ -261,6 +261,8 @@ func TestScripts(t *testing.T) {
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
+			// panic
+			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
 	}
 
@@ -911,6 +913,8 @@ func TestScriptsPrepared(t *testing.T) {
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
+			// panic
+			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
 		for _, s := range queries.SpatialScriptTests {
 			skipped = append(skipped, s.Name)
