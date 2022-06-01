@@ -115,6 +115,64 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 	return sess.(*DoltSession)
 }
 
+// SyncDatabaseState implements sql.Session
+func (sess *Session) SyncDatabaseState(ctx *sql.Context, dbName string) error {
+	err := SyncInitialDBState(ctx, dbName)
+	if err != nil {
+		// Ignore any database not found or not accessible errors at this level
+		if sql.ErrDatabaseNotFound.Is(err) || sql.ErrDatabaseAccessDeniedForUser.Is(err) {
+			return nil
+		}
+		return err
+	}
+
+	sessionState, _, err := sess.LookupDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	// TODO: If the session state is read only... then we don't need to do any syncing?
+	//       Revisit this code and see if we need to add anything here...
+
+	err = sessionState.dbData.Ddb.Rebase(ctx)
+	if err != nil {
+		return err
+	}
+
+	wsRef := sessionState.WorkingSet.Ref()
+	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
+	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
+	if err == doltdb.ErrWorkingSetNotFound {
+		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
+		if err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	// TODO: this is going to do 2 resolves to get the head root, not ideal
+	err = sess.SetWorkingSet(ctx, dbName, ws)
+
+	return nil
+}
+
+// TODO: Only used in one place (SyncDatabaseState); Consider inlining?
+// TODO: Isn't there another very similar method somewehre?
+func SyncInitialDBState(ctx *sql.Context, dbName string) error {
+	dsession := DSessFromSess(ctx.Session)
+	if dsession.HasDB(ctx, dbName) {
+		return nil
+	}
+
+	initialDbState, err := dsession.provider.RevisionDbState(ctx, dbName)
+	if err != nil {
+		return err
+	}
+
+	return dsession.AddDB(ctx, initialDbState)
+}
+
 // LookupDbState returns the session state for the database named
 // TODO(zachmu) get rid of bool return param, use a not found error or similar
 func (sess *Session) lookupDbState(ctx *sql.Context, dbName string) (*DatabaseSessionState, bool, error) {
@@ -177,6 +235,14 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return DisabledTransaction{}, nil
 	}
 
+	// Database state for all databases involved in a statement should have already been synced into this session
+	// by the Session.SyncDatabaseState method before the Session.StartTransaction method is called, but to preserve
+	// the previous behavior, we explicitly sync the state for the transaction DB.
+	err := sess.SyncDatabaseState(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
 	if err != nil {
 		return nil, err
@@ -186,35 +252,20 @@ func (sess *Session) StartTransaction(ctx *sql.Context, dbName string, tCharacte
 		return DisabledTransaction{}, nil
 	}
 
-	err = sessionState.dbData.Ddb.Rebase(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	wsRef := sessionState.WorkingSet.Ref()
-	ws, err := sessionState.dbData.Ddb.ResolveWorkingSet(ctx, wsRef)
-	// TODO: every HEAD needs a working set created when it is. We can get rid of this in a 1.0 release when this is fixed
-	if err == doltdb.ErrWorkingSetNotFound {
-		ws, err = sess.newWorkingSetForHead(ctx, wsRef, dbName)
-		if err != nil {
-			return nil, err
-		}
-	} else if err != nil {
-		return nil, err
-	}
-
 	// logrus.Tracef("starting transaction with working root %s", ws.WorkingRoot().DebugString(ctx, true))
-
-	// TODO: this is going to do 2 resolves to get the head root, not ideal
-	err = sess.SetWorkingSet(ctx, dbName, ws)
 
 	// SetWorkingSet always sets the dirty bit, but by definition we are clean at transaction start
 	sessionState.dirty = false
 
+	ws, err := sess.WorkingSet(ctx, dbName)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewDoltTransaction(
 		dbName,
 		ws,
-		wsRef,
+		ws.Ref(),
 		sessionState.dbData,
 		sessionState.WriteSession.GetOptions(),
 		tCharacteristic,
@@ -584,7 +635,7 @@ func (sess *Session) SetRoot(ctx *sql.Context, dbName string, newRoot *doltdb.Ro
 
 // SetRoots sets new roots for the session for the database named. Typically clients should only set the working root,
 // via setRoot. This method is for clients that need to update more of the session state, such as the dolt_ functions.
-// Unlike setting the only the working root, this method always marks the database state dirty.
+// Unlike setting only the working root, this method always marks the database state dirty.
 func (sess *Session) SetRoots(ctx *sql.Context, dbName string, roots doltdb.Roots) error {
 	// TODO: handle HEAD here?
 	sessionState, _, err := sess.LookupDbState(ctx, dbName)
