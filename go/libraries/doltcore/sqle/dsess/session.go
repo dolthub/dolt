@@ -117,7 +117,7 @@ func DSessFromSess(sess sql.Session) *DoltSession {
 
 // SyncDatabaseState implements sql.Session
 func (sess *Session) SyncDatabaseState(ctx *sql.Context, dbName string) error {
-	err := SyncInitialDBState(ctx, dbName)
+	err := syncInitialDBState(ctx, dbName)
 	if err != nil {
 		// Ignore any database not found or not accessible errors at this level
 		if sql.ErrDatabaseNotFound.Is(err) || sql.ErrDatabaseAccessDeniedForUser.Is(err) {
@@ -131,8 +131,10 @@ func (sess *Session) SyncDatabaseState(ctx *sql.Context, dbName string) error {
 		return err
 	}
 
-	// TODO: If the session state is read only... then we don't need to do any syncing?
-	//       Revisit this code and see if we need to add anything here...
+	// If the session state is read-only, then we don't need to sync anything else or set the working set
+	if sessionState.readOnly {
+		return nil
+	}
 
 	err = sessionState.dbData.Ddb.Rebase(ctx)
 	if err != nil {
@@ -157,9 +159,8 @@ func (sess *Session) SyncDatabaseState(ctx *sql.Context, dbName string) error {
 	return nil
 }
 
-// TODO: Only used in one place (SyncDatabaseState); Consider inlining?
-// TODO: Isn't there another very similar method somewehre?
-func SyncInitialDBState(ctx *sql.Context, dbName string) error {
+// syncInitialDBState syncs the initial state of the specified DB into the current session.
+func syncInitialDBState(ctx *sql.Context, dbName string) error {
 	dsession := DSessFromSess(ctx.Session)
 	if dsession.HasDB(ctx, dbName) {
 		return nil
