@@ -599,3 +599,36 @@ var DropColumnScripts = []queries.ScriptTest{
  		},
 	},
 }
+
+var BrokenDDLScripts = []queries.ScriptTest{
+	{
+		Name:        "drop first of two primary key columns",
+		SetUpScript: []string{
+			"create table test (p1 int, p2 int, c1 int, c2 int, index (c1))",
+			"insert into test values (0, 1, 2, 3), (4, 5, 6, 7)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "alter table test drop column p1",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "show create table test",
+				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+						"  `p2` int,\n" +
+						"  `c1` int,\n" +
+						"  `c2` int,\n" +
+						"  KEY `c1` (`c1`)\n" +
+						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+			},
+			{
+				Query: "select * from test order by pk",
+				Expected: []sql.Row{{0, 3}, {1, 2}},
+			},
+			{
+				Query: "select * from test where v1 = 3",
+				Expected: []sql.Row{{0, 3}},
+			},
+		},
+	},
+}

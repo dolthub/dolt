@@ -80,29 +80,33 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Drop and add primary key on two branches converges to same schema",
+			Name:        "drop first of two primary key columns",
 			SetUpScript: []string{
-				"create table t1 (i int);",
-				"call dolt_commit('-am', 't1 table')",
-				"call dolt_checkout('-b', 'b1')",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"alter table t1 drop primary key",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'b1 primary key changes')",
-				"call dolt_checkout('main')",
-				"alter table t1 add primary key(i)",
-				"call dolt_commit('-am', 'main primary key change')",
+				"create table test (p1 int, p2 int, c1 int, c2 int, index (c1), primary key (p1, p2))",
+				"insert into test values (0, 1, 2, 3), (4, 5, 6, 7)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "call dolt_merge('b1')",
-					Expected: []sql.Row{{1}},
+					Query:          "alter table test drop column p1",
+					SkipResultsCheck: true,
 				},
 				{
-					Query:    "select count(*) from dolt_conflicts",
-					Expected: []sql.Row{{0}},
+					Query: "show create table test",
+					Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
+							"  `p2` int,\n" +
+							"  `c1` int,\n" +
+							"  `c2` int,\n" +
+							"  KEY `c1` (`c1`),\n" +
+							"  primary key (p1),\n" +
+							") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+				},
+				{
+					Query: "select * from test order by p2",
+					Expected: []sql.Row{{1, 2, 3}, {5, 6, 7}},
+				},
+				{
+					Query: "select * from test where c1 = 6",
+					Expected: []sql.Row{{5, 6, 7}},
 				},
 			},
 		},
@@ -588,6 +592,12 @@ func TestDoltDdlScripts(t *testing.T) {
 		e, err := harness.NewEngine(t)
 		require.NoError(t, err)
 		enginetest.TestScriptWithEngine(t, e, harness, script)
+	}
+}
+
+func TestBrokenDdlScripts(t *testing.T) {
+	for _, script := range BrokenDDLScripts {
+		t.Skip(script.Name)
 	}
 }
 
