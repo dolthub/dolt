@@ -261,6 +261,9 @@ func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSc
 		}
 		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
 		if err != nil {
+			if sql.ErrNotMatchingSRID.Is(err) {
+				err = sql.ErrNotMatchingSRIDWithColName.New(modifiedCol.Name, err)
+			}
 			return nil, err
 		}
 	} else if !modifiedCol.IsNullable() {
@@ -378,7 +381,7 @@ func updateRowDataWithNewType(
 			return true, err
 		}
 		// convFunc returns types.NullValue rather than nil so it's always safe to compare
-		if newVal.Equals(val) {
+		if newCol.Tag == oldCol.Tag && newVal.Equals(val) {
 			newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
 			if err != nil {
 				return true, err
@@ -933,4 +936,22 @@ func keyedRowDataToKeylessRowData(ctx context.Context, nbf *types.NomsBinFormat,
 	}
 
 	return mapEditor.Map(ctx)
+}
+
+func validateSpatialTypeSRID(c schema.Column, v types.Value) error {
+	sc, ok := c.TypeInfo.ToSqlType().(sql.SpatialColumnType)
+	if !ok {
+		return nil
+	}
+	sqlVal, err := c.TypeInfo.ConvertNomsValueToValue(v)
+	if err != nil {
+		return err
+	}
+	err = sc.MatchSRID(sqlVal)
+	if err != nil {
+		if sql.ErrNotMatchingSRID.Is(err) {
+			return sql.ErrNotMatchingSRIDWithColName.New(c.Name, err)
+		}
+	}
+	return nil
 }

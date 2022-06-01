@@ -278,8 +278,8 @@ func deserializeGeometry(buf []byte) (v interface{}) {
 	switch typ {
 	case geo.PointType:
 		v = geo.DeserializePoint(buf, srid)
-	case geo.LinestringType:
-		v = geo.DeserializeLinestring(buf, srid)
+	case geo.LineStringType:
+		v = geo.DeserializeLineString(buf, srid)
 	case geo.PolygonType:
 		v = geo.DeserializePolygon(srid, buf)
 	default:
@@ -292,8 +292,8 @@ func serializeGeometry(v interface{}) []byte {
 	switch t := v.(type) {
 	case sql.Point:
 		return geo.SerializePoint(t)
-	case sql.Linestring:
-		return geo.SerializeLinestring(t)
+	case sql.LineString:
+		return geo.SerializeLineString(t)
 	case sql.Polygon:
 		return geo.SerializePolygon(t)
 	default:

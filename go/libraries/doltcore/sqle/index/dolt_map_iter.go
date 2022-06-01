@@ -231,7 +231,6 @@ func NewDoltMapIter(keyValGet KVGetFunc, closeKVGetter func() error, conv *KVToS
 // Next returns the next sql.Row until all rows are returned at which point (nil, io.EOF) is returned.
 func (dmi *DoltMapIter) Next(ctx *sql.Context) (sql.Row, error) {
 	k, v, err := dmi.kvGet(ctx)
-
 	if err != nil {
 		return nil, err
 	}
