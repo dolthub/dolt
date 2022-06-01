@@ -54,7 +54,7 @@ var SimpsonsSetup = []string{
 		(3, "Homer's Odyssey", "1990-01-22 03:00:00", 7.0),
 		(4, "There's No Disgrace Like Home", "1990-01-29 03:00:00", 8.5);
 `,
-`insert into appearances values
+	`insert into appearances values
 		(0, 1, "Homer is great in this one"),
 		(1, 1, "Marge is here too"),
 		(0, 2, "Homer is great in this one too"),
@@ -89,16 +89,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `first_name` varchar(16383) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `first_name` varchar(16383) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by 1",
@@ -124,16 +124,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `first_name` varchar(16383) NOT NULL,\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `first_name` varchar(16383) NOT NULL,\n" +
+					"  `id` int NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by id",
@@ -159,16 +159,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `first_name` varchar(16383),\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `first_name` varchar(16383),\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query:    "select * from people order by id",
@@ -187,16 +187,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `christian_name` varchar(16383) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `christian_name` varchar(16383) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by id",
@@ -222,16 +222,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `christian_name` varchar(16383) NOT NULL,\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `christian_name` varchar(16383) NOT NULL,\n" +
+					"  `id` int NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by id",
@@ -257,16 +257,16 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{sql.Row{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `first_name` varchar(16383),\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `first_name` varchar(16383),\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query:    "select * from people order by id",
@@ -298,198 +298,198 @@ var ModifyAndChangeColumnScripts = []queries.ScriptTest{
 
 var ModifyColumnTypeScripts = []queries.ScriptTest{
 	{
-		Name:        "alter modify column type similar types",
+		Name: "alter modify column type similar types",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bigint, index (v1))",
 			"insert into test values (0, 3), (1, 2)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column v1 int",
+				Query:            "alter table test modify column v1 int",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `pk` bigint NOT NULL,\n" +
-						"  `v1` int,\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `v1` (`v1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `pk` bigint NOT NULL,\n" +
+					"  `v1` int,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `v1` (`v1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{{0, 3}, {1, 2}},
 			},
 			{
-				Query: "select * from test where v1 = 3",
+				Query:    "select * from test where v1 = 3",
 				Expected: []sql.Row{{0, 3}},
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type different types",
+		Name: "alter modify column type different types",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bigint, index (v1))",
 			"insert into test values (0, 3), (1, 2)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column v1 varchar(20)",
+				Query:            "alter table test modify column v1 varchar(20)",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `pk` bigint NOT NULL,\n" +
-						"  `v1` varchar(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `v1` (`v1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `pk` bigint NOT NULL,\n" +
+					"  `v1` varchar(20),\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `v1` (`v1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{{0, "3"}, {1, "2"}},
 			},
 			{
-				Query: "select * from test where v1 = '3'",
+				Query:    "select * from test where v1 = '3'",
 				Expected: []sql.Row{{0, "3"}},
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type different types reversed",
+		Name: "alter modify column type different types reversed",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
 			`insert into test values (0, "3"), (1, "2")`,
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column v1 bigint",
+				Query:            "alter table test modify column v1 bigint",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `pk` bigint NOT NULL,\n" +
-						"  `v1` bigint,\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `v1` (`v1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `pk` bigint NOT NULL,\n" +
+					"  `v1` bigint,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `v1` (`v1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{{0, 3}, {1, 2}},
 			},
 			{
-				Query: "select * from test where v1 = 3",
+				Query:    "select * from test where v1 = 3",
 				Expected: []sql.Row{{0, 3}},
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type primary key",
+		Name: "alter modify column type primary key",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bigint, index (v1))",
 			"insert into test values (0, 3), (1, 2)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column pk varchar(20)",
+				Query:            "alter table test modify column pk varchar(20)",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `pk` varchar(20) NOT NULL,\n" +
-						"  `v1` bigint,\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `v1` (`v1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `pk` varchar(20) NOT NULL,\n" +
+					"  `v1` bigint,\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `v1` (`v1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{{"0", 3}, {"1", 2}},
 			},
 			{
-				Query: "select * from test where v1 = 3",
+				Query:    "select * from test where v1 = 3",
 				Expected: []sql.Row{{"0", 3}},
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type incompatible types with empty table",
+		Name: "alter modify column type incompatible types with empty table",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column pk datetime",
+				Query:            "alter table test modify column pk datetime",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `pk` datetime NOT NULL,\n" +
-						"  `v1` bit(20),\n" +
-						"  PRIMARY KEY (`pk`),\n" +
-						"  KEY `v1` (`v1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `pk` datetime NOT NULL,\n" +
+					"  `v1` bit(20),\n" +
+					"  PRIMARY KEY (`pk`),\n" +
+					"  KEY `v1` (`v1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{},
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type incompatible types with non-empty table",
+		Name: "alter modify column type incompatible types with non-empty table",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bit(20), index (v1))",
 			"insert into test values (1, 1)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column pk datetime",
+				Query:       "alter table test modify column pk datetime",
 				ExpectedErr: sql.ErrConvertingToTime,
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type different types incompatible values",
+		Name: "alter modify column type different types incompatible values",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 varchar(20), index (v1))",
 			"insert into test values (0, 3), (1, 'a')",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column v1 bigint",
+				Query:       "alter table test modify column v1 bigint",
 				ExpectedErr: sql.ErrInvalidValue,
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type foreign key parent",
+		Name: "alter modify column type foreign key parent",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bigint, index (v1))",
 			"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test modify column v1 varchar(20)",
+				Query:       "alter table test modify column v1 varchar(20)",
 				ExpectedErr: sql.ErrForeignKeyTypeChange,
 			},
 		},
 	},
 	{
-		Name:        "alter modify column type foreign key child",
+		Name: "alter modify column type foreign key child",
 		SetUpScript: []string{
 			"create table test(pk bigint primary key, v1 bigint, index (v1))",
 			"create table test2(pk bigint primary key, v1 bigint, index (v1), foreign key (v1) references test(v1))",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test2 modify column v1 varchar(20)",
+				Query:       "alter table test2 modify column v1 varchar(20)",
 				ExpectedErr: sql.ErrForeignKeyTypeChange,
 			},
 		},
@@ -508,15 +508,15 @@ var DropColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `first_name` varchar(100) NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `first_name` varchar(100) NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by 1",
@@ -542,15 +542,15 @@ var DropColumnScripts = []queries.ScriptTest{
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
-						"  `id` int NOT NULL,\n" +
-						"  `first_name` varchar(100) NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned,\n" +
-						"  PRIMARY KEY (`id`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `id` int NOT NULL,\n" +
+					"  `first_name` varchar(100) NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned,\n" +
+					"  PRIMARY KEY (`id`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by 1",
@@ -570,20 +570,20 @@ var DropColumnScripts = []queries.ScriptTest{
 		SetUpScript: SimpsonsSetup,
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "alter table people drop column id",
+				Query:            "alter table people drop column id",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table people",
 				Expected: []sql.Row{{"people", "CREATE TABLE `people` (\n" +
-						"  `first_name` varchar(100) NOT NULL,\n" +
-						"  `last_name` varchar(100) NOT NULL,\n" +
-						"  `is_married` tinyint,\n" +
-						"  `age` int,\n" +
-						"  `rating` float,\n" +
-						"  `uuid` varchar(64),\n" +
-						"  `num_episodes` int unsigned\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `first_name` varchar(100) NOT NULL,\n" +
+					"  `last_name` varchar(100) NOT NULL,\n" +
+					"  `is_married` tinyint,\n" +
+					"  `age` int,\n" +
+					"  `rating` float,\n" +
+					"  `uuid` varchar(64),\n" +
+					"  `num_episodes` int unsigned\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
 				Query: "select * from people order by first_name",
@@ -596,37 +596,37 @@ var DropColumnScripts = []queries.ScriptTest{
 					{"Moe", "Szyslak", 0, 48, 6.5, "00000000-0000-0000-0000-000000000004", uint(444)},
 				},
 			},
- 		},
+		},
 	},
 }
 
 var BrokenDDLScripts = []queries.ScriptTest{
 	{
-		Name:        "drop first of two primary key columns",
+		Name: "drop first of two primary key columns",
 		SetUpScript: []string{
 			"create table test (p1 int, p2 int, c1 int, c2 int, index (c1))",
 			"insert into test values (0, 1, 2, 3), (4, 5, 6, 7)",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:          "alter table test drop column p1",
+				Query:            "alter table test drop column p1",
 				SkipResultsCheck: true,
 			},
 			{
 				Query: "show create table test",
 				Expected: []sql.Row{{"test", "CREATE TABLE `test` (\n" +
-						"  `p2` int,\n" +
-						"  `c1` int,\n" +
-						"  `c2` int,\n" +
-						"  KEY `c1` (`c1`)\n" +
-						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					"  `p2` int,\n" +
+					"  `c1` int,\n" +
+					"  `c2` int,\n" +
+					"  KEY `c1` (`c1`)\n" +
+					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
 			},
 			{
-				Query: "select * from test order by pk",
+				Query:    "select * from test order by pk",
 				Expected: []sql.Row{{0, 3}, {1, 2}},
 			},
 			{
-				Query: "select * from test where v1 = 3",
+				Query:    "select * from test where v1 = 3",
 				Expected: []sql.Row{{0, 3}},
 			},
 		},
