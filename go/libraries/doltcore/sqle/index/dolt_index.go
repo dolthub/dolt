@@ -79,23 +79,22 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
 	}
-	indexes = append(indexes, toIndex)
 
 	// TODO: from_ columns
-	//indexes[1] = doltIndex{
-	//	id:       "PRIMARY",
-	//	tblName:  doltdb.DoltDiffTablePrefix + tbl,
-	//	dbName:   db,
-	//	columns:  cols,
-	//	indexSch: sch,
-	//	tableSch: sch,
-	//	unique:   true,
-	//	comment:  "",
-	//	vrw:      t.ValueReadWriter(),
-	//	keyBld:   keyBld,
-	//}
+	fromIndex := doltIndex{
+		id:       "PRIMARY",
+		tblName:  doltdb.DoltDiffTablePrefix + tbl,
+		dbName:   db,
+		columns:  cols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
+	}
 
-	return indexes, nil
+	return append(indexes, toIndex, fromIndex), nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {

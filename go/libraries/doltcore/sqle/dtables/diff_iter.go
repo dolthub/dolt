@@ -94,13 +94,13 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 		rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
 	} else {
 		ranges := index.NomsRangesFromIndexLookup(lookup) // TODO: this is a testing method
-		rangeFunc := func(ctx context.Context, val types.Value) (bool, error) {
+		// TODO: maybe just use Check
+		rangeFunc := func(ctx context.Context, val types.Value) (bool, bool, error) {
 			v, ok := val.(types.Tuple)
 			if !ok {
-				return false, nil
+				return false, false, nil
 			}
-			valid, _, err := ranges[0].Check.Check(ctx, v)
-			return valid, err
+			return ranges[0].Check.Check(ctx, v)
 		}
 		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
 	}
