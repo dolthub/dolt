@@ -165,6 +165,9 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
+
+	// I want to see Exchange nodes, so have Parallelism
+	enginetest.TestDoltDiffQueryPlans(t, newDoltHarness(t).WithParallelism(2))
 }
 
 func TestQueryErrors(t *testing.T) {
