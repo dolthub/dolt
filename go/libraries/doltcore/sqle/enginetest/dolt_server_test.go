@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	gosql "database/sql"
+	"math/rand"
 	"strings"
 	"testing"
 
@@ -220,8 +221,8 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 
 func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
-	// TODO: customize port?
-	serverConfig := sqlserver.DefaultServerConfig()
+	port := 15403 + rand.Intn(25)
+	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
 
 	sc := sqlserver.NewServerController()
 	go func() {
