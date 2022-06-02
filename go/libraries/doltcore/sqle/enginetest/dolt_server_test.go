@@ -37,6 +37,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"call dolt_branch('branch1');",
 			"call dolt_branch('branch2');",
+			"call dolt_branch('branch3');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -52,11 +53,23 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
 			},
 			{
-				Query:    "/* client b */ CALL DOLT_BRANCH('-df', 'branch1');",
+				Query:    "/* client a */ CALL DOLT_CHECKOUT('branch2');",
 				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch2');",
+				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:          "/* client b */ CALL DOLT_BRANCH('-d', 'branch2');",
+				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client b */ CALL DOLT_BRANCH('-df', 'branch2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client b */ CALL DOLT_BRANCH('-d', 'branch3');",
 				Expected: []sql.Row{{0}},
 			},
 		},
