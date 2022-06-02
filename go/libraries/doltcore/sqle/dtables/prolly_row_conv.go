@@ -15,8 +15,9 @@
 package dtables
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
