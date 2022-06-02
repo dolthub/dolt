@@ -30,7 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -797,7 +797,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		m := prolly.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
+		m := shim.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
 		return IndexFromProllyMap(m), nil
 	}
 }

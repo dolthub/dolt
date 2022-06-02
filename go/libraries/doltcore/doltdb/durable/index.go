@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -84,7 +85,7 @@ func RefFromIndex(ctx context.Context, vrw types.ValueReadWriter, idx Index) (ty
 		return refFromNomsValue(ctx, vrw, idx.(nomsIndex).index)
 
 	case types.Format_DOLT_1:
-		b := prolly.ValueFromMap(idx.(prollyIndex).index)
+		b := shim.ValueFromMap(idx.(prollyIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -108,7 +109,7 @@ func indexFromAddr(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 		return IndexFromNomsMap(v.(types.Map), vrw), nil
 
 	case types.Format_DOLT_1:
-		pm := prolly.MapFromValue(v, sch, vrw)
+		pm := shim.MapFromValue(v, sch, vrw)
 		return IndexFromProllyMap(pm), nil
 
 	default:
@@ -127,8 +128,8 @@ func NewEmptyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Sc
 		return IndexFromNomsMap(m, vrw), nil
 
 	case types.Format_DOLT_1:
-		kd, vd := prolly.MapDescriptorsFromSchema(sch)
-		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		kd, vd := shim.MapDescriptorsFromSchema(sch)
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewMapFromTuples(ctx, ns, kd, vd)
 		if err != nil {
 			return nil, err
@@ -234,7 +235,7 @@ func (i prollyIndex) Format() *types.NomsBinFormat {
 
 // bytes implements Index.
 func (i prollyIndex) bytes() ([]byte, error) {
-	return []byte(prolly.ValueFromMap(i.index).(types.TupleRowStorage)), nil
+	return []byte(shim.ValueFromMap(i.index).(types.TupleRowStorage)), nil
 }
 
 var _ Index = prollyIndex{}

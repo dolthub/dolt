@@ -21,7 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -70,7 +70,7 @@ func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, err
 		}
 	}
 
-	kd, vd := prolly.MapDescriptorsFromSchema(inSch)
+	kd, vd := shim.MapDescriptorsFromSchema(inSch)
 	return ProllyRowConverter{
 		inSchema:         inSch,
 		outSchema:        outSch,
