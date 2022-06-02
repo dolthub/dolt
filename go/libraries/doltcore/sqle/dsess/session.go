@@ -53,6 +53,12 @@ var transactionMergeStomp = false
 var ErrWorkingSetChanges = goerrors.NewKind("Cannot switch working set, session state is dirty. " +
 	"Rollback or commit changes before changing working sets.")
 
+// InitialDbStateProvider allows callers to retrieve InitialDbState for a database by name.
+type InitialDbStateProvider interface {
+	// GetInitialDbState returns the InitialDbState for the database with the specified name.
+	GetInitialDbState(ctx *sql.Context, dbName string) (InitialDbState, error)
+}
+
 // Session is the sql.Session implementation used by dolt. It is accessible through a *sql.Context instance
 type Session struct {
 	sql.Session
@@ -166,12 +172,15 @@ func syncInitialDBState(ctx *sql.Context, dbName string) error {
 		return nil
 	}
 
-	initialDbState, err := dsession.provider.RevisionDbState(ctx, dbName)
-	if err != nil {
-		return err
+	if initialDBStateProvider, ok := dsession.provider.(InitialDbStateProvider); ok {
+		initialDbState, err := initialDBStateProvider.GetInitialDbState(ctx, dbName)
+		if err != nil {
+			return err
+		}
+		return dsession.AddDB(ctx, initialDbState)
+	} else {
+		return fmt.Errorf("unable to load initial DB state for database: %s", dbName)
 	}
-
-	return dsession.AddDB(ctx, initialDbState)
 }
 
 // LookupDbState returns the session state for the database named

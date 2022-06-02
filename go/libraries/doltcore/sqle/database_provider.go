@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
@@ -53,6 +54,7 @@ var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ dsess.RevisionDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.InitialDbStateProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
@@ -309,6 +311,25 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	}
 
 	return init, nil
+}
+
+// GetInitialDbState implements dsess.InitialDbStateProvider
+func (p DoltDatabaseProvider) GetInitialDbState(ctx *sql.Context, dbName string) (dsess.InitialDbState, error) {
+	database, err := p.Database(ctx, dbName)
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
+	if privilegedDb, ok := database.(mysql_db.PrivilegedDatabase); ok {
+		database = privilegedDb.Unwrap()
+	}
+
+	if database, ok := database.(SqlDatabase); ok {
+		return GetInitialDBState(ctx, database)
+	} else {
+		return dsess.InitialDbState{},
+			fmt.Errorf("unable to load initial state for database: %s", dbName)
+	}
 }
 
 // Function implements the FunctionProvider interface
