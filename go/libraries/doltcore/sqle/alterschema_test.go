@@ -866,7 +866,7 @@ func TestModifyColumn(t *testing.T) {
 			name:           "name collision",
 			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "A column with the name name already exists",
+			expectedErr:    "two different columns with the same name exist",
 		},
 		{
 			name:           "type change",
@@ -920,7 +920,7 @@ func TestModifyColumn(t *testing.T) {
 			assert.NoError(t, err)
 
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
+			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)

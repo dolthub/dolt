@@ -89,7 +89,6 @@ func iterTree(ctx context.Context, ns NodeStore, nd Node, cb func(item Item) err
 		return err
 	}
 
-	//ok := true
 	for !cur.outOfBounds() {
 		err = cb(cur.CurrentKey())
 		if err != nil {

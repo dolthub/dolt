@@ -77,18 +77,26 @@ func (te *nomsTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v
 }
 
 func (te *nomsTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(te.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
-		if err != nil {
-			return err
-		}
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+	if schema.IsKeyless(te.sch) {
+		return te.keylessInsert(ctx, sqlRow)
 	}
+	return te.keyedInsert(ctx, sqlRow)
+}
+
+func (te *nomsTableWriter) keylessInsert(ctx *sql.Context, sqlRow sql.Row) error {
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+}
+
+func (te *nomsTableWriter) keyedInsert(ctx *sql.Context, sqlRow sql.Row) error {
+	k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
+	if err != nil {
+		return err
+	}
+	return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 }
 
 func (te *nomsTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
