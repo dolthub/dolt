@@ -76,20 +76,18 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
+	//t.Skip()
+
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Create table with TIME type",
+			Name: "alter modify column type, make primary key spatial",
 			SetUpScript: []string{
-				"create table my_types (pk int primary key, c0 time);",
+				"create table point_tbl (p int primary key)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "INSERT INTO my_types VALUES (1, '11:22:33.444444');",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, InsertID: 0}}},
-				},
-				{
-					Query:    "UPDATE my_types SET c0='11:22' WHERE pk=1;",
-					Expected: []sql.Row{{sql.OkResult{RowsAffected: 1, Info: plan.UpdateInfo{Matched: 1, Updated: 1, Warnings: 0}}}},
+					Query:       "alter table point_tbl modify column p point primary key",
+					ExpectedErr: schema.ErrUsingSpatialKey,
 				},
 			},
 		},

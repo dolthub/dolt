@@ -15,6 +15,7 @@
 package enginetest
 
 import (
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 )
@@ -491,6 +492,18 @@ var ModifyColumnTypeScripts = []queries.ScriptTest{
 			{
 				Query:       "alter table test2 modify column v1 varchar(20)",
 				ExpectedErr: sql.ErrForeignKeyTypeChange,
+			},
+		},
+	},
+	{
+		Name: "alter modify column type, make primary key spatial",
+		SetUpScript: []string{
+			"create table point_tbl (p int primary key)",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table point_tbl modify column p point primary key",
+				ExpectedErr: schema.ErrUsingSpatialKey,
 			},
 		},
 	},

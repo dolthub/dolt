@@ -1028,6 +1028,11 @@ func (t *AlterableDoltTable) RewriteInserter(
 	oldColumn *sql.Column,
 	newColumn *sql.Column,
 ) (sql.RowInserter, error) {
+	err := validateSchemaChange(t.Name(), oldSchema, newSchema, oldColumn, newColumn)
+	if err != nil {
+		return nil, err
+	}
+
 	sess := dsess.DSessFromSess(ctx.Session)
 
 	// Begin by creating a new table with the same name and the new schema, then removing all its existing rows
@@ -1149,6 +1154,27 @@ func (t *AlterableDoltTable) RewriteInserter(
 	}
 
 	return ed, nil
+}
+
+// validateSchemaChange returns an error if the schema change given is not legal
+func validateSchemaChange(
+	tableName string,
+		oldSchema sql.PrimaryKeySchema,
+		newSchema sql.PrimaryKeySchema,
+		oldColumn *sql.Column,
+		newColumn *sql.Column,
+) error {
+	if newColumn != nil {
+		newCol, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, newColumn)
+		if err != nil {
+			panic(err)
+		}
+
+		if newCol.IsPartOfPK && schema.IsColSpatialType(newCol) {
+			return schema.ErrUsingSpatialKey.New(tableName)
+		}
+	}
+	return nil
 }
 
 func (t *AlterableDoltTable) adjustForeignKeysForDroppedPk(ctx *sql.Context, root *doltdb.RootValue) (*doltdb.RootValue, error) {
