@@ -644,4 +644,30 @@ var BrokenDDLScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:         "alter string column to truncate data",
+		SetUpScript:  []string{
+			"create table t1 (a int primary key, b varchar(3))",
+			"insert into t1 values (1, 'hi'), (2, 'bye')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t1 modify b varchar(2)",
+				ExpectedErr: sql.ErrInvalidValue, // not sure of the type of error, but it should give one
+			},
+		},
+	},
+	{
+		Name:         "alter datetime column with invalid values",
+		SetUpScript:  []string{
+			"CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1))",
+			"INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "alter table t3 modify v1 timestamp",
+				ExpectedErr: sql.ErrInvalidValue, // not sure of the type of error, but it should give one
+			},
+		},
+	},
 }

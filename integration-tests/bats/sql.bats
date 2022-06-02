@@ -1026,17 +1026,9 @@ SQL
     skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
-CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
-CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
 INSERT INTO t1 VALUES (0,-1),(1,1);
-INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
-INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');
 SQL
     run dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 INT UNSIGNED"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2)"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP"
     [ "$status" -eq "1" ]
 }
 
