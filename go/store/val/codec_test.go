@@ -78,6 +78,22 @@ func TestCompare(t *testing.T) {
 			l:   encFloat(1), r: encFloat(0),
 			cmp: 1,
 		},
+		// bit
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(1), r: encBit(0),
+			cmp: 1,
+		},
 		// decimal
 		{
 			typ: Type{Enc: DecimalEnc},
@@ -161,6 +177,38 @@ func TestCompare(t *testing.T) {
 			r:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
 			cmp: -1,
 		},
+		// enum
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(1), r: encEnum(0),
+			cmp: 1,
+		},
+		// set
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(1), r: encSet(0),
+			cmp: 1,
+		},
 		// string
 		{
 			typ: Type{Enc: StringEnc},
@@ -231,6 +279,12 @@ func encFloat(f float64) []byte {
 	return buf
 }
 
+func encBit(u uint64) []byte {
+	buf := make([]byte, bit64Size)
+	writeBit64(buf, u)
+	return buf
+}
+
 func encDecimal(d decimal.Decimal) []byte {
 	buf := make([]byte, sizeOfDecimal(d))
 	writeDecimal(buf, d)
@@ -265,6 +319,18 @@ func encTime(t int64) []byte {
 func encDatetime(dt time.Time) []byte {
 	buf := make([]byte, datetimeSize)
 	writeDatetime(buf, dt)
+	return buf
+}
+
+func encEnum(u uint16) []byte {
+	buf := make([]byte, enumSize)
+	writeEnum(buf, u)
+	return buf
+}
+
+func encSet(u uint64) []byte {
+	buf := make([]byte, setSize)
+	writeSet(buf, u)
 	return buf
 }
 
@@ -365,6 +431,14 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
+	buf = make([]byte, enumSize)
+	for _, value := range uintegers {
+		exp := uint16(value)
+		writeEnum(buf, exp)
+		assert.Equal(t, exp, readEnum(buf))
+		zero(buf)
+	}
+
 	buf = make([]byte, uint32Size)
 	uintegers = append(uintegers, math.MaxUint32)
 	for _, value := range uintegers {
@@ -380,6 +454,22 @@ func roundTripUints(t *testing.T) {
 		exp := uint64(value)
 		writeUint64(buf, exp)
 		assert.Equal(t, exp, readUint64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, bit64Size)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeBit64(buf, exp)
+		assert.Equal(t, exp, readBit64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, setSize)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeSet(buf, exp)
+		assert.Equal(t, exp, readSet(buf))
 		zero(buf)
 	}
 }

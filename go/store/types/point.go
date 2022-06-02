@@ -81,8 +81,8 @@ func WriteEWKBHeader(v interface{}, buf []byte) {
 	case Point:
 		// Write SRID and type
 		geometry.WriteEWKBHeader(buf, v.SRID, geometry.PointType)
-	case Linestring:
-		geometry.WriteEWKBHeader(buf, v.SRID, geometry.LinestringType)
+	case LineString:
+		geometry.WriteEWKBHeader(buf, v.SRID, geometry.LineStringType)
 	case Polygon:
 		geometry.WriteEWKBHeader(buf, v.SRID, geometry.PolygonType)
 	}

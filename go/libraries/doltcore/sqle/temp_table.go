@@ -152,7 +152,7 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	if t.lookup != nil {
 		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)
 	} else {
-		return partitionRows(ctx, t.table, nil, partition)
+		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}
 }
 

@@ -41,7 +41,7 @@ func DeserializePoint(buf []byte, srid uint32) (p sql.Point) {
 	return
 }
 
-func DeserializeLinestring(buf []byte, srid uint32) (l sql.Linestring) {
+func DeserializeLineString(buf []byte, srid uint32) (l sql.LineString) {
 	l.SRID = srid
 	l.Points = readPointSlice(buf, srid)
 	return
@@ -68,8 +68,8 @@ func readPointSlice(buf []byte, srid uint32) (points []sql.Point) {
 	return
 }
 
-func readLineSlice(buf []byte, srid uint32) (lines []sql.Linestring) {
-	lines = make([]sql.Linestring, readCount(buf))
+func readLineSlice(buf []byte, srid uint32) (lines []sql.LineString) {
+	lines = make([]sql.LineString, readCount(buf))
 	buf = buf[CountSize:]
 	for i := range lines {
 		lines[i].SRID = srid

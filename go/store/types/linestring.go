@@ -31,20 +31,20 @@ const (
 	LengthSize = 4
 )
 
-// Linestring is a Noms Value wrapper around a string.
-type Linestring struct {
+// LineString is a Noms Value wrapper around a string.
+type LineString struct {
 	SRID   uint32
 	Points []Point
 }
 
 // Value interface
-func (v Linestring) Value(ctx context.Context) (Value, error) {
+func (v LineString) Value(ctx context.Context) (Value, error) {
 	return v, nil
 }
 
-func (v Linestring) Equals(other Value) bool {
+func (v LineString) Equals(other Value) bool {
 	// Compare types
-	v2, ok := other.(Linestring)
+	v2, ok := other.(LineString)
 	if !ok {
 		return false
 	}
@@ -65,11 +65,11 @@ func (v Linestring) Equals(other Value) bool {
 	return true
 }
 
-func (v Linestring) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
+func (v LineString) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error) {
 	// Compare types
-	v2, ok := other.(Linestring)
+	v2, ok := other.(LineString)
 	if !ok {
-		return LinestringKind < other.Kind(), nil
+		return LineStringKind < other.Kind(), nil
 	}
 	// TODO: should I even take this into account?
 	// Compare SRID
@@ -97,32 +97,32 @@ func (v Linestring) Less(nbf *NomsBinFormat, other LesserValuable) (bool, error)
 	return len1 < len2, nil
 }
 
-func (v Linestring) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
+func (v LineString) Hash(nbf *NomsBinFormat) (hash.Hash, error) {
 	return getHash(v, nbf)
 }
 
-func (v Linestring) isPrimitive() bool {
+func (v LineString) isPrimitive() bool {
 	return true
 }
 
-func (v Linestring) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
+func (v LineString) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	return nil
 }
 
-func (v Linestring) typeOf() (*Type, error) {
-	return PrimitiveTypeMap[LinestringKind], nil
+func (v LineString) typeOf() (*Type, error) {
+	return PrimitiveTypeMap[LineStringKind], nil
 }
 
-func (v Linestring) Kind() NomsKind {
-	return LinestringKind
+func (v LineString) Kind() NomsKind {
+	return LineStringKind
 }
 
-func (v Linestring) valueReadWriter() ValueReadWriter {
+func (v LineString) valueReadWriter() ValueReadWriter {
 	return nil
 }
 
 // WriteEWKBLineData converts a Line into a byte array in EWKB format
-func WriteEWKBLineData(l Linestring, buf []byte) {
+func WriteEWKBLineData(l LineString, buf []byte) {
 	// Write length of linestring
 	binary.LittleEndian.PutUint32(buf[:LengthSize], uint32(len(l.Points)))
 	// Append each point
@@ -131,8 +131,8 @@ func WriteEWKBLineData(l Linestring, buf []byte) {
 	}
 }
 
-func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	err := LinestringKind.writeTo(w, nbf)
+func (v LineString) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
+	err := LineStringKind.writeTo(w, nbf)
 	if err != nil {
 		return err
 	}
@@ -148,9 +148,9 @@ func (v Linestring) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
 	return nil
 }
 
-// ParseEWKBLine converts the data portion of a WKB point to Linestring
+// ParseEWKBLine converts the data portion of a WKB point to LineString
 // Very similar logic to the function in GMS
-func ParseEWKBLine(buf []byte, srid uint32) Linestring {
+func ParseEWKBLine(buf []byte, srid uint32) LineString {
 	// Read length of linestring
 	numPoints := binary.LittleEndian.Uint32(buf[:4])
 
@@ -160,32 +160,32 @@ func ParseEWKBLine(buf []byte, srid uint32) Linestring {
 		points[i] = ParseEWKBPoint(buf[LengthSize+geometry.PointSize*i:LengthSize+geometry.PointSize*(i+1)], srid)
 	}
 
-	return Linestring{SRID: srid, Points: points}
+	return LineString{SRID: srid, Points: points}
 }
 
-func readLinestring(nbf *NomsBinFormat, b *valueDecoder) (Linestring, error) {
+func readLineString(nbf *NomsBinFormat, b *valueDecoder) (LineString, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LinestringType {
-		return Linestring{}, errors.New("not a linestring")
+	if geomType != geometry.LineStringType {
+		return LineString{}, errors.New("not a linestring")
 	}
 	return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
 }
 
-func (v Linestring) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
+func (v LineString) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
 	buf := []byte(b.ReadString())
 	srid, _, geomType := geometry.ParseEWKBHeader(buf)
-	if geomType != geometry.LinestringType {
+	if geomType != geometry.LineStringType {
 		return nil, errors.New("not a linestring")
 	}
 	return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
 }
 
-func (v Linestring) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
+func (v LineString) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 	b.skipString()
 }
 
-func (v Linestring) HumanReadableString() string {
+func (v LineString) HumanReadableString() string {
 	points := make([]string, len(v.Points))
 	for i, p := range v.Points {
 		points[i] = p.HumanReadableString()

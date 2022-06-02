@@ -49,7 +49,7 @@ type CodecReader interface {
 	ReadDecimal() (decimal.Decimal, error)
 	ReadGeometry() (Geometry, error)
 	ReadPoint() (Point, error)
-	ReadLinestring() (Linestring, error)
+	ReadLineString() (LineString, error)
 	ReadPolygon() (Polygon, error)
 	ReadBlob() (Blob, error)
 	ReadJSON() (JSON, error)
@@ -93,8 +93,8 @@ func (r *valueDecoder) ReadPoint() (Point, error) {
 	return readPoint(nil, r)
 }
 
-func (r *valueDecoder) ReadLinestring() (Linestring, error) {
-	return readLinestring(nil, r)
+func (r *valueDecoder) ReadLineString() (LineString, error) {
+	return readLineString(nil, r)
 }
 
 func (r *valueDecoder) ReadPolygon() (Polygon, error) {
@@ -384,7 +384,7 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 		switch geomType {
 		case geometry.PointType:
 			return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
-		case geometry.LinestringType:
+		case geometry.LineStringType:
 			return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
 		case geometry.PolygonType:
 			return ParseEWKBPoly(buf[geometry.EWKBHeaderSize:], srid), nil
@@ -399,11 +399,11 @@ func (r *valueDecoder) readValue(nbf *NomsBinFormat) (Value, error) {
 			return nil, ErrUnknownType
 		}
 		return ParseEWKBPoint(buf[geometry.EWKBHeaderSize:], srid), nil
-	case LinestringKind:
+	case LineStringKind:
 		r.skipKind()
 		buf := []byte(r.ReadString())
 		srid, _, geomType := geometry.ParseEWKBHeader(buf)
-		if geomType != geometry.LinestringType {
+		if geomType != geometry.LineStringType {
 			return nil, ErrUnknownType
 		}
 		return ParseEWKBLine(buf[geometry.EWKBHeaderSize:], srid), nil
@@ -470,7 +470,7 @@ func (r *valueDecoder) SkipValue(nbf *NomsBinFormat) error {
 	case PointKind:
 		r.skipKind()
 		r.skipString()
-	case LinestringKind:
+	case LineStringKind:
 		r.skipKind()
 		r.skipString()
 	case PolygonKind:
