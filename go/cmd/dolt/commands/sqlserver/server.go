@@ -22,10 +22,8 @@ import (
 	"strconv"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/mysql"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
@@ -34,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -166,65 +163,24 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	// Set mysql.db file path from server
-	if serverConfig.MySQLDbFilePath() != "" {
-		mysql_file_handler.SetMySQLDbFilePath(serverConfig.MySQLDbFilePath())
-	}
-
-	// Load in MySQL Db from file, if it exists
-	data, err := mysql_file_handler.LoadData()
-	if err != nil {
-		return nil, err
-	}
-
-	// Use privilege file iff mysql.db file DNE
-	var users []*mysql_db.User
-	var roles []*mysql_db.RoleEdge
-	var tempUsers []gms.TemporaryUser
-	if len(data) == 0 {
-		// Set privilege file path from server
-		if serverConfig.PrivilegeFilePath() != "" {
-			mysql_file_handler.SetPrivilegeFilePath(serverConfig.PrivilegeFilePath())
-		}
-
-		// Load privileges from privilege file
-		users, roles, err = mysql_file_handler.LoadPrivileges()
-		if err != nil {
-			return err, nil
-		}
-
-		// Create temporary users if no privileges in config
-		if len(users) == 0 && len(serverConfig.User()) > 0 {
-			tempUsers = append(tempUsers, gms.TemporaryUser{
-				Username: serverConfig.User(),
-				Password: serverConfig.Password(),
-			})
-		}
-	}
-
 	// Create SQL Engine with users
-	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", isReadOnly, tempUsers, serverConfig.AutoCommit())
+	sqlEngine, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatTabular,
+		"",
+		isReadOnly,
+		serverConfig.MySQLDbFilePath(),
+		serverConfig.PrivilegeFilePath(),
+		serverConfig.User(),
+		serverConfig.Password(),
+		serverConfig.AutoCommit(),
+	)
 	if err != nil {
 		return err, nil
 	}
 	defer sqlEngine.Close()
 
-	// Load in MySQL DB information
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data)
-	if err != nil {
-		return err, nil
-	}
-
-	// Load in Privilege data iff mysql db didn't exist
-	if len(data) == 0 {
-		err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles)
-		if err != nil {
-			return err, nil
-		}
-	}
-
-	// Set persist callbacks
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
 	defer listener.Close()

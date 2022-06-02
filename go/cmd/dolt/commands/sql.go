@@ -377,7 +377,18 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -398,7 +409,18 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -408,6 +430,9 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -433,7 +458,18 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -443,6 +479,9 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
@@ -455,7 +494,18 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		initialDb,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		true,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -465,6 +515,9 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
@@ -731,6 +784,9 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv.GetEnv(currentDB)
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())

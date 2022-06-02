@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -33,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
@@ -53,7 +55,10 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	initialDb string,
 	isReadOnly bool,
-	tempUsers []gms.TemporaryUser,
+	mysqlDbFilePath string,
+	privFilePath string,
+	serverUser string,
+	serverPass string,
 	autocommit bool) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
@@ -75,7 +80,54 @@ func NewSqlEngine(
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
+	// Set mysql.db file path from server
+	mysql_file_handler.SetMySQLDbFilePath(mysqlDbFilePath)
+
+	// Load in MySQL Db from file, if it exists
+	data, err := mysql_file_handler.LoadData()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use privilege file iff mysql.db file DNE
+	var users []*mysql_db.User
+	var roles []*mysql_db.RoleEdge
+	var tempUsers []gms.TemporaryUser
+	if len(data) == 0 {
+		// Set privilege file path from server
+		if privFilePath != "" {
+			mysql_file_handler.SetPrivilegeFilePath(privFilePath)
+		}
+
+		// Load privileges from privilege file
+		users, roles, err = mysql_file_handler.LoadPrivileges()
+		if err != nil {
+			return nil, err
+		}
+
+		// Create temporary users if no privileges in config
+		if len(users) == 0 && len(serverUser) > 0 {
+			tempUsers = append(tempUsers, gms.TemporaryUser{
+				Username: serverUser,
+				Password: serverPass,
+			})
+		}
+	}
+
+	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	// Load MySQL Db information
+	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
+		return nil, err
+	}
+	// Load Privilege data iff mysql db didn't exist
+	if len(data) == 0 {
+		if err = engine.Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles); err != nil {
+			return nil, err
+		}
+	}
+	// Set persist callbacks
+	engine.Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
