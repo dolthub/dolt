@@ -51,7 +51,18 @@ fi
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" "$issuenumber" > job.json
+source \
+  "$TEMPLATE_SCRIPT" \
+  "$jobname"         \
+  "$FROM_SERVER"     \
+  "$FROM_VERSION"    \
+  "$TO_SERVER"       \
+  "$TO_VERSION"      \
+  "$timeprefix"      \
+  "$actorprefix"     \
+  "$format"          \
+  "$issuenumber"     \
+  "$INIT_BIG_REPO"   > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

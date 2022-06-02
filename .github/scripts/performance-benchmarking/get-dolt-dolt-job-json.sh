@@ -2,8 +2,8 @@
 
 set -e
 
-if [ "$#" -lt 9 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber>"
+if [ "$#" -lt 10 ]; then
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo>"
     exit 1
 fi
 
@@ -16,6 +16,7 @@ timePrefix="$6"
 actorPrefix="$7"
 format="$8"
 issueNumber="$9"
+initBigRepo="${10}"
 tpccRegex="tpcc%"
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan')"
@@ -74,7 +75,7 @@ echo '
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
               "--tpccQueries='"$tpccTpsQuery"'",
-              "--init-big-repo"
+              "--init-big-repo='"$initBigRepo"'""
             ]
           }
         ],

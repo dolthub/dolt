@@ -95,4 +95,5 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
+          INIT_BIG_REPO: "true"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"

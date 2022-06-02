@@ -279,7 +279,7 @@ type Config struct {
 	TestOptions []string
 	// ScriptDir is a path to a directory of lua scripts
 	ScriptDir string
-	// DirtyClone downloads a database with existing chunks and commits
+	// InitBigRepo downloads a database with existing chunks and commits
 	InitBigRepo bool
 }
 
