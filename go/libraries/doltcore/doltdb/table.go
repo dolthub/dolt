@@ -17,7 +17,6 @@ package doltdb
 import (
 	"context"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -430,37 +429,6 @@ func (t *Table) RenameIndexRowData(ctx context.Context, oldIndexName, newIndexNa
 	}
 
 	return t.SetIndexSet(ctx, indexes)
-}
-
-// VerifyIndexRowData verifies that the index with the given name's data matches what the index expects.
-func (t *Table) VerifyIndexRowData(ctx context.Context, indexName string) error {
-	sch, err := t.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	index := sch.Indexes().GetByName(indexName)
-	if index == nil {
-		return fmt.Errorf("index `%s` does not exist", indexName)
-	}
-
-	indexes, err := t.GetIndexSet(ctx)
-	if err != nil {
-		return err
-	}
-
-	idx, err := indexes.GetIndex(ctx, sch, indexName)
-	if err != nil {
-		return err
-	}
-
-	im := durable.NomsMapFromIndex(idx)
-	iter, err := im.Iterator(ctx)
-	if err != nil {
-		return err
-	}
-
-	return index.VerifyMap(ctx, iter, im.Format())
 }
 
 // GetAutoIncrementValue returns the current AUTO_INCREMENT value for this table.
