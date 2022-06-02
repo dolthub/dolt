@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 10 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo>"
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat>"
     exit 1
 fi
 
@@ -17,6 +17,7 @@ actorPrefix="$7"
 format="$8"
 issueNumber="$9"
 initBigRepo="${10}"
+nomsBinFormat="${11}"
 tpccRegex="tpcc%"
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan')"
@@ -75,7 +76,8 @@ echo '
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
               "--tpccQueries='"$tpccTpsQuery"'",
-              "--init-big-repo='"$initBigRepo"'""
+              "--init-big-repo='"$initBigRepo"'"",
+              "--noms-bin-format='"$nomsBinFormat"'""
             ]
           }
         ],

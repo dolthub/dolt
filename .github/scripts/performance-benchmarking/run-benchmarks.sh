@@ -62,7 +62,8 @@ source \
   "$actorprefix"     \
   "$format"          \
   "$issuenumber"     \
-  "$INIT_BIG_REPO"   > job.json
+  "$INIT_BIG_REPO"   \
+  "$NOMS_BIN_FORMAT" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

@@ -281,6 +281,8 @@ type Config struct {
 	ScriptDir string
 	// InitBigRepo downloads a database with existing chunks and commits
 	InitBigRepo bool
+	// NomsBinFormat specifies the NomsBinFormat
+	NomsBinFormat string
 }
 
 // NewConfig returns a new Config
