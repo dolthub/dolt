@@ -15,9 +15,10 @@
 package enginetest
 
 import (
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 // Tests in this file are a grab bag of DDL queries, many of them ported from older parts of the Dolt codebase

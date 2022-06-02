@@ -1159,10 +1159,10 @@ func (t *AlterableDoltTable) RewriteInserter(
 // validateSchemaChange returns an error if the schema change given is not legal
 func validateSchemaChange(
 	tableName string,
-		oldSchema sql.PrimaryKeySchema,
-		newSchema sql.PrimaryKeySchema,
-		oldColumn *sql.Column,
-		newColumn *sql.Column,
+	oldSchema sql.PrimaryKeySchema,
+	newSchema sql.PrimaryKeySchema,
+	oldColumn *sql.Column,
+	newColumn *sql.Column,
 ) error {
 	if newColumn != nil {
 		newCol, err := sqlutil.ToDoltCol(schema.SystemTableReservedMin, newColumn)
