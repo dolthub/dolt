@@ -986,8 +986,11 @@ func (t *AlterableDoltTable) isIncompatibleTypeChange(oldColumn *sql.Column, new
 		panic(err) // should be impossible, we check compatibility before this point
 	}
 
-	// TODO: this check should look different for DOLT_1
 	if !existingCol.TypeInfo.Equals(newCol.TypeInfo) {
+		if types.IsFormat_DOLT_1(t.Format()) {
+			// This is overly broad, we could narrow this down a bit
+			return true
+		}
 		if existingCol.Kind != newCol.Kind {
 			return true
 		} else if schema.IsColSpatialType(newCol) {
