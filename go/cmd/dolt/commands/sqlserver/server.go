@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
