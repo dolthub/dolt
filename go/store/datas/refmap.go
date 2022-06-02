@@ -132,11 +132,7 @@ func RefMapApplyEdits(rm *serial.RefMap, builder *flatbuffers.Builder, edits []R
 func storeroot_flatbuffer(am prolly.AddressMap) []byte {
 	builder := flatbuffers.NewBuilder(1024)
 	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.TupleRowStorage))
-	builder.Prep(flatbuffers.SizeUOffsetT, len(ambytes))
-	stop := int(builder.Head())
-	start := stop - len(ambytes)
-	copy(builder.Bytes[start:stop], ambytes)
-	voff := builder.CreateByteVector(builder.Bytes[start:stop])
+	voff := builder.CreateByteVector(ambytes)
 	serial.StoreRootStart(builder)
 	serial.StoreRootAddAddressMap(builder, voff)
 	builder.FinishWithFileIdentifier(serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
