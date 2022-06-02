@@ -20,11 +20,7 @@ import (
 	"io"
 	"strings"
 
-	flatbuffers "github.com/google/flatbuffers/go"
-
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -306,10 +302,9 @@ func (i prollyIndex) AddColumnToRows(ctx context.Context, newCol string, newSche
 // NewIndexSet returns an empty IndexSet.
 func NewIndexSet(ctx context.Context, vrw types.ValueReadWriter) IndexSet {
 	if vrw.Format().UsesFlatbuffers() {
-		builder := flatbuffers.NewBuilder(24)
-		serial.RefMapStart(builder)
-		builder.Finish(serial.RefMapEnd(builder))
-		return doltDevIndexSet{vrw, serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
+		emptyam := prolly.NewEmptyAddressMap(ns)
+		return doltDevIndexSet{vrw, emptyam}
 	}
 
 	empty, _ := types.NewMap(ctx, vrw)
@@ -418,17 +413,20 @@ func mapFromIndexSet(ic IndexSet) types.Map {
 
 type doltDevIndexSet struct {
 	vrw types.ValueReadWriter
-	msg *serial.RefMap
+	am  prolly.AddressMap
 }
 
 var _ IndexSet = doltDevIndexSet{}
 
 func (is doltDevIndexSet) HashOf() (hash.Hash, error) {
-	return types.SerialMessage(is.msg.Table().Bytes).Hash(is.vrw.Format())
+	return is.am.HashOf(), nil
 }
 
 func (is doltDevIndexSet) GetIndex(ctx context.Context, sch schema.Schema, name string) (Index, error) {
-	addr := datas.RefMapLookup(is.msg, name)
+	addr, err := is.am.Get(ctx, name)
+	if err != nil {
+		return nil, err
+	}
 	if addr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", name)
 	}
@@ -445,12 +443,17 @@ func (is doltDevIndexSet) PutIndex(ctx context.Context, name string, idx Index) 
 		return nil, err
 	}
 
-	builder := flatbuffers.NewBuilder(1024)
-	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name, Addr: ref.TargetHash()}})
-	builder.Finish(off)
-	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+	ae := is.am.Editor()
+	err = ae.Update(ctx, name, ref.TargetHash())
+	if err != nil {
+		return nil, err
+	}
+	am, err := ae.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
 
-	return doltDevIndexSet{is.vrw, msg}, nil
+	return doltDevIndexSet{is.vrw, am}, nil
 }
 
 func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx types.Map) (IndexSet, error) {
@@ -458,30 +461,48 @@ func (is doltDevIndexSet) PutNomsIndex(ctx context.Context, name string, idx typ
 }
 
 func (is doltDevIndexSet) DropIndex(ctx context.Context, name string) (IndexSet, error) {
-	builder := flatbuffers.NewBuilder(1024)
-	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{{Name: name, Addr: hash.Hash{}}})
-	builder.Finish(off)
-	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
-	return doltDevIndexSet{is.vrw, msg}, nil
+	ae := is.am.Editor()
+	err := ae.Delete(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	am, err := ae.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return doltDevIndexSet{is.vrw, am}, nil
 }
 
 func (is doltDevIndexSet) RenameIndex(ctx context.Context, oldName, newName string) (IndexSet, error) {
-	addr := datas.RefMapLookup(is.msg, oldName)
+	addr, err := is.am.Get(ctx, oldName)
+	if err != nil {
+		return nil, err
+	}
 	if addr.IsEmpty() {
 		return nil, fmt.Errorf("index %s not found in IndexSet", oldName)
 	}
-	newaddr := datas.RefMapLookup(is.msg, newName)
+	newaddr, err := is.am.Get(ctx, newName)
+	if err != nil {
+		return nil, err
+	}
 	if !newaddr.IsEmpty() {
 		return nil, fmt.Errorf("index %s found in IndexSet when attempting to rename index", newName)
 	}
 
-	builder := flatbuffers.NewBuilder(1024)
-	off := datas.RefMapApplyEdits(is.msg, builder, []datas.RefMapEdit{
-		{Name: newName, Addr: addr},
-		{Name: oldName},
-	})
-	builder.Finish(off)
-	msg := serial.GetRootAsRefMap(builder.FinishedBytes(), 0)
+	ae := is.am.Editor()
+	err = ae.Update(ctx, newName, addr)
+	if err != nil {
+		return nil, err
+	}
+	err = ae.Delete(ctx, oldName)
+	if err != nil {
+		return nil, err
+	}
 
-	return doltDevIndexSet{is.vrw, msg}, nil
+	am, err := ae.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return doltDevIndexSet{is.vrw, am}, nil
 }

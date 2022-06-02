@@ -204,12 +204,11 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				fmt.Fprintf(w, "\t}\n")
 
 				fmt.Fprintf(w, "\tSecondary indexes: {\n")
-				idxRefs := msg.SecondaryIndexes(nil)
-				hashes := idxRefs.RefArrayBytes()
-				for i := 0; i < idxRefs.NamesLength(); i++ {
-					name := idxRefs.Names(i)
-					addr := hash.New(hashes[i*20 : (i+1)*20])
-					fmt.Fprintf(w, "\t\t%s: #%s\n", name, addr.String())
+
+				node = tree.NodeFromBytes(msg.SecondaryIndexesBytes())
+				err := tree.OutputProllyNode(w, node)
+				if err != nil {
+					return err
 				}
 				fmt.Fprintf(w, "\t}\n")
 				fmt.Fprintf(w, "}")

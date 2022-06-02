@@ -29,10 +29,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -1393,7 +1393,7 @@ func (m fbTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
 
 func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, error)) error {
 	var stop bool
-	return m.AddressMap.IterAll(ctx, func (n string, a hash.Hash) error {
+	return m.AddressMap.IterAll(ctx, func(n string, a hash.Hash) error {
 		if !stop {
 			var err error
 			stop, err = cb(n, a)

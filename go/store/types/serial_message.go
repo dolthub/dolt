@@ -126,14 +126,7 @@ func (sm SerialMessage) HumanReadableString() string {
 		// TODO: can't use tree package to print here, creates a cycle
 		fmt.Fprintf(ret, "\tPrimary index: prolly tree\n")
 
-		fmt.Fprintf(ret, "\tSecondary indexes: {\n")
-		idxRefs := msg.SecondaryIndexes(nil)
-		hashes := idxRefs.RefArrayBytes()
-		for i := 0; i < idxRefs.NamesLength(); i++ {
-			name := idxRefs.Names(i)
-			addr := hash.New(hashes[i*20 : (i+1)*20])
-			fmt.Fprintf(ret, "\t\t%s: #%s\n", name, addr.String())
-		}
+		fmt.Fprintf(ret, "\tSecondary indexes: {\n\t%s\n", TupleRowStorage(msg.SecondaryIndexesBytes()).HumanReadableString())
 		fmt.Fprintf(ret, "\t}\n")
 		fmt.Fprintf(ret, "}")
 		return ret.String()
@@ -307,18 +300,9 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 			}
 		}
 
-		rm := msg.SecondaryIndexes(nil)
-		refs := rm.RefArrayBytes()
-		for i := 0; i < rm.NamesLength(); i++ {
-			off := i * 20
-			addr := hash.New(refs[off : off+20])
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
+		err = TupleRowStorage(msg.SecondaryIndexesBytes()).walkRefs(nbf, cb)
+		if err != nil {
+			return err
 		}
 
 		mapbytes := msg.PrimaryIndexBytes()
