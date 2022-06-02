@@ -848,7 +848,7 @@ func (sess *Session) AddDB(ctx *sql.Context, dbState InitialDbState) error {
 
 	sessionState := &DatabaseSessionState{}
 	sess.dbStates[db.Name()] = sessionState
-
+	sessionState.dbName = db.Name()
 	// TODO: get rid of all repo state reader / writer stuff. Until we do, swap out the reader with one of our own, and
 	//  the writer with one that errors out
 	sessionState.dbData = dbState.DbData

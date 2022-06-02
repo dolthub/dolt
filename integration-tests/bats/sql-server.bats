@@ -1131,22 +1131,25 @@ END""")
 }
 
 @test "sql-server: connect to databases case insensitive" {
-    skip "Database connnection strings are case sensitive and should not be"
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
     skip_nbf_dolt_1
-    
+
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
     server_query "" 1 "create database Test1"
-    
+
     server_query "" 1 "show databases" "Database\nTest1\ninformation_schema"
-    server_query "test1" 1 "create table a(x int)"
-    server_query "TEST1" 1 "insert into a values (1), (2)"
-    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
-    run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
-    server_query "TEST1/newbranch" 1 "select * from a" "x\n1\n2"
-    server_query "TEST1/NEWBRANCH" 1 "select * from a" "x\n1\n2"
+    multi_query "" 1 "use test1; create table a(x int);"
+    multi_query "" 1 "use TEST1; insert into a values (1), (2);"
+    run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
+    run multi_query "" 1 "use test1; select dolt_checkout('-b', 'newbranch');"
+    multi_query "" 1 "use \`TEST1/newbranch\`; select * from a" "x\n1\n2"
+    multi_query "" 1 "use \`test1/newbranch\`; select * from a" "x\n1\n2"
+    server_query "" 1 "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
+
+    multi_query "" 1 "create database test2; use test2; select database();" "database()\ntest2"
+    multi_query "" 1 "use test2; drop database TEST2; select database();" "null"
 }
 
 @test "sql-server: create and drop database with --multi-db-dir" {

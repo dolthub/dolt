@@ -26,6 +26,32 @@ type MutationIter interface {
 	Close() error
 }
 
+// ApplyMutations applies a sorted series of edits to a NodeStore,
+// returning the new root Node.
+//
+// The algorithm is structured as follows:
+//
+// - Create a new chunker, the main interface for building a new
+//   tree.
+// - Create two cursors into the previous tree. Both cursors
+//   track key indexes in the old keyspace. The first tracks where
+//   a new edit will be applied relative to the old keyspace.
+//   The second indicates the most recent edit in the new tree
+//   relative to the old keyspace. The second cursor is embedded in
+//   the chunker, maintained by the chunker, and necessary precedes
+//   the first.
+//
+// - For every edit, first identify the key index in the old keyspace
+//   where the edit will be applied, and move the tracking cursor to
+//   that index.
+// - Advance the chunker and the second cursor to the new edit point.
+//   Refer to the chunker.AdvanceTo docstring for details.
+// - Add the edit to the chunker. This applies the edit to the in-progress
+//   NodeStore. The new NodeStore may expand or shrink relative to the
+//   old tree, but these details are internal to the chunker.
+//  - Repeat for every edit.
+//
+//  - Finalize the chunker and resolve the tree's new root Node.
 func ApplyMutations[S message.Serializer](
 	ctx context.Context,
 	ns NodeStore,
@@ -67,11 +93,7 @@ func ApplyMutations[S message.Serializer](
 		}
 
 		// check for no-op mutations
-		if oldValue == nil && newValue == nil {
-			newKey, newValue = edits.NextMutation(ctx)
-			continue // already non-present
-		}
-		if oldValue != nil && equalValues(newValue, oldValue) {
+		if equalValues(newValue, oldValue) {
 			newKey, newValue = edits.NextMutation(ctx)
 			continue // same newValue
 		}

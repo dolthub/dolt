@@ -1248,3 +1248,76 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 		},
 	},
 }
+
+var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
+	{
+		Name: "a transaction commit that is a fast-forward produces no constraint violations",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
+			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO parent VALUES (10, 1), (20, 2);",
+			"INSERT INTO child VALUES (1, 1), (2, 2);",
+			"ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1);",
+			"CALL DOLT_COMMIT('-am', 'MC1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "a transaction commit that is a three-way merge produces constraint violations",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
+			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT);",
+			"INSERT INTO parent VALUES (10, 1), (20, 2);",
+			"INSERT INTO child VALUES (1, 1), (2, 2);",
+			"ALTER TABLE child ADD CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1);",
+			"CALL DOLT_COMMIT('-am', 'MC1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET FOREIGN_KEY_CHECKS = 0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ DELETE FROM PARENT where v1 = 2;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO parent VALUES (30, 3);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "/* client b */ COMMIT;",
+				ExpectedErrStr: "Constraint violation from merge detected, cannot commit transaction. Constraint violations from a merge must be resolved using the dolt_constraint_violations table before committing a transaction. To commit transactions with constraint violations set @@dolt_force_transaction_commit=1",
+			},
+		},
+	},
+}

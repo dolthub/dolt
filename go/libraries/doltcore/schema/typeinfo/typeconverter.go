@@ -141,8 +141,8 @@ func wrapConvertValueToNomsValue(
 			if err != nil {
 				return nil, err
 			}
-		case types.Linestring:
-			vInt = ConvertTypesLinestringToSQLLinestring(val)
+		case types.LineString:
+			vInt = ConvertTypesLineStringToSQLLineString(val)
 		case types.Point:
 			vInt = ConvertTypesPointToSQLPoint(val)
 		case types.Polygon:

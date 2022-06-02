@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -77,15 +76,12 @@ const (
 )
 
 var PeopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch, _ = untyped.UntypeUnkeySchema(PeopleTestSchema)
 var PeopleTableName = "people"
 
 var EpisodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch, _ = untyped.UntypeUnkeySchema(EpisodesTestSchema)
 var EpisodesTableName = "episodes"
 
 var AppearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
@@ -259,20 +255,6 @@ func Rs(rows ...row.Row) []row.Row {
 		return make([]row.Row, 0)
 	}
 	return rows
-}
-
-// Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
-func FindRowIndex(find row.Row, rows []row.Row) int {
-	idx := -1
-	for i, updatedRow := range rows {
-		rowId, _ := find.GetColVal(IdTag)
-		updatedId, _ := updatedRow.GetColVal(IdTag)
-		if rowId.Equals(updatedId) {
-			idx = i
-			break
-		}
-	}
-	return idx
 }
 
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
