@@ -35,7 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/datetime"
@@ -179,7 +179,7 @@ func outputType(value interface{}) {
 func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) error {
 	switch value := value.(type) {
 	case types.TupleRowStorage:
-		node := prolly.NodeFromValue(value)
+		node := shim.NodeFromValue(value)
 		return tree.OutputProllyNode(w, node)
 	case tree.Node:
 		return tree.OutputProllyNode(w, value)
@@ -216,7 +216,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 
 				return nil
 			case serial.ProllyTreeNodeFileID:
-				node := prolly.NodeFromValue(value)
+				node := shim.NodeFromValue(value)
 				return tree.OutputProllyNode(w, node)
 			default:
 				return types.WriteEncodedValue(ctx, w, value)

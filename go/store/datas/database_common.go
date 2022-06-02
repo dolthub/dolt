@@ -28,6 +28,8 @@ import (
 
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -87,17 +89,17 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 	return val.(types.Map), nil
 }
 
-func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (refmap, error) {
+func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) (prolly.AddressMap, error) {
 	if rootHash == (hash.Hash{}) {
-		return empty_refmap(), nil
+		return prolly.NewEmptyAddressMap(tree.NewNodeStore(db.chunkStore())), nil
 	}
 
 	val, err := db.ReadValue(ctx, rootHash)
 	if err != nil {
-		return refmap{}, err
+		return prolly.AddressMap{}, err
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage))), nil
+	return parse_storeroot([]byte(val.(types.SerialMessage)), db.chunkStore()), nil
 }
 
 func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
@@ -240,23 +242,15 @@ func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRef
 }
 
 type refmapDatasetsMap struct {
-	rm refmap
+	am prolly.AddressMap
 }
 
 func (m refmapDatasetsMap) Len() uint64 {
-	return m.rm.len()
+	return uint64(m.am.Count())
 }
 
 func (m refmapDatasetsMap) IterAll(ctx context.Context, cb func(string, hash.Hash) error) error {
-	addrs := m.rm.RefMap.RefArrayBytes()
-	for i := 0; i < m.rm.RefMap.NamesLength(); i++ {
-		name := string(m.rm.RefMap.Names(i))
-		addr := hash.New(addrs[i*20 : i*20+20])
-		if err := cb(name, addr); err != nil {
-			return err
-		}
-	}
-	return nil
+	return m.am.IterAll(ctx, cb)
 }
 
 type nomsDatasetsMap struct {
@@ -332,7 +326,10 @@ func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap 
 		return newDataset(db, datasetID, head, headAddr)
 	} else if rmdsmap, ok := dsmap.(refmapDatasetsMap); ok {
 		var err error
-		curr := rmdsmap.rm.lookup(datasetID)
+		curr, err := rmdsmap.am.Get(ctx, datasetID)
+		if err != nil {
+			return Dataset{}, err
+		}
 		var head types.Value
 		if !curr.IsEmpty() {
 			head, err = db.ReadValue(ctx, curr)
@@ -436,23 +433,31 @@ func (db *database) doSetHead(ctx context.Context, ds Dataset, addr hash.Hash) e
 		}
 
 		return datasets.Edit().Set(key, ref).Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		curr := rm.lookup(ds.ID())
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		curr, err := am.Get(ctx, ds.ID())
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
 		if curr != (hash.Hash{}) {
 			currHead, err := db.readHead(ctx, curr)
 			if err != nil {
-				return refmap{}, err
+				return prolly.AddressMap{}, err
 			}
 			currType := currHead.TypeName()
 			if currType != headType {
-				return refmap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
+				return prolly.AddressMap{}, fmt.Errorf("cannot change type of head; currently points at %s but new value would point at %s", currType, headType)
 			}
 		}
 		h, err := newVal.Hash(db.Format())
 		if err != nil {
-			return refmap{}, err
+			return prolly.AddressMap{}, err
 		}
-		return rm.set(ds.ID(), h), nil
+		ae := am.Editor()
+		err = ae.Update(ctx, ds.ID(), h)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 }
 
@@ -567,21 +572,29 @@ func (db *database) doCommit(ctx context.Context, datasetID string, datasetCurre
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), newCommitValueRef).Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		curr := rm.lookup(datasetID)
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		curr, err := am.Get(ctx, datasetID)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
 		if curr != datasetCurrentAddr {
-			return refmap{}, ErrMergeNeeded
+			return prolly.AddressMap{}, ErrMergeNeeded
 		}
 		h, err := newCommitValue.Hash(db.Format())
 		if err != nil {
-			return refmap{}, err
+			return prolly.AddressMap{}, err
 		}
 		if curr != (hash.Hash{}) {
 			if curr == h {
-				return refmap{}, ErrAlreadyCommitted
+				return prolly.AddressMap{}, ErrAlreadyCommitted
 			}
 		}
-		return rm.set(datasetID, h), nil
+		ae := am.Editor()
+		err = ae.Update(ctx, datasetID, h)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 }
 
@@ -616,12 +629,20 @@ func (db *database) doTag(ctx context.Context, datasetID string, tagAddr hash.Ha
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), tagRef).Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		curr := rm.lookup(datasetID)
-		if curr != (hash.Hash{}) {
-			return refmap{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		curr, err := am.Get(ctx, datasetID)
+		if err != nil {
+			return prolly.AddressMap{}, err
 		}
-		return rm.set(datasetID, tagAddr), nil
+		if curr != (hash.Hash{}) {
+			return prolly.AddressMap{}, fmt.Errorf("tag %s already exists and cannot be altered after creation", datasetID)
+		}
+		ae := am.Editor()
+		err = ae.Update(ctx, datasetID, tagAddr)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 }
 
@@ -655,12 +676,20 @@ func (db *database) doUpdateWorkingSet(ctx context.Context, datasetID string, ad
 		}
 
 		return datasets.Edit().Set(types.String(datasetID), ref).Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		curr := rm.lookup(datasetID)
-		if curr != currHash {
-			return refmap{}, ErrOptimisticLockFailed
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		curr, err := am.Get(ctx, datasetID)
+		if err != nil {
+			return prolly.AddressMap{}, err
 		}
-		return rm.set(datasetID, addr), nil
+		if curr != currHash {
+			return prolly.AddressMap{}, ErrOptimisticLockFailed
+		}
+		ae := am.Editor()
+		err = ae.Update(ctx, datasetID, addr)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 }
 
@@ -739,20 +768,31 @@ func (db *database) CommitWithWorkingSet(
 			Set(types.String(workingSetDS.ID()), wsValRef).
 			Set(types.String(commitDS.ID()), commitValRef).
 			Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		currWS := rm.lookup(workingSetDS.ID())
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		currWS, err := am.Get(ctx, workingSetDS.ID())
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
 		if currWS != prevWsHash {
-			return refmap{}, ErrOptimisticLockFailed
+			return prolly.AddressMap{}, ErrOptimisticLockFailed
 		}
-		currDS := rm.lookup(commitDS.ID())
+		currDS, err := am.Get(ctx, commitDS.ID())
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
 		if currDS != currDSHash {
-			return refmap{}, ErrMergeNeeded
+			return prolly.AddressMap{}, ErrMergeNeeded
 		}
-		rm = rm.edit([]RefMapEdit{
-			{commitDS.ID(), commitValRef.TargetHash()},
-			{workingSetDS.ID(), wsAddr},
-		})
-		return rm, nil
+		ae := am.Editor()
+		err = ae.Update(ctx, commitDS.ID(), commitValRef.TargetHash())
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		err = ae.Update(ctx, workingSetDS.ID(), wsAddr)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 
 	if err != nil {
@@ -783,7 +823,7 @@ func (db *database) Delete(ctx context.Context, ds Dataset) (Dataset, error) {
 
 func (db *database) update(ctx context.Context,
 	edit func(context.Context, types.Map) (types.Map, error),
-	editFB func(context.Context, refmap) (refmap, error)) error {
+	editFB func(context.Context, prolly.AddressMap) (prolly.AddressMap, error)) error {
 	var (
 		err      error
 		root     hash.Hash
@@ -808,7 +848,7 @@ func (db *database) update(ctx context.Context,
 				return err
 			}
 
-			data := datasets.storeroot_flatbuffer()
+			data := storeroot_flatbuffer(datasets)
 			r, err := db.WriteValue(ctx, types.SerialMessage(data))
 			if err != nil {
 				return err
@@ -862,15 +902,23 @@ func (db *database) doDelete(ctx context.Context, datasetIDstr string) error {
 			return types.Map{}, ErrMergeNeeded
 		}
 		return datasets.Edit().Remove(datasetID).Map(ctx)
-	}, func(ctx context.Context, rm refmap) (refmap, error) {
-		curr := rm.lookup(datasetIDstr)
+	}, func(ctx context.Context, am prolly.AddressMap) (prolly.AddressMap, error) {
+		curr, err := am.Get(ctx, datasetIDstr)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
 		if curr != (hash.Hash{}) && firstHash == (hash.Hash{}) {
 			firstHash = curr
 		}
 		if curr != firstHash {
-			return refmap{}, ErrMergeNeeded
+			return prolly.AddressMap{}, ErrMergeNeeded
 		}
-		return rm.delete(datasetIDstr), nil
+		ae := am.Editor()
+		err = ae.Delete(ctx, datasetIDstr)
+		if err != nil {
+			return prolly.AddressMap{}, err
+		}
+		return ae.Flush(ctx)
 	})
 }
 

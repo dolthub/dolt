@@ -19,9 +19,7 @@ namespace serial;
 // StoreRoot is the top-level chunk in the store,
 // containing references to all named Refs.
 table StoreRoot {
-  // map from ref name to ref hash
-  // with map root node inlined
-  refs:RefMap (required);
+  address_map:[ubyte]; // Embedded serialized AddressMap.
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go

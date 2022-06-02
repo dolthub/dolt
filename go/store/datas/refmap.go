@@ -21,7 +21,11 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type RefMapEdit struct {
@@ -117,7 +121,6 @@ func RefMapApplyEdits(rm *serial.RefMap, builder *flatbuffers.Builder, edits []R
 	}
 	start = stop - hashessz
 	refarrayoff := builder.CreateByteVector(builder.Bytes[start:stop])
-
 	serial.RefMapStart(builder)
 	serial.RefMapAddNames(builder, namesoff)
 	serial.RefMapAddRefArray(builder, refarrayoff)
@@ -126,63 +129,26 @@ func RefMapApplyEdits(rm *serial.RefMap, builder *flatbuffers.Builder, edits []R
 	return serial.RefMapEnd(builder)
 }
 
-type refmap struct {
-	*serial.RefMap
-}
-
-func empty_refmap() refmap {
-	builder := flatbuffers.NewBuilder(24)
-	serial.RefMapStart(builder)
-	builder.Finish(serial.RefMapEnd(builder))
-	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
-}
-
-func (rm refmap) len() uint64 {
-	return uint64(rm.RefMap.NamesLength())
-}
-
-func (rm refmap) edit(edits []RefMapEdit) refmap {
+func storeroot_flatbuffer(am prolly.AddressMap) []byte {
 	builder := flatbuffers.NewBuilder(1024)
-	builder.Finish(RefMapApplyEdits(rm.RefMap, builder, edits))
-	return refmap{serial.GetRootAsRefMap(builder.FinishedBytes(), 0)}
-}
-
-func (rm refmap) lookup(key string) hash.Hash {
-	return RefMapLookup(rm.RefMap, key)
-}
-
-func (rm refmap) set(key string, addr hash.Hash) refmap {
-	return rm.edit([]RefMapEdit{{key, addr}})
-}
-
-func (rm *refmap) delete(key string) refmap {
-	return rm.edit([]RefMapEdit{{key, hash.Hash{}}})
-}
-
-func (rm refmap) storeroot_flatbuffer() []byte {
-	builder := flatbuffers.NewBuilder(1024)
-	refmap := RefMapApplyEdits(rm.RefMap, builder, []RefMapEdit{})
+	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.TupleRowStorage))
+	builder.Prep(flatbuffers.SizeUOffsetT, len(ambytes))
+	stop := int(builder.Head())
+	start := stop - len(ambytes)
+	copy(builder.Bytes[start:stop], ambytes)
+	voff := builder.CreateByteVector(builder.Bytes[start:stop])
 	serial.StoreRootStart(builder)
-	serial.StoreRootAddRefs(builder, refmap)
+	serial.StoreRootAddAddressMap(builder, voff)
 	builder.FinishWithFileIdentifier(serial.StoreRootEnd(builder), []byte(serial.StoreRootFileID))
 	return builder.FinishedBytes()
 }
 
-func parse_storeroot(bs []byte) refmap {
+func parse_storeroot(bs []byte, cs chunks.ChunkStore) prolly.AddressMap {
 	if !bytes.Equal([]byte(serial.StoreRootFileID), bs[4:8]) {
 		panic("expected store root file id, got: " + string(bs[4:8]))
 	}
-
 	sr := serial.GetRootAsStoreRoot(bs, 0)
-	rm := sr.Refs(nil)
-	if rm == nil {
-		panic("refmap of storeroot was missing")
-	}
-	if rm.TreeLevel() != 0 {
-		panic("unsupported multi-level refmap")
-	}
-	if uint64(rm.NamesLength()) != rm.TreeCount() {
-		panic("inconsistent refmap at level 0 where names length != tree count")
-	}
-	return refmap{rm}
+	mapbytes := sr.AddressMapBytes()
+	node := tree.NodeFromBytes(mapbytes)
+	return prolly.NewAddressMap(node, tree.NewNodeStore(cs))
 }

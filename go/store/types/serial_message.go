@@ -56,15 +56,8 @@ func (sm SerialMessage) HumanReadableString() string {
 	case serial.StoreRootFileID:
 		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
 		ret := &strings.Builder{}
-		refs := msg.Refs(nil)
-		fmt.Fprintf(ret, "{\n")
-		hashes := refs.RefArrayBytes()
-		for i := 0; i < refs.NamesLength(); i++ {
-			name := refs.Names(i)
-			addr := hash.New(hashes[i*20 : (i+1)*20])
-			fmt.Fprintf(ret, "\t%s: #%s\n", name, addr.String())
-		}
-		fmt.Fprintf(ret, "}")
+		mapbytes := msg.AddressMapBytes()
+		fmt.Fprintf(ret, "StoreRoot{%s}", TupleRowStorage(mapbytes).HumanReadableString())
 		return ret.String()
 	case serial.TagFileID:
 		return "Tag"
@@ -175,18 +168,9 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 	switch serial.GetFileID([]byte(sm)) {
 	case serial.StoreRootFileID:
 		msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
-		rm := msg.Refs(nil)
-		refs := rm.RefArrayBytes()
-		for i := 0; i < rm.NamesLength(); i++ {
-			off := i * 20
-			addr := hash.New(refs[off : off+20])
-			r, err := constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
-			if err != nil {
-				return err
-			}
-			if err = cb(r); err != nil {
-				return err
-			}
+		if msg.AddressMapLength() > 0 {
+			mapbytes := msg.AddressMapBytes()
+			return TupleRowStorage(mapbytes).walkRefs(nbf, cb)
 		}
 	case serial.TagFileID:
 		msg := serial.GetRootAsTag([]byte(sm), 0)
