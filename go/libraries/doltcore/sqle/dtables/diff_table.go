@@ -133,6 +133,7 @@ func (dt *DiffTable) Schema() sql.Schema {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
+	// TODO: if this were in parallel it can't always start at HEAD
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
 	sf, err := SelectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
