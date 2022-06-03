@@ -245,36 +245,48 @@ SQL
     [ "$output" = "$mainhash" ]
 }
 
-@test "sql-branch: asserts unsupported -m, -d, -D flags" {
+@test "sql-branch: SELECT DOLT_BRANCH to rename and delete" {
     dolt add . && dolt commit -m "1, 2, and 3 in test table"
     dolt branch new_branch
 
     run dolt sql -q "SELECT DOLT_BRANCH('-m', 'new_branch', 'changed');"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Renaming a branch is not supported." ]] || false
+    [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'new_branch');"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Deleting branches is not supported." ]] || false
+    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'changed');"
+    [ $status -eq 0 ]
 
-    run dolt sql -q "SELECT DOLT_BRANCH('-D', 'new_branch');"
+    dolt branch branch_with_unpushed_commit
+    dolt checkout branch_with_unpushed_commit
+    dolt commit --allow-empty -am 'empty commit'
+    dolt checkout main
+
+    run dolt sql -q "SELECT DOLT_BRANCH('-d', 'branch_with_unpushed_commit');"
     [ $status -eq 1 ]
-    [[ "$output" =~ "Deleting branches is not supported." ]] || false
+    [[ "$output" =~ "attempted to delete a branch that is not fully merged" ]] || false
+
+    run dolt sql -q "SELECT DOLT_BRANCH('-D', 'branch_with_unpushed_commit');"
+    [ $status -eq 0 ]
 }
 
-@test "sql-branch: asserts unsupported -m, -d, -D flags on CALL" {
+@test "sql-branch: CALL DOLT_BRANCH to rename and delete" {
     dolt add . && dolt commit -m "1, 2, and 3 in test table"
     dolt branch new_branch
 
     run dolt sql -q "CALL DOLT_BRANCH('-m', 'new_branch', 'changed');"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Renaming a branch is not supported." ]] || false
+    [ $status -eq 0 ]
 
-    run dolt sql -q "CALL DOLT_BRANCH('-d', 'new_branch');"
-    [ $status -eq 1 ]
-    [[ "$output" =~ "Deleting branches is not supported." ]] || false
+    run dolt sql -q "CALL DOLT_BRANCH('-d', 'changed');"
+    [ $status -eq 0 ]
 
-    run dolt sql -q "CALL DOLT_BRANCH('-D', 'new_branch');"
+    dolt branch branch_with_unpushed_commit
+    dolt checkout branch_with_unpushed_commit
+    dolt commit --allow-empty -am 'empty commit'
+    dolt checkout main
+
+    run dolt sql -q "CALL DOLT_BRANCH('-d', 'branch_with_unpushed_commit');"
     [ $status -eq 1 ]
-    [[ "$output" =~ "Deleting branches is not supported." ]] || false
+    [[ "$output" =~ "attempted to delete a branch that is not fully merged" ]] || false
+
+    run dolt sql -q "CALL DOLT_BRANCH('-D', 'branch_with_unpushed_commit');"
+    [ $status -eq 0 ]
 }

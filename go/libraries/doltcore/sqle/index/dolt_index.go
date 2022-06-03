@@ -35,6 +35,7 @@ type DoltIndex interface {
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
+	IsPrimaryKey() bool
 	GetDurableIndexes(*sql.Context, *doltdb.Table) (durable.Index, durable.Index, error)
 }
 
@@ -80,6 +81,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		indexSch: sch,
 		tableSch: sch,
 		unique:   true,
+		isPk:     true,
 		comment:  "",
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
@@ -106,6 +108,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexSch: idx.Schema(),
 		tableSch: sch,
 		unique:   idx.IsUnique(),
+		isPk:     false,
 		comment:  idx.Comment(),
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
@@ -122,6 +125,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	isPk     bool
 	comment  string
 
 	vrw    types.ValueReadWriter
@@ -328,6 +332,11 @@ func (di doltIndex) ID() string {
 // IsUnique implements sql.Index
 func (di doltIndex) IsUnique() bool {
 	return di.unique
+}
+
+// IsPrimaryKey implements DoltIndex.
+func (di doltIndex) IsPrimaryKey() bool {
+	return di.isPk
 }
 
 // Comment implements sql.Index

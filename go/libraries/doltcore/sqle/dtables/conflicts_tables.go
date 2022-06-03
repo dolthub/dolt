@@ -18,19 +18,19 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/pool"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 var _ sql.Table = ConflictsTable{}
@@ -294,6 +294,10 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: We can delete from more than one table in a single statement. Root
+	// updates should be restricted to write session and not individual table
+	// editors.
 
 	// TODO (dhruv): move this code into some kind of ResolveConflicts function
 	var updatedTbl *doltdb.Table

@@ -76,7 +76,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
@@ -173,14 +173,6 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 }
 
 func TestInsertInto(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: on duplicate key broken for foreign keys in new format
-			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
-				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
-			}
-		}
-	}
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
@@ -637,6 +629,12 @@ func TestDoltReset(t *testing.T) {
 	}
 }
 
+func TestDoltBranch(t *testing.T) {
+	for _, script := range DoltBranchScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 // TestSingleTransactionScript is a convenience method for debugging a single transaction test. Unskip and set to the
 // desired test.
 func TestSingleTransactionScript(t *testing.T) {
@@ -761,7 +759,6 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffTableFunction(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
@@ -925,14 +922,6 @@ func TestScriptsPrepared(t *testing.T) {
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: on duplicate key broken for foreign keys in new format
-			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
-				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
-			}
-		}
-	}
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
@@ -983,8 +972,6 @@ func TestPrepared(t *testing.T) {
 }
 
 func TestPreparedInsert(t *testing.T) {
-	//TODO: on duplicate key broken for foreign keys in new format
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }

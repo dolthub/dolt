@@ -267,8 +267,8 @@ func (cfg *commandLineServerConfig) withHost(host string) *commandLineServerConf
 	return cfg
 }
 
-// withPort updates the port and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
-func (cfg *commandLineServerConfig) withPort(port int) *commandLineServerConfig {
+// WithPort updates the port and returns the called `*commandLineServerConfig`, which is useful for chaining calls.
+func (cfg *commandLineServerConfig) WithPort(port int) *commandLineServerConfig {
 	cfg.port = port
 	return cfg
 }
