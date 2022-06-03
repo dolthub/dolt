@@ -80,7 +80,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 			return nil, err
 		}
 	} else {
-		rd, err := merge.NewConflictReader(ctx, tbl)
+		rd, err = merge.NewConflictReader(ctx, tbl)
 		if err != nil {
 			return nil, err
 		}
