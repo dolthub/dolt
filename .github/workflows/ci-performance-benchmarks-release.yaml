@@ -35,12 +35,6 @@ jobs:
           ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
   benchmark-release-mysql:
-<<<<<<< HEAD
-    strategy:
-      matrix:
-        nbf: [ "__LD_1__", "__DOLT_1__" ]
-=======
->>>>>>> hardcode benchmark params
     runs-on: ubuntu-18.04
     needs: set-version-actor
     name: Benchmark Dolt Release vs MySQL 8
