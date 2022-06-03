@@ -56,11 +56,10 @@ func (n prollyFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 // PartitionRows implements the interface sql.Table.
 func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	var idxWriter indexWriter
+	var ok bool
 	if n.index.IsPrimaryKey() {
 		idxWriter = n.writer.primary
-	} else if idxWriterPosition, ok := n.writer.secNames[n.index.ID()]; ok {
-		idxWriter = n.writer.secondary[idxWriterPosition]
-	} else {
+	} else if idxWriter, ok = n.writer.secondary[n.index.ID()]; !ok {
 		return nil, fmt.Errorf("unable to find writer for index `%s`", n.index.ID())
 	}
 
