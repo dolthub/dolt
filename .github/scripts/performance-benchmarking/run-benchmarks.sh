@@ -36,7 +36,11 @@ short=${TO_VERSION:0:8}
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
 actorShort="$lowered-$short"
 
-jobname="$actorShort"
+# random sleep
+sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
+
+timesuffix=`date +%s%N`
+jobname="$actorShort_$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
