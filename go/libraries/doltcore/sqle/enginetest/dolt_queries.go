@@ -1684,21 +1684,65 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
 				Expected: []sql.Row{
 					{100, 101, nil, nil, "added"},
+					// TODO: It's more correct to also return the following rows.
+					//{1, 3, 1, nil, "modified"},
+					//{4, 6, 4, nil, "modified"}
+
+					// To explain why, let's inspect table t at each of the commits:
+					//
+					//     @Commit1          @Commit2         @Commit3
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | pk | c1 | c2 |     | pk | c2 |     | pk  | c1  |
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | 1  | 2  | 3  |     | 1  | 3  |     | 1   | 3   |
+					// | 4  | 5  | 6  |     | 4  | 6  |     | 4   | 6   |
+					// +----+----+----+     +----+----+     | 100 | 101 |
+					//                                      +-----+-----+
+					//
+					// If you were to interpret each table using the schema at
+					// @Commit3, (pk, c1), you would see the following:
+					//
+					//   @Commit1            @Commit2         @Commit3
+					// +----+----+         +----+------+     +-----+-----+
+					// | pk | c1 |         | pk | c1   |     | pk  | c1  |
+					// +----+----+         +----+------+     +-----+-----+
+					// | 1  | 2  |         | 1  | NULL |     | 1   | 3   |
+					// | 4  | 5  |         | 4  | NULL |     | 4   | 6   |
+					// +----+----+         +----+------+     | 100 | 101 |
+					//                                       +-----+-----+
+					//
+					// The corresponding diffs for the interpreted tables:
+					//
+					// Diff between init and @Commit1:
+					// + (1, 2)
+					// + (4, 5)
+					//
+					// Diff between @Commit1 and @Commit2:
+					// ~ (1, NULL)
+					// ~ (4, NULL)
+					//
+					// Diff between @Commit2 and @Commit3:
+					// ~ (1, 3) <- currently not outputted
+					// ~ (4, 6) <- currently not outputted
+					// + (100, 101)
+					//
+					// The missing rows are not produced by diff since the
+					// underlying value of the prolly trees are not modified during a column rename.
 				},
 			},
 		},
@@ -2660,20 +2704,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
+					// TODO: Missing rows here see TestDiffSystemTable tests
 					{100, 101, nil, nil, "added"},
 				},
 			},
