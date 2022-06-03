@@ -76,8 +76,8 @@ echo '
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
               "--tpccQueries='"$tpccTpsQuery"'",
-              "--init-big-repo='"$initBigRepo"'"",
-              "--noms-bin-format='"$nomsBinFormat"'""
+              "--init-big-repo='"$initBigRepo"'",
+              "--noms-bin-format='"$nomsBinFormat"'"
             ]
           }
         ],
