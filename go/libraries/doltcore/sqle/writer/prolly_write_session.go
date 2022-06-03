@@ -66,7 +66,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 	autoCol := autoIncrementColFromSchema(sch)
 
 	var pw indexWriter
-	var sws []indexWriter
+	var sws map[string]indexWriter
 	if schema.IsKeyless(sch) {
 		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
 		if err != nil {
@@ -86,17 +86,12 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 			return nil, err
 		}
 	}
-	secNames := make(map[string]int)
-	for i, secondaryWriter := range sws {
-		secNames[secondaryWriter.Name()] = i
-	}
 
 	twr := &prollyTableWriter{
 		tableName: table,
 		dbName:    db,
 		primary:   pw,
 		secondary: sws,
-		secNames:  secNames,
 		tbl:       t,
 		sch:       sch,
 		sqlSch:    pkSch.Schema,
