@@ -31,7 +31,7 @@ jobs:
         uses: dolthub/pull-request-comment-trigger@master
         id: check
         with:
-          trigger: '#benchmark'
+          trigger: '#newbenchmark'
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -95,6 +95,6 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
-          INIT_BIG_REPO: "true"
-          NOMS_BIN_FORMAT: "__LD_1__"
+          INIT_BIG_REPO: "false"
+          NOMS_BIN_FORMAT: "__DOLT_1__"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"
