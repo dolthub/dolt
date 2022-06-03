@@ -56,13 +56,11 @@ func (n prollyFkIndexer) Partitions(ctx *sql.Context) (sql.PartitionIter, error)
 // PartitionRows implements the interface sql.Table.
 func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.RowIter, error) {
 	var idxWriter indexWriter
-	for _, secondaryWriter := range n.writer.secondary {
-		if secondaryWriter.Name() == n.index.ID() {
-			idxWriter = secondaryWriter
-			break
-		}
-	}
-	if idxWriter == nil {
+	if n.index.IsPrimaryKey() {
+		idxWriter = n.writer.primary
+	} else if idxWriterPosition, ok := n.writer.secNames[n.index.ID()]; ok {
+		idxWriter = n.writer.secondary[idxWriterPosition]
+	} else {
 		return nil, fmt.Errorf("unable to find writer for index `%s`", n.index.ID())
 	}
 
@@ -173,8 +171,8 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, io.EOF
 	}
 	hashId := k.GetField(k.Count() - 1)
-	iter.primary.valBld.PutHash128(0, hashId)
-	primaryKey := iter.primary.valBld.Build(sharePool)
+	iter.primary.keyBld.PutHash128(0, hashId)
+	primaryKey := iter.primary.keyBld.Build(sharePool)
 
 	nextRow := make(sql.Row, len(iter.primary.valMap))
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
