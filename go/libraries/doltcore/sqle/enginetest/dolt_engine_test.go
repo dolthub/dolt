@@ -173,14 +173,6 @@ func TestAmbiguousColumnResolution(t *testing.T) {
 }
 
 func TestInsertInto(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: on duplicate key broken for foreign keys in new format
-			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
-				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
-			}
-		}
-	}
 	enginetest.TestInsertInto(t, newDoltHarness(t))
 }
 
@@ -930,14 +922,6 @@ func TestScriptsPrepared(t *testing.T) {
 
 func TestInsertScriptsPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		for i := len(queries.InsertScripts) - 1; i >= 0; i-- {
-			//TODO: on duplicate key broken for foreign keys in new format
-			if queries.InsertScripts[i].Name == "Insert on duplicate key" {
-				queries.InsertScripts = append(queries.InsertScripts[:i], queries.InsertScripts[i+1:]...)
-			}
-		}
-	}
 	enginetest.TestInsertScriptsPrepared(t, newDoltHarness(t))
 }
 
@@ -988,8 +972,6 @@ func TestPrepared(t *testing.T) {
 }
 
 func TestPreparedInsert(t *testing.T) {
-	//TODO: on duplicate key broken for foreign keys in new format
-	skipNewFormat(t)
 	skipPreparedTests(t)
 	enginetest.TestPreparedInsert(t, newDoltHarness(t))
 }
