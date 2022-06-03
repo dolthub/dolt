@@ -49,7 +49,7 @@ jobs:
         exclude:
           - biginit: "true"
             nbf: "__DOLT_1__"
-          - bigint: "false"
+          - biginit: "false"
             nbf: "__LD_1__"
     runs-on: ubuntu-18.04
     needs: [validate-commentor, check-comments]
