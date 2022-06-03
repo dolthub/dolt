@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
@@ -208,7 +209,7 @@ func setForInExp(nbf *types.NomsBinFormat, col schema.Column, be expression.Bina
 
 // CreateReaderFunc creates a new instance of an object implementing TableReadCloser for the given types.Map.  The
 // readers created by calling this function will have the rows they return limited by a setalgebra.Set implementation.
-type CreateReaderFunc func(ctx context.Context, m types.Map) (table.TableReadCloser, error)
+type CreateReaderFunc func(ctx context.Context, rows durable.Index) (table.TableReadCloser, error)
 
 // ThreadSafeCRFuncCache is a thread safe CreateReaderFunc cache
 type ThreadSafeCRFuncCache struct {
@@ -273,8 +274,8 @@ func CreateReaderFuncLimitedByExpressions(nbf *types.NomsBinFormat, tblSch schem
 		return getCreateFuncForKeySet(nbf, keySet, tblSch)
 	}
 
-	return func(ctx context.Context, m types.Map) (table.TableReadCloser, error) {
-		return noms.NewNomsMapReader(ctx, m, tblSch)
+	return func(ctx context.Context, rows durable.Index) (table.TableReadCloser, error) {
+		return noms.NewNomsMapReader(ctx, durable.NomsMapFromIndex(rows), tblSch)
 	}, nil
 }
 
@@ -381,13 +382,13 @@ func rangeForInterval(nbf *types.NomsBinFormat, tag types.Uint, in setalgebra.In
 func getCreateFuncForKeySet(nbf *types.NomsBinFormat, keySet setalgebra.Set, sch schema.Schema) (CreateReaderFunc, error) {
 	switch keySet.(type) {
 	case setalgebra.EmptySet:
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsMapReaderForKeys(m, sch, []types.Tuple{}), nil
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsMapReaderForKeys(durable.NomsMapFromIndex(rows), sch, []types.Tuple{}), nil
 		}, nil
 
 	case setalgebra.UniversalSet:
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsMapReader(ctx, m, sch)
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsMapReader(ctx, durable.NomsMapFromIndex(rows), sch)
 		}, nil
 	}
 
@@ -409,9 +410,9 @@ func getCreateFuncForMultiPK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sc
 			return nil, err
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
 
-			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
+			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, durable.NomsMapFromIndex(rows), ranges)}
 			return table.NewCompositeTableReader(readers)
 		}, nil
 
@@ -422,8 +423,8 @@ func getCreateFuncForMultiPK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sc
 			return nil, err
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsRangeReader(sch, m, []*noms.ReadRange{r}), nil
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsRangeReader(sch, durable.NomsMapFromIndex(rows), []*noms.ReadRange{r}), nil
 		}, nil
 
 	case setalgebra.CompositeSet:
@@ -448,14 +449,14 @@ func getCreateFuncForMultiPK(nbf *types.NomsBinFormat, keySet setalgebra.Set, sc
 			ranges = append(ranges, rangesForFS...)
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, durable.NomsMapFromIndex(rows), ranges)}
 			return table.NewCompositeTableReader(readers)
 		}, nil
 	}
 
-	return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-		return noms.NewNomsMapReader(ctx, m, sch)
+	return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+		return noms.NewNomsMapReader(ctx, durable.NomsMapFromIndex(rows), sch)
 	}, nil
 }
 
@@ -470,8 +471,8 @@ func getCreateFuncForSinglePK(nbf *types.NomsBinFormat, keySet setalgebra.Set, s
 			return nil, err
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsMapReaderForKeys(m, sch, keys), nil
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsMapReaderForKeys(durable.NomsMapFromIndex(rows), sch, keys), nil
 		}, nil
 
 	case setalgebra.Interval:
@@ -481,8 +482,8 @@ func getCreateFuncForSinglePK(nbf *types.NomsBinFormat, keySet setalgebra.Set, s
 			return nil, err
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			return noms.NewNomsRangeReader(sch, m, []*noms.ReadRange{r}), nil
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			return noms.NewNomsRangeReader(sch, durable.NomsMapFromIndex(rows), []*noms.ReadRange{r}), nil
 		}, nil
 
 	case setalgebra.CompositeSet:
@@ -507,11 +508,11 @@ func getCreateFuncForSinglePK(nbf *types.NomsBinFormat, keySet setalgebra.Set, s
 			}
 		}
 
-		return func(ctx context.Context, m types.Map) (reader table.TableReadCloser, err error) {
-			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, m, ranges)}
+		return func(ctx context.Context, rows durable.Index) (reader table.TableReadCloser, err error) {
+			var readers = []table.TableReadCloser{noms.NewNomsRangeReader(sch, durable.NomsMapFromIndex(rows), ranges)}
 
 			if len(keys) > 0 {
-				rd := noms.NewNomsMapReaderForKeys(m, sch, keys)
+				rd := noms.NewNomsMapReaderForKeys(durable.NomsMapFromIndex(rows), sch, keys)
 				readers = append(readers, rd)
 			}
 

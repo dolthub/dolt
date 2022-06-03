@@ -19,6 +19,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
@@ -48,33 +49,33 @@ const (
 
 var _ sql.Table = (*HistoryTable)(nil)
 var _ sql.FilteredTable = (*HistoryTable)(nil)
+var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
+var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	name                  string
-	ddb                   *doltdb.DoltDB
+	doltTable             *sqle.DoltTable
 	commitFilters         []sql.Expression
 	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
+	indexLookup           sql.IndexLookup
 	readerCreateFuncCache *ThreadSafeCRFuncCache
 	sqlSch                sql.PrimaryKeySchema
 	targetSch             schema.Schema
 }
 
-// NewHistoryTable creates a history table
-func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
-	table, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
-	}
+func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return ht.doltTable.GetIndexes(ctx)
+}
 
-	currentSch, err := table.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
+func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	ht.indexLookup = lookup
+	return &ht
+}
+
+// NewHistoryTable creates a history table
+func NewHistoryTable(ctx *sql.Context, table *sqle.DoltTable) (sql.Table, error) {
+	currentSch := table.Schema()
 
 	sch := schema.MustSchemaFromCols(currentSch.GetAllCols().Append(
 		schema.NewColumn(CommitHashCol, schema.HistoryCommitHashTag, types.StringKind, false),
@@ -83,18 +84,16 @@ func NewHistoryTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root 
 	))
 
 	if sch.GetAllCols().Size() <= 3 {
-		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + tblName)
+		return nil, sql.ErrTableNotFound.New(doltdb.DoltHistoryTablePrefix + table.Name())
 	}
 
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltHistoryTablePrefix+tblName, sch)
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltHistoryTablePrefix+table.Name(), sch)
 	if err != nil {
 		return nil, err
 	}
 
 	cmItr := doltdb.CommitItrForRoots(ddb, head)
 	return &HistoryTable{
-		name:                  tblName,
-		ddb:                   ddb,
 		sqlSch:                sqlSch,
 		cmItr:                 cmItr,
 		readerCreateFuncCache: NewThreadSafeCRFuncCache(),
@@ -320,7 +319,7 @@ func newRowItrForTableAtCommit(
 		return &rowItrForTableAtCommit{empty: true}, nil
 	}
 
-	m, err := tbl.GetNomsRowData(ctx)
+	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -348,7 +347,7 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	rd, err := createReaderFunc(ctx, m)
+	rd, err := createReaderFunc(ctx, rows)
 	if err != nil {
 		return nil, err
 	}

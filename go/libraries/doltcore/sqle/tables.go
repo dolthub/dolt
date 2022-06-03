@@ -89,6 +89,10 @@ type DoltTable struct {
 	opts editor.Options
 }
 
+func (t DoltTable) Schema() schema.Schema {
+	return t.sch
+}
+
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
 	var autoCol schema.Column
 	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
