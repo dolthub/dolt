@@ -15,8 +15,7 @@
 package dtables
 
 import (
-	"fmt"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -39,7 +38,7 @@ type ProllyRowConverter struct {
 }
 
 func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, error) {
-	keyProj, valProj, err := MapSchemaBasedOnName(inSch, outSch)
+	keyProj, valProj, err := diff.MapSchemaBasedOnName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
 	}
@@ -123,46 +122,4 @@ func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interfac
 	}
 
 	return nil
-}
-
-// MapSchemaBasedOnName can be used to map column values from one schema to
-// another schema. A column in |inSch| is mapped to |outSch| if they share the
-// same name and primary key membership status. It returns ordinal mappings that
-// can be use to map key, value val.Tuple's of schema |inSch| to a sql.Row of
-// |outSch|. The first ordinal map is for keys, and the second is for values. If
-// a column of |inSch| is missing in |outSch| then that column's index in the
-// ordinal map holds -1.
-func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
-	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
-	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())
-
-	err := inSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetPKCols().TagToIdx[tag]
-		if col, ok := outSch.GetPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
-			keyMapping[i] = j
-		} else {
-			return true, fmt.Errorf("could not map primary key column %s", col.Name)
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = inSch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
-		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
-			valMapping[i] = j
-		} else {
-			valMapping[i] = -1
-		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return keyMapping, valMapping, nil
 }

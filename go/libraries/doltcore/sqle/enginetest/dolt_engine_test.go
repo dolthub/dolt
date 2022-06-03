@@ -623,7 +623,7 @@ func TestShowCreateTableAsOf(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
-	skipNewFormat(t)
+	//skipNewFormat(t)
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)

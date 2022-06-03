@@ -20,6 +20,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -113,6 +114,11 @@ func (c ConflictMap) IterAll(ctx context.Context) (ConflictIter, error) {
 
 func (c ConflictMap) IterOrdinalRange(ctx context.Context, start, stop uint64) (ConflictIter, error) {
 	return c.conflicts.iterOrdinalRange(ctx, start, stop)
+}
+
+// Pool returns the pool.BuffPool of the underlying conflicts' tree.NodeStore
+func (c ConflictMap) Pool() pool.BuffPool {
+	return c.conflicts.ns.Pool()
 }
 
 func (c ConflictMap) Editor() ConflictEditor {
