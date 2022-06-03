@@ -163,6 +163,11 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCherryPickArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
