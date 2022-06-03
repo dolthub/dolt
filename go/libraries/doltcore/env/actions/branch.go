@@ -30,17 +30,17 @@ var ErrAlreadyExists = errors.New("already exists")
 var ErrCOBranchDelete = errors.New("attempted to delete checked out branch")
 var ErrUnmergedBranchDelete = errors.New("attempted to delete a branch that is not fully merged into its parent; use `-f` to force")
 
-func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
+func RenameBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, oldBranch, newBranch string, force bool) error {
 	oldRef := ref.NewBranchRef(oldBranch)
 	newRef := ref.NewBranchRef(newBranch)
 
-	err := CopyBranch(ctx, dEnv, oldBranch, newBranch, force)
+	err := CopyBranchOnDB(ctx, dbData.Ddb, oldBranch, newBranch, force)
 	if err != nil {
 		return err
 	}
 
-	if ref.Equals(dEnv.RepoStateReader().CWBHeadRef(), oldRef) {
-		err = dEnv.RepoStateWriter().SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
+	if ref.Equals(dbData.Rsr.CWBHeadRef(), oldRef) {
+		err = dbData.Rsw.SetCWBHeadRef(ctx, ref.MarshalableRef{Ref: newRef})
 		if err != nil {
 			return err
 		}
@@ -59,13 +59,13 @@ func RenameBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch s
 		// We always `force` here, because the CopyBranch up
 		// above created a new branch and it will have a
 		// working set.
-		err = dEnv.DoltDB.CopyWorkingSet(ctx, fromWSRef, toWSRef, true /* force */)
+		err = dbData.Ddb.CopyWorkingSet(ctx, fromWSRef, toWSRef, true /* force */)
 		if err != nil {
 			return err
 		}
 	}
 
-	return DeleteBranch(ctx, dEnv, oldBranch, DeleteOptions{Force: true})
+	return DeleteBranch(ctx, dbData, config, oldBranch, DeleteOptions{Force: true})
 }
 
 func CopyBranch(ctx context.Context, dEnv *env.DoltEnv, oldBranch, newBranch string, force bool) error {
@@ -111,7 +111,7 @@ type DeleteOptions struct {
 	Remote bool
 }
 
-func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts DeleteOptions) error {
+func DeleteBranch(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, brName string, opts DeleteOptions) error {
 	var dref ref.DoltRef
 	if opts.Remote {
 		var err error
@@ -121,16 +121,16 @@ func DeleteBranch(ctx context.Context, dEnv *env.DoltEnv, brName string, opts De
 		}
 	} else {
 		dref = ref.NewBranchRef(brName)
-		if ref.Equals(dEnv.RepoStateReader().CWBHeadRef(), dref) {
+		if ref.Equals(dbData.Rsr.CWBHeadRef(), dref) {
 			return ErrCOBranchDelete
 		}
 	}
 
-	return DeleteBranchOnDB(ctx, dEnv, dref, opts)
+	return DeleteBranchOnDB(ctx, dbData, config, dref, opts)
 }
 
-func DeleteBranchOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, opts DeleteOptions) error {
-	ddb := dEnv.DoltDB
+func DeleteBranchOnDB(ctx context.Context, dbData env.DbData, config *env.DoltCliConfig, dref ref.DoltRef, opts DeleteOptions) error {
+	ddb := dbData.Ddb
 	hasRef, err := ddb.HasRef(ctx, dref)
 
 	if err != nil {
@@ -140,7 +140,7 @@ func DeleteBranchOnDB(ctx context.Context, dEnv *env.DoltEnv, dref ref.DoltRef, 
 	}
 
 	if !opts.Force && !opts.Remote {
-		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(dEnv.Config))
+		ms, err := doltdb.NewCommitSpec(env.GetDefaultInitBranch(config))
 		if err != nil {
 			return err
 		}

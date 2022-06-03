@@ -32,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -62,6 +63,7 @@ func Serve(
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)
+		sqlserver.SetRunningServer(nil)
 	}()
 
 	if startError = ValidateConfig(serverConfig); startError != nil {
@@ -195,6 +197,8 @@ func Serve(
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
+	} else {
+		sqlserver.SetRunningServer(mySQLServer)
 	}
 
 	var metSrv *http.Server
