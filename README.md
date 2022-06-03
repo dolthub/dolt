@@ -1,4 +1,4 @@
-<img height="100" src="./docs/Dolt-Logo@3x.svg"/>
+<img height="101" src="./docs/Dolt-Logo@3x.svg"/>
 
 # Dolt is Git for Data!
 
