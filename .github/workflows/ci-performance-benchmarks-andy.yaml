@@ -106,4 +106,4 @@ jobs:
           KUBECONFIG: "./kubeconfig"
           INIT_BIG_REPO: ${{ matrix.biginit }}
           NOMS_BIN_FORMAT: ${{ matrix.nbf }}
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-andy-dolt-dolt-job-json.sh"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-andy-dolt-dolt-json.sh"
