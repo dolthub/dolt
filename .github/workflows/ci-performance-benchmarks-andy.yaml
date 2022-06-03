@@ -31,7 +31,7 @@ jobs:
         uses: dolthub/pull-request-comment-trigger@master
         id: check
         with:
-          trigger: '#benchmark'
+          trigger: '#benchmarkandy'
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
