@@ -43,29 +43,37 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.
 	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
 
 	if from.Format() == types.Format_DOLT_1 {
-		_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
-		if err != nil {
-			return err
-		}
+		return prollySummary(ctx, ch, from, to, fromSch, toSch)
+	}
 
-		f := durable.ProllyMapFromIndex(from)
-		t := durable.ProllyMapFromIndex(to)
-		_, fVD := f.Descriptors()
-		_, tVD := t.Descriptors()
+	return nomsSummary(ctx, ch, from, to)
+}
 
-		err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
-			err := reportPkChanges(ctx, vMapping, fVD, tVD, diff, ch)
-			if err != nil {
-				return err
-			}
-			return nil
-		})
+func prollySummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) error {
+	_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
+	if err != nil {
+		return err
+	}
+
+	f := durable.ProllyMapFromIndex(from)
+	t := durable.ProllyMapFromIndex(to)
+	_, fVD := f.Descriptors()
+	_, tVD := t.Descriptors()
+
+	err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
+		err := reportPkChanges(ctx, vMapping, fVD, tVD, diff, ch)
 		if err != nil {
 			return err
 		}
 		return nil
+	})
+	if err != nil {
+		return err
 	}
+	return nil
+}
 
+func nomsSummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index) (err error) {
 	ad := NewAsyncDiffer(1024)
 	ad.Start(ctx, durable.NomsMapFromIndex(from), durable.NomsMapFromIndex(to))
 	defer func() {
@@ -282,6 +290,7 @@ func reportKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<
 // |outSch|. The first ordinal map is for keys, and the second is for values. If
 // a column of |inSch| is missing in |outSch| then that column's index in the
 // ordinal map holds -1.
+// TODO (dhruv): Unit tests
 func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
 	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
 	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())

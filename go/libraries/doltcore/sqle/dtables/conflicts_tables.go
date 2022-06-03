@@ -80,7 +80,7 @@ func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue,
 			return nil, err
 		}
 	} else {
-		rd, err = merge.NewConflictReader(ctx, tbl)
+		rd, err := merge.NewConflictReader(ctx, tbl)
 		if err != nil {
 			return nil, err
 		}
@@ -294,6 +294,10 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// TODO: We can delete from more than one table in a single statement. Root
+	// updates should be restricted to write session and not individual table
+	// editors.
 
 	// TODO (dhruv): move this code into some kind of ResolveConflicts function
 	var updatedTbl *doltdb.Table
