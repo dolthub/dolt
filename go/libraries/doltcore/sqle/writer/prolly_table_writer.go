@@ -39,6 +39,7 @@ type prollyTableWriter struct {
 
 	primary   indexWriter
 	secondary []indexWriter
+	secNames  map[string]int
 
 	tbl    *doltdb.Table
 	sch    schema.Schema
@@ -280,12 +281,17 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 			return err
 		}
 	}
+	secNames := make(map[string]int)
+	for i, secondaryWriter := range newSecondaries {
+		secNames[secondaryWriter.Name()] = i
+	}
 
 	w.tbl = tbl
 	w.sch = sch
 	w.sqlSch = sqlSch.Schema
 	w.primary = newPrimary
 	w.secondary = newSecondaries
+	w.secNames = secNames
 	w.aiCol = aiCol
 	w.flusher = sess
 
