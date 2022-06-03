@@ -35,6 +35,15 @@ jobs:
           ACTOR_EMAIL: ${{ github.event.inputs.email }}
 
   benchmark-release-mysql:
+    strategy:
+      matrix:
+        biginit: [ "true", "false" ]
+        nbf: [ "__LD_1__", "__DOLT_1__" ]
+        exclude:
+          - biginit: "true"
+            nbf: "__DOLT_1__"
+          - biginit: "false"
+            nbf: "__LD_1__"
     runs-on: ubuntu-18.04
     needs: set-version-actor
     name: Benchmark Dolt Release vs MySQL 8
@@ -76,4 +85,6 @@ jobs:
           ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
+          INIT_BIG_REPO: ${{ matrix.biginit }}
+          NOMS_BIN_FORMAT: ${{ matrix.nbf }}
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"
