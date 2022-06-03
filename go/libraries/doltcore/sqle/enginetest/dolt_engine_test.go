@@ -767,7 +767,6 @@ func TestUnscopedDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffTableFunction(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffTableFunctionScriptTests {
