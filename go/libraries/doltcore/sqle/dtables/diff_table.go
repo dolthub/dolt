@@ -174,7 +174,7 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	return splitFilters(filters, getColumnFilterCheck(partitionFilterCols))
+	return filterFilters(filters, getColumnFilterCheck(partitionFilterCols))
 }
 
 // HandledFilters returns the list of filters that will be handled by the table itself

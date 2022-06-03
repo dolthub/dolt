@@ -92,18 +92,16 @@ func NewHistoryTable(ctx *sql.Context, table *sqle.DoltTable) (sql.Table, error)
 		return nil, err
 	}
 
-	cmItr := doltdb.CommitItrForRoots(ddb, head)
 	return &HistoryTable{
+		doltTable:             table,
 		sqlSch:                sqlSch,
-		cmItr:                 cmItr,
-		readerCreateFuncCache: NewThreadSafeCRFuncCache(),
 		targetSch:             sch,
 	}, nil
 }
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
+	ht.commitFilters = filterFilters(filters, getColumnFilterCheck(commitFilterCols))
 	return ht.commitFilters
 }
 
@@ -113,22 +111,21 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 }
 
 // WithFilters returns a new sql.Table instance with the filters applied
-func (ht *HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
+func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
-		ht.commitFilters, ht.rowFilters = splitCommitFilters(filters)
+		ht.commitFilters = filterFilters(filters, getColumnFilterCheck(commitFilterCols))
 	}
 
 	if len(ht.commitFilters) > 0 {
-		commitCheck, err := getCommitFilterFunc(ctx, ht.commitFilters)
-
+		commitCheck, err := commitFilterForExprs(ctx, ht.commitFilters)
 		if err != nil {
-			return sqlutil.NewStaticErrorTable(ht, err)
+			return sqlutil.NewStaticErrorTable(&ht, err)
 		}
 
 		ht.cmItr = doltdb.NewFilteringCommitItr(ht.cmItr, commitCheck)
 	}
 
-	return ht
+	return &ht
 }
 
 var commitFilterCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
@@ -156,24 +153,17 @@ func getColumnFilterCheck(colNameSet *set.StrSet) func(sql.Expression) bool {
 	}
 }
 
-func splitFilters(filters []sql.Expression, filterCheck func(filter sql.Expression) bool) (matching, notMatching []sql.Expression) {
-	matching = make([]sql.Expression, 0, len(filters))
-	notMatching = make([]sql.Expression, 0, len(filters))
+func filterFilters(filters []sql.Expression, predicate func(filter sql.Expression) bool) []sql.Expression {
+	matching := make([]sql.Expression, 0, len(filters))
 	for _, f := range filters {
-		if filterCheck(f) {
+		if predicate(f) {
 			matching = append(matching, f)
-		} else {
-			notMatching = append(notMatching, f)
 		}
 	}
-	return matching, notMatching
+	return matching
 }
 
-func splitCommitFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	return splitFilters(filters, getColumnFilterCheck(commitFilterCols))
-}
-
-func getCommitFilterFunc(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
+func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
 
 	return func(ctx context.Context, h hash.Hash, cm *doltdb.Commit) (filterOut bool, err error) {
@@ -233,12 +223,12 @@ func (ht *HistoryTable) Projection() []string {
 
 // Name returns the name of the history table
 func (ht *HistoryTable) Name() string {
-	return doltdb.DoltHistoryTablePrefix + ht.name
+	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
 }
 
 // String returns the name of the history table
 func (ht *HistoryTable) String() string {
-	return doltdb.DoltHistoryTablePrefix + ht.name
+	return doltdb.DoltHistoryTablePrefix + ht.doltTable.Name()
 }
 
 // Schema returns the schema for the history table
@@ -255,7 +245,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.name, ht.targetSch, ht.rowFilters, ht.readerCreateFuncCache)
+	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.doltTable.Name(), ht.targetSch, ht.rowFilters, ht.readerCreateFuncCache)
 }
 
 // commitPartition is a single commit
