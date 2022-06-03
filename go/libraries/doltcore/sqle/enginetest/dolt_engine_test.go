@@ -770,7 +770,6 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
@@ -782,7 +781,6 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {

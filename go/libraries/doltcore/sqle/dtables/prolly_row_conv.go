@@ -18,7 +18,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
-
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -36,9 +36,10 @@ type ProllyRowConverter struct {
 	valDesc          val.TupleDesc
 	pkTargetTypes    []sql.Type
 	nonPkTargetTypes []sql.Type
+	warnFn           rowconv.WarnFunction
 }
 
-func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, error) {
+func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction) (ProllyRowConverter, error) {
 	keyProj, valProj, err := diff.MapSchemaBasedOnName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
@@ -80,22 +81,43 @@ func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, err
 		valDesc:          vd,
 		pkTargetTypes:    pkTargetTypes,
 		nonPkTargetTypes: nonPkTargetTypes,
+		warnFn:           warnFn,
 	}, nil
 }
 
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
 // and places the converted row in |dstRow|.
 func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interface{}) error {
-	for i, j := range c.keyProj {
+	err := c.putFields(key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow)
+	if err != nil {
+		return err
+	}
+
+	err = c.putFields(value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c ProllyRowConverter) putFields(tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow []interface{}) error {
+	for i, j := range proj {
 		if j == -1 {
 			continue
 		}
-		f, err := index.GetField(c.keyDesc, i, key)
+		f, err := index.GetField(desc, i, tup)
 		if err != nil {
 			return err
 		}
-		if t := c.pkTargetTypes[i]; t != nil {
+		if t := targetTypes[i]; t != nil {
 			dstRow[j], err = t.Convert(f)
+			if sql.ErrInvalidValue.Is(err) && c.warnFn != nil {
+				col := c.inSchema.GetAllCols().GetByIndex(i)
+				c.warnFn(rowconv.DatatypeCoercionFailureWarningCode, rowconv.DatatypeCoercionFailureWarning, col.Name)
+				dstRow[j] = nil
+				err = nil
+			}
 			if err != nil {
 				return err
 			}
@@ -103,24 +125,5 @@ func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interfac
 			dstRow[j] = f
 		}
 	}
-
-	for i, j := range c.valProj {
-		if j == -1 {
-			continue
-		}
-		f, err := index.GetField(c.valDesc, i, value)
-		if err != nil {
-			return err
-		}
-		if t := c.nonPkTargetTypes[i]; t != nil {
-			dstRow[j], err = t.Convert(f)
-			if err != nil {
-				return err
-			}
-		} else {
-			dstRow[j] = f
-		}
-	}
-
 	return nil
 }
