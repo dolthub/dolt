@@ -13,10 +13,10 @@ do
     case "$1" in
 
         # benchmark with new NomsBinFmt
-        --new-nbf) export DOLT_FORMAT_FEATURE_FLAG=true
+        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__"
             ;;
 
-        --new-new) export DOLT_FORMAT_FEATURE_FLAG=true &&
+        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__" &&
             export ENABLE_ROW_ITER_2=true
             ;;
 
@@ -115,7 +115,7 @@ sysbench \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 
-unset DOLT_FORMAT_FEATURE_FLAG
+unset DOLT_DEFAULT_BIN_FORMAT
 unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
