@@ -16,18 +16,21 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
 
+type initTest struct {
+	Name          string
+	Args          []string
+	GlobalConfig  map[string]string
+	ExpectSuccess bool
+}
+
 func TestInit(t *testing.T) {
-	tests := []struct {
-		Name          string
-		Args          []string
-		GlobalConfig  map[string]string
-		ExpectSuccess bool
-	}{
+	tests := []initTest{
 		{
 			"Command Line name and email",
 			[]string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"},
@@ -68,10 +71,12 @@ func TestInit(t *testing.T) {
 			if (result == 0) != test.ExpectSuccess {
 				t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
 			} else if test.ExpectSuccess {
-				// succceeded as expected
+				// succeeded as expected
 				if !dEnv.HasDoltDir() {
 					t.Error(test.Name, "- .dolt dir should exist after initialization")
 				}
+				testLocalConfigValue(t, dEnv, test, usernameParamName, env.UserNameKey)
+				testLocalConfigValue(t, dEnv, test, emailParamName, env.UserEmailKey)
 			} else {
 				// failed as expected
 				if dEnv.HasDoltDir() {
@@ -94,5 +99,39 @@ func TestInitTwice(t *testing.T) {
 
 	if result == 0 {
 		t.Error("Second init should fail")
+	}
+}
+
+// testLocalConfigValue tests that local config data is set correctly when the specified argument
+// is present in the command line args, and is not set when the argument is not present.
+func testLocalConfigValue(t *testing.T, dEnv *env.DoltEnv, test initTest, argKey, envKey string) {
+	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
+	if !ok {
+		t.Error(test.Name, "- Unable to load local configuration")
+		return
+	}
+
+	found := false
+	expectedValue := ""
+	for i := 0; i <= len(test.Args)-2; i = i + 2 {
+		if test.Args[i] == "-"+argKey {
+			found = true
+			expectedValue = test.Args[i+1]
+		}
+	}
+
+	actualValue, err := localConfig.GetString(envKey)
+	if found {
+		if err != nil {
+			s := fmt.Sprintf("- Expected '%s', but not found in local config; error: %s",
+				expectedValue, err.Error())
+			t.Error(test.Name, s)
+		} else if expectedValue != actualValue {
+			t.Error(test.Name, fmt.Sprintf("- Expected '%s' in local config, but found '%s'", expectedValue, actualValue))
+		}
+	} else {
+		if err == nil {
+			t.Error(test.Name, fmt.Sprintf("- Expected nothing in local config, but found '%s'", actualValue))
+		}
 	}
 }
