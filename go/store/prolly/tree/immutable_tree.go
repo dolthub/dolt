@@ -26,7 +26,7 @@ const defaultFixedChunkLength = 4000
 
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be > 1")
 
-// buildImmutableTree writes the contexts of |reader| as an append-only
+// buildImmutableTree writes the contents of |reader| as an append-only
 // tree, returning the root node or an error if applicable. |chunkSize|
 // fixes the split size of leaf and intermediate node chunks.
 func buildImmutableTree(ctx context.Context, r io.Reader, ns NodeStore, S message.Serializer, chunkSize int) (Node, error) {
@@ -107,7 +107,6 @@ func buildImmutableTree(ctx context.Context, r io.Reader, ns NodeStore, S messag
 			i++
 		}
 	}
-	panic("unreachable")
 }
 
 func _newInternal(ctx context.Context, ns NodeStore, s message.Serializer, nodes []novelNode, level int, chunkSize int) (novelNode, error) {
