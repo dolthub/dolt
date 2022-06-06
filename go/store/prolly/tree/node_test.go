@@ -80,7 +80,7 @@ func TestNodeHashValueCompatibility(t *testing.T) {
 
 	h1 := hash.Parse("kvup5vdur99ush7c18g0kjc6rhdkfdgo")
 	h2 := hash.Parse("7e54ill10nji9oao1ja88buh9itaj7k9")
-	msg := message.AddressMapSerializer{sharedPool}.Serialize(
+	msg := message.AddressMapSerializer{Pool: sharedPool}.Serialize(
 		[][]byte{[]byte("chopin"), []byte("listz")},
 		[][]byte{h1[:], h2[:]},
 		[]uint64{},
