@@ -73,9 +73,12 @@ func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(table *DoltTable) sql.Table {
+func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) sql.Table {
+	cmItr := doltdb.CommitItrForRoots(ddb, head)
+
 	return &HistoryTable{
 		doltTable: table,
+		cmItr: cmItr,
 	}
 }
 
