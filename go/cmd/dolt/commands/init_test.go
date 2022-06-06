@@ -16,8 +16,9 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 )
@@ -68,20 +69,15 @@ func TestInit(t *testing.T) {
 
 			result := InitCmd{}.Exec(context.Background(), "dolt init", test.Args, dEnv)
 
-			if (result == 0) != test.ExpectSuccess {
-				t.Error(test.Name, "- Expected success:", test.ExpectSuccess, "result:", result == 0)
-			} else if test.ExpectSuccess {
-				// succeeded as expected
-				if !dEnv.HasDoltDir() {
-					t.Error(test.Name, "- .dolt dir should exist after initialization")
-				}
+			require.Equalf(t, test.ExpectSuccess, result == 0, "- Expected success: %t; result: %t;", test.ExpectSuccess, result == 0)
+
+			if test.ExpectSuccess {
+				require.True(t, dEnv.HasDoltDir(), "- .dolt dir should exist after initialization")
 				testLocalConfigValue(t, dEnv, test, usernameParamName, env.UserNameKey)
 				testLocalConfigValue(t, dEnv, test, emailParamName, env.UserEmailKey)
 			} else {
-				// failed as expected
-				if dEnv.HasDoltDir() {
-					t.Error(test.Name, "- dolt directory shouldn't exist after failure to initialize")
-				}
+				require.False(t, dEnv.HasDoltDir(),
+					"- dolt directory shouldn't exist after failure to initialize")
 			}
 		})
 	}
@@ -89,27 +85,20 @@ func TestInit(t *testing.T) {
 
 func TestInitTwice(t *testing.T) {
 	dEnv := createUninitializedEnv()
-	result := InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	result := InitCmd{}.Exec(context.Background(), "dolt init",
+		[]string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	require.True(t, result == 0, "First init should succeed")
 
-	if result != 0 {
-		t.Error("First init should succeed")
-	}
-
-	result = InitCmd{}.Exec(context.Background(), "dolt init", []string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
-
-	if result == 0 {
-		t.Error("Second init should fail")
-	}
+	result = InitCmd{}.Exec(context.Background(), "dolt init",
+		[]string{"-name", "Bill Billerson", "-email", "bigbillieb@fake.horse"}, dEnv)
+	require.True(t, result != 0, "Second init should fail")
 }
 
 // testLocalConfigValue tests that local config data is set correctly when the specified argument
 // is present in the command line args, and is not set when the argument is not present.
 func testLocalConfigValue(t *testing.T, dEnv *env.DoltEnv, test initTest, argKey, envKey string) {
 	localConfig, ok := dEnv.Config.GetConfig(env.LocalConfig)
-	if !ok {
-		t.Error(test.Name, "- Unable to load local configuration")
-		return
-	}
+	require.True(t, ok, "- Unable to load local configuration")
 
 	found := false
 	expectedValue := ""
@@ -122,16 +111,11 @@ func testLocalConfigValue(t *testing.T, dEnv *env.DoltEnv, test initTest, argKey
 
 	actualValue, err := localConfig.GetString(envKey)
 	if found {
-		if err != nil {
-			s := fmt.Sprintf("- Expected '%s', but not found in local config; error: %s",
-				expectedValue, err.Error())
-			t.Error(test.Name, s)
-		} else if expectedValue != actualValue {
-			t.Error(test.Name, fmt.Sprintf("- Expected '%s' in local config, but found '%s'", expectedValue, actualValue))
-		}
+		require.NoErrorf(t, err, "- Expected '%s', but not found in local config; error: %v",
+			expectedValue, err)
+		require.Equalf(t, expectedValue, actualValue, "- Expected '%s' in local config, but found '%s'",
+			expectedValue, actualValue)
 	} else {
-		if err == nil {
-			t.Error(test.Name, fmt.Sprintf("- Expected nothing in local config, but found '%s'", actualValue))
-		}
+		require.Errorf(t, err, "- Expected nothing in local config, but found '%s'", actualValue)
 	}
 }
