@@ -5,6 +5,7 @@ set -o pipefail
 SYSBENCH_TEST="oltp_point_select"
 WORKING_DIR=`mktemp -d`
 PPROF=0
+PORT=3366
 
 # parse options
 # superuser.com/questions/186272/
@@ -13,10 +14,10 @@ do
     case "$1" in
 
         # benchmark with new NomsBinFmt
-        --new-nbf) export DOLT_FORMAT_FEATURE_FLAG=true
+        --new-nbf) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__"
             ;;
 
-        --new-new) export DOLT_FORMAT_FEATURE_FLAG=true &&
+        --new-new) export DOLT_DEFAULT_BIN_FORMAT="__DOLT_1__" &&
             export ENABLE_ROW_ITER_2=true
             ;;
 
@@ -61,7 +62,7 @@ user:
 
 listener:
   host: "0.0.0.0"
-  port: 3306
+  port: $PORT
   max_connections: 128
   read_timeout_millis: 28800000
   write_timeout_millis: 28800000
@@ -87,7 +88,9 @@ echo "benchmark $SYSBENCH_TEST bootstrapping at $WORKING_DIR"
 
 sleep 1
 sysbench \
+  --db-driver="mysql" \
   --mysql-host="0.0.0.0" \
+  --mysql-port="$PORT" \
   --mysql-user="user" \
   --mysql-password="pass" \
   "$SYSBENCH_TEST" prepare
@@ -109,13 +112,15 @@ sleep 1
 echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 
 sysbench \
+  --db-driver="mysql" \
   --mysql-host="0.0.0.0" \
+  --mysql-port="$PORT" \
   --mysql-user="user" \
   --mysql-password="pass" \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 
-unset DOLT_FORMAT_FEATURE_FLAG
+unset DOLT_DEFAULT_BIN_FORMAT
 unset ENABLE_ROW_ITER_2
 unset SINGLE_THREAD_FEATURE_FLAG
 unset GOMAXPROCS
