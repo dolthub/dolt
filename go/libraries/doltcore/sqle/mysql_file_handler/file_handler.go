@@ -25,7 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
-const defaultMySQLFilePath = "mysql.db"
+const defaultMySQLFilePath = "./.dolt/mysql.db"
 
 var fileMutex = &sync.Mutex{}
 var mysqlDbFilePath string
