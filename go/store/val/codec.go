@@ -52,6 +52,7 @@ const (
 	float64Size  ByteSize = 8
 	bit64Size    ByteSize = 8
 	hash128Size  ByteSize = 16
+	hash160Size  ByteSize = 20
 	yearSize     ByteSize = 1
 	dateSize     ByteSize = 4
 	timeSize     ByteSize = 8
@@ -77,6 +78,7 @@ const (
 	Float64Enc  = Encoding(serial.EncodingFloat64)
 	Bit64Enc    = Encoding(serial.EncodingBit64)
 	Hash128Enc  = Encoding(serial.EncodingHash128)
+	Hash160Enc  = Encoding(serial.EncodingHash160)
 	YearEnc     = Encoding(serial.EncodingYear)
 	DateEnc     = Encoding(serial.EncodingDate)
 	TimeEnc     = Encoding(serial.EncodingTime)
@@ -129,6 +131,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float64Size, true
 	case Hash128Enc:
 		return hash128Size, true
+	case Hash160Enc:
+		return hash160Size, true
 	case YearEnc:
 		return yearSize, true
 	case DateEnc:
@@ -554,7 +558,20 @@ func writeHash128(buf, val []byte) {
 	copy(buf, val)
 }
 
+func readHash160(val []byte) []byte {
+	expectSize(val, hash160Size)
+	return val
+}
+func writeHash160(buf, val []byte) {
+	expectSize(buf, hash160Size)
+	copy(buf, val)
+}
+
 func compareHash128(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
+func compareHash160(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 

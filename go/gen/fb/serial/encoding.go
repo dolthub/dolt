@@ -42,6 +42,7 @@ const (
 	EncodingDatetime Encoding = 18
 	EncodingEnum     Encoding = 19
 	EncodingSet      Encoding = 20
+	EncodingHash160  Encoding = 21
 	EncodingString   Encoding = 128
 	EncodingBytes    Encoding = 129
 	EncodingDecimal  Encoding = 130
@@ -69,6 +70,7 @@ var EnumNamesEncoding = map[Encoding]string{
 	EncodingDatetime: "Datetime",
 	EncodingEnum:     "Enum",
 	EncodingSet:      "Set",
+	EncodingHash160:  "Hash160",
 	EncodingString:   "String",
 	EncodingBytes:    "Bytes",
 	EncodingDecimal:  "Decimal",
@@ -96,6 +98,7 @@ var EnumValuesEncoding = map[string]Encoding{
 	"Datetime": EncodingDatetime,
 	"Enum":     EncodingEnum,
 	"Set":      EncodingSet,
+	"Hash160":  EncodingHash160,
 	"String":   EncodingString,
 	"Bytes":    EncodingBytes,
 	"Decimal":  EncodingDecimal,
