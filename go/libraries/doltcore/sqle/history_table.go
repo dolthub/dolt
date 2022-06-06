@@ -17,8 +17,8 @@ package sqle
 import (
 	"context"
 	"io"
-	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -83,7 +83,7 @@ func NewHistoryTable(table *DoltTable) sql.Table {
 // the table's schema with 3 additional columns
 func historyTableSchema(table *DoltTable) sql.Schema {
 	baseSch := table.Schema()
-	newSch := make(sql.Schema, len(baseSch)+3, 0)
+	newSch := make(sql.Schema, len(baseSch), len(baseSch)+3)
 
 	copy(newSch, baseSch)
 	newSch = append(newSch,
@@ -105,7 +105,7 @@ func historyTableSchema(table *DoltTable) sql.Schema {
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (ht *HistoryTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	ht.commitFilters = filterFilters(filters, commitColumnFilter(historyTableCommitMetaCols))
+	ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
 	return ht.commitFilters
 }
 
@@ -117,7 +117,7 @@ func (ht *HistoryTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied. We handle filters on any commit columns.
 func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) sql.Table {
 	if ht.commitFilters == nil {
-		ht.commitFilters = filterFilters(filters, commitColumnFilter(historyTableCommitMetaCols))
+		ht.commitFilters = dtables.FilterFilters(filters, dtables.ColumnPredicate(historyTableCommitMetaCols))
 	}
 
 	if len(ht.commitFilters) > 0 {
@@ -133,40 +133,6 @@ func (ht HistoryTable) WithFilters(ctx *sql.Context, filters []sql.Expression) s
 }
 
 var historyTableCommitMetaCols = set.NewStrSet([]string{CommitHashCol, CommitDateCol, CommitterCol})
-
-// commitColumnFilter returns a predicate function for expressions on the column names given
-func commitColumnFilter(colNameSet *set.StrSet) func(sql.Expression) bool {
-	return func(filter sql.Expression) bool {
-		isCommitFilter := true
-		sql.Inspect(filter, func(e sql.Expression) (cont bool) {
-			if e == nil {
-				return true
-			}
-
-			switch val := e.(type) {
-			case *expression.GetField:
-				if !colNameSet.Contains(strings.ToLower(val.Name())) {
-					isCommitFilter = false
-					return false
-				}
-			}
-
-			return true
-		})
-
-		return isCommitFilter
-	}
-}
-
-func filterFilters(filters []sql.Expression, predicate func(filter sql.Expression) bool) []sql.Expression {
-	matching := make([]sql.Expression, 0, len(filters))
-	for _, f := range filters {
-		if predicate(f) {
-			matching = append(matching, f)
-		}
-	}
-	return matching
-}
 
 func commitFilterForExprs(ctx *sql.Context, filters []sql.Expression) (doltdb.CommitFilter, error) {
 	filters = transformFilters(ctx, filters...)
