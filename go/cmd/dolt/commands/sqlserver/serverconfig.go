@@ -49,7 +49,7 @@ const (
 	defaultDataDir             = "."
 	defaultMetricsHost         = ""
 	defaultMetricsPort         = -1
-	defaultMySQLDbFilePath     = "mysql.db"
+	defaultMySQLDbFilePath     = "./.dolt/mysql.db"
 	defaultPrivilegeFilePath   = "privs.json"
 )
 
