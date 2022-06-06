@@ -36,7 +36,11 @@ short=${TO_VERSION:0:8}
 lowered=$(echo "$ACTOR" | tr '[:upper:]' '[:lower:]')
 actorShort="$lowered-$short"
 
-jobname="$actorShort"
+# random sleep
+sleep 0.$[ ( $RANDOM % 10 )  + 1 ]s
+
+timesuffix=`date +%s%N`
+jobname="$actorShort-$timesuffix"
 
 timeprefix=$(date +%Y/%m/%d)
 
@@ -51,7 +55,19 @@ fi
 # or default to -1
 issuenumber=${ISSUE_NUMBER:-"-1"}
 
-source "$TEMPLATE_SCRIPT" "$jobname" "$FROM_SERVER" "$FROM_VERSION" "$TO_SERVER" "$TO_VERSION" "$timeprefix" "$actorprefix" "$format" "$issuenumber" > job.json
+source \
+  "$TEMPLATE_SCRIPT" \
+  "$jobname"         \
+  "$FROM_SERVER"     \
+  "$FROM_VERSION"    \
+  "$TO_SERVER"       \
+  "$TO_VERSION"      \
+  "$timeprefix"      \
+  "$actorprefix"     \
+  "$format"          \
+  "$issuenumber"     \
+  "$INIT_BIG_REPO"   \
+  "$NOMS_BIN_FORMAT" > job.json
 
 out=$(KUBECONFIG="$KUBECONFIG" kubectl apply -f job.json || true)
 

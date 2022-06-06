@@ -16,7 +16,6 @@ package schema
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -55,8 +54,6 @@ type Index interface {
 	// ToTableTuple returns a tuple that may be used to retrieve the original row from the indexed table when given
 	// a full index key (and not a partial index key).
 	ToTableTuple(ctx context.Context, fullKey types.Tuple, format *types.NomsBinFormat) (types.Tuple, error)
-	// VerifyMap returns whether the given map iterator contains all valid keys and values for this index.
-	VerifyMap(ctx context.Context, iter types.MapIterator, nbf *types.NomsBinFormat) error
 }
 
 var _ Index = (*indexImpl)(nil)
@@ -237,66 +234,6 @@ func (ix *indexImpl) ToTableTuple(ctx context.Context, fullKey types.Tuple, form
 		}
 	}
 	return types.NewTuple(format, resVals...)
-}
-
-// VerifyMap implements Index.
-func (ix *indexImpl) VerifyMap(ctx context.Context, iter types.MapIterator, nbf *types.NomsBinFormat) error {
-	lastKey := types.EmptyTuple(nbf)
-	var keyVal types.Value
-	var valVal types.Value
-	expectedVal := types.EmptyTuple(nbf)
-	var err error
-	cols := make([]Column, len(ix.allTags))
-	for i, tag := range ix.allTags {
-		var ok bool
-		cols[i], ok = ix.indexColl.colColl.TagToCol[tag]
-		if !ok {
-			return fmt.Errorf("index `%s` has column with tag `%d` which cannot be found", ix.name, tag)
-		}
-	}
-
-	for keyVal, valVal, err = iter.Next(ctx); err == nil && keyVal != nil; keyVal, valVal, err = iter.Next(ctx) {
-		key := keyVal.(types.Tuple)
-		i := 0
-		hasNull := false
-		if key.Len() != uint64(2*len(cols)) {
-			return fmt.Errorf("mismatched value count in key tuple compared to what index `%s` expects", ix.name)
-		}
-		err = key.WalkValues(ctx, func(v types.Value) error {
-			colIndex := i / 2
-			isTag := i%2 == 0
-			if isTag {
-				if !v.Equals(types.Uint(cols[colIndex].Tag)) {
-					return fmt.Errorf("column order of map does not match what index `%s` expects", ix.name)
-				}
-			} else {
-				if types.IsNull(v) {
-					hasNull = true
-				} else if v.Kind() != cols[colIndex].TypeInfo.NomsKind() {
-					return fmt.Errorf("column value in map does not match what index `%s` expects", ix.name)
-				}
-			}
-			i++
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-		if ix.isUnique && !hasNull {
-			partialKeysEqual, err := key.PrefixEquals(ctx, lastKey, uint64(len(ix.tags)*2))
-			if err != nil {
-				return err
-			}
-			if partialKeysEqual {
-				return fmt.Errorf("UNIQUE constraint violation while verifying index: %s", ix.name)
-			}
-		}
-		if !expectedVal.Equals(valVal) {
-			return fmt.Errorf("index map value should be empty")
-		}
-		lastKey = key
-	}
-	return err
 }
 
 // copy returns an exact copy of the calling index.

@@ -488,7 +488,7 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 		return rowconv.IdentityConverter, nil
 	}
 
-	fm, err := rowconv.TagMappingWithNameFallback(srcSch, targetSch)
+	fm, err := rowconv.TagMappingByName(srcSch, targetSch)
 	if err != nil {
 		return nil, err
 	}

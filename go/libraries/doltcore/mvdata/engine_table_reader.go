@@ -51,7 +51,18 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		dbName,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +71,9 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	if err != nil {
 		return nil, err
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	sch, iter, err := se.Query(sqlCtx, fmt.Sprintf("SELECT * FROM `%s`", tableName))
 	if err != nil {

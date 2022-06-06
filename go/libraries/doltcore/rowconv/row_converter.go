@@ -30,7 +30,7 @@ var IdentityConverter = &RowConverter{nil, true, nil}
 
 // WarnFunction is a callback function that callers can optionally provide during row conversion
 // to take an extra action when a value cannot be automatically converted to the output data type.
-type WarnFunction func(int, string, ...string)
+type WarnFunction func(int, string, ...interface{})
 
 var DatatypeCoercionFailureWarning = "unable to coerce value from field '%s' into latest column schema"
 

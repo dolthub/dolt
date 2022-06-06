@@ -78,7 +78,18 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	})
 
 	// Simplest path would have our import path be a layer over load data
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		dbName,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		false,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +99,9 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	if err != nil {
 		return nil, err
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
