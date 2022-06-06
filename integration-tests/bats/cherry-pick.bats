@@ -49,12 +49,9 @@ teardown() {
     [[ "$output" =~ "3,c" ]] || false
 
     dolt sql -q "UPDATE test SET v = 'x' WHERE pk = 2"
+    dolt sql -q "INSERT INTO test VALUES (5, 'g'), (8, 'u');"
     dolt add -A
-    dolt commit -m "Updated 2b to 2x"
-    run dolt sql -q "SELECT * FROM test" -r csv
-    [[ "$output" =~ "1,a" ]] || false
-    [[ "$output" =~ "2,x" ]] || false
-    [[ "$output" =~ "3,c" ]] || false
+    dolt commit -m "Updated 2b to 2x and inserted more rows"
 
     dolt checkout main
 
@@ -66,6 +63,16 @@ teardown() {
     [[ ! "$output" =~ "1,a" ]] || false
     [[ ! "$output" =~ "2,x" ]] || false
     [[ ! "$output" =~ "3,c" ]] || false
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ "$output" =~ "2,x" ]] || false
+    [[ ! "$output" =~ "3,c" ]] || false
+    [[ "$output" =~ "5,g" ]] || false
+    [[ "$output" =~ "8,u" ]] || false
 }
 
 @test "cherry-pick: too far back" {

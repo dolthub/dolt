@@ -16,7 +16,7 @@ package commands
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -91,16 +91,45 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(errhand.BuildDError("multiple commits not supported yet.").SetPrintUsage().Build(), usage)
 	}
 
+	// check for clean working state
+	headRoot, err := dEnv.HeadRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	workingRoot, err := dEnv.WorkingRoot(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	headHash, err := headRoot.HashOf()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	workingHash, err := workingRoot.HashOf()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	if !headHash.Equal(workingHash) {
+		return HandleVErrAndExitCode(errhand.BuildDError("You must commit any changes before using cherry-pick.").SetPrintUsage().Build(), usage)
+	}
+
 	cherryStr := apr.Arg(0)
 	if len(cherryStr) == 0 {
 		verr := errhand.BuildDError("error: cannot cherry-pick empty string").Build()
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	newWorkingRoot, commitMsg, err := CherryPick(ctx, dEnv, cherryStr)
+	newWorkingRoot, commitMsg, err := CherryPick(ctx, dEnv, workingRoot, cherryStr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	} else if newWorkingRoot == nil {
+	}
+
+	workingHash, err = newWorkingRoot.HashOf()
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	if headHash.Equal(workingHash) {
+		cli.Println("No changes were made.")
 		return 0
 	}
 
@@ -123,71 +152,39 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 }
 
-func CherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) (*doltdb.RootValue, string, error) {
+func CherryPick(ctx context.Context, dEnv *env.DoltEnv, wRoot *doltdb.RootValue, cherryStr string) (*doltdb.RootValue, string, error) {
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 
-	// check for clean working state
-	headRoot, err := dEnv.HeadRoot(ctx)
+	cherrySpec, err := doltdb.NewCommitSpec(cherryStr)
 	if err != nil {
 		return nil, "", err
 	}
-	workingRoot, err := dEnv.WorkingRoot(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	headHash, err := headRoot.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-	workingHash, err := workingRoot.HashOf()
-	if err != nil {
-		return nil, "", err
-	}
-	if !headHash.Equal(workingHash) {
-		return nil, "", errors.New("You must commit any changes before using cherry-pick.")
-	}
-
-	// get cherry-picked commit
-	cherryCS, err := doltdb.NewCommitSpec(cherryStr)
-	if err != nil {
-		return nil, "", err
-	}
-	cherryCM, err := dEnv.DoltDB.Resolve(ctx, cherryCS, dEnv.RepoStateReader().CWBHeadRef())
+	cherryCommit, err := dEnv.DoltDB.Resolve(ctx, cherrySpec, dEnv.RepoStateReader().CWBHeadRef())
 	if err != nil {
 		return nil, "", err
 	}
 
-	ccm, err := cherryCM.GetCommitMeta(ctx)
+	cherryCM, err := cherryCommit.GetCommitMeta(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	commitMsg := ccm.Description
+	commitMsg := cherryCM.Description
 
-	workingRoot, err = cherryPickACommit(ctx, dEnv.DoltDB, workingRoot, cherryCM, opts)
-	if err != nil {
-		return nil, "", err
-	}
-
-	workingHash, err = workingRoot.HashOf()
+	updatedRoot, err := cherryPickACommit(ctx, dEnv.DoltDB, wRoot, cherryCommit, opts)
 	if err != nil {
 		return nil, "", err
 	}
 
-	if headHash.Equal(workingHash) {
-		cli.Println("No changes were made.")
-		return nil, "", nil
-	}
-
-	return workingRoot, commitMsg, nil
+	return updatedRoot, commitMsg, nil
 }
 
+// cherryPickACommit takes working root and cherry-pick commit and returns updated root with changes from cherry-pick commit applied.
 func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb.RootValue, cherryCM *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, error) {
-	// TODO : get changes made in the cherry-picked commit
 	var err error
-	// fromRoot = parentRoot and toRoot = cherryPickRoot
+	// parentCommitRoot, cherryCommitRoot
 	fromRoot, toRoot, err := getParentAndCherryRoots(ctx, ddb, cherryCM)
 	if err != nil {
-		return nil, errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		return nil, errhand.BuildDError("failed to get cherry-picked commit and its parent commit").AddCause(err).Build()
 	}
 
 	workingSetTblNames, err := doltdb.GetAllTableNames(ctx, headRoot)
@@ -200,21 +197,22 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 	if err != nil {
 		return nil, err
 	}
+	tblsToDrop := set.NewStrSet(nil)
 
+	// changes introduced in cherry-picked commit
 	tblDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
-
-	tblsToDropFromWorkingSet := set.NewStrSet(nil)
 	for _, td := range tblDeltas {
 		if td.IsDrop() {
 			if !workingSetTblSet.Contains(td.FromName) {
 				continue
 			}
 
-			tblsToDropFromWorkingSet.Add(td.FromName)
+			tblsToDrop.Add(td.FromName)
 			stagedFKs.RemoveKeys(td.FromFks...)
 		} else {
-			// if tableName in 'to' commit does not exist in working set tables
-			// if it was created in previous commits not in working set?
+			// ignore changes for a table that does not exist in working set
+			// TODO : what if the table name is changed? Why check before IsRename()? Add tests!
+			// is the table added during cherry-pick changes?
 			if !workingSetTblSet.Contains(td.ToName) {
 				continue
 			}
@@ -228,16 +226,13 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				}
 			}
 
-			// TODO : check for schema changes AND check for row changes
+			// TODO : check for schema changes
+
 			rowDiffs, err := getRowDiffs(ctx, td)
 			if err != nil {
 				return nil, err
 			}
-			//to, err = to.PutTable(ctx, td.ToName, td.ToTable)
-			//if err != nil {
-			//	return nil, "", err
-			//}
-			headRoot, err = applyRowDiffs(ctx, headRoot, td.ToName, td.ToTable, rowDiffs, opts)
+			headRoot, err = applyRowDiffs(ctx, headRoot, td.ToName, rowDiffs, opts)
 			if err != nil {
 				return nil, err
 			}
@@ -248,7 +243,7 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				return nil, err
 			}
 
-			// TODO : what is superSchema?
+			// TODO : what is superSchema doing?
 			ss, _, err := fromRoot.GetSuperSchema(ctx, td.ToName)
 			if err != nil {
 				return nil, err
@@ -267,7 +262,7 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 	}
 
 	// RemoveTables also removes that table's ForeignKeys
-	toRoot, err = toRoot.RemoveTables(ctx, false, false, tblsToDropFromWorkingSet.AsSlice()...)
+	toRoot, err = toRoot.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
 	if err != nil {
 		return nil, err
 	}
@@ -275,64 +270,7 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 	return headRoot, nil
 }
 
-func applyRowDiffs(ctx context.Context, root *doltdb.RootValue, tName string, table *doltdb.Table, diffs []map[string]row.Row, opts editor.Options) (*doltdb.RootValue, error) {
-	tbl, _, err := root.GetTable(ctx, tName)
-	if err != nil {
-		return nil, err
-	}
-	tblSchema, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tableEditor, err := editor.NewTableEditor(ctx, tbl, tblSchema, tName, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, diffMap := range diffs {
-		to, hasTo := diffMap[diff.To]
-		from, hasFrom := diffMap[diff.From]
-
-		if err != nil {
-			return nil, err
-		}
-		if hasTo && hasFrom {
-			// update row
-			err = tableEditor.UpdateRow(context.Background(), from, to, nil)
-			if err != nil {
-				cli.Println(err)
-				return root, nil
-			}
-		} else if hasTo && !hasFrom {
-			// insert row
-			err = tableEditor.InsertRow(ctx, to, nil)
-			if err != nil {
-				cli.Println(err)
-				return root, nil
-			}
-		} else {
-			// delete row
-			err = tableEditor.DeleteRow(ctx, from)
-			if err != nil {
-				cli.Println(err)
-				return root, nil
-			}
-		}
-	}
-
-	t, err := tableEditor.Table(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	newRoot, err := root.PutTable(ctx, tName, t)
-	if err != nil {
-		return nil, err
-	}
-
-	return newRoot, nil
-}
-
+// getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
 func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryCommit *doltdb.Commit) (*doltdb.RootValue, *doltdb.RootValue, error) {
 	cherryRoot, err := cherryCommit.GetRootValue(ctx)
 	if err != nil {
@@ -358,12 +296,13 @@ func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryComm
 	return parentRoot, cherryRoot, nil
 }
 
+// getRowDiffs returns diffs for each table delta as a map of keys 'to' and/or 'from' with values in Row format.
 func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row, error) {
 	fromTable := td.FromTable
 	toTable := td.ToTable
 
 	if fromTable == nil && toTable == nil {
-		return nil, errhand.BuildDError("error: both tables in tableDelta are nil").Build()
+		return nil, errhand.BuildDError(fmt.Sprintf("error: no changes between commits for table %s", td.ToName)).Build()
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -416,9 +355,70 @@ func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row,
 			return nil, iterErr
 		}
 		toAndFromRows, iterErr := joiner.Split(r)
+		if iterErr != nil {
+			return nil, iterErr
+		}
 
 		diffs = append(diffs, toAndFromRows)
 	}
 
 	return diffs, nil
+}
+
+func applyRowDiffs(ctx context.Context, root *doltdb.RootValue, tName string, diffs []map[string]row.Row, opts editor.Options) (*doltdb.RootValue, error) {
+	tbl, _, err := root.GetTable(ctx, tName)
+	if err != nil {
+		return nil, err
+	}
+	tblSchema, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+	tblEditor, err := editor.NewTableEditor(ctx, tbl, tblSchema, tName, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, diffMap := range diffs {
+		to, hasTo := diffMap[diff.To]
+		from, hasFrom := diffMap[diff.From]
+
+		if err != nil {
+			return nil, err
+		}
+		if hasTo && hasFrom {
+			// update row
+			err = tblEditor.UpdateRow(context.Background(), from, to, nil)
+			if err != nil {
+				cli.Println(err)
+				return root, nil
+			}
+		} else if hasTo && !hasFrom {
+			// insert row
+			err = tblEditor.InsertRow(ctx, to, nil)
+			if err != nil {
+				cli.Println(err)
+				return root, nil
+			}
+		} else {
+			// delete row
+			err = tblEditor.DeleteRow(ctx, from)
+			if err != nil {
+				cli.Println(err)
+				return root, nil
+			}
+		}
+	}
+
+	t, err := tblEditor.Table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	newRoot, err := root.PutTable(ctx, tName, t)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRoot, nil
 }
