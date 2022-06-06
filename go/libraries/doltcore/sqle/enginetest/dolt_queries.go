@@ -440,6 +440,26 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "index by primary key",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c int);",
+			"insert into t1 values (1,2), (3,4)",
+			"set @Commit1 = dolt_commit('-am', 'initial table');",
+			"insert into t1 values (5,6), (7,8)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "explain select * from dolt_history_t1",
+				Expected: []sql.Row{
+					{
+
+					},
+				},
+			},
+		},
+	},
+	{
 		Name: "primary key table: non-pk schema changes",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 text);",

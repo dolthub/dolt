@@ -76,18 +76,51 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "alter modify column type, make primary key spatial",
+			Name: "index by primary key",
 			SetUpScript: []string{
-				"create table point_tbl (p int primary key)",
+				"create table t1 (pk int primary key, c int);",
+				"insert into t1 values (1,2), (3,4)",
+				"set @Commit1 = dolt_commit('-am', 'initial table');",
+				"insert into t1 values (5,6), (7,8)",
+				"set @Commit2 = dolt_commit('-am', 'two more rows');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "alter table point_tbl modify column p point primary key",
-					ExpectedErr: schema.ErrUsingSpatialKey,
+					Query:    "select pk, c, commit_hash = @Commit1, commit_hash = @Commit2 from dolt_history_t1",
+					Expected: []sql.Row{
+						{1, 2, false, true},
+						{3, 4, false, true},
+						{5, 6, false, true},
+						{7, 8, false, true},
+						{1, 2, true, false},
+						{3, 4, true, false},
+					},
+				},
+				{
+					Query: "select pk, c from dolt_history_t1 order by pk",
+					Expected: []sql.Row{
+						{1, 2},
+						{1, 2},
+						{3, 4},
+						{3, 4},
+						{5, 6},
+						{7, 8},
+					},
+				},
+				{
+					Query: "explain select pk, c from dolt_history_t1 order by pk",
+					Expected: []sql.Row{
+						{1, 2},
+						{1, 2},
+						{3, 4},
+						{3, 4},
+						{5, 6},
+						{7, 8},
+					},
 				},
 			},
 		},

@@ -19,6 +19,7 @@ import (
 	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -53,6 +54,7 @@ var (
 var _ sql.Table = (*HistoryTable)(nil)
 var _ sql.FilteredTable = (*HistoryTable)(nil)
 var _ sql.IndexAddressableTable = (*HistoryTable)(nil)
+var _ sql.ParallelizedIndexAddressableTable = (*HistoryTable)(nil)
 var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
@@ -63,8 +65,18 @@ type HistoryTable struct {
 	indexLookup           sql.IndexLookup
 }
 
+func (ht *HistoryTable) ShouldParallelizeAccess() bool {
+	return true
+}
+
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	return ht.doltTable.GetIndexes(ctx)
+	tbl, err := ht.doltTable.doltTable(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// For index pushdown to work, we need to represent the indexes from the underlying table as belonging to this one
+	return index.DoltIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
 func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -84,22 +96,30 @@ func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) 
 
 // History table schema returns the corresponding history table schema for the base table given, which consists of
 // the table's schema with 3 additional columns
-func historyTableSchema(table *DoltTable) sql.Schema {
-	baseSch := table.Schema()
+func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
+	baseSch := table.Schema().Copy()
 	newSch := make(sql.Schema, len(baseSch), len(baseSch)+3)
 
-	copy(newSch, baseSch)
+	for i, col := range baseSch {
+		// Returning a schema from a single table with multiple table names can confuse parts of the analyzer
+		col.Source = tableName
+		newSch[i] = col
+	}
+
 	newSch = append(newSch,
 		&sql.Column{
 			Name: CommitHashCol,
+			Source: tableName,
 			Type: CommitHashColType,
 		},
 		&sql.Column{
 			Name: CommitterCol,
+			Source: tableName,
 			Type: CommitterColType,
 		},
 		&sql.Column{
 			Name: CommitDateCol,
+			Source: tableName,
 			Type: sql.Datetime,
 		},
 	)
@@ -209,7 +229,7 @@ func (ht *HistoryTable) String() string {
 
 // Schema returns the schema for the history table
 func (ht *HistoryTable) Schema() sql.Schema {
-	return historyTableSchema(ht.doltTable)
+	return historyTableSchema(ht.Name(), ht.doltTable)
 }
 
 // Partitions returns a PartitionIter which will be used in getting partitions each of which is used to create RowIter.
@@ -221,7 +241,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, ht.doltTable, cp.h, cp.cm)
+	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm)
 }
 
 // commitPartition is a single commit
@@ -264,8 +284,8 @@ type historyIter struct {
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, cm *doltdb.Commit, ) (*historyIter, error) {
-	targetSchema := historyTableSchema(table)
+func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, ) (*historyIter, error) {
+	targetSchema := historyTableSchema(tableName, table)
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {

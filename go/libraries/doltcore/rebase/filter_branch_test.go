@@ -127,7 +127,18 @@ func filterBranchTests() []filterBranchTest {
 			},
 			asserts: []testAssertion{
 				{
-					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk,c0;",
+					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk, c0",
+					rows: []sql.Row{
+						{int32(0), int32(0)},
+						{int32(0), int32(0)},
+						{int32(1), int32(1)},
+						{int32(1), int32(1)},
+						{int32(2), int32(2)},
+						{int32(2), int32(2)},
+					},
+				},
+				{
+					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk",
 					rows: []sql.Row{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
