@@ -28,7 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
@@ -56,7 +55,6 @@ var _ sql.IndexedTable = (*HistoryTable)(nil)
 type HistoryTable struct {
 	doltTable             *sqle.DoltTable
 	commitFilters         []sql.Expression
-	rowFilters            []sql.Expression
 	cmItr                 doltdb.CommitItr
 	indexLookup           sql.IndexLookup
 	readerCreateFuncCache *ThreadSafeCRFuncCache
@@ -245,7 +243,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.doltTable.Name(), ht.targetSch, ht.rowFilters, ht.readerCreateFuncCache)
+	return newRowItrForTableAtCommit(ctx, cp.h, cp.cm, ht.targetSch, ht.doltTable)
 }
 
 // commitPartition is a single commit
@@ -281,27 +279,34 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 }
 
 type rowItrForTableAtCommit struct {
-	rd           table.TableReadCloser
-	sch          schema.Schema
-	rowConverter *rowconv.RowConverter
-	extraVals    map[uint64]types.Value
-	empty        bool
+	table           *sqle.DoltTable
+	tablePartitions sql.PartitionIter
+	currPart        sql.RowIter
+	sch             schema.Schema
+	rowConverter    *rowconv.RowConverter
+	extraVals       map[uint64]types.Value
+	empty           bool
 }
 
 func newRowItrForTableAtCommit(
-	ctx context.Context,
-	h hash.Hash,
-	cm *doltdb.Commit,
-	tblName string,
-	sch schema.Schema,
-	filters []sql.Expression,
-	readerCreateFuncCache *ThreadSafeCRFuncCache) (*rowItrForTableAtCommit, error) {
+		ctx *sql.Context,
+		h hash.Hash,
+		cm *doltdb.Commit,
+		sch schema.Schema,
+		table *sqle.DoltTable,
+) (*rowItrForTableAtCommit, error) {
+
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, _, ok, err := root.GetTableInsensitive(ctx, tblName)
+	meta, err := cm.GetCommitMeta(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tbl, _, ok, err := root.GetTableInsensitive(ctx, table.Name())
 	if err != nil {
 		return nil, err
 	}
@@ -309,17 +314,11 @@ func newRowItrForTableAtCommit(
 		return &rowItrForTableAtCommit{empty: true}, nil
 	}
 
-	rows, err := tbl.GetRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
+	table = table.LockedToRoot(root)
+
+	// TODO: apply index lookups conditionally based on index presence at this revision
 
 	tblSch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	schHash, err := tbl.GetSchemaHash(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -329,35 +328,21 @@ func newRowItrForTableAtCommit(
 		return nil, err
 	}
 
-	// TODO: ThreadSafeCRFuncCache is an older and suboptimal filtering approach that should be replaced
-	//       with the unified indexing path that all other tables use. This logic existed before there was a
-	//       reasonable way to apply multiple filter conditions to an indexed table scan.
-	createReaderFunc, err := readerCreateFuncCache.GetOrCreate(schHash, tbl.Format(), tblSch, filters)
-	if err != nil {
-		return nil, err
-	}
-
-	rd, err := createReaderFunc(ctx, rows)
-	if err != nil {
-		return nil, err
-	}
-
 	hashCol, hashOK := sch.GetAllCols().GetByName(CommitHashCol)
 	dateCol, dateOK := sch.GetAllCols().GetByName(CommitDateCol)
 	committerCol, committerOK := sch.GetAllCols().GetByName(CommitterCol)
-
 	if !hashOK || !dateOK || !committerOK {
-		panic("Bug: History table schema should always have commit_hash")
+		panic("Bug: missing meta columns in history table schema")
 	}
 
-	meta, err := cm.GetCommitMeta(ctx)
+	tablePartitions, err := table.Partitions(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &rowItrForTableAtCommit{
-		rd:           rd,
 		sch:          sch,
+		tablePartitions: tablePartitions,
 		rowConverter: rowConverter,
 		extraVals: map[uint64]types.Value{
 			hashCol.Tag:      types.String(h.String()),
@@ -370,40 +355,40 @@ func newRowItrForTableAtCommit(
 
 // Next retrieves the next row. It will return io.EOF if it's the last row. After retrieving the last row, Close
 // will be automatically closed.
-func (tblItr *rowItrForTableAtCommit) Next(ctx *sql.Context) (sql.Row, error) {
-	if tblItr.empty {
+func (i *rowItrForTableAtCommit) Next(ctx *sql.Context) (sql.Row, error) {
+	if i.empty {
 		return nil, io.EOF
 	}
 
-	r, err := tblItr.rd.ReadRow(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	r, err = tblItr.rowConverter.Convert(r)
-
-	if err != nil {
-		return nil, err
-	}
-
-	for tag, val := range tblItr.extraVals {
-		r, err = r.SetColVal(tag, val, tblItr.sch)
-
+	if i.currPart == nil {
+		nextPart, err := i.tablePartitions.Next(ctx)
 		if err != nil {
 			return nil, err
 		}
+
+		rowIter, err := i.table.PartitionRows(ctx, nextPart)
+		if err != nil {
+			return nil, err
+		}
+
+		i.currPart = rowIter
+		return i.Next(ctx)
 	}
 
-	return sqlutil.DoltRowToSqlRow(r, tblItr.sch)
+	r, err := i.currPart.Next(ctx)
+	if err == io.EOF {
+		i.currPart = nil
+		return i.Next(ctx)
+	} else if err != nil {
+		return nil, err
+	}
+
+	// TODO: add in extra columns
+	return r, nil
 }
 
 // Close the iterator.
-func (tblItr *rowItrForTableAtCommit) Close(ctx *sql.Context) error {
-	if tblItr.rd != nil {
-		return tblItr.rd.Close(ctx)
-	}
-
+func (i *rowItrForTableAtCommit) Close(ctx *sql.Context) error {
 	return nil
 }
 
