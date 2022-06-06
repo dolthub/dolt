@@ -1,4 +1,4 @@
-// Copyright 2019 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dtables
+package sqle
 
 import (
 	"context"
 	"io"
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -58,11 +57,10 @@ var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	doltTable             *sqle.DoltTable
+	doltTable             *DoltTable
 	commitFilters         []sql.Expression
 	cmItr                 doltdb.CommitItr
 	indexLookup           sql.IndexLookup
-	readerCreateFuncCache *ThreadSafeCRFuncCache
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
@@ -75,7 +73,7 @@ func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 }
 
 // NewHistoryTable creates a history table
-func NewHistoryTable(table *sqle.DoltTable) sql.Table {
+func NewHistoryTable(table *DoltTable) sql.Table {
 	return &HistoryTable{
 		doltTable: table,
 	}
@@ -83,7 +81,7 @@ func NewHistoryTable(table *sqle.DoltTable) sql.Table {
 
 // History table schema returns the corresponding history table schema for the base table given, which consists of
 // the table's schema with 3 additional columns
-func historyTableSchema(table *sqle.DoltTable) sql.Schema {
+func historyTableSchema(table *DoltTable) sql.Schema {
 	baseSch := table.Schema()
 	newSch := make(sql.Schema, len(baseSch)+3, 0)
 
@@ -222,7 +220,7 @@ func transformFilters(ctx *sql.Context, filters ...sql.Expression) []sql.Express
 
 func (ht HistoryTable) WithProjections(colNames []string) sql.Table {
 	projectedTable := ht.doltTable.WithProjections(colNames)
-	ht.doltTable = projectedTable.(*sqle.DoltTable)
+	ht.doltTable = projectedTable.(*DoltTable)
 	return &ht
 }
 
@@ -290,14 +288,14 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 }
 
 type historyIter struct {
-	table           *sqle.DoltTable
+	table           *DoltTable
 	tablePartitions sql.PartitionIter
 	currPart        sql.RowIter
 	rowConverter     func (row sql.Row) sql.Row
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, table *sqle.DoltTable, h hash.Hash, cm *doltdb.Commit, ) (*historyIter, error) {
+func newRowItrForTableAtCommit(ctx *sql.Context, table *DoltTable, h hash.Hash, cm *doltdb.Commit, ) (*historyIter, error) {
 	targetSchema := historyTableSchema(table)
 
 	root, err := cm.GetRootValue(ctx)

@@ -152,7 +152,7 @@ func TestQueryPlans(t *testing.T) {
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
 
 	// I want to see Exchange nodes, so have Parallelism
-	enginetest.TestDoltDiffQueryPlans(t, newDoltHarness(t).WithParallelism(2))
+	//enginetest.TestDoltDiffQueryPlans(t, newDoltHarness(t).WithParallelism(2))
 }
 
 func TestQueryErrors(t *testing.T) {
