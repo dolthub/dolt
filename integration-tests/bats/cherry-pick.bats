@@ -5,7 +5,7 @@ setup() {
     setup_common
     skip_nbf_dolt_1
 
-    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 varchar(10))"
+    dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt add -A
     dolt commit -m "Created table"
     dolt checkout -b branch1
@@ -18,7 +18,6 @@ setup() {
     dolt sql -q "INSERT INTO test VALUES (3, 'c')"
     dolt add -A
     dolt commit -m "Inserted 3"
-    dolt checkout main
 }
 
 teardown() {
@@ -27,7 +26,73 @@ teardown() {
 }
 
 @test "cherry-pick: branch name cherry picks the latest commit" {
-    dolt cherry-pick branch1~1
-    dolt sql -q "SELECT * FROM test"
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "1,a" ]] || false
+    [[ "$output" =~ "2,b" ]] || false
+    [[ "$output" =~ "3,c" ]] || false
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ ! "$output" =~ "2,b" ]] || false
+    [[ "$output" =~ "3,c" ]] || false
+}
+
+@test "cherry-pick: cherry picks the commit where row value is not updated" {
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "1,a" ]] || false
+    [[ "$output" =~ "2,b" ]] || false
+    [[ "$output" =~ "3,c" ]] || false
+
+    dolt sql -q "UPDATE test SET v = 'x' WHERE pk = 2"
+    dolt add -A
+    dolt commit -m "Updated 2b to 2x"
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "1,a" ]] || false
+    [[ "$output" =~ "2,x" ]] || false
+    [[ "$output" =~ "3,c" ]] || false
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1~2
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "2,b" ]] || false
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ ! "$output" =~ "2,x" ]] || false
+    [[ ! "$output" =~ "3,c" ]] || false
+}
+
+@test "cherry-pick: too far back" {
+    dolt checkout main
+    run dolt cherry-pick branch1~10
     [ "$status" -eq "1" ]
+    [[ "$output" =~ "ancestor" ]] || false
+}
+
+@test "cherry-pick: no changes" {
+    dolt commit --allow-empty -m "empty commit"
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No changes were made" ]] || false
+}
+
+@test "cherry-pick: invalid hash" {
+    run dolt cherry-pick aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "target commit not found" ]] || false
+}
+
+@test "cherry-pick: has changes in the working set" {
+    dolt checkout main
+    dolt sql -q "INSERT INTO test VALUES (4, 'f')"
+    run dolt cherry-pick branch1~2
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "changes" ]] || false
 }

@@ -33,23 +33,15 @@ import (
 )
 
 var cherryPickDocs = cli.CommandDocumentationContent{
-	ShortDesc: `Switch branches or restore working tree tables`,
+	ShortDesc: `Apply the changes introduced by an existing commit.`,
 	LongDesc: `
-Updates tables in the working set to match the staged versions. If no paths are given, dolt checkout will also update HEAD to set the specified branch as the current branch.
+Updates tables in the clean working set with changes introduced in cherry-picked commit and creates a new commit with applied changes.
 
-dolt checkout {{.LessThan}}branch{{.GreaterThan}}
-   To prepare for working on {{.LessThan}}branch{{.GreaterThan}}, switch to it by updating the index and the tables in the working tree, and by pointing HEAD at the branch. Local modifications to the tables in the working
-   tree are kept, so that they can be committed to the {{.LessThan}}branch{{.GreaterThan}}.
-
-dolt checkout -b {{.LessThan}}new_branch{{.GreaterThan}} [{{.LessThan}}start_point{{.GreaterThan}}]
-   Specifying -b causes a new branch to be created as if dolt branch were called and then checked out.
-
-dolt checkout {{.LessThan}}table{{.GreaterThan}}...
-  To update table(s) with their values in HEAD `,
+dolt cherry-pick {{.LessThan}}commit{{.GreaterThan}}
+   To apply changes from an existing {{.LessThan}}commit{{.GreaterThan}} to current HEAD, the current working tree must be clean (no modifications from the HEAD commit). 
+   By default, cherry-pick creates new commit with applied changes.`,
 	Synopsis: []string{
-		`{{.LessThan}}branch{{.GreaterThan}}`,
-		`{{.LessThan}}table{{.GreaterThan}}...`,
-		`-b {{.LessThan}}new-branch{{.GreaterThan}} [{{.LessThan}}start-point{{.GreaterThan}}]`,
+		`{{.LessThan}}commit{{.GreaterThan}}`,
 	},
 }
 
@@ -57,12 +49,12 @@ type CherryPickCmd struct{}
 
 // Name is returns the name of the Dolt cli command. This is what is used on the command line to invoke the command
 func (cmd CherryPickCmd) Name() string {
-	return "checkout"
+	return "cherry-pick"
 }
 
 // Description returns a description of the command
 func (cmd CherryPickCmd) Description() string {
-	return "Checkout a branch or overwrite a table from HEAD."
+	return "Apply the changes introduced by an existing commit from different branch."
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -77,7 +69,7 @@ func (cmd CherryPickCmd) ArgParser() *argparser.ArgParser {
 
 // EventType returns the type of the event to log
 func (cmd CherryPickCmd) EventType() eventsapi.ClientEventType {
-	return eventsapi.ClientEventType_CHECKOUT // eventsapi.ClientEventType_CHERRY_PICK
+	return eventsapi.ClientEventType_CHERRY_PICK
 }
 
 // Exec executes the command
@@ -105,7 +97,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	newWorkingRoot, commitMsg, err := CherryPicking(ctx, dEnv, cherryStr)
+	newWorkingRoot, commitMsg, err := CherryPick(ctx, dEnv, cherryStr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	} else if newWorkingRoot == nil {
@@ -131,7 +123,7 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	return CommitCmd{}.Exec(ctx, "commit", commitParams, dEnv)
 }
 
-func CherryPicking(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) (*doltdb.RootValue, string, error) {
+func CherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) (*doltdb.RootValue, string, error) {
 	opts := editor.Options{Deaf: dEnv.BulkDbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
 
 	// check for clean working state
@@ -171,16 +163,7 @@ func CherryPicking(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) (*d
 	}
 	commitMsg := ccm.Description
 
-	//headCS, err := doltdb.NewCommitSpec("HEAD")
-	//if err != nil {
-	//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	//}
-	//headCM, err := dEnv.DoltDB.Resolve(context.TODO(), headCS, dEnv.RepoStateReader().CWBHeadRef())
-	//if err != nil {
-	//	return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
-	//}
-
-	workingRoot, err = cherryPick(ctx, dEnv.DoltDB, workingRoot, cherryCM, opts)
+	workingRoot, err = cherryPickACommit(ctx, dEnv.DoltDB, workingRoot, cherryCM, opts)
 	if err != nil {
 		return nil, "", err
 	}
@@ -198,7 +181,7 @@ func CherryPicking(ctx context.Context, dEnv *env.DoltEnv, cherryStr string) (*d
 	return workingRoot, commitMsg, nil
 }
 
-func cherryPick(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb.RootValue, cherryCM *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, error) {
+func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb.RootValue, cherryCM *doltdb.Commit, opts editor.Options) (*doltdb.RootValue, error) {
 	// TODO : get changes made in the cherry-picked commit
 	var err error
 	// fromRoot = parentRoot and toRoot = cherryPickRoot
@@ -293,9 +276,19 @@ func cherryPick(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb.RootVa
 }
 
 func applyRowDiffs(ctx context.Context, root *doltdb.RootValue, tName string, table *doltdb.Table, diffs []map[string]row.Row, opts editor.Options) (*doltdb.RootValue, error) {
-	tbl, _, _ := root.GetTable(ctx, tName)
-	tblSchema, _ := tbl.GetSchema(ctx)
+	tbl, _, err := root.GetTable(ctx, tName)
+	if err != nil {
+		return nil, err
+	}
+	tblSchema, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
 	tableEditor, err := editor.NewTableEditor(ctx, tbl, tblSchema, tName, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, diffMap := range diffs {
 		to, hasTo := diffMap[diff.To]
 		from, hasFrom := diffMap[diff.From]
@@ -327,7 +320,11 @@ func applyRowDiffs(ctx context.Context, root *doltdb.RootValue, tName string, ta
 		}
 	}
 
-	t, _ := tableEditor.Table(ctx)
+	t, err := tableEditor.Table(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	newRoot, err := root.PutTable(ctx, tName, t)
 	if err != nil {
 		return nil, err
@@ -392,7 +389,6 @@ func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row,
 		},
 		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
 	)
-
 	if err != nil {
 		return nil, errhand.BuildDError("").AddCause(err).Build()
 	}
