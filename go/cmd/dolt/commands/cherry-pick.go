@@ -209,14 +209,16 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 
 			tblsToDrop.Add(td.FromName)
 			stagedFKs.RemoveKeys(td.FromFks...)
-		} else {
-			// ignore changes for a table that does not exist in working set
-			// TODO : what if the table name is changed? Why check before IsRename()? Add tests!
-			// is the table added during cherry-pick changes?
-			if !workingSetTblSet.Contains(td.ToName) {
+		} else if td.IsAdd() {
+			if workingSetTblSet.Contains(td.ToName) {
+				// TODO: (skipped) table already exists in current HEAD => CONFLICT
 				continue
 			}
-
+			headRoot, err = headRoot.PutTable(ctx, td.ToName, td.ToTable)
+			if err != nil {
+				return nil, err
+			}
+		} else {
 			if td.IsRename() {
 				// rename table before adding the new version, so we don't have
 				// two copies of the same table
@@ -249,20 +251,20 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				return nil, err
 			}
 
-			toRoot, err = toRoot.PutSuperSchema(ctx, td.ToName, ss)
+			headRoot, err = headRoot.PutSuperSchema(ctx, td.ToName, ss)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	toRoot, err = toRoot.PutForeignKeyCollection(ctx, stagedFKs)
+	headRoot, err = headRoot.PutForeignKeyCollection(ctx, stagedFKs)
 	if err != nil {
 		return nil, err
 	}
 
 	// RemoveTables also removes that table's ForeignKeys
-	toRoot, err = toRoot.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
+	headRoot, err = headRoot.RemoveTables(ctx, false, false, tblsToDrop.AsSlice()...)
 	if err != nil {
 		return nil, err
 	}

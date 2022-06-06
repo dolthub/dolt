@@ -25,7 +25,7 @@ teardown() {
     teardown_common
 }
 
-@test "cherry-pick: branch name cherry picks the latest commit" {
+@test "cherry-pick: simple cherry pick with the latest commit" {
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
     [[ "$output" =~ "2,b" ]] || false
@@ -42,7 +42,7 @@ teardown() {
     [[ "$output" =~ "3,c" ]] || false
 }
 
-@test "cherry-pick: cherry picks the commit where row value is not updated" {
+@test "cherry-pick: commit with multiple row changes" {
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
     [[ "$output" =~ "2,b" ]] || false
@@ -102,4 +102,45 @@ teardown() {
     run dolt cherry-pick branch1~2
     [ "$status" -eq "1" ]
     [[ "$output" =~ "changes" ]] || false
+}
+
+@test "cherry-pick: commit with CREATE TABLE" {
+    dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
+    dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
+    dolt sql -q "DELETE FROM test WHERE pk = 2"
+    dolt add -A
+    dolt commit -m "Added table_a with rows and delete pk=2 from test"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    dolt sql -q "SHOW TABLES" -r csv
+    [[ "$output" =~ "table_a" ]] || false
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ ! "$output" =~ "2,b" ]] || false
+    [[ ! "$output" =~ "3,c" ]] || false
+}
+
+@test "cherry-pick: commit with DROP TABLE" {
+    dolt sql -q "DROP TABLE test"
+    dolt add -A
+    dolt commit -m "Drop table test"
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "test" ]] || false
+
+    dolt checkout main
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ "$output" =~ "test" ]] || false
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "test" ]] || false
 }
