@@ -69,10 +69,13 @@ teardown() {
     [ "${lines[7]}" = '| new_user |' ]
     [ "${lines[8]}" = '+----------+' ]
 
-    # check that mysql.db file exists, and privs.json doesn't
+    # check that privs.json doesn't exist
     run ls
-    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
+
+    # check that mysql.db file exists
+    run ls .dolt
+    [[ "$output" =~ "mysql.db" ]] || false
 
     # restart server
     stop_sql_server
@@ -143,10 +146,13 @@ teardown() {
     run cat privs.json
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # check that mysql.db and privs.json exist
+    # check that privs.json exist
     run ls
-    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
+
+    # check that mysql.db and privs.json exist
+    run ls .dolt
+    [[ "$output" =~ "mysql.db" ]] || false
 
     # restart server
     stop_sql_server
@@ -215,10 +221,13 @@ teardown() {
     [ "${lines[8]}" = '| new_user   |' ]
     [ "${lines[9]}" = '+------------+' ]
 
-    # check that mysql.db exists, and privs.json doesn't
+    # check that privs.json doesn't exist
     run ls
-    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
+
+    # check that mysql.db exists
+    run ls .dolt
+    [[ "$output" =~ "mysql.db" ]] || false
 
     # restart server
     stop_sql_server
@@ -292,10 +301,13 @@ teardown() {
     run cat privs.json
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # check that mysql.db and privs.json exist
+    # check that privs.json exists
     run ls
-    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
+
+    # check that mysql.db exists
+    run ls .dolt
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
 
     # restart server
     stop_sql_server
