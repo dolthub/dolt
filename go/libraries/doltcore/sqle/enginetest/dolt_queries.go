@@ -1504,7 +1504,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
@@ -1528,7 +1528,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{1, 2, 0, 1, 2, 3, "modified"},
 				},
@@ -1935,6 +1935,76 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff_t;",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name: "selecting to_pk columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"insert into t values (7, 8, 9);",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"update t set c1 = 0 where pk > 5;",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk = 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk > 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 0, 9, 7, 8, 9, "modified"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "selecting to_pk1 and to_pk2 columns",
+		SetUpScript: []string{
+			"create table t (pk1 int, pk2 int, c1 int, primary key (pk1, pk2));",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"insert into t values (7, 8, 9);",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"update t set c1 = 0 where pk1 > 5;",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 and to_pk2 = 2 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 > 1 and to_pk2 < 10 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 8, 0, 7, 8, 9, "modified"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
 			},
 		},
 	},
@@ -2840,5 +2910,39 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
 			},
 		},
+	},
+}
+
+// DoltDiffPlanTests are tests that check our query plans for various operations on the dolt diff system tables
+var DoltDiffPlanTests = []queries.QueryPlanTest{
+	{
+		Query: `select * from dolt_diff_one_pk where to_pk=1`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[1, 1]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_one_pk where to_pk>=10 and to_pk<=100`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[10, 100]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1=1`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], (-∞, ∞)}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1=1 and to_pk2=2`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], [2, 2]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1 < 1 and to_pk2 > 10`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{(-∞, 1), (10, ∞)}])\n" +
+			"",
 	},
 }

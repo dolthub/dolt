@@ -152,6 +152,18 @@ func TestQueryPlans(t *testing.T) {
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
 }
 
+func TestDoltDiffQueryPlans(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
+	harness.Setup(setup.SimpleSetup...)
+	e, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer e.Close()
+	for _, tt := range DoltDiffPlanTests {
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
+	}
+}
+
 func TestQueryErrors(t *testing.T) {
 	enginetest.TestQueryErrors(t, newDoltHarness(t))
 }
