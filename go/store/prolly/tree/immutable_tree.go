@@ -17,8 +17,9 @@ package tree
 import (
 	"context"
 	"errors"
-	"github.com/dolthub/dolt/go/store/prolly/message"
 	"io"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 const defaultFixedChunkLength = 4000

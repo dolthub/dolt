@@ -19,10 +19,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dolthub/dolt/go/store/prolly/message"
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
 func TestWriteImmutableTree(t *testing.T) {
