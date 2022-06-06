@@ -17,439 +17,8 @@
 package serial
 
 import (
-	"strconv"
-
 	flatbuffers "github.com/google/flatbuffers/go"
 )
-
-type ForeignKeyReferenceOption byte
-
-const (
-	ForeignKeyReferenceOptionDefaultAction ForeignKeyReferenceOption = 0
-	ForeignKeyReferenceOptionCascade       ForeignKeyReferenceOption = 1
-	ForeignKeyReferenceOptionNoAction      ForeignKeyReferenceOption = 2
-	ForeignKeyReferenceOptionRestrict      ForeignKeyReferenceOption = 3
-	ForeignKeyReferenceOptionSetNull       ForeignKeyReferenceOption = 4
-)
-
-var EnumNamesForeignKeyReferenceOption = map[ForeignKeyReferenceOption]string{
-	ForeignKeyReferenceOptionDefaultAction: "DefaultAction",
-	ForeignKeyReferenceOptionCascade:       "Cascade",
-	ForeignKeyReferenceOptionNoAction:      "NoAction",
-	ForeignKeyReferenceOptionRestrict:      "Restrict",
-	ForeignKeyReferenceOptionSetNull:       "SetNull",
-}
-
-var EnumValuesForeignKeyReferenceOption = map[string]ForeignKeyReferenceOption{
-	"DefaultAction": ForeignKeyReferenceOptionDefaultAction,
-	"Cascade":       ForeignKeyReferenceOptionCascade,
-	"NoAction":      ForeignKeyReferenceOptionNoAction,
-	"Restrict":      ForeignKeyReferenceOptionRestrict,
-	"SetNull":       ForeignKeyReferenceOptionSetNull,
-}
-
-func (v ForeignKeyReferenceOption) String() string {
-	if s, ok := EnumNamesForeignKeyReferenceOption[v]; ok {
-		return s
-	}
-	return "ForeignKeyReferenceOption(" + strconv.FormatInt(int64(v), 10) + ")"
-}
-
-type Column struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &Column{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &Column{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Column) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *Column) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *Column) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *Column) StorageOrder() uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.GetUint16(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *Column) MutateStorageOrder(n uint16) bool {
-	return rcv._tab.MutateUint16Slot(6, n)
-}
-
-func (rcv *Column) SchemaOrder() uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.GetUint16(o + rcv._tab.Pos)
-	}
-	return 0
-}
-
-func (rcv *Column) MutateSchemaOrder(n uint16) bool {
-	return rcv._tab.MutateUint16Slot(8, n)
-}
-
-func (rcv *Column) Type(obj *Type) *Type {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(Type)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *Column) Nullable() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *Column) MutateNullable(n bool) bool {
-	return rcv._tab.MutateBoolSlot(12, n)
-}
-
-func (rcv *Column) PrimaryKey() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *Column) MutatePrimaryKey(n bool) bool {
-	return rcv._tab.MutateBoolSlot(14, n)
-}
-
-func (rcv *Column) AutoIncrement() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *Column) MutateAutoIncrement(n bool) bool {
-	return rcv._tab.MutateBoolSlot(16, n)
-}
-
-func (rcv *Column) Default(obj *ColumnDefault) *ColumnDefault {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(ColumnDefault)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
-func (rcv *Column) Constraints(obj *ColumnConstraint, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
-	if o != 0 {
-		x := rcv._tab.Vector(o)
-		x += flatbuffers.UOffsetT(j) * 4
-		x = rcv._tab.Indirect(x)
-		obj.Init(rcv._tab.Bytes, x)
-		return true
-	}
-	return false
-}
-
-func (rcv *Column) ConstraintsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *Column) Comment() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func ColumnStart(builder *flatbuffers.Builder) {
-	builder.StartObject(10)
-}
-func ColumnAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
-}
-func ColumnAddStorageOrder(builder *flatbuffers.Builder, storageOrder uint16) {
-	builder.PrependUint16Slot(1, storageOrder, 0)
-}
-func ColumnAddSchemaOrder(builder *flatbuffers.Builder, schemaOrder uint16) {
-	builder.PrependUint16Slot(2, schemaOrder, 0)
-}
-func ColumnAddType(builder *flatbuffers.Builder, type_ flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(type_), 0)
-}
-func ColumnAddNullable(builder *flatbuffers.Builder, nullable bool) {
-	builder.PrependBoolSlot(4, nullable, false)
-}
-func ColumnAddPrimaryKey(builder *flatbuffers.Builder, primaryKey bool) {
-	builder.PrependBoolSlot(5, primaryKey, false)
-}
-func ColumnAddAutoIncrement(builder *flatbuffers.Builder, autoIncrement bool) {
-	builder.PrependBoolSlot(6, autoIncrement, false)
-}
-func ColumnAddDefault(builder *flatbuffers.Builder, default_ flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(7, flatbuffers.UOffsetT(default_), 0)
-}
-func ColumnAddConstraints(builder *flatbuffers.Builder, constraints flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(8, flatbuffers.UOffsetT(constraints), 0)
-}
-func ColumnStartConstraintsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func ColumnAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(9, flatbuffers.UOffsetT(comment), 0)
-}
-func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type Type struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsType(buf []byte, offset flatbuffers.UOffsetT) *Type {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &Type{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsType(buf []byte, offset flatbuffers.UOffsetT) *Type {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &Type{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *Type) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *Type) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *Type) Type() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *Type) ParamKeys(j int) []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
-	}
-	return nil
-}
-
-func (rcv *Type) ParamKeysLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *Type) ParamValues(j int) []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
-	}
-	return nil
-}
-
-func (rcv *Type) ParamValuesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func TypeStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
-}
-func TypeAddType(builder *flatbuffers.Builder, type_ flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(type_), 0)
-}
-func TypeAddParamKeys(builder *flatbuffers.Builder, paramKeys flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(paramKeys), 0)
-}
-func TypeStartParamKeysVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func TypeAddParamValues(builder *flatbuffers.Builder, paramValues flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(paramValues), 0)
-}
-func TypeStartParamValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
-}
-func TypeEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type ColumnDefault struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsColumnDefault(buf []byte, offset flatbuffers.UOffsetT) *ColumnDefault {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &ColumnDefault{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsColumnDefault(buf []byte, offset flatbuffers.UOffsetT) *ColumnDefault {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &ColumnDefault{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *ColumnDefault) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *ColumnDefault) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *ColumnDefault) Expression() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func ColumnDefaultStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
-}
-func ColumnDefaultAddExpression(builder *flatbuffers.Builder, expression flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(expression), 0)
-}
-func ColumnDefaultEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
-
-type ColumnConstraint struct {
-	_tab flatbuffers.Table
-}
-
-func GetRootAsColumnConstraint(buf []byte, offset flatbuffers.UOffsetT) *ColumnConstraint {
-	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &ColumnConstraint{}
-	x.Init(buf, n+offset)
-	return x
-}
-
-func GetSizePrefixedRootAsColumnConstraint(buf []byte, offset flatbuffers.UOffsetT) *ColumnConstraint {
-	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &ColumnConstraint{}
-	x.Init(buf, n+offset+flatbuffers.SizeUint32)
-	return x
-}
-
-func (rcv *ColumnConstraint) Init(buf []byte, i flatbuffers.UOffsetT) {
-	rcv._tab.Bytes = buf
-	rcv._tab.Pos = i
-}
-
-func (rcv *ColumnConstraint) Table() flatbuffers.Table {
-	return rcv._tab
-}
-
-func (rcv *ColumnConstraint) Name() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *ColumnConstraint) Expression() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *ColumnConstraint) Enforced() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *ColumnConstraint) MutateEnforced(n bool) bool {
-	return rcv._tab.MutateBoolSlot(8, n)
-}
-
-func ColumnConstraintStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
-}
-func ColumnConstraintAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
-}
-func ColumnConstraintAddExpression(builder *flatbuffers.Builder, expression flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(expression), 0)
-}
-func ColumnConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
-	builder.PrependBoolSlot(2, enforced, false)
-}
-func ColumnConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	return builder.EndObject()
-}
 
 type TableSchema struct {
 	_tab flatbuffers.Table
@@ -498,7 +67,7 @@ func (rcv *TableSchema) ColumnsLength() int {
 	return 0
 }
 
-func (rcv *TableSchema) Indexes(obj *IndexSchema, j int) bool {
+func (rcv *TableSchema) Indexes(obj *Index, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -518,8 +87,25 @@ func (rcv *TableSchema) IndexesLength() int {
 	return 0
 }
 
+func (rcv *TableSchema) Checks(j int) []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+	}
+	return nil
+}
+
+func (rcv *TableSchema) ChecksLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
 func TableSchemaStart(builder *flatbuffers.Builder) {
-	builder.StartObject(2)
+	builder.StartObject(3)
 }
 func TableSchemaAddColumns(builder *flatbuffers.Builder, columns flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(columns), 0)
@@ -533,38 +119,44 @@ func TableSchemaAddIndexes(builder *flatbuffers.Builder, indexes flatbuffers.UOf
 func TableSchemaStartIndexesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
+func TableSchemaAddChecks(builder *flatbuffers.Builder, checks flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(checks), 0)
+}
+func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
 func TableSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
-type IndexSchema struct {
+type Column struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsIndexSchema(buf []byte, offset flatbuffers.UOffsetT) *IndexSchema {
+func GetRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &IndexSchema{}
+	x := &Column{}
 	x.Init(buf, n+offset)
 	return x
 }
 
-func GetSizePrefixedRootAsIndexSchema(buf []byte, offset flatbuffers.UOffsetT) *IndexSchema {
+func GetSizePrefixedRootAsColumn(buf []byte, offset flatbuffers.UOffsetT) *Column {
 	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &IndexSchema{}
+	x := &Column{}
 	x.Init(buf, n+offset+flatbuffers.SizeUint32)
 	return x
 }
 
-func (rcv *IndexSchema) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Column) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *IndexSchema) Table() flatbuffers.Table {
+func (rcv *Column) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *IndexSchema) Name() []byte {
+func (rcv *Column) Name() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -572,108 +164,175 @@ func (rcv *IndexSchema) Name() []byte {
 	return nil
 }
 
-func (rcv *IndexSchema) Columns(j int) []byte {
+func (rcv *Column) Definition() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
-	}
-	return nil
-}
-
-func (rcv *IndexSchema) ColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
-	if o != 0 {
-		return rcv._tab.VectorLen(o)
-	}
-	return 0
-}
-
-func (rcv *IndexSchema) Unique() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *IndexSchema) MutateUnique(n bool) bool {
-	return rcv._tab.MutateBoolSlot(8, n)
-}
-
-func (rcv *IndexSchema) SystemDefined() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *IndexSchema) MutateSystemDefined(n bool) bool {
-	return rcv._tab.MutateBoolSlot(10, n)
-}
-
-func (rcv *IndexSchema) Comment() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
 	}
 	return nil
 }
 
-func IndexSchemaStart(builder *flatbuffers.Builder) {
-	builder.StartObject(5)
+func (rcv *Column) DisplayOrder() int16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetInt16(o + rcv._tab.Pos)
+	}
+	return 0
 }
-func IndexSchemaAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+
+func (rcv *Column) MutateDisplayOrder(n int16) bool {
+	return rcv._tab.MutateInt16Slot(8, n)
+}
+
+func (rcv *Column) Encoding() Encoding {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return Encoding(rcv._tab.GetByte(o + rcv._tab.Pos))
+	}
+	return 0
+}
+
+func (rcv *Column) MutateEncoding(n Encoding) bool {
+	return rcv._tab.MutateByteSlot(10, byte(n))
+}
+
+func (rcv *Column) PrimaryKey() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutatePrimaryKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(12, n)
+}
+
+func (rcv *Column) Nullable() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateNullable(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
+}
+
+func (rcv *Column) AutoIncrement() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateAutoIncrement(n bool) bool {
+	return rcv._tab.MutateBoolSlot(16, n)
+}
+
+func (rcv *Column) Hidden() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateHidden(n bool) bool {
+	return rcv._tab.MutateBoolSlot(18, n)
+}
+
+func (rcv *Column) Generated() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateGenerated(n bool) bool {
+	return rcv._tab.MutateBoolSlot(20, n)
+}
+
+func (rcv *Column) Virtual() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(22))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Column) MutateVirtual(n bool) bool {
+	return rcv._tab.MutateBoolSlot(22, n)
+}
+
+func ColumnStart(builder *flatbuffers.Builder) {
+	builder.StartObject(10)
+}
+func ColumnAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
-func IndexSchemaAddColumns(builder *flatbuffers.Builder, columns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(columns), 0)
+func ColumnAddDefinition(builder *flatbuffers.Builder, definition flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(definition), 0)
 }
-func IndexSchemaStartColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
+func ColumnAddDisplayOrder(builder *flatbuffers.Builder, displayOrder int16) {
+	builder.PrependInt16Slot(2, displayOrder, 0)
 }
-func IndexSchemaAddUnique(builder *flatbuffers.Builder, unique bool) {
-	builder.PrependBoolSlot(2, unique, false)
+func ColumnAddEncoding(builder *flatbuffers.Builder, encoding Encoding) {
+	builder.PrependByteSlot(3, byte(encoding), 0)
 }
-func IndexSchemaAddSystemDefined(builder *flatbuffers.Builder, systemDefined bool) {
-	builder.PrependBoolSlot(3, systemDefined, false)
+func ColumnAddPrimaryKey(builder *flatbuffers.Builder, primaryKey bool) {
+	builder.PrependBoolSlot(4, primaryKey, false)
 }
-func IndexSchemaAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(comment), 0)
+func ColumnAddNullable(builder *flatbuffers.Builder, nullable bool) {
+	builder.PrependBoolSlot(5, nullable, false)
 }
-func IndexSchemaEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func ColumnAddAutoIncrement(builder *flatbuffers.Builder, autoIncrement bool) {
+	builder.PrependBoolSlot(6, autoIncrement, false)
+}
+func ColumnAddHidden(builder *flatbuffers.Builder, hidden bool) {
+	builder.PrependBoolSlot(7, hidden, false)
+}
+func ColumnAddGenerated(builder *flatbuffers.Builder, generated bool) {
+	builder.PrependBoolSlot(8, generated, false)
+}
+func ColumnAddVirtual(builder *flatbuffers.Builder, virtual bool) {
+	builder.PrependBoolSlot(9, virtual, false)
+}
+func ColumnEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }
 
-type ForeignKey struct {
+type Index struct {
 	_tab flatbuffers.Table
 }
 
-func GetRootAsForeignKey(buf []byte, offset flatbuffers.UOffsetT) *ForeignKey {
+func GetRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) *Index {
 	n := flatbuffers.GetUOffsetT(buf[offset:])
-	x := &ForeignKey{}
+	x := &Index{}
 	x.Init(buf, n+offset)
 	return x
 }
 
-func GetSizePrefixedRootAsForeignKey(buf []byte, offset flatbuffers.UOffsetT) *ForeignKey {
+func GetSizePrefixedRootAsIndex(buf []byte, offset flatbuffers.UOffsetT) *Index {
 	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
-	x := &ForeignKey{}
+	x := &Index{}
 	x.Init(buf, n+offset+flatbuffers.SizeUint32)
 	return x
 }
 
-func (rcv *ForeignKey) Init(buf []byte, i flatbuffers.UOffsetT) {
+func (rcv *Index) Init(buf []byte, i flatbuffers.UOffsetT) {
 	rcv._tab.Bytes = buf
 	rcv._tab.Pos = i
 }
 
-func (rcv *ForeignKey) Table() flatbuffers.Table {
+func (rcv *Index) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *ForeignKey) Name() []byte {
+func (rcv *Index) Name() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -681,7 +340,7 @@ func (rcv *ForeignKey) Name() []byte {
 	return nil
 }
 
-func (rcv *ForeignKey) ChildTable() []byte {
+func (rcv *Index) Definition() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -689,16 +348,16 @@ func (rcv *ForeignKey) ChildTable() []byte {
 	return nil
 }
 
-func (rcv *ForeignKey) ChildColumns(j int) []byte {
+func (rcv *Index) KeyColumns(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
 	}
-	return nil
+	return 0
 }
 
-func (rcv *ForeignKey) ChildColumnsLength() int {
+func (rcv *Index) KeyColumnsLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -706,107 +365,92 @@ func (rcv *ForeignKey) ChildColumnsLength() int {
 	return 0
 }
 
-func (rcv *ForeignKey) ChildIndex() []byte {
+func (rcv *Index) MutateKeyColumns(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+func (rcv *Index) ValueColumns(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *ForeignKey) ParentTable() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
-	}
-	return nil
-}
-
-func (rcv *ForeignKey) ParentColumns(j int) []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
-	if o != 0 {
 		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
 	}
-	return nil
+	return 0
 }
 
-func (rcv *ForeignKey) ParentColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
+func (rcv *Index) ValueColumnsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-func (rcv *ForeignKey) ParentIndex() []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+func (rcv *Index) MutateValueColumns(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
 	}
-	return nil
+	return false
 }
 
-func (rcv *ForeignKey) OnUpdate() ForeignKeyReferenceOption {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+func (rcv *Index) Unique() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
-		return ForeignKeyReferenceOption(rcv._tab.GetByte(o + rcv._tab.Pos))
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
 	}
-	return 0
+	return false
 }
 
-func (rcv *ForeignKey) MutateOnUpdate(n ForeignKeyReferenceOption) bool {
-	return rcv._tab.MutateByteSlot(18, byte(n))
+func (rcv *Index) MutateUnique(n bool) bool {
+	return rcv._tab.MutateBoolSlot(12, n)
 }
 
-func (rcv *ForeignKey) OnDelete() ForeignKeyReferenceOption {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(20))
+func (rcv *Index) SystemDefined() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
-		return ForeignKeyReferenceOption(rcv._tab.GetByte(o + rcv._tab.Pos))
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
 	}
-	return 0
+	return false
 }
 
-func (rcv *ForeignKey) MutateOnDelete(n ForeignKeyReferenceOption) bool {
-	return rcv._tab.MutateByteSlot(20, byte(n))
+func (rcv *Index) MutateSystemDefined(n bool) bool {
+	return rcv._tab.MutateBoolSlot(14, n)
 }
 
-func ForeignKeyStart(builder *flatbuffers.Builder) {
-	builder.StartObject(9)
+func IndexStart(builder *flatbuffers.Builder) {
+	builder.StartObject(6)
 }
-func ForeignKeyAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+func IndexAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
-func ForeignKeyAddChildTable(builder *flatbuffers.Builder, childTable flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(childTable), 0)
+func IndexAddDefinition(builder *flatbuffers.Builder, definition flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(definition), 0)
 }
-func ForeignKeyAddChildColumns(builder *flatbuffers.Builder, childColumns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(childColumns), 0)
+func IndexAddKeyColumns(builder *flatbuffers.Builder, keyColumns flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(keyColumns), 0)
 }
-func ForeignKeyStartChildColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
+func IndexStartKeyColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
-func ForeignKeyAddChildIndex(builder *flatbuffers.Builder, childIndex flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(childIndex), 0)
+func IndexAddValueColumns(builder *flatbuffers.Builder, valueColumns flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(valueColumns), 0)
 }
-func ForeignKeyAddParentTable(builder *flatbuffers.Builder, parentTable flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(parentTable), 0)
+func IndexStartValueColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
-func ForeignKeyAddParentColumns(builder *flatbuffers.Builder, parentColumns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(5, flatbuffers.UOffsetT(parentColumns), 0)
+func IndexAddUnique(builder *flatbuffers.Builder, unique bool) {
+	builder.PrependBoolSlot(4, unique, false)
 }
-func ForeignKeyStartParentColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
-	return builder.StartVector(4, numElems, 4)
+func IndexAddSystemDefined(builder *flatbuffers.Builder, systemDefined bool) {
+	builder.PrependBoolSlot(5, systemDefined, false)
 }
-func ForeignKeyAddParentIndex(builder *flatbuffers.Builder, parentIndex flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(6, flatbuffers.UOffsetT(parentIndex), 0)
-}
-func ForeignKeyAddOnUpdate(builder *flatbuffers.Builder, onUpdate ForeignKeyReferenceOption) {
-	builder.PrependByteSlot(7, byte(onUpdate), 0)
-}
-func ForeignKeyAddOnDelete(builder *flatbuffers.Builder, onDelete ForeignKeyReferenceOption) {
-	builder.PrependByteSlot(8, byte(onDelete), 0)
-}
-func ForeignKeyEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

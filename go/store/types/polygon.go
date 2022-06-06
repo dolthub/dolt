@@ -30,7 +30,7 @@ import (
 // Polygon is a Noms Value wrapper around a string.
 type Polygon struct {
 	SRID  uint32
-	Lines []Linestring
+	Lines []LineString
 }
 
 // Value interface
@@ -157,7 +157,7 @@ func ParseEWKBPoly(buf []byte, srid uint32) Polygon {
 
 	// Parse lines
 	s := LengthSize
-	lines := make([]Linestring, numLines)
+	lines := make([]LineString, numLines)
 	for i := uint32(0); i < numLines; i++ {
 		lines[i] = ParseEWKBLine(buf[s:], srid)
 		s += LengthSize * geometry.PointSize * len(lines[i].Points)

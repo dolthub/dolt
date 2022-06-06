@@ -17,9 +17,9 @@ package schema
 import (
 	"strings"
 
+	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -212,12 +212,9 @@ func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 
 var ErrUsingSpatialKey = errors.NewKind("can't use Spatial Types as Primary Key for table %s")
 
-// IsColSpatialType is a utility function that checks if a single column is using a spatial type by comparing typeinfos
+// IsColSpatialType returns whether a column's type is a spatial type
 func IsColSpatialType(c Column) bool {
-	return c.TypeInfo.Equals(typeinfo.PointType) ||
-		c.TypeInfo.Equals(typeinfo.LinestringType) ||
-		c.TypeInfo.Equals(typeinfo.PolygonType) ||
-		c.TypeInfo.Equals(typeinfo.GeometryType)
+	return c.TypeInfo.ToSqlType().Type() == query.Type_GEOMETRY
 }
 
 // IsUsingSpatialColAsKey is a utility function that checks for any spatial types being used as a primary key
@@ -232,12 +229,16 @@ func IsUsingSpatialColAsKey(sch Schema) bool {
 	return false
 }
 
-// Adapt adapts the |from| schema to the |to| schema, applying all the necessary metadata (foreign keys, constraints,
-// etc) present in |from| to |to| and returning the result.
-func Adapt(from, to Schema) (Schema, error) {
+// CopyChecksConstraints copies check constraints from the |from| schema to the |to| schema and returns it
+func CopyChecksConstraints(from, to Schema) Schema {
 	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
-	// TODO: this doesn't work in many cases, the indexes and checks themselves need to be adapted
-	toSch.indexCollection = fromSch.indexCollection
 	toSch.checkCollection = fromSch.checkCollection
-	return toSch, nil
+	return toSch
+}
+
+// CopyIndexes copies secondary indexes from the |from| schema to the |to| schema and returns it
+func CopyIndexes(from, to Schema) Schema {
+	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
+	toSch.indexCollection = fromSch.indexCollection
+	return toSch
 }

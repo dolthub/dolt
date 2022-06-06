@@ -38,7 +38,7 @@ type prollyTableWriter struct {
 	dbName    string
 
 	primary   indexWriter
-	secondary []indexWriter
+	secondary map[string]indexWriter
 
 	tbl    *doltdb.Table
 	sch    schema.Schema
@@ -54,17 +54,18 @@ type prollyTableWriter struct {
 
 var _ TableWriter = &prollyTableWriter{}
 
-func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) ([]indexWriter, error) {
+func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	definitions := sch.Indexes().AllIndexes()
-	writers := make([]indexWriter, len(definitions))
+	writers := make(map[string]indexWriter)
 
-	for i, def := range definitions {
-		idxRows, err := s.GetIndex(ctx, sch, def.Name())
+	for _, def := range definitions {
+		defName := def.Name()
+		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {
 			return nil, err
 		}
@@ -73,8 +74,8 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, valDesc := m.Descriptors()
 
-		writers[i] = prollyIndexWriter{
-			name:   def.Name(),
+		writers[defName] = prollyIndexWriter{
+			name:   defName,
 			mut:    m.Mutate(),
 			keyBld: val.NewTupleBuilder(keyDesc),
 			keyMap: keyMap,
@@ -86,17 +87,18 @@ func getSecondaryProllyIndexWriters(ctx context.Context, t *doltdb.Table, sqlSch
 	return writers, nil
 }
 
-func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema, primary prollyKeylessWriter) ([]indexWriter, error) {
+func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlSch sql.Schema, sch schema.Schema, primary prollyKeylessWriter) (map[string]indexWriter, error) {
 	s, err := t.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	definitions := sch.Indexes().AllIndexes()
-	writers := make([]indexWriter, len(definitions))
+	writers := make(map[string]indexWriter)
 
-	for i, def := range definitions {
-		idxRows, err := s.GetIndex(ctx, sch, def.Name())
+	for _, def := range definitions {
+		defName := def.Name()
+		idxRows, err := s.GetIndex(ctx, sch, defName)
 		if err != nil {
 			return nil, err
 		}
@@ -106,8 +108,8 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, valDesc := m.Descriptors()
 
-		writers[i] = prollyKeylessSecondaryWriter{
-			name:    def.Name(),
+		writers[defName] = prollyKeylessSecondaryWriter{
+			name:    defName,
 			mut:     m.Mutate(),
 			primary: primary,
 			unique:  def.IsUnique(),
@@ -122,7 +124,14 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 }
 
 // Insert implements TableWriter.
-func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
+func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
+		return err
+	}
+
+	if err := w.primary.Insert(ctx, sqlRow); err != nil {
+		return err
+	}
 	for _, wr := range w.secondary {
 		if err := wr.Insert(ctx, sqlRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {
@@ -131,14 +140,15 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
 			return err
 		}
 	}
-	if err := w.primary.Insert(ctx, sqlRow); err != nil {
-		return err
-	}
 	return nil
 }
 
 // Delete implements TableWriter.
-func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
+func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
+	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -152,6 +162,13 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
+	if oldRow, err = index.NormalizeRow(w.sqlSch, oldRow); err != nil {
+		return err
+	}
+	if newRow, err = index.NormalizeRow(w.sqlSch, newRow); err != nil {
+		return err
+	}
+
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {
@@ -244,8 +261,9 @@ func (w *prollyTableWriter) Reset(ctx context.Context, sess *prollyWriteSession,
 	}
 	aiCol := autoIncrementColFromSchema(sch)
 	var newPrimary indexWriter
-	var newSecondaries []indexWriter
-	if _, ok := w.primary.(prollyKeylessWriter); ok {
+
+	var newSecondaries map[string]indexWriter
+	if schema.IsKeyless(sch) {
 		newPrimary, err = getPrimaryKeylessProllyWriter(ctx, tbl, sqlSch.Schema, sch)
 		if err != nil {
 			return err
@@ -324,9 +342,6 @@ func (w *prollyTableWriter) table(ctx context.Context) (t *doltdb.Table, err err
 }
 
 func (w *prollyTableWriter) flush(ctx *sql.Context) error {
-	if !w.primary.HasEdits(ctx) {
-		return nil
-	}
 	ws, err := w.flusher.Flush(ctx)
 	if err != nil {
 		return err

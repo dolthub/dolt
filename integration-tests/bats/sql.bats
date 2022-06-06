@@ -697,7 +697,7 @@ SQL
 CREATE DATABASE test1;
 CREATE DATABASE test2;
 USE test1;
-CALL DOLT_CHECKOUT('-b', 'newbranch');
+CALL DOLT_CHECKOUT('-b', 'newBranch');
 USE \`test1/newBranch\`;
 USE test2;
 DROP DATABASE test1;
@@ -708,16 +708,16 @@ SQL
     run dolt sql  <<SQL
 CREATE DATABASE test1;
 USE test1;
-CALL DOLT_CHECKOUT('-b', 'newbranch');
-USE \`test1/newBranch\`;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`TEST1/newBranch\`;
 USE test2;
-DROP DATABASE test1;
+DROP DATABASE Test1;
 SHOW TABLES;
 USE \`test1/newBranch\`;
 SQL
 
     [ $status -ne 0 ]
-    [[ "$output" =~ "database not found: test1/newbranch" ]] || false
+    [[ "$output" =~ "database not found: test1/newBranch" ]] || false
 
     cd ../
 }
@@ -1023,6 +1023,7 @@ ALTER TABLE t1 MODIFY COLUMN v1 BIGINT;
 ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2000);
 ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP;
 SQL
+
     run dolt sql -q "SELECT * FROM t1 ORDER BY pk" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -1058,17 +1059,9 @@ SQL
     skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
-CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
-CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
 INSERT INTO t1 VALUES (0,-1),(1,1);
-INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
-INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');
 SQL
     run dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 INT UNSIGNED"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2)"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP"
     [ "$status" -eq "1" ]
 }
 

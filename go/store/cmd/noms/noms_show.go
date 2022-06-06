@@ -31,8 +31,10 @@ import (
 
 	flag "github.com/juju/gnuflag"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -139,9 +141,35 @@ func outputType(value interface{}) {
 	case tree.Node:
 		typeString = "prolly.Node"
 	case types.Value:
-		t, err := types.TypeOf(value)
-		typeString = t.HumanReadableString()
-		util.CheckError(err)
+		switch value := value.(type) {
+		case types.SerialMessage:
+			switch serial.GetFileID(value) {
+			case serial.StoreRootFileID:
+				typeString = "StoreRoot"
+			case serial.TagFileID:
+				typeString = "Tag"
+			case serial.WorkingSetFileID:
+				typeString = "WorkingSet"
+			case serial.CommitFileID:
+				typeString = "Commit"
+			case serial.RootValueFileID:
+				typeString = "RootValue"
+			case serial.TableFileID:
+				typeString = "TableFile"
+			case serial.ProllyTreeNodeFileID:
+				typeString = "ProllyTreeNode"
+			case serial.AddressMapFileID:
+				typeString = "AddressMap"
+			default:
+				t, err := types.TypeOf(value)
+				typeString = t.HumanReadableString()
+				util.CheckError(err)
+			}
+		default:
+			t, err := types.TypeOf(value)
+			typeString = t.HumanReadableString()
+			util.CheckError(err)
+		}
 	default:
 		typeString = fmt.Sprintf("unknown type %T", value)
 	}
@@ -156,7 +184,46 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 	case tree.Node:
 		return tree.OutputProllyNode(w, value)
 	case types.Value:
-		return types.WriteEncodedValue(ctx, w, value)
+		switch value := value.(type) {
+		// Some types of serial message need to be output here because of dependency cycles between type / tree package
+		case types.SerialMessage:
+			switch serial.GetFileID(value) {
+			case serial.TableFileID:
+				msg := serial.GetRootAsTable(value, 0)
+
+				fmt.Fprintf(w, "{\n")
+				fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
+				fmt.Fprintf(w, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
+				// TODO: merge conflicts, not stable yet
+
+				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
+
+				fmt.Fprintf(w, "\tPrimary index: {\n")
+				node := tree.NodeFromBytes(msg.PrimaryIndexBytes())
+				tree.OutputProllyNode(w, node)
+				fmt.Fprintf(w, "\t}\n")
+
+				fmt.Fprintf(w, "\tSecondary indexes: {\n")
+				idxRefs := msg.SecondaryIndexes(nil)
+				hashes := idxRefs.RefArrayBytes()
+				for i := 0; i < idxRefs.NamesLength(); i++ {
+					name := idxRefs.Names(i)
+					addr := hash.New(hashes[i*20 : (i+1)*20])
+					fmt.Fprintf(w, "\t\t%s: #%s\n", name, addr.String())
+				}
+				fmt.Fprintf(w, "\t}\n")
+				fmt.Fprintf(w, "}")
+
+				return nil
+			case serial.ProllyTreeNodeFileID:
+				node := prolly.NodeFromValue(value)
+				return tree.OutputProllyNode(w, node)
+			default:
+				return types.WriteEncodedValue(ctx, w, value)
+			}
+		default:
+			return types.WriteEncodedValue(ctx, w, value)
+		}
 	default:
 		_, err := w.Write([]byte(fmt.Sprintf("unknown value type %T: %v", value, value)))
 		return err

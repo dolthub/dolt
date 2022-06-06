@@ -25,20 +25,60 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+type TempTable struct {
+	tableName string
+	dbName    string
+	pkSch     sql.PrimaryKeySchema
+
+	table *doltdb.Table
+	sch   schema.Schema
+
+	lookup sql.IndexLookup
+
+	ed   writer.TableWriter
+	opts editor.Options
+}
+
+var _ sql.TemporaryTable = &TempTable{}
+var _ sql.Table = &TempTable{}
+var _ sql.PrimaryKeyTable = &TempTable{}
+var _ sql.IndexedTable = &TempTable{}
+var _ sql.IndexAlterableTable = &TempTable{}
+var _ sql.ForeignKeyTable = &TempTable{}
+var _ sql.CheckTable = &TempTable{}
+var _ sql.CheckAlterableTable = &TempTable{}
+var _ sql.StatisticsTable = &TempTable{}
+
 func NewTempTable(
-	ctx context.Context,
+	ctx *sql.Context,
 	ddb *doltdb.DoltDB,
 	pkSch sql.PrimaryKeySchema,
 	name, db string,
 	opts editor.Options,
 ) (*TempTable, error) {
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	dbState, ok, err := sess.LookupDbState(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("database %s not found in session", db)
+	}
+
+	ws := dbState.WorkingSet
+
 	sch, err := temporaryDoltSchema(ctx, pkSch)
 	if err != nil {
 		return nil, err
@@ -56,45 +96,76 @@ func NewTempTable(
 		return nil, err
 	}
 
-	ed, err := editor.NewTableEditor(ctx, tbl, sch, name, opts)
+	newRoot, err := ws.WorkingRoot().PutTable(ctx, name, tbl)
 	if err != nil {
 		return nil, err
 	}
 
-	return &TempTable{
+	newWs := ws.WithWorkingRoot(newRoot)
+
+	gs := globalstate.NewGlobalStateStore()
+	ait, err := gs.GetAutoIncrementTracker(ctx, newWs)
+	if err != nil {
+		return nil, err
+	}
+
+	writeSession := writer.NewWriteSession(tbl.Format(), newWs, ait, opts)
+
+	tempTable := &TempTable{
 		tableName: name,
 		dbName:    db,
 		pkSch:     pkSch,
 		table:     tbl,
 		sch:       sch,
-		ed:        ed,
 		opts:      opts,
-	}, nil
+	}
+
+	tempTable.ed, err = writeSession.GetTableWriter(ctx, name, db, setTempTableRoot(tempTable), false)
+	if err != nil {
+		return nil, err
+	}
+
+	return tempTable, nil
 }
 
-type TempTable struct {
-	tableName string
-	dbName    string
-	pkSch     sql.PrimaryKeySchema
+func setTempTableRoot(t *TempTable) func(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+	return func(ctx *sql.Context, dbName string, newRoot *doltdb.RootValue) error {
+		newTable, _, err := newRoot.GetTable(ctx, t.tableName)
+		if err != nil {
+			return err
+		}
 
-	table *doltdb.Table
-	sch   schema.Schema
+		t.table = newTable
 
-	lookup sql.IndexLookup
+		sess := dsess.DSessFromSess(ctx.Session)
 
-	ed   editor.TableEditor
-	opts editor.Options
+		dbState, ok, err := sess.LookupDbState(ctx, t.dbName)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return fmt.Errorf("database %s not found in session", t.dbName)
+		}
+
+		ws := dbState.WorkingSet
+		newWs := ws.WithWorkingRoot(newRoot)
+
+		gs := globalstate.NewGlobalStateStore()
+		ait, err := gs.GetAutoIncrementTracker(ctx, newWs)
+		if err != nil {
+			return err
+		}
+
+		writeSession := writer.NewWriteSession(newTable.Format(), newWs, ait, t.opts)
+		t.ed, err = writeSession.GetTableWriter(ctx, t.tableName, t.dbName, setTempTableRoot(t), false)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
-
-var _ sql.TemporaryTable = &TempTable{}
-var _ sql.Table = &TempTable{}
-var _ sql.PrimaryKeyTable = &TempTable{}
-var _ sql.IndexedTable = &TempTable{}
-var _ sql.IndexAlterableTable = &TempTable{}
-var _ sql.ForeignKeyTable = &TempTable{}
-var _ sql.CheckTable = &TempTable{}
-var _ sql.CheckAlterableTable = &TempTable{}
-var _ sql.StatisticsTable = &TempTable{}
 
 func (t *TempTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltIndexesFromTable(ctx, t.dbName, t.tableName, t.table)
@@ -152,7 +223,7 @@ func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sq
 	if t.lookup != nil {
 		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)
 	} else {
-		return partitionRows(ctx, t.table, nil, partition)
+		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}
 }
 
@@ -309,55 +380,15 @@ func (t *TempTable) DropCheck(ctx *sql.Context, chName string) error {
 }
 
 func (t *TempTable) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	vrw := t.table.ValueReadWriter()
-	if !schema.IsKeyless(t.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, vrw, sqlRow, t.sch)
-		if err != nil {
-			return err
-		}
-		return t.ed.InsertKeyVal(ctx, k, v, tagToVal, t.duplicateKeyErrFunc)
-	}
-	dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, sqlRow, t.sch)
-	if err != nil {
-		return err
-	}
-	return t.ed.InsertRow(ctx, dRow, t.duplicateKeyErrFunc)
+	return t.ed.Insert(ctx, sqlRow)
 }
 
 func (t *TempTable) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) error {
-	vrw := t.table.ValueReadWriter()
-	dOldRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, oldRow, t.sch)
-	if err != nil {
-		return err
-	}
-	dNewRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, newRow, t.sch)
-	if err != nil {
-		return err
-	}
-
-	return t.ed.UpdateRow(ctx, dOldRow, dNewRow, t.duplicateKeyErrFunc)
+	return t.ed.Update(ctx, oldRow, newRow)
 }
 
 func (t *TempTable) Delete(ctx *sql.Context, sqlRow sql.Row) error {
-	vrw := t.table.ValueReadWriter()
-	if !schema.IsKeyless(t.sch) {
-		k, tagToVal, err := sqlutil.DoltKeyAndMappingFromSqlRow(ctx, vrw, sqlRow, t.sch)
-		if err != nil {
-			return err
-		}
-		return t.ed.DeleteByKey(ctx, k, tagToVal)
-	} else {
-		dRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, sqlRow, t.sch)
-		if err != nil {
-			return err
-		}
-		return t.ed.DeleteRow(ctx, dRow)
-	}
-}
-
-func (t *TempTable) duplicateKeyErrFunc(keyString, indexName string, k, v types.Tuple, isPk bool) error {
-	// todo: improve error msg
-	return sql.NewUniqueKeyErr(keyString, isPk, nil)
+	return t.ed.Delete(ctx, sqlRow)
 }
 
 func (t *TempTable) StatementBegin(ctx *sql.Context) {
@@ -375,19 +406,9 @@ func (t *TempTable) StatementComplete(ctx *sql.Context) error {
 }
 
 func (t *TempTable) Close(ctx *sql.Context) error {
-	tbl, err := t.ed.Table(ctx)
-	if err != nil {
-		return err
-	}
-	t.table = tbl
-
-	if err = t.ed.Close(ctx); err != nil {
-		return err
-	}
+	err := t.ed.Close(ctx)
 
 	t.lookup = nil
-	t.ed, err = editor.NewTableEditor(ctx, tbl, t.sch, t.tableName, t.opts)
-
 	return err
 }
 

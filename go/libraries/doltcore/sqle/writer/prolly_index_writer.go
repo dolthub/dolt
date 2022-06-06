@@ -56,11 +56,12 @@ func getPrimaryKeylessProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch 
 
 	m := durable.ProllyMapFromIndex(idx)
 
-	_, valDesc := m.Descriptors()
+	keyDesc, valDesc := m.Descriptors()
 	_, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyKeylessWriter{
 		mut:    m.Mutate(),
+		keyBld: val.NewTupleBuilder(keyDesc),
 		valBld: val.NewTupleBuilder(valDesc),
 		valMap: valMap,
 	}, nil
@@ -238,6 +239,7 @@ type prollyKeylessWriter struct {
 	name string
 	mut  prolly.MutableMap
 
+	keyBld *val.TupleBuilder
 	valBld *val.TupleBuilder
 	valMap val.OrdinalMapping
 }

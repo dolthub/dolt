@@ -66,7 +66,7 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 	autoCol := autoIncrementColFromSchema(sch)
 
 	var pw indexWriter
-	var sws []indexWriter
+	var sws map[string]indexWriter
 	if schema.IsKeyless(sch) {
 		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
 		if err != nil {
@@ -189,6 +189,7 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			return nil, err
 		}
 	}
+
 	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 
 	return s.workingSet, nil

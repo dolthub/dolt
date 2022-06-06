@@ -176,7 +176,9 @@ func awsConfigFromParams(params map[string]interface{}) (session.Options, error)
 		}
 	}
 
-	opts := session.Options{}
+	opts := session.Options{
+		SharedConfigState: session.SharedConfigEnable,
+	}
 
 	profile := ""
 	if val, ok := params[AWSCredsProfile]; ok {

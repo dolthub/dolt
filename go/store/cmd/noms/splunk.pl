@@ -85,10 +85,15 @@ sub print_show {
     
     my $noms_show_output = show($hash);
     for my $line (split /\n/, $noms_show_output) {
-        if ($line =~ /#([a-z0-9]{32})/) {
-            $hashes{$label} = $1;
-            print "$label)   $line\n";
-            $label++;
+        if ($line =~ /#([a-z0-9]{32})/ ) {
+            $h = $1;
+            if ( $1 =~ /[a-z1-9]/ ) {
+                $hashes{$label} = $h;
+                print "$label)   $line\n";
+                $label++;
+            } else {
+                print "     $line\n";
+            }
         } else {
             print "     $line\n";
         }

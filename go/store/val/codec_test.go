@@ -17,6 +17,9 @@ package val
 import (
 	"math"
 	"testing"
+	"time"
+
+	"github.com/shopspring/decimal"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -27,7 +30,7 @@ func TestCompare(t *testing.T) {
 		l, r []byte
 		cmp  int
 	}{
-		// ints
+		// int
 		{
 			typ: Type{Enc: Int64Enc},
 			l:   encInt(0), r: encInt(0),
@@ -43,7 +46,7 @@ func TestCompare(t *testing.T) {
 			l:   encInt(1), r: encInt(0),
 			cmp: 1,
 		},
-		// uints
+		// uint
 		{
 			typ: Type{Enc: Uint64Enc},
 			l:   encUint(0), r: encUint(0),
@@ -59,7 +62,7 @@ func TestCompare(t *testing.T) {
 			l:   encUint(1), r: encUint(0),
 			cmp: 1,
 		},
-		// floats
+		// float
 		{
 			typ: Type{Enc: Float64Enc},
 			l:   encFloat(0), r: encFloat(0),
@@ -75,7 +78,138 @@ func TestCompare(t *testing.T) {
 			l:   encFloat(1), r: encFloat(0),
 			cmp: 1,
 		},
-		// strings
+		// bit
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(0), r: encBit(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: Bit64Enc},
+			l:   encBit(1), r: encBit(0),
+			cmp: 1,
+		},
+		// decimal
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("-3.7e0")), r: encDecimal(decimalFromString("-3.7e0")),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("5.5729136e3")), r: encDecimal(decimalFromString("2634193746329327479.32030573792e-19")),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DecimalEnc},
+			l:   encDecimal(decimalFromString("2634193746329327479.32030573792e-19")), r: encDecimal(decimalFromString("5.5729136e3")),
+			cmp: -1,
+		},
+		// year
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2022), r: encYear(2022),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2022), r: encYear(1999),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: YearEnc},
+			l:   encYear(2000), r: encYear(2022),
+			cmp: -1,
+		},
+		// date
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(2022, 05, 24), r: encDate(2022, 05, 24),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(2022, 12, 24), r: encDate(2022, 05, 24),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DateEnc},
+			l:   encDate(1999, 04, 24), r: encDate(2022, 05, 24),
+			cmp: -1,
+		},
+		// time
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(978220860), r: encTime(978220860),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(599529660), r: encTime(-11644473600),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: TimeEnc},
+			l:   encTime(-11644473600), r: encTime(599529660),
+			cmp: -1,
+		},
+		// datetime
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: 1,
+		},
+		{
+			typ: Type{Enc: DatetimeEnc},
+			l:   encDatetime(time.Date(1999, 11, 01, 01, 01, 01, 00, time.UTC)),
+			r:   encDatetime(time.Date(2000, 11, 01, 01, 01, 01, 00, time.UTC)),
+			cmp: -1,
+		},
+		// enum
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(0), r: encEnum(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: EnumEnc},
+			l:   encEnum(1), r: encEnum(0),
+			cmp: 1,
+		},
+		// set
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(0),
+			cmp: 0,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(0), r: encSet(1),
+			cmp: -1,
+		},
+		{
+			typ: Type{Enc: SetEnc},
+			l:   encSet(1), r: encSet(0),
+			cmp: 1,
+		},
+		// string
 		{
 			typ: Type{Enc: StringEnc},
 			l:   encStr(""), r: encStr(""),
@@ -110,31 +244,93 @@ func TestCompare(t *testing.T) {
 
 	for _, test := range tests {
 		act := compare(test.typ, test.l, test.r)
-		assert.Equal(t, test.cmp, act)
+		assert.Equal(t, test.cmp, act, "expected %s %s %s ",
+			formatValue(test.typ.Enc, test.l),
+			fmtComparator(test.cmp),
+			formatValue(test.typ.Enc, test.r))
+	}
+}
+
+func fmtComparator(c int) string {
+	if c == 0 {
+		return "="
+	} else if c < 0 {
+		return "<"
+	} else {
+		return ">"
 	}
 }
 
 func encInt(i int64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, uint64Size)
 	writeInt64(buf, i)
 	return buf
 }
 
 func encUint(u uint64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, int64Size)
 	writeUint64(buf, u)
 	return buf
 }
 
 func encFloat(f float64) []byte {
-	buf := make([]byte, 8)
+	buf := make([]byte, float64Size)
 	writeFloat64(buf, f)
+	return buf
+}
+
+func encBit(u uint64) []byte {
+	buf := make([]byte, bit64Size)
+	writeBit64(buf, u)
+	return buf
+}
+
+func encDecimal(d decimal.Decimal) []byte {
+	buf := make([]byte, sizeOfDecimal(d))
+	writeDecimal(buf, d)
 	return buf
 }
 
 func encStr(s string) []byte {
 	buf := make([]byte, len(s)+1)
 	writeString(buf, s)
+	return buf
+}
+
+func encYear(y int16) []byte {
+	buf := make([]byte, yearSize)
+	writeYear(buf, y)
+	return buf
+}
+
+func encDate(y, m, d int) []byte {
+	date := time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+	buf := make([]byte, dateSize)
+	writeDate(buf, date)
+	return buf
+}
+
+func encTime(t int64) []byte {
+	buf := make([]byte, timeSize)
+	writeTime(buf, t)
+	return buf
+}
+
+func encDatetime(dt time.Time) []byte {
+	buf := make([]byte, datetimeSize)
+	writeDatetime(buf, dt)
+	return buf
+}
+
+func encEnum(u uint16) []byte {
+	buf := make([]byte, enumSize)
+	writeEnum(buf, u)
+	return buf
+}
+
+func encSet(u uint64) []byte {
+	buf := make([]byte, setSize)
+	writeSet(buf, u)
 	return buf
 }
 
@@ -150,6 +346,21 @@ func TestCodecRoundTrip(t *testing.T) {
 	})
 	t.Run("round trip floats", func(t *testing.T) {
 		roundTripFloats(t)
+	})
+	t.Run("round trip years", func(t *testing.T) {
+		roundTripYears(t)
+	})
+	t.Run("round trip dates", func(t *testing.T) {
+		roundTripDates(t)
+	})
+	t.Run("round trip times", func(t *testing.T) {
+		roundTripTimes(t)
+	})
+	t.Run("round trip datetimes", func(t *testing.T) {
+		roundTripDatetimes(t)
+	})
+	t.Run("round trip decimal", func(t *testing.T) {
+		roundTripDecimal(t)
 	})
 }
 
@@ -220,6 +431,14 @@ func roundTripUints(t *testing.T) {
 		zero(buf)
 	}
 
+	buf = make([]byte, enumSize)
+	for _, value := range uintegers {
+		exp := uint16(value)
+		writeEnum(buf, exp)
+		assert.Equal(t, exp, readEnum(buf))
+		zero(buf)
+	}
+
 	buf = make([]byte, uint32Size)
 	uintegers = append(uintegers, math.MaxUint32)
 	for _, value := range uintegers {
@@ -235,6 +454,22 @@ func roundTripUints(t *testing.T) {
 		exp := uint64(value)
 		writeUint64(buf, exp)
 		assert.Equal(t, exp, readUint64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, bit64Size)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeBit64(buf, exp)
+		assert.Equal(t, exp, readBit64(buf))
+		zero(buf)
+	}
+
+	buf = make([]byte, setSize)
+	for _, value := range uintegers {
+		exp := uint64(value)
+		writeSet(buf, exp)
+		assert.Equal(t, exp, readSet(buf))
 		zero(buf)
 	}
 }
@@ -257,6 +492,112 @@ func roundTripFloats(t *testing.T) {
 		assert.Equal(t, exp, readFloat64(buf))
 		zero(buf)
 	}
+}
+
+func roundTripYears(t *testing.T) {
+	years := []int16{
+		1901,
+		2022,
+		2155,
+	}
+
+	buf := make([]byte, yearSize)
+	for _, y := range years {
+		writeYear(buf, y)
+		assert.Equal(t, y, readYear(buf))
+		zero(buf)
+	}
+}
+
+func roundTripDates(t *testing.T) {
+	dates := []time.Time{
+		testDate(1000, 01, 01),
+		testDate(2022, 05, 24),
+		testDate(9999, 12, 31),
+	}
+
+	buf := make([]byte, dateSize)
+	for _, d := range dates {
+		writeDate(buf, d)
+		assert.Equal(t, d, readDate(buf))
+		zero(buf)
+	}
+}
+
+func roundTripTimes(t *testing.T) {
+	times := []int64{
+		-1221681866,
+		-11644473600,
+		599529660,
+		978220860,
+	}
+
+	buf := make([]byte, timeSize)
+	for _, d := range times {
+		writeTime(buf, d)
+		assert.Equal(t, d, readTime(buf))
+		zero(buf)
+	}
+}
+
+func roundTripDatetimes(t *testing.T) {
+	datetimes := []time.Time{
+		time.Date(1000, 01, 01, 0, 0, 0, 0, time.UTC),
+		time.UnixMicro(time.Now().UTC().UnixMicro()).UTC(),
+		time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC),
+	}
+
+	buf := make([]byte, datetimeSize)
+	for _, dt := range datetimes {
+		writeDatetime(buf, dt)
+		assert.Equal(t, dt, readDatetime(buf))
+		zero(buf)
+	}
+}
+
+func roundTripDecimal(t *testing.T) {
+	decimals := []decimal.Decimal{
+		decimalFromString("0"),
+		decimalFromString("1"),
+		decimalFromString("-1"),
+		decimalFromString("-3.7e0"),
+		decimalFromString("0.00000000000000000003e20"),
+		decimalFromString(".22"),
+		decimalFromString("-.7863294659345624"),
+		decimalFromString("2634193746329327479.32030573792e-19"),
+		decimalFromString("7742"),
+		decimalFromString("99999.999994"),
+		decimalFromString("5.5729136e3"),
+		decimalFromString("600e-2"),
+		decimalFromString("-99999.999995"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999.1"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999999999999999.99"),
+		decimalFromString("16976349273982359874209023948672021737840592720387475.2719128737543572927374503832837350563300243035038234972093785"),
+		decimalFromString("99999999999999999999999999999999999999999999999999999.9999999999999"),
+	}
+
+	for _, dec := range decimals {
+		buf := make([]byte, sizeOfDecimal(dec))
+		writeDecimal(buf, dec)
+		actual := readDecimal(buf)
+		assert.True(t, dec.Equal(actual), "%s != %s",
+			dec.String(), actual.String())
+		assert.Equal(t, dec, actual)
+		zero(buf)
+	}
+}
+
+func testDate(y, m, d int) (date time.Time) {
+	return time.Date(y, time.Month(m), d, 0, 0, 0, 0, time.UTC)
+}
+
+func decimalFromString(s string) decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 func zero(buf []byte) {

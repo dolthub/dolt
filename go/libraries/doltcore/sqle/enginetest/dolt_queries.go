@@ -985,6 +985,454 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Drop and add primary key on two branches converges to same schema",
+		SetUpScript: []string{
+			"create table t1 (i int);",
+			"call dolt_commit('-am', 't1 table')",
+			"call dolt_checkout('-b', 'b1')",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'b1 primary key changes')",
+			"call dolt_checkout('main')",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'main primary key change')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('b1')",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "merging branches into a constraint violated head. Any new violations are appended",
+		SetUpScript: []string{
+			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+			"CREATE table other (pk int);",
+			"INSERT INTO parent VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"CALL DOLT_BRANCH('branch1');",
+			"CALL DOLT_BRANCH('branch2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// we need dolt_force_transaction_commit because we want to
+				// transaction commit constraint violations that occur as a
+				// result of a merge.
+				Query:    "set autocommit = off, dolt_force_transaction_commit = on",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "DELETE FROM parent where pk = 1;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-am', 'delete parent 1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO CHILD VALUES (1, 1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('branch1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}},
+			},
+			{
+				Query:    "COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "CALL DOLT_COMMIT('-am', 'commit constraint violations');",
+				ExpectedErrStr: "error: the table(s) child has constraint violations",
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'commit constraint violations');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "DELETE FROM parent where pk = 2;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'remove parent 2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('branch2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO OTHER VALUES (1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-am', 'non-fk insert');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('branch2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}},
+			},
+			{
+				Query:    "COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "CALL DOLT_COMMIT('-am', 'commit non-conflicting merge');",
+				ExpectedErrStr: "error: the table(s) child has constraint violations",
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'commit non-conflicting merge');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO CHILD VALUES (2, 2);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'add child of parent 2');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('main');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+			},
+		},
+	},
+	{
+		Name: "conflicting merge aborts when conflicts and violations already exist",
+		SetUpScript: []string{
+			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+			"INSERT INTO parent VALUES (1, 1), (2, 1);",
+			"CALL DOLT_COMMIT('-am', 'create table with data');",
+			"CALL DOLT_BRANCH('other');",
+			"CALL DOLT_BRANCH('other2');",
+			"UPDATE parent SET col1 = 2 where pk = 1;",
+			"DELETE FROM parent where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'updating col1 to 2 and remove pk = 2');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE parent SET col1 = 3 where pk = 1;",
+			"INSERT into child VALUEs (1, 2);",
+			"CALL DOLT_COMMIT('-am', 'updating col1 to 3 and adding child of pk 2');",
+			"CALL DOLT_CHECKOUT('other2')",
+			"UPDATE parent SET col1 = 4 where pk = 1",
+			"CALL DOLT_COMMIT('-am', 'updating col1 to 4');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET dolt_force_transaction_commit = 1",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
+				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 2}},
+			},
+			// commit so we can merge again
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:          "CALL DOLT_MERGE('other2');",
+				ExpectedErrStr: "existing unresolved conflicts would be overridden by new conflicts produced by merge. Please resolve them and try again",
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
+				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 2}},
+			},
+		},
+	},
+	{
+		Name: "non-conflicting / non-violating merge succeeds when conflicts and violations already exist",
+		SetUpScript: []string{
+			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+			"INSERT INTO parent VALUES (1, 1), (2, 1);",
+			"CALL DOLT_COMMIT('-am', 'create table with data');",
+			"CALL DOLT_BRANCH('other');",
+			"CALL DOLT_BRANCH('other2');",
+			"UPDATE parent SET col1 = 2 where pk = 1;",
+			"DELETE FROM parent where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'updating col1 to 2 and remove pk = 2');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE parent SET col1 = 3 where pk = 1;",
+			"INSERT into child VALUES (1, 2);",
+			"CALL DOLT_COMMIT('-am', 'updating col1 to 3 and adding child of pk 2');",
+			"CALL DOLT_CHECKOUT('other2')",
+			"INSERT INTO parent values (3, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert parent with pk 3');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SET dolt_force_transaction_commit = 1;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
+				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 2}},
+			},
+			// commit so we can merge again
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'committing merge conflicts');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{{1, 2}, {3, 1}},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1, 2}},
+			},
+			{
+				Query:    "SELECT base_col1, base_pk, our_col1, our_pk, their_col1, their_pk from dolt_conflicts_parent;",
+				Expected: []sql.Row{{1, 1, 2, 1, 3, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 2}},
+			},
+		},
+	},
+}
+
+var DoltBranchScripts = []queries.ScriptTest{
+	{
+		Name: "Create branches from HEAD with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Trying to recreate that branch fails without the force flag
+				Query:          "CALL DOLT_BRANCH('myNewBranch1')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch1' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-f', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Rename branches with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Renaming to an existing name fails without the force flag
+				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "already exists",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Copy branches from other branches using dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-c')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch2')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', '', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch2';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch2' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Delete branches with dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+			"CALL DOLT_BRANCH('myNewBranch2')",
+			"CALL DOLT_BRANCH('myNewBranch3')",
+			"CALL DOLT_BRANCH('myNewBranchWithCommit')",
+			"CALL DOLT_CHECKOUT('myNewBranchWithCommit')",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'empty commit')",
+			"CALL DOLT_CHECKOUT('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-d')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', 'branchDoesNotExist')",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Trying to delete a branch with unpushed changes fails without force option
+				Query:          "CALL DOLT_BRANCH('-d', 'myNewBranchWithCommit')",
+				ExpectedErrStr: "attempted to delete a branch that is not fully merged into its parent; use `-f` to force",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
@@ -1236,21 +1684,65 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
 				Expected: []sql.Row{
 					{100, 101, nil, nil, "added"},
+					// TODO: It's more correct to also return the following rows.
+					//{1, 3, 1, nil, "modified"},
+					//{4, 6, 4, nil, "modified"}
+
+					// To explain why, let's inspect table t at each of the commits:
+					//
+					//     @Commit1          @Commit2         @Commit3
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | pk | c1 | c2 |     | pk | c2 |     | pk  | c1  |
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | 1  | 2  | 3  |     | 1  | 3  |     | 1   | 3   |
+					// | 4  | 5  | 6  |     | 4  | 6  |     | 4   | 6   |
+					// +----+----+----+     +----+----+     | 100 | 101 |
+					//                                      +-----+-----+
+					//
+					// If you were to interpret each table using the schema at
+					// @Commit3, (pk, c1), you would see the following:
+					//
+					//   @Commit1            @Commit2         @Commit3
+					// +----+----+         +----+------+     +-----+-----+
+					// | pk | c1 |         | pk | c1   |     | pk  | c1  |
+					// +----+----+         +----+------+     +-----+-----+
+					// | 1  | 2  |         | 1  | NULL |     | 1   | 3   |
+					// | 4  | 5  |         | 4  | NULL |     | 4   | 6   |
+					// +----+----+         +----+------+     | 100 | 101 |
+					//                                       +-----+-----+
+					//
+					// The corresponding diffs for the interpreted tables:
+					//
+					// Diff between init and @Commit1:
+					// + (1, 2)
+					// + (4, 5)
+					//
+					// Diff between @Commit1 and @Commit2:
+					// ~ (1, NULL)
+					// ~ (4, NULL)
+					//
+					// Diff between @Commit2 and @Commit3:
+					// ~ (1, 3) <- currently not outputted
+					// ~ (4, 6) <- currently not outputted
+					// + (100, 101)
+					//
+					// The missing rows are not produced by diff since the
+					// underlying value of the prolly trees are not modified during a column rename.
 				},
 			},
 		},
@@ -2212,20 +2704,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
+					// TODO: Missing rows here see TestDiffSystemTable tests
 					{100, 101, nil, nil, "added"},
 				},
 			},

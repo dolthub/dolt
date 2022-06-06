@@ -43,6 +43,13 @@ var ErrFastForward = errors.New("fast forward")
 var ErrSameTblAddedTwice = errors.New("table with same name added in 2 commits can't be merged")
 var ErrTableDeletedAndModified = errors.New("conflict: table with same name deleted and modified ")
 
+// ErrCantOverwriteConflicts is returned when there are unresolved conflicts
+// and the merge produces new conflicts. Because we currently don't have a model
+// to merge sets of conflicts together, we need to abort the merge at this
+// point.
+var ErrCantOverwriteConflicts = errors.New("existing unresolved conflicts would be" +
+	" overridden by new conflicts produced by merge. Please resolve them and try again")
+
 type Merger struct {
 	root      *doltdb.RootValue
 	mergeRoot *doltdb.RootValue
@@ -303,19 +310,23 @@ func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.Root
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
 	ms := MergeStats{Operation: TableModified}
-	if tbl.Format() == types.Format_DOLT_1 {
-		// TODO (dhruv): calculate stats for V1
-		return ms, nil
-	}
 
-	rows, err := tbl.GetNomsRowData(ctx)
-
+	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
 
-	mergeRows, err := mergeTbl.GetNomsRowData(ctx)
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
 
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
+
+	mergeSch, err := mergeTbl.GetSchema(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
@@ -324,7 +335,8 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows)
+		// todo (dhruv): In the new storage format we can do better than executing a diff...
+		err := diff.Summary(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)
 	}()
@@ -893,7 +905,26 @@ func MergeCommits(ctx context.Context, commit, mergeCommit *doltdb.Commit, opts 
 	return MergeRoots(ctx, ourRoot, theirRoot, ancRoot, opts)
 }
 
+// MergeRoots three-way merges |ourRoot|, |theirRoot|, and |ancRoot| and returns
+// the merged root. If any conflicts or constraint violations are produced they
+// are stored in the merged root. If |ourRoot| already contains conflicts they
+// are stashed before the merge is performed. We abort the merge if the stash
+// contains conflicts and we produce new conflicts. We currently don't have a
+// model to merge conflicts together.
+//
+// Constraint violations that exist in ancestor are stashed and merged with the
+// violations we detect when we diff the ancestor and the newly merged root.
 func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootValue, opts editor.Options) (*doltdb.RootValue, map[string]*MergeStats, error) {
+	ourRoot, conflictStash, err := stashConflicts(ctx, ourRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ancRoot, violationStash, err := stashViolations(ctx, ancRoot)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
@@ -902,7 +933,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 
 	tblToStats := make(map[string]*MergeStats)
 
-	newRoot := ourRoot
+	mergedRoot := ourRoot
 
 	optsWithFKChecks := opts
 	optsWithFKChecks.ForeignKeyChecksDisabled = true
@@ -919,14 +950,14 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		if mergedTable != nil {
 			tblToStats[tblName] = stats
 
-			newRoot, err = newRoot.PutTable(ctx, tblName, mergedTable)
+			mergedRoot, err = mergedRoot.PutTable(ctx, tblName, mergedTable)
 			if err != nil {
 				return nil, nil, err
 			}
 			continue
 		}
 
-		newRootHasTable, err := newRoot.HasTable(ctx, tblName)
+		newRootHasTable, err := mergedRoot.HasTable(ctx, tblName)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -935,7 +966,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 			// Merge root deleted this table
 			tblToStats[tblName] = &MergeStats{Operation: TableRemoved}
 
-			newRoot, err = newRoot.RemoveTables(ctx, false, false, tblName)
+			mergedRoot, err = mergedRoot.RemoveTables(ctx, false, false, tblName)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -949,7 +980,7 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		}
 	}
 
-	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, newRoot, ourRoot, theirRoot, ancRoot)
+	mergedFKColl, conflicts, err := ForeignKeysMerge(ctx, mergedRoot, ourRoot, theirRoot, ancRoot)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -957,31 +988,94 @@ func MergeRoots(ctx context.Context, ourRoot, theirRoot, ancRoot *doltdb.RootVal
 		return nil, nil, fmt.Errorf("foreign key conflicts")
 	}
 
-	newRoot, err = newRoot.PutForeignKeyCollection(ctx, mergedFKColl)
+	mergedRoot, err = mergedRoot.PutForeignKeyCollection(ctx, mergedFKColl)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, err = newRoot.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
+	mergedRoot, err = mergedRoot.UpdateSuperSchemasFromOther(ctx, tblNames, theirRoot)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	newRoot, _, err = AddConstraintViolations(ctx, newRoot, ancRoot, nil)
+	mergedRoot, _, err = AddConstraintViolations(ctx, mergedRoot, ancRoot, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	err = calculateViolationStats(ctx, newRoot, tblToStats)
+	mergedRoot, err = mergeCVsWithStash(ctx, mergedRoot, violationStash)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return newRoot, tblToStats, nil
+	err = calculateViolationStats(ctx, mergedRoot, tblToStats)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	mergedHasConflicts := checkForConflicts(tblToStats)
+	if !conflictStash.Empty() && mergedHasConflicts {
+		return nil, nil, ErrCantOverwriteConflicts
+	} else if !conflictStash.Empty() {
+		mergedRoot, err = applyConflictStash(ctx, conflictStash.Stash, mergedRoot)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return mergedRoot, tblToStats, nil
 }
 
-func calculateViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+// mergeCVsWithStash merges the table constraint violations in |stash| with |root|.
+// Returns an updated root with all the merged CVs.
+func mergeCVsWithStash(ctx context.Context, root *doltdb.RootValue, stash *violationStash) (*doltdb.RootValue, error) {
+	updatedRoot := root
+	for name, stashed := range stash.Stash {
+		tbl, ok, err := root.GetTable(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			// the table with the CVs was deleted
+			continue
+		}
+		curr, err := tbl.GetConstraintViolations(ctx)
+		if err != nil {
+			return nil, err
+		}
+		unioned, err := types.UnionMaps(ctx, curr, stashed, func(key types.Value, currV types.Value, stashV types.Value) (types.Value, error) {
+			if !currV.Equals(stashV) {
+				panic(fmt.Sprintf("encountered conflict when merging constraint violations, conflicted key: %v\ncurrent value: %v\nstashed value: %v\n", key, currV, stashV))
+			}
+			return currV, nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		tbl, err = tbl.SetConstraintViolations(ctx, unioned)
+		if err != nil {
+			return nil, err
+		}
+		updatedRoot, err = root.PutTable(ctx, name, tbl)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return updatedRoot, nil
+}
 
+// checks if a conflict occurred during the merge
+func checkForConflicts(tblToStats map[string]*MergeStats) bool {
+	for _, stat := range tblToStats {
+		if stat.Conflicts > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// populates tblToStats with violation statistics
+func calculateViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
 	for tblName, stats := range tblToStats {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {

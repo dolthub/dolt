@@ -73,7 +73,7 @@ func newChunker[S message.Serializer](ctx context.Context, cur *Cursor, level in
 	}
 
 	if cur != nil {
-		if err := sc.resume(ctx); err != nil {
+		if err := sc.processPrefix(ctx); err != nil {
 			return nil, err
 		}
 	}
@@ -81,7 +81,7 @@ func newChunker[S message.Serializer](ctx context.Context, cur *Cursor, level in
 	return sc, nil
 }
 
-func (tc *chunker[S]) resume(ctx context.Context) (err error) {
+func (tc *chunker[S]) processPrefix(ctx context.Context) (err error) {
 	if tc.cur.parent != nil && tc.parent == nil {
 		if err := tc.createParentChunker(ctx); err != nil {
 			return err
@@ -108,7 +108,7 @@ func (tc *chunker[S]) resume(ctx context.Context) (err error) {
 			return err
 		}
 
-		_, err = tc.cur.Advance(ctx)
+		err = tc.cur.Advance(ctx)
 		if err != nil {
 			return err
 		}
@@ -137,116 +137,118 @@ func (tc *chunker[S]) DeletePair(ctx context.Context, _, _ Item) error {
 	return tc.skip(ctx)
 }
 
-// AdvanceTo advances the chunker to |next|, the nextMutation mutation point.
+// AdvanceTo progresses the chunker until its tracking cursor catches up with
+// |next|, a cursor indicating next key where an edit will be applied.
+//
+// The method proceeds from the deepest chunker recursively into its
+// linked list parents:
+//
+//  (1) If the current cursor and all of its parents are aligned with |next|,
+//  we are done.
+//
+//  (2) In lockstep, a) append to the chunker and b) increment the cursor until
+//  we either meet condition (1) and return, or we synchronize and progress to
+//  (3) or (4). Synchronizing means that the current tree being built has
+//  reached a chunk boundary that aligns with a chunk boundary in the old tree
+//  being mutated. Synchronization means chunks between this boundary and
+//  |next| at the current cursor level will be unchanged and can be skipped.
+//
+//  (3) All parent cursors are (1) current or (2) synchronized, or there are no
+//  parents, and we are done.
+//
+//  (4) The parent cursors are not aligned. Recurse into the parent. After
+//  parents are aligned, we need to reprocess the prefix of the current node in
+//  anticipation of impending edits that may edit the current chunk. Note that
+//  processPrefix is only necessary for the "fast forward" case where we
+//  synchronized the tree level before reaching |next|.
 func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
-	// There a four cases to handle when advancing the tree chunker
-	//  (1) |tc.cur| and |next| are aligned, we're done
-	//
-	//  (2) |tc.cur| is "ahead" of |next|. This can be caused by advances
-	//      at a lower Level of the tree. In this case, Advance |next|
-	//      until it is even with |tc.cur|.
-	//
-	//  (3) |tc.cur| is behind |next|, we must consume elements between the
-	//      two cursors until |tc.cur| catches up with |next|.
-	//
-	//  (4) This is a special case of (3) where we can "Fast-Forward" |tc.cur|
-	//      towards |next|. As we consume elements between the two cursors, if
-	//      we re-synchronize with the previous tree, we can skip over the
-	//      chunks between the re-synchronization boundary and |next|.
-
 	cmp := tc.cur.Compare(next)
-
-	if cmp == 0 { // Case (1)
+	if cmp == 0 { // step (1)
 		return nil
-	}
-
-	if cmp > 0 { // Case (2)
+	} else if cmp > 0 {
+		//todo(max): this appears to be a result of a seek() bug, where
+		// we navigate to the end of the previous chunk rather than the
+		// beginning of the next chunk. I think this is basically a one-off
+		// error.
 		for tc.cur.Compare(next) > 0 {
-			if _, err := next.Advance(ctx); err != nil {
+			if err := next.Advance(ctx); err != nil {
 				return err
 			}
 		}
 		return nil
 	}
 
-	fastForward := false
+	split, err := tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), tc.cur.currentSubtreeSize())
+	if err != nil {
+		return err
+	}
 
-	for tc.cur.Compare(next) < 0 { // Case (3) or (4)
-
-		// append items until we catchup with |next|, or until
-		// we resynchronize with the previous tree.
-		ok, err := tc.append(ctx,
-			tc.cur.CurrentKey(),
-			tc.cur.CurrentValue(),
-			tc.cur.currentSubtreeSize())
+	for !(split && tc.cur.atNodeEnd()) { // step (2)
+		err = tc.cur.Advance(ctx)
 		if err != nil {
 			return err
 		}
-
-		// Note: if |ok| is true, but |tc.cur.atNodeEnd()| is false,
-		// then we've de-synchronized with the previous tree.
-
-		if ok && tc.cur.atNodeEnd() { // re-synchronized at |tc.Level|
-
-			if tc.cur.parent != nil {
-				if tc.cur.parent.Compare(next.parent) < 0 { // Case (4)
-					// |tc| re-synchronized at |tc.Level|, but we're still behind |next|.
-					// We can Advance |tc| at Level+1 to get to |next| faster.
-					fastForward = true
-				}
-
-				// Here we need to Advance the chunker's cursor, but calling
-				// tc.cur.Advance() would needlessly fetch another chunk at the
-				// current Level. Instead, we only Advance the parent.
-				_, err := tc.cur.parent.advanceInBounds(ctx)
-				if err != nil {
-					return err
-				}
-
-				// |tc.cur| is now inconsistent with its parent, Invalidate it.
-				tc.cur.Invalidate()
-			}
-
-			break
+		if cmp = tc.cur.Compare(next); cmp >= 0 {
+			// we caught up before synchronizing
+			return nil
 		}
-
-		if _, err := tc.cur.Advance(ctx); err != nil {
-			return err
-		}
-	}
-
-	if tc.parent != nil && next.parent != nil {
-		// At this point we've either caught up to |next|, or we've
-		// re-synchronized at |tc.Level| and we're fast-forwarding
-		err := tc.parent.AdvanceTo(ctx, next.parent)
+		split, err = tc.append(ctx, tc.cur.CurrentKey(), tc.cur.CurrentValue(), tc.cur.currentSubtreeSize())
 		if err != nil {
 			return err
 		}
 	}
 
-	// We may have invalidated cursors as we re-synchronized,
-	// so copy |next| here.
+	if tc.cur.parent == nil || next.parent == nil { // step (3)
+		// end of tree
+		tc.cur.copy(next)
+		return nil
+	}
+
+	if tc.cur.parent.Compare(next.parent) == 0 { // step (3)
+		// (rare) new tree synchronized with old tree at the
+		// same time as the cursor caught up to the next mutation point
+		tc.cur.copy(next)
+		return nil
+	}
+
+	// step(4)
+
+	// This optimization is logically equivalent to advancing
+	// current cursor. Because we just wrote a chunk, we are
+	// at a boundary and can simply increment the parent.
+	err = tc.cur.parent.Advance(ctx)
+	if err != nil {
+		return err
+	}
+	tc.cur.invalidate()
+
+	// no more pending chunks at this level, recurse
+	// into parent
+	err = tc.parent.AdvanceTo(ctx, next.parent)
+	if err != nil {
+		return err
+	}
+
+	// fast forward to the edit index at this level
 	tc.cur.copy(next)
 
-	if fastForward { // Case (4)
-		// we fast-forwarded to the current chunk, so we
-		// need to process its prefix
-		if err := tc.resume(ctx); err != nil {
-			return err
-		}
+	// incoming edit can affect the entire chunk, process the prefix
+	err = tc.processPrefix(ctx)
+	if err != nil {
+		return err
 	}
-
 	return nil
 }
 
 func (tc *chunker[S]) skip(ctx context.Context) error {
-	_, err := tc.cur.Advance(ctx)
+	err := tc.cur.Advance(ctx)
 	return err
 }
 
 // Append adds a new key-value pair to the chunker, validating the new pair to ensure
 // that chunks are well-formed. Key-value pairs are appended atomically a chunk boundary
-// may be made before or after the pair, but not between them.
+// may be made before or after the pair, but not between them. Returns true if chunk boundary
+// was split.
 func (tc *chunker[S]) append(ctx context.Context, key, value Item, subtree uint64) (bool, error) {
 	// When adding new key-value pairs to an in-progress chunk, we must enforce 3 invariants
 	// (1) Key-value pairs are stored in the same Node.
@@ -374,12 +376,12 @@ func (tc *chunker[S]) Done(ctx context.Context) (Node, error) {
 
 	// At this point, we know |tc.keys| contains every item at this Level of the tree.
 	// To see this, consider that there are two ways items can enter |tc.keys|.
-	//  (1) as the result of resume() with the cursor on anything other than the first item in the Node
+	//  (1) as the result of processPrefix() with the cursor on anything other than the first item in the Node
 	//  (2) as a result of a child chunker hitting an explicit chunk boundary during either Append() or finalize().
 	//
 	// The only way there can be no items in some parent chunker's |tc.keys| is if this chunker began with
-	// a cursor within its first existing chunk (and thus all parents resume()'d with a cursor on their first item) and
-	// continued through all sebsequent items without creating any explicit chunk boundaries (and thus never sent any
+	// a cursor within its first existing chunk (and thus all parents processPrefix()'d with a cursor on their first item) and
+	// continued through all subsequent items without creating any explicit chunk boundaries (and thus never sent any
 	// items up to a parent as a result of chunking). Therefore, this chunker's |tc.keys| must contain all items
 	// within the current Node.
 
@@ -414,14 +416,14 @@ func (tc *chunker[S]) finalizeCursor(ctx context.Context) (err error) {
 			break // boundary occurred at same place in old & new Node
 		}
 
-		_, err = tc.cur.Advance(ctx)
+		err = tc.cur.Advance(ctx)
 		if err != nil {
 			return err
 		}
 	}
 
 	if tc.cur.parent != nil {
-		_, err := tc.cur.parent.Advance(ctx)
+		err := tc.cur.parent.Advance(ctx)
 
 		if err != nil {
 			return err
