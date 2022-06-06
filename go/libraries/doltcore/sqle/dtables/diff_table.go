@@ -177,11 +177,11 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}, nil
 }
 
-var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
+var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	dt.partitionFilters = filterFilters(filters, getColumnFilterCheck(partitionFilterCols))
+	dt.partitionFilters = filterFilters(filters, commitColumnFilter(commitMetaColumns))
 	return dt.partitionFilters
 }
 
@@ -193,7 +193,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
 	if dt.partitionFilters == nil {
-		dt.partitionFilters = filterFilters(filters, getColumnFilterCheck(partitionFilterCols))
+		dt.partitionFilters = filterFilters(filters, commitColumnFilter(commitMetaColumns))
 	}
 
 	return dt
