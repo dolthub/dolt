@@ -36,7 +36,7 @@ teardown() {
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
 
     start_sql_server repo1
@@ -71,7 +71,7 @@ teardown() {
 
     # check that mysql.db file exists, and privs.json doesn't
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
 
     # restart server
@@ -91,7 +91,7 @@ teardown() {
     [ "${lines[8]}" = '+----------+' ]
 
     # remove mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
 
     # leave the directory
@@ -103,7 +103,7 @@ teardown() {
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
     cp $BATS_TEST_DIRNAME/privs.json .
 
@@ -145,7 +145,7 @@ teardown() {
 
     # check that mysql.db and privs.json exist
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
 
     # restart server
@@ -166,7 +166,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
 
     # leave the directory
@@ -179,9 +179,9 @@ teardown() {
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
-    cp $BATS_TEST_DIRNAME/mysql.db .
+    cp $BATS_TEST_DIRNAME/mysql.db ./.dolt/.
 
     start_sql_server repo1
 
@@ -217,7 +217,7 @@ teardown() {
 
     # check that mysql.db exists, and privs.json doesn't
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     ! [[ "$output" =~ "privs.json" ]] || false
 
     # restart server
@@ -238,7 +238,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
 
     # leave the directory
@@ -251,10 +251,10 @@ teardown() {
     cd repo1
 
     # remove/replace mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
     cp $BATS_TEST_DIRNAME/privs.json .
-    cp $BATS_TEST_DIRNAME/mysql.db .
+    cp $BATS_TEST_DIRNAME/mysql.db ./.dolt/.
 
     start_sql_server repo1
 
@@ -294,7 +294,7 @@ teardown() {
 
     # check that mysql.db and privs.json exist
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
     [[ "$output" =~ "privs.json" ]] || false
 
     # restart server
@@ -315,7 +315,7 @@ teardown() {
     [ "${lines[9]}" = '+------------+' ]
 
     # remove mysql.db and privs.json if they exist
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
     rm -f privs.json
 
     # leave the directory

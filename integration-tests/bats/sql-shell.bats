@@ -45,7 +45,7 @@ teardown() {
 @test "sql-shell: dolt sql shell has mysql db and can create users" {
     # there does not exist a mysql.db file
     run ls
-    ! [[ "$output" =~ "mysql.db" ]] || false
+    ! [[ "$output" =~ ".dolt/mysql.db" ]] || false
 
     # mysql database exists and has privilege tables
     run dolt sql <<< "show tables from mysql;"
@@ -64,7 +64,7 @@ teardown() {
 
     # there should now be a mysql.db file
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
 
     # show users, expect root and new_user
     run dolt sql <<< "select user from mysql.user;"
@@ -72,7 +72,7 @@ teardown() {
     [[ "$output" =~ "new_user" ]] || false
 
     # remove mysql.db just in case
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
 }
 
 @test "sql-shell: bad sql in sql shell should error" {

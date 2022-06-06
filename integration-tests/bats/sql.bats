@@ -42,7 +42,7 @@ teardown() {
 @test "sql: dolt sql -q has mysql db and can create users" {
     # there does not exist a mysql.db file
     run ls
-    ! [[ "$output" =~ "mysql.db" ]] || false
+    ! [[ "$output" =~ ".dolt/mysql.db" ]] || false
 
     # mysql database exists and has privilege tables
     run dolt sql -q "show tables from mysql;"
@@ -61,7 +61,7 @@ teardown() {
 
     # there should now be a mysql.db file
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    [[ "$output" =~ ".dolt/mysql.db" ]] || false
 
     # show users, expect root and new_user
     run dolt sql -q "select user from mysql.user;"
@@ -69,7 +69,7 @@ teardown() {
     [[ "$output" =~ "new_user" ]] || false
 
     # remove mysql.db just in case
-    rm -f mysql.db
+    rm -f .dolt/mysql.db
 }
 
 @test "sql: errors do not write incomplete rows" {
