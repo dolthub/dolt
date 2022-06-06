@@ -82,26 +82,6 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 	}
 
 	// TODO: need to add from_ columns
-	//// add from_ prefix
-	//fromCols := make([]schema.Column, len(cols))
-	//for i, col := range cols {
-	//	toCols[i] = col
-	//	toCols[i].Name = "from_" + col.Name
-	//}
-	//
-	//// from_ columns
-	//fromIndex := doltIndex{
-	//	id:       "PRIMARY",
-	//	tblName:  doltdb.DoltDiffTablePrefix + tbl,
-	//	dbName:   db,
-	//	columns:  fromCols,
-	//	indexSch: sch,
-	//	tableSch: sch,
-	//	unique:   true,
-	//	comment:  "",
-	//	vrw:      t.ValueReadWriter(),
-	//	keyBld:   keyBld,
-	//}
 
 	return append(indexes, toIndex), nil
 }

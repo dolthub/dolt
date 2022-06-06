@@ -105,11 +105,7 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
 	}
 
-	warnFn := func(code int, message string, args ...string) {
-		ctx.Warn(code, message, args)
-	}
-
-	src := diff.NewRowDiffSource(rd, joiner, warnFn)
+	src := diff.NewRowDiffSource(rd, joiner, ctx.Warn)
 	src.AddInputRowConversion(fromConv, toConv)
 
 	return &diffRowItr{
@@ -260,12 +256,12 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema)
+	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tSch, targetToSchema)
+	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}

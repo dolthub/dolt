@@ -150,9 +150,18 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
+}
 
-	// I want to see Exchange nodes, so have Parallelism
-	//enginetest.TestDoltDiffQueryPlans(t, newDoltHarness(t).WithParallelism(2))
+func TestDoltDiffQueryPlans(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
+	harness.Setup(setup.SimpleSetup...)
+	e, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer e.Close()
+	for _, tt := range DoltDiffPlanTests {
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
+	}
 }
 
 func TestQueryErrors(t *testing.T) {
@@ -773,7 +782,6 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
@@ -785,7 +793,6 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {

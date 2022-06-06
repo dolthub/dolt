@@ -261,6 +261,36 @@ func TagMappingWithNameFallback(srcSch, destSch schema.Schema) (*FieldMapping, e
 	return NewFieldMapping(srcSch, destSch, srcToDest)
 }
 
+// TagMappingByName takes a source schema and a destination schema and maps
+// columns by matching names.
+func TagMappingByName(srcSch, destSch schema.Schema) (*FieldMapping, error) {
+	successes := 0
+	srcCols := srcSch.GetAllCols()
+	destCols := destSch.GetAllCols()
+
+	srcToDest := make(map[uint64]uint64, destCols.Size())
+	err := destCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		srcCol, ok := srcCols.GetByName(col.Name)
+		if !ok {
+			return false, nil
+		}
+
+		srcToDest[srcCol.Tag] = col.Tag
+		successes++
+
+		return false, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if successes == 0 {
+		return nil, ErrEmptyMapping
+	}
+
+	return NewFieldMapping(srcSch, destSch, srcToDest)
+}
+
 // TypedToUntypedMapping takes a schema and creates a mapping to an untyped schema with all the same columns.
 func TypedToUntypedMapping(sch schema.Schema) (*FieldMapping, error) {
 	untypedSch, err := untyped.UntypeSchema(sch)

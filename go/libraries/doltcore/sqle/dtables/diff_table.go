@@ -132,7 +132,6 @@ func (dt *DiffTable) Schema() sql.Schema {
 }
 
 func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	// TODO: if this were in parallel it can't always start at HEAD
 	cmItr := doltdb.CommitItrForRoots(dt.ddb, dt.head)
 
 	sf, err := SelectFuncForFilters(dt.ddb.Format(), dt.partitionFilters)
@@ -509,7 +508,7 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 		return rowconv.IdentityConverter, nil
 	}
 
-	fm, err := rowconv.TagMappingWithNameFallback(srcSch, targetSch)
+	fm, err := rowconv.TagMappingByName(srcSch, targetSch)
 	if err != nil {
 		return nil, err
 	}
