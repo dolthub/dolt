@@ -76,6 +76,23 @@ teardown() {
   assert_valid_repository
 }
 
+@test "init: explicit local configuration for name and email with no global config" {
+  unset_dolt_user
+
+  run dolt init --name foo --email foo@bar.com
+  [ "$status" -eq 0 ]
+
+  run dolt config --local --get user.name
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "foo" ]] || false
+
+  run dolt config --local --get user.email
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "foo@bar.com" ]] || false
+
+  assert_valid_repository
+}
+
 @test "init: no explicit or implicit configuration for name and email" {
   unset_dolt_user
 
