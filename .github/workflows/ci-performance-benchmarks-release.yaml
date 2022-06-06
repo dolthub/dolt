@@ -76,4 +76,5 @@ jobs:
           ACTOR_EMAIL: ${{ needs.set-version-actor.outputs.actor_email }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
+          NOMS_BIN_FORMAT: "__LD_1__"
           TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-mysql-dolt-job-json.sh"

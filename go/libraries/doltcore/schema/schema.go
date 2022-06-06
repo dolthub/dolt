@@ -229,8 +229,8 @@ func IsUsingSpatialColAsKey(sch Schema) bool {
 	return false
 }
 
-// CopyChecks copies check constraints from the |from| schema to the |to| schema and returns it
-func CopyChecks(from, to Schema) Schema {
+// CopyChecksConstraints copies check constraints from the |from| schema to the |to| schema and returns it
+func CopyChecksConstraints(from, to Schema) Schema {
 	fromSch, toSch := from.(*schemaImpl), to.(*schemaImpl)
 	toSch.checkCollection = fromSch.checkCollection
 	return toSch

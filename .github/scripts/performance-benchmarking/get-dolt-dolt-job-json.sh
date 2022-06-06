@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -lt 9 ]; then
-    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber>"
+    echo  "Usage: ./get-job-json.sh <jobname> <fromServer> <fromVersion> <toServer> <toVersion> <timePrefix> <actorPrefix> <format> <issueNumber> <initBigRepo> <nomsBinFormat>"
     exit 1
 fi
 
@@ -16,7 +16,17 @@ timePrefix="$6"
 actorPrefix="$7"
 format="$8"
 issueNumber="$9"
+initBigRepo="${10}"
+nomsBinFormat="${11}"
 tpccRegex="tpcc%"
+
+if [ -n "$initBigRepo" ]; then
+  initBigRepo="\"--init-big-repo=$initBigRepo\","
+fi
+
+if [ -n "$nomsBinFormat" ]; then
+  nomsBinFormat="\"--noms-bin-format=$nomsBinFormat\","
+fi
 
 readTests="('oltp_read_only', 'oltp_point_select', 'select_random_points', 'select_random_ranges', 'covering_index_scan', 'index_scan', 'table_scan', 'groupby_scan')"
 medianLatencyChangeReadsQuery="select f.test_name as read_tests, case when avg(f.latency_percentile) < 0.001 then 0.001 else avg(f.latency_percentile) end as from_latency_median, case when avg(t.latency_percentile) < 0.001 then 0.001 else avg(t.latency_percentile) end as to_latency_median, case when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) < -0.1 then 1 when ((avg(t.latency_percentile) - avg(f.latency_percentile)) / (avg(f.latency_percentile) + .0000001)) > 0.1 then -1 else 0 end as is_faster from from_results as f join to_results as t on f.test_name = t.test_name where f.test_name in $readTests group by f.test_name;"
@@ -70,11 +80,12 @@ echo '
               "--results-dir='$timePrefix'",
               "--results-prefix='$actorPrefix'",
               "--withTpcc=true",
+              '"$initBigRepo"'
+              '"$nomsBinFormat"'
               "--sysbenchQueries='"$medianLatencyChangeReadsQuery"'",
               "--sysbenchQueries='"$medianLatencyChangeWritesQuery"'",
               "--tpccQueries='"$tpccLatencyQuery"'",
-              "--tpccQueries='"$tpccTpsQuery"'",
-              "--init-big-repo"
+              "--tpccQueries='"$tpccTpsQuery"'"
             ]
           }
         ],

@@ -32,6 +32,7 @@ const (
 	dbName       = "test"
 	luaPath      = "?.lua"
 	bigEmptyRepo = "max-hoffman/big-empty"
+	nbfEnvVar    = "DOLT_DEFAULT_BIN_FORMAT"
 )
 
 var stampFunc = func() string { return time.Now().UTC().Format(stampFormat) }
@@ -50,7 +51,7 @@ func BenchmarkDolt(ctx context.Context, config *Config, serverConfig *ServerConf
 		return nil, err
 	}
 
-	testRepo, err := initDoltRepo(ctx, serverConfig, config.InitBigRepo)
+	testRepo, err := initDoltRepo(ctx, serverConfig, config.InitBigRepo, config.NomsBinFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +134,7 @@ func doltVersion(ctx context.Context, config *ServerConfig) error {
 }
 
 // initDoltRepo initializes a dolt repo and returns the repo path
-func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool) (string, error) {
+func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool, nbf string) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -150,6 +151,12 @@ func initDoltRepo(ctx context.Context, config *ServerConfig, initBigRepo bool) (
 	err = os.MkdirAll(testRepo, os.ModePerm)
 	if err != nil {
 		return "", err
+	}
+
+	if nbf != "" {
+		if err = os.Setenv(nbfEnvVar, nbf); err != nil {
+			return "", err
+		}
 	}
 
 	doltInit := ExecCommand(ctx, config.ServerExec, "init")

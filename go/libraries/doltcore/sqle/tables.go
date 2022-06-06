@@ -1072,7 +1072,7 @@ func (t *AlterableDoltTable) RewriteInserter(
 		return nil, err
 	}
 
-	newSch = schema.CopyChecks(oldSch, newSch)
+	newSch = schema.CopyChecksConstraints(oldSch, newSch)
 
 	if isColumnDrop(oldSchema, newSchema) {
 		newSch = schema.CopyIndexes(oldSch, newSch)
