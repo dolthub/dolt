@@ -315,16 +315,16 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
-		head, err := sess.GetHeadCommit(ctx, db.name)
+		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		baseTable, ok, err := db.GetTableInsensitiveWithRoot(ctx, root, baseTableName)
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
-		if err != nil {
-			return nil, false, err
+		if !ok {
+			return nil, false, nil
 		}
-		return dt, true, nil
+
+		return dtables.NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable), true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
 		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
