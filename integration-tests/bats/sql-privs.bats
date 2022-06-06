@@ -307,7 +307,7 @@ teardown() {
 
     # check that mysql.db exists
     run ls .dolt
-    [[ "$output" =~ ".dolt/mysql.db" ]] || false
+    [[ "$output" =~ "mysql.db" ]] || false
 
     # restart server
     stop_sql_server
