@@ -78,8 +78,10 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	if newBranch, newBranchOk := apr.GetValue(cli.CheckoutCoBranch); newBranchOk {
 		if len(newBranch) == 0 {
 			err = errors.New("error: cannot checkout empty string")
-		} else {
+		} else if len(apr.Args) > 0 {
 			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, apr.Arg(0))
+		} else {
+			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, "")
 		}
 
 		if err != nil {

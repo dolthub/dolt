@@ -1437,7 +1437,7 @@ var DoltBranchScripts = []queries.ScriptTest{
 		Name: "Create branch from startpoint",
 		SetUpScript: []string{
 			"create table a (x int)",
-			"CALL DOLT_COMMIT('--allow-empty', '-am', 'add table a')",
+			"set @commit1 = (select DOLT_COMMIT('-am', 'add table a'));",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
@@ -1451,6 +1451,14 @@ var DoltBranchScripts = []queries.ScriptTest{
 			{
 				Query:    "show tables",
 				Expected: []sql.Row{{"myview"}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show tables",
+				Expected: []sql.Row{{"a"}, {"myview"}},
 			},
 			{
 				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
