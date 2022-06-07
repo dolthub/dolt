@@ -147,6 +147,24 @@ type nomsIndex struct {
 
 var _ Index = nomsIndex{}
 
+func IterAllIndexes(
+	ctx context.Context,
+	sch schema.Schema,
+	set IndexSet,
+	cb func(name string, idx Index) error,
+) error {
+	for _, def := range sch.Indexes().AllIndexes() {
+		idx, err := set.GetIndex(ctx, sch, def.Name())
+		if err != nil {
+			return err
+		}
+		if err = cb(def.Name(), idx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NomsMapFromIndex unwraps the Index and returns the underlying types.Map.
 func NomsMapFromIndex(i Index) types.Map {
 	return i.(nomsIndex).index
