@@ -307,8 +307,7 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 	}
 
 	table = table.LockedToRoot(root)
-
-
+	
 	// TODO: apply index lookups conditionally based on index presence at this revision
 	var sqlTable sql.Table
 	sqlTable = table
@@ -373,7 +372,7 @@ func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.C
 		srcIdx := srcSchema.IndexOfColName(col.Name)
 		if srcIdx >= 0 {
 			// only add a conversion if the type is the same
-			// TODO: we could do a projection to convert an
+			// TODO: we could do a projection to convert between types in some cases
 			if srcSchema[srcIdx].Type == targetSchema[i].Type {
 				srcToTarget[srcIdx] = i
 			}

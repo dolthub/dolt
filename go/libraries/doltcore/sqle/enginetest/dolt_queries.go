@@ -517,7 +517,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "primary key table: non-pk schema changes",
+		Name: "primary key table: non-pk column drops and adds",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 text);",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
@@ -542,16 +542,40 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
-				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1;",
-				Expected: []sql.Row{{1, 2}, {4, 5}},
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+				Expected: []sql.Row{{1, nil}, {4, nil}},
 			},
 			{
-				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2;",
-				Expected: []sql.Row{{1, 2}, {4, 5}},
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+				Expected: []sql.Row{{1, nil}, {4, nil}},
 			},
 			{
-				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit3;",
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit3 order by pk;",
 				Expected: []sql.Row{{1, 2}, {4, 5}},
+			},
+		},
+	},
+	{
+		Name: "primary key table: non-pk column type changes",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 text);",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+			"alter table t modify column c2 int;",
+			"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_history_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+				Expected: []sql.Row{{1, nil}, {4, nil}},
+			},
+			{
+				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+				Expected: []sql.Row{{1, 3}, {4, 6}},
 			},
 		},
 	},
