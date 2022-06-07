@@ -242,7 +242,7 @@ func (ht *HistoryTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) 
 func (ht *HistoryTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	cp := part.(*commitPartition)
 
-	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm)
+	return newRowItrForTableAtCommit(ctx, ht.Name(), ht.doltTable, cp.h, cp.cm, ht.indexLookup)
 }
 
 // commitPartition is a single commit
@@ -278,14 +278,14 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 }
 
 type historyIter struct {
-	table           *DoltTable
+	table           sql.Table
 	tablePartitions sql.PartitionIter
 	currPart        sql.RowIter
 	rowConverter     func (row sql.Row) sql.Row
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, ) (*historyIter, error) {
+func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, ) (*historyIter, error) {
 	targetSchema := historyTableSchema(tableName, table)
 
 	root, err := cm.GetRootValue(ctx)
@@ -306,18 +306,20 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return &historyIter{nonExistentTable: true}, nil
 	}
 
-	// TODO: apply index lookups conditionally based on index presence at this revision
-
 	table = table.LockedToRoot(root)
-	tablePartitions, err := table.Partitions(ctx)
+
+	// TODO: apply index lookups conditionally based on index presence at this revision
+	sqlTable := table.WithIndexLookup(lookup)
+
+	tablePartitions, err := sqlTable.Partitions(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	converter := rowConverter(table.Schema(), targetSchema, h, meta)
+	converter := rowConverter(sqlTable.Schema(), targetSchema, h, meta)
 
 	return &historyIter{
-		table:           table,
+		table:           sqlTable,
 		tablePartitions: tablePartitions,
 		rowConverter:    converter,
 	}, nil
