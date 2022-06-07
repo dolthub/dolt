@@ -79,7 +79,7 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		if len(newBranch) == 0 {
 			err = errors.New("error: cannot checkout empty string")
 		} else {
-			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, "")
+			err = checkoutNewBranch(ctx, dbName, dbData, roots, newBranch, apr.Arg(0))
 		}
 
 		if err != nil {
