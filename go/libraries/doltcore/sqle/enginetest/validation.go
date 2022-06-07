@@ -17,6 +17,7 @@ package enginetest
 import (
 	"context"
 	"fmt"
+	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
@@ -25,8 +26,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func ValidateDatabase(ctx context.Context, db sql.Database) (err error) {
@@ -56,6 +59,7 @@ type validator func(ctx context.Context, db sqle.Database) error
 
 var validationStages = []validator{
 	validateChunkReferences,
+	validateSecondaryIndexes,
 }
 
 // validateChunkReferences checks for dangling chunks.
@@ -97,6 +101,110 @@ func validateChunkReferences(ctx context.Context, db sqle.Database) error {
 	}
 
 	return iterDatabaseTables(ctx, db, cb)
+}
+
+// validateSecondaryIndexes checks that secondary index contents are consistent
+// with primary index contents.
+func validateSecondaryIndexes(ctx context.Context, db sqle.Database) error {
+	cb := func(n string, t *doltdb.Table, sch schema.Schema) (stop bool, err error) {
+		rows, err := t.GetRowData(ctx)
+		if err != nil {
+			return false, err
+		}
+		primary := durable.ProllyMapFromIndex(rows)
+
+		for _, def := range sch.Indexes().AllIndexes() {
+			set, err := t.GetIndexSet(ctx)
+			if err != nil {
+				return true, err
+			}
+			idx, err := set.GetIndex(ctx, sch, def.Name())
+			if err != nil {
+				return true, err
+			}
+			secondary := durable.ProllyMapFromIndex(idx)
+
+			err = validateIndexConsistency(ctx, sch, def, primary, secondary)
+			if err != nil {
+				return true, err
+			}
+		}
+		return false, nil
+	}
+	return iterDatabaseTables(ctx, db, cb)
+}
+
+func validateIndexConsistency(
+	ctx context.Context,
+	sch schema.Schema,
+	def schema.Index,
+	primary, secondary prolly.Map,
+) error {
+	// secondary indexes have empty keys
+	idxDesc, _ := secondary.Descriptors()
+	builder := val.NewTupleBuilder(idxDesc)
+	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+
+	kd, _ := primary.Descriptors()
+	pkSize := kd.Count()
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	for {
+		key, value, err := iter.Next(ctx)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// make secondary index key
+		for i := range mapping {
+			j := mapping.MapOrdinal(i)
+			if j < pkSize {
+				builder.PutRaw(i, key.GetField(j))
+			} else {
+				builder.PutRaw(i, value.GetField(j-pkSize))
+			}
+		}
+		k := builder.Build(primary.Pool())
+
+		ok, err := secondary.Has(ctx, k)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("index key %v not found in index %s", k, def.Name())
+		}
+	}
+}
+
+func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord val.OrdinalMapping) {
+	// assert empty values for secondary indexes
+	if def.Schema().GetNonPKCols().Size() > 0 {
+		panic("expected empty secondary index values")
+	}
+
+	secondary := def.Schema().GetPKCols()
+	primary := sch.GetAllCols().GetColumns()
+
+	ord = make(val.OrdinalMapping, secondary.Size())
+	for i := range ord {
+		ord[i] = -1
+		n := secondary.GetAtIndex(i).Name
+		for j, col := range primary {
+			if col.Name == n {
+				ord[i] = j
+			}
+		}
+		if ord[i] < 0 {
+			panic("column " + n + " not found")
+		}
+	}
+	return
 }
 
 // iterDatabaseTables is a utility to factor out common validation access patterns.
