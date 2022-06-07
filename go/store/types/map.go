@@ -32,7 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-type ValueInRange func(Value) (bool, error)
+//type ValueInRange func(Value) (bool, error)
+type ValueInRange func(context.Context, Value) (bool, bool, error)
 
 var ErrKeysNotOrdered = errors.New("streaming map keys not ordered")
 
@@ -203,8 +204,8 @@ func (m Map) Diff(ctx context.Context, last Map, changes chan<- ValueChanged) er
 // streaming approach, optimised for returning results early, but not
 // completing quickly.
 func (m Map) DiffLeftRight(ctx context.Context, last Map, changes chan<- ValueChanged) error {
-	trueFunc := func(Value) (bool, error) {
-		return true, nil
+	trueFunc := func(context.Context, Value) (bool, bool, error) {
+		return true, false, nil
 	}
 	return m.DiffLeftRightInRange(ctx, last, nil, trueFunc, changes)
 }

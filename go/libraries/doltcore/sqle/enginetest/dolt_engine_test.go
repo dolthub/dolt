@@ -152,6 +152,18 @@ func TestQueryPlans(t *testing.T) {
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
 }
 
+func TestDoltDiffQueryPlans(t *testing.T) {
+	skipNewFormat(t)
+	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
+	harness.Setup(setup.SimpleSetup...)
+	e, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer e.Close()
+	for _, tt := range DoltDiffPlanTests {
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
+	}
+}
+
 func TestQueryErrors(t *testing.T) {
 	enginetest.TestQueryErrors(t, newDoltHarness(t))
 }
@@ -281,7 +293,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 						t.Skip()
 					}
 				}
-				enginetest.RunQueryWithContext(t, engine, ctx, statement)
+				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 			for _, assertion := range script.Assertions {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -305,11 +317,11 @@ func TestDoltUserPrivileges(t *testing.T) {
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, assertion.ExpectedErr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, assertion.ExpectedErr)
 					})
 				} else if assertion.ExpectedErrStr != "" {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {

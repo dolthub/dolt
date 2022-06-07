@@ -140,6 +140,21 @@ func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return 1
 	}
 
+	configuration := make(map[string]string)
+	if apr.Contains(usernameParamName) {
+		configuration[env.UserNameKey] = name
+	}
+	if apr.Contains(emailParamName) {
+		configuration[env.UserEmailKey] = email
+	}
+	if len(configuration) > 0 {
+		err = dEnv.Config.WriteableConfig().SetStrings(configuration)
+		if err != nil {
+			cli.PrintErrln(color.RedString("Failed to store initial configuration. %s", err.Error()))
+			return 1
+		}
+	}
+
 	cli.Println(color.CyanString("Successfully initialized dolt data repository."))
 	return 0
 }
