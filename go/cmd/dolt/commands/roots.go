@@ -57,7 +57,7 @@ func (cmd RootsCmd) Hidden() bool {
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
 // that it be run from within a data repository directory
 func (cmd RootsCmd) RequiresRepo() bool {
-	return true
+	return false
 }
 
 // Description returns a description of the command
