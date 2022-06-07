@@ -134,50 +134,20 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	tableDelta := d.tableDeltas[d.idx]
 	d.idx++
 
-	dataChange := false
-	schemaChange := false
-
-	// TODO: is this the right logic? double check this?
-	// TODO: Can we abstract and simplify any of this?
-	if tableDelta.IsDrop() {
-		rowData, err := tableDelta.FromTable.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		dataChange = rowData.Count() > 0
-		schemaChange = true
-	} else if tableDelta.IsAdd() {
-		rowData, err := tableDelta.ToTable.GetRowData(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		dataChange = rowData.Count() > 0
-		schemaChange = true
-	} else {
-		hashChanged, err := tableDelta.HasHashChanged()
-		if err != nil {
-			return nil, err
-		}
-		dataChange = hashChanged
-
-		schemaChanged, err := tableDelta.HasSchemaChanged(ctx)
-		if err != nil {
-			return nil, err
-		}
-		schemaChange = schemaChanged
+	change, err := processTableDelta(ctx, tableDelta)
+	if err != nil {
+		return nil, err
 	}
 
 	sqlRow := sql.NewRow(
-		"WORKING",         // commit_hash
-		tableDelta.ToName, // table_name
-		"NULL",            // committer
-		"NULL",            // email
-		"NULL",            // date
-		"NULL",            // message
-		dataChange,        // data_change
-		schemaChange,      // schema_change
+		"WORKING",
+		change.tableName,
+		"NULL", // committer
+		"NULL", // email
+		"NULL", // date
+		"NULL", // message
+		change.dataChange,
+		change.schemaChange,
 	)
 
 	return sqlRow, nil
@@ -325,7 +295,7 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 
 	tableChanges := make([]tableChange, len(deltas))
 	for i := 0; i < len(deltas); i++ {
-		change, err := itr.processTableDelta(deltas[i])
+		change, err := processTableDelta(itr.ctx, deltas[i])
 		if err != nil {
 			return nil, err
 		}
@@ -343,10 +313,10 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 
 // processTableDelta processes the specified TableDelta to determine what kind of change it was (i.e. table drop,
 // table rename, table create, or data update) and returns a tableChange struct representing the change.
-func (itr *doltDiffCommitHistoryRowItr) processTableDelta(delta diff.TableDelta) (*tableChange, error) {
+func processTableDelta(ctx *sql.Context, delta diff.TableDelta) (*tableChange, error) {
 	// Dropping a table is always a schema change, and also a data change if the table contained data
 	if delta.IsDrop() {
-		isEmpty, err := itr.isTableDataEmpty(delta.FromTable)
+		isEmpty, err := isTableDataEmpty(ctx, delta.FromTable)
 		if err != nil {
 			return nil, err
 		}
@@ -374,7 +344,7 @@ func (itr *doltDiffCommitHistoryRowItr) processTableDelta(delta diff.TableDelta)
 
 	// Creating a table is always a schema change, and also a data change if data was inserted
 	if delta.IsAdd() {
-		isEmpty, err := itr.isTableDataEmpty(delta.ToTable)
+		isEmpty, err := isTableDataEmpty(ctx, delta.ToTable)
 		if err != nil {
 			return nil, err
 		}
@@ -391,7 +361,7 @@ func (itr *doltDiffCommitHistoryRowItr) processTableDelta(delta diff.TableDelta)
 		return nil, err
 	}
 
-	schemaChanged, err := delta.HasSchemaChanged(itr.ctx)
+	schemaChanged, err := delta.HasSchemaChanged(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -409,8 +379,8 @@ func (itr *doltDiffCommitHistoryRowItr) Close(*sql.Context) error {
 }
 
 // isTableDataEmpty return true if the table does not contain any data
-func (itr *doltDiffCommitHistoryRowItr) isTableDataEmpty(table *doltdb.Table) (bool, error) {
-	rowData, err := table.GetRowData(itr.ctx)
+func isTableDataEmpty(ctx *sql.Context, table *doltdb.Table) (bool, error) {
+	rowData, err := table.GetRowData(ctx)
 	if err != nil {
 		return false, err
 	}
