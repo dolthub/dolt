@@ -18,16 +18,20 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
-	"math"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
 
-// TupleRowStorage is a clone of InlineBlob. It only exists to be able to easily differentiate these two very different
-// use cases during the migration from the old storage format to the new one.
+// TupleRowStorage cribs its implementation from InlineBlob. It bridges
+// prolly/message byte arrays between types.Value and prolly/tree.Node.
+//
+// Unlike SerialMessage, the byte array held in TupleRowStorage includes the
+// NomsKind byte and the BigEndian uint16 size of the message. |writeTo| is
+// simply a call through to writeRaw, and |readFrom| has to pick up bytes from
+// the reader that have already been "read" to determine kind and size.
+
 type TupleRowStorage []byte
 
 func (v TupleRowStorage) Value(ctx context.Context) (Value, error) {
@@ -81,23 +85,12 @@ func (v TupleRowStorage) valueReadWriter() ValueReadWriter {
 }
 
 func (v TupleRowStorage) writeTo(w nomsWriter, nbf *NomsBinFormat) error {
-	byteLen := len(v)
-	if byteLen > math.MaxUint16 {
-		return fmt.Errorf("TupleRowStorage has length %v when max is %v", byteLen, math.MaxUint16)
-	}
-
-	err := TupleRowStorageKind.writeTo(w, nbf)
-	if err != nil {
-		return err
-	}
-
-	w.writeUint16(uint16(byteLen))
 	w.writeRaw(v)
 	return nil
 }
 
 func (v TupleRowStorage) readFrom(nbf *NomsBinFormat, b *binaryNomsReader) (Value, error) {
-	bytes := b.ReadInlineBlob()
+	bytes := b.readTupleRowStorage()
 	return TupleRowStorage(bytes), nil
 }
 
