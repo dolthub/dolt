@@ -52,8 +52,8 @@ const (
 )
 
 const (
-	threeWayMerge = 0
-	ff            = 1
+	threeWayMerge    = 0
+	fastForwardMerge = 1
 )
 
 func (d DoltMergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
@@ -178,11 +178,11 @@ func mergeIntoWorkingSet(ctx *sql.Context, sess *dsess.DoltSession, roots doltdb
 
 				return ws, hasConflictsOrViolations, threeWayMerge, nil
 			}
-			return ws, noConflictsOrViolations, ff, err
+			return ws, noConflictsOrViolations, fastForwardMerge, err
 		}
 
 		ws, err = executeFFMerge(ctx, dbName, spec.Squash, ws, dbData, spec.MergeC)
-		return ws, noConflictsOrViolations, ff, err
+		return ws, noConflictsOrViolations, fastForwardMerge, err
 	}
 
 	dbState, ok, err := sess.LookupDbState(ctx, dbName)
