@@ -345,7 +345,7 @@ func (itr *doltDiffCommitHistoryRowItr) calculateTableChanges(ctx context.Contex
 // table rename, table create, or data update) and returns a tableChange struct representing the change.
 func (itr *doltDiffCommitHistoryRowItr) processTableDelta(delta diff.TableDelta) (*tableChange, error) {
 	// Dropping a table is always a schema change, and also a data change if the table contained data
-	if itr.isTableDropChange(delta) {
+	if delta.IsDrop() {
 		isEmpty, err := itr.isTableDataEmpty(delta.FromTable)
 		if err != nil {
 			return nil, err
@@ -373,7 +373,7 @@ func (itr *doltDiffCommitHistoryRowItr) processTableDelta(delta diff.TableDelta)
 	}
 
 	// Creating a table is always a schema change, and also a data change if data was inserted
-	if itr.isTableCreateChange(delta) {
+	if delta.IsAdd() {
 		isEmpty, err := itr.isTableDataEmpty(delta.ToTable)
 		if err != nil {
 			return nil, err
@@ -416,21 +416,4 @@ func (itr *doltDiffCommitHistoryRowItr) isTableDataEmpty(table *doltdb.Table) (b
 	}
 
 	return rowData.Empty(), nil
-}
-
-// isRenameChange returns true if the specified TableDelta represents a table rename change.
-func (itr *doltDiffCommitHistoryRowItr) isRenameChange(delta diff.TableDelta) bool {
-	return delta.FromTable != nil &&
-		delta.ToTable != nil &&
-		delta.FromName != delta.ToName
-}
-
-// isTableDropChange return true if the specified TableDelta represents a table drop change.
-func (itr *doltDiffCommitHistoryRowItr) isTableDropChange(delta diff.TableDelta) bool {
-	return len(delta.FromName) > 0 && len(delta.ToName) == 0
-}
-
-// isTableCreateChange returns true if the specified TableDelta represents a table create change.
-func (itr *doltDiffCommitHistoryRowItr) isTableCreateChange(delta diff.TableDelta) bool {
-	return delta.FromTable == nil && delta.ToTable != nil
 }
