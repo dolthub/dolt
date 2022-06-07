@@ -15,10 +15,10 @@
 package dtables
 
 import (
-	"fmt"
-
 	"github.com/dolthub/go-mysql-server/sql"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
+	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -36,10 +36,11 @@ type ProllyRowConverter struct {
 	valDesc          val.TupleDesc
 	pkTargetTypes    []sql.Type
 	nonPkTargetTypes []sql.Type
+	warnFn           rowconv.WarnFunction
 }
 
-func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, error) {
-	keyProj, valProj, err := MapSchemaBasedOnName(inSch, outSch)
+func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction) (ProllyRowConverter, error) {
+	keyProj, valProj, err := diff.MapSchemaBasedOnName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
 	}
@@ -80,89 +81,49 @@ func NewProllyRowConverter(inSch, outSch schema.Schema) (ProllyRowConverter, err
 		valDesc:          vd,
 		pkTargetTypes:    pkTargetTypes,
 		nonPkTargetTypes: nonPkTargetTypes,
+		warnFn:           warnFn,
 	}, nil
 }
 
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
 // and places the converted row in |dstRow|.
 func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interface{}) error {
-	for i, j := range c.keyProj {
-		if j == -1 {
-			continue
-		}
-		f, err := index.GetField(c.keyDesc, i, key)
-		if err != nil {
-			return err
-		}
-		if t := c.pkTargetTypes[i]; t != nil {
-			dstRow[j], err = t.Convert(f)
-			if err != nil {
-				return err
-			}
-		} else {
-			dstRow[j] = f
-		}
+	err := c.putFields(key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow)
+	if err != nil {
+		return err
 	}
 
-	for i, j := range c.valProj {
-		if j == -1 {
-			continue
-		}
-		f, err := index.GetField(c.valDesc, i, value)
-		if err != nil {
-			return err
-		}
-		if t := c.nonPkTargetTypes[i]; t != nil {
-			dstRow[j], err = t.Convert(f)
-			if err != nil {
-				return err
-			}
-		} else {
-			dstRow[j] = f
-		}
+	err = c.putFields(value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-// MapSchemaBasedOnName can be used to map column values from one schema to
-// another schema. A column in |inSch| is mapped to |outSch| if they share the
-// same name and primary key membership status. It returns ordinal mappings that
-// can be use to map key, value val.Tuple's of schema |inSch| to a sql.Row of
-// |outSch|. The first ordinal map is for keys, and the second is for values. If
-// a column of |inSch| is missing in |outSch| then that column's index in the
-// ordinal map holds -1.
-func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
-	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
-	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())
-
-	err := inSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetPKCols().TagToIdx[tag]
-		if col, ok := outSch.GetPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
-			keyMapping[i] = j
-		} else {
-			return true, fmt.Errorf("could not map primary key column %s", col.Name)
+func (c ProllyRowConverter) putFields(tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow []interface{}) error {
+	for i, j := range proj {
+		if j == -1 {
+			continue
 		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = inSch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
-		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
-			valMapping[i] = j
-		} else {
-			valMapping[i] = -1
+		f, err := index.GetField(desc, i, tup)
+		if err != nil {
+			return err
 		}
-		return false, nil
-	})
-	if err != nil {
-		return nil, nil, err
+		if t := targetTypes[i]; t != nil {
+			dstRow[j], err = t.Convert(f)
+			if sql.ErrInvalidValue.Is(err) && c.warnFn != nil {
+				col := c.inSchema.GetAllCols().GetByIndex(i)
+				c.warnFn(rowconv.DatatypeCoercionFailureWarningCode, rowconv.DatatypeCoercionFailureWarning, col.Name)
+				dstRow[j] = nil
+				err = nil
+			}
+			if err != nil {
+				return err
+			}
+		} else {
+			dstRow[j] = f
+		}
 	}
-
-	return keyMapping, valMapping, nil
+	return nil
 }

@@ -310,19 +310,23 @@ func getTableInfoFromRoot(ctx context.Context, tblName string, root *doltdb.Root
 
 func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltdb.Table) (MergeStats, error) {
 	ms := MergeStats{Operation: TableModified}
-	if tbl.Format() == types.Format_DOLT_1 {
-		// TODO (dhruv): calculate stats for V1
-		return ms, nil
-	}
 
-	rows, err := tbl.GetNomsRowData(ctx)
-
+	rows, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
 
-	mergeRows, err := mergeTbl.GetNomsRowData(ctx)
+	mergeRows, err := mergeTbl.GetRowData(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
 
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return MergeStats{}, err
+	}
+
+	mergeSch, err := mergeTbl.GetSchema(ctx)
 	if err != nil {
 		return MergeStats{}, err
 	}
@@ -331,7 +335,8 @@ func calcTableMergeStats(ctx context.Context, tbl *doltdb.Table, mergeTbl *doltd
 	ch := make(chan diff.DiffSummaryProgress)
 	go func() {
 		defer close(ch)
-		err := diff.Summary(ctx, ch, rows, mergeRows)
+		// todo (dhruv): In the new storage format we can do better than executing a diff...
+		err := diff.Summary(ctx, ch, rows, mergeRows, sch, mergeSch)
 
 		ae.SetIfError(err)
 	}()

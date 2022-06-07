@@ -25,6 +25,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 )
 
+const defaultMySQLFilePath = "mysql.db"
+
 var fileMutex = &sync.Mutex{}
 var mysqlDbFilePath string
 var privsFilePath string
@@ -45,37 +47,28 @@ func SetPrivilegeFilePath(fp string) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
+	// Panic if some strange unknown failure occurs (not just that it doesn't exist)
 	_, err := os.Stat(fp)
-	if err != nil {
-		// Some strange unknown failure, okay to panic here
-		if !errors.Is(err, os.ErrNotExist) {
-			panic(err)
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		panic(err)
 	}
 	privsFilePath = fp
 }
 
 // SetMySQLDbFilePath sets the file path that will be used for saving and loading MySQL Db tables.
 func SetMySQLDbFilePath(fp string) {
-	// do nothing for empty file path
+	// look for default mysql db file path if none specified
 	if len(fp) == 0 {
-		return
+		fp = defaultMySQLFilePath
 	}
 
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
+	// Panic if some strange unknown failure occurs (not just that it doesn't exist)
 	_, err := os.Stat(fp)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			if err := ioutil.WriteFile(fp, []byte{}, 0644); err != nil {
-				// If we can't create the file it's a catastrophic error
-				panic(err)
-			}
-		} else {
-			// Some strange unknown failure, okay to panic here
-			panic(err)
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		panic(err)
 	}
 	mysqlDbFilePath = fp
 }
@@ -92,11 +85,9 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
+	// read from privsFilePath, error if something other than not-exists
 	fileContents, err := ioutil.ReadFile(privsFilePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, nil
-		}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, nil, err
 	}
 	if len(fileContents) == 0 {
@@ -112,19 +103,19 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
 func LoadData() ([]byte, error) {
-	// return nil for empty path
+	// use default mysql db file path if none specified
 	if len(mysqlDbFilePath) == 0 {
-		return nil, nil
+		mysqlDbFilePath = defaultMySQLFilePath
 	}
 
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
+	// read from mysqldbFilePath, error if something other than not-exists
 	buf, err := ioutil.ReadFile(mysqlDbFilePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
-
 	if len(buf) == 0 {
 		return nil, nil
 	}
@@ -139,5 +130,11 @@ func SaveData(ctx *sql.Context, data []byte) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
+	// use default if empty filepath
+	if len(mysqlDbFilePath) == 0 {
+		mysqlDbFilePath = defaultMySQLFilePath
+	}
+
+	// should create file if it doesn't exist
 	return ioutil.WriteFile(mysqlDbFilePath, data, 0777)
 }

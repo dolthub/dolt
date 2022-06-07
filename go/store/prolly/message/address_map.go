@@ -74,26 +74,47 @@ func (s AddressMapSerializer) Serialize(keys, addrs [][]byte, subtrees []uint64,
 		serial.AddressMapAddTreeCount(b, uint64(len(keys)))
 	}
 	serial.AddressMapAddTreeLevel(b, uint8(level))
-	b.FinishWithFileIdentifier(serial.AddressMapEnd(b), addressMapFileID)
-	return b.FinishedBytes()
+
+	return finishMessage(b, serial.AddressMapEnd(b), addressMapFileID)
+}
+
+func finishMessage(b *fb.Builder, off fb.UOffsetT, fileID []byte) []byte {
+	// We finish the buffer by prefixing it with:
+	// 1) 1 byte NomsKind == TupleRowStorage.
+	// 2) big endian uint16 representing the size of the message, not
+	// including the kind or size prefix bytes.
+	//
+	// This allows chunks we serialize here to be read by types binary
+	// codec.
+	//
+	// All accessors in this package expect this prefix to be on the front
+	// of the message bytes as well. See |messagePrefixSz|.
+
+	b.Prep(1, fb.SizeInt32+4+messagePrefixSz)
+	b.FinishWithFileIdentifier(off, fileID)
+
+	bytes := b.Bytes[b.Head()-messagePrefixSz:]
+	bytes[0] = byte(MessageTypesKind)
+	binary.BigEndian.PutUint16(bytes[1:], uint16(len(b.Bytes)-int(b.Head())))
+	return bytes
 }
 
 func getAddressMapKeys(msg Message) (keys val.SlicedBuffer) {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	keys.Buf = am.KeyItemsBytes()
 	keys.Offs = getAddressMapKeyOffsets(am)
 	return
 }
 
 func getAddressMapValues(msg Message) (values val.SlicedBuffer) {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	values.Buf = am.AddressArrayBytes()
 	values.Offs = offsetsForAddressArray(values.Buf)
 	return
 }
 
 func walkAddressMapAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	arr := am.AddressArrayBytes()
 	for i := 0; i < len(arr)/hash.ByteLen; i++ {
 		addr := hash.New(arr[i*addrSize : (i+1)*addrSize])
@@ -105,7 +126,7 @@ func walkAddressMapAddresses(ctx context.Context, msg Message, cb func(ctx conte
 }
 
 func getAddressMapCount(msg Message) uint16 {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	if am.KeyItemsLength() == 0 {
 		return 0
 	}
@@ -114,18 +135,18 @@ func getAddressMapCount(msg Message) uint16 {
 }
 
 func getAddressMapTreeLevel(msg Message) int {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	return int(am.TreeLevel())
 }
 
 func getAddressMapTreeCount(msg Message) int {
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	return int(am.TreeCount())
 }
 
 func getAddressMapSubtrees(msg Message) []uint64 {
 	counts := make([]uint64, getAddressMapCount(msg))
-	am := serial.GetRootAsAddressMap(msg, 0)
+	am := serial.GetRootAsAddressMap(msg, messagePrefixSz)
 	return decodeVarints(am.SubtreeCountsBytes(), counts)
 }
 
@@ -149,5 +170,6 @@ func estimateAddressMapSize(keys, addresses [][]byte, subtrees []uint64) (keySz,
 	totalSz += len(subtrees) * binary.MaxVarintLen64
 	totalSz += 8 + 1 + 1 + 1
 	totalSz += 72
+	totalSz += messagePrefixSz
 	return
 }

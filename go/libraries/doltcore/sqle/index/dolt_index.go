@@ -35,7 +35,55 @@ type DoltIndex interface {
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
+	IsPrimaryKey() bool
 	GetDurableIndexes(*sql.Context, *doltdb.Table) (durable.Index, durable.Index, error)
+}
+
+func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Currently, only support diffs on tables with primary keys, panic?
+	if schema.IsKeyless(sch) {
+		return nil, nil
+	}
+
+	// TODO: do this for other indexes?
+	tableRows, err := t.GetRowData(ctx)
+	if err != nil {
+		return nil, err
+	}
+	keyBld := maybeGetKeyBuilder(tableRows)
+
+	// TODO: two primary keys???
+	cols := sch.GetPKCols().GetColumns()
+
+	// add to_ prefix
+	toCols := make([]schema.Column, len(cols))
+	for i, col := range cols {
+		toCols[i] = col
+		toCols[i].Name = "to_" + col.Name
+	}
+
+	// to_ columns
+	toIndex := doltIndex{
+		id:       "PRIMARY",
+		tblName:  doltdb.DoltDiffTablePrefix + tbl,
+		dbName:   db,
+		columns:  toCols,
+		indexSch: sch,
+		tableSch: sch,
+		unique:   true,
+		comment:  "",
+		vrw:      t.ValueReadWriter(),
+		keyBld:   keyBld,
+	}
+
+	// TODO: need to add from_ columns
+
+	return append(indexes, toIndex), nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -80,6 +128,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		indexSch: sch,
 		tableSch: sch,
 		unique:   true,
+		isPk:     true,
 		comment:  "",
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
@@ -106,6 +155,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		indexSch: idx.Schema(),
 		tableSch: sch,
 		unique:   idx.IsUnique(),
+		isPk:     false,
 		comment:  idx.Comment(),
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
@@ -122,6 +172,7 @@ type doltIndex struct {
 	indexSch schema.Schema
 	tableSch schema.Schema
 	unique   bool
+	isPk     bool
 	comment  string
 
 	vrw    types.ValueReadWriter
@@ -328,6 +379,11 @@ func (di doltIndex) ID() string {
 // IsUnique implements sql.Index
 func (di doltIndex) IsUnique() bool {
 	return di.unique
+}
+
+// IsPrimaryKey implements DoltIndex.
+func (di doltIndex) IsPrimaryKey() bool {
+	return di.isPk
 }
 
 // Comment implements sql.Index

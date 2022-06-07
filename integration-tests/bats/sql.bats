@@ -39,6 +39,39 @@ teardown() {
     teardown_common
 }
 
+@test "sql: dolt sql -q has mysql db and can create users" {
+    # there does not exist a mysql.db file
+    run ls
+    ! [[ "$output" =~ "mysql.db" ]] || false
+
+    # mysql database exists and has privilege tables
+    run dolt sql -q "show tables from mysql;"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # create a new user
+    run dolt sql -q "create user new_user;"
+    [ "$status" -eq "0" ]
+
+    # there should now be a mysql.db file
+    run ls
+    [[ "$output" =~ "mysql.db" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove mysql.db just in case
+    rm -f mysql.db
+}
+
 @test "sql: errors do not write incomplete rows" {
     skip_nbf_dolt_1
     dolt sql <<"SQL"
@@ -990,6 +1023,7 @@ ALTER TABLE t1 MODIFY COLUMN v1 BIGINT;
 ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2000);
 ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP;
 SQL
+
     run dolt sql -q "SELECT * FROM t1 ORDER BY pk" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -1025,17 +1059,9 @@ SQL
     skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
-CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
-CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
 INSERT INTO t1 VALUES (0,-1),(1,1);
-INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
-INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');
 SQL
     run dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 INT UNSIGNED"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2)"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP"
     [ "$status" -eq "1" ]
 }
 

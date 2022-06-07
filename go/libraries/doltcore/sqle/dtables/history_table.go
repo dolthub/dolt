@@ -424,6 +424,7 @@ func rowConvForSchema(ctx context.Context, vrw types.ValueReadWriter, targetSch 
 		return rowconv.IdentityConverter, nil
 	}
 
+	// TODO: Update history table to also match by name only
 	fm, err := rowconv.TagMappingWithNameFallback(sch, targetSch)
 	if err != nil {
 		return nil, err

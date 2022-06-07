@@ -95,7 +95,7 @@ func TestNewEmptyNode(t *testing.T) {
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	assert.Equal(t, 0, empty.TreeCount())
-	assert.Equal(t, 72, empty.Size())
+	assert.Equal(t, 75, empty.Size())
 	assert.True(t, empty.IsLeaf())
 }
 

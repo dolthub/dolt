@@ -1297,6 +1297,144 @@ var MergeScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltBranchScripts = []queries.ScriptTest{
+	{
+		Name: "Create branches from HEAD with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				// Trying to recreate that branch fails without the force flag
+				Query:          "CALL DOLT_BRANCH('myNewBranch1')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch1' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-f', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Rename branches with dolt_branch procedure",
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Renaming to an existing name fails without the force flag
+				Query:          "CALL DOLT_BRANCH('-m', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "already exists",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-mf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-m', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Copy branches from other branches using dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-c')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch2')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', '', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch2';",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-c', 'myNewBranch1', 'myNewBranch2')",
+				ExpectedErrStr: "fatal: A branch named 'myNewBranch2' already exists.",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-cf', 'myNewBranch1', 'myNewBranch2')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Delete branches with dolt_branch procedure",
+		SetUpScript: []string{
+			"CALL DOLT_BRANCH('myNewBranch1')",
+			"CALL DOLT_BRANCH('myNewBranch2')",
+			"CALL DOLT_BRANCH('myNewBranch3')",
+			"CALL DOLT_BRANCH('myNewBranchWithCommit')",
+			"CALL DOLT_CHECKOUT('myNewBranchWithCommit')",
+			"CALL DOLT_COMMIT('--allow-empty', '-am', 'empty commit')",
+			"CALL DOLT_CHECKOUT('main')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_BRANCH('-d')",
+				ExpectedErrStr: "error: invalid usage",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', '')",
+				ExpectedErrStr: "error: cannot branch empty string",
+			},
+			{
+				Query:          "CALL DOLT_BRANCH('-d', 'branchDoesNotExist')",
+				ExpectedErrStr: "branch not found",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_BRANCHES WHERE NAME='myNewBranch1'",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-d', 'myNewBranch2', 'myNewBranch3')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Trying to delete a branch with unpushed changes fails without force option
+				Query:          "CALL DOLT_BRANCH('-d', 'myNewBranchWithCommit')",
+				ExpectedErrStr: "attempted to delete a branch that is not fully merged into its parent; use `-f` to force",
+			},
+			{
+				Query:    "CALL DOLT_BRANCH('-df', 'myNewBranchWithCommit')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
 var DoltReset = []queries.ScriptTest{
 	{
 		Name: "CALL DOLT_RESET('--hard') should reset the merge state after uncommitted merge",
@@ -1366,7 +1504,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{2}},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{1, 2, 3, nil, nil, nil, "added"},
 					{4, 5, 6, nil, nil, nil, "added"},
@@ -1390,7 +1528,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{3}},
 			},
 			{
-				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk, to_c2, to_c2, from_pk, from_c1, from_c2, diff_type;",
 				Expected: []sql.Row{
 					{1, 2, 0, 1, 2, 3, "modified"},
 				},
@@ -1546,21 +1684,65 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_DIFF_t WHERE TO_COMMIT=@Commit3 ORDER BY to_pk;",
 				Expected: []sql.Row{
 					{100, 101, nil, nil, "added"},
+					// TODO: It's more correct to also return the following rows.
+					//{1, 3, 1, nil, "modified"},
+					//{4, 6, 4, nil, "modified"}
+
+					// To explain why, let's inspect table t at each of the commits:
+					//
+					//     @Commit1          @Commit2         @Commit3
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | pk | c1 | c2 |     | pk | c2 |     | pk  | c1  |
+					// +----+----+----+     +----+----+     +-----+-----+
+					// | 1  | 2  | 3  |     | 1  | 3  |     | 1   | 3   |
+					// | 4  | 5  | 6  |     | 4  | 6  |     | 4   | 6   |
+					// +----+----+----+     +----+----+     | 100 | 101 |
+					//                                      +-----+-----+
+					//
+					// If you were to interpret each table using the schema at
+					// @Commit3, (pk, c1), you would see the following:
+					//
+					//   @Commit1            @Commit2         @Commit3
+					// +----+----+         +----+------+     +-----+-----+
+					// | pk | c1 |         | pk | c1   |     | pk  | c1  |
+					// +----+----+         +----+------+     +-----+-----+
+					// | 1  | 2  |         | 1  | NULL |     | 1   | 3   |
+					// | 4  | 5  |         | 4  | NULL |     | 4   | 6   |
+					// +----+----+         +----+------+     | 100 | 101 |
+					//                                       +-----+-----+
+					//
+					// The corresponding diffs for the interpreted tables:
+					//
+					// Diff between init and @Commit1:
+					// + (1, 2)
+					// + (4, 5)
+					//
+					// Diff between @Commit1 and @Commit2:
+					// ~ (1, NULL)
+					// ~ (4, NULL)
+					//
+					// Diff between @Commit2 and @Commit3:
+					// ~ (1, 3) <- currently not outputted
+					// ~ (4, 6) <- currently not outputted
+					// + (100, 101)
+					//
+					// The missing rows are not produced by diff since the
+					// underlying value of the prolly trees are not modified during a column rename.
 				},
 			},
 		},
@@ -1753,6 +1935,76 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff_t;",
 				Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
+			},
+		},
+	},
+	{
+		Name: "selecting to_pk columns",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 int);",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"insert into t values (7, 8, 9);",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"update t set c1 = 0 where pk > 5;",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk = 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type FROM DOLT_DIFF_t WHERE to_pk > 1 ORDER BY to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 0, 9, 7, 8, 9, "modified"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
+			},
+		},
+	},
+	{
+		Name: "selecting to_pk1 and to_pk2 columns",
+		SetUpScript: []string{
+			"create table t (pk1 int, pk2 int, c1 int, primary key (pk1, pk2));",
+			"insert into t values (1, 2, 3), (4, 5, 6);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'first commit'));",
+			"insert into t values (7, 8, 9);",
+			"set @Commit2 = (select DOLT_COMMIT('-am', 'second commit'));",
+			"update t set c1 = 0 where pk1 > 5;",
+			"set @Commit3 = (select DOLT_COMMIT('-am', 'third commit'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF_t;",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 = 1 and to_pk2 = 2 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{1, 2, 3, nil, nil, nil, "added"},
+				},
+			},
+			{
+				Query: "SELECT to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type FROM DOLT_DIFF_t WHERE to_pk1 > 1 and to_pk2 < 10 ORDER BY to_pk1, to_pk2, to_c1, from_pk1, from_pk2, from_c1, diff_type;",
+				Expected: []sql.Row{
+					{4, 5, 6, nil, nil, nil, "added"},
+					{7, 8, 0, 7, 8, 9, "modified"},
+					{7, 8, 9, nil, nil, nil, "added"},
+				},
 			},
 		},
 	},
@@ -2522,20 +2774,21 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit1 and FROM_COMMIT=@Commit0 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, nil, nil, "added"},
-					{4, 6, nil, nil, "added"},
+					{1, 2, nil, nil, "added"},
+					{4, 5, nil, nil, "added"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit2 and FROM_COMMIT=@Commit1 ORDER BY to_pk;",
 				Expected: []sql.Row{
-					{1, 3, 1, 3, "modified"},
-					{4, 6, 4, 6, "modified"},
+					{1, nil, 1, 2, "modified"},
+					{4, nil, 4, 5, "modified"},
 				},
 			},
 			{
 				Query: "SELECT to_pk, to_c1, from_pk, from_c1, diff_type FROM DOLT_COMMIT_DIFF_t WHERE TO_COMMIT=@Commit3 and FROM_COMMIT=@Commit2 ORDER BY to_pk;",
 				Expected: []sql.Row{
+					// TODO: Missing rows here see TestDiffSystemTable tests
 					{100, 101, nil, nil, "added"},
 				},
 			},
@@ -2657,5 +2910,39 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
 			},
 		},
+	},
+}
+
+// DoltDiffPlanTests are tests that check our query plans for various operations on the dolt diff system tables
+var DoltDiffPlanTests = []queries.QueryPlanTest{
+	{
+		Query: `select * from dolt_diff_one_pk where to_pk=1`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[1, 1]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_one_pk where to_pk>=10 and to_pk<=100`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[10, 100]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1=1`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], (-∞, ∞)}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1=1 and to_pk2=2`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], [2, 2]}])\n" +
+			"",
+	},
+	{
+		Query: `select * from dolt_diff_two_pk where to_pk1 < 1 and to_pk2 > 10`,
+		ExpectedPlan: "Exchange(parallelism=2)\n" +
+			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{(-∞, 1), (10, ∞)}])\n" +
+			"",
 	},
 }

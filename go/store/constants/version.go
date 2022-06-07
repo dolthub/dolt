@@ -51,3 +51,5 @@ const FormatDolt1String = "__DOLT_1__"
 const FormatDoltDevString = "__DOLT_DEV__"
 
 var FormatDefaultString = FormatLD1String
+
+// var FormatDefaultString = FormatDolt1String
