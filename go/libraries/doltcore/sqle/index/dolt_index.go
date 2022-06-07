@@ -80,6 +80,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		comment:  "",
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
+		order:    sql.IndexOrderAsc,
 	}
 
 	// TODO: need to add from_ columns
@@ -112,6 +113,22 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 	return indexes, nil
 }
 
+func UnorderedDoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) ([]sql.Index, error) {
+	indexes, err := DoltIndexesFromTable(ctx, db, tbl, t)
+	if err != nil {
+		return nil, err
+	}
+
+	unorderedIndexes := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		di := indexes[i].(doltIndex)
+		di.order= sql.IndexOrderNone
+		unorderedIndexes[i] = di
+	}
+
+	return unorderedIndexes, nil
+}
+
 func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
@@ -133,6 +150,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		comment:  "",
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
+		order:    sql.IndexOrderAsc,
 	}, nil
 }
 
@@ -160,6 +178,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		comment:  idx.Comment(),
 		vrw:      t.ValueReadWriter(),
 		keyBld:   keyBld,
+		order:    sql.IndexOrderAsc,
 	}, nil
 }
 
@@ -175,6 +194,7 @@ type doltIndex struct {
 	unique   bool
 	isPk     bool
 	comment  string
+	order    sql.IndexOrder
 
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
@@ -359,7 +379,7 @@ func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 }
 
 func (di doltIndex) Order() sql.IndexOrder {
-	return sql.IndexOrderAsc
+	return di.order
 }
 
 // Database implement sql.Index
@@ -553,4 +573,8 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 
 func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	return typ.Convert(sql.GetRangeCutKey(cut))
+}
+
+type unorderedDoltIndex struct {
+
 }

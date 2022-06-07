@@ -112,7 +112,7 @@ func TestSingleScript(t *testing.T) {
 					},
 				},
 				{
-					Query: "explain select pk, c from dolt_history_t1 order by pk",
+					Query: "select pk, c from dolt_history_t1 order by pk, c",
 					Expected: []sql.Row{
 						{1, 2},
 						{1, 2},
@@ -120,6 +120,28 @@ func TestSingleScript(t *testing.T) {
 						{3, 4},
 						{5, 6},
 						{7, 8},
+					},
+				},
+				{
+					Query: "select pk, c from dolt_history_t1 where pk = 3",
+					Expected: []sql.Row{
+						{3, 4},
+						{3, 4},
+					},
+				},
+				{
+					Query: "select pk, c from dolt_history_t1 where pk = 3 and commit_hash = @Commit2",
+					Expected: []sql.Row{
+						{3, 4},
+					},
+				},
+				{
+					Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+					Expected: []sql.Row{
+						{ "Project(dolt_history_t1.pk, dolt_history_t1.c)" },
+						{ " └─ Projected table access on [pk c]" },
+						{ "     └─ Exchange(parallelism=16)" },
+						{ "         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])" },
 					},
 				},
 			},

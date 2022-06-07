@@ -76,7 +76,8 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	}
 
 	// For index pushdown to work, we need to represent the indexes from the underlying table as belonging to this one
-	return index.DoltIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
+	// Our results will also not be ordered, so we need to declare them as such
+	return index.UnorderedDoltIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
 func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
