@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -49,13 +48,12 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb       string
-	IsReadOnly      bool
-	MySQLDbFilePath string
-	PrivFilePath    string
-	ServerUser      string
-	ServerPass      string
-	Autocommit      bool
+	InitialDb    string
+	IsReadOnly   bool
+	PrivFilePath string
+	ServerUser   string
+	ServerPass   string
+	Autocommit   bool
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -85,38 +83,20 @@ func NewSqlEngine(
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
-	// Set mysql.db file path from server
-	mysql_file_handler.SetMySQLDbFilePath(config.MySQLDbFilePath)
-
-	// Load in MySQL Db from file, if it exists
+	// Load in privileges from file, if it exists
+	mysql_file_handler.SetPrivilegeFilePath(config.PrivFilePath)
 	data, err := mysql_file_handler.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
-	// Use privilege file iff mysql.db file DNE
-	var users []*mysql_db.User
-	var roles []*mysql_db.RoleEdge
+	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
-	if len(data) == 0 {
-		// Set privilege file path from server
-		if config.PrivFilePath != "" {
-			mysql_file_handler.SetPrivilegeFilePath(config.PrivFilePath)
-		}
-
-		// Load privileges from privilege file
-		users, roles, err = mysql_file_handler.LoadPrivileges()
-		if err != nil {
-			return nil, err
-		}
-
-		// Create temporary users if no privileges in config
-		if len(users) == 0 && len(config.ServerUser) > 0 {
-			tempUsers = append(tempUsers, gms.TemporaryUser{
-				Username: config.ServerUser,
-				Password: config.ServerPass,
-			})
-		}
+	if len(data) == 0 && len(config.ServerUser) > 0 {
+		tempUsers = append(tempUsers, gms.TemporaryUser{
+			Username: config.ServerUser,
+			Password: config.ServerPass,
+		})
 	}
 
 	// Set up engine
@@ -125,12 +105,7 @@ func NewSqlEngine(
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
 	}
-	// Load Privilege data iff mysql db didn't exist
-	if len(data) == 0 {
-		if err = engine.Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles); err != nil {
-			return nil, err
-		}
-	}
+
 	// Set persist callbacks
 	engine.Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
 

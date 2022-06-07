@@ -28,7 +28,6 @@ import (
 const defaultMySQLFilePath = "./.dolt/mysql.db"
 
 var fileMutex = &sync.Mutex{}
-var mysqlDbFilePath string
 var privsFilePath string
 
 // privDataJson is used to marshal/unmarshal the privilege data to/from JSON.
@@ -47,30 +46,15 @@ func SetPrivilegeFilePath(fp string) {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
-	// Panic if some strange unknown failure occurs (not just that it doesn't exist)
+	// Create file if it does not exist, panic if something goes wrong
 	_, err := os.Stat(fp)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		err = ioutil.WriteFile(fp, []byte{}, 0644)
+	}
+	if err != nil {
 		panic(err)
 	}
 	privsFilePath = fp
-}
-
-// SetMySQLDbFilePath sets the file path that will be used for saving and loading MySQL Db tables.
-func SetMySQLDbFilePath(fp string) {
-	// look for default mysql db file path if none specified
-	if len(fp) == 0 {
-		fp = defaultMySQLFilePath
-	}
-
-	fileMutex.Lock()
-	defer fileMutex.Unlock()
-
-	// Panic if some strange unknown failure occurs (not just that it doesn't exist)
-	_, err := os.Stat(fp)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		panic(err)
-	}
-	mysqlDbFilePath = fp
 }
 
 // LoadPrivileges reads the file previously set on the file path and returns the privileges and role connections. If the
@@ -103,16 +87,16 @@ func LoadPrivileges() ([]*mysql_db.User, []*mysql_db.RoleEdge, error) {
 
 // LoadData reads the mysql.db file, returns nil if empty or not found
 func LoadData() ([]byte, error) {
-	// use default mysql db file path if none specified
-	if len(mysqlDbFilePath) == 0 {
-		mysqlDbFilePath = defaultMySQLFilePath
+	// do nothing if no filepath specified
+	if len(privsFilePath) == 0 {
+		return nil, nil
 	}
 
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
 	// read from mysqldbFilePath, error if something other than not-exists
-	buf, err := ioutil.ReadFile(mysqlDbFilePath)
+	buf, err := ioutil.ReadFile(privsFilePath)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, err
 	}
@@ -130,11 +114,9 @@ func SaveData(ctx *sql.Context, data []byte) error {
 	fileMutex.Lock()
 	defer fileMutex.Unlock()
 
-	// use default if empty filepath
-	if len(mysqlDbFilePath) == 0 {
-		mysqlDbFilePath = defaultMySQLFilePath
+	if len(privsFilePath) == 0 {
+		return errors.New("no privilege file specified, will not save any new users or grants")
 	}
 
-	// should create file if it doesn't exist
-	return ioutil.WriteFile(mysqlDbFilePath, data, 0777)
+	return ioutil.WriteFile(privsFilePath, data, 0777)
 }

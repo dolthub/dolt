@@ -52,13 +52,12 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	})
 
 	config := &engine.SqlEngineConfig{
-		InitialDb:       dbName,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    dbName,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,

@@ -79,13 +79,12 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 
 	// Simplest path would have our import path be a layer over load data
 	config := &engine.SqlEngineConfig{
-		InitialDb:       dbName,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    dbName,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,

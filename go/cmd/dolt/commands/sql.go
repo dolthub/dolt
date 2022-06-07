@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"io"
 	"os"
 	"os/signal"
@@ -82,17 +83,18 @@ By default this command uses the dolt database in the current working directory,
 }
 
 const (
-	QueryFlag      = "query"
-	FormatFlag     = "result-format"
-	saveFlag       = "save"
-	executeFlag    = "execute"
-	listSavedFlag  = "list-saved"
-	messageFlag    = "message"
-	BatchFlag      = "batch"
-	multiDBDirFlag = "multi-db-dir"
-	continueFlag   = "continue"
-	fileInputFlag  = "file"
-	welcomeMsg     = `# Welcome to the DoltSQL shell.
+	QueryFlag             = "query"
+	FormatFlag            = "result-format"
+	saveFlag              = "save"
+	executeFlag           = "execute"
+	listSavedFlag         = "list-saved"
+	messageFlag           = "message"
+	BatchFlag             = "batch"
+	multiDBDirFlag        = "multi-db-dir"
+	continueFlag          = "continue"
+	fileInputFlag         = "file"
+	privilegeFilePathFlag = "privilege-file"
+	welcomeMsg            = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -143,6 +145,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
+	ap.SupportsString(privilegeFilePathFlag, "", "Privilege File", "Points to the file that privileges will be loaded from, in addition to being overwritten when privileges have been modified.")
 	return ap
 }
 
@@ -171,6 +174,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
+	mysql_file_handler.SetPrivilegeFilePath(privsFp)
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
@@ -378,13 +384,12 @@ func execShell(
 	initialDb string,
 ) errhand.VerboseError {
 	config := &engine.SqlEngineConfig{
-		InitialDb:       initialDb,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -413,13 +418,12 @@ func execBatch(
 	initialDb string,
 ) errhand.VerboseError {
 	config := &engine.SqlEngineConfig{
-		InitialDb:       initialDb,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -465,13 +469,12 @@ func execMultiStatements(
 	initialDb string,
 ) errhand.VerboseError {
 	config := &engine.SqlEngineConfig{
-		InitialDb:       initialDb,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
@@ -504,13 +507,12 @@ func execQuery(
 	initialDb string,
 ) errhand.VerboseError {
 	config := &engine.SqlEngineConfig{
-		InitialDb:       initialDb,
-		IsReadOnly:      false,
-		MySQLDbFilePath: "",
-		PrivFilePath:    "",
-		ServerUser:      "root",
-		ServerPass:      "",
-		Autocommit:      true,
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
 	}
 	se, err := engine.NewSqlEngine(
 		ctx,
