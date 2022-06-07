@@ -32,6 +32,7 @@ import (
 
 type DoltIndex interface {
 	sql.FilteredIndex
+	sql.OrderedIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
@@ -355,6 +356,10 @@ func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	} else {
 		return filters
 	}
+}
+
+func (di doltIndex) Order() sql.IndexOrder {
+	return sql.IndexOrderAsc
 }
 
 // Database implement sql.Index
