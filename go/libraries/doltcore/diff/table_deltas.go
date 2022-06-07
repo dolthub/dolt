@@ -233,6 +233,10 @@ func (td TableDelta) IsRename() bool {
 	return td.FromName != td.ToName
 }
 
+// HasHashChanged returns true if the hash of the table content has changed between
+// the fromRoot and toRoot. Note that before calling HasHashChanged, you need to
+// make sure the TableDelta doesn't represent a table add or drop change, since
+// those cases won't have both FromTable and ToTable set and will return an error.
 func (td TableDelta) HasHashChanged() (bool, error) {
 	toHash, err := td.ToTable.HashOf()
 	if err != nil {
@@ -245,6 +249,24 @@ func (td TableDelta) HasHashChanged() (bool, error) {
 	}
 
 	return !toHash.Equal(fromHash), nil
+}
+
+// HasSchemaChanged returns true if the table schema has changed between the
+// fromRoot and toRoot. Note that before calling HasSchemaChanged, you need to
+// make sure the TableDelta doesn't represent a table add or drop change, since
+// those cases won't have both FromTable and ToTable set and will return an error.
+func (td TableDelta) HasSchemaChanged(ctx context.Context) (bool, error) {
+	fromSchemaHash, err := td.FromTable.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	toSchemaHash, err := td.ToTable.GetSchemaHash(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return fromSchemaHash != toSchemaHash, nil
 }
 
 func (td TableDelta) HasPrimaryKeySetChanged() bool {
