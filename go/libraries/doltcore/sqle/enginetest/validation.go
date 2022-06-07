@@ -189,19 +189,26 @@ func ordinalMappingsForSecondaryIndex(sch schema.Schema, def schema.Index) (ord 
 	}
 
 	secondary := def.Schema().GetPKCols()
-	primary := sch.GetAllCols().GetColumns()
-
 	ord = make(val.OrdinalMapping, secondary.Size())
+
 	for i := range ord {
+		name := secondary.GetAtIndex(i).Name
 		ord[i] = -1
-		n := secondary.GetAtIndex(i).Name
-		for j, col := range primary {
-			if col.Name == n {
+
+		pks := sch.GetPKCols().GetColumns()
+		for j, col := range pks {
+			if col.Name == name {
 				ord[i] = j
 			}
 		}
+		vals := sch.GetNonPKCols().GetColumns()
+		for j, col := range vals {
+			if col.Name == name {
+				ord[i] = j + len(pks)
+			}
+		}
 		if ord[i] < 0 {
-			panic("column " + n + " not found")
+			panic("column " + name + " not found")
 		}
 	}
 	return
