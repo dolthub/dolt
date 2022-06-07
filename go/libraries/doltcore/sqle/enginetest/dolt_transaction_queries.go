@@ -953,7 +953,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -1043,7 +1043,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -1131,7 +1131,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",

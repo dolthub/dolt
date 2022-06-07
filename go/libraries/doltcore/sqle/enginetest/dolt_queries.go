@@ -1069,7 +1069,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_COMMIT('-am', 'commit constraint violations');",
-				ExpectedErrStr: "error: the table(s) child has constraint violations",
+				ExpectedErrStr: "error: the table(s) child have constraint violations",
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'commit constraint violations');",
@@ -1117,7 +1117,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:          "CALL DOLT_COMMIT('-am', 'commit non-conflicting merge');",
-				ExpectedErrStr: "error: the table(s) child has constraint violations",
+				ExpectedErrStr: "error: the table(s) child have constraint violations",
 			},
 			{
 				Query:            "CALL DOLT_COMMIT('-afm', 'commit non-conflicting merge');",
