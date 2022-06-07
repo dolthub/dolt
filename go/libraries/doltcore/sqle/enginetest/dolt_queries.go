@@ -1433,6 +1433,39 @@ var DoltBranchScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Create branch from startpoint",
+		SetUpScript: []string{
+			"create table a (x int)",
+			"set @commit1 = (select DOLT_COMMIT('-am', 'add table a'));",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "show tables",
+				Expected: []sql.Row{{"a"}, {"myview"}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch', 'head~1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show tables",
+				Expected: []sql.Row{{"myview"}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('-b', 'newBranch2', @commit1)",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "show tables",
+				Expected: []sql.Row{{"a"}, {"myview"}},
+			},
+			{
+				Query:          "CALL DOLT_CHECKOUT('-b', 'otherBranch', 'unknownCommit')",
+				ExpectedErrStr: "fatal: 'unknownCommit' is not a commit and a branch 'otherBranch' cannot be created from it",
+			},
+		},
+	},
 }
 
 var DoltReset = []queries.ScriptTest{
