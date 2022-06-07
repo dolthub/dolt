@@ -69,6 +69,7 @@ var _ enginetest.VersionedDBHarness = (*DoltHarness)(nil)
 var _ enginetest.ForeignKeyHarness = (*DoltHarness)(nil)
 var _ enginetest.KeylessTableHarness = (*DoltHarness)(nil)
 var _ enginetest.ReadOnlyDatabaseHarness = (*DoltHarness)(nil)
+var _ enginetest.ValidatingHarness = (*DoltHarness)(nil)
 
 func newDoltHarness(t *testing.T) *DoltHarness {
 	dEnv := dtestutils.CreateTestEnv()
@@ -447,10 +448,7 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 
 func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error) {
 	for _, db := range e.Analyzer.Catalog.AllDatabases(ctx) {
-		if _, ok := db.(sqle.Database); !ok {
-			continue
-		}
-		if err = ValidateDatabase(ctx, db.(sqle.Database)); err != nil {
+		if err = ValidateDatabase(ctx, db); err != nil {
 			return err
 		}
 	}
