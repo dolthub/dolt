@@ -450,11 +450,68 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "explain select * from dolt_history_t1",
+				Query:    "select pk, c, commit_hash = @Commit1, commit_hash = @Commit2 from dolt_history_t1",
 				Expected: []sql.Row{
-					{
-
-					},
+					{1, 2, false, true},
+					{3, 4, false, true},
+					{5, 6, false, true},
+					{7, 8, false, true},
+					{1, 2, true, false},
+					{3, 4, true, false},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 order by pk",
+				Expected: []sql.Row{
+					{1, 2},
+					{1, 2},
+					{3, 4},
+					{3, 4},
+					{5, 6},
+					{7, 8},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 order by pk, c",
+				Expected: []sql.Row{
+					{1, 2},
+					{1, 2},
+					{3, 4},
+					{3, 4},
+					{5, 6},
+					{7, 8},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 where pk = 3",
+				Expected: []sql.Row{
+					{3, 4},
+					{3, 4},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 where pk = 3 and commit_hash = @Commit2",
+				Expected: []sql.Row{
+					{3, 4},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
+				Expected: []sql.Row{
+					{ "Project(dolt_history_t1.pk, dolt_history_t1.c)" },
+					{ " └─ Projected table access on [pk c]" },
+					{ "     └─ Exchange(parallelism=16)" },
+					{ "         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])" },
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{ "Project(dolt_history_t1.pk, dolt_history_t1.c)" },
+					{ " └─ Filter(dolt_history_t1.committer = \"someguy\")" },
+					{ "     └─ Projected table access on [pk c committer]" },
+					{ "         └─ Exchange(parallelism=16)" },
+					{ "             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])" },
 				},
 			},
 		},

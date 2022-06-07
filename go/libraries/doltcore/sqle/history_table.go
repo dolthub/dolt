@@ -308,8 +308,13 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 
 	table = table.LockedToRoot(root)
 
+
 	// TODO: apply index lookups conditionally based on index presence at this revision
-	sqlTable := table.WithIndexLookup(lookup)
+	var sqlTable sql.Table
+	sqlTable = table
+	if lookup != nil {
+		sqlTable = table.WithIndexLookup(lookup)
+	}
 
 	tablePartitions, err := sqlTable.Partitions(ctx)
 	if err != nil {
