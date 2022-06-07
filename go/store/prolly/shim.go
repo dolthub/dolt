@@ -39,6 +39,10 @@ func ValueFromConflictMap(m ConflictMap) types.Value {
 	return tree.ValueFromNode(m.conflicts.root)
 }
 
+func ValueFromArtifactMap(m ArtifactMap) types.Value {
+	return tree.ValueFromNode(m.tuples.root)
+}
+
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
 	root := NodeFromValue(v)
 	kd := KeyDescriptorFromSchema(sch)
@@ -77,6 +81,11 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 		return val.KeylessTupleDesc
 	}
 
+	tt := KeyTypesFromSchema(sch)
+	return val.NewTupleDescriptor(tt...)
+}
+
+func KeyTypesFromSchema(sch schema.Schema) []val.Type {
 	var tt []val.Type
 	_ = sch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		tt = append(tt, val.Type{
@@ -85,7 +94,7 @@ func KeyDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 		})
 		return
 	})
-	return val.NewTupleDescriptor(tt...)
+	return tt
 }
 
 func columnNullable(col schema.Column) bool {
@@ -98,6 +107,10 @@ func columnNullable(col schema.Column) bool {
 }
 
 func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
+	return val.NewTupleDescriptor(ValueTypesFromSchema(sch)...)
+}
+
+func ValueTypesFromSchema(sch schema.Schema) []val.Type {
 	var tt []val.Type
 	if schema.IsKeyless(sch) {
 		tt = []val.Type{val.KeylessCardType}
@@ -110,7 +123,7 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 		})
 		return
 	})
-	return val.NewTupleDescriptor(tt...)
+	return tt
 }
 
 // ConvertToKeylessIndex converts the given map to a keyless index map.

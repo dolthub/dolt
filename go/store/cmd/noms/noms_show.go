@@ -194,6 +194,7 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				fmt.Fprintf(w, "{\n")
 				fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
 				fmt.Fprintf(w, "\tViolations: #%s\n", hash.New(msg.ViolationsBytes()).String())
+				fmt.Fprintf(w, "\tArtifacts: #%s\n", hash.New(msg.ArtifactsBytes()).String())
 				// TODO: merge conflicts, not stable yet
 
 				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())

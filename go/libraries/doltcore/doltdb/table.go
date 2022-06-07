@@ -116,16 +116,50 @@ func (t *Table) SetConflicts(ctx context.Context, schemas conflict.ConflictSchem
 
 // GetConflicts returns a map built from ValueReadWriter when there are no conflicts in table.
 func (t *Table) GetConflicts(ctx context.Context) (conflict.ConflictSchema, durable.ConflictIndex, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		panic("should use artifacts")
+	}
+
 	return t.table.GetConflicts(ctx)
 }
 
 // HasConflicts returns true if this table contains merge conflicts.
 func (t *Table) HasConflicts(ctx context.Context) (bool, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		art, err := t.GetArtifacts(ctx)
+		if err != nil {
+			return false, err
+		}
+
+		return art.HasConflicts(ctx)
+	}
 	return t.table.HasConflicts(ctx)
+}
+
+// GetArtifacts returns the merge artifacts for this table.
+func (t *Table) GetArtifacts(ctx context.Context) (durable.ArtifactIndex, error) {
+	return t.table.GetArtifacts(ctx)
+}
+
+// SetArtifacts sets the merge artifacts for this table.
+func (t *Table) SetArtifacts(ctx context.Context, artifacts durable.ArtifactIndex) (*Table, error) {
+	table, err := t.table.SetArtifacts(ctx, artifacts)
+	if err != nil {
+		return nil, err
+	}
+	return &Table{table: table}, nil
 }
 
 // NumRowsInConflict returns the number of rows with merge conflicts for this table.
 func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		artIdx, err := t.table.GetArtifacts(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return artIdx.ConflictCount(ctx)
+	}
+
 	ok, err := t.table.HasConflicts(ctx)
 	if err != nil {
 		return 0, err
@@ -144,6 +178,30 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		return t.clearArtifactConflicts(ctx)
+	}
+
+	return t.clearConflicts(ctx)
+}
+
+func (t *Table) clearArtifactConflicts(ctx context.Context) (*Table, error) {
+	artIdx, err := t.table.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	artIdx, err = artIdx.ClearConflicts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	table, err := t.table.SetArtifacts(ctx, artIdx)
+	if err != nil {
+		return nil, err
+	}
+	return &Table{table: table}, nil
+}
+
+func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 	table, err := t.table.ClearConflicts(ctx)
 	if err != nil {
 		return nil, err
