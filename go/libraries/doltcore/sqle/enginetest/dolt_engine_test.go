@@ -698,7 +698,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",

@@ -534,7 +534,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 
 var MergeScripts = []queries.ScriptTest{
 	{
-		Name: "DOLT_MERGE ff correctly works with autocommit off",
+		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -549,8 +549,8 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// FF-Merge
-				Query:    "SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -567,7 +567,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE no-ff correctly works with autocommit off",
+		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -582,8 +582,8 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -604,7 +604,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE without conflicts correctly works with autocommit off",
+		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -620,8 +620,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
@@ -642,7 +642,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
+		Name: "CALL DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -658,8 +658,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{0}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -696,7 +696,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE ff & squash correctly works with autocommit off",
+		Name: "CALL DOLT_MERGE ff & squash correctly works with autocommit off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -710,8 +710,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_status",
@@ -728,7 +728,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE ff & squash with a checkout in between",
+		Name: "CALL DOLT_MERGE ff & squash with a checkout in between",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -742,8 +742,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '--squash')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
@@ -756,7 +756,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE ff",
+		Name: "CALL DOLT_MERGE ff",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -770,8 +770,8 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// FF-Merge
-				Query:    "SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -788,7 +788,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE no-ff",
+		Name: "CALL DOLT_MERGE no-ff",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -802,8 +802,8 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				// No-FF-Merge
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -824,7 +824,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with no conflicts works",
+		Name: "CALL DOLT_MERGE with no conflicts works",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key)",
 			"INSERT INTO test VALUES (0),(1),(2);",
@@ -839,8 +839,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{1}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "SELECT COUNT(*) from dolt_status",
@@ -861,7 +861,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
+		Name: "CALL DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -877,8 +877,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{0}},
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT count(*) from dolt_conflicts_test",
@@ -886,7 +886,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * FROM test",
@@ -915,7 +915,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE with conflicts can be aborted when autocommit is off",
+		Name: "CALL DOLT_MERGE with conflicts can be aborted when autocommit is off",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -931,8 +931,8 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-				Expected: []sql.Row{{0}},
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -944,7 +944,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "SELECT * from dolt_status",
@@ -965,7 +965,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "DOLT_MERGE complains when a merge overrides local changes",
+		Name: "CALL DOLT_MERGE complains when a merge overrides local changes",
 		SetUpScript: []string{
 			"CREATE TABLE test (pk int primary key, val int)",
 			"INSERT INTO test VALUES (0, 0)",
@@ -980,7 +980,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:       "SELECT DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
 				ExpectedErr: dfunctions.ErrUncommittedChanges,
 			},
 		},
@@ -1004,7 +1004,7 @@ var MergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "call dolt_merge('b1')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0, 0}},
 			},
 			{
 				Query:    "select count(*) from dolt_conflicts",
@@ -1057,7 +1057,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch1');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
@@ -1105,7 +1105,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
@@ -1141,7 +1141,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('branch3');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
@@ -1177,7 +1177,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",
@@ -1250,7 +1250,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",
@@ -1275,7 +1275,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "CALL DOLT_MERGE('other2');",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "SELECT * from parent;",

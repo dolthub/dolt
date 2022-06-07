@@ -25,8 +25,8 @@ type tblErrorType string
 const (
 	tblErrInvalid        tblErrorType = "invalid"
 	tblErrTypeNotExist   tblErrorType = "do not exist"
-	tblErrTypeInConflict tblErrorType = "in conflict"
-	tblErrTypeConstViols tblErrorType = "has constraint violations"
+	tblErrTypeInConflict tblErrorType = "are in conflict"
+	tblErrTypeConstViols tblErrorType = "have constraint violations"
 )
 
 type TblError struct {

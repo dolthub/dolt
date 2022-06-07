@@ -22,9 +22,9 @@ import (
 
 // doltPull is the stored procedure version of the function `dolt_pull`.
 func doltPull(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltPull(ctx, args)
+	conflicts, ff, err := dfunctions.DoDoltPull(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(res)), nil
+	return rowToIter(int64(ff), int64(conflicts)), nil
 }
