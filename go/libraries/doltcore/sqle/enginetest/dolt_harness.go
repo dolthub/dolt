@@ -445,6 +445,18 @@ func (d *DoltHarness) SnapshotTable(db sql.VersionedDatabase, name string, asOf 
 	return nil
 }
 
+func (d *DoltHarness) ValidateEngine(ctx *sql.Context, e *gms.Engine) (err error) {
+	for _, db := range e.Analyzer.Catalog.AllDatabases(ctx) {
+		if _, ok := db.(sqle.Database); !ok {
+			continue
+		}
+		if err = ValidateDatabase(ctx, db.(sqle.Database)); err != nil {
+			return err
+		}
+	}
+	return
+}
+
 func dsqleDBsAsSqlDBs(dbs []sqle.Database) []sql.Database {
 	sqlDbs := make([]sql.Database, 0, len(dbs))
 	for _, db := range dbs {
