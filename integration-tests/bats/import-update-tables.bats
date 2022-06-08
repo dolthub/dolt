@@ -1089,7 +1089,7 @@ DELIM
     dolt sql -q "create table t(pk int primary key, val varbinary(100))"
     cat <<DELIM > binary.csv
 pk,val
-1,0xdsdd
+1,a\0
 DELIM
 
     run dolt table import -u t binary.csv
@@ -1099,7 +1099,7 @@ DELIM
     run dolt sql -r csv -q "select * from t order by pk"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,v" ]] || false
-    [[ "$output" =~ "1,0xdsdd" ]] || false
+    [[ "$output" =~ "1,a\0" ]] || false
 
     dolt table rm t
 
@@ -1113,7 +1113,7 @@ DELIM
     run dolt sql -r csv -q "select * from t order by pk"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk,val" ]] || false
-    [[ "$output" =~ "1,0xdsdd" ]] || false
+    [[ "$output" =~ "1,a\0" ]] || false
 }
 
 @test "import-update-tables: enum type" {
