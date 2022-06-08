@@ -16,6 +16,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -97,6 +98,7 @@ const (
 
 const (
 	SyncBackupId        = "sync"
+	SyncBackupUrlId     = "sync-url"
 	RestoreBackupId     = "restore"
 	AddBackupId         = "add"
 	RemoveBackupId      = "remove"
@@ -209,4 +211,53 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	return ap
+}
+
+var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
+
+func ProcessBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, error) {
+	params := map[string]string{}
+
+	var err error
+	if scheme == dbfactory.AWSScheme {
+		err = AddAWSParams(backupUrl, apr, params)
+	} else {
+		err = VerifyNoAwsParams(apr)
+	}
+
+	return params, err
+}
+
+func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
+	isAWS := strings.HasPrefix(remoteUrl, "aws")
+
+	if !isAWS {
+		for _, p := range awsParams {
+			if _, ok := apr.GetValue(p); ok {
+				return fmt.Errorf("%s param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database", p)
+			}
+		}
+	}
+
+	for _, p := range awsParams {
+		if val, ok := apr.GetValue(p); ok {
+			params[p] = val
+		}
+	}
+
+	return nil
+}
+
+func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
+	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
+		awsParamKeys := make([]string, 0, len(awsParams))
+		for k := range awsParams {
+			awsParamKeys = append(awsParamKeys, k)
+		}
+
+		keysStr := strings.Join(awsParamKeys, ",")
+		return fmt.Errorf("The parameters %s, are only valid for aws remotes", keysStr)
+	}
+
+	return nil
 }

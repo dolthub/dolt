@@ -16,6 +16,9 @@ package dfunctions
 
 import (
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -76,6 +79,13 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return 1, err
 	}
 
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return 1, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	var b env.Remote
 	switch {
 	case apr.NArg() == 0:
 		return 1, fmt.Errorf("listing existing backups endpoints in sql is unimplemented.")
@@ -87,6 +97,28 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("removing backup endpoint in sql is unimplemented.")
 	case apr.Arg(0) == cli.RestoreBackupId:
 		return 1, fmt.Errorf("restoring backup endpoint in sql is unimplemented.")
+	case apr.Arg(0) == cli.SyncBackupUrlId:
+		if apr.NArg() != 2 {
+			return 1, fmt.Errorf("usage: dolt_backup('sync-url', BACKUP_URL)")
+		}
+
+		backupUrl := strings.TrimSpace(apr.Arg(1))
+		cfg := loadConfig(ctx)
+		scheme, absBackupUrl, err := env.GetAbsRemoteUrl(filesys.LocalFS, cfg, backupUrl)
+		if err != nil {
+			return 1, fmt.Errorf("error: '%s' is not valid.", backupUrl)
+		} else if scheme == dbfactory.HTTPScheme || scheme == dbfactory.HTTPSScheme {
+			// not sure how to get the dialer so punting on this
+			return 1, fmt.Errorf("sync-url does not support http or https backup locations currently")
+		}
+
+		params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+		if err != nil {
+			return 1, err
+		}
+
+		b = env.NewRemote("__temp__", backupUrl, params, nil)
+
 	case apr.Arg(0) == cli.SyncBackupId:
 		if apr.NArg() != 2 {
 			return 1, fmt.Errorf("usage: dolt_backup('sync', BACKUP_NAME)")
@@ -94,32 +126,28 @@ func DoDoltBackup(ctx *sql.Context, args []string) (int, error) {
 
 		backupName := strings.TrimSpace(apr.Arg(1))
 
-		sess := dsess.DSessFromSess(ctx.Session)
-		dbData, ok := sess.GetDbData(ctx, dbName)
-		if !ok {
-			return 1, sql.ErrDatabaseNotFound.New(dbName)
-		}
-
 		backups, err := dbData.Rsr.GetBackups()
 		if err != nil {
 			return 1, err
 		}
-		b, ok := backups[backupName]
+
+		b, ok = backups[backupName]
 		if !ok {
 			return 1, fmt.Errorf("error: unknown backup: '%s'; %v", backupName, backups)
 		}
 
-		destDb, err := b.GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format())
-		if err != nil {
-			return 1, fmt.Errorf("error loading backup destination: %w", err)
-		}
-
-		err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dbData.Rsw.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
-		if err != nil && err != pull.ErrDBUpToDate {
-			return 1, fmt.Errorf("error syncing backup: %w", err)
-		}
-		return 0, nil
 	default:
 		return 1, fmt.Errorf("unrecognized dolt_backup parameter: %s", apr.Arg(0))
 	}
+
+	destDb, err := b.GetRemoteDB(ctx, dbData.Ddb.ValueReadWriter().Format())
+	if err != nil {
+		return 1, fmt.Errorf("error loading backup destination: %w", err)
+	}
+
+	err = actions.SyncRoots(ctx, dbData.Ddb, destDb, dbData.Rsw.TempTableFilesDir(), runProgFuncs, stopProgFuncs)
+	if err != nil && err != pull.ErrDBUpToDate {
+		return 1, fmt.Errorf("error syncing backup: %w", err)
+	}
+	return 0, nil
 }
