@@ -93,6 +93,8 @@ In create, update, and replace scenarios the file's extension is used to infer t
 	},
 }
 
+var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
+
 type importOptions struct {
 	operation         mvdata.TableImportOp
 	destTableName     string
@@ -732,11 +734,9 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			continue
 		}
 
-		switch col.Type.(type) {
-		case sql.StringType:
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
-		case sql.BitType:
+		if _, ok := col.Type.(sql.BitType); ok {
 			colAsString, ok := row[i].(string)
 			if !ok {
 				return nil, fmt.Errorf("error: column value should be of type string")
@@ -750,8 +750,8 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			}
 
 			// Check if the column is of type b'110'
-			re := regexp.MustCompile(`(?m)b\'(\d+)\'`)
-			groups := re.FindStringSubmatch(colAsString)
+			groups := bitTypeRegex.FindStringSubmatch(colAsString)
+			// Note that we use the second element as the first value in `groups` is the entire string.
 			if len(groups) > 1 {
 				val, err = strconv.ParseUint(groups[1], 2, 64)
 				if err == nil {
@@ -765,7 +765,15 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			val, err = strconv.ParseUint(numberStr, 16, 64)
 			if err == nil {
 				row[i] = val
+			} else {
+				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
 			}
+		}
+
+		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
+		// an empty string value
+		switch col.Type.(type) {
+		case sql.StringType:
 		default:
 			row[i] = emptyStringToNil(row[i])
 		}

@@ -1049,7 +1049,7 @@ DELIM
     [[ "$output" =~ "1,4" ]] || false
 
     # Try with a binary value like 0x04
-    echo -e 'id,b\n2,0x04'|dolt table import -u bitted2
+    echo -e 'id,b\n2,0x04\n3,0xa'|dolt table import -u bitted2
     [ "$status" -eq 0 ]
 
     run dolt sql -r csv -q "select * from bitted2 order by id"
@@ -1057,30 +1057,31 @@ DELIM
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "1,4" ]] || false
     [[ "$output" =~ "2,4" ]] || false
+    [[ "$output" =~ "3,10" ]] || false
 
     # Try an actual bit string like b'11'
     cat <<DELIM > bitted.csv
 id,b
-3,b'100'
+4,b'100'
 DELIM
 
     run dolt table import -u bitted2 bitted.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
 
-    run dolt sql -r csv -q "select * from bitted2 where id = 3"
+    run dolt sql -r csv -q "select * from bitted2 where id = 4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "id,b" ]] || false
-    [[ "$output" =~ "3,4" ]] || false
+    [[ "$output" =~ "4,4" ]] || false
 
     cat <<DELIM > bitted-bad.csv
 id,b
-3,b'1001
+5,b'1001
 DELIM
 
     run dolt table import -u bitted2 bitted-bad.csv
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "Bad Row: [3,b'1001]" ]] || false
+    [[ "$output" =~ "Unparsable bit value b'1001" ]] || false
 }
 
 @test "import-update-tables: binary and varbinary types" {
