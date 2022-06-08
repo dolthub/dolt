@@ -20,6 +20,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -37,7 +38,7 @@ func RefFromConflictIndex(ctx context.Context, vrw types.ValueReadWriter, idx Co
 		return refFromNomsValue(ctx, vrw, idx.(nomsConflictIndex).index)
 
 	case types.Format_DOLT_1:
-		b := prolly.ValueFromConflictMap(idx.(prollyConflictIndex).index)
+		b := shim.ValueFromConflictMap(idx.(prollyConflictIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -56,10 +57,10 @@ func NewEmptyConflictIndex(ctx context.Context, vrw types.ValueReadWriter, oursS
 		return ConflictIndexFromNomsMap(m, vrw), nil
 
 	case types.Format_DOLT_1:
-		kd, oursVD := prolly.MapDescriptorsFromSchema(oursSch)
-		theirsVD := prolly.ValueDescriptorFromSchema(theirsSch)
-		baseVD := prolly.ValueDescriptorFromSchema(baseSch)
-		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		kd, oursVD := shim.MapDescriptorsFromSchema(oursSch)
+		theirsVD := shim.ValueDescriptorFromSchema(theirsSch)
+		baseVD := shim.ValueDescriptorFromSchema(baseSch)
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 
 		m := prolly.NewEmptyConflictMap(ns, kd, oursVD, theirsVD, baseVD)
 
@@ -106,7 +107,7 @@ func conflictIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, ourSc
 		return ConflictIndexFromNomsMap(v.(types.Map), vrw), nil
 
 	case types.Format_DOLT_1:
-		m := prolly.ConflictMapFromValue(v, ourSch, theirSch, baseSch, vrw)
+		m := shim.ConflictMapFromValue(v, ourSch, theirSch, baseSch, vrw)
 		return ConflictIndexFromProllyMap(m), nil
 
 	default:

@@ -52,22 +52,6 @@ table ProllyTreeNode {
   tree_level:uint8;
 }
 
-/// Refmap has been deprecated in favor of AddressMap
-table RefMap {
-  // map keys ordered lexigraphically
-  names:[string] (required);
-
-  // array of chunk addresses
-  //  - subtree addresses for internal prolly tree nodes
-  //  - value addresses for AddressMap leaf nodes
-  ref_array:[ubyte] (required);
-
-  // total count of prolly tree
-  tree_count:uint64;
-  // prolly tree level, 0 for leaf nodes
-  tree_level:uint8;
-}
-
 table CommitClosure {
   // array of commit ref hashes
   ref_array:[ubyte] (required);
