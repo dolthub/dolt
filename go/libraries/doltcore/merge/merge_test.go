@@ -19,6 +19,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -304,8 +305,8 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
-	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	vrw, leftHeadCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
+	merger := NewMerger(context.Background(), leftHeadCommitHash, root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
 	merged, _, err := merger.MergeTable(context.Background(), tableName, opts)
@@ -354,9 +355,9 @@ func TestNomsMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
+	vrw, leftHeadCmHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, expectedStats := setupNomsMergeTest(t)
 
-	merger := NewMerger(context.Background(), root, mergeRoot, ancRoot, vrw)
+	merger := NewMerger(context.Background(), leftHeadCmHash, root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
 	merged, stats, err := merger.MergeTable(context.Background(), tableName, opts)
 	if err != nil {
@@ -415,7 +416,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	sortTests(testRows)
@@ -494,12 +495,12 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *do
 	ancTbl, err = rebuildAllProllyIndexes(context.Background(), ancTbl)
 	require.NoError(t, err)
 
-	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
+	leftHeadCmHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
 
-	return vrw, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
+	return vrw, leftHeadCmHash, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
 }
 
-func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
+func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	sortTests(testRows)
@@ -580,9 +581,9 @@ func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, *doltdb.RootValue,
 	ancTable, err = editor.RebuildAllIndexes(context.Background(), ancTable, editor.TestEditorOptions(vrw))
 	require.NoError(t, err)
 
-	root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
+	leftHeadCommitHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, updatedTbl, mergeTbl, ancTable)
 
-	return vrw, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
+	return vrw, leftHeadCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts, calcExpectedStats(t)
 }
 
 // rebuildAllProllyIndexes builds the data for the secondary indexes in |tbl|'s
@@ -692,7 +693,7 @@ func mustMakeEmptyRepo(t *testing.T) *doltdb.DoltDB {
 	return ddb
 }
 
-func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (*doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
+func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootTbl, mergeTbl, ancTbl *doltdb.Table) (hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue) {
 	mainHeadSpec, _ := doltdb.NewCommitSpec(env.DefaultInitBranch)
 	mainHead, err := ddb.Resolve(context.Background(), mainHeadSpec, nil)
 	require.NoError(t, err)
@@ -744,7 +745,10 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	require.NoError(t, err)
 	require.False(t, ff)
 
-	return root, mergeRoot, ancRoot
+	leftHeadCommitHash, err := commit.HashOf()
+	require.NoError(t, err)
+
+	return leftHeadCommitHash, root, mergeRoot, ancRoot
 }
 
 var kD = prolly.KeyDescriptorFromSchema(sch)
