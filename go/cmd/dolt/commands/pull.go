@@ -55,7 +55,7 @@ func (cmd PullCmd) Description() string {
 }
 
 func (cmd PullCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return false
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

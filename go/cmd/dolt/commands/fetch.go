@@ -57,7 +57,7 @@ func (cmd FetchCmd) Description() string {
 }
 
 func (cmd FetchCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return false
 }
 
 // EventType returns the type of the event to log
