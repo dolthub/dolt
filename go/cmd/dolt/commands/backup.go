@@ -63,7 +63,7 @@ Restore a Dolt database from a given {{.LessThan}}url{{.GreaterThan}} into a spe
 {{.EmphasisLeft}}sync{{.EmphasisRight}}
 Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}. This includes branches, tags, working sets, and remote tracking refs.
 	
-{{.EmphasisLeft}}sync{{.EmphasisRight}}
+{{.EmphasisLeft}}sync-url{{.EmphasisRight}}
 Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}. Like sync, this includes branches, tags, working sets, and remote tracking refs, but it does not require you to create a named backup`,
 
 	Synopsis: []string{
