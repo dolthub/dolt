@@ -57,7 +57,7 @@ teardown() {
     # create a new user, fails when no privilege file is specified
     run dolt sql <<< "create user new_user;"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "no privilege file specified, will not save any new users or grants" ]] || false
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
     # there shouldn't be any mysql.db files
     run ls .dolt

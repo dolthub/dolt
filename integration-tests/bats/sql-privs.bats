@@ -35,10 +35,7 @@ teardown() {
     skiponwindows "redirecting SQL to sql-client returns nothing after welcome messages"
     cd repo1
 
-    # remove/replace mysql.db and privs.json if they exist
-    rm -f .dolt/mysql.db
-
-    start_sql_server_with_args repo1
+    start_sql_server repo1
 
     # expect only dolt user
     run show_users
@@ -52,9 +49,10 @@ teardown() {
     [ "${lines[6]}" = '| dolt |' ]
     [ "${lines[7]}" = '+------+' ]
 
-    # create user
+    # create user, expect error
     run create_user
-    [ "$status" -eq 0 ]
+    [ "$status" -eq 1 ]
+
 
     # expect dolt and new_user
     run show_users

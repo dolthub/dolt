@@ -54,7 +54,7 @@ teardown() {
     # create a new user, fails
     run dolt sql -q "create user new_user;"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "" ]] || false
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
     # there should now be a mysql.db file
     run ls

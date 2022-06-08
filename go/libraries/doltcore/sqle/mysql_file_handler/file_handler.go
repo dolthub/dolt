@@ -115,7 +115,7 @@ func SaveData(ctx *sql.Context, data []byte) error {
 	defer fileMutex.Unlock()
 
 	if len(privsFilePath) == 0 {
-		return errors.New("no privilege file specified, will not save any new users or grants")
+		return errors.New("no privilege file specified, to persist users/grants run with --privilege-file=<file_path>")
 	}
 
 	return ioutil.WriteFile(privsFilePath, data, 0777)
