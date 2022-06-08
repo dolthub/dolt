@@ -209,19 +209,7 @@ func TestReplaceIntoErrors(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip update for join
-		patternToSkip := "join"
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), patternToSkip) {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestUpdate(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestUpdate(t, newDoltHarness(t))
 }
 
 func TestUpdateErrors(t *testing.T) {
