@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/expreval"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -49,6 +50,8 @@ const (
 
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
+var _ sql.IndexedTable = (*DiffTable)(nil)
+var _ sql.ParallelizedIndexAddressableTable = (*DiffTable)(nil)
 
 type DiffTable struct {
 	name        string
@@ -65,7 +68,9 @@ type DiffTable struct {
 
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
-	rowFilters       []sql.Expression
+
+	table  *doltdb.Table
+	lookup sql.IndexLookup
 
 	// noms only
 	joiner *rowconv.Joiner
@@ -109,7 +114,7 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		diffTableSch:     diffTableSchema,
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
-		rowFilters:       nil,
+		table:            table,
 		joiner:           j,
 	}, nil
 }
@@ -171,15 +176,11 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}, nil
 }
 
-var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
-
-func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	return splitFilters(filters, getColumnFilterCheck(partitionFilterCols))
-}
+var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
+	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
 	return dt.partitionFilters
 }
 
@@ -191,7 +192,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
 	if dt.partitionFilters == nil {
-		dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
+		dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
 	}
 
 	return dt
@@ -199,7 +200,26 @@ func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.T
 
 func (dt *DiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, dt.lookup)
+}
+
+func (dt *DiffTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
+	return index.DoltDiffIndexesFromTable(ctx, "", dt.name, dt.table)
+}
+
+func (dt *DiffTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
+	if lookup == nil {
+		return dt
+	}
+
+	nt := *dt
+	nt.lookup = lookup
+
+	return &nt
+}
+
+func (dt *DiffTable) ShouldParallelizeAccess() bool {
+	return true
 }
 
 // tableData returns the map of primary key to values for the specified table (or an empty map if the tbl is null)
@@ -279,11 +299,11 @@ func (dp DiffPartition) Key() []byte {
 	return []byte(dp.toName + dp.fromName)
 }
 
-func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner) (sql.RowIter, error) {
+func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
 	if types.IsFormat_DOLT_1(ddb.Format()) {
 		return newProllyDiffIter(ctx, dp, ddb, *dp.fromSch, *dp.toSch)
 	} else {
-		return newNomsDiffIter(ctx, ddb, joiner, dp)
+		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
 	}
 }
 
@@ -488,7 +508,7 @@ func (dp DiffPartition) rowConvForSchema(ctx context.Context, vrw types.ValueRea
 		return rowconv.IdentityConverter, nil
 	}
 
-	fm, err := rowconv.TagMappingWithNameFallback(srcSch, targetSch)
+	fm, err := rowconv.TagMappingByName(srcSch, targetSch)
 	if err != nil {
 		return nil, err
 	}

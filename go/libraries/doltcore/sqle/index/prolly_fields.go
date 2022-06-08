@@ -16,7 +16,9 @@ package index
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var ErrValueExceededMaxFieldSize = errors.New("value exceeded max field size of 65kb")
 
 // todo(andy): this should go in GMS
 func DenormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
@@ -203,13 +207,23 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:
 		if s, ok := v.(string); ok {
+			if len(s) > math.MaxUint16 {
+				return ErrValueExceededMaxFieldSize
+			}
 			v = []byte(s)
 		}
 		tb.PutByteString(i, v.([]byte))
 	case val.GeometryEnc:
+		geo := serializeGeometry(v)
+		if len(geo) > math.MaxUint16 {
+			return ErrValueExceededMaxFieldSize
+		}
 		tb.PutGeometry(i, serializeGeometry(v))
 	case val.JSONEnc:
 		buf, err := convJson(v)
+		if len(buf) > math.MaxUint16 {
+			return ErrValueExceededMaxFieldSize
+		}
 		if err != nil {
 			return err
 		}

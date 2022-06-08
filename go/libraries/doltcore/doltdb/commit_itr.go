@@ -158,6 +158,11 @@ type FilteringCommitItr struct {
 	filter CommitFilter
 }
 
+// AllCommits is a CommitFilter that matches all commits
+func AllCommits(_ context.Context, _ hash.Hash, _ *Commit) (filterOut bool, err error) {
+	return false, nil
+}
+
 func NewFilteringCommitItr(itr CommitItr, filter CommitFilter) FilteringCommitItr {
 	return FilteringCommitItr{itr, filter}
 }

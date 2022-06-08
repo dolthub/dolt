@@ -6,6 +6,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -27,7 +28,7 @@ func RefFromArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, idx Ar
 		panic("TODO")
 
 	case types.Format_DOLT_1:
-		b := prolly.ValueFromArtifactMap(idx.(prollyArtifactIndex).index)
+		b := shim.ValueFromArtifactMap(idx.(prollyArtifactIndex).index)
 		return refFromNomsValue(ctx, vrw, b)
 
 	default:
@@ -42,8 +43,8 @@ func NewEmptyArtifactIndex(ctx context.Context, vrw types.ValueReadWriter, table
 		panic("TODO")
 
 	case types.Format_DOLT_1:
-		kd := prolly.KeyDescriptorFromSchema(tableSch)
-		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		kd := shim.KeyDescriptorFromSchema(tableSch)
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m, err := prolly.NewArtifactMapFromTuples(ctx, ns, kd)
 		if err != nil {
 			return nil, err
@@ -80,9 +81,9 @@ func artifactIndexFromAddr(ctx context.Context, vrw types.ValueReadWriter, table
 		panic("TODO")
 
 	case types.Format_DOLT_1:
-		root := prolly.NodeFromValue(v)
-		kd := prolly.KeyDescriptorFromSchema(tableSch)
-		ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+		root := shim.NodeFromValue(v)
+		kd := shim.KeyDescriptorFromSchema(tableSch)
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 		m := prolly.NewArtifactMap(root, ns, kd)
 		return ArtifactIndexFromProllyMap(m), nil
 

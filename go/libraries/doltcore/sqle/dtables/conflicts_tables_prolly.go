@@ -13,6 +13,7 @@ import (
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -163,10 +164,10 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		return nil, err
 	}
 
-	kd := prolly.KeyDescriptorFromSchema(ct.baseSch)
-	baseVD := prolly.ValueDescriptorFromSchema(ct.baseSch)
-	oursVD := prolly.ValueDescriptorFromSchema(ct.ourSch)
-	theirsVD := prolly.ValueDescriptorFromSchema(ct.theirSch)
+	kd := shim.KeyDescriptorFromSchema(ct.baseSch)
+	baseVD := shim.ValueDescriptorFromSchema(ct.baseSch)
+	oursVD := shim.ValueDescriptorFromSchema(ct.ourSch)
+	theirsVD := shim.ValueDescriptorFromSchema(ct.theirSch)
 
 	b := 1
 	o := b + kd.Count() + baseVD.Count()

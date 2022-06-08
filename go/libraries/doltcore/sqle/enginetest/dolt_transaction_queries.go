@@ -953,7 +953,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -1043,7 +1043,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -1131,7 +1131,7 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -1183,7 +1183,7 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DOLT_MERGE('feature-branch')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{1}},
 			},
 			{
 				Query:    "/* client a */ SELECT count(*) from dolt_conflicts_test",
@@ -1215,7 +1215,7 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 			},
 			{
 				Query:    "/* client a */ SELECT DOLT_MERGE('--abort')",
-				Expected: []sql.Row{{1}},
+				Expected: []sql.Row{{0}},
 			},
 			{
 				Query:    "/* client a */ commit",

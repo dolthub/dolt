@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
@@ -52,7 +53,7 @@ type commitInfo struct {
 	dateTag uint64
 }
 
-func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition) (*diffRowItr, error) {
+func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, dp DiffPartition, lookup sql.IndexLookup) (*diffRowItr, error) {
 	fromData, fromSch, err := tableData(ctx, dp.from, ddb)
 
 	if err != nil {
@@ -88,13 +89,23 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
 	// TODO (dhruv) don't cast to noms map
-	rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
-
-	warnFn := func(code int, message string, args ...string) {
-		ctx.Warn(code, message, args)
+	// Use index lookup if it exists
+	if lookup == nil {
+		rd.Start(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData))
+	} else {
+		ranges := index.NomsRangesFromIndexLookup(lookup) // TODO: this is a testing method
+		// TODO: maybe just use Check
+		rangeFunc := func(ctx context.Context, val types.Value) (bool, bool, error) {
+			v, ok := val.(types.Tuple)
+			if !ok {
+				return false, false, nil
+			}
+			return ranges[0].Check.Check(ctx, v)
+		}
+		rd.StartWithRange(ctx, durable.NomsMapFromIndex(fromData), durable.NomsMapFromIndex(toData), ranges[0].Start, rangeFunc)
 	}
 
-	src := diff.NewRowDiffSource(rd, joiner, warnFn)
+	src := diff.NewRowDiffSource(rd, joiner, ctx.Warn)
 	src.AddInputRowConversion(fromConv, toConv)
 
 	return &diffRowItr{
@@ -245,12 +256,12 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema)
+	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tSch, targetToSchema)
+	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}

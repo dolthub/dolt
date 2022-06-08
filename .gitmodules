@@ -1,15 +1,20 @@
 [submodule "proto/third_party/protobuf"]
 	path = proto/third_party/protobuf
 	url = https://github.com/protocolbuffers/protobuf.git
+	ignore = dirty
 [submodule "proto/third_party/googleapis"]
 	path = proto/third_party/googleapis
 	url = https://github.com/googleapis/googleapis.git
+	ignore = dirty
 [submodule "proto/third_party/protobuf-go"]
 	path = proto/third_party/protobuf-go
 	url = https://github.com/protocolbuffers/protobuf-go.git
+	ignore = dirty
 [submodule "proto/third_party/grpc-go"]
 	path = proto/third_party/grpc-go
 	url = https://github.com/grpc/grpc-go.git
+	ignore = dirty
 [submodule "integration-tests/mysql-client-tests/cpp/third_party/mysql-connector-cpp"]
 	path = integration-tests/mysql-client-tests/cpp/third_party/mysql-connector-cpp
 	url = https://github.com/mysql/mysql-connector-cpp
+	ignore = dirty

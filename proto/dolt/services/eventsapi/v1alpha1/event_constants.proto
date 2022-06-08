@@ -84,6 +84,7 @@ enum ClientEventType {
     GARBAGE_COLLECTION = 52;
     FILTER_BRANCH = 53;
     DUMP = 54;
+    CHERRY_PICK = 55;
 }
 
 enum MetricID {

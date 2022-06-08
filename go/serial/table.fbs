@@ -27,7 +27,7 @@ table Table {
 
   // Entries map from index names to addresses of
   // index maps.
-  secondary_indexes:RefMap (required);
+  secondary_indexes:[ubyte]; // Embedded AddressMap
 
   auto_increment_value:uint64;
 

@@ -16,7 +16,7 @@ QUERY_RESPONSE = [
     {"insert into test (pk, `value`) values (1,1)": ()},
     {"select dolt_commit('-a', '-m', 'my commit2')": (('',),)},
     {"select dolt_checkout('main')": ((0,),)},
-    {"select dolt_merge('mybranch')": ((1,),)},
+    {"select dolt_merge('mybranch')": ((0,),)},
     {"select COUNT(*) FROM dolt_log": ((3,),)},
 ]
 

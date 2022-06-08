@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -128,7 +127,18 @@ func filterBranchTests() []filterBranchTest {
 			},
 			asserts: []testAssertion{
 				{
-					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk;",
+					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk, c0",
+					rows: []sql.Row{
+						{int32(0), int32(0)},
+						{int32(0), int32(0)},
+						{int32(1), int32(1)},
+						{int32(1), int32(1)},
+						{int32(2), int32(2)},
+						{int32(2), int32(2)},
+					},
+				},
+				{
+					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk",
 					rows: []sql.Row{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
@@ -151,7 +161,7 @@ func filterBranchTests() []filterBranchTest {
 					},
 				},
 				{
-					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk",
+					query: "SELECT pk,c0 FROM dolt_history_test ORDER BY pk,c0",
 					rows: []sql.Row{
 						{int32(0), int32(0)},
 						{int32(0), int32(0)},
@@ -220,9 +230,6 @@ func testFilterBranch(t *testing.T, test filterBranchTest) {
 		actRows, err := sqle.ExecuteSelect(t, dEnv, dEnv.DoltDB, root, a.query)
 		require.NoError(t, err)
 
-		require.Equal(t, len(a.rows), len(actRows))
-		for i := range a.rows {
-			assert.Equal(t, a.rows[i], actRows[i])
-		}
+		require.Equal(t, a.rows, actRows)
 	}
 }

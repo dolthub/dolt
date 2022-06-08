@@ -36,6 +36,7 @@ import (
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -70,7 +71,7 @@ type rowV struct {
 	col1, col2 int
 }
 
-var vD = prolly.ValueDescriptorFromSchema(sch)
+var vD = shim.ValueDescriptorFromSchema(sch)
 var vB = val.NewTupleBuilder(vD)
 var syncPool = pool.NewBuffPool()
 
@@ -421,7 +422,7 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, *doltdb.Roo
 	vrw := ddb.ValueReadWriter()
 	sortTests(testRows)
 
-	ns := tree.NewNodeStore(prolly.ChunkStoreFromVRW(vrw))
+	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
 
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
@@ -751,7 +752,7 @@ func buildLeftRightAncCommitsAndBranches(t *testing.T, ddb *doltdb.DoltDB, rootT
 	return leftHeadCommitHash, root, mergeRoot, ancRoot
 }
 
-var kD = prolly.KeyDescriptorFromSchema(sch)
+var kD = shim.KeyDescriptorFromSchema(sch)
 var kB = val.NewTupleBuilder(kD)
 
 func key(i int) val.Tuple {

@@ -76,18 +76,30 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "alter modify column type, make primary key spatial",
+			Name: "primary key table: non-pk column type changes",
 			SetUpScript: []string{
-				"create table point_tbl (p int primary key)",
+				"create table t (pk int primary key, c1 int, c2 text);",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+				"alter table t modify column c2 int;",
+				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:       "alter table point_tbl modify column p point primary key",
-					ExpectedErr: schema.ErrUsingSpatialKey,
+					Query:    "select count(*) from dolt_history_t;",
+					Expected: []sql.Row{{4}},
+				},
+				{
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+					Expected: []sql.Row{{1, nil}, {4, nil}},
+				},
+				{
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+					Expected: []sql.Row{{1, 3}, {4, 6}},
 				},
 			},
 		},
@@ -150,6 +162,19 @@ func TestQueryPlans(t *testing.T) {
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
 	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
+}
+
+func TestDoltDiffQueryPlans(t *testing.T) {
+	skipNewFormat(t) // different query plans due to index filter behavior
+
+	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
+	harness.Setup(setup.SimpleSetup...)
+	e, err := harness.NewEngine(t)
+	require.NoError(t, err)
+	defer e.Close()
+	for _, tt := range DoltDiffPlanTests {
+		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
+	}
 }
 
 func TestQueryErrors(t *testing.T) {
@@ -281,7 +306,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 						t.Skip()
 					}
 				}
-				enginetest.RunQueryWithContext(t, engine, ctx, statement)
+				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 			for _, assertion := range script.Assertions {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -305,11 +330,11 @@ func TestDoltUserPrivileges(t *testing.T) {
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, assertion.ExpectedErr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, assertion.ExpectedErr)
 					})
 				} else if assertion.ExpectedErrStr != "" {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
@@ -615,7 +640,7 @@ func TestShowCreateTableAsOf(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
-	skipNewFormat(t)
+	//skipNewFormat(t)
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
@@ -686,7 +711,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
@@ -739,7 +764,6 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {
@@ -770,7 +794,6 @@ func TestDiffTableFunction(t *testing.T) {
 }
 
 func TestCommitDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range CommitDiffSystemTableScriptTests {
@@ -782,7 +805,6 @@ func TestCommitDiffSystemTable(t *testing.T) {
 }
 
 func TestDiffSystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range DiffSystemTableScriptTests {

@@ -1,4 +1,4 @@
-name: Benchmark Pull Requests (andy test)
+name: Benchmark Pull Requests  (New Format)
 
 on:
   pull_request:
@@ -31,7 +31,7 @@ jobs:
         uses: dolthub/pull-request-comment-trigger@master
         id: check
         with:
-          trigger: '#benchmarkandy'
+          trigger: '#newbenchmark'
           reaction: rocket
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -42,15 +42,6 @@ jobs:
           echo "::set-output name=benchmark::true"
 
   performance:
-    strategy:
-      matrix:
-        biginit: ["true", "false"]
-        nbf: ["__LD_1__", "__DOLT_1__"]
-        exclude:
-          - biginit: "true"
-            nbf: "__DOLT_1__"
-          - biginit: "false"
-            nbf: "__LD_1__"
     runs-on: ubuntu-18.04
     needs: [validate-commentor, check-comments]
     if: ${{ needs.check-comments.outputs.benchmark == 'true' }}
@@ -104,6 +95,6 @@ jobs:
           ACTOR: ${{ github.actor }}
           REPO_ACCESS_TOKEN: ${{ secrets.REPO_ACCESS_TOKEN }}
           KUBECONFIG: "./kubeconfig"
-          INIT_BIG_REPO: ${{ matrix.biginit }}
-          NOMS_BIN_FORMAT: ${{ matrix.nbf }}
-          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-andy-dolt-dolt-job-json.sh"
+          INIT_BIG_REPO: "false"
+          NOMS_BIN_FORMAT: "__DOLT_1__"
+          TEMPLATE_SCRIPT: "./.github/scripts/performance-benchmarking/get-dolt-dolt-job-json.sh"

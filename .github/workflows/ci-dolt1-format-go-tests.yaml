@@ -7,6 +7,10 @@ on:
       - 'go/**'
   workflow_dispatch:
 
+concurrency:
+  group: ci-dolt1-format-go-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Go tests (new format)

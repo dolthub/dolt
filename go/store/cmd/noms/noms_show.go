@@ -27,7 +27,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	flag "github.com/juju/gnuflag"
 
@@ -35,7 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/store/cmd/noms/util"
 	"github.com/dolthub/dolt/go/store/config"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/util/datetime"
@@ -73,23 +72,12 @@ func setupShowFlags() *flag.FlagSet {
 func runShow(ctx context.Context, args []string) int {
 	cfg := config.NewResolver()
 
-	var value interface{}
+	var value types.Value
 	database, vrw, value, err := cfg.GetPath(ctx, args[0])
 
-	if err != nil && strings.Contains(err.Error(), "unknown type") {
-		// If noms can't decode a value but it does exist, we'll assume it's a prolly node and treat it as such
-		sp, err := cfg.GetDatabaseSpecForPath(ctx, args[0])
+	if err != nil {
 		util.CheckErrorNoUsage(err)
-
-		database = sp.GetDatabase(ctx)
-		vrw = sp.GetVRW(ctx)
-		cs := sp.NewChunkStore(ctx)
-		chunk, err := cs.Get(ctx, sp.Path.Hash)
-		util.CheckErrorNoUsage(err)
-
-		value = tree.NodeFromBytes(chunk.Data())
 	} else {
-		util.CheckErrorNoUsage(err)
 	}
 
 	defer database.Close()
@@ -135,61 +123,50 @@ func runShow(ctx context.Context, args []string) int {
 	return 0
 }
 
-func outputType(value interface{}) {
+func outputType(value types.Value) {
 	var typeString string
 	switch value := value.(type) {
-	case tree.Node:
-		typeString = "prolly.Node"
-	case types.Value:
-		switch value := value.(type) {
-		case types.SerialMessage:
-			switch serial.GetFileID(value) {
-			case serial.StoreRootFileID:
-				typeString = "StoreRoot"
-			case serial.TagFileID:
-				typeString = "Tag"
-			case serial.WorkingSetFileID:
-				typeString = "WorkingSet"
-			case serial.CommitFileID:
-				typeString = "Commit"
-			case serial.RootValueFileID:
-				typeString = "RootValue"
-			case serial.TableFileID:
-				typeString = "TableFile"
-			case serial.ProllyTreeNodeFileID:
-				typeString = "ProllyTreeNode"
-			case serial.AddressMapFileID:
-				typeString = "AddressMap"
-			default:
-				t, err := types.TypeOf(value)
-				typeString = t.HumanReadableString()
-				util.CheckError(err)
-			}
+	case types.SerialMessage:
+		switch serial.GetFileID(value) {
+		case serial.StoreRootFileID:
+			typeString = "StoreRoot"
+		case serial.TagFileID:
+			typeString = "Tag"
+		case serial.WorkingSetFileID:
+			typeString = "WorkingSet"
+		case serial.CommitFileID:
+			typeString = "Commit"
+		case serial.RootValueFileID:
+			typeString = "RootValue"
+		case serial.TableFileID:
+			typeString = "TableFile"
+		case serial.ProllyTreeNodeFileID:
+			typeString = "ProllyTreeNode"
+		case serial.AddressMapFileID:
+			typeString = "AddressMap"
 		default:
 			t, err := types.TypeOf(value)
+			util.CheckErrorNoUsage(err)
 			typeString = t.HumanReadableString()
-			util.CheckError(err)
 		}
 	default:
-		typeString = fmt.Sprintf("unknown type %T", value)
+		t, err := types.TypeOf(value)
+		util.CheckErrorNoUsage(err)
+		typeString = t.HumanReadableString()
 	}
 	fmt.Fprint(os.Stdout, typeString, " - ")
 }
 
-func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) error {
+func outputEncodedValue(ctx context.Context, w io.Writer, value types.Value) error {
 	switch value := value.(type) {
 	case types.TupleRowStorage:
-		node := prolly.NodeFromValue(value)
+		node := shim.NodeFromValue(value)
 		return tree.OutputProllyNode(w, node)
-	case tree.Node:
-		return tree.OutputProllyNode(w, value)
-	case types.Value:
-		switch value := value.(type) {
-		// Some types of serial message need to be output here because of dependency cycles between type / tree package
-		case types.SerialMessage:
-			switch serial.GetFileID(value) {
-			case serial.TableFileID:
-				msg := serial.GetRootAsTable(value, 0)
+	// Some types of serial message need to be output here because of dependency cycles between types / tree package
+	case types.SerialMessage:
+		switch serial.GetFileID(value) {
+		case serial.TableFileID:
+			msg := serial.GetRootAsTable(value, 0)
 
 				fmt.Fprintf(w, "{\n")
 				fmt.Fprintf(w, "\tSchema: #%s\n", hash.New(msg.SchemaBytes()).String())
@@ -197,36 +174,33 @@ func outputEncodedValue(ctx context.Context, w io.Writer, value interface{}) err
 				fmt.Fprintf(w, "\tArtifacts: #%s\n", hash.New(msg.ArtifactsBytes()).String())
 				// TODO: merge conflicts, not stable yet
 
-				fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
+			fmt.Fprintf(w, "\tAutoinc: %d\n", msg.AutoIncrementValue())
 
-				fmt.Fprintf(w, "\tPrimary index: {\n")
-				node := tree.NodeFromBytes(msg.PrimaryIndexBytes())
-				tree.OutputProllyNode(w, node)
-				fmt.Fprintf(w, "\t}\n")
+			fmt.Fprintf(w, "\tPrimary index: {\n")
+			node := tree.NodeFromBytes(msg.PrimaryIndexBytes())
+			tree.OutputProllyNode(w, node)
+			fmt.Fprintf(w, "\t}\n")
 
-				fmt.Fprintf(w, "\tSecondary indexes: {\n")
-				idxRefs := msg.SecondaryIndexes(nil)
-				hashes := idxRefs.RefArrayBytes()
-				for i := 0; i < idxRefs.NamesLength(); i++ {
-					name := idxRefs.Names(i)
-					addr := hash.New(hashes[i*20 : (i+1)*20])
-					fmt.Fprintf(w, "\t\t%s: #%s\n", name, addr.String())
-				}
-				fmt.Fprintf(w, "\t}\n")
-				fmt.Fprintf(w, "}")
+			fmt.Fprintf(w, "\tSecondary indexes: {\n")
 
-				return nil
-			case serial.ProllyTreeNodeFileID:
-				node := prolly.NodeFromValue(value)
-				return tree.OutputProllyNode(w, node)
-			default:
-				return types.WriteEncodedValue(ctx, w, value)
+			node = tree.NodeFromBytes(msg.SecondaryIndexesBytes())
+			err := tree.OutputAddressMapNode(w, node)
+			if err != nil {
+				return err
 			}
+			fmt.Fprintf(w, "\t}\n")
+			fmt.Fprintf(w, "}")
+
+			return nil
+		case serial.StoreRootFileID:
+			msg := serial.GetRootAsStoreRoot(value, 0)
+			ambytes := msg.AddressMapBytes()
+			node := tree.NodeFromBytes(ambytes)
+			return tree.OutputAddressMapNode(w, node)
 		default:
 			return types.WriteEncodedValue(ctx, w, value)
 		}
 	default:
-		_, err := w.Write([]byte(fmt.Sprintf("unknown value type %T: %v", value, value)))
-		return err
+		return types.WriteEncodedValue(ctx, w, value)
 	}
 }

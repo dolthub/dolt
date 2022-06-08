@@ -105,6 +105,10 @@ func (m ArtifactMap) HashOf() hash.Hash {
 	return m.tuples.hashOf()
 }
 
+func (m ArtifactMap) Node() tree.Node {
+	return m.tuples.root
+}
+
 func (m ArtifactMap) Format() *types.NomsBinFormat {
 	return m.tuples.ns.Format()
 }

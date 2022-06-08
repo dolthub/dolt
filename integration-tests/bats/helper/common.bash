@@ -24,6 +24,11 @@ set_dolt_user() {
     dolt config --global --add user.email "$2" > /dev/null 2>&1
 }
 
+unset_dolt_user() {
+  dolt config --global --unset user.name
+  dolt config --global --unset user.email
+}
+
 current_dolt_user_name() {
     dolt config --global --get user.name
 }
@@ -52,6 +57,9 @@ assert_feature_version() {
     # command, don't check its output in that case
     if [ "$status" -eq 0 ]; then
         [[ "$output" =~ "feature version: 3" ]] || exit 1
+    else
+      # Clear status to avoid BATS failing if this is the last run command
+      status=0
     fi
 }
 
