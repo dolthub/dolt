@@ -166,6 +166,10 @@ func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	}
 }
 
+func (m Map) Node() tree.Node {
+	return m.tuples.root
+}
+
 // Pool returns the pool.BuffPool of the underlying tuples' tree.NodeStore
 func (m Map) Pool() pool.BuffPool {
 	return m.tuples.ns.Pool()
@@ -285,4 +289,20 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	}
 	sb.WriteString("}")
 	return sb.String(), nil
+}
+
+// ConvertToKeylessIndex converts the given map to a keyless index map.
+func ConvertToKeylessIndex(m Map) Map {
+	keyDesc, valDesc := m.Descriptors()
+	newTypes := make([]val.Type, len(keyDesc.Types)+1)
+	copy(newTypes, keyDesc.Types)
+	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
+	newKeyDesc := val.NewTupleDescriptorWithComparator(keyDesc.Comparator(), newTypes...)
+	newTuples := m.tuples
+	newTuples.order = newKeyDesc
+	return Map{
+		tuples:  newTuples,
+		keyDesc: newKeyDesc,
+		valDesc: valDesc,
+	}
 }

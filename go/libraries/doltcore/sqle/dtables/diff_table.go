@@ -68,7 +68,6 @@ type DiffTable struct {
 
 	sqlSch           sql.PrimaryKeySchema
 	partitionFilters []sql.Expression
-	rowFilters       []sql.Expression
 
 	table  *doltdb.Table
 	lookup sql.IndexLookup
@@ -115,7 +114,6 @@ func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *do
 		diffTableSch:     diffTableSchema,
 		sqlSch:           sqlSch,
 		partitionFilters: nil,
-		rowFilters:       nil,
 		table:            table,
 		joiner:           j,
 	}, nil
@@ -178,15 +176,11 @@ func (dt *DiffTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
 	}, nil
 }
 
-var partitionFilterCols = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
-
-func splitPartitionFilters(filters []sql.Expression) (commitFilters, rowFilters []sql.Expression) {
-	return splitFilters(filters, getColumnFilterCheck(partitionFilterCols))
-}
+var commitMetaColumns = set.NewStrSet([]string{toCommit, fromCommit, toCommitDate, fromCommitDate})
 
 // HandledFilters returns the list of filters that will be handled by the table itself
 func (dt *DiffTable) HandledFilters(filters []sql.Expression) []sql.Expression {
-	dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
+	dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
 	return dt.partitionFilters
 }
 
@@ -198,7 +192,7 @@ func (dt *DiffTable) Filters() []sql.Expression {
 // WithFilters returns a new sql.Table instance with the filters applied
 func (dt *DiffTable) WithFilters(_ *sql.Context, filters []sql.Expression) sql.Table {
 	if dt.partitionFilters == nil {
-		dt.partitionFilters, dt.rowFilters = splitPartitionFilters(filters)
+		dt.partitionFilters = FilterFilters(filters, ColumnPredicate(commitMetaColumns))
 	}
 
 	return dt

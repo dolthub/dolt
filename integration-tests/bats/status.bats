@@ -426,7 +426,6 @@ SQL
 }
 
 @test "status: roots runs even if status fails" {
-    skip_nbf_dolt_1
     mv .dolt/repo_state.json .dolt/repo_state.backup
 
     run dolt status

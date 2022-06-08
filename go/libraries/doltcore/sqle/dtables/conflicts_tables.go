@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -158,10 +159,10 @@ func newProllyConflictRowIter(ctx context.Context, conflictMap prolly.ConflictMa
 		return prollyConflictRowIter{}, err
 	}
 
-	kd := prolly.KeyDescriptorFromSchema(baseSch)
-	baseVD := prolly.ValueDescriptorFromSchema(baseSch)
-	oursVD := prolly.ValueDescriptorFromSchema(ourSch)
-	theirsVD := prolly.ValueDescriptorFromSchema(theirSch)
+	kd := shim.KeyDescriptorFromSchema(baseSch)
+	baseVD := shim.ValueDescriptorFromSchema(baseSch)
+	oursVD := shim.ValueDescriptorFromSchema(ourSch)
+	theirsVD := shim.ValueDescriptorFromSchema(theirSch)
 
 	b := 0
 	o := kd.Count() + baseVD.Count()

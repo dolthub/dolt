@@ -109,7 +109,7 @@ async function main() {
 	},
 	[],
 	[ { "dolt_checkout('main')": 0 } ],
-	[ { "dolt_merge('mybranch')": 1 } ],
+	[ { "dolt_merge('mybranch')": 0 } ],
 	[ { "COUNT(*)": 3 } ],
     ];
 

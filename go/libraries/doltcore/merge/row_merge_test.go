@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -223,7 +223,7 @@ func TestRowMerge(t *testing.T) {
 
 			merged, isConflict := v.tryMerge(test.row, test.mergeRow, test.ancRow)
 			assert.Equal(t, test.expectConflict, isConflict)
-			vD := prolly.ValueDescriptorFromSchema(test.mergedSch)
+			vD := shim.ValueDescriptorFromSchema(test.mergedSch)
 			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
 		})
 	}
@@ -342,7 +342,7 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		return nil
 	}
 
-	vD := prolly.ValueDescriptorFromSchema(sch)
+	vD := shim.ValueDescriptorFromSchema(sch)
 	vB := val.NewTupleBuilder(vD)
 	for i, v := range r {
 		if v != nil {

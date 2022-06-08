@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"strings"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
 )
@@ -100,5 +101,22 @@ func (v TupleRowStorage) skip(nbf *NomsBinFormat, b *binaryNomsReader) {
 }
 
 func (v TupleRowStorage) HumanReadableString() string {
-	return strings.ToUpper(hex.EncodeToString(v))
+	if serial.GetFileID(v) == serial.AddressMapFileID {
+		keys, values, cnt := message.GetKeysAndValues(message.Message([]byte(v)))
+		var b strings.Builder
+		b.Write([]byte("AddressMap{\n"))
+		for i := uint16(0); i < cnt; i++ {
+			name := keys.GetSlice(int(i))
+			addr := values.GetSlice(int(i))
+			b.Write([]byte("\t"))
+			b.Write(name)
+			b.Write([]byte(": "))
+			b.Write([]byte(hash.New(addr).String()))
+			b.Write([]byte("\n"))
+		}
+		b.Write([]byte("}"))
+		return b.String()
+	} else {
+		return strings.ToUpper(hex.EncodeToString(v))
+	}
 }

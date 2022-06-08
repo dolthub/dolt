@@ -315,16 +315,21 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		baseTable, ok, err := db.GetTableInsensitiveWithRoot(ctx, root, baseTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			return nil, false, nil
+		}
+
 		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
+
+		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
 		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
@@ -399,11 +404,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	switch table := table.(type) {
 	case *DoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *AlterableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *WritableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	default:
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}
