@@ -7,7 +7,7 @@ on:
       - 'integration-tests/**'
 
 concurrency:
-  group: build-${{ github.event.pull_request.number || github.ref }}
+  group: ci-data-dump-loading-tests-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
