@@ -242,12 +242,8 @@ func TestScripts(t *testing.T) {
 		skipped = append(skipped,
 			// Different error output for primary key error
 			"failed statements data validation for INSERT, UPDATE",
-			// missing FK violation
-			"failed statements data validation for DELETE, REPLACE",
 			// wrong results
 			"Indexed Join On Keyless Table",
-			// spurious fk violation
-			"Nested Subquery projections (NTC)",
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
