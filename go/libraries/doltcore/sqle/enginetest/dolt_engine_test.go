@@ -821,7 +821,6 @@ func TestKeylessUniqueIndex(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
-	skipPreparedTests(t)
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
 
