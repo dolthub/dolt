@@ -6,6 +6,10 @@ on:
       - 'go/**'
       - 'integration-tests/**'
 
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   mysql_client_integrations_job:
     runs-on: ubuntu-18.04
