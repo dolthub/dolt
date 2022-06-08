@@ -59,6 +59,7 @@ const (
 	insertBatchMode
 	deleteBatchMode
 	fake
+	faker
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
