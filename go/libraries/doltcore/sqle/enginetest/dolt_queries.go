@@ -2420,6 +2420,42 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 	{
+		Name: "working set changes",
+		SetUpScript: []string{
+			"create table regularTable (a int primary key, b int, c int);",
+			"create table droppedTable (a int primary key, b int, c int);",
+			"create table renamedEmptyTable (a int primary key, b int, c int);",
+			"insert into droppedTable values (1, 2, 3), (2, 3, 4);",
+			"set @Commit1 = (select DOLT_COMMIT('-am', 'Creating tables x and y'));",
+
+			// data change: false; schema change: true
+			"create table addedTable (a int primary key, b int, c int);",
+			"call DOLT_ADD('addedTable');",
+			// data change: true; schema change: true
+			"drop table droppedTable;",
+			"call DOLT_ADD('droppedTable');",
+			// data change: false; schema change: true
+			"rename table renamedEmptyTable to newRenamedEmptyTable",
+			// data change: true; schema change: false
+			"insert into regularTable values (1, 2, 3);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT COUNT(*) FROM DOLT_DIFF;",
+				Expected: []sql.Row{{7}},
+			},
+			{
+				Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH='WORKING' ORDER BY table_name;",
+				Expected: []sql.Row{
+					{"WORKING", "addedTable", "NULL", "NULL", "NULL", "NULL", false, true},
+					{"WORKING", "droppedTable", "NULL", "NULL", "NULL", "NULL", true, true},
+					{"WORKING", "newRenamedEmptyTable", "NULL", "NULL", "NULL", "NULL", false, true},
+					{"WORKING", "regularTable", "NULL", "NULL", "NULL", "NULL", true, false},
+				},
+			},
+		},
+	},
+	{
 		Name: "basic case with three tables",
 		SetUpScript: []string{
 			"create table x (a int primary key, b int, c int);",
