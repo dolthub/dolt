@@ -79,20 +79,6 @@ func NewArtifactMapFromTuples(ctx context.Context, ns tree.NodeStore, srcKeyDesc
 	return NewArtifactMap(root, ns, srcKeyDesc), nil
 }
 
-func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
-	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
-	if err != nil {
-		return ArtifactMap{}, err
-	}
-
-	return ArtifactMap{
-		tuples:  tuples,
-		keyDesc: base.keyDesc,
-		valDesc: base.valDesc,
-	}, nil
-}
-
 func (m ArtifactMap) Count() int {
 	return m.tuples.count()
 }
@@ -133,8 +119,23 @@ func (m ArtifactMap) Has(ctx context.Context, key val.Tuple) (ok bool, err error
 	return m.tuples.has(ctx, key)
 }
 
+func (m ArtifactMap) Pool() pool.BuffPool {
+	return m.tuples.ns.Pool()
+}
+
+func (m ArtifactMap) Editor() ArtifactsEditor {
+	return ArtifactsEditor{
+		srcKeyDesc: m.srcKeyDesc,
+		mut: MutableMap{
+			tuples:  m.tuples.mutate(),
+			keyDesc: m.keyDesc,
+			valDesc: m.valDesc,
+		},
+	}
+}
+
+// IterAll returns an iterator for all artifacts.
 func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
-	// pks..., target_branch_cm_hash, artifact_type
 	numPks := m.srcKeyDesc.Count()
 	tb := val.NewTupleBuilder(m.srcKeyDesc)
 	itr, err := m.tuples.iterAll(ctx)
@@ -151,6 +152,7 @@ func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
 	}, nil
 }
 
+// IterAllConflicts returns an iterator for the conflicts.
 func (m ArtifactMap) IterAllConflicts(ctx context.Context) (ConflictArtifactIter, error) {
 	artIter, err := m.iterAllOfType(ctx, ArtifactTypeConflict)
 	if err != nil {
@@ -160,6 +162,7 @@ func (m ArtifactMap) IterAllConflicts(ctx context.Context) (ConflictArtifactIter
 	return ConflictArtifactIter{artIter}, nil
 }
 
+// HasArtifactOfType returns whether an artifact of |artType| exists in the map.
 func (m ArtifactMap) HasArtifactOfType(ctx context.Context, artType ArtifactType) (bool, error) {
 	artIter, err := m.iterAllOfType(ctx, artType)
 	if err != nil {
@@ -176,6 +179,7 @@ func (m ArtifactMap) HasArtifactOfType(ctx context.Context, artType ArtifactType
 	return hasType, nil
 }
 
+// ClearArtifactsOfType deletes all artifacts of |artType|.
 func (m ArtifactMap) ClearArtifactsOfType(ctx context.Context, artType ArtifactType) (ArtifactMap, error) {
 	edt := m.Editor()
 	itr, err := m.iterAllOfType(ctx, artType)
@@ -201,6 +205,7 @@ func (m ArtifactMap) ClearArtifactsOfType(ctx context.Context, artType ArtifactT
 	return edt.Flush(ctx)
 }
 
+// CountOfType returns the number of artifacts of |artType|.
 func (m ArtifactMap) CountOfType(ctx context.Context, artType ArtifactType) (cnt uint64, err error) {
 	itr, err := m.iterAllOfType(ctx, artType)
 	if err != nil {
@@ -224,19 +229,18 @@ func (m ArtifactMap) iterAllOfType(ctx context.Context, artType ArtifactType) (a
 	return artifactTypeIter{itr, artType}, nil
 }
 
-func (m ArtifactMap) Pool() pool.BuffPool {
-	return m.tuples.ns.Pool()
-}
-
-func (m ArtifactMap) Editor() ArtifactsEditor {
-	return ArtifactsEditor{
-		srcKeyDesc: m.srcKeyDesc,
-		mut: MutableMap{
-			tuples:  m.tuples.mutate(),
-			keyDesc: m.keyDesc,
-			valDesc: m.valDesc,
-		},
+func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
+	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	if err != nil {
+		return ArtifactMap{}, err
 	}
+
+	return ArtifactMap{
+		tuples:  tuples,
+		keyDesc: base.keyDesc,
+		valDesc: base.valDesc,
+	}, nil
 }
 
 type ArtifactsEditor struct {
@@ -266,35 +270,7 @@ func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
 	}, nil
 }
 
-func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
-
-	// artifact key consists of keys of source schema, followed by target branch
-	// commit hash, and artifact type.
-	keyTypes := srcKd.Types
-
-	// target branch commit hash
-	keyTypes = append(keyTypes, val.Type{Enc: val.Hash160Enc, Nullable: false})
-
-	// artifact type
-	keyTypes = append(keyTypes, val.Type{Enc: val.StringEnc, Nullable: false})
-
-	// json blob data
-	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
-
-	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
-}
-
-type ConflictArtifact struct {
-	Key        val.Tuple
-	HeadCmHash []byte
-	Metadata   ConflictMetadata
-}
-
-type ConflictMetadata struct {
-	BaseTblHash  []byte `json:"bc"`
-	TheirTblHash []byte `json:"tc"`
-}
-
+// ConflictArtifactIter iters all the conflicts in ArtifactMap.
 type ConflictArtifactIter struct {
 	itr artifactTypeIter
 }
@@ -306,7 +282,7 @@ func (itr *ConflictArtifactIter) Next(ctx context.Context) (ConflictArtifact, er
 	}
 
 	var parsedMeta ConflictMetadata
-	err = json.Unmarshal(art.metadata, &parsedMeta)
+	err = json.Unmarshal(art.Metadata, &parsedMeta)
 	if err != nil {
 		return ConflictArtifact{}, err
 	}
@@ -318,14 +294,22 @@ func (itr *ConflictArtifactIter) Next(ctx context.Context) (ConflictArtifact, er
 	}, nil
 }
 
-type Artifact struct {
-	ArtKey     val.Tuple
+// ConflictArtifact is the decoded conflict from the artifacts table
+type ConflictArtifact struct {
 	Key        val.Tuple
 	HeadCmHash []byte
-	ArtType    ArtifactType
-	metadata   []byte
+	Metadata   ConflictMetadata
 }
 
+// ConflictMetadata is the json metadata associated with a conflict
+type ConflictMetadata struct {
+	// BaseTblHash is the target hash of the table holding the base value for the conflict
+	BaseTblHash []byte `json:"bc"`
+	// TheirTblHash is the target hash of the table holding the their value for the conflict
+	TheirTblHash []byte `json:"tc"`
+}
+
+// artifactTypeIter iters all artifacts of a given |artType|.
 type artifactTypeIter struct {
 	itr     ArtifactIter
 	artType ArtifactType
@@ -352,7 +336,7 @@ type ArtifactIter struct {
 }
 
 func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
-	artKey, val, err := itr.itr.Next(ctx)
+	artKey, v, err := itr.itr.Next(ctx)
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -360,14 +344,14 @@ func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
 	srcKey := itr.getSrcKeyFromArtKey(artKey)
 	cmHash, _ := itr.artKD.GetHash160(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetString(itr.numPks+1, artKey)
-	metadata, _ := itr.artVD.GetJSON(0, val)
+	metadata, _ := itr.artVD.GetJSON(0, v)
 
 	return Artifact{
 		ArtKey:     artKey,
 		Key:        srcKey,
 		HeadCmHash: cmHash,
 		ArtType:    ArtifactType(artType),
-		metadata:   metadata,
+		Metadata:   metadata,
 	}, nil
 }
 
@@ -376,4 +360,36 @@ func (itr ArtifactIter) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 		itr.tb.PutRaw(0, k.GetField(i))
 	}
 	return itr.tb.Build(itr.pool)
+}
+
+// Artifact is a struct representing an artifact in the artifacts table
+type Artifact struct {
+	// ArtKey is the key of the artifact itself
+	ArtKey val.Tuple
+	// Key is the key of the source row that the artifact references
+	Key val.Tuple
+	// HeadCmHash is the cm hash of the left branch's head at the time of artifact creation
+	HeadCmHash []byte
+	// ArtType is the type of the artifact
+	ArtType ArtifactType
+	// Metadata is the encoded json metadata
+	Metadata []byte
+}
+
+func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
+
+	// artifact key consists of keys of source schema, followed by target branch
+	// commit hash, and artifact type.
+	keyTypes := srcKd.Types
+
+	// target branch commit hash
+	keyTypes = append(keyTypes, val.Type{Enc: val.Hash160Enc, Nullable: false})
+
+	// artifact type
+	keyTypes = append(keyTypes, val.Type{Enc: val.StringEnc, Nullable: false})
+
+	// json blob data
+	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}
+
+	return val.NewTupleDescriptor(keyTypes...), val.NewTupleDescriptor(valTypes...)
 }
