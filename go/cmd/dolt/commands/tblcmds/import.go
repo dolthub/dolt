@@ -732,13 +732,18 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			continue
 		}
 
+		colAsString, ok := row[i].(string)
+		if !ok {
+			return nil, fmt.Errorf("error: column value should be of type string")
+		}
+
 		switch col.Type.(type) {
 		case sql.StringType:
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
 		case sql.BitType:
 			// Check if the column can be parsed an uint64
-			val, err := strconv.ParseUint(row[i].(string), 10, 64)
+			val, err := strconv.ParseUint(colAsString, 10, 64)
 			if err == nil {
 				row[i] = val
 				continue
@@ -746,7 +751,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 			// Check if the column is of type b'110'
 			re := regexp.MustCompile(`(?m)b\'(\d+)\'`)
-			groups := re.FindStringSubmatch(row[i].(string))
+			groups := re.FindStringSubmatch(colAsString)
 			if len(groups) > 1 {
 				val, err = strconv.ParseUint(groups[1], 2, 64)
 				if err == nil {
@@ -756,7 +761,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			}
 
 			// Check if the column can be parsed as a hex string
-			numberStr := strings.Replace(row[i].(string), "0x", "", -1)
+			numberStr := strings.Replace(colAsString, "0x", "", -1)
 			val, err = strconv.ParseUint(numberStr, 16, 64)
 			if err == nil {
 				row[i] = val

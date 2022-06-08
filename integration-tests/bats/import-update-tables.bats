@@ -1019,56 +1019,138 @@ DELIM
 }
 
 @test "import-update-tables: bit types" {
-   dolt sql -q "CREATE TABLE bitted (id int PRIMARY KEY, b bit)"
-   dolt sql -q "INSERT INTO bitted VALUES (1, 0), (3, 1)"
+    dolt sql -q "CREATE TABLE bitted (id int PRIMARY KEY, b bit)"
+    dolt sql -q "INSERT INTO bitted VALUES (1, 0), (3, 1)"
 
-   dolt table export bitted bitted.csv
+    dolt table export bitted bitted.csv
 
-   run dolt table import -u bitted bitted.csv
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 0, Had No Effect: 2" ]] || false
+    run dolt table import -u bitted bitted.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 0, Had No Effect: 2" ]] || false
 
-   run dolt sql -r csv -q "select * from bitted order by id"
-   [[ "$output" =~ "id,b" ]] || false
-   [[ "$output" =~ "1,0" ]] || false
-   [[ "$output" =~ "3,1" ]] || false
+    run dolt sql -r csv -q "select * from bitted order by id"
+    [[ "$output" =~ "id,b" ]] || false
+    [[ "$output" =~ "1,0" ]] || false
+    [[ "$output" =~ "3,1" ]] || false
 
-   # Try with a larger bit size
-   dolt sql -q "create table bitted2 (id int PRIMARY KEY, b bit(4))"
-   dolt sql -q "INSERT INTO bitted2 values (1, 4)"
+    # Try with a larger bit size
+    dolt sql -q "create table bitted2 (id int PRIMARY KEY, b bit(4))"
+    dolt sql -q "INSERT INTO bitted2 values (1, 4)"
 
-   dolt table export -f bitted2 bitted.csv
+    dolt table export -f bitted2 bitted.csv
 
-   run dolt table import -u bitted2 bitted.csv
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 0, Had No Effect: 1" ]] || false
+    run dolt table import -u bitted2 bitted.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 0, Had No Effect: 1" ]] || false
 
-   run dolt sql -r csv -q "select * from bitted2 order by id"
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "id,b" ]] || false
-   [[ "$output" =~ "1,4" ]] || false
+    run dolt sql -r csv -q "select * from bitted2 order by id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "id,b" ]] || false
+    [[ "$output" =~ "1,4" ]] || false
 
-   # Try with a binary value like 0x04
-   echo -e 'id,b\n2,0x04'|dolt table import -u bitted2
-   [ "$status" -eq 0 ]
+    # Try with a binary value like 0x04
+    echo -e 'id,b\n2,0x04'|dolt table import -u bitted2
+    [ "$status" -eq 0 ]
 
-   run dolt sql -r csv -q "select * from bitted2 order by id"
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "id,b" ]] || false
-   [[ "$output" =~ "1,4" ]] || false
-   [[ "$output" =~ "2,4" ]] || false
+    run dolt sql -r csv -q "select * from bitted2 order by id"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "id,b" ]] || false
+    [[ "$output" =~ "1,4" ]] || false
+    [[ "$output" =~ "2,4" ]] || false
 
-   # Try an actual bit string like b'11'
-   cat <<DELIM > bitted.csv
+    # Try an actual bit string like b'11'
+    cat <<DELIM > bitted.csv
 id,b
 3,b'100'
 DELIM
-   run dolt table import -u bitted2 bitted.csv
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
 
-   run dolt sql -r csv -q "select * from bitted2 where id = 3"
-   [ "$status" -eq 0 ]
-   [[ "$output" =~ "id,b" ]] || false
-   [[ "$output" =~ "3,4" ]] || false
+    run dolt table import -u bitted2 bitted.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from bitted2 where id = 3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "id,b" ]] || false
+    [[ "$output" =~ "3,4" ]] || false
+}
+
+@test "import-update-tables: binary and varbinary types" {
+    # Varbinary column
+    dolt sql -q "create table t(pk int primary key, val varbinary(100))"
+    cat <<DELIM > binary.csv
+pk,val
+1,0xdsdd
+DELIM
+
+    run dolt table import -u t binary.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from t order by pk"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,v" ]] || false
+    [[ "$output" =~ "1,0xdsdd" ]] || false
+
+    dolt table rm t
+
+    # Binary column
+    dolt sql -q "create table t(pk int primary key, val binary(10))"
+
+    run dolt table import -u t binary.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from t order by pk"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,val" ]] || false
+    [[ "$output" =~ "1,0xdsdd" ]] || false
+}
+
+@test "import-update-tables: enum type" {
+    skip "dolt is improperly giving a default calue for a bad enum value on --continue"
+
+    dolt sql -q "create table t(pk int primary key, size ENUM('x-small', 'small', 'medium', 'large', 'x-large'))"
+    cat <<DELIM > enum.csv
+pk,size
+1,small
+2,medium
+3,large
+DELIM
+
+    run dolt table import -u t enum.csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 3, Additions: 3, Modifications: 0, Had No Effect: 0" ]] || false
+
+    run dolt sql -r csv -q "select * from t order by pk"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "pk,size" ]] || false
+    [[ "$output" =~ "1,small" ]] || false
+    [[ "$output" =~ "2,medium" ]] || false
+    [[ "$output" =~ "3,large" ]] || false
+
+    cat <<DELIM > bad-enum.csv
+pk,size
+1,small
+2,medium
+3,large
+4,dasdas
+DELIM
+
+    run dolt table import -u t bad-enum.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Bad Row: [4,dasdas]" ]] || false
+
+    # This is not correct
+    run dolt table import -u t bad-enum.csv --continue
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Rows Processed: 4, Additions: 1, Modifications: 0, Had No Effect: 3" ]] || false
+
+    run dolt sql -r csv -q "select * from t order by pk"
+    [ "$status" -eq 0 ]
+
+    [[ "$output" =~ "pk,size" ]] || false
+    [[ "$output" =~ "1,small" ]] || false
+    [[ "$output" =~ "2,medium" ]] || false
+    [[ "$output" =~ "3,large" ]] || false
+    [[ "$output" =~ "4,x-small" ]] || false # should be empty
 }
