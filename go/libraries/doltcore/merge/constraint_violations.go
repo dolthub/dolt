@@ -58,6 +58,10 @@ const (
 
 // AddConstraintViolations adds all constraint violations to each table.
 func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet) (*doltdb.RootValue, *set.StrSet, error) {
+	if types.IsFormat_DOLT_1(baseRoot.VRW().Format()) {
+		return nil, nil, fmt.Errorf("constraint violations not supported for NomsBinFormat __DOLT_1__")
+	}
+
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
