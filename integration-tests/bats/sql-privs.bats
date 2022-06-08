@@ -51,7 +51,7 @@ teardown() {
 
     # create user, expect error
     run create_user
-    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>, query=CREATE USER new_user" ]] || false
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
     # expect only dolt user
     run show_users
