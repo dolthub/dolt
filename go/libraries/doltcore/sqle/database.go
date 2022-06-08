@@ -404,11 +404,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	switch table := table.(type) {
 	case *DoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *AlterableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *WritableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	default:
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}

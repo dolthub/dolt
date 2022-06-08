@@ -306,8 +306,11 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return &historyIter{nonExistentTable: true}, nil
 	}
 
-	table = table.LockedToRoot(root)
-	
+	table, err = table.LockedToRoot(ctx, root)
+	if err != nil {
+		return nil, err
+	}
+
 	// TODO: apply index lookups conditionally based on index presence at this revision
 	var sqlTable sql.Table
 	sqlTable = table

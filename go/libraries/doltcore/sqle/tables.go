@@ -119,9 +119,44 @@ func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatab
 // LockedToRoot returns a version of this table with its root value locked to the given value. The table's values will
 // not change as the session's root value changes. Appropriate for AS OF queries, or other use cases where the table's
 // values should not change throughout execution of a session.
-func (t DoltTable) LockedToRoot(rootValue *doltdb.RootValue) *DoltTable {
-	t.lockedToRoot = rootValue
-	return &t
+func (t DoltTable) LockedToRoot(ctx *sql.Context, root *doltdb.RootValue) (*DoltTable, error) {
+	tbl, ok, err := root.GetTable(ctx, t.tableName)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, doltdb.ErrTableNotFound
+	}
+
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var autoCol schema.Column
+	_ = sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		if col.AutoIncrement {
+			autoCol = col
+			stop = true
+		}
+		return
+	})
+
+	sqlSch, err := sqlutil.FromDoltSchema(t.tableName, sch)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DoltTable{
+		tableName:     t.tableName,
+		db:            t.db,
+		nbf:           tbl.Format(),
+		sch:           sch,
+		sqlSch:        sqlSch,
+		autoIncCol:    autoCol,
+		projectedCols: t.projectedCols,
+		opts:          t.opts,
+		lockedToRoot:  root,
+	}, nil
 }
 
 // Internal interface for declaring the interfaces that read-only dolt tables are expected to implement
