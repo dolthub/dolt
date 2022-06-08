@@ -763,7 +763,6 @@ func TestBrokenSystemTableQueries(t *testing.T) {
 }
 
 func TestHistorySystemTable(t *testing.T) {
-	skipNewFormat(t)
 	harness := newDoltHarness(t)
 	harness.Setup(setup.MydbData)
 	for _, test := range HistorySystemTableScriptTests {

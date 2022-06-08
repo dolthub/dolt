@@ -409,33 +409,67 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: basic cases",
 		SetUpScript: []string{
-			"create table foo1 (n int primary key, de text);",
-			"insert into foo1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
-			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
+			"create table t1 (n int primary key, de text);",
+			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
+			"set @Commit1 = dolt_commit('-am', 'inserting into t1');",
 
-			"alter table foo1 add column fr text;",
-			"insert into foo1 values (4, 'Vier', 'Quatre');",
-			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in foo1');",
+			"alter table t1 add column fr text;",
+			"insert into t1 values (4, 'Vier', 'Quatre');",
+			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1');",
 
-			"update foo1 set fr='Un' where n=1;",
-			"set @Commit3 = dolt_commit('-am', 'updating data in foo1');",
+			"update t1 set fr='Un' where n=1;",
+			"update t1 set fr='Deux' where n=2;",
+			"set @Commit3 = dolt_commit('-am', 'updating data in t1');",
+
+			"update t1 set de=concat(de, ', meine herren') where n>1;",
+			"set @Commit4 = dolt_commit('-am', 'be polite when you address a gentleman');",
+
+			"delete from t1 where n=2;",
+			"set @Commit5 = dolt_commit('-am', 'we don''t need the number 2');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select count(*) from Dolt_History_Foo1;",
-				Expected: []sql.Row{{11}},
+				Query:    "select count(*) from Dolt_History_t1;",
+				Expected: []sql.Row{{18}},
 			},
 			{
-				Query:    "select n, de, fr from dolt_history_FOO1 where commit_hash = @Commit1;",
+				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit1;",
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}},
 			},
 			{
-				Query:    "select n, de, fr from dolt_history_foo1 where commit_hash = @Commit2;",
+				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit2;",
 				Expected: []sql.Row{{1, "Eins", nil}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
 			{
-				Query:    "select n, de, fr from dolt_history_foo1 where commit_hash = @Commit3;",
-				Expected: []sql.Row{{1, "Eins", "Un"}, {2, "Zwei", nil}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit3;",
+				Expected: []sql.Row{{1, "Eins", "Un"}, {2, "Zwei", "Deux"}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
+			},
+			{
+				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit4;",
+				Expected: []sql.Row{
+					{1, "Eins", "Un"},
+					{2, "Zwei, meine herren", "Deux"},
+					{3, "Drei, meine herren", nil},
+					{4, "Vier, meine herren", "Quatre"},
+				},
+			},
+			{
+				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit5;",
+				Expected: []sql.Row{
+					{1, "Eins", "Un"},
+					{3, "Drei, meine herren", nil},
+					{4, "Vier, meine herren", "Quatre"},
+				},
+			},
+			{
+				Query:    "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
+					" from dolt_history_T1 where n=2 order by commit_date",
+				Expected: []sql.Row{
+					{"Zwei", nil, true, false, false, false},
+					{"Zwei", nil, false, true, false, false},
+					{"Zwei", "Deux", false, false, true, false},
+					{"Zwei, meine herren", "Deux", false, false, false, true},
+				},
 			},
 		},
 	},
