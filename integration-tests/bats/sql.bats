@@ -56,14 +56,17 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
-    # there should now be a mysql.db file
+    # there shouldn't be a mysql.db file
     run ls
-    [[ "$output" =~ "privs.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
 
-    # show users, expect root and new_user
+    # show users, expect just root user
     run dolt sql -q "select user from mysql.user;"
     [[ "$output" =~ "root" ]] || false
-    [[ "$output" =~ "new_user" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # remove privs.db just in case
+    rm -f privs.db
 }
 
 @test "sql: dolt sql -q with privilege file persists" {
