@@ -58,6 +58,7 @@ const (
 	invalidBatchMode batchMode = iota
 	insertBatchMode
 	deleteBatchMode
+	fake
 )
 
 var sqlDocs = cli.CommandDocumentationContent{
