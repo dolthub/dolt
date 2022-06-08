@@ -43,7 +43,8 @@ func (mf *MergeFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	if err != nil {
 		return noConflictsOrViolations, err
 	}
-	return DoDoltMerge(ctx, args)
+	hasConflicts, _, err := DoDoltMerge(ctx, args)
+	return hasConflicts, err
 }
 
 // String implements the Stringer interface.

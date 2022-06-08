@@ -444,7 +444,7 @@ SQL
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
     [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
-    [[ "${lines[3]}" =~ "1" ]] || false
+    [[ "${lines[3]}" =~ "0" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
@@ -764,7 +764,7 @@ SQL
     [[ "${lines[2]}" =~ "table,num_conflicts" ]] || false
     [[ "${lines[3]}" =~ "one_pk,1" ]] || false
     [[ "${lines[4]}" =~ "DOLT_MERGE('--abort')" ]] || false
-    [[ "${lines[5]}" =~ "1" ]] || false
+    [[ "${lines[5]}" =~ "0" ]] || false
 
     # now resolve commits
     run dolt sql  << SQL
@@ -1308,7 +1308,7 @@ rollback;
 SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
-    [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
+    [[ "$output" =~ "| 1                            |" ]] || false # conflict should return 1
     [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts or constraint violations |" ]] || false
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
