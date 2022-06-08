@@ -18,17 +18,17 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/transform"
 	"github.com/dolthub/vitess/go/sqltypes"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
@@ -59,10 +59,10 @@ var _ sql.IndexedTable = (*HistoryTable)(nil)
 
 // HistoryTable is a system table that shows the history of rows over time
 type HistoryTable struct {
-	doltTable             *DoltTable
-	commitFilters         []sql.Expression
-	cmItr                 doltdb.CommitItr
-	indexLookup           sql.IndexLookup
+	doltTable     *DoltTable
+	commitFilters []sql.Expression
+	cmItr         doltdb.CommitItr
+	indexLookup   sql.IndexLookup
 }
 
 func (ht *HistoryTable) ShouldParallelizeAccess() bool {
@@ -91,7 +91,7 @@ func NewHistoryTable(table *DoltTable, ddb *doltdb.DoltDB, head *doltdb.Commit) 
 
 	return &HistoryTable{
 		doltTable: table,
-		cmItr: cmItr,
+		cmItr:     cmItr,
 	}
 }
 
@@ -109,19 +109,19 @@ func historyTableSchema(tableName string, table *DoltTable) sql.Schema {
 
 	newSch = append(newSch,
 		&sql.Column{
-			Name: CommitHashCol,
+			Name:   CommitHashCol,
 			Source: tableName,
-			Type: CommitHashColType,
+			Type:   CommitHashColType,
 		},
 		&sql.Column{
-			Name: CommitterCol,
+			Name:   CommitterCol,
 			Source: tableName,
-			Type: CommitterColType,
+			Type:   CommitterColType,
 		},
 		&sql.Column{
-			Name: CommitDateCol,
+			Name:   CommitDateCol,
 			Source: tableName,
-			Type: sql.Datetime,
+			Type:   sql.Datetime,
 		},
 	)
 	return newSch
@@ -278,14 +278,14 @@ func (cp commitPartitioner) Close(*sql.Context) error {
 }
 
 type historyIter struct {
-	table           sql.Table
-	tablePartitions sql.PartitionIter
-	currPart        sql.RowIter
-	rowConverter     func (row sql.Row) sql.Row
+	table            sql.Table
+	tablePartitions  sql.PartitionIter
+	currPart         sql.RowIter
+	rowConverter     func(row sql.Row) sql.Row
 	nonExistentTable bool
 }
 
-func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup, ) (*historyIter, error) {
+func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTable, h hash.Hash, cm *doltdb.Commit, lookup sql.IndexLookup) (*historyIter, error) {
 	targetSchema := historyTableSchema(tableName, table)
 
 	root, err := cm.GetRootValue(ctx)
@@ -377,7 +377,7 @@ func (i *historyIter) Close(ctx *sql.Context) error {
 	return nil
 }
 
-func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta) func (row sql.Row) sql.Row {
+func rowConverter(srcSchema, targetSchema sql.Schema, h hash.Hash, meta *datas.CommitMeta) func(row sql.Row) sql.Row {
 	srcToTarget := make(map[int]int)
 	for i, col := range targetSchema[:len(targetSchema)-3] {
 		srcIdx := srcSchema.IndexOfColName(col.Name)

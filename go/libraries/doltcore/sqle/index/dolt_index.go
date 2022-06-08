@@ -174,7 +174,7 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 		di := indexes[i].(doltIndex)
 		// History table indexed reads don't come back in order (iterated by commit graph first), and can include rows that
 		// weren't asked for (because the index needed may not exist at all revisions)
-		di.order= sql.IndexOrderNone
+		di.order = sql.IndexOrderNone
 		di.constrainedToLookupExpression = false
 		unorderedIndexes[i] = di
 	}
@@ -636,5 +636,4 @@ func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 }
 
 type unorderedDoltIndex struct {
-
 }

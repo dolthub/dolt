@@ -445,7 +445,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, "Eins", "Un"}, {2, "Zwei", "Deux"}, {3, "Drei", nil}, {4, "Vier", "Quatre"}},
 			},
 			{
-				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit4;",
+				Query: "select n, de, fr from dolt_history_T1 where commit_hash = @Commit4;",
 				Expected: []sql.Row{
 					{1, "Eins", "Un"},
 					{2, "Zwei, meine herren", "Deux"},
@@ -454,7 +454,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "select n, de, fr from dolt_history_T1 where commit_hash = @Commit5;",
+				Query: "select n, de, fr from dolt_history_T1 where commit_hash = @Commit5;",
 				Expected: []sql.Row{
 					{1, "Eins", "Un"},
 					{3, "Drei, meine herren", nil},
@@ -462,7 +462,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
+				Query: "select de, fr, commit_hash=@commit1, commit_hash=@commit2, commit_hash=@commit3, commit_hash=@commit4" +
 					" from dolt_history_T1 where n=2 order by commit_date",
 				Expected: []sql.Row{
 					{"Zwei", nil, true, false, false, false},
@@ -484,7 +484,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "select pk, c, commit_hash = @Commit1, commit_hash = @Commit2 from dolt_history_t1",
+				Query: "select pk, c, commit_hash = @Commit1, commit_hash = @Commit2 from dolt_history_t1",
 				Expected: []sql.Row{
 					{1, 2, false, true},
 					{3, 4, false, true},

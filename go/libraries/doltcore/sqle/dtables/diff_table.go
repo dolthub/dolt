@@ -51,6 +51,7 @@ const (
 var _ sql.Table = (*DiffTable)(nil)
 var _ sql.FilteredTable = (*DiffTable)(nil)
 var _ sql.IndexedTable = (*DiffTable)(nil)
+
 //var _ sql.ParallelizedIndexAddressableTable = (*DiffTable)(nil)
 
 type DiffTable struct {

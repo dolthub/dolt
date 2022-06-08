@@ -17,9 +17,10 @@ package dtables
 import (
 	"strings"
 
-	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+
+	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
 // ColumnPredicate returns a predicate function for expressions on the column names given
@@ -56,4 +57,3 @@ func FilterFilters(filters []sql.Expression, predicate func(filter sql.Expressio
 	}
 	return matching
 }
-
