@@ -165,7 +165,8 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	skipNewFormat(t)
+	skipNewFormat(t) // different query plans due to index filter behavior
+	
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)

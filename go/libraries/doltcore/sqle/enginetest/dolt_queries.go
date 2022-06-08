@@ -3152,31 +3152,31 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 var DoltDiffPlanTests = []queries.QueryPlanTest{
 	{
 		Query: `select * from dolt_diff_one_pk where to_pk=1`,
-		ExpectedPlan: "Exchange(parallelism=2)\n" +
+		ExpectedPlan: "Exchange\n" +
 			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[1, 1]}])\n" +
 			"",
 	},
 	{
 		Query: `select * from dolt_diff_one_pk where to_pk>=10 and to_pk<=100`,
-		ExpectedPlan: "Exchange(parallelism=2)\n" +
+		ExpectedPlan: "Exchange\n" +
 			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[10, 100]}])\n" +
 			"",
 	},
 	{
 		Query: `select * from dolt_diff_two_pk where to_pk1=1`,
-		ExpectedPlan: "Exchange(parallelism=2)\n" +
+		ExpectedPlan: "Exchange\n" +
 			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], (-∞, ∞)}])\n" +
 			"",
 	},
 	{
 		Query: `select * from dolt_diff_two_pk where to_pk1=1 and to_pk2=2`,
-		ExpectedPlan: "Exchange(parallelism=2)\n" +
+		ExpectedPlan: "Exchange\n" +
 			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], [2, 2]}])\n" +
 			"",
 	},
 	{
 		Query: `select * from dolt_diff_two_pk where to_pk1 < 1 and to_pk2 > 10`,
-		ExpectedPlan: "Exchange(parallelism=2)\n" +
+		ExpectedPlan: "Exchange\n" +
 			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{(-∞, 1), (10, ∞)}])\n" +
 			"",
 	},
