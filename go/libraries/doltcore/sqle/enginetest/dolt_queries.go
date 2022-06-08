@@ -517,6 +517,70 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
+		Name: "adding an index",
+		SetUpScript: []string{
+			"create table t1 (pk int primary key, c int);",
+			"insert into t1 values (1,2), (3,4)",
+			"set @Commit1 = dolt_commit('-am', 'initial table');",
+			"insert into t1 values (5,6), (7,8)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows');",
+			"insert into t1 values (9,10), (11,12)",
+			"create index t1_c on t1(c)",
+			"set @Commit2 = dolt_commit('-am', 'two more rows and an index');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "select pk, c from dolt_history_t1 order by pk",
+				Expected: []sql.Row{
+					{1, 2},
+					{1, 2},
+					{1, 2},
+					{3, 4},
+					{3, 4},
+					{3, 4},
+					{5, 6},
+					{5, 6},
+					{7, 8},
+					{7, 8},
+					{9, 10},
+					{11, 12},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 where c = 4",
+				Expected: []sql.Row{
+					{3, 4},
+					{3, 4},
+					{3, 4},
+				},
+			},
+			{
+				Query: "select pk, c from dolt_history_t1 where c = 10",
+				Expected: []sql.Row{
+					{9, 10},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 4",
+				Expected: []sql.Row{
+					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Projected table access on [pk c]"},
+					{"     └─ Exchange(parallelism=16)"},
+					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+				},
+			},
+			{
+				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
+				Expected: []sql.Row{
+					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Filter(dolt_history_t1.committer = \"someguy\")"},
+					{"     └─ Projected table access on [pk c committer]"},
+					{"         └─ Exchange(parallelism=16)"},
+					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
+			},
+		},
+	},
+	{
 		Name: "primary key table: non-pk column drops and adds",
 		SetUpScript: []string{
 			"create table t (pk int primary key, c1 int, c2 text);",
@@ -569,6 +633,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query:    "select count(*) from dolt_history_t;",
 				Expected: []sql.Row{{4}},
 			},
+			// Can't represent the old schema in the current one, so it gets nil valued
 			{
 				Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
 				Expected: []sql.Row{{1, nil}, {4, nil}},
