@@ -42,7 +42,7 @@ teardown() {
     [[ "$output" =~ "3,c" ]] || false
 }
 
-@test "cherry-pick: commit with multiple row changes" {
+@test "cherry-pick: multiple simple cherry-picks" {
     run dolt sql -q "SELECT * FROM test" -r csv
     [[ "$output" =~ "1,a" ]] || false
     [[ "$output" =~ "2,b" ]] || false
@@ -104,6 +104,29 @@ teardown() {
     [[ "$output" =~ "changes" ]] || false
 }
 
+@test "cherry-pick: update and delete on non existent row" {
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "1,a" ]] || false
+    [[ "$output" =~ "2,b" ]] || false
+    [[ "$output" =~ "3,c" ]] || false
+
+    dolt sql -q "UPDATE test SET v = 'x' WHERE pk = 2"
+    dolt sql -q "DELETE FROM test WHERE pk = 1"
+    dolt add -A
+    dolt commit -m "Update and delete rows"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ ! "$output" =~ "2,b" ]] || false
+    [[ ! "$output" =~ "2,x" ]] || false
+    [[ ! "$output" =~ "3,c" ]] || false
+}
+
 @test "cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
@@ -123,6 +146,11 @@ teardown() {
     [[ ! "$output" =~ "1,a" ]] || false
     [[ ! "$output" =~ "2,b" ]] || false
     [[ ! "$output" =~ "3,c" ]] || false
+
+    run dolt sql -q "SELECT * FROM table_a" -r csv
+    [[ "$output" =~ "11,aa" ]] || false
+    [[ "$output" =~ "22,ab" ]] || false
+    [[ "$output" =~ "33,ac" ]] || false
 }
 
 @test "cherry-pick: commit with DROP TABLE" {
@@ -143,4 +171,186 @@ teardown() {
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ ! "$output" =~ "test" ]] || false
+}
+
+@test "cherry-pick: ALTER TABLE rename table name" {
+    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
+    dolt sql -q "ALTER TABLE test RENAME TO new_name"
+    dolt add -A
+    dolt commit -m "rename table name"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "table not found" ]] || false
+
+    run dolt sql -q "SELECT * FROM new_name" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "4,d" ]] || false
+    [[ ! "$output" =~ "1,a" ]] || false
+    [[ ! "$output" =~ "2,b" ]] || false
+    [[ ! "$output" =~ "3,c" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE add column" {
+    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
+    dolt sql -q "ALTER TABLE test ADD COLUMN c int"
+    dolt add -A
+    dolt commit -m "alter table test add column c"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "\`c\` int" ]] || false
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "4,d" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE change column" {
+    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
+    dolt sql -q "ALTER TABLE test CHANGE COLUMN v c varchar(100)"
+    dolt add -A
+    dolt commit -m "alter table test change column v"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "\`c\` varchar(100)" ]] || false
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [ "$status" -eq "0" ]
+    [[ ! "$output" =~ "pk,v" ]] || false
+    [[ "$output" =~ "pk,c" ]] || false
+    [[ "$output" =~ "4,d" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE modify column" {
+    dolt sql -q "UPDATE test SET v = '1' WHERE pk < 4"
+    dolt sql -q "ALTER TABLE test MODIFY COLUMN v int"
+    dolt add -A
+    dolt commit -m "alter table test modify column v"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "\`v\` int" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE drop column" {
+    dolt sql -q "ALTER TABLE test DROP COLUMN v"
+    dolt add -A
+    dolt commit -m "alter table test drop column v"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ ! "$output" =~ "\`v\` varchar(10)" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE rename column" {
+    dolt sql -q "ALTER TABLE test RENAME COLUMN v TO c"
+    dolt add -A
+    dolt commit -m "alter table test rename column v"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "\`c\` varchar(10)" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE drop and add primary key" {
+    dolt sql -q "ALTER TABLE test DROP PRIMARY KEY, ADD PRIMARY KEY (pk, v)"
+    dolt add -A
+    dolt commit -m "alter table test drop and add primary key"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "PRIMARY KEY (\`pk\`,\`v\`)" ]] || false
+}
+
+
+@test "cherry-pick: commit with ALTER TABLE foreign key with create index" {
+    skip # TODO : handle index changes
+    dolt sql -q "CREATE TABLE child (id INT PRIMARY KEY, cv VARCHAR(10))"
+    dolt sql -q "CREATE INDEX idx_v ON test(v)"
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk1 FOREIGN KEY (cv) REFERENCES test(v)"
+    dolt add -A
+    dolt commit -m "create index and alter table add foreign key"
+
+    dolt checkout main
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    dolt sql -q "SHOW CREATE TABLE test" -r csv
+    [[ "$output" =~ "KEY \`idx_v\` (\`v\`)" ]] || false
+
+    run dolt sql -q "SHOW CREATE TABLE child" -r csv
+    [[ "$output" =~ "KEY \`cv\` (\`cv\`)" ]] || false
+    [[ "$output" =~ "CONSTRAINT \`fk1\` FOREIGN KEY (\`cv\`) REFERENCES \`test\` (\`v\`)" ]] || false
+
+    run dolt index ls test
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "idx_v(v)" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE foreign key" {
+    skip # TODO : handle foreign key changes
+    dolt checkout main
+    dolt sql <<SQL
+CREATE TABLE parent (id int PRIMARY KEY, v1 int, v2 int, INDEX v1 (v1), INDEX v2 (v2));
+CREATE TABLE child (id int primary key, v1 int, v2 int);
+SQL
+    dolt add -A
+    dolt commit -m "create two tables"
+
+    dolt checkout -b branch2
+
+    dolt sql -q "INSERT INTO parent VALUES (1, 2, 3), (2, 3, 4), (3, 4, 5)"
+    dolt add -A
+    dolt commit -m "Inserted rows to parent"
+    dolt sql -q "INSERT INTO child VALUES (11, 2, 3), (22, 3, 4), (33, 4, 5)"
+    dolt add -A
+    dolt commit -m "Inserted rows to child"
+    dolt sql -q "ALTER TABLE child ADD CONSTRAINT fk_named FOREIGN KEY (v1) REFERENCES parent(v1)"
+    dolt add -A
+    dolt commit -m "create index and alter table add foreign key"
+
+    dolt checkout main
+
+    dolt cherry-pick branch2
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW CREATE TABLE child" -r csv
+    [[ "$output" =~ "KEY \`v1\` (\`cv1\`)" ]] || false
+    [[ "$output" =~ "CONSTRAINT \`fk_named\` FOREIGN KEY (\`v1\`) REFERENCES \`test\` (\`v1\`)" ]] || false
+
+    run dolt index ls child
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "v1(v1)" ]] || false
 }
