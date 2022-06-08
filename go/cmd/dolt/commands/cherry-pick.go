@@ -223,6 +223,10 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				}
 			}
 		} else {
+			if !workingSetTblSet.Contains(td.FromName) {
+				continue
+			}
+
 			if td.IsRename() {
 				// rename table before adding the new version, so we don't have
 				// two copies of the same table
@@ -230,11 +234,6 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				if err != nil {
 					return nil, err
 				}
-			}
-
-			// if ToTable does not exist in working set, no changes
-			if !workingSetTblSet.Contains(td.ToName) {
-				continue
 			}
 
 			// TODO : check for schema changes
