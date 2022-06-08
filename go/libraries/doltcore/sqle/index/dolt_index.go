@@ -32,6 +32,7 @@ import (
 
 type DoltIndex interface {
 	sql.FilteredIndex
+	sql.OrderedIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
@@ -69,16 +70,18 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 
 	// to_ columns
 	toIndex := doltIndex{
-		id:       "PRIMARY",
-		tblName:  doltdb.DoltDiffTablePrefix + tbl,
-		dbName:   db,
-		columns:  toCols,
-		indexSch: sch,
-		tableSch: sch,
-		unique:   true,
-		comment:  "",
-		vrw:      t.ValueReadWriter(),
-		keyBld:   keyBld,
+		id:                            "PRIMARY",
+		tblName:                       doltdb.DoltDiffTablePrefix + tbl,
+		dbName:                        db,
+		columns:                       toCols,
+		indexSch:                      sch,
+		tableSch:                      sch,
+		unique:                        true,
+		comment:                       "",
+		vrw:                           t.ValueReadWriter(),
+		keyBld:                        keyBld,
+		order:                         sql.IndexOrderAsc,
+		constrainedToLookupExpression: true,
 	}
 
 	// TODO: need to add from_ columns
@@ -111,6 +114,74 @@ func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) 
 	return indexes, nil
 }
 
+func TableHasIndex(ctx context.Context, db, tbl string, t *doltdb.Table, i sql.Index) (bool, error) {
+	sch, err := t.GetSchema(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if !schema.IsKeyless(sch) {
+		idx, err := getPrimaryKeyIndex(ctx, db, tbl, t, sch)
+		if err != nil {
+			return false, err
+		}
+		if indexesMatch(idx, i) {
+			return true, nil
+		}
+	}
+
+	for _, definition := range sch.Indexes().AllIndexes() {
+		idx, err := getSecondaryIndex(ctx, db, tbl, t, sch, definition)
+		if err != nil {
+			return false, err
+		}
+		if indexesMatch(idx, i) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// indexesMatch returns whether the two index objects should be considered the same index for the purpose of a lookup,
+// i.e. whether they have the same name and index the same table columns.
+func indexesMatch(a sql.Index, b sql.Index) bool {
+	dia, dib := a.(doltIndex), b.(doltIndex)
+	if dia.isPk != dib.isPk || dia.id != dib.id {
+		return false
+	}
+
+	if len(dia.columns) != len(dib.columns) {
+		return false
+	}
+	for i := range dia.columns {
+		if dia.columns[i].Name != dib.columns[i].Name {
+			return false
+		}
+	}
+
+	return true
+}
+
+func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) ([]sql.Index, error) {
+	indexes, err := DoltIndexesFromTable(ctx, db, tbl, t)
+	if err != nil {
+		return nil, err
+	}
+
+	unorderedIndexes := make([]sql.Index, len(indexes))
+	for i := range indexes {
+		di := indexes[i].(doltIndex)
+		// History table indexed reads don't come back in order (iterated by commit graph first), and can include rows that
+		// weren't asked for (because the index needed may not exist at all revisions)
+		di.order = sql.IndexOrderNone
+		di.constrainedToLookupExpression = false
+		unorderedIndexes[i] = di
+	}
+
+	return unorderedIndexes, nil
+}
+
 func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch schema.Schema) (sql.Index, error) {
 	tableRows, err := t.GetRowData(ctx)
 	if err != nil {
@@ -121,17 +192,19 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 	cols := sch.GetPKCols().GetColumns()
 
 	return doltIndex{
-		id:       "PRIMARY",
-		tblName:  tbl,
-		dbName:   db,
-		columns:  cols,
-		indexSch: sch,
-		tableSch: sch,
-		unique:   true,
-		isPk:     true,
-		comment:  "",
-		vrw:      t.ValueReadWriter(),
-		keyBld:   keyBld,
+		id:                            "PRIMARY",
+		tblName:                       tbl,
+		dbName:                        db,
+		columns:                       cols,
+		indexSch:                      sch,
+		tableSch:                      sch,
+		unique:                        true,
+		isPk:                          true,
+		comment:                       "",
+		vrw:                           t.ValueReadWriter(),
+		keyBld:                        keyBld,
+		order:                         sql.IndexOrderAsc,
+		constrainedToLookupExpression: true,
 	}, nil
 }
 
@@ -148,17 +221,19 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	}
 
 	return doltIndex{
-		id:       idx.Name(),
-		tblName:  tbl,
-		dbName:   db,
-		columns:  cols,
-		indexSch: idx.Schema(),
-		tableSch: sch,
-		unique:   idx.IsUnique(),
-		isPk:     false,
-		comment:  idx.Comment(),
-		vrw:      t.ValueReadWriter(),
-		keyBld:   keyBld,
+		id:                            idx.Name(),
+		tblName:                       tbl,
+		dbName:                        db,
+		columns:                       cols,
+		indexSch:                      idx.Schema(),
+		tableSch:                      sch,
+		unique:                        idx.IsUnique(),
+		isPk:                          false,
+		comment:                       idx.Comment(),
+		vrw:                           t.ValueReadWriter(),
+		keyBld:                        keyBld,
+		order:                         sql.IndexOrderAsc,
+		constrainedToLookupExpression: true,
 	}, nil
 }
 
@@ -174,6 +249,9 @@ type doltIndex struct {
 	unique   bool
 	isPk     bool
 	comment  string
+	order    sql.IndexOrder
+
+	constrainedToLookupExpression bool
 
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
@@ -353,8 +431,15 @@ func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 		// todo(andy): handle first column filters
 		return nil
 	} else {
-		return filters
+		if di.constrainedToLookupExpression {
+			return filters
+		}
+		return nil
 	}
+}
+
+func (di doltIndex) Order() sql.IndexOrder {
+	return di.order
 }
 
 // Database implement sql.Index
