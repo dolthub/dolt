@@ -774,7 +774,7 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	return row, nil
 }
 
-// detectAndConvertToBoolean determines whether a column is potentially a
+// detectAndConvertToBoolean determines whether a column is potentially a boolean and converts it accordingly.
 func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
 	switch columnType {
 	case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType

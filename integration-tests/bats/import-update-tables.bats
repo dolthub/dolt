@@ -1107,7 +1107,7 @@ DELIM
 }
 
 @test "import-update-tables: enum type" {
-    skip "dolt is improperly giving a default calue for a bad enum value on --continue"
+    skip "dolt is improperly giving a default value for a bad enum value on --continue"
 
     dolt sql -q "create table t(pk int primary key, size ENUM('x-small', 'small', 'medium', 'large', 'x-large'))"
     cat <<DELIM > enum.csv
