@@ -95,11 +95,34 @@ teardown() {
     [[ "$output" =~ "privs.db" ]] || false
 
     # show users, expect root and new_user
-    run dolt sql -q "select user from mysql.user;"
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # remove mysql.db just in case
+    # remove mysql.db
+    rm -f privs.db
+}
+
+@test "sql: dolt sql -q create database and specify privilege file" {
+    run dolt sql --privilege-file=privs.db -q "create database inner_db;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd inner_db
+
+    run dolt sql --privilege-file=../privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
     rm -f privs.db
 }
 
