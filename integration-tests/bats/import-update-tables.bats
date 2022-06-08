@@ -1017,3 +1017,58 @@ DELIM
     [ "$status" -eq 1 ]
     [[ "$output" =~ "All constraints are not satisfied" ]] || false
 }
+
+@test "import-update-tables: bit types" {
+   dolt sql -q "CREATE TABLE bitted (id int PRIMARY KEY, b bit)"
+   dolt sql -q "INSERT INTO bitted VALUES (1, 0), (3, 1)"
+
+   dolt table export bitted bitted.csv
+
+   run dolt table import -u bitted bitted.csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 0, Had No Effect: 2" ]] || false
+
+   run dolt sql -r csv -q "select * from bitted order by id"
+   [[ "$output" =~ "id,b" ]] || false
+   [[ "$output" =~ "1,0" ]] || false
+   [[ "$output" =~ "3,1" ]] || false
+
+   # Try with a larger bit size
+   dolt sql -q "create table bitted2 (id int PRIMARY KEY, b bit(4))"
+   dolt sql -q "INSERT INTO bitted2 values (1, 4)"
+
+   dolt table export -f bitted2 bitted.csv
+
+   run dolt table import -u bitted2 bitted.csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 0, Had No Effect: 1" ]] || false
+
+   run dolt sql -r csv -q "select * from bitted2 order by id"
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "id,b" ]] || false
+   [[ "$output" =~ "1,4" ]] || false
+
+   # Try with a binary value like 0x04
+   echo -e 'id,b\n2,0x04'|dolt table import -u bitted2
+   [ "$status" -eq 0 ]
+
+   run dolt sql -r csv -q "select * from bitted2 order by id"
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "id,b" ]] || false
+   [[ "$output" =~ "1,4" ]] || false
+   [[ "$output" =~ "2,4" ]] || false
+
+   # Try an actual bit string like b'11'
+   cat <<DELIM > bitted.csv
+id,b
+3,b'100'
+DELIM
+   run dolt table import -u bitted2 bitted.csv
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
+
+   run dolt sql -r csv -q "select * from bitted2 where id = 3"
+   [ "$status" -eq 0 ]
+   [[ "$output" =~ "id,b" ]] || false
+   [[ "$output" =~ "3,4" ]] || false
+}

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -724,32 +725,65 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
 
 	for i, col := range rowOperationSchema.Schema {
-		switch col.Type {
-		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			switch row[i].(type) {
-			case int8:
-				val, ok := stringToBoolean(strconv.Itoa(int(row[i].(int8))))
-				if ok {
-					row[i] = val
-				}
-			case string:
-				val, ok := stringToBoolean(row[i].(string))
-				if ok {
-					row[i] = val
-				}
-			case bool:
-				row[i] = row[i].(bool)
-			}
+		// Check if this a string that can be converted to a boolean
+		val, ok := detectAndConvertToBoolean(row[i], col.Type)
+		if ok {
+			row[i] = val
+			continue
 		}
 
 		switch col.Type.(type) {
 		case sql.StringType:
+		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
+		// be interpreted in the correct manner.
+		case sql.BitType:
+			// Check if the column can be parsed an uint64
+			val, err := strconv.ParseUint(row[i].(string), 10, 64)
+			if err == nil {
+				row[i] = val
+				continue
+			}
+
+			// Check if the column is of type b'110'
+			re := regexp.MustCompile(`(?m)b\'(\d+)\'`)
+			groups := re.FindStringSubmatch(row[i].(string))
+			if len(groups) > 1 {
+				val, err = strconv.ParseUint(groups[1], 2, 64)
+				if err == nil {
+					row[i] = val
+					continue
+				}
+			}
+
+			// Check if the column can be parsed as a hex string
+			numberStr := strings.Replace(row[i].(string), "0x", "", -1)
+			val, err = strconv.ParseUint(numberStr, 16, 64)
+			if err == nil {
+				row[i] = val
+			}
 		default:
 			row[i] = emptyStringToNil(row[i])
 		}
 	}
 
 	return row, nil
+}
+
+// detectAndConvertToBoolean determines whether a column is potentially a
+func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
+	switch columnType {
+	case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
+		switch columnVal.(type) {
+		case int8:
+			return stringToBoolean(strconv.Itoa(int(columnVal.(int8))))
+		case string:
+			return stringToBoolean(columnVal.(string))
+		case bool:
+			return columnVal.(bool), true
+		}
+	}
+
+	return false, false
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
@@ -762,7 +796,7 @@ func stringToBoolean(s string) (result bool, canConvert bool) {
 	case "0":
 		return false, true
 	case "1":
-		return true, false
+		return true, true
 	default:
 		return false, false
 	}
