@@ -53,34 +53,33 @@ teardown() {
     run create_user
     [ "$status" -eq 1 ]
 
-
-    # expect dolt and new_user
+    # expect only dolt user
     run show_users
+    [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+----------+' ]
-    [ "${lines[4]}" = '| User     |' ]
-    [ "${lines[5]}" = '+----------+' ]
-    [ "${lines[6]}" = '| dolt     |' ]
-    [ "${lines[7]}" = '| new_user |' ]
-    [ "${lines[8]}" = '+----------+' ]
+    [ "${lines[3]}" = '+------+' ]
+    [ "${lines[4]}" = '| User |' ]
+    [ "${lines[5]}" = '+------+' ]
+    [ "${lines[6]}" = '| dolt |' ]
+    [ "${lines[7]}" = '+------+' ]
 
     # restart server
     stop_sql_server
-    start_sql_server_with_args --privilege-file=mysql.db repo1
+    start_sql_server repo1
 
-    # check for new_user
+    # expect only dolt user
     run show_users
+    [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+----------+' ]
-    [ "${lines[4]}" = '| User     |' ]
-    [ "${lines[5]}" = '+----------+' ]
-    [ "${lines[6]}" = '| dolt     |' ]
-    [ "${lines[7]}" = '| new_user |' ]
-    [ "${lines[8]}" = '+----------+' ]
+    [ "${lines[3]}" = '+------+' ]
+    [ "${lines[4]}" = '| User |' ]
+    [ "${lines[5]}" = '+------+' ]
+    [ "${lines[6]}" = '| dolt |' ]
+    [ "${lines[7]}" = '+------+' ]
 
     # remove mysql.db and privs.json if they exist
     rm -f mysql.db
