@@ -1072,6 +1072,15 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "3,4" ]] || false
+
+    cat <<DELIM > bitted-bad.csv
+id,b
+3,b'1001
+DELIM
+
+    run dolt table import -u bitted2 bitted-bad.csv
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Bad Row: [3,b'1001]" ]] || false
 }
 
 @test "import-update-tables: binary and varbinary types" {
