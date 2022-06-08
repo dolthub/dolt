@@ -23,8 +23,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 )
 
+type Predicate func(sql.Expression) bool
+
 // ColumnPredicate returns a predicate function for expressions on the column names given
-func ColumnPredicate(colNameSet *set.StrSet) func(sql.Expression) bool {
+func ColumnPredicate(colNameSet *set.StrSet) Predicate {
 	return func(filter sql.Expression) bool {
 		isCommitFilter := true
 		sql.Inspect(filter, func(e sql.Expression) (cont bool) {

@@ -634,6 +634,3 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	return typ.Convert(sql.GetRangeCutKey(cut))
 }
-
-type unorderedDoltIndex struct {
-}
