@@ -22,7 +22,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions/commitwalk"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/store/datas"
@@ -102,11 +101,9 @@ func (dt *UnscopedDiffTable) PartitionRows(ctx *sql.Context, partition sql.Parti
 
 func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
-	rootsProvider := dsess.NewSessionStateAdapter(sess.Session, ctx.GetCurrentDatabase(), map[string]env.Remote{}, map[string]env.BranchConfig{}, map[string]env.Remote{})
-
-	roots, err := rootsProvider.GetRoots(ctx)
-	if err != nil {
-		return nil, err
+	roots, ok := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+	if !ok {
+		return nil, fmt.Errorf("unable to lookup roots for database %s", ctx.GetCurrentDatabase())
 	}
 
 	staged, unstaged, err := diff.GetStagedUnstagedTableDeltas(ctx, roots)
