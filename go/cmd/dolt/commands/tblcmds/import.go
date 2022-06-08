@@ -732,16 +732,16 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 			continue
 		}
 
-		colAsString, ok := row[i].(string)
-		if !ok {
-			return nil, fmt.Errorf("error: column value should be of type string")
-		}
-
 		switch col.Type.(type) {
 		case sql.StringType:
 		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
 		// be interpreted in the correct manner.
 		case sql.BitType:
+			colAsString, ok := row[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("error: column value should be of type string")
+			}
+
 			// Check if the column can be parsed an uint64
 			val, err := strconv.ParseUint(colAsString, 10, 64)
 			if err == nil {
