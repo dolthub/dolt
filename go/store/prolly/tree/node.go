@@ -180,6 +180,23 @@ func OutputProllyNode(w io.Writer, node Node) error {
 	return nil
 }
 
+func OutputAddressMapNode(w io.Writer, node Node) error {
+	w.Write([]byte("["))
+	for i := 0; i < int(node.count); i++ {
+		k := node.GetKey(i)
+		w.Write([]byte("\n    { key: "))
+		w.Write(k)
+
+		ref := node.getAddress(i)
+
+		w.Write([]byte(" ref: #"))
+		w.Write([]byte(ref.String()))
+		w.Write([]byte(" }"))
+	}
+	w.Write([]byte("\n]\n"))
+	return nil
+}
+
 func ValueFromNode(root Node) types.Value {
 	return types.TupleRowStorage(root.bytes())
 }

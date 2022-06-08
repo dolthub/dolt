@@ -99,6 +99,9 @@ func (ns nodeStore) Pool() pool.BuffPool {
 }
 
 func (ns nodeStore) Format() *types.NomsBinFormat {
-	// todo(andy): read from |ns.store|
-	return types.Format_DOLT_1
+	nbf, err := types.GetFormatForVersionString(ns.store.Version())
+	if err != nil {
+		panic(err)
+	}
+	return nbf
 }

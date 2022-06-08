@@ -27,10 +27,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/store/chunks"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -663,7 +663,7 @@ var _ Table = doltDevTable{}
 type serialTableFields struct {
 	schema            []byte
 	rows              []byte
-	indexes           *serial.RefMap
+	indexes           prolly.AddressMap
 	conflictsdata     []byte
 	conflictsours     []byte
 	conflictstheirs   []byte
@@ -676,9 +676,12 @@ func (fields serialTableFields) write() *serial.Table {
 	// TODO: Chance for a pool.
 	builder := flatbuffers.NewBuilder(1024)
 
+	indexesam := fields.indexes
+	indexesbytes := []byte(tree.ValueFromNode(indexesam.Node()).(types.TupleRowStorage))
+
 	schemaoff := builder.CreateByteVector(fields.schema)
 	rowsoff := builder.CreateByteVector(fields.rows)
-	indexesoff := datas.RefMapApplyEdits(fields.indexes, builder, nil)
+	indexesoff := builder.CreateByteVector(indexesbytes)
 	conflictsdataoff := builder.CreateByteVector(fields.conflictsdata)
 	conflictsoursoff := builder.CreateByteVector(fields.conflictsours)
 	conflictstheirsoff := builder.CreateByteVector(fields.conflictstheirs)
@@ -733,7 +736,7 @@ func newDoltDevTable(ctx context.Context, vrw types.ValueReadWriter, sch schema.
 	msg := serialTableFields{
 		schema:            schemaAddr[:],
 		rows:              rowsbytes,
-		indexes:           indexes.(doltDevIndexSet).msg,
+		indexes:           indexes.(doltDevIndexSet).am,
 		conflictsdata:     emptyhash[:],
 		conflictsours:     emptyhash[:],
 		conflictstheirs:   emptyhash[:],
@@ -797,7 +800,7 @@ func (t doltDevTable) GetTableRows(ctx context.Context) (Index, error) {
 		if err != nil {
 			return nil, err
 		}
-		m := prolly.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
+		m := shim.MapFromValue(types.TupleRowStorage(rowbytes), sch, t.vrw)
 		return IndexFromProllyMap(m), nil
 	}
 }
@@ -816,13 +819,15 @@ func (t doltDevTable) SetTableRows(ctx context.Context, rows Index) (Table, erro
 }
 
 func (t doltDevTable) GetIndexes(ctx context.Context) (IndexSet, error) {
-	is := t.msg.SecondaryIndexes(nil)
-	return doltDevIndexSet{t.vrw, is}, nil
+	ambytes := t.msg.SecondaryIndexesBytes()
+	node := tree.NodeFromBytes(ambytes)
+	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(t.vrw))
+	return doltDevIndexSet{t.vrw, prolly.NewAddressMap(node, ns)}, nil
 }
 
 func (t doltDevTable) SetIndexes(ctx context.Context, indexes IndexSet) (Table, error) {
 	fields := t.fields()
-	fields.indexes = indexes.(doltDevIndexSet).msg
+	fields.indexes = indexes.(doltDevIndexSet).am
 	msg := fields.write()
 	return doltDevTable{t.vrw, msg}, nil
 }
@@ -983,11 +988,15 @@ func (t doltDevTable) clone() *serial.Table {
 }
 
 func (t doltDevTable) fields() serialTableFields {
+	ambytes := t.msg.SecondaryIndexesBytes()
+	node := tree.NodeFromBytes(ambytes)
+	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(t.vrw))
+
 	conflicts := t.msg.Conflicts(nil)
 	return serialTableFields{
 		schema:            t.msg.SchemaBytes(),
 		rows:              t.msg.PrimaryIndexBytes(),
-		indexes:           t.msg.SecondaryIndexes(nil),
+		indexes:           prolly.NewAddressMap(node, ns),
 		conflictsdata:     conflicts.DataBytes(),
 		conflictsours:     conflicts.OurSchemaBytes(),
 		conflictstheirs:   conflicts.TheirSchemaBytes(),

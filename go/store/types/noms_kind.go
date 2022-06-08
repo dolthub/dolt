@@ -21,6 +21,10 @@
 
 package types
 
+import (
+	"github.com/dolthub/dolt/go/store/prolly/message"
+)
+
 // NomsKind allows a TypeDesc to indicate what kind of type is described.
 type NomsKind uint8
 
@@ -125,6 +129,10 @@ func init() {
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
 	SupportedKinds[TupleRowStorageKind] = true
+
+	if message.MessageTypesKind != int(TupleRowStorageKind) {
+		panic("internal error: message.MessageTypesKind != TupleRowStorageKind")
+	}
 }
 
 var KindToTypeSlice []Value

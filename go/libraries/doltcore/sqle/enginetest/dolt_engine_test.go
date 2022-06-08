@@ -305,7 +305,7 @@ func TestDoltUserPrivileges(t *testing.T) {
 						t.Skip()
 					}
 				}
-				enginetest.RunQueryWithContext(t, engine, ctx, statement)
+				enginetest.RunQueryWithContext(t, engine, harness, ctx, statement)
 			}
 			for _, assertion := range script.Assertions {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -329,11 +329,11 @@ func TestDoltUserPrivileges(t *testing.T) {
 
 				if assertion.ExpectedErr != nil {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, assertion.ExpectedErr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, assertion.ExpectedErr)
 					})
 				} else if assertion.ExpectedErrStr != "" {
 					t.Run(assertion.Query, func(t *testing.T) {
-						enginetest.AssertErrWithCtx(t, engine, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
+						enginetest.AssertErrWithCtx(t, engine, harness, ctx, assertion.Query, nil, assertion.ExpectedErrStr)
 					})
 				} else {
 					t.Run(assertion.Query, func(t *testing.T) {
@@ -710,7 +710,7 @@ func TestSingleTransactionScript(t *testing.T) {
 			},
 			{
 				Query:    "/* client b */ call dolt_merge('main')",
-				Expected: []sql.Row{{0}},
+				Expected: []sql.Row{{0, 1}},
 			},
 			{
 				Query:    "/* client b */ select count(*) from dolt_conflicts",
