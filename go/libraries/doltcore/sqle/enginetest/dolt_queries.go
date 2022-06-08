@@ -498,20 +498,21 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3",
 				Expected: []sql.Row{
-					{ "Project(dolt_history_t1.pk, dolt_history_t1.c)" },
-					{ " └─ Projected table access on [pk c]" },
-					{ "     └─ Exchange(parallelism=16)" },
-					{ "         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])" },
+					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Filter(dolt_history_t1.pk = 3)"},
+					{"     └─ Projected table access on [pk c]"},
+					{"         └─ Exchange(parallelism=16)"},
+					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
-					{ "Project(dolt_history_t1.pk, dolt_history_t1.c)" },
-					{ " └─ Filter(dolt_history_t1.committer = \"someguy\")" },
-					{ "     └─ Projected table access on [pk c committer]" },
-					{ "         └─ Exchange(parallelism=16)" },
-					{ "             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])" },
+					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
+					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = \"someguy\"))"},
+					{"     └─ Projected table access on [pk c committer]"},
+					{"         └─ Exchange(parallelism=16)"},
+					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
 				},
 			},
 		},
@@ -547,7 +548,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select pk, c from dolt_history_t1 where c = 4",
+				Query: "select pk, c from dolt_history_t1 where c = 4 order by pk",
 				Expected: []sql.Row{
 					{3, 4},
 					{3, 4},
@@ -555,7 +556,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query: "select pk, c from dolt_history_t1 where c = 10",
+				Query: "select pk, c from dolt_history_t1 where c = 10 order by pk",
 				Expected: []sql.Row{
 					{9, 10},
 				},
@@ -564,16 +565,17 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "explain select pk, c from dolt_history_t1 where c = 4",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Projected table access on [pk c]"},
-					{"     └─ Exchange(parallelism=16)"},
-					{"         └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
+					{" └─ Filter(dolt_history_t1.c = 4)"},
+					{"     └─ Projected table access on [pk c]"},
+					{"         └─ Exchange(parallelism=16)"},
+					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[4, 4]}])"},
 				},
 			},
 			{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter(dolt_history_t1.committer = \"someguy\")"},
+					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = \"someguy\"))"},
 					{"     └─ Projected table access on [pk c committer]"},
 					{"         └─ Exchange(parallelism=16)"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},

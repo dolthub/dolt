@@ -77,7 +77,7 @@ func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 
 	// For index pushdown to work, we need to represent the indexes from the underlying table as belonging to this one
 	// Our results will also not be ordered, so we need to declare them as such
-	return index.UnorderedDoltIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
+	return index.DoltHistoryIndexesFromTable(ctx, ht.doltTable.db.Name(), ht.Name(), tbl)
 }
 
 func (ht HistoryTable) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
@@ -311,11 +311,19 @@ func newRowItrForTableAtCommit(ctx *sql.Context, tableName string, table *DoltTa
 		return nil, err
 	}
 
-	// TODO: apply index lookups conditionally based on index presence at this revision
 	var sqlTable sql.Table
 	sqlTable = table
 	if lookup != nil {
-		sqlTable = table.WithIndexLookup(lookup)
+		// This revision of the table may not have the index we need (which was determined based on HEAD)
+		// Only apply the lookup if the index is there
+		hasIndex, err := table.HasIndex(ctx, lookup.Index())
+		if err != nil {
+			return nil, err
+		}
+
+		if hasIndex {
+			sqlTable = table.WithIndexLookup(lookup)
+		}
 	}
 
 	tablePartitions, err := sqlTable.Partitions(ctx)

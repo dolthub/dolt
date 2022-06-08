@@ -224,6 +224,16 @@ func (t *DoltTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
 	return index.DoltIndexesFromTable(ctx, t.db.Name(), t.tableName, tbl)
 }
 
+// HasIndex returns whether the given index is present in the table
+func (t *DoltTable) HasIndex(ctx *sql.Context, idx sql.Index) (bool, error) {
+	tbl, err := t.doltTable(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	return index.TableHasIndex(ctx, t.db.Name(), t.tableName, tbl, idx)
+}
+
 // GetAutoIncrementValue gets the last AUTO_INCREMENT value
 func (t *DoltTable) GetAutoIncrementValue(ctx *sql.Context) (interface{}, error) {
 	table, err := t.doltTable(ctx)
