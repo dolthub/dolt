@@ -127,6 +127,64 @@ teardown() {
     [[ ! "$output" =~ "3,c" ]] || false
 }
 
+@test "cherry-pick: insert, update, delete rows and schema changes on non existent table in working set" {
+    dolt sql -q "CREATE TABLE branch1table (id int primary key, col1 int)"
+    dolt sql -q "INSERT INTO branch1table VALUES (9,8),(7,6),(5,4)"
+    dolt add -A
+    dolt commit -m "create table with rows"
+
+    dolt sql -q "INSERT INTO branch1table VALUES (1,2)"
+    dolt add -A
+    dolt commit -m "Insert a row"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No changes" ]] || false
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "branch1table" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q "UPDATE branch1table SET col1 = 0 WHERE id > 6"
+    dolt add -A
+    dolt commit -m "Update a rows"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No changes" ]] || false
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "branch1table" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q "DELETE FROM branch1table WHERE id > 8"
+    dolt add -A
+    dolt commit -m "Update and delete rows"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No changes" ]] || false
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "branch1table" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q "ALTER TABLE branch1table ADD COLUMN col2 int"
+    dolt add -A
+    dolt commit -m "Alter table add column"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "No changes" ]] || false
+
+    run dolt sql -q "SHOW TABLES" -r csv
+    [[ ! "$output" =~ "branch1table" ]] || false
+}
+
 @test "cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
@@ -292,7 +350,6 @@ teardown() {
     run dolt sql -q "SHOW CREATE TABLE test" -r csv
     [[ "$output" =~ "PRIMARY KEY (\`pk\`,\`v\`)" ]] || false
 }
-
 
 @test "cherry-pick: commit with ALTER TABLE foreign key with create index" {
     skip # TODO : handle index changes

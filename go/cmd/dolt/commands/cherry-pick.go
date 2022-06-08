@@ -231,6 +231,11 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				}
 			}
 
+			// if ToTable does not exist in working set, no changes
+			if !workingSetTblSet.Contains(td.ToName) {
+				continue
+			}
+
 			// TODO : check for schema changes
 			if !schema.SchemasAreEqual(td.FromSch, td.ToSch) {
 				headRoot, err = handleSchemaChanges(ctx, headRoot, td.FromSch, td.ToSch, td.ToName)
