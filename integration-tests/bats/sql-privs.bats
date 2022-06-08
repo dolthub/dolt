@@ -53,18 +53,17 @@ teardown() {
     run create_user
     [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
-    # expect only dolt user
+    # expect dolt user and new_user
     run show_users
     [ "$status" -eq 0 ]
     [ "${lines[0]}" = '# Welcome to the Dolt MySQL client.' ]
     [ "${lines[1]}" = "# Statements must be terminated with ';'." ]
     [ "${lines[2]}" = '# "exit" or "quit" (or Ctrl-D) to exit.' ]
-    [ "${lines[3]}" = '+----------+' ]
-    [ "${lines[4]}" = '| User     |' ]
-    [ "${lines[5]}" = '+----------+' ]
-    [ "${lines[6]}" = '| dolt     |' ]
-    [ "${lines[7]}" = '| new_user |' ]
-    [ "${lines[8]}" = '+----------+' ]
+    [ "${lines[3]}" = '+------+' ]
+    [ "${lines[4]}" = '| User |' ]
+    [ "${lines[5]}" = '+------+' ]
+    [ "${lines[6]}" = '| dolt |' ]
+    [ "${lines[7]}" = '+------+' ]
 
     # restart server
     stop_sql_server

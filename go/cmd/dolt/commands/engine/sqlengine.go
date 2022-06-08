@@ -108,6 +108,7 @@ func NewSqlEngine(
 
 	// Set persist callbacks
 	engine.Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
+	engine.Analyzer.Catalog.MySQLDb.CanPersist = len(config.PrivFilePath) != 0
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
