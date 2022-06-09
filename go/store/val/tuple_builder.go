@@ -262,6 +262,13 @@ func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.pos += hash128Size
 }
 
+func (tb *TupleBuilder) PutAddress(i int, v []byte) {
+	tb.Desc.expectEncoding(i, AddressEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+addressSize]
+	writeAddress(tb.fields[i], v)
+	tb.pos += addressSize
+}
+
 // PutRaw writes a []byte to the ith field of the Tuple being built.
 func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	if buf == nil {

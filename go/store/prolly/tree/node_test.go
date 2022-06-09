@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"testing"
@@ -23,7 +24,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/chunks"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -64,6 +68,43 @@ func TestRoundTripNodeItems(t *testing.T) {
 func TestNodeSize(t *testing.T) {
 	sz := unsafe.Sizeof(Node{})
 	assert.Equal(t, 128, int(sz))
+}
+
+func TestNodeHashValueCompatibility(t *testing.T) {
+	keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
+	nd := newLeafNode(keys, values)
+	nbf := types.Format_DOLT_1
+	th, err := ValueFromNode(nd).Hash(nbf)
+	require.NoError(t, err)
+	assert.Equal(t, nd.HashOf(), th)
+
+	h1 := hash.Parse("kvup5vdur99ush7c18g0kjc6rhdkfdgo")
+	h2 := hash.Parse("7e54ill10nji9oao1ja88buh9itaj7k9")
+	msg := message.AddressMapSerializer{Pool: sharedPool}.Serialize(
+		[][]byte{[]byte("chopin"), []byte("listz")},
+		[][]byte{h1[:], h2[:]},
+		[]uint64{},
+		0)
+	nd = NodeFromBytes(msg)
+	th, err = ValueFromNode(nd).Hash(nbf)
+	require.NoError(t, err)
+	assert.Equal(t, nd.HashOf(), th)
+}
+
+func TestNodeDecodeValueCompatibility(t *testing.T) {
+	keys, values := randomNodeItemPairs(t, (rand.Int()%101)+50)
+	nd := newLeafNode(keys, values)
+
+	ts := &chunks.TestStorage{}
+	cs := ts.NewView()
+	ns := NewNodeStore(cs)
+	vs := types.NewValueStore(cs)
+	h, err := ns.Write(context.Background(), nd)
+	require.NoError(t, err)
+
+	v, err := vs.ReadValue(context.Background(), h)
+	require.NoError(t, err)
+	assert.Equal(t, nd.bytes(), []byte(v.(types.TupleRowStorage)))
 }
 
 func randomNodeItemPairs(t *testing.T, count int) (keys, values []Item) {

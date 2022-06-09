@@ -86,7 +86,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		usage()
 		return 1
 	}
-	headRoot, err := dEnv.HeadRoot(ctx)
+	headCommit, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -122,7 +126,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits, opts)
+	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

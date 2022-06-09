@@ -16,7 +16,9 @@ package index
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
+
+var ErrValueExceededMaxFieldSize = errors.New("value exceeded max field size of 65kb")
 
 // todo(andy): this should go in GMS
 func DenormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
@@ -140,6 +144,8 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
+	case val.AddressEnc:
+		v, ok = td.GetAddress(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
@@ -201,19 +207,31 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutString(i, v.(string))
 	case val.ByteStringEnc:
 		if s, ok := v.(string); ok {
+			if len(s) > math.MaxUint16 {
+				return ErrValueExceededMaxFieldSize
+			}
 			v = []byte(s)
 		}
 		tb.PutByteString(i, v.([]byte))
 	case val.GeometryEnc:
+		geo := serializeGeometry(v)
+		if len(geo) > math.MaxUint16 {
+			return ErrValueExceededMaxFieldSize
+		}
 		tb.PutGeometry(i, serializeGeometry(v))
 	case val.JSONEnc:
 		buf, err := convJson(v)
+		if len(buf) > math.MaxUint16 {
+			return ErrValueExceededMaxFieldSize
+		}
 		if err != nil {
 			return err
 		}
 		tb.PutJSON(i, buf)
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
+	case val.AddressEnc:
+		tb.PutAddress(i, v.([]byte))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

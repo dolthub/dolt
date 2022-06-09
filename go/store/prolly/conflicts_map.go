@@ -84,6 +84,10 @@ func (c ConflictMap) HashOf() hash.Hash {
 	return c.conflicts.hashOf()
 }
 
+func (c ConflictMap) Node() tree.Node {
+	return c.conflicts.root
+}
+
 func (c ConflictMap) Format() *types.NomsBinFormat {
 	return c.conflicts.ns.Format()
 }

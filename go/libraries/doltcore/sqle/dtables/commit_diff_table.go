@@ -288,5 +288,5 @@ func (dt *CommitDiffTable) WithFilters(_ *sql.Context, _ []sql.Expression) sql.T
 
 func (dt *CommitDiffTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	dp := part.(DiffPartition)
-	return dp.GetRowIter(ctx, dt.ddb, dt.joiner)
+	return dp.GetRowIter(ctx, dt.ddb, dt.joiner, nil)
 }

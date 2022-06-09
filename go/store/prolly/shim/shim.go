@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package prolly
+package shim
 
 import (
 	"fmt"
@@ -22,6 +22,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/datas"
+	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -31,29 +32,33 @@ func NodeFromValue(v types.Value) tree.Node {
 	return tree.NodeFromBytes(v.(types.TupleRowStorage))
 }
 
-func ValueFromMap(m Map) types.Value {
-	return tree.ValueFromNode(m.tuples.root)
+func ValueFromMap(m prolly.Map) types.Value {
+	return tree.ValueFromNode(m.Node())
 }
 
-func ValueFromConflictMap(m ConflictMap) types.Value {
-	return tree.ValueFromNode(m.conflicts.root)
+func ValueFromConflictMap(m prolly.ConflictMap) types.Value {
+	return tree.ValueFromNode(m.Node())
 }
 
-func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) Map {
+func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
+	return tree.ValueFromNode(m.Node())
+}
+
+func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) prolly.Map {
 	root := NodeFromValue(v)
 	kd := KeyDescriptorFromSchema(sch)
 	vd := ValueDescriptorFromSchema(sch)
 	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
-	return NewMap(root, ns, kd, vd)
+	return prolly.NewMap(root, ns, kd, vd)
 }
 
-func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) ConflictMap {
+func ConflictMapFromValue(v types.Value, ourSchema, theirSchema, baseSchema schema.Schema, vrw types.ValueReadWriter) prolly.ConflictMap {
 	root := NodeFromValue(v)
 	kd, ourVD := MapDescriptorsFromSchema(ourSchema)
 	theirVD := ValueDescriptorFromSchema(theirSchema)
 	baseVD := ValueDescriptorFromSchema(baseSchema)
 	ns := tree.NewNodeStore(ChunkStoreFromVRW(vrw))
-	return NewConflictMap(root, ns, kd, ourVD, theirVD, baseVD)
+	return prolly.NewConflictMap(root, ns, kd, ourVD, theirVD, baseVD)
 }
 
 func ChunkStoreFromVRW(vrw types.ValueReadWriter) chunks.ChunkStore {
@@ -111,21 +116,6 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 		return
 	})
 	return val.NewTupleDescriptor(tt...)
-}
-
-// ConvertToKeylessIndex converts the given map to a keyless index map.
-func ConvertToKeylessIndex(m Map) Map {
-	newTypes := make([]val.Type, len(m.keyDesc.Types)+1)
-	copy(newTypes, m.keyDesc.Types)
-	newTypes[len(newTypes)-1] = val.Type{Enc: val.Hash128Enc}
-	newKeyDesc := val.NewTupleDescriptorWithComparator(m.keyDesc.Comparator(), newTypes...)
-	newTuples := m.tuples
-	newTuples.order = newKeyDesc
-	return Map{
-		tuples:  newTuples,
-		keyDesc: newKeyDesc,
-		valDesc: m.valDesc,
-	}
 }
 
 func encodingFromSqlType(typ query.Type) val.Encoding {
