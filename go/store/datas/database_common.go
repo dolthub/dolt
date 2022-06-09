@@ -986,7 +986,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		}
 	}
 
-	return newCommitForValue(ctx, ds.db, v, opts)
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, v, opts)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

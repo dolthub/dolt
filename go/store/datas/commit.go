@@ -25,15 +25,21 @@ import (
 	"container/heap"
 	"context"
 	"errors"
+	"io"
 	"fmt"
+	"encoding/binary"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -125,15 +131,15 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return nil, errors.New("cannot create commit without parents")
 	}
 
-	return newCommitForValue(ctx, vrw, v, opts)
+	return newCommitForValue(ctx, cs, vrw, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([]byte, uint64) {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) ([]byte, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
@@ -156,6 +162,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 		}
 	}
 
+	pcaddroff := builder.CreateByteVector(parentsClosureAddr[:])
+
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
 	descoff := builder.CreateString(opts.Meta.Description)
@@ -163,6 +171,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
 	serial.CommitAddParentAddrs(builder, parentaddrsoff)
+	serial.CommitAddParentClosure(builder, pcaddroff)
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
@@ -172,7 +181,67 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	return builder.FinishedBytes(), maxheight + 1
 }
 
-func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, parents []*serial.Commit, parentAddrs []hash.Hash) (hash.Hash, error) {
+	if len(parents) == 0 {
+		// We write an empty hash for parent-less commits of height 1.
+		return hash.Hash{}, nil
+	}
+	// Fetch the parent closures of our parents.
+	addrs := make([]hash.Hash, len(parents))
+	for i := range parents {
+		addrs[i] = hash.New(parents[i].ParentClosureBytes())
+	}
+	vs, err := vrw.ReadManyValues(ctx, addrs)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: ReadManyValues: %w", err)
+	}
+	// Load them as ProllyTrees.
+	ns := tree.NewNodeStore(cs)
+	keyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint64Enc, Nullable: false},
+		val.Type{Enc: val.ByteStringEnc, Nullable: false},
+	)
+	valDesc := val.NewTupleDescriptor()
+	maps := make([]prolly.Map, len(parents))
+	for i := range addrs {
+		if !types.IsNull(vs[i]) {
+			node := tree.NodeFromBytes(vs[i].(types.TupleRowStorage))
+			maps[i] = prolly.NewMap(node, ns, keyDesc, valDesc)
+		} else {
+			maps[i], err = prolly.NewMapFromTuples(ctx, ns, keyDesc, valDesc)
+			if err != nil {
+				return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: NewMapFromTuples: %w", err)
+			}
+		}
+	}
+	editor := maps[0].Mutate()
+	for i := 1; i < len(maps); i++ {
+		err = prolly.DiffMaps(ctx, maps[0], maps[i], func(ctx context.Context, diff tree.Diff) error {
+			if diff.Type == tree.AddedDiff {
+				return editor.Put(ctx, val.Tuple(diff.Key), val.Tuple{})
+			}
+			return nil
+		})
+		if err != nil && !errors.Is(err, io.EOF) {
+			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: DiffMaps: %w", err)
+		}
+	}
+	var height [8]byte
+	for i := 0; i < len(parents); i++ {
+		binary.LittleEndian.PutUint64(height[:], parents[i].Height())
+		err = editor.Put(ctx, val.NewTuple(ns.Pool(), height[:], parentAddrs[i][:]), val.Tuple{})
+		if err != nil {
+			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Put: %w", err)
+		}
+	}
+	res, err := editor.Map(ctx)
+	if err != nil {
+		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Map: %w", err)
+	}
+	return res.HashOf(), nil
+}
+
+func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
@@ -182,15 +251,21 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		if err != nil {
 			return nil, err
 		}
+		parents := make([]*serial.Commit, len(opts.Parents))
 		heights := make([]uint64, len(opts.Parents))
-		parents, err := vrw.ReadManyValues(ctx, opts.Parents)
+		parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
 		if err != nil {
 			return nil, err
 		}
 		for i := range heights {
-			heights[i] = serial.GetRootAsCommit([]byte(parents[i].(types.SerialMessage)), 0).Height()
+			parents[i] = serial.GetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), 0)
+			heights[i] = parents[i].Height()
 		}
-		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights)
+		parentClosureAddr, err := writeCommitParentClosure(ctx, cs, vrw, parents, opts.Parents)
+		if err != nil {
+			return nil, err
+		}
+		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 		v := types.SerialMessage(bs)
 		addr, err := v.Hash(vrw.Format())
 		if err != nil {
