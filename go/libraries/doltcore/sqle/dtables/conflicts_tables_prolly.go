@@ -17,7 +17,6 @@ package dtables
 import (
 	"bytes"
 	"context"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -39,62 +38,16 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string
 	if err != nil {
 		return nil, err
 	}
-
 	m := durable.ProllyMapFromArtifactIndex(arts)
-	itr, err := m.IterAllConflicts(ctx)
+
+	baseSch, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	art, err := itr.Next(ctx)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-
-	// The conflict schema is implicitly determined based on the first conflict in the artifacts table.
-	// For now, we will enforce that all conflicts in the artifacts table must have the same schema set (base, ours, theirs).
-	// In the future, we may be able to display conflicts in a way that allows different conflict schemas.
-
-	var baseSch, ourSch, theirSch schema.Schema
-	if err == io.EOF {
-		ourSch, err = tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		baseSch, theirSch = ourSch, ourSch
-	} else {
-		// Get the first conflict and rebuild the conflict schema from it.
-
-		h := hash.New(art.Metadata.BaseTblHash)
-		baseTbl, err := durable.TableFromAddr(ctx, tbl.ValueReadWriter(), h)
-		if err != nil {
-			return nil, err
-		}
-		h = hash.New(art.Metadata.TheirTblHash)
-		theirTbl, err := durable.TableFromAddr(ctx, tbl.ValueReadWriter(), h)
-		if err != nil {
-			return nil, err
-		}
-
-		baseSch, err = baseTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		ourSch, err = tbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-		theirSch, err = theirTbl.GetSchema(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	confSch, err := CalculateConflictSchema(baseSch, ourSch, theirSch)
 	if err != nil {
 		return nil, err
 	}
-
 	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, confSch)
 	if err != nil {
 		return nil, err
@@ -365,7 +318,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	cd.kB.PutAddress(cd.kd.Count()-2, h[:])
 
 	// Finally the artifact type which is always a conflict
-	cd.kB.PutString(cd.kd.Count()-1, string(prolly.ArtifactTypeConflict))
+	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
 
 	key := cd.kB.Build(cd.pool)
 	err := cd.ed.Delete(ctx, key)
@@ -449,11 +402,11 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 	if err != nil {
 		return nil, err
 	}
-	err = putWithPrefix("ours_", ours)
+	err = putWithPrefix("our_", ours)
 	if err != nil {
 		return nil, err
 	}
-	err = putWithPrefix("theirs_", theirs)
+	err = putWithPrefix("their_", theirs)
 	if err != nil {
 		return nil, err
 	}

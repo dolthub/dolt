@@ -211,6 +211,69 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
 func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+	if t.Format() == types.Format_DOLT_1 {
+		return t.getProllyConflictSchemas(ctx)
+	}
+
+	return t.getNomsConflictSchemas(ctx)
+}
+
+// The conflict schema is implicitly determined based on the first conflict in the artifacts table.
+// For now, we will enforce that all conflicts in the artifacts table must have the same schema set (base, ours, theirs).
+// In the future, we may be able to display conflicts in a way that allows different conflict schemas to coexist.
+func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+	arts, err := t.GetArtifacts(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	ourSch, err := t.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if has, err := arts.HasConflicts(ctx); err != nil {
+		return nil, nil, nil, err
+	} else if !has {
+		return ourSch, ourSch, ourSch, nil
+	}
+
+	m := durable.ProllyMapFromArtifactIndex(arts)
+
+	itr, err := m.IterAllConflicts(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	art, err := itr.Next(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	h := hash.New(art.Metadata.BaseTblHash)
+	baseTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	h = hash.New(art.Metadata.TheirTblHash)
+	theirTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	baseSch, err := baseTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	theirSch, err := theirTbl.GetSchema(ctx)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return baseSch, ourSch, theirSch, nil
+}
+
+func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
 	cs, _, err := t.table.GetConflicts(ctx)
 	if err != nil {
 		return nil, nil, nil, err

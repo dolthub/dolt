@@ -29,9 +29,10 @@ type ArtifactIndex interface {
 	HashOf() (hash.Hash, error)
 	Count() uint64
 	Format() *types.NomsBinFormat
-
 	HasConflicts(ctx context.Context) (bool, error)
+	// ConflictCount returns the number of conflicts
 	ConflictCount(ctx context.Context) (uint64, error)
+	// ClearConflicts clears all conflicts
 	ClearConflicts(ctx context.Context) (ArtifactIndex, error)
 }
 

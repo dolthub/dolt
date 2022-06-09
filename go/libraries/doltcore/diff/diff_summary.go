@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -67,7 +68,7 @@ func prollySummary(ctx context.Context, ch chan DiffSummaryProgress, from, to du
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return err
 	}
 	return nil
