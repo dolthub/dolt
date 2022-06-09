@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"os"
 	"strings"
 	"testing"
@@ -298,7 +299,9 @@ func TestDoltUserPrivileges(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
+
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
