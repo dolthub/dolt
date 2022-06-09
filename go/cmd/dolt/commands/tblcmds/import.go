@@ -25,6 +25,7 @@ import (
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/message"
@@ -784,8 +785,8 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 
 // detectAndConvertToBoolean determines whether a column is potentially a boolean and converts it accordingly.
 func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
-	switch columnType {
-	case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
+	switch columnType.Type() {
+	case sqltypes.Int8, sqltypes.Bit: // TODO: noms bool wraps MustCreateBitType
 		switch columnVal.(type) {
 		case int8:
 			return stringToBoolean(strconv.Itoa(int(columnVal.(int8))))
