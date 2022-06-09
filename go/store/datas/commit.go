@@ -25,8 +25,8 @@ import (
 	"container/heap"
 	"context"
 	"errors"
-	"io"
 	"fmt"
+	"io"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
@@ -35,9 +35,9 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
-	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -810,7 +810,7 @@ func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 	if i.i == 0 {
 		return false
 	}
-	i.i = i.i-1
+	i.i = i.i - 1
 	return true
 }
 
@@ -889,7 +889,7 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 			i += 1
 		}
 		return &fbParentsClosureIterator{
-			tuples, len(tuples)-1,
+			tuples, len(tuples) - 1,
 		}, nil
 	}
 
