@@ -229,7 +229,7 @@ func TestCreateTable(t *testing.T) {
 			expectedTable: "ip2nation",
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumnWDefVal(t, "ip", 7265, sql.Uint32, true, "0", schema.NotNullConstraint{}),
-				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `'''`, schema.NotNullConstraint{})),
+				schemaNewColumnWDefVal(t, "country", 6630, sql.MustCreateStringWithDefaults(sqltypes.Char, 2), false, `''`, schema.NotNullConstraint{})),
 		},
 		{
 			name:          "Test ip2nationCountries",
