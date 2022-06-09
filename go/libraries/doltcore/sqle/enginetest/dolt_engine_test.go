@@ -16,7 +16,6 @@ package enginetest
 
 import (
 	"context"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"os"
 	"strings"
 	"testing"
@@ -25,6 +24,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
