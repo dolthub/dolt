@@ -337,9 +337,9 @@ SQL
     [ "$status" -eq 0 ]
 
     [[ "$output" =~ "-  \`a\` int NOT NULL," ]] || false
-    [[ "$output" =~ "-  \`b\` int DEFAULT 10," ]] || false
+    [[ "$output" =~ "-  \`b\` int DEFAULT '10'," ]] || false
     [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
-    [[ "$output" =~ "+  \`b\` tinyint NOT NULL DEFAULT 50," ]] || false
+    [[ "$output" =~ "+  \`b\` tinyint NOT NULL DEFAULT '50'," ]] || false
     [[ "$output" =~ "+  \`c\` varchar(10)" ]] || false
     [[ "$output" =~ "|  <  | a | b |   |" ]] || false
     [[ "$output" =~ "|  >  | a | b | c |" ]] || false
