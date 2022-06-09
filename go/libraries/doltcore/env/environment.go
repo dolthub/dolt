@@ -697,13 +697,16 @@ func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
-
+	commit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return commit.GetRootValue(ctx)
+}
+
+func (dEnv *DoltEnv) HeadCommit(ctx context.Context) (*doltdb.Commit, error) {
+	return dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 }
 
 func (dEnv *DoltEnv) DbData() DbData {
