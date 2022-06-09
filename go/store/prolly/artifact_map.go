@@ -32,7 +32,7 @@ type ArtifactType uint8
 
 const (
 	// ArtifactTypeConflict is the type for conflicts.
-	ArtifactTypeConflict ArtifactType = iota
+	ArtifactTypeConflict ArtifactType = iota + 1
 	// ArtifactTypeForeignKeyViol is the type for foreign key violations.
 	ArtifactTypeForeignKeyViol
 	// ArtifactTypeUniqueKeyViol is the type for unique key violations.
