@@ -90,3 +90,25 @@ teardown() {
     (cd the_restore && dolt status)
     dolt sql -q "CALL dolt_backup('sync', 'hostedapidb-0')"
 }
+
+@test "sql-backup: dolt_backup sync-url" {
+    mkdir the_backup
+    dolt sql -q "select dolt_backup('sync-url', 'file://./the_backup')"
+    # Initial backup works.
+    dolt backup restore file://./the_backup the_restore
+    (cd the_restore && dolt status)
+
+    rm -rf the_backup the_restore
+
+    mkdir the_backup
+    dolt sql -q "CALL dolt_backup('sync-url', 'file://./the_backup')"
+    dolt backup restore file://./the_backup the_restore
+    (cd the_restore && dolt status)
+}
+
+@test "sql-backup: dolt_backup sync-url fails for http remotes" {
+    run dolt sql -q "select dolt_backup('sync-url', 'http://dolthub.com/dolthub/backup')"
+    [ "$status" -ne 0 ]
+    run dolt sql -q "CALL dolt_backup('sync-url', 'https://dolthub.com/dolthub/backup')"
+    [ "$status" -ne 0 ]
+}

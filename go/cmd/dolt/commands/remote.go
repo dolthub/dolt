@@ -70,7 +70,6 @@ const (
 	removeRemoteShortId = "rm"
 )
 
-var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
 var credTypes = dbfactory.AWSCredTypes
 
 type RemoteCmd struct{}
@@ -201,48 +200,18 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
 	params := map[string]string{}
 
-	var verr errhand.VerboseError
+	var err error
 	if scheme == dbfactory.AWSScheme {
-		verr = addAWSParams(remoteUrl, apr, params)
+		err = cli.AddAWSParams(remoteUrl, apr, params)
 	} else {
-		verr = verifyNoAwsParams(apr)
+		err = cli.VerifyNoAwsParams(apr)
 	}
 
-	return params, verr
-}
-
-func addAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) errhand.VerboseError {
-	isAWS := strings.HasPrefix(remoteUrl, "aws")
-
-	if !isAWS {
-		for _, p := range awsParams {
-			if _, ok := apr.GetValue(p); ok {
-				return errhand.BuildDError(p + " param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database").Build()
-			}
-		}
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	for _, p := range awsParams {
-		if val, ok := apr.GetValue(p); ok {
-			params[p] = val
-		}
-	}
-
-	return nil
-}
-
-func verifyNoAwsParams(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
-		awsParamKeys := make([]string, 0, len(awsParams))
-		for k := range awsParams {
-			awsParamKeys = append(awsParamKeys, k)
-		}
-
-		keysStr := strings.Join(awsParamKeys, ",")
-		return errhand.BuildDError("The parameters %s, are only valid for aws remotes", keysStr).SetPrintUsage().Build()
-	}
-
-	return nil
+	return params, nil
 }
 
 func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
