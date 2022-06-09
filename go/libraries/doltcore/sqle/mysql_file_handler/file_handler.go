@@ -49,16 +49,19 @@ func NewPersister(fp string) *Persister {
 	}
 }
 
-func (p *Persister) CanPersist() bool {
-	return len(p.privsFilePath) != 0
+func (p *Persister) ValidateCanPersist() error {
+	if len(p.privsFilePath) == 0 {
+		return errors.New("no privilege file specified, to persist users/grants run with --privilege-file=<file_path>")
+	}
+	return nil
 }
 
 func (p *Persister) Persist(ctx *sql.Context, data []byte) error {
 	p.fileMutex.Lock()
 	defer p.fileMutex.Unlock()
 
-	if len(p.privsFilePath) == 0 {
-		return errors.New("no privilege file specified, to persist users/grants run with --privilege-file=<file_path>")
+	if err := p.ValidateCanPersist(); err != nil {
+		return err
 	}
 
 	return ioutil.WriteFile(p.privsFilePath, data, 0777)
