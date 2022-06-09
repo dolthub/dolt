@@ -340,7 +340,15 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 		if err = cb(r); err != nil {
 			return err
 		}
-		// TODO: cb for parent closure.
+
+		addr = hash.New(msg.ParentClosureBytes())
+		r, err = constructRef(nbf, addr, PrimitiveTypeMap[ValueKind], SerialMessageRefHeight)
+		if err != nil {
+			return err
+		}
+		if err = cb(r); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("unsupported SerialMessage message with FileID: %s", serial.GetFileID([]byte(sm)))
 	}
