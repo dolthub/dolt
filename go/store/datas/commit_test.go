@@ -39,7 +39,6 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 func mustHead(ds Dataset) types.Value {
@@ -441,12 +440,7 @@ func TestCommitParentsClosure(t *testing.T) {
 				return
 			}
 			node := tree.NodeFromBytes(v.(types.TupleRowStorage))
-			keyDesc := val.NewTupleDescriptor(
-				val.Type{Enc: val.Uint64Enc, Nullable: false},
-				val.Type{Enc: val.ByteStringEnc, Nullable: false},
-			)
-			valDesc := val.NewTupleDescriptor()
-			m := prolly.NewMap(node, tree.NewNodeStore(db.chunkStore()), keyDesc, valDesc)
+			m := prolly.NewMap(node, tree.NewNodeStore(db.chunkStore()), commitKeyTupleDesc, commitValueTupleDesc)
 			if !assert.Equal(len(es), m.Count(), "expected length of commit closure matches") {
 				return
 			}
@@ -463,11 +457,11 @@ func TestCommitParentsClosure(t *testing.T) {
 				if !assert.NoError(err, "no error on MapIterator.Next") {
 					return
 				}
-				height, ok := keyDesc.GetUint64(0, k)
+				height, ok := commitKeyTupleDesc.GetUint64(0, k)
 				if !assert.True(ok, "able to get height from first field of closure key") {
 					return
 				}
-				addrbs, ok := keyDesc.GetBytes(1, k)
+				addrbs, ok := commitKeyTupleDesc.GetBytes(1, k)
 				if !assert.True(ok, "able to get address bytes from second field of closure key") {
 					return
 				}

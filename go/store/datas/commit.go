@@ -180,6 +180,12 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 	return builder.FinishedBytes(), maxheight + 1
 }
 
+var commitKeyTupleDesc = val.NewTupleDescriptor(
+	val.Type{Enc: val.Uint64Enc, Nullable: false},
+	val.Type{Enc: val.ByteStringEnc, Nullable: false},
+)
+var commitValueTupleDesc = val.NewTupleDescriptor()
+
 func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, parents []*serial.Commit, parentAddrs []hash.Hash) (hash.Hash, error) {
 	if len(parents) == 0 {
 		// We write an empty hash for parent-less commits of height 1.
@@ -196,18 +202,13 @@ func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw typ
 	}
 	// Load them as ProllyTrees.
 	ns := tree.NewNodeStore(cs)
-	keyDesc := val.NewTupleDescriptor(
-		val.Type{Enc: val.Uint64Enc, Nullable: false},
-		val.Type{Enc: val.ByteStringEnc, Nullable: false},
-	)
-	valDesc := val.NewTupleDescriptor()
 	maps := make([]prolly.Map, len(parents))
 	for i := range addrs {
 		if !types.IsNull(vs[i]) {
 			node := tree.NodeFromBytes(vs[i].(types.TupleRowStorage))
-			maps[i] = prolly.NewMap(node, ns, keyDesc, valDesc)
+			maps[i] = prolly.NewMap(node, ns, commitKeyTupleDesc, commitValueTupleDesc)
 		} else {
-			maps[i], err = prolly.NewMapFromTuples(ctx, ns, keyDesc, valDesc)
+			maps[i], err = prolly.NewMapFromTuples(ctx, ns, commitKeyTupleDesc, commitValueTupleDesc)
 			if err != nil {
 				return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: NewMapFromTuples: %w", err)
 			}
@@ -227,7 +228,7 @@ func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw typ
 		}
 	}
 	// Add the parents themselves to the new map.
-	tb := val.NewTupleBuilder(keyDesc)
+	tb := val.NewTupleBuilder(commitKeyTupleDesc)
 	for i := 0; i < len(parents); i++ {
 		tb.PutUint64(0, parents[i].Height())
 		tb.PutByteString(1, parentAddrs[i][:])
@@ -798,11 +799,7 @@ func (i *fbParentsClosureIterator) Err() error {
 }
 
 func (i *fbParentsClosureIterator) Hash() hash.Hash {
-	keyDesc := val.NewTupleDescriptor(
-		val.Type{Enc: val.Uint64Enc, Nullable: false},
-		val.Type{Enc: val.ByteStringEnc, Nullable: false},
-	)
-	bs, _ := keyDesc.GetBytes(1, i.tuples[i.i])
+	bs, _ := commitKeyTupleDesc.GetBytes(1, i.tuples[i.i])
 	return hash.New(bs)
 }
 
@@ -816,11 +813,7 @@ func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 
 func (i *fbParentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*fbParentsClosureIterator)
-	keyDesc := val.NewTupleDescriptor(
-		val.Type{Enc: val.Uint64Enc, Nullable: false},
-		val.Type{Enc: val.ByteStringEnc, Nullable: false},
-	)
-	return keyDesc.Comparator().Compare(i.tuples[i.i], other.tuples[other.i], keyDesc) == -1
+	return commitKeyTupleDesc.Comparator().Compare(i.tuples[i.i], other.tuples[other.i], commitKeyTupleDesc) == -1
 }
 
 func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
