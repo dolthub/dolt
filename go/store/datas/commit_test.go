@@ -25,15 +25,21 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"io"
+	"errors"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func mustHead(ds Dataset) types.Value {
@@ -412,6 +418,7 @@ func TestCommitParentsClosure(t *testing.T) {
 
 	storage := &chunks.TestStorage{}
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+	ctx := context.Background()
 
 	type expected struct {
 		height int
@@ -419,8 +426,58 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	assertCommitParentsClosure := func(v types.Value, es []expected) {
-		if _, ok := v.(types.SerialMessage); ok {
-			t.Skip("__DOLT_DEV__ does not implement ParentsClosure yet.")
+		if v, ok := v.(types.SerialMessage); ok {
+			msg := serial.GetRootAsCommit(v, 0)
+			addr := hash.New(msg.ParentClosureBytes())
+			if len(es) == 0 {
+				assert.True(addr.IsEmpty(), "no parent closure when the closure is empty")
+				return
+			}
+			v, err := db.ReadValue(ctx, addr)
+			if !assert.NoError(err, "no error reading map for parent closure") {
+				return
+			}
+			if !assert.False(types.IsNull(v), "reading parent closure map returns non-null") {
+				return
+			}
+			node := tree.NodeFromBytes(v.(types.TupleRowStorage))
+			keyDesc := val.NewTupleDescriptor(
+				val.Type{Enc: val.Uint64Enc, Nullable: false},
+				val.Type{Enc: val.ByteStringEnc, Nullable: false},
+			)
+			valDesc := val.NewTupleDescriptor()
+			m := prolly.NewMap(node, tree.NewNodeStore(db.chunkStore()), keyDesc, valDesc)
+			if !assert.Equal(len(es), m.Count(), "expected length of commit closure matches") {
+				return
+			}
+			mi, err := m.IterAll(ctx)
+			if !assert.NoError(err, "no error getting map iterator") {
+				return
+			}
+			i := 0
+			for {
+				k, _, err := mi.Next(ctx)
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if !assert.NoError(err, "no error on MapIterator.Next") {
+					return
+				}
+				height, ok := keyDesc.GetUint64(0, k)
+				if !assert.True(ok, "able to get height from first field of closure key") {
+					return
+				}
+				addrbs, ok := keyDesc.GetBytes(1, k)
+				if !assert.True(ok, "able to get address bytes from second field of closure key") {
+					return
+				}
+				addr := hash.New(addrbs)
+				assert.Equal(es[i].height, int(height), "heights of expected entries match")
+				assert.Equal(es[i].hash, addr, "addresses of expected entries match")
+				i += 1
+			}
+			assert.Equal(len(es), i)
+			return
 		}
 		s, ok := v.(types.Struct)
 		if !assert.True(ok) {
@@ -441,7 +498,7 @@ func TestCommitParentsClosure(t *testing.T) {
 		if !assert.True(ok, "parents_closure field must contain a ref value.") {
 			return
 		}
-		tv, err := r.TargetValue(context.Background(), db)
+		tv, err := r.TargetValue(ctx, db)
 		if !assert.NoError(err, "getting target value of parents_closure field must not error") {
 			return
 		}
@@ -453,7 +510,7 @@ func TestCommitParentsClosure(t *testing.T) {
 			return
 		}
 		i := 0
-		err = m.IterAll(context.Background(), func(k, v types.Value) error {
+		err = m.IterAll(ctx, func(k, v types.Value) error {
 			j := i
 			i++
 			kt, ok := k.(types.Tuple)
@@ -493,14 +550,19 @@ func TestCommitParentsClosure(t *testing.T) {
 		assert.NoError(err)
 	}
 
+	// TODO: These tests rely on the hash values of the commits
+	// to assert the order of commits that are at the same height in the
+	// parent closure map. The values have been tweaked to currently pass
+	// with LD_1 and DOLT_DEV.
+
 	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
 	a1, a1a := addCommit(t, db, a, "a1")
 	a2, a2a := addCommit(t, db, a, "a2", a1)
-	a3, a3a := addCommit(t, db, a, "a3", a2)
+	a3, a3a := addCommit(t, db, a, "a3 ", a2)
 
 	b1, b1a := addCommit(t, db, b, "b1", a1)
-	b2, b2a := addCommit(t, db, b, "b2", b1)
-	b3, b3a := addCommit(t, db, b, "b3", b2)
+	b2, b2a := addCommit(t, db, b, "b2 ", b1)
+	b3, b3a := addCommit(t, db, b, "b3 ", b2)
 
 	c1, c1a := addCommit(t, db, c, "c1", a3, b3)
 

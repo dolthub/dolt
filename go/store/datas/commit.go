@@ -27,7 +27,6 @@ import (
 	"errors"
 	"io"
 	"fmt"
-	"encoding/binary"
 
 	flatbuffers "github.com/google/flatbuffers/go"
 
@@ -214,11 +213,12 @@ func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw typ
 			}
 		}
 	}
+	// Add all the missing entries from [1, ...) maps to the 0th map.
 	editor := maps[0].Mutate()
 	for i := 1; i < len(maps); i++ {
 		err = prolly.DiffMaps(ctx, maps[0], maps[i], func(ctx context.Context, diff tree.Diff) error {
 			if diff.Type == tree.AddedDiff {
-				return editor.Put(ctx, val.Tuple(diff.Key), val.Tuple{})
+				return editor.Put(ctx, val.Tuple(diff.Key), val.EmptyTuple)
 			}
 			return nil
 		})
@@ -226,14 +226,18 @@ func writeCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw typ
 			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: DiffMaps: %w", err)
 		}
 	}
-	var height [8]byte
+	// Add the parents themselves to the new map.
+	tb := val.NewTupleBuilder(keyDesc)
 	for i := 0; i < len(parents); i++ {
-		binary.LittleEndian.PutUint64(height[:], parents[i].Height())
-		err = editor.Put(ctx, val.NewTuple(ns.Pool(), height[:], parentAddrs[i][:]), val.Tuple{})
+		tb.PutUint64(0, parents[i].Height())
+		tb.PutByteString(1, parentAddrs[i][:])
+		err = editor.Put(ctx, tb.Build(ns.Pool()), val.EmptyTuple)
 		if err != nil {
 			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Put: %w", err)
 		}
+		tb.Recycle()
 	}
+	// This puts the map in the NodeStore as well.
 	res, err := editor.Map(ctx)
 	if err != nil {
 		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Map: %w", err)
@@ -713,6 +717,13 @@ func getRefElementType(t *types.Type) *types.Type {
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
+type parentsClosureIter interface {
+	Err() error
+	Hash() hash.Hash
+	Less(*types.NomsBinFormat, parentsClosureIter) bool
+	Next(context.Context) bool
+}
+
 type parentsClosureIterator struct {
 	mi   types.MapIterator
 	err  error
@@ -742,7 +753,8 @@ func (i *parentsClosureIterator) Hash() hash.Hash {
 	return h
 }
 
-func (i *parentsClosureIterator) Less(f *types.NomsBinFormat, other *parentsClosureIterator) bool {
+func (i *parentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
+	other := otherI.(*parentsClosureIterator)
 	if i.err != nil || other.err != nil {
 		return false
 	}
@@ -776,6 +788,41 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 	return true
 }
 
+type fbParentsClosureIterator struct {
+	tuples []val.Tuple
+	i      int
+}
+
+func (i *fbParentsClosureIterator) Err() error {
+	return nil
+}
+
+func (i *fbParentsClosureIterator) Hash() hash.Hash {
+	keyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint64Enc, Nullable: false},
+		val.Type{Enc: val.ByteStringEnc, Nullable: false},
+	)
+	bs, _ := keyDesc.GetBytes(1, i.tuples[i.i])
+	return hash.New(bs)
+}
+
+func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
+	if i.i == 0 {
+		return false
+	}
+	i.i = i.i-1
+	return true
+}
+
+func (i *fbParentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
+	other := otherI.(*fbParentsClosureIterator)
+	keyDesc := val.NewTupleDescriptor(
+		val.Type{Enc: val.Uint64Enc, Nullable: false},
+		val.Type{Enc: val.ByteStringEnc, Nullable: false},
+	)
+	return keyDesc.Comparator().Compare(i.tuples[i.i], other.tuples[other.i], keyDesc) == -1
+}
+
 func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
 	h := c.Addr()
 	ib := make([]byte, len(hash.Hash{}))
@@ -790,12 +837,60 @@ func firstError(l, r error) error {
 	return r
 }
 
-func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (*parentsClosureIterator, error) {
+func hackVRToCS(vr types.ValueReader) chunks.ChunkStore {
+	switch v := vr.(type) {
+	case Database:
+		return ChunkStoreFromDatabase(v)
+	case *types.ValueStore:
+		return v.ChunkStore()
+	}
+	panic("unknown ValueReader implementation...")
+}
+
+func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (parentsClosureIter, error) {
 	sv := c.NomsValue()
 
 	if _, ok := sv.(types.SerialMessage); ok {
-		// TODO: __DOLT_DEV__ should support parent closures.
-		return nil, nil
+		msg := serial.GetRootAsCommit(sv.(types.SerialMessage), 0)
+		addr := hash.New(msg.ParentClosureBytes())
+		if addr.IsEmpty() {
+			return nil, nil
+		}
+		v, err := vr.ReadValue(ctx, addr)
+		if err != nil {
+			return nil, err
+		}
+		if types.IsNull(v) {
+			return nil, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
+		}
+		node := tree.NodeFromBytes(v.(types.TupleRowStorage))
+		keyDesc := val.NewTupleDescriptor(
+			val.Type{Enc: val.Uint64Enc, Nullable: false},
+			val.Type{Enc: val.ByteStringEnc, Nullable: false},
+		)
+		valDesc := val.NewTupleDescriptor()
+		ns := tree.NewNodeStore(hackVRToCS(vr))
+		m := prolly.NewMap(node, ns, keyDesc, valDesc)
+		tuples := make([]val.Tuple, m.Count())
+		mi, err := m.IterAll(ctx)
+		if err != nil {
+			return nil, err
+		}
+		i := 0
+		for {
+			k, _, err := mi.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			tuples[i] = k
+			i += 1
+		}
+		return &fbParentsClosureIterator{
+			tuples, len(tuples)-1,
+		}, nil
 	}
 
 	s, ok := sv.(types.Struct)
