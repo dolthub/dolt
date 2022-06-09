@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
@@ -160,7 +161,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr := diffUserTables(ctx, fromRoot, toRoot, dArgs)
+	verr := diffUserTables(ctx, dEnv, fromRoot, toRoot, dArgs, apr)
 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
@@ -377,7 +378,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dArgs *diffArgs) (verr errhand.VerboseError) {
+func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, dArgs *diffArgs, apr *argparser.ArgParseResults) (verr errhand.VerboseError) {
 	var err error
 
 	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
@@ -429,7 +430,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			verr = diffRows(ctx, td, dArgs, toRoot.VRW())
+			verr = diffRows(ctx, dEnv, td, dArgs, toRoot.VRW(), apr)
 		}
 
 		if verr != nil {
@@ -439,6 +440,34 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 
 	return nil
 }
+
+func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (*engine.SqlEngine, error) {
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var dbName string
+	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		dbName = name
+		return true, nil
+	})
+
+	return engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		dbName,
+		false,
+		"",
+		"",
+		"root",
+		"",
+		false,
+	)
+}
+
 
 func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
@@ -602,9 +631,35 @@ func fromNamer(name string) string {
 	return diff.From + "_" + name
 }
 
-func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw types.ValueReadWriter) errhand.VerboseError {
-	if types.IsFormat_DOLT_1(vrw.Format()) {
-		return errhand.BuildDError("dolt diff is not supported in format %s", vrw.Format().VersionString()).Build()
+func diffRows(ctx context.Context, dEnv *env.DoltEnv, td diff.TableDelta, dArgs *diffArgs, vrw types.ValueReadWriter, apr *argparser.ArgParseResults) errhand.VerboseError {
+
+	engine, err := newSqlEngine(ctx, dEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	from, to := "HEAD", "WORKING"
+	if apr.Contains(CachedFlag) {
+		to = "STAGED"
+	}
+
+	if apr.NArg() > 0 {
+		from = apr.Arg(0)
+	}
+	if apr.NArg() > 1 {
+		to = apr.Arg(1)
+	}
+
+	// TODO: need to do anything different for different added / dropped tables?
+	query := fmt.Sprintf("select * from dolt_diff(%s, '%s', '%s')", td.ToName, from, to)
+	sqlCtx, err := engine.NewContext(ctx)
+	if err != nil {
+		return nil
+	}
+
+	rowIter, schema, err := engine.Query(sqlCtx, query)
+	if err != nil {
+		return nil
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
@@ -849,11 +904,6 @@ func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch sche
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
-	nbf := dEnv.DoltDB.Format()
-	if types.IsFormat_DOLT_1(nbf) {
-		return fmt.Errorf("dolt diff is not supported in format %s", nbf.VersionString())
-	}
-
 	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
 
 	if err != nil {
