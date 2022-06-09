@@ -84,8 +84,8 @@ func NewSqlEngine(
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
 	// Load in privileges from file, if it exists
-	mysql_file_handler.SetPrivilegeFilePath(config.PrivFilePath)
-	data, err := mysql_file_handler.LoadData()
+	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
+	data, err := persister.LoadData()
 	if err != nil {
 		return nil, err
 	}
@@ -101,14 +101,11 @@ func NewSqlEngine(
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
 	}
-
-	// Set persist callbacks
-	engine.Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
-	engine.Analyzer.Catalog.MySQLDb.CanPersist = len(config.PrivFilePath) != 0
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
