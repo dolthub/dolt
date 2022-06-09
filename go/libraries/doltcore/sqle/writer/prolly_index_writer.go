@@ -17,6 +17,7 @@ package writer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -230,9 +231,19 @@ func (m prollyIndexWriter) keyError(ctx context.Context, key val.Tuple, isPk boo
 		return
 	})
 
-	s := m.keyBld.Desc.Format(key)
-
-	return sql.NewUniqueKeyErr(s, isPk, dupe)
+	var sb strings.Builder
+	sb.WriteString("[")
+	seenOne := false
+	d := m.keyBld.Desc
+	for i := range d.Types {
+		if seenOne {
+			sb.WriteString(",")
+		}
+		seenOne = true
+		sb.WriteString(d.FormatValue(i, key.GetField(i)))
+	}
+	sb.WriteString("]")
+	return sql.NewUniqueKeyErr(sb.String(), isPk, dupe)
 }
 
 type prollyKeylessWriter struct {

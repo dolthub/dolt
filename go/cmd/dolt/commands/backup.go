@@ -61,13 +61,18 @@ Remove the backup named {{.LessThan}}name{{.GreaterThan}}. All configuration set
 Restore a Dolt database from a given {{.LessThan}}url{{.GreaterThan}} into a specified directory {{.LessThan}}url{{.GreaterThan}}.
 
 {{.EmphasisLeft}}sync{{.EmphasisRight}}
-Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}. This includes branches, tags, working sets, and remote tracking refs.`,
+Snapshot the database and upload to the backup {{.LessThan}}name{{.GreaterThan}}. This includes branches, tags, working sets, and remote tracking refs.
+	
+{{.EmphasisLeft}}sync-url{{.EmphasisRight}}
+Snapshot the database and upload the backup to {{.LessThan}}url{{.GreaterThan}}. Like sync, this includes branches, tags, working sets, and remote tracking refs, but it does not require you to create a named backup`,
+
 	Synopsis: []string{
 		"[-v | --verbose]",
 		"add [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}name{{.GreaterThan}} {{.LessThan}}url{{.GreaterThan}}",
 		"remove {{.LessThan}}name{{.GreaterThan}}",
 		"restore {{.LessThan}}url{{.GreaterThan}} {{.LessThan}}name{{.GreaterThan}}",
 		"sync {{.LessThan}}name{{.GreaterThan}}",
+		"sync-url [--aws-region {{.LessThan}}region{{.GreaterThan}}] [--aws-creds-type {{.LessThan}}creds-type{{.GreaterThan}}] [--aws-creds-file {{.LessThan}}file{{.GreaterThan}}] [--aws-creds-profile {{.LessThan}}profile{{.GreaterThan}}] {{.LessThan}}url{{.GreaterThan}}",
 	},
 }
 
@@ -125,6 +130,8 @@ func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string,
 		verr = removeBackup(ctx, dEnv, apr)
 	case apr.Arg(0) == cli.SyncBackupId:
 		verr = syncBackup(ctx, dEnv, apr)
+	case apr.Arg(0) == cli.SyncBackupUrlId:
+		verr = syncBackupUrl(ctx, dEnv, apr)
 	case apr.Arg(0) == cli.RestoreBackupId:
 		verr = restoreBackup(ctx, dEnv, apr)
 	default:
@@ -171,9 +178,9 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
 	}
 
-	params, verr := parseBackupArgs(apr, scheme, absBackupUrl)
-	if verr != nil {
-		return verr
+	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	r := env.NewRemote(backupName, backupUrl, params, dEnv)
@@ -193,19 +200,6 @@ func addBackup(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 	default:
 		return errhand.BuildDError("error: Unable to save changes.").AddCause(err).Build()
 	}
-}
-
-func parseBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, errhand.VerboseError) {
-	params := map[string]string{}
-
-	var verr errhand.VerboseError
-	if scheme == dbfactory.AWSScheme {
-		verr = addAWSParams(backupUrl, apr, params)
-	} else {
-		verr = verifyNoAwsParams(apr)
-	}
-
-	return params, verr
 }
 
 func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
@@ -230,6 +224,26 @@ func printBackups(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Ver
 	return nil
 }
 
+func syncBackupUrl(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.NArg() != 2 {
+		return errhand.BuildDError("").SetPrintUsage().Build()
+	}
+
+	backupUrl := apr.Arg(1)
+	scheme, absBackupUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, backupUrl)
+	if err != nil {
+		return errhand.BuildDError("error: '%s' is not valid.", backupUrl).AddCause(err).Build()
+	}
+
+	params, err := cli.ProcessBackupArgs(apr, scheme, absBackupUrl)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	b := env.NewRemote("__temp__", backupUrl, params, dEnv)
+	return backup(ctx, dEnv, b)
+}
+
 func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {
 	if apr.NArg() != 2 {
 		return errhand.BuildDError("").SetPrintUsage().Build()
@@ -241,15 +255,21 @@ func syncBackup(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	if err != nil {
 		return errhand.BuildDError("Unable to get backups from the local directory").AddCause(err).Build()
 	}
+
 	b, ok := backups[backupName]
 	if !ok {
 		return errhand.BuildDError("error: unknown backup: '%s' ", backupName).Build()
 	}
 
+	return backup(ctx, dEnv, b)
+}
+
+func backup(ctx context.Context, dEnv *env.DoltEnv, b env.Remote) errhand.VerboseError {
 	destDb, err := b.GetRemoteDB(ctx, dEnv.DoltDB.ValueReadWriter().Format())
 	if err != nil {
 		return errhand.BuildDError("error: unable to open destination.").AddCause(err).Build()
 	}
+
 	err = actions.SyncRoots(ctx, dEnv.DoltDB, destDb, dEnv.TempTableFilesDir(), buildProgStarter(defaultLanguage), stopProgFuncs)
 
 	switch err {

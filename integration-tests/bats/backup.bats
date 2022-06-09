@@ -255,3 +255,17 @@ teardown() {
     [[ ! "$output" =~ "panic" ]] || false
     [[ "$output" =~ "address conflict with a remote: 'bac1'" ]] || false
 }
+
+@test "backup: sync-url" {
+    skip_nbf_dolt_1
+    cd repo1
+    dolt backup sync-url file://../bac1
+
+    cd ..
+    run dolt backup restore file://./bac1 repo2
+    cd repo2
+    run dolt ls
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "t1" ]] || false
+}
