@@ -33,6 +33,22 @@ func TestNodeCursor(t *testing.T) {
 		testNewCursorAtItem(t, 1000)
 		testNewCursorAtItem(t, 10_000)
 	})
+
+	t.Run("retreat past beginning", func(t *testing.T) {
+		ctx := context.Background()
+		root, _, ns := randomTree(t, 10_000)
+		assert.NotNil(t, root)
+		before, err := NewCursorAtStart(ctx, ns, root)
+		assert.NoError(t, err)
+		err = before.Retreat(ctx)
+		assert.NoError(t, err)
+		assert.False(t, before.Valid())
+
+		start, err := NewCursorAtStart(ctx, ns, root)
+		assert.NoError(t, err)
+		assert.True(t, start.Compare(before) > 0, "start is after before")
+		assert.True(t, before.Compare(start) < 0, "before is before start")
+	})
 }
 
 func testNewCursorAtItem(t *testing.T, count int) {

@@ -308,7 +308,7 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 type
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
-func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
+func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database, desc string) {
 	type caFinder func(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error)
 
 	methods := map[string]caFinder{
@@ -326,7 +326,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 	require.NoError(t, err)
 
 	for name, method := range methods {
-		t.Run(fmt.Sprintf("%s/%s_%s", name, aref.TargetHash().String(), bref.TargetHash().String()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s", name, desc), func(t *testing.T) {
 			assert := assert.New(t)
 			ctx := context.Background()
 			found, ok, err := method(ctx, ac, bc, ldb, rdb)
@@ -640,11 +640,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	b5, _ := addCommit(t, db, b, "b5", b4, a3)
 	a6, _ := addCommit(t, db, a, "a6", a5, b5)
 
-	assertCommonAncestor(t, a1, a1, a1, db, db) // All self
-	assertCommonAncestor(t, a1, a1, a2, db, db) // One side self
-	assertCommonAncestor(t, a2, a3, b3, db, db) // Common parent
-	assertCommonAncestor(t, a2, a4, b4, db, db) // Common grandparent
-	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
+	assertCommonAncestor(t, a1, a1, a1, db, db, "all self")
+	assertCommonAncestor(t, a1, a1, a2, db, db, "one side self")
+	assertCommonAncestor(t, a2, a3, b3, db, db, "common parent")
+	assertCommonAncestor(t, a2, a4, b4, db, db, "common grandeparent")
+	assertCommonAncestor(t, a1, a6, c3, db, db, "traversing multiple parents on both sides")
 
 	// No common ancestor
 	ctx := context.Background()
@@ -672,69 +672,71 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assert.NoError(db.Close())
 
-	storage = &chunks.TestStorage{}
-	db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
+	t.Run("DifferentVRWs", func(t *testing.T) {
+		storage = &chunks.TestStorage{}
+		db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+		defer db.Close()
 
-	rstorage := &chunks.TestStorage{}
-	rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
-	defer rdb.Close()
+		rstorage := &chunks.TestStorage{}
+		rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
+		defer rdb.Close()
 
-	// Rerun the tests when using two difference Databases for left and
-	// right commits. Both databases have all the previous commits.
-	a, b, c, d = "ds-a", "ds-b", "ds-c", "ds-d"
-	a1, _ = addCommit(t, db, a, "a1")
-	d1, _ = addCommit(t, db, d, "d1")
-	a2, _ = addCommit(t, db, a, "a2", a1)
-	c2, _ = addCommit(t, db, c, "c2", a1)
-	d2, _ = addCommit(t, db, d, "d2", d1)
-	a3, _ = addCommit(t, db, a, "a3", a2)
-	b3, _ = addCommit(t, db, b, "b3", a2)
-	c3, _ = addCommit(t, db, c, "c3", c2, d2)
-	a4, _ = addCommit(t, db, a, "a4", a3)
-	b4, _ = addCommit(t, db, b, "b4", b3)
-	a5, _ = addCommit(t, db, a, "a5", a4)
-	b5, _ = addCommit(t, db, b, "b5", b4, a3)
-	a6, _ = addCommit(t, db, a, "a6", a5, b5)
+		// Rerun the tests when using two difference Databases for left and
+		// right commits. Both databases have all the previous commits.
+		a, b, c, d = "ds-a", "ds-b", "ds-c", "ds-d"
+		a1, _ = addCommit(t, db, a, "a1")
+		d1, _ = addCommit(t, db, d, "d1")
+		a2, _ = addCommit(t, db, a, "a2", a1)
+		c2, _ = addCommit(t, db, c, "c2", a1)
+		d2, _ = addCommit(t, db, d, "d2", d1)
+		a3, _ = addCommit(t, db, a, "a3", a2)
+		b3, _ = addCommit(t, db, b, "b3", a2)
+		c3, _ = addCommit(t, db, c, "c3", c2, d2)
+		a4, _ = addCommit(t, db, a, "a4", a3)
+		b4, _ = addCommit(t, db, b, "b4", b3)
+		a5, _ = addCommit(t, db, a, "a5", a4)
+		b5, _ = addCommit(t, db, b, "b5", b4, a3)
+		a6, _ = addCommit(t, db, a, "a6", a5, b5)
 
-	addCommit(t, rdb, a, "a1")
-	addCommit(t, rdb, d, "d1")
-	addCommit(t, rdb, a, "a2", a1)
-	addCommit(t, rdb, c, "c2", a1)
-	addCommit(t, rdb, d, "d2", d1)
-	addCommit(t, rdb, a, "a3", a2)
-	addCommit(t, rdb, b, "b3", a2)
-	addCommit(t, rdb, c, "c3", c2, d2)
-	addCommit(t, rdb, a, "a4", a3)
-	addCommit(t, rdb, b, "b4", b3)
-	addCommit(t, rdb, a, "a5", a4)
-	addCommit(t, rdb, b, "b5", b4, a3)
-	addCommit(t, rdb, a, "a6", a5, b5)
+		addCommit(t, rdb, a, "a1")
+		addCommit(t, rdb, d, "d1")
+		addCommit(t, rdb, a, "a2", a1)
+		addCommit(t, rdb, c, "c2", a1)
+		addCommit(t, rdb, d, "d2", d1)
+		addCommit(t, rdb, a, "a3", a2)
+		addCommit(t, rdb, b, "b3", a2)
+		addCommit(t, rdb, c, "c3", c2, d2)
+		addCommit(t, rdb, a, "a4", a3)
+		addCommit(t, rdb, b, "b4", b3)
+		addCommit(t, rdb, a, "a5", a4)
+		addCommit(t, rdb, b, "b5", b4, a3)
+		addCommit(t, rdb, a, "a6", a5, b5)
 
-	// Additionally, |db| has a6<-a7<-a8<-a9.
-	// |rdb| has a6<-ra7<-ra8<-ra9.
-	a7, _ := addCommit(t, db, a, "a7", a6)
-	a8, _ := addCommit(t, db, a, "a8", a7)
-	a9, _ := addCommit(t, db, a, "a9", a8)
+		// Additionally, |db| has a6<-a7<-a8<-a9.
+		// |rdb| has a6<-ra7<-ra8<-ra9.
+		a7, _ := addCommit(t, db, a, "a7", a6)
+		a8, _ := addCommit(t, db, a, "a8", a7)
+		a9, _ := addCommit(t, db, a, "a9", a8)
 
-	ra7, _ := addCommit(t, rdb, a, "ra7", a6)
-	ra8, _ := addCommit(t, rdb, a, "ra8", ra7)
-	ra9, _ := addCommit(t, rdb, a, "ra9", ra8)
+		ra7, _ := addCommit(t, rdb, a, "ra7", a6)
+		ra8, _ := addCommit(t, rdb, a, "ra8", ra7)
+		ra9, _ := addCommit(t, rdb, a, "ra9", ra8)
 
-	assertCommonAncestor(t, a1, a1, a1, db, rdb) // All self
-	assertCommonAncestor(t, a1, a1, a2, db, rdb) // One side self
-	assertCommonAncestor(t, a2, a3, b3, db, rdb) // Common parent
-	assertCommonAncestor(t, a2, a4, b4, db, rdb) // Common grandparent
-	assertCommonAncestor(t, a1, a6, c3, db, rdb) // Traversing multiple parents on both sides
+		assertCommonAncestor(t, a1, a1, a1, db, rdb, "all self")
+		assertCommonAncestor(t, a1, a1, a2, db, rdb, "one side self")
+		assertCommonAncestor(t, a2, a3, b3, db, rdb, "common parent")
+		assertCommonAncestor(t, a2, a4, b4, db, rdb, "common grandeparent")
+		assertCommonAncestor(t, a1, a6, c3, db, rdb, "traversing multiple parents on both sides")
 
-	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
+		assertCommonAncestor(t, a6, a9, ra9, db, rdb, "common third parent")
 
-	a9c, err := commitFromValue(db.Format(), a9)
-	require.NoError(t, err)
-	ra9c, err := commitFromValue(rdb.Format(), ra9)
-	require.NoError(t, err)
-	_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
-	assert.Error(err)
+		a9c, err := commitFromValue(db.Format(), a9)
+		require.NoError(t, err)
+		ra9c, err := commitFromValue(rdb.Format(), ra9)
+		require.NoError(t, err)
+		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
+		assert.Error(err)
+	})
 }
 
 func TestNewCommitRegressionTest(t *testing.T) {

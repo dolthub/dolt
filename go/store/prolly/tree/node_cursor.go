@@ -325,9 +325,14 @@ func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	return idx
 }
 
-// invalidate sets the cursor's index to the node count.
-func (cur *Cursor) invalidate() {
+// invalidateAtEnd sets the cursor's index to the node count.
+func (cur *Cursor) invalidateAtEnd() {
 	cur.idx = int(cur.nd.count)
+}
+
+// invalidateAtStart sets the cursor's index to -1.
+func (cur *Cursor) invalidateAtStart() {
+	cur.idx = -1
 }
 
 // hasNext returns true if we do not need to recursively
@@ -375,7 +380,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 	}
 
 	if cur.parent == nil {
-		cur.invalidate()
+		cur.invalidateAtEnd()
 		return nil
 	}
 
@@ -387,7 +392,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 
 	if cur.parent.outOfBounds() {
 		// exhausted every parent cursor
-		cur.invalidate()
+		cur.invalidateAtEnd()
 		return nil
 	}
 
@@ -412,7 +417,7 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 	}
 
 	if cur.parent == nil {
-		cur.invalidate()
+		cur.invalidateAtStart()
 		return nil
 	}
 
@@ -424,7 +429,7 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 
 	if cur.parent.outOfBounds() {
 		// exhausted every parent cursor
-		cur.invalidate()
+		cur.invalidateAtStart()
 		return nil
 	}
 

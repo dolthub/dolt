@@ -35,6 +35,7 @@ import (
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
@@ -790,30 +791,46 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 }
 
 type fbParentsClosureIterator struct {
-	tuples []val.Tuple
-	i      int
+	mi   prolly.MapIter
+	curr val.Tuple
+	err  error
 }
 
 func (i *fbParentsClosureIterator) Err() error {
-	return nil
+	return i.err
+}
+
+func (i *fbParentsClosureIterator) Height() uint64 {
+	if i.err != nil {
+		return 0
+	}
+	h, _ := commitKeyTupleDesc.GetUint64(0, i.curr)
+	return h
 }
 
 func (i *fbParentsClosureIterator) Hash() hash.Hash {
-	bs, _ := commitKeyTupleDesc.GetBytes(1, i.tuples[i.i])
+	if i.err != nil {
+		return hash.Hash{}
+	}
+	bs, _ := commitKeyTupleDesc.GetBytes(1, i.curr)
 	return hash.New(bs)
 }
 
 func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
-	if i.i == 0 {
+	if i.err != nil {
 		return false
 	}
-	i.i = i.i - 1
+	i.curr, _, i.err = i.mi.Next(ctx)
+	if i.err == io.EOF {
+		i.err = nil
+		return false
+	}
 	return true
 }
 
 func (i *fbParentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*fbParentsClosureIterator)
-	return commitKeyTupleDesc.Comparator().Compare(i.tuples[i.i], other.tuples[other.i], commitKeyTupleDesc) == -1
+	return commitKeyTupleDesc.Comparator().Compare(i.curr, other.curr, commitKeyTupleDesc) == -1
 }
 
 func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
@@ -821,6 +838,14 @@ func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error)
 	ib := make([]byte, len(hash.Hash{}))
 	copy(ib, h[:])
 	return types.NewTuple(f, types.Uint(c.Height()), types.InlineBlob(ib))
+}
+
+func commitToFbKeyTuple(c *Commit, p pool.BuffPool) val.Tuple {
+	tb := val.NewTupleBuilder(commitKeyTupleDesc)
+	tb.PutUint64(0, c.Height())
+	h := c.Addr()
+	tb.PutByteString(1, h[:])
+	return tb.Build(p)
 }
 
 func firstError(l, r error) error {
@@ -857,33 +882,13 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 			return nil, fmt.Errorf("internal error or data loss: dangling commit parent closure for addr %s or commit %s", addr.String(), c.Addr().String())
 		}
 		node := tree.NodeFromBytes(v.(types.TupleRowStorage))
-		keyDesc := val.NewTupleDescriptor(
-			val.Type{Enc: val.Uint64Enc, Nullable: false},
-			val.Type{Enc: val.ByteStringEnc, Nullable: false},
-		)
-		valDesc := val.NewTupleDescriptor()
 		ns := tree.NewNodeStore(hackVRToCS(vr))
-		m := prolly.NewMap(node, ns, keyDesc, valDesc)
-		tuples := make([]val.Tuple, m.Count())
-		mi, err := m.IterAll(ctx)
+		m := prolly.NewMap(node, ns, commitKeyTupleDesc, commitValueTupleDesc)
+		mi, err := m.IterAllReverse(ctx)
 		if err != nil {
 			return nil, err
 		}
-		i := 0
-		for {
-			k, _, err := mi.Next(ctx)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			tuples[i] = k
-			i += 1
-		}
-		return &fbParentsClosureIterator{
-			tuples, len(tuples) - 1,
-		}, nil
+		return &fbParentsClosureIterator{mi: mi, curr: commitToFbKeyTuple(c, ns.Pool()), err: nil}, nil
 	}
 
 	s, ok := sv.(types.Struct)

@@ -183,7 +183,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		}
 		from.skipToNodeStart()
 	} else {
-		from.invalidate()
+		from.invalidateAtEnd()
 	}
 
 	if to.parent.Valid() {
@@ -192,7 +192,7 @@ func skipCommonParents(ctx context.Context, from, to *Cursor) (err error) {
 		}
 		to.skipToNodeStart()
 	} else {
-		to.invalidate()
+		to.invalidateAtEnd()
 	}
 
 	return
