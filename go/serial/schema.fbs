@@ -28,8 +28,14 @@ table Column {
   // column name
   name:string (required);
 
-  // full sql column definition
-  definition:string (required);
+  // sql column type
+  sql_type:string (required);
+
+  // sql default value
+  default_value:string;
+
+  // sql comment
+  comment:string;
 
   // sql display order
   display_order:int16;
@@ -65,3 +71,8 @@ table Index {
   unique:bool;
   system_defined:bool;
 }
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DSCH";
+
+root_type TableSchema;
