@@ -28,17 +28,17 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type ArtifactType string
+type ArtifactType uint8
 
 const (
 	// ArtifactTypeConflict is the type for conflicts.
-	ArtifactTypeConflict ArtifactType = "conflict"
+	ArtifactTypeConflict ArtifactType = iota
 	// ArtifactTypeForeignKeyViol is the type for foreign key violations.
-	ArtifactTypeForeignKeyViol = "fk_viol"
+	ArtifactTypeForeignKeyViol
 	// ArtifactTypeUniqueKeyViol is the type for unique key violations.
-	ArtifactTypeUniqueKeyViol = "unique_viol"
+	ArtifactTypeUniqueKeyViol
 	// ArtifactTypeChkConsViol is the type for check constraint violations.
-	ArtifactTypeChkConsViol = "chk_viol"
+	ArtifactTypeChkConsViol
 )
 
 type ArtifactMap struct {
@@ -357,7 +357,7 @@ func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
 
 	srcKey := itr.getSrcKeyFromArtKey(artKey)
 	cmHash, _ := itr.artKD.GetAddress(itr.numPks, artKey)
-	artType, _ := itr.artKD.GetString(itr.numPks+1, artKey)
+	artType, _ := itr.artKD.GetUint8(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
 	return Artifact{
@@ -400,7 +400,7 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	keyTypes = append(keyTypes, val.Type{Enc: val.AddressEnc, Nullable: false})
 
 	// artifact type
-	keyTypes = append(keyTypes, val.Type{Enc: val.StringEnc, Nullable: false})
+	keyTypes = append(keyTypes, val.Type{Enc: val.Uint8Enc, Nullable: false})
 
 	// json blob data
 	valTypes := []val.Type{{Enc: val.JSONEnc, Nullable: false}}

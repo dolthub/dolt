@@ -386,7 +386,7 @@ func (p *conflictProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple
 		p.keyBD.PutRaw(i, key.GetField(i))
 	}
 	p.keyBD.PutAddress(key.Count(), p.cmHash)
-	p.keyBD.PutString(key.Count()+1, string(prolly.ArtifactTypeConflict))
+	p.keyBD.PutUint8(key.Count()+1, uint8(prolly.ArtifactTypeConflict))
 	k = p.keyBD.Build(p.pool)
 
 	p.valBD.PutJSON(0, p.metadataJson)
