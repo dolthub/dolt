@@ -32,10 +32,10 @@ table Column {
   sql_type:string (required);
 
   // sql default value
-  default_value:string;
+  default_value:string; // todo(andy): required?
 
   // sql comment
-  comment:string;
+  comment:string; // todo(andy): required?
 
   // sql display order
   display_order:int16;
