@@ -362,7 +362,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 
 	// then the hash follows. It is the first column of the row and the second to last in the key
 	h := hash.Parse(r[0].(string))
-	cd.kB.PutHash160(cd.kd.Count()-2, h[:])
+	cd.kB.PutAddress(cd.kd.Count()-2, h[:])
 
 	// Finally the artifact type which is always a conflict
 	cd.kB.PutString(cd.kd.Count()-1, string(prolly.ArtifactTypeConflict))

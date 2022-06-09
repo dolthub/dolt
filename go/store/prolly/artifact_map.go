@@ -356,7 +356,7 @@ func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
 	}
 
 	srcKey := itr.getSrcKeyFromArtKey(artKey)
-	cmHash, _ := itr.artKD.GetHash160(itr.numPks, artKey)
+	cmHash, _ := itr.artKD.GetAddress(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetString(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
@@ -397,7 +397,7 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	keyTypes := srcKd.Types
 
 	// target branch commit hash
-	keyTypes = append(keyTypes, val.Type{Enc: val.Hash160Enc, Nullable: false})
+	keyTypes = append(keyTypes, val.Type{Enc: val.AddressEnc, Nullable: false})
 
 	// artifact type
 	keyTypes = append(keyTypes, val.Type{Enc: val.StringEnc, Nullable: false})

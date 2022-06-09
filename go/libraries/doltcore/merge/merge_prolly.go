@@ -385,7 +385,7 @@ func (p *conflictProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple
 	for i := 0; i < key.Count(); i++ {
 		p.keyBD.PutRaw(i, key.GetField(i))
 	}
-	p.keyBD.PutHash160(key.Count(), p.cmHash)
+	p.keyBD.PutAddress(key.Count(), p.cmHash)
 	p.keyBD.PutString(key.Count()+1, string(prolly.ArtifactTypeConflict))
 	k = p.keyBD.Build(p.pool)
 

@@ -387,8 +387,8 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-func (td TupleDesc) GetHash160(i int, tup Tuple) (v []byte, ok bool) {
-	td.expectEncoding(i, Hash160Enc)
+func (td TupleDesc) GetAddress(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, AddressEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
 		v = b
@@ -496,7 +496,7 @@ func formatValue(enc Encoding, value []byte) string {
 		return string(value)
 	case Hash128Enc:
 		return string(value)
-	case Hash160Enc:
+	case AddressEnc:
 		return string(value)
 	default:
 		return string(value)

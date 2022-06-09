@@ -35,7 +35,7 @@ enum Encoding : uint8 {
   Datetime = 18,
   Enum     = 19,
   Set      = 20,
-  Hash160  = 21,
+  Address  = 21,
 
   // variable width
   String   = 128,
