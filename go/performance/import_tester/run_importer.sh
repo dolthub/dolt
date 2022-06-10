@@ -38,7 +38,7 @@ time dolt table import -c --pk=pk current_version benchmark.csv
 
 # Run the current version of export
 echo "Running the current version of export"
-time dolt table export current_version export.csv
+time dolt table export -f current_version export.csv
 
 # Run the old version of dolt
 rm -rf .dolt
