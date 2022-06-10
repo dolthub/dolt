@@ -30,7 +30,7 @@ import (
 
 // CollectDBs takes a MultiRepoEnv and creates Database objects from each environment and returns a slice of these
 // objects.
-func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]sqle.SqlDatabase, error) {
+func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv, useBulkEditor bool) ([]sqle.SqlDatabase, error) {
 	var dbs []sqle.SqlDatabase
 	var db sqle.SqlDatabase
 
@@ -41,7 +41,7 @@ func CollectDBs(ctx context.Context, mrEnv *env.MultiRepoEnv) ([]sqle.SqlDatabas
 		}
 		dEnv.DoltDB.SetCommitHooks(ctx, postCommitHooks)
 
-		db = newDatabase(name, dEnv)
+		db = newDatabase(name, dEnv, useBulkEditor)
 
 		if _, remote, ok := sql.SystemVariables.GetGlobal(sqle.ReadReplicaRemoteKey); ok && remote != "" {
 			remoteName, ok := remote.(string)
@@ -84,9 +84,13 @@ func GetCommitHooks(ctx context.Context, dEnv *env.DoltEnv) ([]doltdb.CommitHook
 	return postCommitHooks, nil
 }
 
-func newDatabase(name string, dEnv *env.DoltEnv) sqle.Database {
+func newDatabase(name string, dEnv *env.DoltEnv, useBulkEditor bool) sqle.Database {
+	deaf := dEnv.DbEaFactory()
+	if useBulkEditor {
+		deaf = dEnv.BulkDbEaFactory()
+	}
 	opts := editor.Options{
-		Deaf:    dEnv.DbEaFactory(),
+		Deaf:    deaf,
 		Tempdir: dEnv.TempTableFilesDir(),
 	}
 	return sqle.NewDatabase(name, dEnv.DbData(), opts)

@@ -377,17 +377,11 @@ func execShell(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
+	config := &engine.SqlEngineConfig{Format: format, InitialDb: initialDb, IsReadOnly: false, ServerUser: "root", Autocommit: true}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		format,
-		initialDb,
-		false,
-		"",
-		"",
-		"root",
-		"",
-		true,
+		config,
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -409,17 +403,11 @@ func execBatch(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
+	config := &engine.SqlEngineConfig{Format: format, InitialDb: initialDb, IsReadOnly: false, ServerUser: "root", Autocommit: true}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		format,
-		initialDb,
-		false,
-		"",
-		"",
-		"root",
-		"",
-		false,
+		config,
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -458,17 +446,11 @@ func execMultiStatements(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
+	config := &engine.SqlEngineConfig{Format: format, InitialDb: initialDb, IsReadOnly: false, ServerUser: "root", Autocommit: true}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		format,
-		initialDb,
-		false,
-		"",
-		"",
-		"root",
-		"",
-		true,
+		config,
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
@@ -494,17 +476,11 @@ func execQuery(
 	format engine.PrintResultFormat,
 	initialDb string,
 ) errhand.VerboseError {
+	config := &engine.SqlEngineConfig{Format: format, InitialDb: initialDb, IsReadOnly: false, ServerUser: "root", Autocommit: true}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
-		format,
-		initialDb,
-		false,
-		"",
-		"",
-		"root",
-		"",
-		true,
+		config,
 	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)

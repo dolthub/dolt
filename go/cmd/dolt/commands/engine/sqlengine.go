@@ -39,6 +39,19 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
+// SqlEngineConfig contains the various options that modify the nature of the sqlEngine such as autocommit and read only
+type SqlEngineConfig struct {
+	Format          PrintResultFormat
+	InitialDb       string
+	IsReadOnly      bool
+	MysqlDbFilePath string
+	PrivFilePath    string
+	ServerUser      string
+	ServerPass      string
+	Autocommit      bool
+	Bulk            bool
+}
+
 // SqlEngine packages up the context necessary to run sql queries against dsqle.
 type SqlEngine struct {
 	dbs            map[string]dsqle.SqlDatabase
@@ -52,18 +65,12 @@ type SqlEngine struct {
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
-	format PrintResultFormat,
-	initialDb string,
-	isReadOnly bool,
-	mysqlDbFilePath string,
-	privFilePath string,
-	serverUser string,
-	serverPass string,
-	autocommit bool) (*SqlEngine, error) {
+	config *SqlEngineConfig,
+) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
 
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +88,7 @@ func NewSqlEngine(
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
 	// Set mysql.db file path from server
-	mysql_file_handler.SetMySQLDbFilePath(mysqlDbFilePath)
+	mysql_file_handler.SetMySQLDbFilePath(config.MysqlDbFilePath)
 
 	// Load in MySQL Db from file, if it exists
 	data, err := mysql_file_handler.LoadData()
@@ -95,8 +102,8 @@ func NewSqlEngine(
 	var tempUsers []gms.TemporaryUser
 	if len(data) == 0 {
 		// Set privilege file path from server
-		if privFilePath != "" {
-			mysql_file_handler.SetPrivilegeFilePath(privFilePath)
+		if config.PrivFilePath != "" {
+			mysql_file_handler.SetPrivilegeFilePath(config.PrivFilePath)
 		}
 
 		// Load privileges from privilege file
@@ -106,16 +113,16 @@ func NewSqlEngine(
 		}
 
 		// Create temporary users if no privileges in config
-		if len(users) == 0 && len(serverUser) > 0 {
+		if len(users) == 0 && len(config.ServerUser) > 0 {
 			tempUsers = append(tempUsers, gms.TemporaryUser{
-				Username: serverUser,
-				Password: serverPass,
+				Username: config.ServerUser,
+				Password: config.ServerPass,
 			})
 		}
 	}
 
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
@@ -160,17 +167,17 @@ func NewSqlEngine(
 	}
 
 	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
 	if err != nil {
 		return nil, err
 	}
 
 	return &SqlEngine{
 		dbs:            nameToDB,
-		contextFactory: newSqlContext(sess, initialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), autocommit),
+		contextFactory: newSqlContext(sess, config.InitialDb),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
 		engine:         engine,
-		resultFormat:   format,
+		resultFormat:   config.Format,
 	}, nil
 }
 
