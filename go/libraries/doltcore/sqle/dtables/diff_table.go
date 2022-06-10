@@ -78,7 +78,7 @@ type DiffTable struct {
 
 var PrimaryKeyChangeWarning = "cannot render full diff between commits %s and %s due to primary key set change"
 
-const PrimaryKeyChangeWarningCode int = 1105 // Since this our own custom warning we'll use 1105, the code for an unknown error
+const PrimaryKeyChangeWarningCode int = 1105 // Since this is our own custom warning we'll use 1105, the code for an unknown error
 
 func NewDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue, head *doltdb.Commit) (sql.Table, error) {
 	diffTblName := doltdb.DoltDiffTablePrefix + tblName
@@ -531,12 +531,6 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromTargetSch, toT
 			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
 			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 		toTargetSch = schema.MustSchemaFromCols(colCollection)
-
-		colCollection = fromTargetSch.GetAllCols()
-		colCollection = colCollection.Append(
-			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
-			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
-		fromTargetSch = schema.MustSchemaFromCols(colCollection)
 
 		j, err = rowconv.NewJoiner(
 			[]rowconv.NamedSchema{{Name: diff.To, Sch: toTargetSch}, {Name: diff.From, Sch: fromTargetSch}},

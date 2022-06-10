@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
@@ -38,7 +37,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
@@ -387,6 +385,11 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *do
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
+	engine, err := newSqlEngine(ctx, dEnv)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
 	sort.Slice(tableDeltas, func(i, j int) bool {
 		return strings.Compare(tableDeltas[i].ToName, tableDeltas[j].ToName) < 0
 	})
@@ -431,7 +434,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *do
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			verr = diffRows(ctx, dEnv, td, dArgs, toRoot.VRW(), apr)
+			verr = diffRows(ctx, engine, td, dArgs, apr)
 		}
 
 		if verr != nil {
@@ -602,43 +605,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return nil
 }
 
-func dumbDownSchema(in schema.Schema) (schema.Schema, error) {
-	allCols := in.GetAllCols()
-
-	dumbCols := make([]schema.Column, 0, allCols.Size())
-	err := allCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		col.Name = strconv.FormatUint(tag, 10)
-		col.Constraints = nil
-		col.Default = ""
-		dumbCols = append(dumbCols, col)
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, err
-	}
-
-	dumbColColl := schema.NewColCollection(dumbCols...)
-
-	return schema.SchemaFromCols(dumbColColl)
-}
-
-func toNamer(name string) string {
-	return diff.To + "_" + name
-}
-
-func fromNamer(name string) string {
-	return diff.From + "_" + name
-}
-
-func diffRows(ctx context.Context, dEnv *env.DoltEnv, td diff.TableDelta, dArgs *diffArgs, vrw types.ValueReadWriter, apr *argparser.ArgParseResults) errhand.VerboseError {
-
-	engine, err := newSqlEngine(ctx, dEnv)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
+func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs, apr *argparser.ArgParseResults) errhand.VerboseError {
 	from, to := "HEAD", "WORKING"
 	if apr.Contains(CachedFlag) {
 		to = "STAGED"
@@ -653,7 +620,8 @@ func diffRows(ctx context.Context, dEnv *env.DoltEnv, td diff.TableDelta, dArgs 
 
 	// TODO: need to do anything different for different added / dropped tables?
 	// TODO: where clause
-	query := fmt.Sprintf("select * from dolt_diff(%s, '%s', '%s')", td.ToName, from, to)
+	columns := getColumnNamesString(td.ToSch)
+	query := fmt.Sprintf("select %s, %s from dolt_diff(%s, '%s', '%s')", columns, "diff_type", td.ToName, from, to)
 	sqlCtx, err := engine.NewContext(ctx)
 	if err != nil {
 		return nil
@@ -689,12 +657,14 @@ func diffRows(ctx context.Context, dEnv *env.DoltEnv, td diff.TableDelta, dArgs 
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	splitter, err := diffSplitter(sch)
+	doltSch, err := sqlutil.ToDoltResultSchema(sch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	p := newDiffPrintingPipeline(dArgs, diffSrc, sink, splitter, td.ToSch, badRowCallback)
+	splitter := diff.NewDiffSplitter(splitDiff(td.ToSch, doltSch), doltSch)
+
+	p := newDiffPrintingPipeline(dArgs, diffSrc, sink, splitter.SplitDiffIntoOldAndNew, td.ToSch, badRowCallback)
 
 	if dArgs.diffOutput != SQLDiffOutput {
 		// TODO: fill this tagged strings
@@ -719,15 +689,70 @@ func diffRows(ctx context.Context, dEnv *env.DoltEnv, td diff.TableDelta, dArgs 
 	return nil
 }
 
-func diffSplitter(sch sql.Schema) (pipeline.TransformRowFunc, error) {
-	doltSch, err := sqlutil.ToDoltResultSchema(sch)
-	if err != nil {
-		return nil, err
-	}
+func getColumnNamesString(sch schema.Schema) string {
+	// TODO: do we need to consider from schema as well?
+	var cols []string
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		cols = append(cols, "from_" + col.Name)
+		return false, nil
+	})
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		cols = append(cols, "to_" + col.Name)
+		return false, nil
+	})
+	return strings.Join(cols, ",")
+}
 
-	return func(inRow row.Row, _ pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
-		return nil, ""
-	}, nil
+func splitDiff(tableSchema schema.Schema, resultSetSchema schema.Schema) diff.RowSplitter {
+	return func(r row.Row) ([]row.Row, error) {
+		var oldRow, newRow row.Row
+
+		// split rows in the result set into old, new
+		diffTypeCol, _ := resultSetSchema.GetAllCols().GetByName("diff_type")
+		diffType, ok := r.GetColVal(diffTypeCol.Tag)
+		if !ok {
+			return nil, fmt.Errorf("no value for column %s", "diff_type")
+		}
+
+		diffTypeStr := diffType.(types.String)
+		if diffTypeStr == "added" || diffTypeStr == "modified" {
+			taggedVals := make(row.TaggedValues)
+			resultSetSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				if int(tag) >= tableSchema.GetAllCols().Size() {
+					return true, nil
+				}
+
+				taggedVals[tag], _ = r.GetColVal(tag)
+				return false, nil
+			})
+
+			var err error
+			oldRow, err = row.New(types.Format_Default, tableSchema, taggedVals)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if diffTypeStr == "removed" || diffTypeStr == "modified" {
+			taggedVals := make(row.TaggedValues)
+			resultSetSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+				if int(tag) < tableSchema.GetAllCols().Size() {
+					return true, nil
+				}
+
+				taggedVals[tag - (uint64(tableSchema.GetAllCols().Size()))], _ = r.GetColVal(tag)
+				return false, nil
+			})
+
+			var err error
+			oldRow, err = row.New(types.Format_Default, tableSchema, taggedVals)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return []row.Row{oldRow, newRow}, nil
+	}
 }
 
 func diffSource(ctx *sql.Context, vrw types.ValueReadWriter, sch sql.Schema, iter sql.RowIter) (pipeline.SourceFunc, error) {
@@ -780,78 +805,6 @@ func newDiffPrintingPipeline(
 
 	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
 	return pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src), sinkProcFunc, transforms, badRowCB)
-}
-
-func mapTagToColName(sch, untypedUnionSch schema.Schema) (map[uint64]string, errhand.VerboseError) {
-	tagToCol := make(map[uint64]string)
-	allCols := sch.GetAllCols()
-	err := untypedUnionSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		col, ok := allCols.GetByTag(tag)
-
-		if ok {
-			tagToCol[tag] = col.Name
-		} else {
-			tagToCol[tag] = ""
-		}
-
-		return false, nil
-	})
-
-	if err != nil {
-		return nil, errhand.BuildDError("error: failed to map columns to tags").Build()
-	}
-
-	return tagToCol, nil
-}
-
-func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.Joiner, dArgs *diffArgs) (schema.Schema, *diff.Splitter, errhand.VerboseError) {
-
-	var unionSch schema.Schema
-	if dArgs.diffOutput == TabularDiffOutput {
-		dumbNewSch, err := dumbDownSchema(toSch)
-
-		if err != nil {
-			return nil, nil, errhand.BuildDError("").AddCause(err).Build()
-		}
-
-		dumbOldSch, err := dumbDownSchema(fromSch)
-
-		if err != nil {
-			return nil, nil, errhand.BuildDError("").AddCause(err).Build()
-		}
-
-		unionSch, err = untyped.UntypedSchemaUnion(dumbNewSch, dumbOldSch)
-		if err != nil {
-			return nil, nil, errhand.BuildDError("Merge failed. Tables with different primary keys cannot be merged.").AddCause(err).Build()
-		}
-	} else {
-		unionSch = toSch
-	}
-
-	newToUnionConv := rowconv.IdentityConverter
-	if toSch != nil {
-		newToUnionMapping, err := rowconv.TagMapping(toSch, unionSch)
-
-		if err != nil {
-			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
-		}
-
-		newToUnionConv, _ = rowconv.NewRowConverter(ctx, vrw, newToUnionMapping)
-	}
-
-	oldToUnionConv := rowconv.IdentityConverter
-	if fromSch != nil {
-		oldToUnionMapping, err := rowconv.TagMapping(fromSch, unionSch)
-
-		if err != nil {
-			return nil, nil, errhand.BuildDError("Error creating unioned mapping").AddCause(err).Build()
-		}
-
-		oldToUnionConv, _ = rowconv.NewRowConverter(ctx, vrw, oldToUnionMapping)
-	}
-
-	ds := diff.NewDiffSplitter(joiner, oldToUnionConv, newToUnionConv)
-	return unionSch, ds, nil
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
