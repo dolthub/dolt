@@ -51,7 +51,14 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 		return true, nil
 	})
 
-	config := &engine.SqlEngineConfig{Format: engine.FormatCsv, InitialDb: dbName, IsReadOnly: false, ServerUser: "root", Autocommit: false}
+	config := &engine.SqlEngineConfig{
+		InitialDb:    dbName,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,

@@ -165,10 +165,16 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	config := &engine.SqlEngineConfig{Format: engine.FormatTabular, IsReadOnly: isReadOnly, MysqlDbFilePath: serverConfig.MySQLDbFilePath(),
-		PrivFilePath: serverConfig.PrivilegeFilePath(), ServerUser: serverConfig.User(), ServerPass: serverConfig.Password(), Autocommit: serverConfig.AutoCommit()}
-
 	// Create SQL Engine with users
+	config := &engine.SqlEngineConfig{
+		Format:       engine.FormatTabular,
+		InitialDb:    "",
+		IsReadOnly:   isReadOnly,
+		PrivFilePath: serverConfig.PrivilegeFilePath(),
+		ServerUser:   serverConfig.User(),
+		ServerPass:   serverConfig.Password(),
+		Autocommit:   serverConfig.AutoCommit(),
+	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
