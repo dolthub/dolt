@@ -44,7 +44,7 @@ RUN apt update -y && \
         postgresql-contrib \
         libpq-dev \
         nodejs \
-        asdf \
+        esl-erlang \
         elixir \
         postgresql-server-dev-all && \
     update-ca-certificates -f
