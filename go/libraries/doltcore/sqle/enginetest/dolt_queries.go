@@ -169,10 +169,10 @@ var DoltScripts = []queries.ScriptTest{
 				Expected: []sql.Row{
 					{"t1", "CREATE TABLE `t1` (\n" +
 						"  `a` int NOT NULL,\n" +
-						"  `b` varchar(10) NOT NULL DEFAULT \"abc\",\n" +
+						"  `b` varchar(10) NOT NULL DEFAULT 'abc',\n" +
 						"  PRIMARY KEY (`a`),\n" +
 						"  KEY `t1b` (`b`),\n" +
-						"  CONSTRAINT `ck1` CHECK (`b` LIKE \"%abc%\")\n" +
+						"  CONSTRAINT `ck1` CHECK (`b` LIKE '%abc%')\n" +
 						") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"},
 				},
 			},
@@ -543,7 +543,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "explain select pk, c from dolt_history_t1 where pk = 3 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = \"someguy\"))"},
+					{" └─ Filter((dolt_history_t1.pk = 3) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"     └─ Projected table access on [pk c committer]"},
 					{"         └─ Exchange"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.pk] with ranges: [{[3, 3]}])"},
@@ -609,7 +609,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 				Query: "explain select pk, c from dolt_history_t1 where c = 10 and committer = 'someguy'",
 				Expected: []sql.Row{
 					{"Project(dolt_history_t1.pk, dolt_history_t1.c)"},
-					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = \"someguy\"))"},
+					{" └─ Filter((dolt_history_t1.c = 10) AND (dolt_history_t1.committer = 'someguy'))"},
 					{"     └─ Projected table access on [pk c committer]"},
 					{"         └─ Exchange"},
 					{"             └─ IndexedTableAccess(dolt_history_t1 on [dolt_history_t1.c] with ranges: [{[10, 10]}])"}},
