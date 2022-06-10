@@ -1019,14 +1019,18 @@ func MergeRoots(ctx context.Context, ourCmHash hash.Hash, ourRoot, theirRoot, an
 		return nil, nil, err
 	}
 
-	if ourRoot.VRW().Format() == types.Format_DOLT_1 {
-		// TODO: constraint violations
-		return mergedRoot, tblToStats, nil
-	}
-
 	mergedRoot, _, err = AddConstraintViolations(ctx, mergedRoot, ancRoot, nil)
 	if err != nil {
 		return nil, nil, err
+	}
+
+	if ourRoot.VRW().Format() == types.Format_DOLT_1 {
+		err = calculateViolationStats(ctx, mergedRoot, tblToStats)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		return mergedRoot, tblToStats, nil
 	}
 
 	mergedRoot, err = mergeCVsWithStash(ctx, mergedRoot, violationStash)
@@ -1108,11 +1112,11 @@ func calculateViolationStats(ctx context.Context, root *doltdb.RootValue, tblToS
 			return err
 		}
 		if ok {
-			cvMap, err := tbl.GetConstraintViolations(ctx)
+			n, err := tbl.NumConstraintViolations(ctx)
 			if err != nil {
 				return err
 			}
-			stats.ConstraintViolations = int(cvMap.Len())
+			stats.ConstraintViolations = int(n)
 		}
 	}
 	return nil

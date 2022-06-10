@@ -764,12 +764,12 @@ func (root *RootValue) TablesWithConstraintViolations(ctx context.Context) ([]st
 			return nil, err
 		}
 
-		cv, err := tbl.GetConstraintViolations(ctx)
+		n, err := tbl.NumConstraintViolations(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		if cv.Len() > 0 {
+		if n > 0 {
 			violating = append(violating, name)
 		}
 	}

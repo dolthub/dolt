@@ -101,8 +101,7 @@ func mergeTableData(
 	if can, err := isNewConflictsCompatible(ctx, tbl, ancSchema, rootSchema, mergeSchema); err != nil {
 		return nil, nil, err
 	} else if can {
-		kd, vd := artM.Descriptors()
-		p, err = newInsertingProcessor(artM.Pool(), kd, vd, cmHash, ancTblHash, mergeTblHash)
+		p, err = newInsertingProcessor(cmHash, ancTblHash, mergeTblHash)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -395,11 +394,9 @@ type conflictProcessor interface {
 type insertingProcessor struct {
 	cmHash       []byte
 	metadataJson []byte
-	keyBD, valBD *val.TupleBuilder
-	pool         pool.BuffPool
 }
 
-func newInsertingProcessor(pool pool.BuffPool, artKD, artVD val.TupleDesc, cmHash, baseTblHash, theirTblHash hash.Hash) (*insertingProcessor, error) {
+func newInsertingProcessor(cmHash, baseTblHash, theirTblHash hash.Hash) (*insertingProcessor, error) {
 	h := make([]byte, 20)
 	copy(h, cmHash[:])
 	m := prolly.ConflictMetadata{
@@ -415,9 +412,6 @@ func newInsertingProcessor(pool pool.BuffPool, artKD, artVD val.TupleDesc, cmHas
 	p := insertingProcessor{
 		cmHash:       h,
 		metadataJson: data,
-		keyBD:        val.NewTupleBuilder(artKD),
-		valBD:        val.NewTupleBuilder(artVD),
-		pool:         pool,
 	}
 	return &p, nil
 }
@@ -431,11 +425,7 @@ OUTER:
 				break OUTER
 			}
 			stats.Conflicts++
-			k, v, err := p.buildConflictArtifact(conflict.key)
-			if err != nil {
-				return err
-			}
-			err = artEditor.Add(ctx, k, v)
+			err := artEditor.Add(ctx, conflict.key, p.cmHash, prolly.ArtifactTypeConflict, p.metadataJson)
 			if err != nil {
 				return err
 			}
@@ -445,20 +435,6 @@ OUTER:
 	}
 
 	return nil
-}
-
-func (p *insertingProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple, err error) {
-	for i := 0; i < key.Count(); i++ {
-		p.keyBD.PutRaw(i, key.GetField(i))
-	}
-	p.keyBD.PutAddress(key.Count(), p.cmHash)
-	p.keyBD.PutUint8(key.Count()+1, uint8(prolly.ArtifactTypeConflict))
-	k = p.keyBD.Build(p.pool)
-
-	p.valBD.PutJSON(0, p.metadataJson)
-	v = p.valBD.Build(p.pool)
-
-	return
 }
 
 type abortingProcessor struct{}

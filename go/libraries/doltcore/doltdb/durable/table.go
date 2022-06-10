@@ -524,10 +524,6 @@ func (t nomsTable) ClearConflicts(ctx context.Context) (Table, error) {
 
 // GetConstraintViolations implements Table.
 func (t nomsTable) GetConstraintViolations(ctx context.Context) (types.Map, error) {
-	if t.Format() == types.Format_DOLT_1 {
-		panic("should use artifacts")
-	}
-
 	constraintViolationsRefVal, ok, err := t.tableStruct.MaybeGet(constraintViolationsKey)
 	if err != nil {
 		return types.EmptyMap, err
@@ -545,10 +541,6 @@ func (t nomsTable) GetConstraintViolations(ctx context.Context) (types.Map, erro
 
 // SetConstraintViolations implements Table.
 func (t nomsTable) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (Table, error) {
-	if t.Format() == types.Format_DOLT_1 {
-		panic("should use artifacts")
-	}
-
 	// We can't just call violationsMap.Empty() as we can't guarantee that the caller passed in an instantiated map
 	if violationsMap == types.EmptyMap || violationsMap.Len() == 0 {
 		updatedStruct, err := t.tableStruct.Delete(constraintViolationsKey)

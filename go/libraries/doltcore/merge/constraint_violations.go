@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -41,10 +42,10 @@ type constraintViolationsLoadedTable struct {
 	TableName   string
 	Table       *doltdb.Table
 	Schema      schema.Schema
-	RowData     types.Map
+	RowData     durable.Index
 	Index       schema.Index
 	IndexSchema schema.Schema
-	IndexData   types.Map
+	IndexData   durable.Index
 }
 
 // cvType is an enum for a constraint violation type.
@@ -93,11 +94,11 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				return nil, nil, err
 			}
 			// Parent does not exist in the ancestor so we use an empty map
-			emptyMap, err := types.NewMap(ctx, postParent.Table.ValueReadWriter())
+			emptyIdx, err := durable.NewEmptyIndex(ctx, postParent.Table.ValueReadWriter(), postParent.Schema)
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyMap)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -116,11 +117,11 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			}
 			innerFoundViolations := false
 			// Child does not exist in the ancestor so we use an empty map
-			emptyMap, err := types.NewMap(ctx, postChild.Table.ValueReadWriter())
+			emptyIdx, err := durable.NewEmptyIndex(ctx, postChild.Table.ValueReadWriter(), postChild.Schema)
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyMap)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -152,8 +153,51 @@ func parentFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSch schema.Schema,
-	preParentRowData types.Map,
+	preParentRowData durable.Index,
 ) (*doltdb.Table, bool, error) {
+	jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if preParentRowData.Format() == types.Format_DOLT_1 {
+		m := durable.ProllyMapFromIndex(preParentRowData)
+		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, jsonData)
+	}
+	m := durable.NomsMapFromIndex(preParentRowData)
+	return nomsParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParentSch, m, jsonData)
+}
+
+// childFkConstraintViolations handles processing the reference options on a child, or creating a violation if
+// necessary.
+func childFkConstraintViolations(
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preChildSch schema.Schema,
+	preChildRowData durable.Index) (*doltdb.Table, bool, error) {
+	jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if preChildRowData.Format() == types.Format_DOLT_1 {
+		m := durable.ProllyMapFromIndex(preChildRowData)
+		return prollyChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, jsonData)
+	}
+
+	m := durable.NomsMapFromIndex(preChildRowData)
+	return nomsChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChildSch, m)
+}
+
+func nomsParentFkConstraintViolations(
+	ctx context.Context,
+	foreignKey doltdb.ForeignKey,
+	postParent, postChild *constraintViolationsLoadedTable,
+	preParentSch schema.Schema,
+	preParentRowData types.Map,
+	jsonData []byte) (*doltdb.Table, bool, error) {
+
 	foundViolations := false
 	postParentIndexTags := postParent.Index.IndexedColumnTags()
 	postChildIndexTags := postChild.Index.IndexedColumnTags()
@@ -163,9 +207,14 @@ func parentFkConstraintViolations(
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
+	vInfo, err := jsonDataToNomsValue(ctx, postParent.Table.ValueReadWriter(), jsonData)
+	if err != nil {
+		return nil, false, err
+	}
+
 	differ := diff.NewRowDiffer(ctx, preParentSch, postParent.Schema, 1024)
 	defer differ.Close()
-	differ.Start(ctx, preParentRowData, postParent.RowData)
+	differ.Start(ctx, preParentRowData, durable.NomsMapFromIndex(postParent.RowData))
 	for {
 		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
 		if err != nil {
@@ -201,11 +250,13 @@ func parentFkConstraintViolations(
 			}
 
 			shouldContinue, err := func() (bool, error) {
-				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(postParent.IndexSchema, postParent.IndexData,
+				var mapIter table.TableReadCloser = noms.NewNomsRangeReader(
+					postParent.IndexSchema,
+					durable.NomsMapFromIndex(postParent.IndexData),
 					[]*noms.ReadRange{{Start: postParentIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postParentIndexPartialKey)}})
 				defer mapIter.Close(ctx)
 				if _, err := mapIter.ReadRow(ctx); err == nil {
-					// If the parent has more rows that satisfy the partial key then we choose to do nothing
+					// If the parent table has other rows that satisfy the partial key then we choose to do nothing
 					return true, nil
 				} else if err != io.EOF {
 					return false, err
@@ -230,7 +281,7 @@ func parentFkConstraintViolations(
 			if err != nil {
 				return nil, false, err
 			}
-			changeViolates, err := parentFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, postChildIndexPartialKey, postChildCVMapEditor)
+			changeViolates, err := nomsParentFkConstraintViolationsProcess(ctx, foreignKey, postChild, postChildIndexPartialKey, postChildCVMapEditor, vInfo)
 			if err != nil {
 				return nil, false, err
 			}
@@ -253,17 +304,21 @@ func parentFkConstraintViolations(
 	return updatedTbl, foundViolations, err
 }
 
-// parentFkConstraintViolationsProcess handles processing the reference options on a child, or creating a violation if
-// necessary.
-func parentFkConstraintViolationsProcess(
+func nomsParentFkConstraintViolationsProcess(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
-	postParent, postChild *constraintViolationsLoadedTable,
+	postChild *constraintViolationsLoadedTable,
 	postChildIndexPartialKey types.Tuple,
 	postChildCVMapEditor *types.MapEditor,
+	vInfo types.JSON,
 ) (bool, error) {
+	indexData := durable.NomsMapFromIndex(postChild.IndexData)
+	rowData := durable.NomsMapFromIndex(postChild.RowData)
+
 	foundViolation := false
-	mapIter := noms.NewNomsRangeReader(postChild.IndexSchema, postChild.IndexData,
+	mapIter := noms.NewNomsRangeReader(
+		postChild.IndexSchema,
+		indexData,
 		[]*noms.ReadRange{{Start: postChildIndexPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(postChildIndexPartialKey)}})
 	defer mapIter.Close(ctx)
 	var postChildIndexRow row.Row
@@ -277,17 +332,14 @@ func parentFkConstraintViolationsProcess(
 		if err != nil {
 			return false, err
 		}
-		postChildRowVal, ok, err := postChild.RowData.MaybeGetTuple(ctx, postChildRowKey)
+		postChildRowVal, ok, err := rowData.MaybeGetTuple(ctx, postChildRowKey)
 		if err != nil {
 			return false, err
 		}
 		if !ok {
 			return false, fmt.Errorf("index %s on %s contains data that table does not", foreignKey.TableIndex, foreignKey.TableName)
 		}
-		vInfo, err := foreignKeyCVJson(ctx, foreignKey, postChild.Table.ValueReadWriter(), postChild.Schema, postParent.Schema)
-		if err != nil {
-			return false, err
-		}
+
 		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, postChildRowKey, postChildRowVal)
 		if err != nil {
 			return false, err
@@ -301,8 +353,8 @@ func parentFkConstraintViolationsProcess(
 	return foundViolation, nil
 }
 
-// childFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
-func childFkConstraintViolations(
+// nomsChildFkConstraintViolations processes foreign key constraint violations for the child in a foreign key.
+func nomsChildFkConstraintViolations(
 	ctx context.Context,
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
@@ -318,9 +370,18 @@ func childFkConstraintViolations(
 	}
 	postChildCVMapEditor := postChildCVMap.Edit()
 
+	jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
+	if err != nil {
+		return nil, false, err
+	}
+	vInfo, err := jsonDataToNomsValue(ctx, postChild.Table.ValueReadWriter(), jsonData)
+	if err != nil {
+		return nil, false, err
+	}
+
 	differ := diff.NewRowDiffer(ctx, preChildSch, postChild.Schema, 1024)
 	defer differ.Close()
-	differ.Start(ctx, preChildRowData, postChild.RowData)
+	differ.Start(ctx, preChildRowData, durable.NomsMapFromIndex(postChild.RowData))
 	for {
 		diffSlice, hasMore, err := differ.GetDiffs(1, 10*time.Second)
 		if err != nil {
@@ -365,7 +426,7 @@ func childFkConstraintViolations(
 			if err != nil {
 				return nil, false, err
 			}
-			diffViolates, err := childFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, rowDiff, parentPartialKey, postChildCVMapEditor)
+			diffViolates, err := childFkConstraintViolationsProcess(ctx, foreignKey, postParent, postChild, rowDiff, parentPartialKey, postChildCVMapEditor, vInfo)
 			if err != nil {
 				return nil, false, err
 			}
@@ -395,17 +456,16 @@ func childFkConstraintViolationsProcess(
 	rowDiff *diff2.Difference,
 	parentPartialKey types.Tuple,
 	postChildCVMapEditor *types.MapEditor,
+	vInfo types.JSON,
 ) (bool, error) {
-	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(postParent.IndexSchema, postParent.IndexData,
+	var mapIter table.TableReadCloser = noms.NewNomsRangeReader(
+		postParent.IndexSchema,
+		durable.NomsMapFromIndex(postParent.IndexData),
 		[]*noms.ReadRange{{Start: parentPartialKey, Inclusive: true, Reverse: false, Check: noms.InRangeCheckPartial(parentPartialKey)}})
 	defer mapIter.Close(ctx)
 	// If the row exists in the parent, then we don't need to do anything
 	if _, err := mapIter.ReadRow(ctx); err != nil {
 		if err != io.EOF {
-			return false, err
-		}
-		vInfo, err := foreignKeyCVJson(ctx, foreignKey, postChild.Table.ValueReadWriter(), postChild.Schema, postParent.Schema)
-		if err != nil {
 			return false, err
 		}
 		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
@@ -432,7 +492,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 	if err != nil {
 		return nil, false, err
 	}
-	rowData, err := tbl.GetNomsRowData(ctx)
+	rowData, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, false, err
 	}
@@ -445,7 +505,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 			RowData:   rowData,
 		}, false, nil
 	}
-	indexData, err := tbl.GetNomsIndexRowData(ctx, idx.Name())
+	indexData, err := tbl.GetIndexRowData(ctx, idx.Name())
 	if err != nil {
 		return nil, false, err
 	}
@@ -490,15 +550,15 @@ func toConstraintViolationRow(ctx context.Context, vType cvType, vInfo types.JSO
 	return constraintViolationKey, constraintViolationVal, nil
 }
 
-// foreignKeyCVJson converts a foreign key to a JSON document for use as the info field in a constraint violations map.
-func foreignKeyCVJson(ctx context.Context, foreignKey doltdb.ForeignKey, vrw types.ValueReadWriter, sch, refSch schema.Schema) (types.JSON, error) {
+// foreignKeyCVJson converts a foreign key to JSON data for use as the info field in a constraint violations map.
+func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) ([]byte, error) {
 	schCols := sch.GetAllCols()
 	refSchCols := refSch.GetAllCols()
 	fkCols := make([]string, len(foreignKey.TableColumns))
 	refFkCols := make([]string, len(foreignKey.ReferencedTableColumns))
 	for i, tag := range foreignKey.TableColumns {
 		if col, ok := schCols.TagToCol[tag]; !ok {
-			return types.JSON{}, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
+			return nil, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
 				foreignKey.Name, tag, foreignKey.TableName)
 		} else {
 			fkCols[i] = col.Name
@@ -506,7 +566,7 @@ func foreignKeyCVJson(ctx context.Context, foreignKey doltdb.ForeignKey, vrw typ
 	}
 	for i, tag := range foreignKey.ReferencedTableColumns {
 		if col, ok := refSchCols.TagToCol[tag]; !ok {
-			return types.JSON{}, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
+			return nil, fmt.Errorf("foreign key '%s' references tag '%d' on table '%s' but it cannot be found",
 				foreignKey.Name, tag, foreignKey.ReferencedTableName)
 		} else {
 			refFkCols[i] = col.Name
@@ -532,8 +592,12 @@ func foreignKeyCVJson(ctx context.Context, foreignKey doltdb.ForeignKey, vrw typ
 		foreignKey.OnUpdate.ReducedString(),
 		foreignKey.OnDelete.ReducedString())
 
+	return []byte(jsonStr), nil
+}
+
+func jsonDataToNomsValue(ctx context.Context, vrw types.ValueReadWriter, data []byte) (types.JSON, error) {
 	var doc interface{}
-	if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
+	if err := json.Unmarshal(data, &doc); err != nil {
 		return types.JSON{}, err
 	}
 	sqlDoc := sql.JSONDocument{Val: doc}

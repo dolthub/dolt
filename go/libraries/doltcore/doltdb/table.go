@@ -176,6 +176,24 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 	return cons.Count(), nil
 }
 
+// NumConstraintViolations returns the number of constraint violations for this table.
+func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		artIdx, err := t.table.GetArtifacts(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return artIdx.ConstraintViolationCount(ctx)
+	}
+
+	cvs, err := t.table.GetConstraintViolations(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return cvs.Len(), nil
+}
+
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 	if t.Format() == types.Format_DOLT_1 {
@@ -303,6 +321,12 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	}
 
 	colColl := schema.NewColCollection()
+
+	if t.Format() == types.Format_DOLT_1 {
+		// new format also includes the commit hash of the left branch's head
+		colColl = colColl.Append(schema.NewColumn("created_at_cm", 0, types.StringKind, false))
+	}
+
 	colColl = colColl.Append(typeCol)
 	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
 	colColl = colColl.Append(infoCol)
@@ -312,12 +336,18 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
 // whether the table has any violations.
 func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		panic("should use artifacts")
+	}
 	return t.table.GetConstraintViolations(ctx)
 }
 
 // SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
 // violations entry on the embedded struct is removed.
 func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		panic("should use artifacts")
+	}
 	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
 	if err != nil {
 		return nil, err
