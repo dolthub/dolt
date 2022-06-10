@@ -39,14 +39,10 @@ teardown() {
     teardown_common
 }
 
-@test "sql: dolt sql -q has mysql db and can create users" {
-    # there does not exist a mysql.db file
-    run ls
-    ! [[ "$output" =~ "mysql.db" ]] || false
-
+@test "sql: dolt sql -q without privilege file doesn't persist" {
     # mysql database exists and has privilege tables
     run dolt sql -q "show tables from mysql;"
-    [ "$status" -eq "0" ]
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "user" ]] || false
     [[ "$output" =~ "role_edges" ]] || false
 
@@ -55,21 +51,79 @@ teardown() {
     [[ "$output" =~ "root" ]] || false
     ! [[ "$output" =~ "new_user" ]] || false
 
-    # create a new user
+    # create a new user, fails
     run dolt sql -q "create user new_user;"
-    [ "$status" -eq "0" ]
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
 
-    # there should now be a mysql.db file
+    # there shouldn't be a mysql.db file
     run ls
-    [[ "$output" =~ "mysql.db" ]] || false
+    ! [[ "$output" =~ "privs.db" ]] || false
 
-    # show users, expect root and new_user
+    # show users, expect just root user
     run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # remove privs.db just in case
+    rm -f privs.db
+}
+
+@test "sql: dolt sql -q with privilege file persists" {
+    # mysql database exists and has privilege tables
+    run dolt sql --privilege-file=privs.db -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # create a new user, fails
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
     [[ "$output" =~ "root" ]] || false
     [[ "$output" =~ "new_user" ]] || false
 
-    # remove mysql.db just in case
-    rm -f mysql.db
+    # there should now be a mysql.db file
+    run ls
+    [[ "$output" =~ "privs.db" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove mysql.db
+    rm -f privs.db
+}
+
+@test "sql: dolt sql -q create database and specify privilege file" {
+    run dolt sql --privilege-file=privs.db -q "create database inner_db;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd inner_db
+
+    run dolt sql --privilege-file=../privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+    rm -f privs.db
 }
 
 @test "sql: errors do not write incomplete rows" {
