@@ -65,7 +65,6 @@ teardown() {
 }
 
 @test "merge: --abort restores working changes" {
-    skip_nbf_dolt_1
     dolt branch other
 
     dolt sql -q "INSERT INTO test1 VALUES (0,10,10),(1,11,11);"
@@ -171,7 +170,6 @@ teardown() {
 }
 
 @test "merge: dolt commit fails on table with conflict" {
-    skip_nbf_dolt_1
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -195,7 +193,6 @@ teardown() {
 }
 
 @test "merge: dolt commit fails with unmerged tables in working set" {
-    skip_nbf_dolt_1
     dolt checkout -b merge_branch
     dolt SQL -q "INSERT INTO test1 values (0,1,1)"
     dolt add test1
@@ -322,7 +319,6 @@ teardown() {
 }
 
 @test "merge: Add tables with same schema on two branches, merge" {
-    skip_nbf_dolt_1
     dolt branch other
     dolt sql <<SQL
 CREATE TABLE quiz (pk int PRIMARY KEY);

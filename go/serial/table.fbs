@@ -35,6 +35,9 @@ table Table {
 
   // address of a violations types.Map (for __DOLT_DEV__).
   violations:[ubyte];
+
+  // address of artifacts
+  artifacts:[ubyte];
 }
 
 table Conflicts {
