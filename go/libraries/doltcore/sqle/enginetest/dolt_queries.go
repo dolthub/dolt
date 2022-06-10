@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
@@ -229,6 +230,47 @@ var DoltScripts = []queries.ScriptTest{
 						"utf8mb4_0900_bin",
 						"utf8mb4_0900_bin",
 					},
+				},
+			},
+		},
+	},
+	{
+		Name: "Prepared ASOF",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c1 int)",
+			"insert into test values (0,0), (1,1);",
+			"set @Commit1 = dolt_commit('-am', 'creating table');",
+			"call dolt_branch('-c', 'main', 'newb')",
+			"alter table test add column c2 int;",
+			"set @Commit2 = dolt_commit('-am', 'alter table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from test as of 'HEAD~' where pk=?;",
+				Expected: []sql.Row{{0, 0}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of hashof('HEAD') where pk=?;",
+				Expected: []sql.Row{{1, 1, nil}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(1, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of @Commit1 where pk=?;",
+				Expected: []sql.Row{{0, 0}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of @Commit2 where pk=?;",
+				Expected: []sql.Row{{0, 0, nil}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
 				},
 			},
 		},
