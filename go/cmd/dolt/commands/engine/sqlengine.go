@@ -38,7 +38,15 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
 
-// SqlEngineConfig contains the various options that modify the nature of the sqlEngine such as autocommit and read only
+// SqlEngine packages up the context necessary to run sql queries against dsqle.
+type SqlEngine struct {
+	dbs            map[string]dsqle.SqlDatabase
+	contextFactory func(ctx context.Context) (*sql.Context, error)
+	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
+	engine         *gms.Engine
+	resultFormat   PrintResultFormat
+}
+
 type SqlEngineConfig struct {
 	Format       PrintResultFormat
 	InitialDb    string
@@ -48,15 +56,6 @@ type SqlEngineConfig struct {
 	ServerPass   string
 	Autocommit   bool
 	Bulk         bool
-}
-
-// SqlEngine packages up the context necessary to run sql queries against dsqle.
-type SqlEngine struct {
-	dbs            map[string]dsqle.SqlDatabase
-	contextFactory func(ctx context.Context) (*sql.Context, error)
-	dsessFactory   func(ctx context.Context, mysqlSess *sql.BaseSession, dbs []sql.Database) (*dsess.DoltSession, error)
-	engine         *gms.Engine
-	resultFormat   PrintResultFormat
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -103,6 +102,7 @@ func NewSqlEngine(
 
 	// Set up engine
 	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
