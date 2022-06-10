@@ -25,14 +25,6 @@ Lots of things! Dolt is a generally useful tool with countless
 applications. But if you want some ideas, [here's how people are using
 it so far](https://www.dolthub.com/blog/2021-03-09-dolt-use-cases-in-the-wild/).
 
-## How do I use it?
-
-Check out our [quick-start guide](docs/quickstart.md) to skip the docs
-and get started as fast as humanly possible! Or keep reading for a
-high level overview of how to use the command line tool.
-
-Having problems? Read the [FAQ](docs/faq.md) to find answers.
-
 # Dolt CLI
 
 The `dolt` CLI has the same commands as `git`, with some extras.
@@ -80,6 +72,16 @@ Valid commands for dolt are
 ```
 
 # Installation
+
+Dolt is a single ~68 megabyte program. 
+
+```bash
+dolt $ du -h /Users/timsehn//go/bin/dolt
+ 68M	/Users/timsehn/go/bin/dolt
+```
+
+It's really easy to install. Download it and put it on your `PATH`. 
+We have a bunch of ways to make this even easier for most platforms.
 
 ## From Latest Release
 
@@ -153,272 +155,628 @@ $ dolt config --global --add user.name "YOUR NAME"
 
 # Getting started
 
-Let's create our first repo, storing state population data.
+## Navigate to the directory where you would like your data stored
 
-```
-$ mkdir state-pops
-$ cd state-pops
-```
+Dolt needs a place to store your databases. I'm going to put my databases in `~/dolt`. 
 
-Run `dolt init` to set up a new `dolt` repo, just like you do with
-git. Then run some SQL queries to insert data.
-
-```
-$ dolt init
-Successfully initialized dolt data repository.
-$ dolt sql -q "create table state_populations ( state varchar(14), population int, primary key (state) )"
-$ dolt sql -q "show tables"
-+-------------------+
-| tables            |
-+-------------------+
-| state_populations |
-+-------------------+
-$ dolt sql -q "insert into state_populations (state, population) values
-('Delaware', 59096),
-('Maryland', 319728),
-('Tennessee', 35691),
-('Virginia', 691937),
-('Connecticut', 237946),
-('Massachusetts', 378787),
-('South Carolina', 249073),
-('New Hampshire', 141885),
-('Vermont', 85425),
-('Georgia', 82548),
-('Pennsylvania', 434373),
-('Kentucky', 73677),
-('New York', 340120),
-('New Jersey', 184139),
-('North Carolina', 393751),
-('Maine', 96540),
-('Rhode Island', 68825)"
-Query OK, 17 rows affected
+```bash
+% cd ~
+% mkdir dolt
+% cd dolt
 ```
 
-Use `dolt sql` to jump into a SQL shell, or run single queries with
-the `-q` option.
+Any databases you create will be stored in this directory. So, for this example, a directory named `getting_started` will be created here once you run `create database getting_started`. Navigating to `~/dolt/getting_started` will allow you to access this database using the Dolt command line.
 
-```
-$ dolt sql -q "select * from state_populations where state = 'New York'"
-+----------+------------+
-| state    | population |
-+----------+------------+
-| New York | 340120     |
-+----------+------------+
-```
+## Start a MySQL-compatible database server
 
-`add` the new tables and `commit` them. Every command matches `git`
-exactly, but with tables instead of files.
-
-```
-$ dolt add .
-$ dolt commit -m "initial data"
-$ dolt status
-On branch master
-nothing to commit, working tree clean
-```
-
-Update the tables with more SQL commands, this time using the shell:
-
-```
-$ dolt sql
-# Welcome to the DoltSQL shell.
-# Statements must be terminated with ';'.
-# "exit" or "quit" (or Ctrl-D) to exit.
-state_pops> update state_populations set population = 0 where state like 'New%';
-Query OK, 3 rows affected
-Rows matched: 3  Changed: 3  Warnings: 0
-state_pops> exit
-Bye
-```
-
-See what you changed with `dolt diff`:
-
-```
-$ dolt diff
-diff --dolt a/state_populations b/state_populations
---- a/state_populations @ qqr3vd0ea6264oddfk4nmte66cajlhfl
-+++ b/state_populations @ 17cinjh5jpimilefd57b4ifeetjcbvn2
-+-----+---------------+------------+
-|     | state         | population |
-+-----+---------------+------------+
-|  <  | New Hampshire | 141885     |
-|  >  | New Hampshire | 0          |
-|  <  | New Jersey    | 184139     |
-|  >  | New Jersey    | 0          |
-|  <  | New York      | 340120     |
-|  >  | New York      | 0          |
-+-----+---------------+------------+
-```
-
-Then commit your changes once more with `dolt add` and `dolt commit`.
-
-```
-$ dolt add state_populations
-$ dolt commit -m "More like Old Jersey"
-```
-
-See the history of your repository with `dolt log`.
-
-```
-% dolt log
-commit babgn65p1r5n36ao4gfdj99811qauo8j
-Author: Zach Musgrave <zach@dolthub.com>
-Date:   Wed Nov 11 13:42:27 -0800 2020
-
-    More like Old Jersey
-
-commit 9hgk7jb7hlkvvkbornpldcopqh2gn6jo
-Author: Zach Musgrave <zach@dolthub.com>
-Date:   Wed Nov 11 13:40:53 -0800 2020
-
-    initial data
-
-commit 8o8ldh58pjovn8uvqvdq2olf7dm63dj9
-Author: Zach Musgrave <zach@dolthub.com>
-Date:   Wed Nov 11 13:36:24 -0800 2020
-
-    Initialize data repository
-```
-
-# Importing data
-
-If you have data in flat files like CSV or JSON, you can import them
-using the `dolt table import` command. Use `dolt table import -u` to
-add data to an existing table, or `dolt table import -c` to create a
-new one.
-
-```
-$ head -n3 data.csv
-state,population
-Delaware,59096
-Maryland,319728
-$ dolt table import -c -pk=state state_populations data.csv
-```
-
-# Branch and merge
-
-Just like with git, it's a good idea to make changes on your own
-branch, then merge them back to `master`. The `dolt checkout` command
-works exactly the same as `git checkout`.
-
-```
-$ dolt checkout -b <branch>
-```
-
-The `merge` command works the same too.
-
-```
-$ dolt merge <branch>
-```
-
-# Working with remotes
-
-Dolt supports remotes just like git. Remotes are set up automatically
-when you clone data from one.
-
-```
-$ dolt clone dolthub/corona-virus
-...
-$ cd corona-virus
-$ dolt remote -v
-origin https://doltremoteapi.dolthub.com/dolthub/corona-virus
-```
-
-To push to a remote, you'll need credentials. Run `dolt login` to open
-a browser to sign in and cache your local credentials. You can sign
-into DoltHub with your Google account, your Github account, or with a
-user name and password.
-
-```
-$ dolt login
-```
-
-If you have a repo that you created locally that you now want to push
-to a remote, add a remote exactly like you would with git.
-
-```
-$ dolt remote add origin myname/myRepo
-$ dolt remote -v
-origin https://doltremoteapi.dolthub.com/myname/myRepo
-```
-
-And then push to it.
-
-```
-$ dolt push origin master
-```
-
-## Other remotes
-
-`dolt` also supports directory, aws, and gcs based remotes:
-
-- file - Use a directory on your machine
-
-```
-dolt remote add <remote> file:///Users/xyz/abs/path/
-```
-
-- aws - Use an S3 bucket
-
-```
-dolt remote add <remote> aws://dynamo-table:s3-bucket/database
-```
-
-- gs - Use a GCS bucket
-
-```
-dolt remote add <remote> gs://gcs-bucket/database
-```
-
-# Interesting datasets to clone
-
-[DoltHub](https://dolthub.com) has lots of interesting datasets to
-explore and clone. Here are some of our favorites.
-
-- Hospital Price Transparency: https://www.dolthub.com/repositories/dolthub/hospital-price-transparency
-- US Presidential Election Precinct Results: https://www.dolthub.com/repositories/dolthub/us-president-precinct-results
-- WordNet: https://www.dolthub.com/repositories/dolthub/word-net
-- ImageNet: https://www.dolthub.com/repositories/dolthub/image-net
-- Google Open Images: https://www.dolthub.com/repositories/dolthub/open-images
-- Iris Classification: https://www.dolthub.com/repositories/dolthub/classified-iris-measurements
-- Public Holidays: https://www.dolthub.com/repositories/oscarbatori/holidays
-- IP Address to Country: https://www.dolthub.com/repositories/dolthub/ip-to-country
-
-# Running A SQL Server
-
-Dolt comes built in with a SQL server that you can connect to with either the MySQL client, or your favorite MySQL-compatible tool.
-Simply run:
+Dolt ships with a MySQL compatible database server built in. To start it you use the command `dolt sql-server`. Running this command starts the server on port 3306. 
 
 ```bash
 dolt sql-server
+Starting server with Config HP="localhost:3306"|T="28800000"|R="false"|L="info"
 ```
 
-You connect with mysql using the default port 3306 as follows. The default username is "root", and the default password is
-"" (empty password)
+Your terminal will just hang there. This means the server is running. Any errors will be printed in this terminal. Just leave it there and open a new terminal.
+
+## Connect with any MySQL client
+
+In the new terminal, we will now connect to the running database server using a client. Dolt also ships with a MySQL compatible client. 
 
 ```bash
-mysql -h 127.0.0.1 -u root  --port 3306 -p
+% dolt sql-client
+# Welcome to the Dolt MySQL client.
+# Statements must be terminated with ';'.
+# "exit" or "quit" (or Ctrl-D) to exit.
+mysql>
 ```
 
-Checkout these portions of the documentation for more configuration options.
+In the other terminal where you ran `dolt sql-server`, you'll see the following log line.
 
-- [Starting a SQL
-  server](https://docs.dolthub.com/reference/cli#dolt-sql-server)
-- [Connecting to a server with an editor](https://docs.dolthub.com/reference/sql/supported/sql-editors)
+```
+2022-06-06T13:14:32-07:00 INFO [conn 1] NewConnection {DisableClientMultiStatements=false}
+```
 
-# More documentation
+You are connected!
 
-There's a lot more to Dolt than can fit in a README file! For full
-documentation, check out the [docs on
-DoltHub](https://docs.dolthub.com/). Some of the topics we didn't
-cover here:
+While we're here let's grab a copy of MySQL so we can connect with that client. Head over to the [MySQL Getting Started](https://dev.mysql.com/doc/mysql-getting-started/en/) documentation and install MySQL on your machine. I used [Homebrew](https://brew.sh/) to install MySQL on my Mac.
 
-- [Querying past revisions of your
-  tables](https://docs.dolthub.com/reference/sql/querying-history)
-- [Selecting the diff between two
-  commits](https://docs.dolthub.com/reference/sql/dolt-system-tables#dolt_diff_usdtablename)
-- [Documentation for all CLI
-  commands](https://docs.dolthub.com/reference/cli)
+MySQL comes with a MySQL server called `mysqld` and a MySQL client called `mysql`. You're only interested in the client. After following the instructions from MySQL's documentation, make sure you have a copy of the `mysql` client on your path:
+
+```bash
+% mysql --version
+mysql  Ver 8.0.29 for macos12.2 on x86_64 (Homebrew)
+```
+
+Now, to connect the `mysql` client to Dolt, you have to force the MySQL client through the TCP interface by passing in a host and port. The default is the socket interface which Dolt does not support. The MySQL client also requires you specify a user, in this case `root`.
+
+```bash
+% mysql --host 127.0.0.1 --port 3306 -uroot
+Welcome to the MySQL monitor.  Commands end with ; or \g.
+Your MySQL connection id is 2
+Server version: 5.7.9-Vitess 
+
+Copyright (c) 2000, 2022, Oracle and/or its affiliates.
+
+Oracle is a registered trademark of Oracle Corporation and/or its
+affiliates. Other names may be trademarks of their respective
+owners.
+
+Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
+
+mysql>
+```
+
+Again, to ensure the client actually connected, you should see the following in the `dolt sql-server` terminal 
+
+```
+2022-06-06T13:26:55-07:00 INFO [conn 2] NewConnection {DisableClientMultiStatements=false}
+```
+
+As you can see, Dolt supports any MySQL-compatible client. Dolt ships with a client but you can use any MySQL client, like the one that comes with MySQL.
+
+## Create a schema
+
+Now we're actually ready to do something interesting. I'll stay in the `mysql` client and execute the following SQL statements to create a database called `getting_started`. The `getting_started` database will have three tables: `employees`, `teams`, and `employees_teams`.
+
+```
+mysql> create database getting_started;
+Query OK, 1 row affected (0.04 sec)
+
+mysql> use getting_started;
+Database changed
+mysql> create table employees (
+    id int, 
+    last_name varchar(255), 
+    first_name varchar(255), 
+    primary key(id));
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> create table teams (
+    id int, 
+    team_name varchar(255), 
+    primary key(id)); 
+Query OK, 0 rows affected (0.00 sec)
+
+mysql> create table employees_teams(
+    team_id int, 
+    employee_id int, 
+    primary key(team_id, employee_id), 
+    foreign key (team_id) references teams(id), 
+    foreign key (employee_id) references employees(id));
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> show tables;
++---------------------------+
+| Tables_in_getting_started |
++---------------------------+
+| employees                 |
+| employees_teams           |
+| teams                     |
++---------------------------+
+3 rows in set (0.00 sec)
+```
+
+Dolt supports foreign keys, secondary indexes, triggers, check constraints, and stored procedures. It's a modern, feature-rich SQL database.
+
+## Make a Dolt commit
+
+It's time to use your first Dolt feature. We're going to make a Dolt [commit](https://docs.dolthub.com/concepts/dolt/commits). A Dolt commit allows you to time travel and see lineage. Make a Dolt commit whenever you want to restore or compare to this point in time.
+
+Dolt exposes version control functionality through a Git-style interface. On the command line, Dolt commands map exactly to their Git equivalent with the targets being tables instead of files. In SQL, Dolt exposes version control read operations as [system tables](https://docs.dolthub.com/sql-reference/version-control/dolt-system-tables) and version control write operations as [stored procedures](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures). 
+
+The naming of the system tables and stored procedures follows the `dolt_<command>` pattern. So `dolt add` on the CLI becomes `dolt_add` as a stored procedure. Passing options also follows the command line model. For instance, to specify tables to add, send the table names in as options to the `dolt_add` procedure. For named arguments like sending a message into the `dolt_commit` command use two arguments in sequence like `('-m', 'This is a message')`. If you know Git, the version control procedures and system tables should feel familiar.
+
+So, we add and commit our new schema like so.
+
+```
+mysql> call dolt_add('teams', 'employees', 'employees_teams');
++--------+
+| status |
++--------+
+|      0 |
++--------+
+1 row in set (0.03 sec)
+
+mysql> call dolt_commit('-m', 'Created initial schema');
++----------------------------------+
+| hash                             |
++----------------------------------+
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 |
++----------------------------------+
+1 row in set (0.02 sec)
+
+mysql> select * from dolt_log;
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+| commit_hash                      | committer | email           | date                    | message                    |
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema     |
+| vluuhvd0bn59598utedt77ed9q5okbcb | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:33:59.531 | Initialize data repository |
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+2 rows in set (0.01 sec)
+```
+
+There you have it. Your schema is created and you have a Dolt commit tracking the creation, as seen in the `dolt_log` system table.
+
+Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable,[`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
+
+## Insert some data
+
+Now, I'm going to populate the database with a few employees here at DoltHub. Then, I'll assign the employees to two teams: engineering and sales. The CEO wears many hats at a start up so he'll be assigned to multiple teams.
+
+```
+mysql> insert into employees values 
+    (0, 'Sehn', 'Tim'), 
+    (1, 'Hendriks', 'Brian'), 
+    (2, 'Son','Aaron'), 
+    (3, 'Fitzgerald', 'Brian');
+Query OK, 4 rows affected (0.01 sec)
+
+mysql> select * from employees where first_name='Brian';
++------+------------+------------+
+| id   | last_name  | first_name |
++------+------------+------------+
+|    1 | Hendriks   | Brian      |
+|    3 | Fitzgerald | Brian      |
++------+------------+------------+
+2 rows in set (0.00 sec)
+
+mysql> mysql> insert into teams values 
+    (0, 'Engineering'), 
+    (1, 'Sales');
+Query OK, 2 rows affected (0.00 sec)
+
+mysql> insert into employees_teams values 
+    (0,0), 
+    (1,0), 
+    (2,0), 
+    (0,1), 
+    (3,1);
+ERROR 1452 (HY000): cannot add or update a child row - Foreign key violation on fk: `rv9ek7ft`, table: `employees_teams`, referenced table: `teams`, key: `[2]`
+```
+
+Oops, I violated a constraint. It looks like I created the table with teams before employees. You should always specify your columns when you insert, not rely on natural ordering. Serves me right! Dolt comes with the full power of a modern SQL relational database to ensure data integrity.
+
+```
+mysql> insert into employees_teams(employee_id, team_id) values 
+    (0,0), 
+    (1,0), 
+    (2,0), 
+    (0,1), 
+    (3,1);
+Query OK, 5 rows affected (0.01 sec)
+
+mysql> select first_name, last_name, team_name from employees 
+    join employees_teams on (employees.id=employees_teams.employee_id) 
+    join teams on (teams.id=employees_teams.team_id) 
+    where team_name='Engineering';
++------------+-----------+-------------+
+| first_name | last_name | team_name   |
++------------+-----------+-------------+
+| Tim        | Sehn      | Engineering |
+| Brian      | Hendriks  | Engineering |
+| Aaron      | Son       | Engineering |
++------------+-----------+-------------+
+3 rows in set (0.00 sec)
+```
+
+Looks like everything is inserted and correct. I was able to list the members of the engineering team using that three table `JOIN`. Dolt supports up to twelve table `JOIN`s. Again, Dolt is a modern SQL relational database paired with Git-style version control.
+
+## Examine the diff
+
+Now, what if you want to see what changed in your working set before you make a commit? You use the `dolt_status` and `dolt_diff_<tablename>` system tables. 
+
+```
+mysql> select * from dolt_status;
++-----------------+--------+----------+
+| table_name      | staged | status   |
++-----------------+--------+----------+
+| teams           |      0 | modified |
+| employees       |      0 | modified |
+| employees_teams |      0 | modified |
++-----------------+--------+----------+
+3 rows in set (0.01 sec)
+
+mysql> select * from dolt_diff_employees;
++--------------+---------------+-------+-----------+----------------+----------------+-----------------+---------+----------------------------------+-------------------------+-----------+
+| to_last_name | to_first_name | to_id | to_commit | to_commit_date | from_last_name | from_first_name | from_id | from_commit                      | from_commit_date        | diff_type |
++--------------+---------------+-------+-----------+----------------+----------------+-----------------+---------+----------------------------------+-------------------------+-----------+
+| Sehn         | Tim           |     0 | WORKING   | NULL           | NULL           | NULL            |    NULL | ne182jemgrlm8jnjmoubfqsstlfi1s98 | 2022-06-07 16:35:49.277 | added     |
+| Hendriks     | Brian         |     1 | WORKING   | NULL           | NULL           | NULL            |    NULL | ne182jemgrlm8jnjmoubfqsstlfi1s98 | 2022-06-07 16:35:49.277 | added     |
+| Son          | Aaron         |     2 | WORKING   | NULL           | NULL           | NULL            |    NULL | ne182jemgrlm8jnjmoubfqsstlfi1s98 | 2022-06-07 16:35:49.277 | added     |
+| Fitzgerald   | Brian         |     3 | WORKING   | NULL           | NULL           | NULL            |    NULL | ne182jemgrlm8jnjmoubfqsstlfi1s98 | 2022-06-07 16:35:49.277 | added     |
++--------------+---------------+-------+-----------+----------------+----------------+-----------------+---------+----------------------------------+-------------------------+-----------+
+4 rows in set (0.00 sec)
+```
+
+As you can see from the diff I've added the correct values to the `employees` table. The values were previously `NULL` and now they are populated.
+
+Let's finish off with another Dolt commit this time adding all effected tables using `-am`.
+
+```
+mysql> call dolt_commit('-am', 'Populated tables with data');
++----------------------------------+
+| hash                             |
++----------------------------------+
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 |
++----------------------------------+
+1 row in set (0.02 sec)
+```
+
+You can inspect the log using `dolt_log` and see which tables changed in each commit using an unscoped `dolt_diff`. Unscoped `dolt_diff` tells you whether schema, data, or both changed in that particular commit for the table.
+
+```
+mysql> select * from dolt_log;
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+| commit_hash                      | committer | email           | date                    | message                    |
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:39:32.066 | Populated tables with data |
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema     |
+| vluuhvd0bn59598utedt77ed9q5okbcb | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:33:59.531 | Initialize data repository |
++----------------------------------+-----------+-----------------+-------------------------+----------------------------+
+3 rows in set (0.00 sec)
+
+mysql> select * from dolt_diff;
++----------------------------------+-----------------+-----------+-----------------+-------------------------+----------------------------+-------------+---------------+
+| commit_hash                      | table_name      | committer | email           | date                    | message                    | data_change | schema_change |
++----------------------------------+-----------------+-----------+-----------------+-------------------------+----------------------------+-------------+---------------+
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | teams           | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:39:32.066 | Populated tables with data |           1 |             0 |
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | employees       | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:39:32.066 | Populated tables with data |           1 |             0 |
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | employees_teams | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:39:32.066 | Populated tables with data |           1 |             0 |
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | employees       | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema     |           0 |             1 |
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | employees_teams | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema     |           0 |             1 |
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | teams           | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema     |           0 |             1 |
++----------------------------------+-----------------+-----------+-----------------+-------------------------+----------------------------+-------------+---------------+
+6 rows in set (0.00 sec)
+```
+
+## Oh no! I made a mistake.
+
+Dolt supports undoing changes via `call dolt_reset()`. Let's imagine I accidentally drop a table.
+
+```
+mysql> drop table employees_teams;
+Query OK, 0 rows affected (0.01 sec)
+
+mysql> show tables;
++---------------------------+
+| Tables_in_getting_started |
++---------------------------+
+| employees                 |
+| teams                     |
++---------------------------+
+2 rows in set (0.00 sec)
+```
+
+In a traditional database, this could be disastrous. In Dolt, you're one command away from getting your table back.
+
+```
+mysql> call dolt_reset('--hard');
++--------+
+| status |
++--------+
+|      0 |
++--------+
+1 row in set (0.01 sec)
+
+mysql> show tables;
++---------------------------+
+| Tables_in_getting_started |
++---------------------------+
+| employees                 |
+| employees_teams           |
+| teams                     |
++---------------------------+
+3 rows in set (0.01 sec)
+```
+
+Dolt makes operating databases less error prone. You can always back out changes you have in progress or rewind to a known good state. You also have the ability to undo specific commits using [`dolt_revert()`](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures#dolt_revert).
+
+Note, the only unrecoverable SQL statement in Dolt is `drop database`. This deletes the database and all of it's history on disk. `drop database` works this way for SQL tool compatibility as it is common for import tools to issue a `drop database` to clear all database state before an import. Dolt implements [remotes](https://docs.dolthub.com/concepts/dolt/remotes) like in Git so you can maintain an offline copy for backup using clone, fetch, push, and pull. Maintaining a remote copy allows you to restore in the case of an errant `drop database` query. 
+
+## See the data in a SQL Workbench
+
+Hate the command line? Let's use [Tableplus](https://tableplus.com/) to make some modifications. Tableplus is a free SQL Workbench. Follow the installation instructions from their website.
+
+Now, to connect you must select MySQL as the connection type. Then enter a name for your connection, `getting_started` as your database, and `root` as your user.
+
+![Tableplus Connection](../images/getting-started-tp-connect.png)
+
+Click connect and you'll be presented with a familiar database workbench GUI.
+
+![Tableplus](../images/getting-started-tp.png)
+
+## Make changes on a branch
+
+To make changes on a branch, I use the `dolt_checkout()` stored procedure. Using the `-b` option creates a branch, just like in Git.
+
+Tableplus gives me the ability to enter a multiple line SQL script on the SQL tab. I entered the following SQL to checkout a branch, update, insert, delete, and finally Dolt commit my changes.
+
+```SQL
+call dolt_checkout('-b','modifications');
+update employees SET first_name='Timothy' where first_name='Tim';
+insert INTO employees (id, first_name, last_name) values (4,'Daylon', 'Wilkins');
+insert into employees_teams(team_id, employee_id) values (0,4);
+delete from employees_teams where employee_id=0 and team_id=1;
+call dolt_commit('-am', 'Modifications on a branch')
+```
+
+Here's the result in Tableplus.
+
+![New Updates](../images/getting-started-new-updates.png)
+
+Back in my terminal, I cannot see the table modifications made in Tableplus because they happened on a different branch than the one I have checked out in my session. 
+
+```
+mysql> select * from dolt_branches;
++---------------+----------------------------------+------------------+------------------------+-------------------------+----------------------------+
+| name          | hash                             | latest_committer | latest_committer_email | latest_commit_date      | latest_commit_message      |
++---------------+----------------------------------+------------------+------------------------+-------------------------+----------------------------+
+| main          | 13qfqa5rojq18j84d1n2htjkm6fletg4 | Tim Sehn         | tim@dolthub.com        | 2022-06-07 16:39:32.066 | Populated tables with data |
+| modifications | uhkv57j4bp2v16vcnmev9lshgkqq8ppb | Tim Sehn         | tim@dolthub.com        | 2022-06-07 16:41:49.847 | Modifications on a branch  |
++---------------+----------------------------------+------------------+------------------------+-------------------------+----------------------------+
+2 rows in set (0.00 sec)
+
+mysql> select active_branch();
++-----------------+
+| active_branch() |
++-----------------+
+| main            |
++-----------------+
+1 row in set (0.00 sec)
+
+mysql> select * from employees;
++------+------------+------------+
+| id   | last_name  | first_name |
++------+------------+------------+
+|    0 | Sehn       | Tim        |
+|    1 | Hendriks   | Brian      |
+|    2 | Son        | Aaron      |
+|    3 | Fitzgerald | Brian      |
++------+------------+------------+
+4 rows in set (0.00 sec)
+```
+
+I can query the branch no matter what I have checked out using SQL `as of` syntax. 
+
+```
+mysql> select * from employees as of 'modifications';
++------+------------+------------+
+| id   | last_name  | first_name |
++------+------------+------------+
+|    0 | Sehn       | Timothy    |
+|    1 | Hendriks   | Brian      |
+|    2 | Son        | Aaron      |
+|    3 | Fitzgerald | Brian      |
+|    4 | Wilkins    | Daylon     |
++------+------------+------------+
+5 rows in set (0.01 sec)
+```
+
+If I'd like to see the diff between the two branches, I can use the `dolt_diff()` table function. It takes the table name and two branches as arguments.
+
+```
+mysql> select * from dolt_diff('employees', 'main','modifications');
++--------------+---------------+-------+---------------+-------------------------+----------------+-----------------+---------+-------------+-------------------------+-----------+
+| to_last_name | to_first_name | to_id | to_commit     | to_commit_date          | from_last_name | from_first_name | from_id | from_commit | from_commit_date        | diff_type |
++--------------+---------------+-------+---------------+-------------------------+----------------+-----------------+---------+-------------+-------------------------+-----------+
+| Sehn         | Timothy       |     0 | modifications | 2022-06-07 16:41:49.847 | Sehn           | Tim             |       0 | main        | 2022-06-07 16:39:32.066 | modified  |
+| Wilkins      | Daylon        |     4 | modifications | 2022-06-07 16:41:49.847 | NULL           | NULL            |    NULL | main        | 2022-06-07 16:39:32.066 | added     |
++--------------+---------------+-------+---------------+-------------------------+----------------+-----------------+---------+-------------+-------------------------+-----------+
+2 rows in set (0.00 sec)
+```
+
+As you can see, you have the full power of Git-style branches and diffs in a SQL database with Dolt.
+
+## Make a schema change on another branch
+
+I can also make schema changes on branches for isolated testing of new schema. I'm going to add a `start_date` column on a new branch and populate it. 
+
+```
+mysql> call dolt_checkout('-b', 'schema_changes');
++--------+
+| status |
++--------+
+|      0 |
++--------+
+1 row in set (0.01 sec)
+
+mysql> alter table employees add column start_date date;
+Query OK, 0 rows affected (0.02 sec)
+
+mysql> update employees set start_date='2018-09-08';
+Query OK, 4 rows affected (0.01 sec)
+Rows matched: 4  Changed: 4  Warnings: 0
+
+mysql> update employees set start_date='2021-04-19' where last_name='Fitzgerald';
+Query OK, 1 row affected (0.01 sec)
+Rows matched: 1  Changed: 1  Warnings: 0
+
+mysql> select * from employees;
++------+------------+------------+------------+
+| id   | last_name  | first_name | start_date |
++------+------------+------------+------------+
+|    0 | Sehn       | Tim        | 2018-09-08 |
+|    1 | Hendriks   | Brian      | 2018-09-08 |
+|    2 | Son        | Aaron      | 2018-09-08 |
+|    3 | Fitzgerald | Brian      | 2021-04-19 |
++------+------------+------------+------------+
+4 rows in set (0.00 sec)
+
+mysql> call dolt_commit('-am', 'Added start_date column to employees');
++----------------------------------+
+| hash                             |
++----------------------------------+
+| pg3nfi0j1dpc5pf1rfgckpmlteaufdrt |
++----------------------------------+
+1 row in set (0.01 sec)
+```
+
+Changing schema on a branch gives you a new method for doing isolated integration testing of new schema changes.
+
+## Merge it all together
+
+Let's assume all the testing of the new schema on the `schema_changes` branch and data on the `modifications` branch completed flawlessly. It's time to merge all our edits together onto `main`. This is done using the `dolt_merge` stored procedure.
+
+```
+mysql> call dolt_checkout('main');
++--------+
+| status |
++--------+
+|      0 |
++--------+
+1 row in set (0.01 sec)
+
+mysql> select * from dolt_status;
+Empty set (0.00 sec)
+
+mysql> call dolt_merge('schema_changes');
++--------------+
+| no_conflicts |
++--------------+
+|            1 |
++--------------+
+1 row in set (0.01 sec)
+
+mysql> select * from employees;
++------+------------+------------+------------+
+| id   | last_name  | first_name | start_date |
++------+------------+------------+------------+
+|    0 | Sehn       | Tim        | 2018-09-08 |
+|    1 | Hendriks   | Brian      | 2018-09-08 |
+|    2 | Son        | Aaron      | 2018-09-08 |
+|    3 | Fitzgerald | Brian      | 2021-04-19 |
++------+------------+------------+------------+
+4 rows in set (0.00 sec)
+```
+
+Schema change successful. We now have start dates. Data changes are next.
+
+```
+mysql> call dolt_merge('modifications');
++--------------+
+| no_conflicts |
++--------------+
+|            1 |
++--------------+
+1 row in set (0.02 sec)
+
+mysql> select * from employees;
++------+------------+------------+------------+
+| id   | last_name  | first_name | start_date |
++------+------------+------------+------------+
+|    0 | Sehn       | Timothy    | 2018-09-08 |
+|    1 | Hendriks   | Brian      | 2018-09-08 |
+|    2 | Son        | Aaron      | 2018-09-08 |
+|    3 | Fitzgerald | Brian      | 2021-04-19 |
+|    4 | Wilkins    | Daylon     | NULL       |
++------+------------+------------+------------+
+5 rows in set (0.00 sec)
+```
+
+Data changes successful as well. As you can see, I am now "Timothy" instead of "Tim", Daylon is added, and we all have start dates except for Daylon who was added on a different branch.
+
+```
+mysql> select first_name, last_name, team_name from employees 
+    join employees_teams on (employees.id=employees_teams.employee_id) 
+    join teams on (teams.id=employees_teams.team_id) 
+    where team_name='Sales';
++------------+------------+-----------+
+| first_name | last_name  | team_name |
++------------+------------+-----------+
+| Brian      | Fitzgerald | Sales     |
++------------+------------+-----------+
+1 row in set (0.01 sec)
+```
+
+I'm also gone from the Sales Team. Engineering is life.
+
+I have to commit all my changes because the last merge was not a fast-forward merge.
+
+```
+mysql> call dolt_commit('-m', 'Merged all branches');
++----------------------------------+
+| hash                             |
++----------------------------------+
+| vn9b0qcematsj2f6ka0hfoflhr5s6p0b |
++----------------------------------+
+1 row in set (0.01 sec)
+
+mysql> select * from dolt_log;
++----------------------------------+-----------+-----------------+-------------------------+--------------------------------------+
+| commit_hash                      | committer | email           | date                    | message                              |
++----------------------------------+-----------+-----------------+-------------------------+--------------------------------------+
+| vn9b0qcematsj2f6ka0hfoflhr5s6p0b | Tim Sehn  | tim@dolthub.com | 2022-06-07 17:10:02.07  | Merged all branches                  |
+| pg3nfi0j1dpc5pf1rfgckpmlteaufdrt | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:44:37.513 | Added start_date column to employees |
+| uhkv57j4bp2v16vcnmev9lshgkqq8ppb | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:41:49.847 | Modifications on a branch            |
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:39:32.066 | Populated tables with data           |
+| ne182jemgrlm8jnjmoubfqsstlfi1s98 | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:35:49.277 | Created initial schema               |
+| vluuhvd0bn59598utedt77ed9q5okbcb | Tim Sehn  | tim@dolthub.com | 2022-06-07 16:33:59.531 | Initialize data repository           |
++----------------------------------+-----------+-----------------+-------------------------+--------------------------------------+
+6 rows in set (0.00 sec)
+```
+
+Now, we have a database with all the schema and data changes merged and ready for use.
+
+## Audit Cell Lineage
+
+Which commit changed my first name? With Dolt you have lineage for every cell in your database. Let's use the `dolt_history_<tablename>` and `dolt_diff_<tablename>` to explore the lineage features in Dolt.
+
+`dolt_history_<tablename>` shows you the state of the row at every commit.
+
+```
+mysql> select * from dolt_history_employees where id=0 order by commit_date;
++------+-----------+------------+------------+----------------------------------+-----------+-------------------------+
+| id   | last_name | first_name | start_date | commit_hash                      | committer | commit_date             |
++------+-----------+------------+------------+----------------------------------+-----------+-------------------------+
+|    0 | Sehn      | Tim        | NULL       | 13qfqa5rojq18j84d1n2htjkm6fletg4 | Tim Sehn  | 2022-06-07 16:39:32.066 |
+|    0 | Sehn      | Timothy    | NULL       | uhkv57j4bp2v16vcnmev9lshgkqq8ppb | Tim Sehn  | 2022-06-07 16:41:49.847 |
+|    0 | Sehn      | Tim        | 2018-09-08 | pg3nfi0j1dpc5pf1rfgckpmlteaufdrt | Tim Sehn  | 2022-06-07 16:44:37.513 |
+|    0 | Sehn      | Timothy    | 2018-09-08 | vn9b0qcematsj2f6ka0hfoflhr5s6p0b | Tim Sehn  | 2022-06-07 17:10:02.07  |
++------+-----------+------------+------------+----------------------------------+-----------+-------------------------+
+4 rows in set (0.00 sec)
+```
+
+`dolt_diff_<tablename>` allows you to filter the history down to only commits when the cell in question changed. In this case, I'm interested in the commits that are changing my first name. Note, there are two commits that changed my name because one is the original change and the second is the merge commit.
+
+```
+mysql> select to_commit,from_first_name,to_first_name from dolt_diff_employees 
+    where (from_id=0 or to_id=0) and (from_first_name <> to_first_name or from_first_name is NULL)
+    order by to_commit_date;
++----------------------------------+-----------------+---------------+
+| to_commit                        | from_first_name | to_first_name |
++----------------------------------+-----------------+---------------+
+| 13qfqa5rojq18j84d1n2htjkm6fletg4 | NULL            | Tim           |
+| uhkv57j4bp2v16vcnmev9lshgkqq8ppb | Tim             | Timothy       |
+| vn9b0qcematsj2f6ka0hfoflhr5s6p0b | Tim             | Timothy       |
++----------------------------------+-----------------+---------------+
+3 rows in set (0.01 sec)
+```
+
+Dolt provides powerful data audit capabilities down to individual cells. When, how, and why has each cell in your database changed over time?
+
+# Additonal Reading
+
+Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a fee for Dolt.
 
 # Credits and License
 
