@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -24,6 +25,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
@@ -137,6 +139,53 @@ func TestSingleQueryPrepared(t *testing.T) {
 	engine.Analyzer.Verbose = true
 
 	enginetest.TestQuery(t, harness, test.Query, test.Expected, nil, nil)
+}
+
+func TestSingleScriptPrepared(t *testing.T) {
+	t.Skip()
+
+	s := []setup.SetupScript{
+		{
+			"create table test (pk int primary key, c1 int)",
+			"insert into test values (0,0), (1,1);",
+			"set @Commit1 = dolt_commit('-am', 'creating table');",
+			"call dolt_branch('-c', 'main', 'newb')",
+			"alter table test add column c2 int;",
+			"set @Commit2 = dolt_commit('-am', 'alter table');",
+		},
+	}
+	tt := queries.QueryTest{
+		Query: "select * from test as of 'HEAD~2' where pk=?",
+		Bindings: map[string]sql.Expression{
+			"v1": expression.NewLiteral(0, sql.Int8),
+		},
+		Expected: []sql.Row{{0, 0}},
+	}
+
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData, s)
+
+	e, err := harness.NewEngine(t)
+	defer e.Close()
+	require.NoError(t, err)
+	ctx := harness.NewContext()
+
+	//e.Analyzer.Debug = true
+	//e.Analyzer.Verbose = true
+
+	// full impl
+	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(pre1, sch1, rows1)
+
+	// inline bindings
+	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(sch2, rows2)
+
+	// no bindings
+	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
+	//fmt.Println(sch3, rows3)
+
+	enginetest.TestQueryWithContext(t, ctx, e, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
 }
 
 func TestVersionedQueries(t *testing.T) {
