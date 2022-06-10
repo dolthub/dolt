@@ -195,8 +195,6 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	skipNewFormat(t)
-
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
 	skipped := []string{
@@ -208,10 +206,18 @@ func TestQueryPlans(t *testing.T) {
 		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 AND pk1=1 ORDER BY 1,2",
 	}
-
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
-	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
+	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
+
+	var plans []queries.QueryPlanTest
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		plans = NewFormatQueryPlanTests
+	} else {
+		plans = queries.PlanTests
+	}
+
+	enginetest.TestQueryPlans(t, harness, plans)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
