@@ -1216,7 +1216,7 @@ var MergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Constraint violations are thrown and persisted",
+		Name: "Constraint violations are persisted",
 		SetUpScript: []string{
 			"set dolt_force_transaction_commit = on;",
 			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
@@ -1381,6 +1381,10 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
 				Expected: []sql.Row{{1, 1, 1, 100, 1, -100}},
+			},
+			{
+				Query:    "SELECT pk, col1, col2 from t;",
+				Expected: []sql.Row{{1, 100, 1000}},
 			},
 		},
 	},
