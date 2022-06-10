@@ -65,10 +65,10 @@ const (
 	TabularDiffOutput diffOutput = 1
 	SQLDiffOutput     diffOutput = 2
 
-	FilterInserts = "inserts"
-	FilterUpdates = "updates"
-	FilterDeletes = "deletes"
-	NoFilter      = "all"
+	FilterAdds     = "added"
+	FilterModified = "modified"
+	FilterRemoved  = "removed"
+	NoFilter       = "all"
 
 	DataFlag    = "data"
 	SchemaFlag  = "schema"
@@ -118,7 +118,7 @@ type diffArgs struct {
 	limit      int
 	where      string
 	query      string
-	filter     string
+	filter     *diffTypeFilter
 }
 
 type DiffCmd struct{}
@@ -153,7 +153,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(whereParam, "", "column", "filters columns based on values in the diff.  See {{.EmphasisLeft}}dolt diff --help{{.EmphasisRight}} for details.")
 	ap.SupportsInt(limitParam, "", "record_count", "limits to the first N diffs.")
 	ap.SupportsFlag(CachedFlag, "c", "Show only the unstaged data changes.")
-	ap.SupportsString(filterParam, "", "diff_type", "filters(inserts|updates|deletes) based on type of modifications.")
+	ap.SupportsString(filterParam, "", "diff_type", "filters results based on the type of modification (added, modified, removed).")
 	return ap
 }
 
@@ -182,6 +182,30 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	return HandleVErrAndExitCode(verr, usage)
+}
+
+type diffTypeFilter struct {
+	filterBy string
+}
+
+func (df *diffTypeFilter) isFilter() bool {
+	return df.filterBy != NoFilter
+}
+
+func (df *diffTypeFilter) includeAddsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds
+}
+
+func (df *diffTypeFilter) includeDropsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterRemoved
+}
+
+func (df *diffTypeFilter) includeModificationsOrAll() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterModified
+}
+
+func (df *diffTypeFilter) isValid() bool {
+	return df.filterBy == NoFilter || df.filterBy == FilterAdds || df.filterBy == FilterModified || df.filterBy == FilterRemoved
 }
 
 func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (from, to *doltdb.RootValue, dArgs *diffArgs, err error) {
@@ -238,14 +262,13 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		dArgs.diffParts = Summary
 	}
 
-	filterType, _ := apr.GetValue(filterParam)
-	if !(filterType == "" || filterType == FilterInserts || filterType == FilterUpdates || filterType == FilterDeletes) {
-		return nil, nil, nil, fmt.Errorf("invalid filter: %s", filterType)
-	}
-
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
-	dArgs.filter = apr.GetValueOrDefault(filterParam, "all")
+	dArgs.filter = &diffTypeFilter{filterBy: apr.GetValueOrDefault(filterParam, "all")}
+
+	if !dArgs.filter.isValid() {
+		return nil, nil, nil, fmt.Errorf("invalid filter: %s", dArgs.filter.filterBy)
+	}
 
 	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
 
@@ -419,10 +442,13 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			return errhand.BuildDError("error: both tables in tableDelta are nil").Build()
 		}
 
-		diffTypes := findDiffTypes(ctx, td)
+		doesFilterMatchDiff := false
+		if (td.IsAdd() && dArgs.filter.includeAddsOrAll()) || (td.IsDrop() && dArgs.filter.includeDropsOrAll()) || (!td.IsAdd() && !td.IsDrop() && dArgs.filter.includeModificationsOrAll()) {
+			doesFilterMatchDiff = true
+		}
 
 		if dArgs.diffOutput == TabularDiffOutput {
-			if _, ok := diffTypes[dArgs.filter]; !ok {
+			if !doesFilterMatchDiff {
 				return nil
 			}
 			printTableDiffSummary(td)
@@ -443,7 +469,10 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, toRoot, td, dArgs)
+			if doesFilterMatchDiff {
+				verr = diffSchemas(ctx, toRoot, td, dArgs)
+			}
+
 		}
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
@@ -452,7 +481,7 @@ func diffUserTables(ctx context.Context, fromRoot, toRoot *doltdb.RootValue, dAr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			if _, ok := diffTypes[dArgs.filter]; !ok {
+			if !doesFilterMatchDiff {
 				return nil
 			}
 
@@ -474,13 +503,13 @@ func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDel
 	}
 
 	if dArgs.diffOutput == TabularDiffOutput {
-		return printShowCreateTableDiff(ctx, td, dArgs.filter)
+		return printShowCreateTableDiff(ctx, td)
 	}
 
-	return sqlSchemaDiff(ctx, td, toSchemas, dArgs.filter)
+	return sqlSchemaDiff(ctx, td, toSchemas)
 }
 
-func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta, filter string) errhand.VerboseError {
+func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
@@ -495,6 +524,7 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta, filter st
 			return errhand.VerboseErrorFromError(err)
 		}
 	}
+	td.IsDrop()
 
 	var toCreateStmt = ""
 	if td.ToTable != nil {
@@ -507,48 +537,30 @@ func printShowCreateTableDiff(ctx context.Context, td diff.TableDelta, filter st
 	}
 
 	if fromCreateStmt != toCreateStmt {
-		if fromCreateStmt == "" && toSch.GetAllCols().Size() > fromSch.GetAllCols().Size() {
-			if filter == FilterInserts || filter == NoFilter {
-				cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
-			}
-		} else if toCreateStmt == "" && toSch.GetAllCols().Size() < fromSch.GetAllCols().Size() {
-			if filter == FilterDeletes || filter == NoFilter {
-				cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
-			}
-		} else if filter == FilterUpdates || filter == NoFilter {
-			cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
-		}
+		cli.Println(textdiff.LineDiff(fromCreateStmt, toCreateStmt))
 	}
 
 	return nil
 }
 
 // TODO: this doesn't handle check constraints or triggers
-func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema, filter string) errhand.VerboseError {
+func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string]schema.Schema) errhand.VerboseError {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
 		return errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
 	}
 
 	if td.IsDrop() {
-		if filter == NoFilter || filter == FilterDeletes {
-			cli.Println(sqlfmt.DropTableStmt(td.FromName))
-		}
+		cli.Println(sqlfmt.DropTableStmt(td.FromName))
 	} else if td.IsAdd() {
-		if filter == NoFilter || filter == FilterInserts {
-			sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
-			sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
-			stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
-			if err != nil {
-				return errhand.VerboseErrorFromError(err)
-			}
-			cli.Println(stmt)
+		sqlDb := sqle.NewSingleTableDatabase(td.ToName, toSch, td.ToFks, td.ToFksParentSch)
+		sqlCtx, engine, _ := sqle.PrepareCreateTableStmt(ctx, sqlDb)
+		stmt, err := sqle.GetCreateTableStmt(sqlCtx, engine, td.ToName)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
 		}
-
+		cli.Println(stmt)
 	} else {
-		if !(filter == NoFilter || filter == FilterUpdates) {
-			return nil
-		}
 		if td.FromName != td.ToName {
 			cli.Println(sqlfmt.RenameTableStmt(td.FromName, td.ToName))
 		}
@@ -773,99 +785,7 @@ func diffRows(ctx context.Context, td diff.TableDelta, dArgs *diffArgs, vrw type
 	return nil
 }
 
-func findDiffTypes(ctx context.Context, td diff.TableDelta) map[string]struct{} {
 
-	diffTypes := map[string]struct{}{NoFilter: {}}
-
-	if td.IsAdd() {
-		diffTypes[FilterInserts] = struct{}{}
-	} else if td.IsDrop() {
-		diffTypes[FilterDeletes] = struct{}{}
-	}
-
-	var fromNoRows = 0
-	var toNoRows = 0
-	var fromColsSize = 0
-	var toColsSize = 0
-
-	if td.FromTable != nil {
-		fromSch, err := td.FromTable.GetSchema(ctx)
-		if err == nil && fromSch != nil {
-			fromColsSize = fromSch.GetAllCols().Size()
-		}
-		if idx, err := td.FromTable.GetRowData(ctx); err == nil {
-			fromNoRows = int(idx.Count())
-		}
-	}
-	if td.ToTable != nil {
-		toSch, err := td.ToTable.GetSchema(ctx)
-		if err == nil && toSch != nil {
-			toColsSize = toSch.GetAllCols().Size()
-		}
-		if idx, err := td.ToTable.GetRowData(ctx); err == nil {
-			toNoRows = int(idx.Count())
-
-		}
-	}
-	if fromNoRows == toNoRows && toColsSize == fromColsSize && fromNoRows == 0 {
-		return diffTypes
-	}
-
-	if !td.IsAdd() && !td.IsDrop() && fromColsSize != toColsSize {
-		diffTypes[FilterUpdates] = struct{}{}
-	}
-
-	if toNoRows > fromNoRows {
-		diffTypes[FilterInserts] = struct{}{}
-	} else if toNoRows < fromNoRows {
-		diffTypes[FilterDeletes] = struct{}{}
-	} else {
-		if td.FromTable == nil {
-			return diffTypes
-		}
-		nomsDataFromTable, err := td.FromTable.GetNomsRowData(ctx)
-		if err != nil {
-			return diffTypes
-		}
-
-		iter, err := nomsDataFromTable.Iterator(ctx)
-		if err != nil {
-			return diffTypes
-		}
-		if td.ToTable == nil {
-			return diffTypes
-		}
-
-		nomsDataToTable, err := td.ToTable.GetNomsRowData(ctx)
-
-		if err != nil {
-			return diffTypes
-		}
-
-		for idx := 0; idx < fromNoRows; idx++ {
-			kFrom, vFrom, err := iter.Next(ctx)
-			if err != nil {
-				return nil
-			}
-
-			vTo, ok, _ := nomsDataToTable.MaybeGet(ctx, kFrom)
-			if !ok {
-				diffTypes[FilterInserts] = struct{}{}
-				diffTypes[FilterDeletes] = struct{}{}
-			}
-
-			if vTo != nil && !vFrom.Equals(vTo) {
-				diffTypes[FilterUpdates] = struct{}{}
-			}
-
-		}
-
-	}
-	if len(diffTypes) == 1 && fromNoRows == toNoRows && fromColsSize == toColsSize && fromColsSize != 0 {
-		diffTypes[FilterUpdates] = struct{}{}
-	}
-	return diffTypes
-}
 
 func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitter, untypedUnionSch schema.Schema, src *diff.RowDiffSource, sink DiffSink, badRowCB pipeline.BadRowCallback) (*pipeline.Pipeline, errhand.VerboseError) {
 	var where FilterFn
@@ -887,11 +807,6 @@ func buildPipeline(dArgs *diffArgs, joiner *rowconv.Joiner, ds *diff.DiffSplitte
 
 		selTrans = NewSelTrans(where, dArgs.limit)
 		transforms.AppendTransforms(pipeline.NewNamedTransform("select", selTrans.LimitAndFilter))
-	}
-
-	if dArgs.filter != "" && dArgs.filter != NoFilter {
-		diffFilterTrans := NewDiffFilterTrans(dArgs.filter, len(untypedUnionSch.GetAllCols().Tags))
-		transforms.AppendTransforms(pipeline.NewNamedTransform("diff_filter", diffFilterTrans.FilterDiffs))
 	}
 
 	transforms.AppendTransforms(
@@ -998,7 +913,7 @@ func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootV
 	return printDocDiffs(ctx, from, to, docs, dArgs.filter)
 }
 
-func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs, filter string) error {
+func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs, filter *diffTypeFilter) error {
 	bold := color.New(color.Bold)
 
 	comparisons, err := diff.DocsDiffToComparisons(ctx, from, to, docsFilter)
@@ -1008,7 +923,7 @@ func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter d
 	for _, doc := range docsFilter {
 		for _, comparison := range comparisons {
 			if doc.DocPk == comparison.DocName {
-				if (filter == NoFilter || filter == FilterInserts) && comparison.OldText == nil && comparison.CurrentText != nil {
+				if filter.includeAddsOrAll() && comparison.OldText == nil && comparison.CurrentText != nil {
 					printAddedDoc(bold, comparison.DocName)
 				} else if comparison.OldText != nil {
 					older := string(comparison.OldText)
@@ -1016,9 +931,9 @@ func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter d
 
 					lines := textdiff.LineDiffAsLines(older, newer)
 
-					if (filter == NoFilter || filter == FilterDeletes) && comparison.CurrentText == nil {
+					if filter.includeDropsOrAll() && comparison.CurrentText == nil {
 						printDeletedDoc(bold, comparison.DocName, lines)
-					} else if (filter == NoFilter || filter == FilterUpdates) && len(lines) > 0 && newer != older {
+					} else if (filter.includeModificationsOrAll()) && len(lines) > 0 && newer != older {
 						printModifiedDoc(bold, comparison.DocName, lines)
 					}
 				}
