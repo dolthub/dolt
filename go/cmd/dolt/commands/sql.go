@@ -396,6 +396,7 @@ func execShell(
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		format,
 		config,
 	)
 	if err != nil {
@@ -430,6 +431,7 @@ func execBatch(
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		format,
 		config,
 	)
 	if err != nil {
@@ -481,6 +483,7 @@ func execMultiStatements(
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		format,
 		config,
 	)
 	if err != nil {
@@ -519,6 +522,7 @@ func execQuery(
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		format,
 		config,
 	)
 	if err != nil {

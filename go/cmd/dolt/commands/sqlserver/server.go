@@ -167,7 +167,6 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		Format:       engine.FormatTabular,
 		InitialDb:    "",
 		IsReadOnly:   isReadOnly,
 		PrivFilePath: serverConfig.PrivilegeFilePath(),
@@ -178,6 +177,7 @@ func Serve(
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		engine.FormatTabular,
 		config,
 	)
 	if err != nil {

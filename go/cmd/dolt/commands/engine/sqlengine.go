@@ -48,7 +48,6 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	Format       PrintResultFormat
 	InitialDb    string
 	IsReadOnly   bool
 	PrivFilePath string
@@ -62,6 +61,7 @@ type SqlEngineConfig struct {
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
+	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 
@@ -149,7 +149,7 @@ func NewSqlEngine(
 		contextFactory: newSqlContext(sess, config.InitialDb),
 		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
 		engine:         engine,
-		resultFormat:   config.Format,
+		resultFormat:   format,
 	}, nil
 }
 

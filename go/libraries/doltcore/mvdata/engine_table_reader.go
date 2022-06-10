@@ -62,6 +62,7 @@ func NewSqlEngineReader(ctx context.Context, dEnv *env.DoltEnv, tableName string
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		engine.FormatCsv,
 		config,
 	)
 	if err != nil {

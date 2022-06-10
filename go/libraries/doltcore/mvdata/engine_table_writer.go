@@ -90,6 +90,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	se, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
+		engine.FormatCsv,
 		config,
 	)
 	if err != nil {
