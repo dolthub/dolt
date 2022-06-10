@@ -155,7 +155,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		ExpectedPlan: "Insert(i, s)\n" +
 			" ├─ Table(mytable)\n" +
 			" └─ Project(i, s)\n" +
-			"     └─ Project(t1.i, \"hello\")\n" +
+			"     └─ Project(t1.i, 'hello')\n" +
 			"         └─ IndexedJoin(t1.i = (t2.i + 1))\n" +
 			"             ├─ Filter(t2.i = 1)\n" +
 			"             │   └─ TableAlias(t2)\n" +
@@ -247,7 +247,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	{
 		Query: `SELECT i, i2, s2 FROM mytable INNER JOIN othertable ON i = i2 OR SUBSTRING_INDEX(s, ' ', 1) = s2`,
 		ExpectedPlan: "Project(mytable.i, othertable.i2, othertable.s2)\n" +
-			" └─ IndexedJoin((mytable.i = othertable.i2) OR (SUBSTRING_INDEX(mytable.s, \" \", 1) = othertable.s2))\n" +
+			" └─ IndexedJoin((mytable.i = othertable.i2) OR (SUBSTRING_INDEX(mytable.s, ' ', 1) = othertable.s2))\n" +
 			"     ├─ Table(mytable)\n" +
 			"     └─ Concat\n" +
 			"         ├─ IndexedTableAccess(othertable on [othertable.i2])\n" +
@@ -257,7 +257,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	{
 		Query: `SELECT i, i2, s2 FROM mytable INNER JOIN othertable ON i = i2 OR SUBSTRING_INDEX(s, ' ', 1) = s2 OR SUBSTRING_INDEX(s, ' ', 2) = s2`,
 		ExpectedPlan: "Project(mytable.i, othertable.i2, othertable.s2)\n" +
-			" └─ IndexedJoin(((mytable.i = othertable.i2) OR (SUBSTRING_INDEX(mytable.s, \" \", 1) = othertable.s2)) OR (SUBSTRING_INDEX(mytable.s, \" \", 2) = othertable.s2))\n" +
+			" └─ IndexedJoin(((mytable.i = othertable.i2) OR (SUBSTRING_INDEX(mytable.s, ' ', 1) = othertable.s2)) OR (SUBSTRING_INDEX(mytable.s, ' ', 2) = othertable.s2))\n" +
 			"     ├─ Table(mytable)\n" +
 			"     └─ Concat\n" +
 			"         ├─ Concat\n" +
@@ -535,7 +535,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		Query: `SELECT a.* FROM mytable a inner join mytable b on (a.i = b.s) WHERE a.s not in ('1', '2', '3', '4')`,
 		ExpectedPlan: "Project(a.i, a.s)\n" +
 			" └─ IndexedJoin(a.i = b.s)\n" +
-			"     ├─ Filter(NOT((a.s HASH IN (\"1\", \"2\", \"3\", \"4\"))))\n" +
+			"     ├─ Filter(NOT((a.s HASH IN ('1', '2', '3', '4'))))\n" +
 			"     │   └─ TableAlias(a)\n" +
 			"     │       └─ IndexedTableAccess(mytable on [mytable.s] with ranges: [{(1, 2)}, {(2, 3)}, {(3, 4)}, {(4, ∞)}, {(-∞, 1)}])\n" +
 			"     └─ TableAlias(b)\n" +
@@ -576,21 +576,21 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	},
 	{
 		Query: `SELECT * from mytable where upper(s) IN ('FIRST ROW', 'SECOND ROW')`,
-		ExpectedPlan: "Filter(UPPER(mytable.s) HASH IN (\"FIRST ROW\", \"SECOND ROW\"))\n" +
+		ExpectedPlan: "Filter(UPPER(mytable.s) HASH IN ('FIRST ROW', 'SECOND ROW'))\n" +
 			" └─ Projected table access on [i s]\n" +
 			"     └─ Table(mytable)\n" +
 			"",
 	},
 	{
 		Query: `SELECT * from mytable where cast(i as CHAR) IN ('a', 'b')`,
-		ExpectedPlan: "Filter(convert(mytable.i, char) HASH IN (\"a\", \"b\"))\n" +
+		ExpectedPlan: "Filter(convert(mytable.i, char) HASH IN ('a', 'b'))\n" +
 			" └─ Projected table access on [i s]\n" +
 			"     └─ Table(mytable)\n" +
 			"",
 	},
 	{
 		Query: `SELECT * from mytable where cast(i as CHAR) IN ('1', '2')`,
-		ExpectedPlan: "Filter(convert(mytable.i, char) HASH IN (\"1\", \"2\"))\n" +
+		ExpectedPlan: "Filter(convert(mytable.i, char) HASH IN ('1', '2'))\n" +
 			" └─ Projected table access on [i s]\n" +
 			"     └─ Table(mytable)\n" +
 			"",
@@ -653,14 +653,14 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	},
 	{
 		Query: `SELECT * from mytable WHERE s IN (cast('first row' AS CHAR))`,
-		ExpectedPlan: "Filter(mytable.s HASH IN (\"first row\"))\n" +
+		ExpectedPlan: "Filter(mytable.s HASH IN ('first row'))\n" +
 			" └─ Projected table access on [i s]\n" +
 			"     └─ IndexedTableAccess(mytable on [mytable.s] with ranges: [{[first row, first row]}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * from mytable WHERE s IN (lower('SECOND ROW'), 'FIRST ROW')`,
-		ExpectedPlan: "Filter(mytable.s HASH IN (\"second row\", \"FIRST ROW\"))\n" +
+		ExpectedPlan: "Filter(mytable.s HASH IN ('second row', 'FIRST ROW'))\n" +
 			" └─ Projected table access on [i s]\n" +
 			"     └─ IndexedTableAccess(mytable on [mytable.s] with ranges: [{[FIRST ROW, FIRST ROW]}, {[second row, second row]}])\n" +
 			"",
@@ -989,7 +989,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	{
 		Query: `SELECT * FROM (SELECT * FROM othertable) othertable_alias WHERE s2 = 'a'`,
 		ExpectedPlan: "SubqueryAlias(othertable_alias)\n" +
-			" └─ Filter(othertable.s2 = \"a\")\n" +
+			" └─ Filter(othertable.s2 = 'a')\n" +
 			"     └─ Projected table access on [s2 i2]\n" +
 			"         └─ IndexedTableAccess(othertable on [othertable.s2] with ranges: [{[a, a]}])\n" +
 			"",
@@ -999,7 +999,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		ExpectedPlan: "SubqueryAlias(othertable_three)\n" +
 			" └─ SubqueryAlias(othertable_two)\n" +
 			"     └─ SubqueryAlias(othertable_one)\n" +
-			"         └─ Filter(othertable.s2 = \"a\")\n" +
+			"         └─ Filter(othertable.s2 = 'a')\n" +
 			"             └─ Projected table access on [s2 i2]\n" +
 			"                 └─ IndexedTableAccess(othertable on [othertable.s2] with ranges: [{[a, a]}])\n" +
 			"",
@@ -1009,7 +1009,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		ExpectedPlan: "Project(othertable.s2, othertable.i2, mytable.i)\n" +
 			" └─ IndexedJoin(othertable.i2 = mytable.i)\n" +
 			"     ├─ SubqueryAlias(othertable)\n" +
-			"     │   └─ Filter(othertable.s2 > \"a\")\n" +
+			"     │   └─ Filter(othertable.s2 > 'a')\n" +
 			"     │       └─ Projected table access on [s2 i2]\n" +
 			"     │           └─ IndexedTableAccess(othertable on [othertable.s2] with ranges: [{(a, ∞)}])\n" +
 			"     └─ IndexedTableAccess(mytable on [mytable.i])\n" +
@@ -1205,42 +1205,42 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	},
 	{
 		Query: `SELECT * FROM datetime_table where date_col = '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.date_col = \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.date_col = '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.date_col] with ranges: [{[2020-01-01, 2020-01-01]}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * FROM datetime_table where date_col > '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.date_col > \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.date_col > '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.date_col] with ranges: [{(2020-01-01, ∞)}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * FROM datetime_table where datetime_col = '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.datetime_col = \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.datetime_col = '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.datetime_col] with ranges: [{[2020-01-01, 2020-01-01]}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * FROM datetime_table where datetime_col > '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.datetime_col > \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.datetime_col > '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.datetime_col] with ranges: [{(2020-01-01, ∞)}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * FROM datetime_table where timestamp_col = '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.timestamp_col = \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.timestamp_col = '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.timestamp_col] with ranges: [{[2020-01-01, 2020-01-01]}])\n" +
 			"",
 	},
 	{
 		Query: `SELECT * FROM datetime_table where timestamp_col > '2020-01-01'`,
-		ExpectedPlan: "Filter(datetime_table.timestamp_col > \"2020-01-01\")\n" +
+		ExpectedPlan: "Filter(datetime_table.timestamp_col > '2020-01-01')\n" +
 			" └─ Projected table access on [i date_col datetime_col timestamp_col time_col]\n" +
 			"     └─ IndexedTableAccess(datetime_table on [datetime_table.timestamp_col] with ranges: [{(2020-01-01, ∞)}])\n" +
 			"",
@@ -1962,7 +1962,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		ExpectedPlan: "Sort(othertable.i2 ASC)\n" +
 			" └─ Project(row_number() over ( order by [othertable.s2, idx=0, type=TEXT, nullable=false] ASC) as idx, othertable.i2, othertable.s2)\n" +
 			"     └─ Window(row_number() over ( order by [othertable.s2, idx=0, type=TEXT, nullable=false] ASC), othertable.i2, othertable.s2)\n" +
-			"         └─ Filter(NOT((othertable.s2 = \"second\")))\n" +
+			"         └─ Filter(NOT((othertable.s2 = 'second')))\n" +
 			"             └─ Projected table access on [i2 s2]\n" +
 			"                 └─ IndexedTableAccess(othertable on [othertable.s2] with ranges: [{(second, ∞)}, {(-∞, second)}])\n" +
 			"",
@@ -1970,7 +1970,7 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	{
 		Query: `SELECT * FROM (SELECT ROW_NUMBER() OVER (ORDER BY s2 ASC) idx, i2, s2 FROM othertable ORDER BY i2 ASC) a WHERE s2 <> 'second'`,
 		ExpectedPlan: "SubqueryAlias(a)\n" +
-			" └─ Filter(NOT((othertable.s2 = \"second\")))\n" +
+			" └─ Filter(NOT((othertable.s2 = 'second')))\n" +
 			"     └─ Sort(othertable.i2 ASC)\n" +
 			"         └─ Project(row_number() over ( order by [othertable.s2, idx=0, type=TEXT, nullable=false] ASC) as idx, othertable.i2, othertable.s2)\n" +
 			"             └─ Window(row_number() over ( order by [othertable.s2, idx=0, type=TEXT, nullable=false] ASC), othertable.i2, othertable.s2)\n" +
