@@ -25,7 +25,6 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/analyzer"
 	"github.com/dolthub/go-mysql-server/sql/information_schema"
-	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -48,18 +47,22 @@ type SqlEngine struct {
 	resultFormat   PrintResultFormat
 }
 
+type SqlEngineConfig struct {
+	InitialDb    string
+	IsReadOnly   bool
+	PrivFilePath string
+	ServerUser   string
+	ServerPass   string
+	Autocommit   bool
+}
+
 // NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
-	initialDb string,
-	isReadOnly bool,
-	mysqlDbFilePath string,
-	privFilePath string,
-	serverUser string,
-	serverPass string,
-	autocommit bool) (*SqlEngine, error) {
+	config *SqlEngineConfig,
+) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
 
@@ -80,54 +83,29 @@ func NewSqlEngine(
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
-	// Set mysql.db file path from server
-	mysql_file_handler.SetMySQLDbFilePath(mysqlDbFilePath)
-
-	// Load in MySQL Db from file, if it exists
-	data, err := mysql_file_handler.LoadData()
+	// Load in privileges from file, if it exists
+	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
+	data, err := persister.LoadData()
 	if err != nil {
 		return nil, err
 	}
 
-	// Use privilege file iff mysql.db file DNE
-	var users []*mysql_db.User
-	var roles []*mysql_db.RoleEdge
+	// Create temporary users if no privileges in config
 	var tempUsers []gms.TemporaryUser
-	if len(data) == 0 {
-		// Set privilege file path from server
-		if privFilePath != "" {
-			mysql_file_handler.SetPrivilegeFilePath(privFilePath)
-		}
-
-		// Load privileges from privilege file
-		users, roles, err = mysql_file_handler.LoadPrivileges()
-		if err != nil {
-			return nil, err
-		}
-
-		// Create temporary users if no privileges in config
-		if len(users) == 0 && len(serverUser) > 0 {
-			tempUsers = append(tempUsers, gms.TemporaryUser{
-				Username: serverUser,
-				Password: serverPass,
-			})
-		}
+	if len(data) == 0 && len(config.ServerUser) > 0 {
+		tempUsers = append(tempUsers, gms.TemporaryUser{
+			Username: config.ServerUser,
+			Password: config.ServerPass,
+		})
 	}
 
 	// Set up engine
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
 	// Load MySQL Db information
 	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
 		return nil, err
 	}
-	// Load Privilege data iff mysql db didn't exist
-	if len(data) == 0 {
-		if err = engine.Analyzer.Catalog.MySQLDb.LoadPrivilegeData(sql.NewEmptyContext(), users, roles); err != nil {
-			return nil, err
-		}
-	}
-	// Set persist callbacks
-	engine.Analyzer.Catalog.MySQLDb.SetPersistCallback(mysql_file_handler.SaveData)
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -160,15 +138,15 @@ func NewSqlEngine(
 	}
 
 	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
 	if err != nil {
 		return nil, err
 	}
 
 	return &SqlEngine{
 		dbs:            nameToDB,
-		contextFactory: newSqlContext(sess, initialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), autocommit),
+		contextFactory: newSqlContext(sess, config.InitialDb),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
