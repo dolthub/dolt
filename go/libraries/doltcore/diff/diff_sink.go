@@ -66,21 +66,21 @@ func (cds *ColorDiffSink) GetSchema() schema.Schema {
 	return cds.sch
 }
 
-var colDiffColors = map[DiffChType]ColorFunc{
-	DiffAdded:       color.New(color.Bold, color.FgGreen).Sprint,
-	DiffModifiedOld: color.New(color.FgRed).Sprint,
-	DiffModifiedNew: color.New(color.FgGreen).Sprint,
-	DiffRemoved:     color.New(color.Bold, color.FgRed).Sprint,
+var colDiffColors = map[ChangeType]ColorFunc{
+	Inserted:    color.New(color.Bold, color.FgGreen).Sprint,
+	ModifiedOld: color.New(color.FgRed).Sprint,
+	ModifiedNew: color.New(color.FgGreen).Sprint,
+	Deleted:     color.New(color.Bold, color.FgRed).Sprint,
 }
 
 func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) error {
 
 	taggedVals := make(row.TaggedValues)
 	allCols := cds.sch.GetAllCols()
-	colDiffs := make(map[string]DiffChType)
+	colDiffs := make(map[string]ChangeType)
 
-	if prop, ok := props.Get(CollChangesProp); ok {
-		if convertedVal, convertedOK := prop.(map[string]DiffChType); convertedOK {
+	if prop, ok := props.Get(ColChangesProp); ok {
+		if convertedVal, convertedOK := prop.(map[string]ChangeType); convertedOK {
 			colDiffs = convertedVal
 		}
 	}
@@ -99,17 +99,17 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 	taggedVals[diffColTag] = types.String("   ")
 	colorColumns := true
 	if prop, ok := props.Get(DiffTypeProp); ok {
-		if dt, convertedOK := prop.(DiffChType); convertedOK {
+		if dt, convertedOK := prop.(ChangeType); convertedOK {
 			switch dt {
-			case DiffAdded:
+			case Inserted:
 				taggedVals[diffColTag] = types.String(" + ")
 				colorColumns = false
-			case DiffRemoved:
+			case Deleted:
 				taggedVals[diffColTag] = types.String(" - ")
 				colorColumns = false
-			case DiffModifiedOld:
+			case ModifiedOld:
 				taggedVals[diffColTag] = types.String(" < ")
-			case DiffModifiedNew:
+			case ModifiedNew:
 				taggedVals[diffColTag] = types.String(" > ")
 			}
 			// Treat the diff indicator string as a diff of the same type
@@ -128,7 +128,7 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 			}
 		} else {
 			if prop, ok := props.Get(DiffTypeProp); ok {
-				if dt, convertedOK := prop.(DiffChType); convertedOK {
+				if dt, convertedOK := prop.(ChangeType); convertedOK {
 					if fn, ok := colDiffColors[dt]; ok {
 						colorFunc = fn
 					}

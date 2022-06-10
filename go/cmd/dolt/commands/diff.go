@@ -804,7 +804,7 @@ func mapTagToColName(sch, untypedUnionSch schema.Schema) (map[uint64]string, err
 	return tagToCol, nil
 }
 
-func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.Joiner, dArgs *diffArgs) (schema.Schema, *diff.DiffSplitter, errhand.VerboseError) {
+func createSplitter(ctx context.Context, vrw types.ValueReadWriter, fromSch schema.Schema, toSch schema.Schema, joiner *rowconv.Joiner, dArgs *diffArgs) (schema.Schema, *diff.Splitter, errhand.VerboseError) {
 
 	var unionSch schema.Schema
 	if dArgs.diffOutput == TabularDiffOutput {

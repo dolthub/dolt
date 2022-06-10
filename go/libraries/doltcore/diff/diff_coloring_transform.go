@@ -31,17 +31,17 @@ func ColoringTransform(r row.Row, props pipeline.ReadableMap) ([]*pipeline.Trans
 	diffType, ok := props.Get(DiffTypeProp)
 
 	if ok {
-		ct, ok := diffType.(DiffChType)
+		ct, ok := diffType.(ChangeType)
 
 		if ok {
 			switch ct {
-			case DiffAdded:
+			case Inserted:
 				updatedProps = greenTextProp
-			case DiffRemoved:
+			case Deleted:
 				updatedProps = redTextProp
-			case DiffModifiedOld:
+			case ModifiedOld:
 				updatedProps = yellowTextProp
-			case DiffModifiedNew:
+			case ModifiedNew:
 				updatedProps = yellowTextProp
 			}
 		}

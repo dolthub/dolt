@@ -49,10 +49,10 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 
 	taggedVals := make(row.TaggedValues)
 	allCols := sds.sch.GetAllCols()
-	colDiffs := make(map[string]DiffChType)
+	colDiffs := make(map[string]ChangeType)
 
-	if prop, ok := props.Get(CollChangesProp); ok {
-		if convertedVal, convertedOK := prop.(map[string]DiffChType); convertedOK {
+	if prop, ok := props.Get(ColChangesProp); ok {
+		if convertedVal, convertedOK := prop.(map[string]ChangeType); convertedOK {
 			colDiffs = convertedVal
 		}
 	}
@@ -76,9 +76,9 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 
 	taggedVals[diffColTag] = types.String("   ")
 	if prop, ok := props.Get(DiffTypeProp); ok {
-		if dt, convertedOK := prop.(DiffChType); convertedOK {
+		if dt, convertedOK := prop.(ChangeType); convertedOK {
 			switch dt {
-			case DiffAdded:
+			case Inserted:
 				stmt, err := sqlfmt.RowAsInsertStmt(r, sds.tableName, sds.sch)
 
 				if err != nil {
@@ -86,7 +86,7 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 				}
 
 				return iohelp.WriteLine(sds.wr, stmt)
-			case DiffRemoved:
+			case Deleted:
 				stmt, err := sqlfmt.RowAsDeleteStmt(r, sds.tableName, sds.sch)
 
 				if err != nil {
@@ -94,9 +94,9 @@ func (sds *SQLDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap) 
 				}
 
 				return iohelp.WriteLine(sds.wr, stmt)
-			case DiffModifiedOld:
+			case ModifiedOld:
 				return nil
-			case DiffModifiedNew:
+			case ModifiedNew:
 				if len(colDiffs) > 0 {
 					// Pass in the update as a setStr
 					keys := make([]string, len(colDiffs))

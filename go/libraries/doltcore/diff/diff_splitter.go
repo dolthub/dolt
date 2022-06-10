@@ -16,10 +16,8 @@ package diff
 
 import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 )
 
 const (
@@ -27,118 +25,74 @@ const (
 	// old value, or the new value after modification
 	DiffTypeProp = "difftype"
 
-	// CollChangesProp is the name of a property added to each modified row which is a map from collumn name to the
+	// ColChangesProp is the name of a property added to each modified row which is a map from column name to the
 	// type of change.
-	CollChangesProp = "collchanges"
+	ColChangesProp = "colchanges"
 )
 
-// DiffChType is an enum that represents the type of change
-type DiffChType int
+// ChangeType is an enum that represents the type of change in a diff
+type ChangeType int
 
 const (
-	// DiffAdded is the DiffTypeProp value for a row that was newly added (In new, but not in old)
-	DiffAdded DiffChType = iota
+	// Inserted is the DiffTypeProp value for a row that was newly added (In new, but not in old)
+	Inserted ChangeType = iota
 
-	// DiffRemoved is the DiffTypeProp value for a row that was newly deleted (In old, but not in new)
-	DiffRemoved
+	// Deleted is the DiffTypeProp value for a row that was newly deleted (In old, but not in new)
+	Deleted
 
-	// DiffModifiedOld is the DiffTypeProp value for the row which represents the old value of the row before it was changed.
-	DiffModifiedOld
+	// ModifiedOld is the DiffTypeProp value for the row which represents the old value of the row before it was changed.
+	ModifiedOld
 
-	// DiffModifiedNew is the DiffTypeProp value for the row which represents the new value of the row after it was changed.
-	DiffModifiedNew
+	// ModifiedNew is the DiffTypeProp value for the row which represents the new value of the row after it was changed.
+	ModifiedNew
 )
 
-// DiffTyped is an interface for an object that has a DiffChType
-type DiffTyped interface {
-	// DiffType gets the DiffChType of an object
-	DiffType() DiffChType
-}
-
-// DiffRow is a row.Row with a change type associated with it.
-type DiffRow struct {
+// Row is a row.Row with a change type associated with it.
+type Row struct {
 	row.Row
-	diffType DiffChType
+	diffType ChangeType
 }
 
-// DiffType gets the DiffChType for the row.
-func (dr *DiffRow) DiffType() DiffChType {
+// DiffType gets the ChangeType for the row.
+func (dr *Row) DiffType() ChangeType {
 	return dr.diffType
 }
 
-// DiffSplitter is a struct that can take a diff which is represented by a row with a column for every field in the old
-// version, and a column for every field in the new version and split it into two rows with properties which annotate
-// what each row is.  This is used to show diffs as 2 lines, instead of 1.
-type DiffSplitter struct {
-	joiner  *rowconv.Joiner
-	oldConv *rowconv.RowConverter
-	newConv *rowconv.RowConverter
+// RowSplitter is a function that takes a diff result row and splits it into [old, new] rows. Either may be nil.
+type RowSplitter func(row.Row) ([]row.Row, error)
+
+// Splitter knows how to split a diff row into two, one for the old values and one for the new values. This is used
+// when printing a diff result on the command line.
+type Splitter struct {
+	splitter     RowSplitter
+	targetSchema schema.Schema
 }
 
 // NewDiffSplitter creates a DiffSplitter
-func NewDiffSplitter(joiner *rowconv.Joiner, oldConv, newConv *rowconv.RowConverter) *DiffSplitter {
-	return &DiffSplitter{joiner, oldConv, newConv}
-}
-
-func convertNamedRow(rows map[string]row.Row, name string, rc *rowconv.RowConverter) (row.Row, error) {
-	r, ok := rows[name]
-
-	if !ok || r == nil {
-		return nil, nil
-	}
-
-	return rc.Convert(r)
+func NewDiffSplitter(joiner RowSplitter, targetSchema schema.Schema) *Splitter {
+	return &Splitter{joiner, targetSchema}
 }
 
 // SplitDiffIntoOldAndNew is a pipeline.TransformRowFunc which can be used in a pipeline to split single row diffs,
 // into 2 row diffs.
-func (ds *DiffSplitter) SplitDiffIntoOldAndNew(inRow row.Row, props pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
-	rows, err := ds.joiner.Split(inRow)
+func (ds *Splitter) SplitDiffIntoOldAndNew(inRow row.Row, _ pipeline.ReadableMap) (rowData []*pipeline.TransformedRowResult, badRowDetails string) {
+	rows, err := ds.splitter(inRow)
 	if err != nil {
 		return nil, err.Error()
 	}
 
-	mappedOld, err := convertNamedRow(rows, From, ds.oldConv)
+	old, new := rows[0], rows[1]
 
-	if err != nil {
-		return nil, err.Error()
-	}
+	var oldProps = map[string]interface{}{DiffTypeProp: Deleted}
+	var newProps = map[string]interface{}{DiffTypeProp: Inserted}
+	if old != nil && new != nil {
+		oldColDiffs := make(map[string]ChangeType)
+		newColDiffs := make(map[string]ChangeType)
 
-	mappedNew, err := convertNamedRow(rows, To, ds.newConv)
-
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	originalNewSch := ds.joiner.SchemaForName(From)
-	originalOldSch := ds.joiner.SchemaForName(To)
-
-	var oldProps = map[string]interface{}{DiffTypeProp: DiffRemoved}
-	var newProps = map[string]interface{}{DiffTypeProp: DiffAdded}
-	if mappedOld != nil && mappedNew != nil {
-		oldColDiffs := make(map[string]DiffChType)
-		newColDiffs := make(map[string]DiffChType)
-
-		outSch := ds.newConv.DestSch
-		outCols := outSch.GetAllCols()
+		outCols := ds.targetSchema.GetAllCols()
 		err := outCols.Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			oldVal, _ := mappedOld.GetColVal(tag)
-			newVal, _ := mappedNew.GetColVal(tag)
-
-			_, inOld := originalOldSch.GetAllCols().GetByTag(tag)
-			_, inNew := originalNewSch.GetAllCols().GetByTag(tag)
-
-			if inOld && inNew {
-				if !valutil.NilSafeEqCheck(oldVal, newVal) {
-					newColDiffs[col.Name] = DiffModifiedNew
-					oldColDiffs[col.Name] = DiffModifiedOld
-				}
-			} else if inOld {
-				oldColDiffs[col.Name] = DiffRemoved
-			} else {
-				newColDiffs[col.Name] = DiffAdded
-			}
-
+			newColDiffs[col.Name] = ModifiedNew
+			oldColDiffs[col.Name] = ModifiedOld
 			return false, nil
 		})
 
@@ -146,17 +100,17 @@ func (ds *DiffSplitter) SplitDiffIntoOldAndNew(inRow row.Row, props pipeline.Rea
 			return nil, err.Error()
 		}
 
-		oldProps = map[string]interface{}{DiffTypeProp: DiffModifiedOld, CollChangesProp: oldColDiffs}
-		newProps = map[string]interface{}{DiffTypeProp: DiffModifiedNew, CollChangesProp: newColDiffs}
+		oldProps = map[string]interface{}{DiffTypeProp: ModifiedOld, ColChangesProp: oldColDiffs}
+		newProps = map[string]interface{}{DiffTypeProp: ModifiedNew, ColChangesProp: newColDiffs}
 	}
 
 	var results []*pipeline.TransformedRowResult
-	if mappedOld != nil {
-		results = append(results, &pipeline.TransformedRowResult{RowData: mappedOld, PropertyUpdates: oldProps})
+	if old != nil {
+		results = append(results, &pipeline.TransformedRowResult{RowData: old, PropertyUpdates: oldProps})
 	}
 
-	if mappedNew != nil {
-		results = append(results, &pipeline.TransformedRowResult{RowData: mappedNew, PropertyUpdates: newProps})
+	if new != nil {
+		results = append(results, &pipeline.TransformedRowResult{RowData: new, PropertyUpdates: newProps})
 	}
 
 	return results, ""
