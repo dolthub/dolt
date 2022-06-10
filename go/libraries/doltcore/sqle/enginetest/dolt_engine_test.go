@@ -26,6 +26,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -331,7 +332,9 @@ func TestDoltUserPrivileges(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
+
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
