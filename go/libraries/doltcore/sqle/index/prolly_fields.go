@@ -144,6 +144,8 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
+	case val.AddressEnc:
+		v, ok = td.GetAddress(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
@@ -228,6 +230,8 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutJSON(i, buf)
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
+	case val.AddressEnc:
+		tb.PutAddress(i, v.([]byte))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

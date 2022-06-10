@@ -40,6 +40,10 @@ func ValueFromConflictMap(m prolly.ConflictMap) types.Value {
 	return tree.ValueFromNode(m.Node())
 }
 
+func ValueFromArtifactMap(m prolly.ArtifactMap) types.Value {
+	return tree.ValueFromNode(m.Node())
+}
+
 func MapFromValue(v types.Value, sch schema.Schema, vrw types.ValueReadWriter) prolly.Map {
 	root := NodeFromValue(v)
 	kd := KeyDescriptorFromSchema(sch)

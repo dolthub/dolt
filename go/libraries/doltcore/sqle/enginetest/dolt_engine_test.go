@@ -223,19 +223,7 @@ func TestReplaceIntoErrors(t *testing.T) {
 }
 
 func TestUpdate(t *testing.T) {
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip update for join
-		patternToSkip := "join"
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), patternToSkip) {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestUpdate(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestUpdate(t, newDoltHarness(t))
 }
 
 func TestUpdateErrors(t *testing.T) {
@@ -268,12 +256,8 @@ func TestScripts(t *testing.T) {
 		skipped = append(skipped,
 			// Different error output for primary key error
 			"failed statements data validation for INSERT, UPDATE",
-			// missing FK violation
-			"failed statements data validation for DELETE, REPLACE",
 			// wrong results
 			"Indexed Join On Keyless Table",
-			// spurious fk violation
-			"Nested Subquery projections (NTC)",
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
@@ -852,7 +836,6 @@ func TestKeylessUniqueIndex(t *testing.T) {
 }
 
 func TestQueriesPrepared(t *testing.T) {
-	skipPreparedTests(t)
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
 
