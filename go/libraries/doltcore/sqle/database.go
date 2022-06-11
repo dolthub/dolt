@@ -482,6 +482,19 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 }
 
 func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
+
+	// TODO: formalize this
+	if commitRef == "WORKING" || commitRef == "STAGED" {
+		sess := dsess.DSessFromSess(ctx.Session)
+		// TODO: no current database
+		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		if commitRef == "WORKING" {
+			return roots.Working, nil
+		} else if commitRef == "STAGED" {
+			return roots.Staged, nil
+		}
+	}
+
 	cs, err := doltdb.NewCommitSpec(commitRef)
 	if err != nil {
 		return nil, err

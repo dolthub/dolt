@@ -17,10 +17,12 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/store/types"
@@ -165,6 +167,21 @@ func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, ref interface{
 		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", ref)
 	}
 
+	sess := dsess.DSessFromSess(ctx.Session)
+
+	// TODO: formalize this
+	if hashStr == "WORKING" || hashStr == "STAGED" {
+		// TODO: get from working set / staged update time
+		now := types.Timestamp(time.Now())
+		// TODO: no current database
+		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		if hashStr == "WORKING" {
+			return roots.Working, hashStr, &now, nil
+		} else if hashStr == "STAGED" {
+			return roots.Staged, hashStr, &now, nil
+		}
+	}
+
 	var root *doltdb.RootValue
 	var commitTime *types.Timestamp
 	cs, err := doltdb.NewCommitSpec(hashStr)
@@ -172,7 +189,13 @@ func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, ref interface{
 		return nil, "", nil, err
 	}
 
-	cm, err := ddb.Resolve(ctx, cs, nil)
+	// TODO: no current database
+	headRef, err := sess.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return nil, "", nil, err
+	}
+
+	cm, err := ddb.Resolve(ctx, cs, headRef)
 	if err != nil {
 		return nil, "", nil, err
 	}

@@ -472,6 +472,17 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (*engine.SqlEngine, er
 	)
 }
 
+// TODO: engine should do this for me
+func newSqlContext(ctx context.Context, se *engine.SqlEngine) (*sql.Context, error) {
+	sqlCtx, err := se.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	return sqlCtx, nil
+}
+
 
 func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
@@ -621,15 +632,15 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 	// TODO: need to do anything different for different added / dropped tables?
 	// TODO: where clause
 	columns := getColumnNamesString(td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff(%s, '%s', '%s')", columns, "diff_type", td.ToName, from, to)
-	sqlCtx, err := engine.NewContext(ctx)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", td.ToName, from, to)
+	sqlCtx, err := newSqlContext(ctx, engine)
 	if err != nil {
-		return nil
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	sch, rowIter, err := engine.Query(sqlCtx, query)
 	if err != nil {
-		return nil
+		return errhand.VerboseErrorFromError(err)
 	}
 
 	var sink DiffSink
@@ -662,9 +673,13 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	splitter := diff.NewDiffSplitter(splitDiff(td.ToSch, doltSch), doltSch)
+	simplifiedTableSch, err := toResultSchema(td.ToSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
 
-	p := newDiffPrintingPipeline(dArgs, diffSrc, sink, splitter.SplitDiffIntoOldAndNew, td.ToSch, badRowCallback)
+	splitter := diff.NewDiffSplitter(splitDiff(simplifiedTableSch, doltSch), doltSch)
+	p := newDiffPrintingPipeline(dArgs, diffSrc, sink, splitter.SplitDiffIntoOldAndNew, simplifiedTableSch, badRowCallback)
 
 	if dArgs.diffOutput != SQLDiffOutput {
 		// TODO: fill this tagged strings
@@ -687,6 +702,20 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 	}
 
 	return nil
+}
+
+func toResultSchema(sch schema.Schema) (schema.Schema, error) {
+	var cols []schema.Column
+	var i uint64
+	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		col.Tag = i
+		cols = append(cols, col)
+		i++
+		return false, nil
+	})
+
+	colColl := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colColl), nil
 }
 
 func getColumnNamesString(sch schema.Schema) string {
