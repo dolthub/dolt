@@ -751,7 +751,11 @@ func splitDiff(tableSchema schema.Schema, resultSetSchema schema.Schema) diff.Ro
 					return true, nil
 				}
 
-				taggedVals[tag], _ = r.GetColVal(tag)
+				val, ok := r.GetColVal(tag)
+				if !ok {
+					val = types.NullValue
+				}
+				taggedVals[tag] = val
 				return false, nil
 			})
 
@@ -769,7 +773,12 @@ func splitDiff(tableSchema schema.Schema, resultSetSchema schema.Schema) diff.Ro
 					return true, nil
 				}
 
-				taggedVals[tag - (uint64(tableSchema.GetAllCols().Size()))], _ = r.GetColVal(tag)
+				val, ok := r.GetColVal(tag)
+				if !ok {
+					val = types.NullValue
+				}
+
+				taggedVals[tag - (uint64(tableSchema.GetAllCols().Size()))] = val
 				return false, nil
 			})
 
