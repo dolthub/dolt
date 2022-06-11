@@ -24,10 +24,12 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -890,6 +892,11 @@ func TestKeylessUniqueIndex(t *testing.T) {
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
 
+func TestTypesOverWire(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
@@ -1224,5 +1231,11 @@ func skipNewFormat(t *testing.T) {
 func skipPreparedTests(t *testing.T) {
 	if skipPrepared {
 		t.Skip("skip prepared")
+	}
+}
+
+func newSessionBuilder(harness *DoltHarness) server.SessionBuilder {
+	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
+		return harness.session, nil
 	}
 }

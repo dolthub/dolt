@@ -173,11 +173,11 @@ var typesTests = []struct {
 }
 
 var (
-	typesTableRow1 = sql.Row{int32(-3), uint64(1), forceParseTime("2020-05-14 12:00:00"), "-3.30000", "a", -3.3, "a", "-00:03:03", "a", int16(1980)}
-	typesTableRow2 = sql.Row{int32(-1), uint64(2), forceParseTime("2020-05-14 12:00:01"), "-1.10000", "b", -1.1, "a,b", "-00:01:01", "b", int16(1990)}
-	typesTableRow3 = sql.Row{int32(0), uint64(3), forceParseTime("2020-05-14 12:00:02"), "0.00000", "c", 0.0, "c", "00:00:00", "c", int16(2000)}
-	typesTableRow4 = sql.Row{int32(1), uint64(4), forceParseTime("2020-05-14 12:00:03"), "1.10000", "d", 1.1, "a,c", "00:01:01", "d", int16(2010)}
-	typesTableRow5 = sql.Row{int32(3), uint64(5), forceParseTime("2020-05-14 12:00:04"), "3.30000", "e", 3.3, "b,c", "00:03:03", "e", int16(2020)}
+	typesTableRow1 = sql.Row{int32(-3), uint64(1), forceParseTime("2020-05-14 12:00:00"), "-3.30000", uint16(2), -3.3, uint64(1), sql.Timespan(-183000000), "a", int16(1980)}
+	typesTableRow2 = sql.Row{int32(-1), uint64(2), forceParseTime("2020-05-14 12:00:01"), "-1.10000", uint16(3), -1.1, uint64(3), sql.Timespan(-61000000), "b", int16(1990)}
+	typesTableRow3 = sql.Row{int32(0), uint64(3), forceParseTime("2020-05-14 12:00:02"), "0.00000", uint16(4), 0.0, uint64(4), sql.Timespan(0), "c", int16(2000)}
+	typesTableRow4 = sql.Row{int32(1), uint64(4), forceParseTime("2020-05-14 12:00:03"), "1.10000", uint16(5), 1.1, uint64(5), sql.Timespan(61000000), "d", int16(2010)}
+	typesTableRow5 = sql.Row{int32(3), uint64(5), forceParseTime("2020-05-14 12:00:04"), "3.30000", uint16(6), 3.3, uint64(6), sql.Timespan(183000000), "e", int16(2020)}
 )
 
 func TestDoltIndexEqual(t *testing.T) {
