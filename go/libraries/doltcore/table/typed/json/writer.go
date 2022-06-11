@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -133,31 +132,28 @@ func (jsonw *JSONWriter) WriteSqlRow(ctx context.Context, row sql.Row) error {
 		}
 
 		switch col.TypeInfo.GetTypeIdentifier() {
-		case typeinfo.DecimalTypeIdentifier,
+		case typeinfo.DatetimeTypeIdentifier,
+			typeinfo.DecimalTypeIdentifier,
 			typeinfo.EnumTypeIdentifier,
 			typeinfo.InlineBlobTypeIdentifier,
 			typeinfo.SetTypeIdentifier,
 			typeinfo.TimeTypeIdentifier,
 			typeinfo.TupleTypeIdentifier,
 			typeinfo.UuidTypeIdentifier,
-			typeinfo.VarBinaryTypeIdentifier,
-			typeinfo.YearTypeIdentifier:
-			val, err = defaultString.Convert(val)
+			typeinfo.VarBinaryTypeIdentifier:
+			sqlVal, err := col.TypeInfo.ToSqlType().SQL(nil, val)
 			if err != nil {
 				return true, err
 			}
-		case typeinfo.DatetimeTypeIdentifier:
-			val, err = col.TypeInfo.FormatValue(types.Timestamp(val.(time.Time)))
-			if err != nil {
-				return true, err
-			}
+			val = sqlVal.ToString()
 
 		case typeinfo.BitTypeIdentifier,
 			typeinfo.BoolTypeIdentifier,
 			typeinfo.VarStringTypeIdentifier,
 			typeinfo.UintTypeIdentifier,
 			typeinfo.IntTypeIdentifier,
-			typeinfo.FloatTypeIdentifier:
+			typeinfo.FloatTypeIdentifier,
+			typeinfo.YearTypeIdentifier:
 			// use primitive type
 		}
 
