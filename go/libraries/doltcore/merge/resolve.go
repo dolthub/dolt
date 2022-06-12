@@ -27,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -245,7 +246,8 @@ func validateConstraintViolations(ctx context.Context, before, after *doltdb.Roo
 		return err
 	}
 
-	_, violators, err := AddConstraintViolations(ctx, after, before, set.NewStrSet(tables))
+	// TODO: fix resolve in the new storage format
+	_, violators, err := AddConstraintViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
 	if err != nil {
 		return err
 	}

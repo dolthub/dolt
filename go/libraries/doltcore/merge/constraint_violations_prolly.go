@@ -22,6 +22,7 @@ func prollyParentFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData prolly.Map,
 	jsonData []byte,
+	ourCmHash hash.Hash,
 ) (*doltdb.Table, bool, error) {
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
@@ -68,7 +69,7 @@ func prollyParentFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			found, err := createCVsForPartialKeyMatches(ctx, partialKeyRange, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData)
+			found, err := createCVsForPartialKeyMatches(ctx, partialKeyRange, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, ourCmHash)
 			if err != nil {
 				return err
 			}
@@ -105,6 +106,7 @@ func prollyChildFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildRowData prolly.Map,
 	jsonData []byte,
+	ourCmHash hash.Hash,
 ) (*doltdb.Table, bool, error) {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
@@ -133,7 +135,7 @@ func prollyChildFkConstraintViolations(
 			}
 
 			partialKeyRange := prolly.ClosedRange(partialKey, partialKey, partialDesc)
-			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKeyRange, parentScndryIdx, artEditor, jsonData)
+			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKeyRange, parentScndryIdx, artEditor, jsonData, ourCmHash)
 			if err != nil {
 				return err
 			}
@@ -167,7 +169,8 @@ func createCVIfNoPartialKeyMatches(
 	partialKeyRange prolly.Range,
 	idx prolly.Map,
 	editor prolly.ArtifactsEditor,
-	jsonData []byte) (bool, error) {
+	jsonData []byte,
+	ourCmHash hash.Hash) (bool, error) {
 	itr, err := idx.IterRange(ctx, partialKeyRange)
 	if err != nil {
 		return false, err
@@ -185,9 +188,7 @@ func createCVIfNoPartialKeyMatches(
 		return false, err
 	}
 
-	tempCmHash := hash.Of(nil)
-
-	err = editor.Add(ctx, k, tempCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
+	err = editor.Add(ctx, k, ourCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
 	if err != nil {
 		return false, err
 	}
@@ -204,6 +205,7 @@ func createCVsForPartialKeyMatches(
 	secondaryIdx prolly.Map,
 	pool pool.BuffPool,
 	jsonData []byte,
+	ourCmHash hash.Hash,
 ) (bool, error) {
 	createdViolation := false
 
@@ -240,9 +242,7 @@ func createCVsForPartialKeyMatches(
 			return false, err
 		}
 
-		tempCmHash := hash.Of(nil)
-
-		err = artifactEditor.Add(ctx, primaryIdxKey, tempCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
+		err = artifactEditor.Add(ctx, primaryIdxKey, ourCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
 		if err != nil {
 			return false, err
 		}

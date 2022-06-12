@@ -79,16 +79,20 @@ func DoDoltConstraintsVerify(ctx *sql.Context, isAll bool, vals []string) (int, 
 	}
 	workingRoot := workingSet.WorkingRoot()
 	var comparingRoot *doltdb.RootValue
+	headCommit, err := dSess.GetHeadCommit(ctx, dbName)
+	if err != nil {
+		return 1, err
+	}
+	h, err := headCommit.HashOf()
+	if err != nil {
+		return 1, err
+	}
 	if isAll {
 		comparingRoot, err = doltdb.EmptyRootValue(ctx, workingRoot.VRW())
 		if err != nil {
 			return 1, err
 		}
 	} else {
-		headCommit, err := dSess.GetHeadCommit(ctx, dbName)
-		if err != nil {
-			return 1, err
-		}
 		comparingRoot, err = headCommit.GetRootValue(ctx)
 		if err != nil {
 			return 1, err
@@ -107,7 +111,7 @@ func DoDoltConstraintsVerify(ctx *sql.Context, isAll bool, vals []string) (int, 
 		tableSet.Add(tableName)
 	}
 
-	newRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, workingRoot, comparingRoot, tableSet)
+	newRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, workingRoot, comparingRoot, tableSet, h)
 	if err != nil {
 		return 1, err
 	}

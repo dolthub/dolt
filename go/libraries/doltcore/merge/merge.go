@@ -1019,7 +1019,7 @@ func MergeRoots(ctx context.Context, ourCmHash hash.Hash, ourRoot, theirRoot, an
 		return nil, nil, err
 	}
 
-	mergedRoot, _, err = AddConstraintViolations(ctx, mergedRoot, ancRoot, nil)
+	mergedRoot, _, err = AddConstraintViolations(ctx, mergedRoot, ancRoot, nil, ourCmHash)
 	if err != nil {
 		return nil, nil, err
 	}

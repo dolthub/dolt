@@ -105,7 +105,17 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to create an empty root.").AddCause(err).Build(), nil)
 		}
 	}
-	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet)
+
+	cm, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit.").AddCause(err).Build(), nil)
+	}
+	h, err := cm.HashOf()
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
+	}
+
+	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}

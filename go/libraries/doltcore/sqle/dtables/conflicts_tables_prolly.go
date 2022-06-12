@@ -171,31 +171,45 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		r[itr.b+i], r[itr.o+i], r[itr.t+i] = f, f, f
+		if c.bV != nil {
+			r[itr.b+i] = f
+		}
+		if c.oV != nil {
+			r[itr.o+i] = f
+		}
+		if c.tV != nil {
+			r[itr.t+i] = f
+		}
 	}
 
-	for i := 0; i < itr.baseVD.Count(); i++ {
-		f, err := index.GetField(itr.baseVD, i, c.bV)
-		if err != nil {
-			return nil, err
+	if c.bV != nil {
+		for i := 0; i < itr.baseVD.Count(); i++ {
+			f, err := index.GetField(itr.baseVD, i, c.bV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.b+itr.kd.Count()+i] = f
 		}
-		r[itr.b+itr.kd.Count()+i] = f
 	}
 
-	for i := 0; i < itr.oursVD.Count(); i++ {
-		f, err := index.GetField(itr.oursVD, i, c.oV)
-		if err != nil {
-			return nil, err
+	if c.oV != nil {
+		for i := 0; i < itr.oursVD.Count(); i++ {
+			f, err := index.GetField(itr.oursVD, i, c.oV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.o+itr.kd.Count()+i] = f
 		}
-		r[itr.o+itr.kd.Count()+i] = f
 	}
 
-	for i := 0; i < itr.theirsVD.Count(); i++ {
-		f, err := index.GetField(itr.theirsVD, i, c.tV)
-		if err != nil {
-			return nil, err
+	if c.tV != nil {
+		for i := 0; i < itr.theirsVD.Count(); i++ {
+			f, err := index.GetField(itr.theirsVD, i, c.tV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.t+itr.kd.Count()+i] = f
 		}
-		r[itr.t+itr.kd.Count()+i] = f
 	}
 
 	return r, nil

@@ -1213,32 +1213,73 @@ var MergeScripts = []queries.ScriptTest{
 	//		},
 	//	},
 	//},
+	//{
+	//	Name: "Constraint violations are persisted",
+	//	SetUpScript: []string{
+	//		"set dolt_force_transaction_commit = on;",
+	//		"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+	//		"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+	//		"CREATE table other (pk int);",
+	//		"INSERT INTO parent VALUES (1, 1), (2, 2);",
+	//		"CALL DOLT_COMMIT('-am', 'setup');",
+	//		"CALL DOLT_BRANCH('branch1');",
+	//		"CALL DOLT_BRANCH('branch2');",
+	//		"DELETE FROM parent where pk = 1;",
+	//		"CALL DOLT_COMMIT('-am', 'delete parent 1');",
+	//		"CALL DOLT_CHECKOUT('branch1');",
+	//		"INSERT INTO CHILD VALUES (1, 1);",
+	//		"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+	//		"CALL DOLT_CHECKOUT('main');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "CALL DOLT_MERGE('branch1');",
+	//			Expected: []sql.Row{{0, 1}},
+	//		},
+	//		{
+	//			Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+	//			Expected: []sql.Row{{"foreign key", 1, 1}},
+	//		},
+	//	},
+	//},
 	{
-		Name: "Constraint violations are persisted",
+		Name: "DOLT_MERGE detects conflicts, returns them in dolt_conflicts table",
 		SetUpScript: []string{
-			"set dolt_force_transaction_commit = on;",
-			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
-			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
-			"CREATE table other (pk int);",
-			"INSERT INTO parent VALUES (1, 1), (2, 2);",
-			"CALL DOLT_COMMIT('-am', 'setup');",
-			"CALL DOLT_BRANCH('branch1');",
-			"CALL DOLT_BRANCH('branch2');",
-			"DELETE FROM parent where pk = 1;",
-			"CALL DOLT_COMMIT('-am', 'delete parent 1');",
-			"CALL DOLT_CHECKOUT('branch1');",
-			"INSERT INTO CHILD VALUES (1, 1);",
-			"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
-			"CALL DOLT_CHECKOUT('main');",
+			"SET dolt_allow_commit_conflicts = 0;",
+			"CREATE TABLE one_pk ( pk1 BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, PRIMARY KEY (pk1));",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add tables');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'changed main');",
+			"SELECT DOLT_CHECKOUT('feature-branch');",
+			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');",
+			"SELECT DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "CALL DOLT_MERGE('branch1');",
-				Expected: []sql.Row{{0, 1}},
+				Query: "CALL DOLT_MERGE('feature-branch');",
 			},
 			{
-				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Query:            "SET autocommit = off;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query: "SELECT DOLT_MERGE('feature-branch');",
+			},
+			{
+				Query:    "SELECT * FROM dolt_conflicts;",
+				Expected: []sql.Row{{"one_pk", 1}},
+			},
+			{
+				Query: "CALL DOLT_MERGE('--abort');",
+			},
+			{
+				Query: "SELECT DOLT_MERGE('feature-branch');",
+			},
+			{
+				Query: "SELECT * from dolt_conflicts_one_pk;",
 			},
 		},
 	},
@@ -1386,7 +1427,84 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	// TODO: Violation merging
+	{
+		Name: "violations on different branches can be merged",
+		SetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
+
+			"CALL DOLT_CHECKOUT('-b', 'viol1');",
+			"CREATE TABLE parent (pk int PRIMARY KEY);",
+			"CREATE TABLE child (pk int PRIMARY KEY, fk int, FOREIGN KEY (fk) REFERENCES parent (pk));",
+			"CALL DOLT_COMMIT('-am', 'setup table');",
+			"CALL DOLT_BRANCH('viol2');",
+			"INSERT INTO parent VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'viol1 setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"INSERT INTO child VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert child of 1');",
+
+			"CALL DOLT_CHECKOUT('viol1');",
+			"DELETE FROM parent where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'delete 1');",
+			"CALL DOLT_MERGE('other');",
+			"CALL DOLT_COMMIT('-afm', 'commit violations 1');",
+
+			"CALL DOLT_CHECKOUT('viol2');",
+			"INSERT INTO parent values (2);",
+			"CALL DOLT_COMMIT('-am', 'viol2 setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other2');",
+			"INSERT into child values (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'insert child of 2');",
+
+			"CALL DOLT_CHECKOUT('viol2');",
+			"DELETE FROM parent where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'delete 2');",
+			"CALL DOLT_MERGE('other2');",
+			"CALL DOLT_COMMIT('-afm', 'commit violations 2');",
+
+			"CALL DOLT_CHECKOUT('viol1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}},
+			},
+			{
+				Query:    "SELECT pk, fk from child;",
+				Expected: []sql.Row{{1, 1}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('viol2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 2, 2}},
+			},
+			{
+				Query:    "SELECT pk, fk from child;",
+				Expected: []sql.Row{{2, 2}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('viol1');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+			},
+		},
+	},
 }
 
 // AppendViolationsAbortOnConflictsMergeScripts tests old format merge behavior
