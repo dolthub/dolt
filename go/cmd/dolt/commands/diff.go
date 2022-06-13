@@ -23,6 +23,7 @@ import (
 
 	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
@@ -709,6 +710,9 @@ func toResultSchema(sch schema.Schema) (schema.Schema, error) {
 	var i uint64
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		col.Tag = i
+		col.Kind = types.StringKind
+		col.TypeInfo = typeinfo.StringDefaultType
+
 		cols = append(cols, col)
 		i++
 		return false, nil
@@ -719,14 +723,14 @@ func toResultSchema(sch schema.Schema) (schema.Schema, error) {
 }
 
 func getColumnNamesString(sch schema.Schema) string {
-	// TODO: do we need to consider from schema as well?
+	// TODO: do we need to consider from schema as well? yeah probably
 	var cols []string
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, "from_" + col.Name)
+		cols = append(cols, fmt.Sprintf("cast (from_%s as char)", col.Name))
 		return false, nil
 	})
 	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, "to_" + col.Name)
+		cols = append(cols, fmt.Sprintf("cast (to_%s as char)", col.Name))
 		return false, nil
 	})
 	return strings.Join(cols, ",")
