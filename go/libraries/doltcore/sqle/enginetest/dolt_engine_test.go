@@ -79,18 +79,30 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
 			Name: "primary key table: non-pk column type changes",
 			SetUpScript: []string{
-				"CREATE TABLE t1 (a INTEGER, create_time timestamp(6) NOT NULL DEFAULT NOW(6), primary key (a))",
+				"create table t (pk int primary key, c1 int, c2 text);",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+				"alter table t modify column c2 int;",
+				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "SHOW CREATE TABLE t1",
-					Expected: []sql.Row{sql.Row{"t1", "CREATE TABLE `t1` (\n  `a` int NOT NULL,\n  `create_time` timestamp NOT NULL DEFAULT NOW(6),\n  PRIMARY KEY (`a`)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin"}},
+					Query:    "select count(*) from dolt_history_t;",
+					Expected: []sql.Row{{4}},
+				},
+				{
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+					Expected: []sql.Row{{1, nil}, {4, nil}},
+				},
+				{
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+					Expected: []sql.Row{{1, 3}, {4, 6}},
 				},
 			},
 		},
