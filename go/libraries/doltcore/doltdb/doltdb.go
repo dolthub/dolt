@@ -1202,3 +1202,35 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	ddb.db.ExecuteCommitHooks(ctx, ds)
 	return nil
 }
+
+func (ddb *DoltDB) GetBranchesByCommitHash(ctx context.Context, commitHash hash.Hash) ([]BranchWithHash, error) {
+	dss, err := ddb.db.GetDatasetsByCommitHash(ctx, commitHash)
+	if err != nil {
+		return nil, err
+	}
+
+	var refs []BranchWithHash
+
+	err = dss.IterAll(ctx, func(key string, addr hash.Hash) error {
+		keyStr := key
+
+		var dref ref.DoltRef
+		if ref.IsRef(keyStr) {
+			dref, err = ref.Parse(keyStr)
+			if err != nil {
+				return err
+			}
+
+			if _, ok := branchRefFilter[dref.GetType()]; ok {
+				refs = append(refs, BranchWithHash{dref, addr})
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return refs, nil
+}

@@ -61,6 +61,7 @@ type Database interface {
 	// datasetID in the above Datasets Map.
 	GetDataset(ctx context.Context, datasetID string) (Dataset, error)
 
+	GetDatasetsByCommitHash(ctx context.Context, commitHash hash.Hash) (DatasetsMap, error)
 	// Commit updates the Commit that ds.ID() in this database points at. All
 	// Values that have been written to this Database are guaranteed to be
 	// persistent after Commit() returns successfully.
