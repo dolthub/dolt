@@ -223,6 +223,10 @@ func (t *TempTable) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
+func (t *TempTable) GetStatistics(ctx *sql.Context) (sql.Statistics, error) {
+	return nil, nil
+}
+
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	if t.lookup != nil {
 		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)

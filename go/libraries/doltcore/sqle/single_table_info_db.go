@@ -202,6 +202,10 @@ func (db *SingleTableInfoDatabase) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
+func (db *SingleTableInfoDatabase) GetStatistics(ctx *sql.Context) (sql.Statistics, error) {
+	return nil, nil
+}
+
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"sort"
@@ -74,6 +75,99 @@ type projected interface {
 	Project() []string
 }
 
+// TODO: interfaces?
+
+// TODO: equi-height buckets
+type SingletonBucket struct {
+	value     float64
+	frequency float64 // indicates what % of values are <= value
+}
+
+var _ sql.Bucket = &SingletonBucket{}
+
+func (sb *SingletonBucket) SetValue(value float64) {
+	sb.value = value
+}
+
+func (sb *SingletonBucket) SetFrequency(value float64) {
+	sb.frequency = value
+}
+
+func (sb *SingletonBucket) GetValue() float64 {
+	return sb.value
+}
+
+func (sb *SingletonBucket) GetFrequency() float64 {
+	return sb.frequency
+}
+
+type DoltColumnStatistic struct {
+	buckets   map[float64]sql.Bucket
+	mean      float64
+	min       float64
+	max       float64
+	nullCount uint64
+}
+
+var _ sql.ColumnStatistics = &DoltColumnStatistic{}
+
+func (dcs *DoltColumnStatistic) SetBucket(value float64, bucket sql.Bucket) {
+	dcs.buckets[value] = bucket
+}
+
+func (dcs *DoltColumnStatistic) SetMean(value float64) {
+	dcs.mean = value
+}
+
+func (dcs *DoltColumnStatistic) SetMin(value float64) {
+	dcs.min = value
+}
+
+func (dcs *DoltColumnStatistic) SetMax(value float64) {
+	dcs.max = value
+}
+
+func (dcs *DoltColumnStatistic) SetNullCount(value uint64) {
+	dcs.nullCount = value
+}
+
+func (dcs *DoltColumnStatistic) GetBucket(value float64) sql.Bucket {
+	return dcs.buckets[value]
+}
+
+func (dcs *DoltColumnStatistic) GetBucketMap() map[float64]sql.Bucket {
+	return dcs.buckets
+}
+
+func (dcs *DoltColumnStatistic) GetMean() float64 {
+	return dcs.mean
+}
+
+func (dcs *DoltColumnStatistic) GetMin() float64 {
+	return dcs.min
+}
+
+func (dcs *DoltColumnStatistic) GetMax() float64 {
+	return dcs.max
+}
+
+func (dcs *DoltColumnStatistic) GetNullCount() uint64 {
+	return dcs.nullCount
+}
+
+type DoltStatistics struct {
+	ColumnStatisticsMap map[string]sql.ColumnStatistics
+}
+
+var _ sql.Statistics = &DoltStatistics{}
+
+func (ds *DoltStatistics) GetColumnStatistics(colName string) (sql.ColumnStatistics, error) {
+	if res, ok := ds.ColumnStatisticsMap[colName]; ok {
+		return res, nil
+	}
+	return nil, fmt.Errorf("column %s not found", colName)
+}
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -88,12 +182,8 @@ type DoltTable struct {
 
 	opts editor.Options
 
-	// TODO: convert into stats object
-	// TODO: histogram
-	count uint64
-	means map[string]float64
-	mins  map[string]float64
-	maxs  map[string]float64
+	count     uint64
+	doltStats *DoltStatistics
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -369,9 +459,116 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 
 	t.count = m.Count()
 
-	// TODO: perform table scan over table
+	//TODO: async?
+	partIter, err := t.Partitions(ctx)
+	if err != nil {
+		return err
+	}
+
+	cols := t.sch.GetAllCols()
+	t.doltStats = &DoltStatistics{
+		ColumnStatisticsMap: make(map[string]sql.ColumnStatistics, cols.Size()),
+	}
+
+	// no rows, mark everything as 0 or empty
+	if t.count == 0 {
+		for _, col := range cols.GetColumns() {
+			t.doltStats.ColumnStatisticsMap[col.Name] = &DoltColumnStatistic{
+				buckets:   map[float64]sql.Bucket{},
+				mean:      0,
+				min:       0,
+				max:       0,
+				nullCount: 0,
+			}
+		}
+		return nil
+	}
+
+	// initialize column stats
+	for _, col := range cols.GetColumns() {
+		t.doltStats.ColumnStatisticsMap[col.Name] = &DoltColumnStatistic{
+			buckets:   map[float64]sql.Bucket{},
+			mean:      0,
+			min:       math.MaxFloat64,
+			max:       -math.MaxFloat64,
+			nullCount: 0,
+		}
+	}
+
+	colStatsMap := t.doltStats.ColumnStatisticsMap
+	for {
+		part, err := partIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		iter, err := t.PartitionRows(ctx, part)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+
+			for i := 0; i < cols.Size(); i++ {
+				col := cols.GetAtIndex(i)
+				colStats := colStatsMap[col.Name]
+
+				if row[i] == nil {
+					colStats.SetNullCount(colStats.GetNullCount() + 1)
+					continue // TODO: should you skip?
+				}
+
+				val, err := sql.Float64.Convert(row[i])
+				if err != nil {
+					return err
+				}
+				v := val.(float64)
+
+				if bucket := colStats.GetBucket(v); bucket == nil {
+					colStats.SetBucket(v, &SingletonBucket{
+						value:     v,
+						frequency: 1.0,
+					})
+				} else {
+					bucket.SetFrequency(bucket.GetFrequency() + 1)
+				}
+
+				colStats.SetMean(colStats.GetMean() + v)
+				colStats.SetMin(math.Min(colStats.GetMin(), v))
+				colStats.SetMax(math.Max(colStats.GetMax(), v))
+			}
+		}
+	}
+
+	// fix mean and frequencies
+	for i := 0; i < cols.Size(); i++ {
+		for _, colStats := range colStatsMap {
+			for _, bucket := range colStats.GetBucketMap() {
+				bucket.SetFrequency(bucket.GetFrequency() / float64(t.count))
+			}
+
+			colStats.SetMean(colStats.GetMean() / float64(t.count))
+		}
+	}
 
 	return nil
+}
+
+func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.Statistics, error) {
+	return t.doltStats, nil
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {

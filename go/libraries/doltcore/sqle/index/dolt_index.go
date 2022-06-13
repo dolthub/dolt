@@ -195,7 +195,6 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		id:                            "PRIMARY",
 		tblName:                       tbl,
 		dbName:                        db,
-		tbl:                           t,
 		columns:                       cols,
 		indexSch:                      sch,
 		tableSch:                      sch,
@@ -225,7 +224,6 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		id:                            idx.Name(),
 		tblName:                       tbl,
 		dbName:                        db,
-		tbl:                           t,
 		columns:                       cols,
 		indexSch:                      idx.Schema(),
 		tableSch:                      sch,
@@ -243,8 +241,6 @@ type doltIndex struct {
 	id      string
 	tblName string
 	dbName  string
-
-	tbl *doltdb.Table
 
 	columns []schema.Column
 
