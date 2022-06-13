@@ -44,11 +44,13 @@ RUN apt update -y && \
         postgresql-contrib \
         libpq-dev \
         nodejs \
-        esl-erlang \
-        elixir \
         postgresql-server-dev-all && \
-    update-ca-certificates -f
-
+    update-ca-certificates -f && \
+    echo 'deb https://packages.erlang-solutions.com/ubuntu xenial contrib' | tee -a /etc/apt/sources.list && \
+    wget https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc && \
+    apt-key add erlang_solutions.asc && \
+    apt -y update && \
+    apt install -y esl-erlang elixir
 # install go
 WORKDIR /root
 ENV GO_VERSION=1.18

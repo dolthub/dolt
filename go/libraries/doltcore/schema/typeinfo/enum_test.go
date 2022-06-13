@@ -30,44 +30,38 @@ func TestEnumConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
 		typ         *enumType
 		input       types.Uint
-		output      string
+		output      uint16
 		expectedErr bool
 	}{
 		{
 			generateEnumType(t, 3),
 			1,
-			"aaaa",
+			1,
 			false,
 		},
 		{
 			generateEnumType(t, 5),
 			2,
-			"aaab",
+			2,
 			false,
 		},
 		{
 			generateEnumType(t, 8),
 			3,
-			"aaac",
+			3,
 			false,
 		},
 		{
 			generateEnumType(t, 7),
 			7,
-			"aaag",
+			7,
 			false,
 		},
 		{
 			generateEnumType(t, 2),
 			0,
-			"",
+			0,
 			false,
-		},
-		{
-			generateEnumType(t, 3),
-			4,
-			"",
-			true,
 		},
 	}
 
@@ -172,12 +166,6 @@ func TestEnumFormatValue(t *testing.T) {
 			generateEnumType(t, 7),
 			7,
 			"aaag",
-			false,
-		},
-		{
-			generateEnumType(t, 2),
-			0,
-			"",
 			false,
 		},
 		{
