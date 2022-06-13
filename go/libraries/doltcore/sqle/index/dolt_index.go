@@ -33,7 +33,6 @@ import (
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
-	sql.StatisticsIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
@@ -508,11 +507,6 @@ func (di doltIndex) Table() string {
 
 func (di doltIndex) Format() *types.NomsBinFormat {
 	return di.vrw.Format()
-}
-
-func (di doltIndex) NumFilteredRows(ctx *sql.Context) (uint64, error) {
-
-	return 10, nil
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to

@@ -87,6 +87,13 @@ type DoltTable struct {
 	projectedCols []string
 
 	opts editor.Options
+
+	// TODO: convert into stats object
+	// TODO: histogram
+	count uint64
+	means map[string]float64
+	mins  map[string]float64
+	maxs  map[string]float64
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -347,6 +354,24 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	}
 
 	return numBytesPerRow * numRows, nil
+}
+
+func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
+	table, err := t.doltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	t.count = m.Count()
+
+	// TODO: perform table scan over table
+
+	return nil
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {

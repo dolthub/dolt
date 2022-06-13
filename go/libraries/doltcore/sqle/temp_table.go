@@ -219,6 +219,10 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return idx.Count(), nil
 }
 
+func (t *TempTable) CalculateStatistics(ctx *sql.Context) error {
+	return nil
+}
+
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	if t.lookup != nil {
 		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)
