@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,37 +30,37 @@ import (
 func TestTimeConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
 		input       types.Int
-		output      string
+		output      sql.Timespan
 		expectedErr bool
 	}{
 		{
 			1000000,
-			"00:00:01",
+			1000000,
 			false,
 		},
 		{
 			113000000,
-			"00:01:53",
+			113000000,
 			false,
 		},
 		{
 			247019000000,
-			"68:36:59",
+			247019000000,
 			false,
 		},
 		{
 			458830485214,
-			"127:27:10.485214",
+			458830485214,
 			false,
 		},
 		{
 			-3020399000000,
-			"-838:59:59",
+			-3020399000000,
 			false,
 		},
 		{ // no integer can cause an error, values beyond the max/min are set equal to the max/min
 			922337203685477580,
-			"838:59:59",
+			922337203685477580,
 			false,
 		},
 	}
@@ -163,11 +164,6 @@ func TestTimeFormatValue(t *testing.T) {
 		{
 			-3020399000000,
 			"-838:59:59",
-			false,
-		},
-		{
-			922337203685477580,
-			"838:59:59",
 			false,
 		},
 	}

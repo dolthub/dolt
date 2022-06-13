@@ -125,10 +125,6 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 
 // Insert implements TableWriter.
 func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
-		return err
-	}
-
 	if err := w.primary.Insert(ctx, sqlRow); err != nil {
 		return err
 	}
@@ -145,10 +141,6 @@ func (w *prollyTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 // Delete implements TableWriter.
 func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error) {
-	if sqlRow, err = index.NormalizeRow(w.sqlSch, sqlRow); err != nil {
-		return err
-	}
-
 	for _, wr := range w.secondary {
 		if err := wr.Delete(ctx, sqlRow); err != nil {
 			return err
@@ -162,13 +154,6 @@ func (w *prollyTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) (err error)
 
 // Update implements TableWriter.
 func (w *prollyTableWriter) Update(ctx *sql.Context, oldRow sql.Row, newRow sql.Row) (err error) {
-	if oldRow, err = index.NormalizeRow(w.sqlSch, oldRow); err != nil {
-		return err
-	}
-	if newRow, err = index.NormalizeRow(w.sqlSch, newRow); err != nil {
-		return err
-	}
-
 	for _, wr := range w.secondary {
 		if err := wr.Update(ctx, oldRow, newRow); err != nil {
 			if sql.ErrUniqueKeyViolation.Is(err) {

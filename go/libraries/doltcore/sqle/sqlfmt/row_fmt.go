@@ -386,7 +386,10 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 }
 
 func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value interface{}) (string, error) {
-	str := sqlutil.SqlColToStr(ctx, value)
+	str, err := sqlutil.SqlColToStr(ctx, ti.ToSqlType(), value)
+	if err != nil {
+		return "", err
+	}
 
 	switch ti.GetTypeIdentifier() {
 	case typeinfo.BoolTypeIdentifier:
@@ -398,17 +401,7 @@ func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value 
 	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:
-		reparsed, err := typeinfo.StringDefaultType.ConvertToType(ctx, nil, ti, types.String(str))
-		if err != nil {
-			return "", err
-		}
-
-		strp, err := ti.FormatValue(reparsed)
-		if err != nil {
-			return "", err
-		}
-
-		return singleQuote + *strp + singleQuote, nil
+		return singleQuote + str + singleQuote, nil
 	case typeinfo.BlobStringTypeIdentifier, typeinfo.VarBinaryTypeIdentifier, typeinfo.InlineBlobTypeIdentifier, typeinfo.JSONTypeIdentifier, typeinfo.EnumTypeIdentifier, typeinfo.SetTypeIdentifier:
 		return quoteAndEscapeString(str), nil
 	case typeinfo.VarStringTypeIdentifier:

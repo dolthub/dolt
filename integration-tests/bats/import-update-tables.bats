@@ -1028,7 +1028,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 2, Additions: 0, Modifications: 0, Had No Effect: 2" ]] || false
 
-    run dolt sql -r csv -q "select * from bitted order by id"
+    run dolt sql -r csv -q "select id, convert(b, unsigned) as b from bitted order by id"
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "1,0" ]] || false
     [[ "$output" =~ "3,1" ]] || false
@@ -1043,7 +1043,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 0, Had No Effect: 1" ]] || false
 
-    run dolt sql -r csv -q "select * from bitted2 order by id"
+    run dolt sql -r csv -q "select id, convert(b, unsigned) as b from bitted2 order by id"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "1,4" ]] || false
@@ -1052,7 +1052,7 @@ DELIM
     echo -e 'id,b\n2,0x04\n3,0xa'|dolt table import -u bitted2
     [ "$status" -eq 0 ]
 
-    run dolt sql -r csv -q "select * from bitted2 order by id"
+    run dolt sql -r csv -q "select id, convert(b, unsigned) as b from bitted2 order by id"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "1,4" ]] || false
@@ -1069,7 +1069,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
 
-    run dolt sql -r csv -q "select * from bitted2 where id = 4"
+    run dolt sql -r csv -q "select id, convert(b, unsigned) as b from bitted2 where id = 4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "id,b" ]] || false
     [[ "$output" =~ "4,4" ]] || false
