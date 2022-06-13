@@ -611,23 +611,21 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range queries.TransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltConflictHandlingTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -950,9 +948,6 @@ func TestScriptsPrepared(t *testing.T) {
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
 		)
-		for _, s := range queries.SpatialScriptTests {
-			skipped = append(skipped, s.Name)
-		}
 	}
 
 	skipPreparedTests(t)
