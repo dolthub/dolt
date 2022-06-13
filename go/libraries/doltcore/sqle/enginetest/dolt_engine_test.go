@@ -84,27 +84,76 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "failed statements data validation for INSERT, UPDATE",
+			Name: "Indexed Join On Keyless Table",
 			SetUpScript: []string{
-				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
-				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
+				"create table l (pk int primary key, c0 int, c1 int);",
+				"create table r (c0 int, c1 int, third int);",
+				"create index r_c0 on r (c0);",
+				"create index r_c1 on r (c1);",
+				"create index r_third on r (third);",
+				"insert into l values (0, 0, 0), (1, 0, 1), (2, 1, 0), (3, 0, 2), (4, 2, 0), (5, 1, 2), (6, 2, 1), (7, 2, 2);",
+				"insert into l values (256, 1024, 4096);",
+				"insert into r values (1, 1, -1), (2, 2, -1), (2, 2, -1);",
+				"insert into r values (-1, -1, 256);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:          "INSERT INTO test VALUES (2,2), (3,3), (1,1);",
-					ExpectedErrStr: "duplicate primary key given: [1]",
+					Query: "SELECT pk, l.c0, l.c1 FROM l JOIN r ON l.c0 = r.c0 OR l.c1 = r.c1 ORDER BY 1, 2, 3;",
+					Expected: []sql.Row{
+						{1, 0, 1},
+						{2, 1, 0},
+						{3, 0, 2},
+						{3, 0, 2},
+						{4, 2, 0},
+						{4, 2, 0},
+						{5, 1, 2},
+						{5, 1, 2},
+						{5, 1, 2},
+						{6, 2, 1},
+						{6, 2, 1},
+						{6, 2, 1},
+						{7, 2, 2},
+						{7, 2, 2},
+					},
 				},
 				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+					Query: "select pk, l.c0, l.c1 from l join r on l.c0 = r.c0 or l.c1 = r.c1 or l.pk = r.third order by 1, 2, 3;",
+					Expected: []sql.Row{
+						{1, 0, 1},
+						{2, 1, 0},
+						{3, 0, 2},
+						{3, 0, 2},
+						{4, 2, 0},
+						{4, 2, 0},
+						{5, 1, 2},
+						{5, 1, 2},
+						{5, 1, 2},
+						{6, 2, 1},
+						{6, 2, 1},
+						{6, 2, 1},
+						{7, 2, 2},
+						{7, 2, 2},
+						{256, 1024, 4096},
+					},
 				},
 				{
-					Query:          "UPDATE test SET pk = pk + 1 ORDER BY pk;",
-					ExpectedErrStr: "duplicate primary key given: [5]",
-				},
-				{
-					Query:    "SELECT * FROM test;",
-					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
+					Query: "select pk, l.c0, l.c1 from l join r on l.c0 = r.c0 or l.c1 < 4 and l.c1 = r.c1 or l.c1 >= 4 and l.c1 = r.c1 order by 1, 2, 3;",
+					Expected: []sql.Row{
+						{1, 0, 1},
+						{2, 1, 0},
+						{3, 0, 2},
+						{3, 0, 2},
+						{4, 2, 0},
+						{4, 2, 0},
+						{5, 1, 2},
+						{5, 1, 2},
+						{5, 1, 2},
+						{6, 2, 1},
+						{6, 2, 1},
+						{6, 2, 1},
+						{7, 2, 2},
+						{7, 2, 2},
+					},
 				},
 			},
 		},
@@ -1176,8 +1225,6 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 }
 
 var newFormatSkippedScripts = []string{
-	// Different error output for primary key error
-	//"failed statements data validation for INSERT, UPDATE",
 	// wrong results
 	"Indexed Join On Keyless Table",
 	// Different query plans
