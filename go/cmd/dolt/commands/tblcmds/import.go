@@ -500,6 +500,12 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
 	}
 
+	// Leave a warning if the import operation is operating on fewer columns than the relevant table's schema.
+	// This can certainly be intentional, but it is often due to typos in the header of a csv file.
+	if rowOperationSchema.GetAllCols().Size() < tableSchema.GetAllCols().Size() {
+		cli.PrintErrln(color.YellowString("Warning: There are fewer columns in the import file's schema than the table's schema.\nIf unintentional, check for any typos in the import file's header."))
+	}
+
 	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.CreateWriterErr, Cause: err}
