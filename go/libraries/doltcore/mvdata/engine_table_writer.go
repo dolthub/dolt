@@ -84,7 +84,7 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		PrivFilePath: "",
 		ServerUser:   "root",
 		ServerPass:   "",
-		Autocommit:   false,
+		Autocommit:   false, // We set autocommit == false to ensure to improve performance. Bulk import should not commit on each row.
 		Bulk:         true,
 	}
 	se, err := engine.NewSqlEngine(
@@ -107,11 +107,6 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
-
-	err = sqlCtx.Session.SetSessionVariable(sqlCtx, sql.AutoCommitSessionVar, false)
-	if err != nil {
-		return nil, err
-	}
 
 	doltCreateTableSchema, err := sqlutil.FromDoltSchema(options.TableToWriteTo, createTableSchema)
 	if err != nil {
