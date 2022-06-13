@@ -656,7 +656,7 @@ func applyPkChangeUnqErr(ctx context.Context, err error, k, v types.Tuple, table
 		if err != nil {
 			return err
 		}
-		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_UniqueIndex, types.JSON(nomsJson), k, v)
+		cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_UniqueIndex, types.JSON(nomsJson), k, v)
 		if err != nil {
 			return err
 		}

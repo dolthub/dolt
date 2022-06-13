@@ -49,12 +49,12 @@ type constraintViolationsLoadedTable struct {
 }
 
 // cvType is an enum for a constraint violation type.
-type cvType uint64
+type CvType uint64
 
 const (
-	cvType_ForeignKey cvType = iota + 1
-	cvType_UniqueIndex
-	cvType_CheckConstraint
+	CvType_ForeignKey CvType = iota + 1
+	CvType_UniqueIndex
+	CvType_CheckConstraint
 )
 
 // AddConstraintViolations adds all constraint violations to each table.
@@ -87,6 +87,11 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 				foreignKey.Name, foreignKey.TableIndex, foreignKey.TableName)
 		}
 
+		jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		foundViolations := false
 		preParent, _, err := newConstraintViolationsLoadedTable(ctx, foreignKey.ReferencedTableName, "", baseRoot)
 		if err != nil {
@@ -98,13 +103,13 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx, ourCmHash)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx, ourCmHash, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
 		} else {
 			// Parent exists in the ancestor
-			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, ourCmHash)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, ourCmHash, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -121,7 +126,7 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx, ourCmHash)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx, ourCmHash, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -129,7 +134,7 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 		} else {
 			// Child exists in the ancestor
 			innerFoundViolations := false
-			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData, ourCmHash)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData, ourCmHash, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -155,15 +160,11 @@ func parentFkConstraintViolations(
 	preParentSch schema.Schema,
 	preParentRowData durable.Index,
 	ourCmHash hash.Hash,
+	jsonData []byte,
 ) (*doltdb.Table, bool, error) {
-	jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
-	if err != nil {
-		return nil, false, err
-	}
-
 	if preParentRowData.Format() == types.Format_DOLT_1 {
 		m := durable.ProllyMapFromIndex(preParentRowData)
-		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, jsonData, ourCmHash)
+		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, ourCmHash, jsonData)
 	}
 	m := durable.NomsMapFromIndex(preParentRowData)
 	return nomsParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParentSch, m, jsonData)
@@ -177,15 +178,11 @@ func childFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildSch schema.Schema,
 	preChildRowData durable.Index,
-	ourCmHash hash.Hash) (*doltdb.Table, bool, error) {
-	jsonData, err := foreignKeyCVJson(foreignKey, postChild.Schema, postParent.Schema)
-	if err != nil {
-		return nil, false, err
-	}
-
+	ourCmHash hash.Hash,
+	jsonData []byte) (*doltdb.Table, bool, error) {
 	if preChildRowData.Format() == types.Format_DOLT_1 {
 		m := durable.ProllyMapFromIndex(preChildRowData)
-		return prollyChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, jsonData, ourCmHash)
+		return prollyChildFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, ourCmHash, jsonData)
 	}
 
 	m := durable.NomsMapFromIndex(preChildRowData)
@@ -342,7 +339,7 @@ func nomsParentFkConstraintViolationsProcess(
 			return false, fmt.Errorf("index %s on %s contains data that table does not", foreignKey.TableIndex, foreignKey.TableName)
 		}
 
-		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, postChildRowKey, postChildRowVal)
+		cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_ForeignKey, vInfo, postChildRowKey, postChildRowVal)
 		if err != nil {
 			return false, err
 		}
@@ -470,7 +467,7 @@ func childFkConstraintViolationsProcess(
 		if err != io.EOF {
 			return false, err
 		}
-		cvKey, cvVal, err := toConstraintViolationRow(ctx, cvType_ForeignKey, vInfo, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
+		cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_ForeignKey, vInfo, rowDiff.KeyValue.(types.Tuple), rowDiff.NewValue.(types.Tuple))
 		if err != nil {
 			return false, err
 		}
@@ -523,7 +520,7 @@ func newConstraintViolationsLoadedTable(ctx context.Context, tblName, idxName st
 }
 
 // toConstraintViolationRow converts the given key and value tuples into ones suitable to add to a constraint violation map.
-func toConstraintViolationRow(ctx context.Context, vType cvType, vInfo types.JSON, k, v types.Tuple) (types.Tuple, types.Tuple, error) {
+func toConstraintViolationRow(ctx context.Context, vType CvType, vInfo types.JSON, k, v types.Tuple) (types.Tuple, types.Tuple, error) {
 	constraintViolationKeyVals := []types.Value{types.Uint(schema.DoltConstraintViolationsTypeTag), types.Uint(vType)}
 	keySlice, err := k.AsSlice()
 	if err != nil {

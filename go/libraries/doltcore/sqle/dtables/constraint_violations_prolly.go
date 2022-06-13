@@ -191,7 +191,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	d.kb.PutAddress(d.kd.Count()-2, h[:])
 
 	// Finally the artifact type
-	artType := unmapCVType(r[1].(string))
+	artType := unmapCVType(r[1].(merge.CvType))
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
 	key := d.kb.Build(d.pool)
@@ -240,27 +240,27 @@ func (d *prollyCVDeleter) Close(ctx *sql.Context) error {
 	return d.cvt.rs.SetRoot(ctx, updatedRoot)
 }
 
-func mapCVType(artifactType prolly.ArtifactType) (outType string) {
+func mapCVType(artifactType prolly.ArtifactType) (outType uint64) {
 	switch artifactType {
 	case prolly.ArtifactTypeForeignKeyViol:
-		outType = "foreign key"
+		outType = uint64(merge.CvType_ForeignKey)
 	case prolly.ArtifactTypeUniqueKeyViol:
-		outType = "unique key"
+		outType = uint64(merge.CvType_UniqueIndex)
 	case prolly.ArtifactTypeChkConsViol:
-		outType = "check constraint"
+		outType = uint64(merge.CvType_CheckConstraint)
 	default:
 		panic("unhandled cv type")
 	}
 	return
 }
 
-func unmapCVType(in string) (out prolly.ArtifactType) {
+func unmapCVType(in merge.CvType) (out prolly.ArtifactType) {
 	switch in {
-	case "foreign key":
+	case merge.CvType_ForeignKey:
 		out = prolly.ArtifactTypeForeignKeyViol
-	case "unique key":
+	case merge.CvType_UniqueIndex:
 		out = prolly.ArtifactTypeUniqueKeyViol
-	case "check constraint":
+	case merge.CvType_CheckConstraint:
 		out = prolly.ArtifactTypeChkConsViol
 	default:
 		panic("unhandled cv type")

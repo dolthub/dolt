@@ -24,9 +24,8 @@ func prollyParentFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData prolly.Map,
-	jsonData []byte,
 	ourCmHash hash.Hash,
-) (*doltdb.Table, bool, error) {
+	jsonData []byte) (*doltdb.Table, bool, error) {
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
@@ -109,9 +108,8 @@ func prollyChildFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildRowData prolly.Map,
-	jsonData []byte,
 	ourCmHash hash.Hash,
-) (*doltdb.Table, bool, error) {
+	jsonData []byte) (*doltdb.Table, bool, error) {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
 	idxDesc := shim.KeyDescriptorFromSchema(postChild.Index.Schema())
@@ -276,8 +274,8 @@ func makePartialKey(kb *val.TupleBuilder, idxSch schema.Index, tblSch schema.Sch
 }
 
 // TODO: Change json.NomsJson string marshalling to match json.Marshall
-// Currently it returns additional whitespace which complicates things.
-// Another option is to implement a custom json encoder that matches json.NomsJson string marshalling.
+// Currently it returns additional whitespace. Another option is to implement a
+// custom json encoder that matches json.NomsJson string marshalling.
 
 type FkCVMeta struct {
 	Columns           []string `json:"Columns"`

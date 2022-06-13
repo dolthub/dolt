@@ -319,9 +319,23 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 }
 
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
+
+	// get keys from either base, ours, or theirs
+	o := func() int {
+		if o := 1; r[o] != nil {
+			return o
+		} else if o = 1 + cd.kd.Count(); r[o] != nil {
+			return o
+		} else if o = 1 + cd.kd.Count()*2; r[o] != nil {
+			return o
+		} else {
+			panic("neither base, ours, or theirs had a key")
+		}
+	}()
+
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := index.PutField(cd.kB, i, r[i+1])
+		err := index.PutField(cd.kB, i, r[o+i])
 		if err != nil {
 			return err
 		}

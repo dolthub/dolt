@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -1282,7 +1283,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}},
 			},
 		},
 	},
@@ -1519,7 +1520,7 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 		Assertions: []queries.ScriptTestAssertion{
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -1535,7 +1536,7 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 2, 2}},
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -1552,7 +1553,7 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			// the commit hashes for the above two violations change in this merge
 			{
 				Query:    "SELECT violation_type, fk, pk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1, 1}, {uint64(merge.CvType_ForeignKey), 2, 2}},
 			},
 			{
 				Query:    "SELECT pk, fk from child;",
@@ -1583,8 +1584,12 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 				Expected: []sql.Row{{0, 1}},
 			},
 			{
-				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 1, 4}, {"foreign key", 2, 2}, {"foreign key", 2, 4}},
+				Query: "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{
+					{uint64(merge.CvType_ForeignKey), 1, 1},
+					{uint64(merge.CvType_ForeignKey), 1, 4},
+					{uint64(merge.CvType_ForeignKey), 2, 2},
+					{uint64(merge.CvType_ForeignKey), 2, 4}},
 			},
 		},
 	},
