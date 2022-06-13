@@ -446,7 +446,7 @@ func TestAddColumn(t *testing.T) {
 		},
 		{
 			name:  "alter add column not null with expression default",
-			query: "alter table people add (newColumn int not null default 2+2/2)",
+			query: "alter table people add (newColumn int not null default (2+2/2))",
 			expectedSchema: dtestutils.AddColumnToSchema(PeopleTestSchema,
 				schemaNewColumnWDefVal(t, "newColumn", 2803, sql.Int32, false, "((2 + (2 / 2)))", schema.NotNullConstraint{})),
 			expectedRows: dtestutils.AddColToRows(t, AllPeopleRows, 2803, types.Int(3)),
