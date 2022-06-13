@@ -33,6 +33,7 @@ import (
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
+	sql.StatisticsIndex
 	Schema() schema.Schema
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
@@ -195,6 +196,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 		id:                            "PRIMARY",
 		tblName:                       tbl,
 		dbName:                        db,
+		tbl:                           t,
 		columns:                       cols,
 		indexSch:                      sch,
 		tableSch:                      sch,
@@ -224,6 +226,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		id:                            idx.Name(),
 		tblName:                       tbl,
 		dbName:                        db,
+		tbl:                           t,
 		columns:                       cols,
 		indexSch:                      idx.Schema(),
 		tableSch:                      sch,
@@ -241,6 +244,8 @@ type doltIndex struct {
 	id      string
 	tblName string
 	dbName  string
+
+	tbl *doltdb.Table
 
 	columns []schema.Column
 
@@ -503,6 +508,11 @@ func (di doltIndex) Table() string {
 
 func (di doltIndex) Format() *types.NomsBinFormat {
 	return di.vrw.Format()
+}
+
+func (di doltIndex) NumFilteredRows(ctx *sql.Context) (uint64, error) {
+
+	return 10, nil
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
