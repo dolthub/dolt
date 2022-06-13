@@ -48,6 +48,17 @@ func TestNodeCursor(t *testing.T) {
 		assert.NoError(t, err)
 		assert.True(t, start.Compare(before) > 0, "start is after before")
 		assert.True(t, before.Compare(start) < 0, "before is before start")
+
+		// Backwards iteration...
+		end, err := NewCursorAtEnd(ctx, ns, root)
+		assert.NoError(t, err)
+		i := 0
+		for end.Compare(before) > 0 {
+			i++
+			err = end.Retreat(ctx)
+			assert.NoError(t, err)
+		}
+		assert.Equal(t, 10_000 / 2, i)
 	})
 }
 
