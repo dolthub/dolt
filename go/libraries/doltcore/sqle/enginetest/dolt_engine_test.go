@@ -627,11 +627,9 @@ func TestTransactions(t *testing.T) {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConflictHandlingTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
