@@ -129,7 +129,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		{
 			name:  "time",
 			typ:   val.Type{Enc: val.TimeEnc},
-			value: "11:22:00",
+			value: mustParseTime(t, "11:22:00"),
 		},
 		{
 			name:  "datetime",
@@ -219,6 +219,12 @@ func mustParseDecimal(s string) decimal.Decimal {
 		panic(err)
 	}
 	return d
+}
+
+func mustParseTime(t *testing.T, s string) sql.Timespan {
+	val, err := sql.Time.ConvertToTimespan(s)
+	require.NoError(t, err)
+	return val
 }
 
 func dateFromTime(t time.Time) time.Time {
