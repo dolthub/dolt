@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
@@ -223,14 +222,20 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	skipNewFormat(t) // different query plans due to index filter behavior
-
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
 	require.NoError(t, err)
 	defer e.Close()
-	for _, tt := range DoltDiffPlanTests {
+
+	var planTests []queries.QueryPlanTest
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		planTests = DoltDiffPlanNewFormatTests
+	} else {
+		planTests = DoltDiffPlanTests
+	}
+
+	for _, tt := range planTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
 	}
 }
@@ -318,8 +323,6 @@ func TestScripts(t *testing.T) {
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
-			// panic
-			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
 	}
 
@@ -614,23 +617,21 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range queries.TransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltConflictHandlingTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -943,34 +944,12 @@ func TestInfoSchemaPrepared(t *testing.T) {
 
 func TestUpdateQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip select join for update
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), "join") {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestUpdateQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestUpdateQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip keyless
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), "keyless") {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestInsertQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestInsertQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestReplaceQueriesPrepared(t *testing.T) {
@@ -989,21 +968,12 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped,
 			// Different error output for primary key error
 			"failed statements data validation for INSERT, UPDATE",
-			// missing FK violation
-			"failed statements data validation for DELETE, REPLACE",
 			// wrong results
 			"Indexed Join On Keyless Table",
-			// spurious fk violation
-			"Nested Subquery projections (NTC)",
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
-			// panic
-			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
-		for _, s := range queries.SpatialScriptTests {
-			skipped = append(skipped, s.Name)
-		}
 	}
 
 	skipPreparedTests(t)
