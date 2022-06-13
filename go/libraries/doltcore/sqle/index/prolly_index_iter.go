@@ -103,7 +103,7 @@ func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
 		select {
 		case r, ok = <-p.rowChan:
 			if ok {
-				return DenormalizeRow(p.sqlSch, r)
+				return r, nil
 			}
 		}
 		if !ok {
@@ -278,7 +278,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return DenormalizeRow(p.sqlSch, r)
+	return r, nil
 }
 
 func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {

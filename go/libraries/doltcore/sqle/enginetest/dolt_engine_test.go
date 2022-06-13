@@ -16,6 +16,7 @@ package enginetest
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -23,8 +24,12 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -138,6 +143,53 @@ func TestSingleQueryPrepared(t *testing.T) {
 	enginetest.TestQuery(t, harness, test.Query, test.Expected, nil, nil)
 }
 
+func TestSingleScriptPrepared(t *testing.T) {
+	t.Skip()
+
+	s := []setup.SetupScript{
+		{
+			"create table test (pk int primary key, c1 int)",
+			"insert into test values (0,0), (1,1);",
+			"set @Commit1 = dolt_commit('-am', 'creating table');",
+			"call dolt_branch('-c', 'main', 'newb')",
+			"alter table test add column c2 int;",
+			"set @Commit2 = dolt_commit('-am', 'alter table');",
+		},
+	}
+	tt := queries.QueryTest{
+		Query: "select * from test as of 'HEAD~2' where pk=?",
+		Bindings: map[string]sql.Expression{
+			"v1": expression.NewLiteral(0, sql.Int8),
+		},
+		Expected: []sql.Row{{0, 0}},
+	}
+
+	harness := newDoltHarness(t)
+	harness.Setup(setup.MydbData, s)
+
+	e, err := harness.NewEngine(t)
+	defer e.Close()
+	require.NoError(t, err)
+	ctx := harness.NewContext()
+
+	//e.Analyzer.Debug = true
+	//e.Analyzer.Verbose = true
+
+	// full impl
+	pre1, sch1, rows1 := enginetest.MustQueryWithPreBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(pre1, sch1, rows1)
+
+	// inline bindings
+	sch2, rows2 := enginetest.MustQueryWithBindings(ctx, e, tt.Query, tt.Bindings)
+	fmt.Println(sch2, rows2)
+
+	// no bindings
+	//sch3, rows3 := enginetest.MustQuery(ctx, e, rawQuery)
+	//fmt.Println(sch3, rows3)
+
+	enginetest.TestQueryWithContext(t, ctx, e, tt.Query, tt.Expected, tt.ExpectedColumns, tt.Bindings)
+}
+
 func TestVersionedQueries(t *testing.T) {
 	enginetest.TestVersionedQueries(t, newDoltHarness(t))
 }
@@ -145,8 +197,6 @@ func TestVersionedQueries(t *testing.T) {
 // Tests of choosing the correct execution plan independent of result correctness. Mostly useful for confirming that
 // the right indexes are being used for joining tables.
 func TestQueryPlans(t *testing.T) {
-	skipNewFormat(t)
-
 	// Dolt supports partial keys, so the index matched is different for some plans
 	// TODO: Fix these differences by implementing partial key matching in the memory tables, or the engine itself
 	skipped := []string{
@@ -158,10 +208,18 @@ func TestQueryPlans(t *testing.T) {
 		"SELECT pk,pk1,pk2 FROM one_pk LEFT JOIN two_pk ON pk=pk1 ORDER BY 1,2,3",
 		"SELECT pk,pk1,pk2 FROM one_pk t1, two_pk t2 WHERE pk=1 AND pk2=1 AND pk1=1 ORDER BY 1,2",
 	}
-
 	// Parallelism introduces Exchange nodes into the query plans, so disable.
 	// TODO: exchange nodes should really only be part of the explain plan under certain debug settings
-	enginetest.TestQueryPlans(t, newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped))
+	harness := newDoltHarness(t).WithParallelism(1).WithSkippedQueries(skipped)
+
+	var plans []queries.QueryPlanTest
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		plans = NewFormatQueryPlanTests
+	} else {
+		plans = queries.PlanTests
+	}
+
+	enginetest.TestQueryPlans(t, harness, plans)
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
@@ -282,7 +340,9 @@ func TestDoltUserPrivileges(t *testing.T) {
 				User:    "root",
 				Address: "localhost",
 			})
+
 			engine.Analyzer.Catalog.MySQLDb.AddRootAccount()
+			engine.Analyzer.Catalog.MySQLDb.SetPersister(&mysql_db.NoopPersister{})
 
 			for _, statement := range script.SetUpScript {
 				if sh, ok := interface{}(harness).(enginetest.SkippingHarness); ok {
@@ -832,6 +892,11 @@ func TestKeylessUniqueIndex(t *testing.T) {
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
 
+func TestTypesOverWire(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
@@ -1166,5 +1231,11 @@ func skipNewFormat(t *testing.T) {
 func skipPreparedTests(t *testing.T) {
 	if skipPrepared {
 		t.Skip("skip prepared")
+	}
+}
+
+func newSessionBuilder(harness *DoltHarness) server.SessionBuilder {
+	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
+		return harness.session, nil
 	}
 }

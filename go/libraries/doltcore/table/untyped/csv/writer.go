@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -87,7 +88,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 	allCols := csvw.sch.GetAllCols()
 	colValStrs := make([]*string, allCols.Size())
 
-	sqlRow, err := sqlutil.DoltRowToSqlRow(r, csvw.GetSchema())
+	sqlRow, err := sqlutil.DoltRowToSqlRow(r, csvw.sch)
 	if err != nil {
 		return err
 	}
@@ -96,7 +97,10 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			v := sqlutil.SqlColToStr(ctx, val)
+			v, err := sqlutil.SqlColToStr(ctx, csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType(), val)
+			if err != nil {
+				return err
+			}
 			colValStrs[i] = &v
 		}
 	}
@@ -110,7 +114,18 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			v := sqlutil.SqlColToStr(ctx, val)
+			var v string
+			var err error
+			colType := csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType()
+			// Due to BIT's unique output, we special-case writing the integer specifically for CSV
+			if _, ok := colType.(sql.BitType); ok {
+				v = strconv.FormatUint(val.(uint64), 10)
+			} else {
+				v, err = sqlutil.SqlColToStr(ctx, colType, val)
+				if err != nil {
+					return err
+				}
+			}
 			colValStrs[i] = &v
 		}
 	}

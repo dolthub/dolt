@@ -16,12 +16,14 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
@@ -32,7 +34,7 @@ import (
 
 type mergeResult struct {
 	tbl   *doltdb.Table
-	cons  durable.ConflictIndex
+	arts  durable.ArtifactIndex
 	stats *MergeStats
 }
 
@@ -48,7 +50,15 @@ type mergeResult struct {
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, ancIndexSet durable.IndexSet) (mergeResult, error) {
+func mergeTableData(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
+	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	ancRows durable.Index,
+	ancIndexSet durable.IndexSet,
+	cmHash hash.Hash,
+	mergeTblHash, ancTblHash hash.Hash) (mergeResult, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	stats := &MergeStats{Operation: TableModified}
@@ -60,7 +70,6 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 
 	group.Go(func() error {
 		var err error
-		// TODO (dhruv): update this function definition to return any conflicts
 		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, tableToUpdate, ancRows, indexEdits, conflicts)
 		if err != nil {
 			return err
@@ -87,13 +96,19 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 		return err
 	})
 
-	confIdx, err := durable.NewEmptyConflictIndex(ctx, vrw, rootSchema, mergeSchema, ancSchema)
+	artIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return mergeResult{}, err
 	}
-	confEditor := durable.ProllyMapFromConflictIndex(confIdx).Editor()
+	artM := durable.ProllyMapFromArtifactIndex(artIdx)
+	artifactEditor := artM.Editor()
+	kd, vd := artM.Descriptors()
+	p, err := newConflictProcessor(artM.Pool(), kd, vd, cmHash, ancTblHash, mergeTblHash)
+	if err != nil {
+		return mergeResult{}, err
+	}
 	group.Go(func() error {
-		return processConflicts(ctx, stats, conflicts, confEditor)
+		return p.process(gCtx, stats, conflicts, artifactEditor)
 	})
 
 	err = group.Wait()
@@ -110,11 +125,11 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 		return mergeResult{}, err
 	}
 
-	confMap, err := confEditor.Flush(ctx)
+	artifactMap, err := artifactEditor.Flush(ctx)
 	if err != nil {
 		return mergeResult{}, err
 	}
-	confIdx = durable.ConflictIndexFromProllyMap(confMap)
+	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
 	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
 	if err != nil {
@@ -124,7 +139,7 @@ func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSch
 	// TODO (dhruv): populate merge stats
 	return mergeResult{
 		tbl:   updatedTable,
-		cons:  confIdx,
+		arts:  artIdx,
 		stats: stats,
 	}, nil
 }
@@ -311,7 +326,37 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 	}
 }
 
-func processConflicts(ctx context.Context, stats *MergeStats, conflictChan chan confVals, editor prolly.ConflictEditor) error {
+type conflictProcessor struct {
+	cmHash       []byte
+	metadataJson []byte
+	keyBD, valBD *val.TupleBuilder
+	pool         pool.BuffPool
+}
+
+func newConflictProcessor(pool pool.BuffPool, artKD, artVD val.TupleDesc, cmHash, baseTblHash, theirTblHash hash.Hash) (*conflictProcessor, error) {
+	h := make([]byte, 20)
+	copy(h, cmHash[:])
+	m := prolly.ConflictMetadata{
+		BaseTblHash:  make([]byte, 20),
+		TheirTblHash: make([]byte, 20),
+	}
+	copy(m.BaseTblHash, baseTblHash[:])
+	copy(m.TheirTblHash, theirTblHash[:])
+	data, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	p := conflictProcessor{
+		cmHash:       h,
+		metadataJson: data,
+		keyBD:        val.NewTupleBuilder(artKD),
+		valBD:        val.NewTupleBuilder(artVD),
+		pool:         pool,
+	}
+	return &p, nil
+}
+
+func (p *conflictProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
 OUTER:
 	for {
 		select {
@@ -320,7 +365,11 @@ OUTER:
 				break OUTER
 			}
 			stats.Conflicts++
-			err := editor.Add(ctx, conflict.key, conflict.ourVal, conflict.theirVal, conflict.baseVal)
+			k, v, err := p.buildConflictArtifact(conflict.key)
+			if err != nil {
+				return err
+			}
+			err = artEditor.Add(ctx, k, v)
 			if err != nil {
 				return err
 			}
@@ -330,4 +379,18 @@ OUTER:
 	}
 
 	return nil
+}
+
+func (p *conflictProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple, err error) {
+	for i := 0; i < key.Count(); i++ {
+		p.keyBD.PutRaw(i, key.GetField(i))
+	}
+	p.keyBD.PutAddress(key.Count(), p.cmHash)
+	p.keyBD.PutUint8(key.Count()+1, uint8(prolly.ArtifactTypeConflict))
+	k = p.keyBD.Build(p.pool)
+
+	p.valBD.PutJSON(0, p.metadataJson)
+	v = p.valBD.Build(p.pool)
+
+	return
 }

@@ -24,61 +24,11 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/shopspring/decimal"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	geo "github.com/dolthub/dolt/go/store/geometry"
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
 var ErrValueExceededMaxFieldSize = errors.New("value exceeded max field size of 65kb")
-
-// todo(andy): this should go in GMS
-func DenormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
-	var err error
-	for i := range row {
-		if row[i] == nil {
-			continue
-		}
-		switch typ := sch[i].Type.(type) {
-		case sql.DecimalType:
-			row[i] = row[i].(decimal.Decimal).String()
-		case sql.EnumType:
-			row[i], err = typ.Unmarshal(int64(row[i].(uint16)))
-		case sql.SetType:
-			row[i], err = typ.Unmarshal(row[i].(uint64))
-		default:
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	return row, nil
-}
-
-// todo(andy): this should go in GMS
-func NormalizeRow(sch sql.Schema, row sql.Row) (sql.Row, error) {
-	var err error
-	for i := range row {
-		if row[i] == nil {
-			continue
-		}
-		switch typ := sch[i].Type.(type) {
-		case sql.DecimalType:
-			row[i], err = decimal.NewFromString(row[i].(string))
-		case sql.EnumType:
-			var v int64
-			v, err = typ.Marshal(row[i])
-			row[i] = uint16(v)
-		case sql.SetType:
-			row[i], err = typ.Marshal(row[i])
-		default:
-		}
-		if err != nil {
-			return nil, err
-		}
-	}
-	return row, nil
-}
 
 // GetField reads the value from the ith field of the Tuple as an interface{}.
 func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error) {
@@ -116,7 +66,7 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		var t int64
 		t, ok = td.GetSqlTime(i, tup)
 		if ok {
-			v, err = deserializeTime(t)
+			v = sql.Timespan(t)
 		}
 	case val.DatetimeEnc:
 		v, ok = td.GetDatetime(i, tup)
@@ -144,6 +94,8 @@ func GetField(td val.TupleDesc, i int, tup val.Tuple) (v interface{}, err error)
 		}
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
+	case val.AddressEnc:
+		v, ok = td.GetAddress(i, tup)
 	default:
 		panic("unknown val.encoding")
 	}
@@ -190,11 +142,7 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.DateEnc:
 		tb.PutDate(i, v.(time.Time))
 	case val.TimeEnc:
-		t, err := serializeTime(v)
-		if err != nil {
-			return err
-		}
-		tb.PutSqlTime(i, t)
+		tb.PutSqlTime(i, int64(v.(sql.Timespan)))
 	case val.DatetimeEnc:
 		tb.PutDatetime(i, v.(time.Time))
 	case val.EnumEnc:
@@ -228,6 +176,8 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 		tb.PutJSON(i, buf)
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
+	case val.AddressEnc:
+		tb.PutAddress(i, v.([]byte))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}
@@ -321,16 +271,4 @@ func convJson(v interface{}) (buf []byte, err error) {
 		return nil, err
 	}
 	return json.Marshal(v.(sql.JSONDocument).Val)
-}
-
-func deserializeTime(v int64) (interface{}, error) {
-	return typeinfo.TimeType.ConvertNomsValueToValue(types.Int(v))
-}
-
-func serializeTime(v interface{}) (int64, error) {
-	i, err := typeinfo.TimeType.ConvertValueToNomsValue(nil, nil, v)
-	if err != nil {
-		return 0, err
-	}
-	return int64(i.(types.Int)), nil
 }
