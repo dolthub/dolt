@@ -207,7 +207,7 @@ func createCSVPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter, hasTo
 
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", noParallelizationInitFunc, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("process", nil, csvProcessStageFunc, parallelism, 1000, readBatchSize),
+		pipeline.NewStage("process", nil, getCsvProcessStageFunc(sch), parallelism, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
 	)
 
@@ -228,38 +228,43 @@ func createCSVPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter, hasTo
 	return p
 }
 
-func csvProcessStageFunc(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	if items == nil {
-		return nil, nil
-	}
+func getCsvProcessStageFunc(sch sql.Schema) pipeline.StageFunc {
+	return func(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+		if items == nil {
+			return nil, nil
+		}
 
-	var b bytes.Buffer
-	wr := bufio.NewWriter(&b)
+		var b bytes.Buffer
+		wr := bufio.NewWriter(&b)
 
-	for _, item := range items {
-		r := item.GetItem().(sql.Row)
-		colValStrs := make([]*string, len(r))
+		for _, item := range items {
+			r := item.GetItem().(sql.Row)
+			colValStrs := make([]*string, len(r))
 
-		for colNum, col := range r {
-			if col != nil {
-				str := sqlutil.SqlColToStr(ctx, col)
-				colValStrs[colNum] = &str
-			} else {
-				colValStrs[colNum] = nil
+			for colNum, col := range r {
+				if col != nil {
+					str, err := sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					if err != nil {
+						return nil, err
+					}
+					colValStrs[colNum] = &str
+				} else {
+					colValStrs[colNum] = nil
+				}
+			}
+
+			err := csv.WriteCSVRow(wr, colValStrs, ",", false)
+
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		err := csv.WriteCSVRow(wr, colValStrs, ",", false)
+		wr.Flush()
 
-		if err != nil {
-			return nil, err
-		}
+		str := b.String()
+		return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
 	}
-
-	wr.Flush()
-
-	str := b.String()
-	return []pipeline.ItemWithProps{pipeline.NewItemWithNoProps(&str)}, nil
 }
 
 // JSON pipeline creation and stage functions
@@ -315,7 +320,10 @@ func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
 					}
 
 					validCols++
-					colStr := sqlutil.SqlColToStr(ctx, col)
+					colStr, err := sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					if err != nil {
+						return nil, err
+					}
 
 					if _, ok := col.(sql.JSONValue); !ok {
 						// don't escape for JSONValue literals
@@ -373,7 +381,7 @@ func createTabularPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) *
 
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", nil, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
+		pipeline.NewStage("stringify", nil, getRowsToStringSlices(sch), 0, 1000, 1000),
 		pipeline.NewStage("fix_width", noParallelizationInitFunc, tps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
 		pipeline.NewStage("cell_borders", noParallelizationInitFunc, tps.getBorderFunc(), 0, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),
@@ -392,38 +400,44 @@ func createTabularPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) *
 	return p
 }
 
-func rowsToStringSlices(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
-	if items == nil {
-		return nil, nil
-	}
+func getRowsToStringSlices(sch sql.Schema) pipeline.StageFunc {
+	return func(ctx context.Context, items []pipeline.ItemWithProps) ([]pipeline.ItemWithProps, error) {
+		if items == nil {
+			return nil, nil
+		}
+		var err error
 
-	rows := make([]pipeline.ItemWithProps, len(items))
-	for i, item := range items {
-		r := item.GetItem().(sql.Row)
+		rows := make([]pipeline.ItemWithProps, len(items))
+		for i, item := range items {
+			r := item.GetItem().(sql.Row)
 
-		cols := make([]string, len(r))
-		for colNum, col := range r {
-			isNull := col == nil
+			cols := make([]string, len(r))
+			for colNum, col := range r {
+				isNull := col == nil
 
-			if !isNull {
-				sqlTypeInst, isType := col.(sql.Type)
+				if !isNull {
+					sqlTypeInst, isType := col.(sql.Type)
 
-				if isType && sqlTypeInst.Type() == sqltypes.Null {
-					isNull = true
+					if isType && sqlTypeInst.Type() == sqltypes.Null {
+						isNull = true
+					}
+				}
+
+				if !isNull {
+					cols[colNum], err = sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					if err != nil {
+						return nil, err
+					}
+				} else {
+					cols[colNum] = "NULL"
 				}
 			}
 
-			if !isNull {
-				cols[colNum] = sqlutil.SqlColToStr(ctx, col)
-			} else {
-				cols[colNum] = "NULL"
-			}
+			rows[i] = pipeline.NewItemWithNoProps(cols)
 		}
 
-		rows[i] = pipeline.NewItemWithNoProps(cols)
+		return rows, nil
 	}
-
-	return rows, nil
 }
 
 type tabularPipelineStages struct {
@@ -571,7 +585,7 @@ func createVerticalPipeline(ctx *sql.Context, sch sql.Schema, iter sql.RowIter) 
 
 	p := pipeline.NewPipeline(
 		pipeline.NewStage("read", nil, getReadStageFunc(ctx, iter, readBatchSize), 0, 0, 0),
-		pipeline.NewStage("stringify", nil, rowsToStringSlices, 0, 1000, 1000),
+		pipeline.NewStage("stringify", nil, getRowsToStringSlices(sch), 0, 1000, 1000),
 		pipeline.NewStage("fix_width", noParallelizationInitFunc, vps.getFixWidthStageFunc(samplesForAutoSizing), 0, 1000, readBatchSize),
 		pipeline.NewStage("cell_borders", noParallelizationInitFunc, vps.getSeparatorFunc(), 0, 1000, readBatchSize),
 		pipeline.NewStage("write", noParallelizationInitFunc, writeToCliOutStageFunc, 0, 100, writeBatchSize),

@@ -160,7 +160,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 	}
-	return DenormalizeRow(it.sqlSch, row)
+	return row, nil
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {

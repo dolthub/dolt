@@ -18,16 +18,17 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/enginetest"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/enginetest/scriptgen/setup"
+	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/go-mysql-server/sql/plan"
+	"github.com/dolthub/vitess/go/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -221,14 +222,20 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	skipNewFormat(t) // different query plans due to index filter behavior
-
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
 	require.NoError(t, err)
 	defer e.Close()
-	for _, tt := range DoltDiffPlanTests {
+
+	var planTests []queries.QueryPlanTest
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		planTests = DoltDiffPlanNewFormatTests
+	} else {
+		planTests = DoltDiffPlanTests
+	}
+
+	for _, tt := range planTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
 	}
 }
@@ -316,8 +323,6 @@ func TestScripts(t *testing.T) {
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
-			// panic
-			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
 	}
 
@@ -612,23 +617,21 @@ func TestStoredProcedures(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range queries.TransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltSqlFuncTransactionTests {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
-
 	for _, script := range DoltConflictHandlingTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
+		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -890,6 +893,11 @@ func TestKeylessUniqueIndex(t *testing.T) {
 	enginetest.TestKeylessUniqueIndex(t, harness)
 }
 
+func TestTypesOverWire(t *testing.T) {
+	harness := newDoltHarness(t)
+	enginetest.TestTypesOverWire(t, harness, newSessionBuilder(harness))
+}
+
 func TestQueriesPrepared(t *testing.T) {
 	enginetest.TestQueriesPrepared(t, newDoltHarness(t))
 }
@@ -916,34 +924,12 @@ func TestInfoSchemaPrepared(t *testing.T) {
 
 func TestUpdateQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip select join for update
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), "join") {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestUpdateQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestUpdateQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestInsertQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
-	var skipped []string
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		// skip keyless
-		skipped = make([]string, 0)
-		for _, q := range queries.UpdateTests {
-			if strings.Contains(strings.ToLower(q.WriteQuery), "keyless") {
-				skipped = append(skipped, q.WriteQuery)
-			}
-		}
-	}
-
-	enginetest.TestInsertQueriesPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
+	enginetest.TestInsertQueriesPrepared(t, newDoltHarness(t))
 }
 
 func TestReplaceQueriesPrepared(t *testing.T) {
@@ -962,21 +948,12 @@ func TestScriptsPrepared(t *testing.T) {
 		skipped = append(skipped,
 			// Different error output for primary key error
 			"failed statements data validation for INSERT, UPDATE",
-			// missing FK violation
-			"failed statements data validation for DELETE, REPLACE",
 			// wrong results
 			"Indexed Join On Keyless Table",
-			// spurious fk violation
-			"Nested Subquery projections (NTC)",
 			// Different query plans
 			"Partial indexes are used and return the expected result",
 			"Multiple indexes on the same columns in a different order",
-			// panic
-			"Ensure proper DECIMAL support (found by fuzzer)",
 		)
-		for _, s := range queries.SpatialScriptTests {
-			skipped = append(skipped, s.Name)
-		}
 	}
 
 	skipPreparedTests(t)
@@ -1224,5 +1201,11 @@ func skipNewFormat(t *testing.T) {
 func skipPreparedTests(t *testing.T) {
 	if skipPrepared {
 		t.Skip("skip prepared")
+	}
+}
+
+func newSessionBuilder(harness *DoltHarness) server.SessionBuilder {
+	return func(ctx context.Context, conn *mysql.Conn, host string) (sql.Session, error) {
+		return harness.session, nil
 	}
 }

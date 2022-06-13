@@ -101,7 +101,7 @@ func (ti *decimalType) ConvertValueToNomsValue(ctx context.Context, vrw types.Va
 	if v == nil {
 		return types.NullValue, nil
 	}
-	decVal, err := ti.sqlDecimalType.ConvertToDecimal(v)
+	decVal, err := ti.sqlDecimalType.ConvertToNullDecimal(v)
 	if err != nil {
 		return nil, err
 	}

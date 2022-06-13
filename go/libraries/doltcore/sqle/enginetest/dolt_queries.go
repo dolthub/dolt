@@ -1305,7 +1305,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
@@ -1353,7 +1353,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
@@ -1389,7 +1389,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 1}, {uint16(1), 2, 2}},
 			},
 		},
 	},
@@ -1437,7 +1437,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
@@ -1462,7 +1462,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 		},
 	},
@@ -1510,7 +1510,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
@@ -1535,7 +1535,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 		},
 	},
