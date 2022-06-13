@@ -109,10 +109,6 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
 // are sent through the server, from out of process, instead of directly to the in-process engine API.
 func TestDoltMultiSessionBehavior(t *testing.T) {
-	// When this test runs with the new storage engine format, we get a panic about an unknown message id.
-	// Ex: https://github.com/dolthub/dolt/runs/6679643619?check_suite_focus=true
-	skipNewFormat(t)
-
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
 }
 
@@ -220,7 +216,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 }
 
 func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
-	dEnv := dtestutils.CreateEnvWithSeedData(t)
+	dEnv := dtestutils.CreateTestEnv()
 	port := 15403 + rand.Intn(25)
 	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
 
