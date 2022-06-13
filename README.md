@@ -776,7 +776,7 @@ Dolt provides powerful data audit capabilities down to individual cells. When, h
 
 # Additonal Reading
 
-Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a fee for Dolt.
+Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt.
 
 # Credits and License
 
