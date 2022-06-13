@@ -309,17 +309,17 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	return db.datasetFromMap(ctx, datasetID, datasets)
 }
 
-func (db *database) GetDatasetsByCommitHash(ctx context.Context, commitHash hash.Hash) (DatasetsMap, error) {
+func (db *database) GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error) {
 
 	if db.Format().UsesFlatbuffers() {
-		rm, err := db.loadDatasetsRefmap(ctx, commitHash)
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
 		if err != nil {
 			return nil, err
 		}
 		return refmapDatasetsMap{rm}, nil
 	}
 
-	m, err := db.loadDatasetsNomsMap(ctx, commitHash)
+	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}

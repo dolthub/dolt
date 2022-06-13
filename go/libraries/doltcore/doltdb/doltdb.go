@@ -1203,8 +1203,8 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	return nil
 }
 
-func (ddb *DoltDB) GetBranchesByCommitHash(ctx context.Context, commitHash hash.Hash) ([]BranchWithHash, error) {
-	dss, err := ddb.db.GetDatasetsByCommitHash(ctx, commitHash)
+func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash) ([]BranchWithHash, error) {
+	dss, err := ddb.db.GetDatasetsByRootHash(ctx, rootHash)
 	if err != nil {
 		return nil, err
 	}

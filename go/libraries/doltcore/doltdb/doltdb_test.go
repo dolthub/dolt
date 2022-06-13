@@ -16,15 +16,12 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
-	"os"
-	"path/filepath"
-	"reflect"
-	"testing"
-
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"os"
+	"path/filepath"
+	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -311,12 +308,12 @@ func TestLDNoms(t *testing.T) {
 		if err != nil {
 			t.Error("Failed to get root hash")
 		}
-		branches, err := ddb.GetBranchesByCommitHash(context.Background(), rootHash)
+		branches, err := ddb.GetBranchesByRootHash(context.Background(), rootHash)
 		if err != nil {
 			t.Error("Failed to get branches by root hash")
 		}
 		assert.Equal(t, len(branches), 1)
-		assert.Equal(t, branches[0].Ref.(data).branch, "master")
+		assert.Equal(t, branches[0].Ref.GetPath(), "master")
 
 		numParents, err := commit.NumParents()
 		assert.NoError(t, err)
