@@ -58,7 +58,7 @@ func TestNodeCursor(t *testing.T) {
 			err = end.Retreat(ctx)
 			assert.NoError(t, err)
 		}
-		assert.Equal(t, 10_000 / 2, i)
+		assert.Equal(t, 10_000/2, i)
 	})
 }
 
