@@ -68,7 +68,12 @@ func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, n
 	}
 
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
-	return &TextTableWriter{wr, bwr, sch, nil, numHeaderRows, 0}, nil
+	return &TextTableWriter{
+		closer: wr,
+		bWr: bwr,
+		sch: sch,
+		numHeaderRows: numHeaderRows,
+	}, nil
 }
 
 // writeTableHeader writes a table header with the column names given in the row provided, which is assumed to be

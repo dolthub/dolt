@@ -20,14 +20,10 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 )
 
 // TableWriteCloser is an interface for writing rows to a table
 type TableWriter interface {
-	// GetSchema gets the schema of the rows that this writer writes
-	GetSchema() schema.Schema
-
 	// WriteRow will write a row to a table
 	WriteRow(ctx context.Context, r row.Row) error
 }
