@@ -23,8 +23,8 @@ import (
 
 	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
@@ -42,9 +42,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/nullprinter"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -644,82 +641,99 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	var sink DiffSink
-	if dArgs.diffOutput == TabularDiffOutput {
-		sink, err = diff.NewColorDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, 1)
-	} else {
-		sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, td.CurName())
-	}
-
+	// TODO: union old and new schemas together
+	outputSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
 	if err != nil {
-		return errhand.BuildDError("").AddCause(err).Build()
+		return errhand.VerboseErrorFromError(err)
 	}
 
-	defer sink.Close()
+	// TODO: default sample size
+	resultsWriter := tabular.NewFixedWidthTableWriter(outputSch.Schema, iohelp.NopWrCloser(cli.CliOut), 100)
 
-	var badRowVErr errhand.VerboseError
-	badRowCallback := func(trf *pipeline.TransformRowFailure) (quit bool) {
-		badRowVErr = errhand.BuildDError("Failed transforming row").AddDetails(trf.TransformName).AddDetails(trf.Details).Build()
-		return true
-	}
-	
+		// TODO: SQL writer
+		// sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, td.CurName())
+
+
 	// TODO: fill in sch
-	diffSrc, err := diffSource(sqlCtx, td.ToTable.ValueReadWriter(), sch, rowIter)
+	// diffSrc, err := diffSource(sqlCtx, td.ToTable.ValueReadWriter(), sch, rowIter)
+	// if err != nil {
+	// 	return errhand.VerboseErrorFromError(err)
+	// }
+
+	err = writeDiffResults(sqlCtx, sch, outputSch.Schema, rowIter, resultsWriter)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
-	}
-
-	doltSch, err := sqlutil.ToDoltResultSchema(sch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	simplifiedTableSch, err := toResultSchema(td.ToSch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
-	}
-
-	splitter := diff.NewDiffSplitter(splitDiff(simplifiedTableSch, doltSch), doltSch)
-	p := newDiffPrintingPipeline(dArgs, diffSrc, sink, splitter.SplitDiffIntoOldAndNew, simplifiedTableSch, badRowCallback)
-
-	if dArgs.diffOutput != SQLDiffOutput {
-		// TODO: fill this tagged strings
-		schRow, err := untyped.NewRowFromTaggedStrings(td.ToTable.Format(), td.ToSch, nil)
-
-		if err != nil {
-			return errhand.BuildDError("error: creating diff header").AddCause(err).Build()
-		}
-
-		p.InjectRow(fwtStageName, schRow)
-	}
-
-	p.Start()
-	if err = p.Wait(); err != nil {
-		return errhand.BuildDError("Error diffing: %v", err.Error()).Build()
-	}
-
-	if badRowVErr != nil {
-		return badRowVErr
 	}
 
 	return nil
 }
 
-func toResultSchema(sch schema.Schema) (schema.Schema, error) {
-	var cols []schema.Column
-	var i uint64
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		col.Tag = i
-		col.Kind = types.StringKind
-		col.TypeInfo = typeinfo.StringDefaultType
+// TODO: SQL writer
+func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.Schema, iter sql.RowIter, writer *tabular.FixedWidthTableWriter) error {
+	for {
+		r, err := iter.Next(ctx)
+		if err == io.EOF {
+			return writer.Close(ctx)
+		} else if err != nil {
+			return err
+		}
 
-		cols = append(cols, col)
-		i++
-		return false, nil
-	})
+		newRow, oldRow, err := splitDiffResultRow(diffQuerySch)
+	}
 
-	colColl := schema.NewColCollection(cols...)
-	return schema.UnkeyedSchemaFromCols(colColl), nil
+	return nil
+}
+
+type rowDiff struct {
+	row sql.Row
+	colDiffs []diff.ChangeType
+}
+
+type diffSplitter struct {
+	diffQuerySch sql.Schema
+	targetSch sql.Schema
+}
+
+func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error) {
+	// split rows in the result set into old, new
+	diffTypeColIdx := ds.diffQuerySch.IndexOfColName("diff_type")
+	if diffTypeColIdx < 0 {
+		return rowDiff{}, rowDiff{}, fmt.Errorf("expected a diff_type column")
+	}
+
+	diffType := row[diffTypeColIdx]
+
+	var oldRow, newRow rowDiff
+
+	// TODO: need a better mapping from diff result row to output row
+	//  1st col needs to be reserved for +-><
+	//  need to handle union of all schemas
+	diffTypeStr := diffType.(types.String)
+	if diffTypeStr == "added" || diffTypeStr == "modified" {
+		oldRow.row = make(sql.Row, len(ds.targetSch))
+		for i := range ds.diffQuerySch {
+			if i >= len(ds.targetSch) {
+				break
+			}
+
+			oldRow.row[i] = row[i]
+			// TODO: column change type
+		}
+	}
+
+	if diffTypeStr == "removed" || diffTypeStr == "modified" {
+		newRow.row = make(sql.Row, len(ds.targetSch))
+		for i := range ds.diffQuerySch {
+			if i < len(ds.targetSch) {
+				continue
+			}
+
+			newRow.row[i-len(ds.targetSch)] = row[i]
+			// TODO: column change type
+		}
+	}
+
+	return oldRow, newRow, nil
 }
 
 func getColumnNamesString(sch schema.Schema) string {
@@ -795,58 +809,6 @@ func splitDiff(tableSchema schema.Schema, resultSetSchema schema.Schema) diff.Ro
 
 		return []row.Row{oldRow, newRow}, nil
 	}
-}
-
-func diffSource(ctx *sql.Context, vrw types.ValueReadWriter, sch sql.Schema, iter sql.RowIter) (pipeline.SourceFunc, error) {
-	doltSch, err := sqlutil.ToDoltResultSchema(sch)
-	if err != nil {
-		return nil, err
-	}
-
-	return func() (row.Row, pipeline.ImmutableProperties, error) {
-		r, err := iter.Next(ctx)
-		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
-		}
-		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
-		}
-
-		doltRow, err := sqlutil.SqlRowToDoltRow(ctx, vrw, r, doltSch)
-		if err != nil {
-			return nil, pipeline.ImmutableProperties{}, err
-		}
-
-		return doltRow, pipeline.ImmutableProperties{}, nil
-	}, nil
-}
-
-func newDiffPrintingPipeline(
-		dArgs *diffArgs,
-		src pipeline.SourceFunc,
-		sink DiffSink,
-		splitter pipeline.TransformRowFunc,
-		resultSchema schema.Schema,
-		badRowCB pipeline.BadRowCallback,
-) *pipeline.Pipeline {
-
-	transforms := pipeline.NewTransformCollection()
-
-	transforms.AppendTransforms(
-		pipeline.NewNamedTransform("split_diff_rows", splitter),
-	)
-
-	if dArgs.diffOutput == TabularDiffOutput {
-		nullPrinter := nullprinter.NewNullPrinter(resultSchema)
-		fwtTr := fwt.NewAutoSizingFWTTransformer(resultSchema, fwt.HashFillWhenTooLong, 1000)
-		transforms.AppendTransforms(
-			pipeline.NewNamedTransform(nullprinter.NullPrintingStage, nullPrinter.ProcessRow),
-			pipeline.NamedTransform{Name: fwtStageName, Func: fwtTr.TransformToFWT},
-		)
-	}
-
-	sinkProcFunc := pipeline.ProcFuncForSinkFunc(sink.ProcRowWithProps)
-	return pipeline.NewAsyncPipeline(pipeline.ProcFuncForSourceFunc(src), sinkProcFunc, transforms, badRowCB)
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {

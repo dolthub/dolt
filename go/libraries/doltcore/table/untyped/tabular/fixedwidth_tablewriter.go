@@ -28,9 +28,9 @@ import (
 	"github.com/fatih/color"
 )
 
-// fixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
+// FixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
 // expected to be strings.
-type fixedWidthTableWriter struct {
+type FixedWidthTableWriter struct {
 	// number of samples to take before beginning to print rows
 	numSamples int
 	// Max print width for each column
@@ -53,9 +53,9 @@ type fixedWidthTableWriter struct {
 	flushedSampleBuffer bool
 }
 
-func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *fixedWidthTableWriter {
+func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthTableWriter {
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
-	return &fixedWidthTableWriter{
+	return &FixedWidthTableWriter{
 		printWidths:         make([]int, len(schema)),
 		maxRunes:            make([]int, len(schema)),
 		rowBuffer:           make([][]string, numSamples),
@@ -65,7 +65,7 @@ func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples i
 	}
 }
 
-func (w *fixedWidthTableWriter) Close(ctx context.Context) error {
+func (w *FixedWidthTableWriter) Close(ctx context.Context) error {
 	err := w.flushSampleBuffer()
 	if err != nil {
 		return err
@@ -84,7 +84,7 @@ func (w *fixedWidthTableWriter) Close(ctx context.Context) error {
 	return w.closer.Close()
 }
 
-func (w *fixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
+func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
 	if w.numSamples < len(w.rowBuffer) {
 		strRow, err := w.sampleRow(r, colors)
 		if err != nil {
@@ -108,7 +108,7 @@ func (w *fixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors 
 	return nil
 }
 
-func (w *fixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) ([]string, error) {
+func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) ([]string, error) {
 	strRow := make([]string, len(r))
 	for i := range r {
 		str, err := w.stringValue(r[i])
@@ -137,7 +137,7 @@ func (w *fixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) ([]s
 	return strRow, nil
 }
 
-func (w *fixedWidthTableWriter) flushSampleBuffer() error {
+func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	if w.flushedSampleBuffer {
 		return nil
 	}
@@ -161,7 +161,7 @@ func (w *fixedWidthTableWriter) flushSampleBuffer() error {
 	return nil
 }
 
-func (w *fixedWidthTableWriter) stringValue(i interface{}) (string, error) {
+func (w *FixedWidthTableWriter) stringValue(i interface{}) (string, error) {
 	str := ""
 	if i == nil {
 		str = "NULL"
@@ -175,7 +175,7 @@ func (w *fixedWidthTableWriter) stringValue(i interface{}) (string, error) {
 	return str, nil
 }
 
-func (w *fixedWidthTableWriter) writeRow(row []string) error {
+func (w *FixedWidthTableWriter) writeRow(row []string) error {
 	if !w.writtenHeader {
 		err := w.writeHeader()
 		if err != nil {
@@ -213,7 +213,7 @@ func rowToStrings(row sql.Row) []string {
 	return strs
 }
 
-func (w *fixedWidthTableWriter) writeHeader() error {
+func (w *FixedWidthTableWriter) writeHeader() error {
 	err := w.writeSepararator()
 	if err != nil {
 		return err
@@ -245,7 +245,7 @@ func (w *fixedWidthTableWriter) writeHeader() error {
 	return w.writeSepararator()
 }
 
-func (w *fixedWidthTableWriter) writeSepararator() error {
+func (w *FixedWidthTableWriter) writeSepararator() error {
 	colNames := make([]string, len(w.schema))
 	for i := range w.schema {
 		colNames[i] = " "
@@ -271,7 +271,7 @@ func (w *fixedWidthTableWriter) writeSepararator() error {
 	return iohelp.WriteLine(w.wr, separator.String())
 }
 
-func (w *fixedWidthTableWriter) writeFooter() error {
+func (w *FixedWidthTableWriter) writeFooter() error {
 	return w.writeSepararator()
 }
 
