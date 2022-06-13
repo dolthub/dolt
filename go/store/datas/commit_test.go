@@ -134,7 +134,7 @@ func TestNewCommit(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
@@ -155,7 +155,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
@@ -174,7 +174,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
@@ -200,7 +200,7 @@ func TestNewCommit(t *testing.T) {
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, meta)
 	assert.NoError(err)
 	at4, err := types.TypeOf(commit4)
@@ -224,7 +224,7 @@ func TestNewCommit(t *testing.T) {
 	parents = mustList(types.NewList(context.Background(), db,
 		mustRef(types.NewRef(commit2, db.Format())),
 		mustRef(types.NewRef(commit3, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit5, err := newCommit(
 		context.Background(),
 		types.String("Hi"),
@@ -745,7 +745,7 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(t, err)
 	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
@@ -757,7 +757,7 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, db.Format())))
 	assert.NoError(t, err)
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	meta, err := types.NewStruct(db.Format(), "", types.StructData{
 		"basis": cx,
 	})
