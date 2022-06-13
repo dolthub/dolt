@@ -80,80 +80,30 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "Indexed Join On Keyless Table",
+			Name: "primary key table: non-pk column type changes",
 			SetUpScript: []string{
-				"create table l (pk int primary key, c0 int, c1 int);",
-				"create table r (c0 int, c1 int, third int);",
-				"create index r_c0 on r (c0);",
-				"create index r_c1 on r (c1);",
-				"create index r_third on r (third);",
-				"insert into l values (0, 0, 0), (1, 0, 1), (2, 1, 0), (3, 0, 2), (4, 2, 0), (5, 1, 2), (6, 2, 1), (7, 2, 2);",
-				"insert into l values (256, 1024, 4096);",
-				"insert into r values (1, 1, -1), (2, 2, -1), (2, 2, -1);",
-				"insert into r values (-1, -1, 256);",
+				"create table t (pk int primary key, c1 int, c2 text);",
+				"insert into t values (1, 2, '3'), (4, 5, '6');",
+				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
+				"alter table t modify column c2 int;",
+				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query: "SELECT pk, l.c0, l.c1 FROM l JOIN r ON l.c0 = r.c0 OR l.c1 = r.c1 ORDER BY 1, 2, 3;",
-					Expected: []sql.Row{
-						{1, 0, 1},
-						{2, 1, 0},
-						{3, 0, 2},
-						{3, 0, 2},
-						{4, 2, 0},
-						{4, 2, 0},
-						{5, 1, 2},
-						{5, 1, 2},
-						{5, 1, 2},
-						{6, 2, 1},
-						{6, 2, 1},
-						{6, 2, 1},
-						{7, 2, 2},
-						{7, 2, 2},
-					},
+					Query:    "select count(*) from dolt_history_t;",
+					Expected: []sql.Row{{4}},
 				},
 				{
-					Query: "select pk, l.c0, l.c1 from l join r on l.c0 = r.c0 or l.c1 = r.c1 or l.pk = r.third order by 1, 2, 3;",
-					Expected: []sql.Row{
-						{1, 0, 1},
-						{2, 1, 0},
-						{3, 0, 2},
-						{3, 0, 2},
-						{4, 2, 0},
-						{4, 2, 0},
-						{5, 1, 2},
-						{5, 1, 2},
-						{5, 1, 2},
-						{6, 2, 1},
-						{6, 2, 1},
-						{6, 2, 1},
-						{7, 2, 2},
-						{7, 2, 2},
-						{256, 1024, 4096},
-					},
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
+					Expected: []sql.Row{{1, nil}, {4, nil}},
 				},
 				{
-					Query: "select pk, l.c0, l.c1 from l join r on l.c0 = r.c0 or l.c1 < 4 and l.c1 = r.c1 or l.c1 >= 4 and l.c1 = r.c1 order by 1, 2, 3;",
-					Expected: []sql.Row{
-						{1, 0, 1},
-						{2, 1, 0},
-						{3, 0, 2},
-						{3, 0, 2},
-						{4, 2, 0},
-						{4, 2, 0},
-						{5, 1, 2},
-						{5, 1, 2},
-						{5, 1, 2},
-						{6, 2, 1},
-						{6, 2, 1},
-						{6, 2, 1},
-						{7, 2, 2},
-						{7, 2, 2},
-					},
+					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
+					Expected: []sql.Row{{1, 3}, {4, 6}},
 				},
 			},
 		},
@@ -1225,8 +1175,6 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 }
 
 var newFormatSkippedScripts = []string{
-	// wrong results
-	"Indexed Join On Keyless Table",
 	// Different query plans
 	"Partial indexes are used and return the expected result",
 	"Multiple indexes on the same columns in a different order",
