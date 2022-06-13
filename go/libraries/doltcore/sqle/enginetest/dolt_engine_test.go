@@ -222,14 +222,20 @@ func TestQueryPlans(t *testing.T) {
 }
 
 func TestDoltDiffQueryPlans(t *testing.T) {
-	skipNewFormat(t) // different query plans due to index filter behavior
-
 	harness := newDoltHarness(t).WithParallelism(2) // want Exchange nodes
 	harness.Setup(setup.SimpleSetup...)
 	e, err := harness.NewEngine(t)
 	require.NoError(t, err)
 	defer e.Close()
-	for _, tt := range DoltDiffPlanTests {
+
+	var planTests []queries.QueryPlanTest
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		planTests = DoltDiffPlanNewFormatTests
+	} else {
+		planTests = DoltDiffPlanTests
+	}
+
+	for _, tt := range planTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
 	}
 }
