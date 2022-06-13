@@ -157,7 +157,7 @@ func (fwf FixedWidthFormatter) FormatRow(r row.Row, sch schema.Schema) (row.Row,
 	return row.New(r.Format(), sch, destFields)
 }
 
-// Format takes an array of columns strings and makes each column the approriate width
+// Format takes an array of columns strings and makes each column the appropriate width
 func (fwf FixedWidthFormatter) Format(cols []string) ([]string, error) {
 	if len(cols) != fwf.colCount {
 		return nil, ErrRowCountMismatch
