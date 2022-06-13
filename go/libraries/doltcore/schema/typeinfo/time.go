@@ -36,7 +36,7 @@ var TimeType = &timeType{sql.Time}
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *timeType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Int); ok {
-		return ti.sqlTimeType.Unmarshal(int64(val)), nil
+		return ti.sqlTimeType.Convert(sql.Timespan(val))
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -50,7 +50,7 @@ func (ti *timeType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecReader) (
 	switch k {
 	case types.IntKind:
 		val := reader.ReadInt()
-		return ti.sqlTimeType.Unmarshal(val), nil
+		return ti.sqlTimeType.Convert(sql.Timespan(val))
 	case types.NullKind:
 		return nil, nil
 	}
@@ -63,11 +63,11 @@ func (ti *timeType) ConvertValueToNomsValue(ctx context.Context, vrw types.Value
 	if v == nil {
 		return types.NullValue, nil
 	}
-	val, err := ti.sqlTimeType.Marshal(v)
+	val, err := ti.sqlTimeType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
-	return types.Int(val), nil
+	return types.Int(val.(sql.Timespan)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -84,14 +84,11 @@ func (ti *timeType) FormatValue(v types.Value) (*string, error) {
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
-	strVal, err := ti.ConvertNomsValueToValue(v)
+	convVal, err := ti.ConvertNomsValueToValue(v)
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
-	if !ok {
-		return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
-	}
+	val := convVal.(sql.Timespan).String()
 	return &val, nil
 }
 

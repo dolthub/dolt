@@ -54,7 +54,7 @@ SQL
     dolt sql -q "INSERT INTO mytable (id, col3) VALUES (1, TIMESTAMP('2003-12-31'));"
     run dolt sql -q "SELECT * FROM myview;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,999,2003-12-31 00:00:00 +0000 UTC" ]] || false
+    [[ "$output" =~ "1,999,2003-12-31 00:00:00" ]] || false
 
     run dolt sql -q "SHOW CREATE VIEW myview;" -r csv
     [ "$status" -eq 0 ]

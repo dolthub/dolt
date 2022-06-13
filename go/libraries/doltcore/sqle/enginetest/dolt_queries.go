@@ -20,6 +20,7 @@ import (
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -229,6 +230,47 @@ var DoltScripts = []queries.ScriptTest{
 						"utf8mb4_0900_bin",
 						"utf8mb4_0900_bin",
 					},
+				},
+			},
+		},
+	},
+	{
+		Name: "Prepared ASOF",
+		SetUpScript: []string{
+			"create table test (pk int primary key, c1 int)",
+			"insert into test values (0,0), (1,1);",
+			"set @Commit1 = dolt_commit('-am', 'creating table');",
+			"call dolt_branch('-c', 'main', 'newb')",
+			"alter table test add column c2 int;",
+			"set @Commit2 = dolt_commit('-am', 'alter table');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select * from test as of 'HEAD~' where pk=?;",
+				Expected: []sql.Row{{0, 0}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of hashof('HEAD') where pk=?;",
+				Expected: []sql.Row{{1, 1, nil}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(1, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of @Commit1 where pk=?;",
+				Expected: []sql.Row{{0, 0}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
+				},
+			},
+			{
+				Query:    "select * from test as of @Commit2 where pk=?;",
+				Expected: []sql.Row{{0, 0, nil}},
+				Bindings: map[string]sql.Expression{
+					"v1": expression.NewLiteral(0, sql.Int8),
 				},
 			},
 		},
@@ -1263,7 +1305,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
@@ -1311,7 +1353,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}},
+				Expected: []sql.Row{{uint16(1), 1, 1}},
 			},
 			{
 				Query:    "COMMIT;",
@@ -1347,7 +1389,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 1}, {uint16(1), 2, 2}},
 			},
 		},
 	},
@@ -1395,7 +1437,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
@@ -1420,7 +1462,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 		},
 	},
@@ -1468,7 +1510,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 			// commit so we can merge again
 			{
@@ -1493,7 +1535,7 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 2}},
+				Expected: []sql.Row{{uint16(1), 1, 2}},
 			},
 		},
 	},
@@ -3181,39 +3223,5 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{7, 8, nil, nil, "added"}},
 			},
 		},
-	},
-}
-
-// DoltDiffPlanTests are tests that check our query plans for various operations on the dolt diff system tables
-var DoltDiffPlanTests = []queries.QueryPlanTest{
-	{
-		Query: `select * from dolt_diff_one_pk where to_pk=1`,
-		ExpectedPlan: "Exchange\n" +
-			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[1, 1]}])\n" +
-			"",
-	},
-	{
-		Query: `select * from dolt_diff_one_pk where to_pk>=10 and to_pk<=100`,
-		ExpectedPlan: "Exchange\n" +
-			" └─ IndexedTableAccess(dolt_diff_one_pk on [dolt_diff_one_pk.to_pk] with ranges: [{[10, 100]}])\n" +
-			"",
-	},
-	{
-		Query: `select * from dolt_diff_two_pk where to_pk1=1`,
-		ExpectedPlan: "Exchange\n" +
-			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], (-∞, ∞)}])\n" +
-			"",
-	},
-	{
-		Query: `select * from dolt_diff_two_pk where to_pk1=1 and to_pk2=2`,
-		ExpectedPlan: "Exchange\n" +
-			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{[1, 1], [2, 2]}])\n" +
-			"",
-	},
-	{
-		Query: `select * from dolt_diff_two_pk where to_pk1 < 1 and to_pk2 > 10`,
-		ExpectedPlan: "Exchange\n" +
-			" └─ IndexedTableAccess(dolt_diff_two_pk on [dolt_diff_two_pk.to_pk1,dolt_diff_two_pk.to_pk2] with ranges: [{(-∞, 1), (10, ∞)}])\n" +
-			"",
 	},
 }
