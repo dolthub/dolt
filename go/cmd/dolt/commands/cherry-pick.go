@@ -192,7 +192,7 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 
 	workingSetTblNames, err := doltdb.GetAllTableNames(ctx, headRoot)
 	if err != nil {
-		return nil, errhand.BuildDError("failed to get table names").AddCause(err).Build()
+		return nil, err
 	}
 	workingSetTblSet := set.NewStrSet(workingSetTblNames)
 
@@ -205,25 +205,27 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 	// changes introduced in cherry-picked commit
 	tblDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	for _, td := range tblDeltas {
-		if td.IsDrop() {
-			if !workingSetTblSet.Contains(td.FromName) {
-				continue
-			}
-
-			tblsToDrop.Add(td.FromName)
-			stagedFKs.RemoveKeys(td.FromFks...)
-		} else if td.IsAdd() {
+		if td.IsAdd() {
+			// added table exists in current HEAD
 			if workingSetTblSet.Contains(td.ToName) {
-				// TODO: (skipped) added table already exists in current HEAD => CONFLICT
-				continue
+				return nil, doltdb.ErrTableExists
 			} else {
 				headRoot, err = headRoot.PutTable(ctx, td.ToName, td.ToTable)
 				if err != nil {
 					return nil, err
 				}
 			}
-		} else {
+		} else if td.IsDrop() {
 			if !workingSetTblSet.Contains(td.FromName) {
+				cli.Printf("warning: '%s' table is deleted in cherry-pick commit and does not exist in working set\n", td.FromTable)
+				continue
+			}
+			tblsToDrop.Add(td.FromName)
+			stagedFKs.RemoveKeys(td.FromFks...)
+		} else {
+			// changes made to non-existing table
+			if !workingSetTblSet.Contains(td.FromName) {
+				cli.Printf("warning: '%s' table does not exist in working set\n", td.FromName)
 				continue
 			}
 
@@ -236,17 +238,25 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 				}
 			}
 
-			// TODO : check for schema changes
-			if !schema.SchemasAreEqual(td.FromSch, td.ToSch) {
-				headRoot, err = handleSchemaChanges(ctx, headRoot, td.FromSch, td.ToSch, td.ToName)
-				if err != nil {
-					return nil, err
-				}
+			headTbl, _, er := headRoot.GetTable(ctx, td.ToName)
+			if er != nil {
+				return nil, er
+			}
+			headSch, er := headTbl.GetSchema(ctx)
+			if er != nil {
+				return nil, er
 			}
 
-			rowDiffs, err := getRowDiffs(ctx, td)
-			if err != nil {
-				return nil, err
+			// TODO : handle schema changes
+			if !schema.SchemasAreEqual(headSch, td.ToSch) {
+				//verr := printShowCreateTableDiff(ctx, td)
+				//if verr != nil {}
+				return nil, fmt.Errorf("schema changes in cherry-pick is not supported yet: schema change in '%s' table", td.ToName)
+			}
+
+			rowDiffs, rErr := getRowDiffs(ctx, td)
+			if rErr != nil {
+				return nil, rErr
 			}
 			headRoot, err = applyRowDiffs(ctx, headRoot, td.ToName, rowDiffs, opts)
 			if err != nil {
@@ -258,17 +268,6 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 			if err != nil {
 				return nil, err
 			}
-
-			// TODO : what is superSchema doing?
-			//ss, _, err := fromRoot.GetSuperSchema(ctx, td.ToName)
-			//if err != nil {
-			//	return nil, err
-			//}
-			//
-			//headRoot, err = headRoot.PutSuperSchema(ctx, td.ToName, ss)
-			//if err != nil {
-			//	return nil, err
-			//}
 		}
 	}
 
@@ -284,34 +283,6 @@ func cherryPickACommit(ctx context.Context, ddb *doltdb.DoltDB, headRoot *doltdb
 	}
 
 	return headRoot, nil
-}
-
-func handleSchemaChanges(ctx context.Context, root *doltdb.RootValue, parentSch, toSch schema.Schema, tblName string) (*doltdb.RootValue, error) {
-	tbl, _, err := root.GetTable(ctx, tblName)
-	if err != nil {
-		return nil, err
-	}
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !schema.SchemasAreEqual(sch, parentSch) {
-		// if current HEAD table schema is not the same as parent table schema of cherry-picked table, schema changes not supported
-		return nil, errhand.BuildDError(fmt.Sprintf("%s table schema in working tree is not the same as parent commit's of cherry-picked commit", tblName)).AddCause(err).Build()
-	}
-
-	if !sch.Indexes().Equals(toSch.Indexes()) {
-		// any change on indexes, not supported yet
-		return nil, errhand.BuildDError(fmt.Sprintf("index on %s table in working tree is not the same as parent commit's of cherry-picked commit", tblName)).AddCause(err).Build()
-	}
-
-	newTbl, err := tbl.UpdateSchema(ctx, toSch)
-	if err != nil {
-		return nil, err
-	}
-
-	return root.PutTable(ctx, tblName, newTbl)
 }
 
 // getParentAndCherryRoots return root values of parent commit of cherry-picked commit and cherry-picked commit itself.
@@ -346,12 +317,12 @@ func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row,
 	toTable := td.ToTable
 
 	if fromTable == nil && toTable == nil {
-		return nil, errhand.BuildDError(fmt.Sprintf("error: no changes between commits for table %s", td.ToName)).Build()
+		return nil, fmt.Errorf("error: no changes between commits for table %s", td.ToName)
 	}
 
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
-		return nil, errhand.BuildDError("cannot retrieve schema for table %s", td.ToName).AddCause(err).Build()
+		return nil, err
 	}
 
 	if td.IsAdd() {
@@ -362,7 +333,7 @@ func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row,
 
 	fromRows, toRows, err := td.GetMaps(ctx)
 	if err != nil {
-		return nil, errhand.BuildDError("could not get row data for table %s", td.ToName).AddCause(err).Build()
+		return nil, err
 	}
 
 	joiner, err := rowconv.NewJoiner(
@@ -373,7 +344,7 @@ func getRowDiffs(ctx context.Context, td diff.TableDelta) ([]map[string]row.Row,
 		map[string]rowconv.ColNamingFunc{diff.To: toNamer, diff.From: fromNamer},
 	)
 	if err != nil {
-		return nil, errhand.BuildDError("").AddCause(err).Build()
+		return nil, err
 	}
 
 	rd := diff.NewRowDiffer(ctx, fromSch, toSch, 1024)
@@ -443,22 +414,19 @@ func applyRowDiffs(ctx context.Context, root *doltdb.RootValue, tName string, di
 			}
 			err = tblEditor.UpdateRow(ctx, row, to, nil)
 			if err != nil {
-				cli.Println(err)
-				return root, nil
+				return nil, err
 			}
 		} else if hasTo && !hasFrom {
 			// INSERT ROW
 			err = tblEditor.InsertRow(ctx, to, nil)
 			if err != nil {
-				cli.Println(err)
-				return root, nil
+				return nil, err
 			}
 		} else {
 			// DELETE ROW
 			err = tblEditor.DeleteRow(ctx, from)
 			if err != nil {
-				cli.Println(err)
-				return root, nil
+				return nil, err
 			}
 		}
 	}
@@ -493,6 +461,6 @@ func getRowInTable(ctx context.Context, tbl *doltdb.Table, sch schema.Schema, r 
 	} else if !val.Equals(v) {
 		return nil, err
 	}
-
+	// TODO : what if the row is converted from schema update and now it doesn't find the old row from the table?
 	return row.FromNoms(sch, k, v)
 }
