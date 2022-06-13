@@ -133,6 +133,7 @@ func commitToFbKeyTuple(c *Commit, p pool.BuffPool) val.Tuple {
 type parentsClosureIter interface {
 	Err() error
 	Hash() hash.Hash
+	Height() uint64
 	Less(*types.NomsBinFormat, parentsClosureIter) bool
 	Next(context.Context) bool
 }
@@ -145,6 +146,18 @@ type parentsClosureIterator struct {
 
 func (i *parentsClosureIterator) Err() error {
 	return i.err
+}
+
+func (i *parentsClosureIterator) Height() uint64 {
+	if i.err != nil {
+		return 0
+	}
+	field, err := i.curr.Get(0)
+	if err != nil {
+		i.err = err
+		return 0
+	}
+	return uint64(field.(types.Uint))
 }
 
 func (i *parentsClosureIterator) Hash() hash.Hash {

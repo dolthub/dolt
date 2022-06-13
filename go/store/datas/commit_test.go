@@ -23,21 +23,16 @@ package datas
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
-	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -425,123 +420,31 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	assertCommitParentsClosure := func(v types.Value, es []expected) {
-		if v, ok := v.(types.SerialMessage); ok {
-			msg := serial.GetRootAsCommit(v, 0)
-			addr := hash.New(msg.ParentClosureBytes())
-			if len(es) == 0 {
-				assert.True(addr.IsEmpty(), "no parent closure when the closure is empty")
-				return
-			}
-			v, err := db.ReadValue(ctx, addr)
-			if !assert.NoError(err, "no error reading map for parent closure") {
-				return
-			}
-			if !assert.False(types.IsNull(v), "reading parent closure map returns non-null") {
-				return
-			}
-			node := tree.NodeFromBytes(v.(types.TupleRowStorage))
-			m := prolly.NewMap(node, tree.NewNodeStore(db.chunkStore()), commitKeyTupleDesc, commitValueTupleDesc)
-			if !assert.Equal(len(es), m.Count(), "expected length of commit closure matches") {
-				return
-			}
-			mi, err := m.IterAll(ctx)
-			if !assert.NoError(err, "no error getting map iterator") {
-				return
-			}
-			i := 0
-			for {
-				k, _, err := mi.Next(ctx)
-				if errors.Is(err, io.EOF) {
-					break
-				}
-				if !assert.NoError(err, "no error on MapIterator.Next") {
-					return
-				}
-				height, ok := commitKeyTupleDesc.GetUint64(0, k)
-				if !assert.True(ok, "able to get height from first field of closure key") {
-					return
-				}
-				addrbs, ok := commitKeyTupleDesc.GetBytes(1, k)
-				if !assert.True(ok, "able to get address bytes from second field of closure key") {
-					return
-				}
-				addr := hash.New(addrbs)
-				assert.Equal(es[i].height, int(height), "heights of expected entries match")
-				assert.Equal(es[i].hash, addr, "addresses of expected entries match")
-				i += 1
-			}
-			assert.Equal(len(es), i)
+		c, err := commitPtr(db.Format(), v, nil)
+		if !assert.NoError(err) {
 			return
 		}
-		s, ok := v.(types.Struct)
-		if !assert.True(ok) {
-			return
-		}
-		v, ok, err := s.MaybeGet(parentsClosureField)
+		iter, err := newParentsClosureIterator(ctx, c, db)
 		if !assert.NoError(err) {
 			return
 		}
 		if len(es) == 0 {
-			assert.False(ok, "must not find parents_closure field when its length is 0")
+			assert.Nil(iter)
 			return
 		}
-		if !assert.True(ok, "must find parents_closure field in commit.") {
-			return
+		for _, e := range es {
+			if !assert.True(iter.Next(ctx)) {
+				return
+			}
+			if !assert.Equal(e.hash, iter.Hash()) {
+				return
+			}
+			if !assert.Equal(uint64(e.height), iter.Height()) {
+				return
+			}
 		}
-		r, ok := v.(types.Ref)
-		if !assert.True(ok, "parents_closure field must contain a ref value.") {
-			return
-		}
-		tv, err := r.TargetValue(ctx, db)
-		if !assert.NoError(err, "getting target value of parents_closure field must not error") {
-			return
-		}
-		m, ok := tv.(types.Map)
-		if !assert.True(ok, "parents_closure ref target value must contain a map value.") {
-			return
-		}
-		if !assert.Equal(len(es), int(m.Len()), "expected length %v and got %v", len(es), m.Len()) {
-			return
-		}
-		i := 0
-		err = m.IterAll(ctx, func(k, v types.Value) error {
-			j := i
-			i++
-			kt, ok := k.(types.Tuple)
-			if !assert.True(ok, "key type must be Tuple") {
-				return nil
-			}
-			if !assert.Equal(2, int(kt.Len()), "key must have length 2") {
-				return nil
-			}
-			hv, err := kt.Get(0)
-			if !assert.NoError(err) {
-				return nil
-			}
-			h, ok := hv.(types.Uint)
-			if !assert.True(ok, "key first field must be Uint") {
-				return nil
-			}
-			if !assert.Equal(es[j].height, int(uint64(h))) {
-				return nil
-			}
-			hv, err = kt.Get(1)
-			if !assert.NoError(err) {
-				return nil
-			}
-			b, ok := hv.(types.InlineBlob)
-			if !assert.True(ok, "key second field must be InlineBlob") {
-				return nil
-			}
-			var fh hash.Hash
-			copy(fh[:], []byte(b))
-			if !assert.Equal(es[j].hash, fh, "hash for idx %d did not match", j) {
-				return nil
-			}
-			assertClosureMapValue(t, db, v, fh)
-			return nil
-		})
-		assert.NoError(err)
+		assert.False(iter.Next(ctx))
+		assert.NoError(iter.Err())
 	}
 
 	// TODO: These tests rely on the hash values of the commits
@@ -567,40 +470,40 @@ func TestCommitParentsClosure(t *testing.T) {
 		{1, a1a},
 	})
 	assertCommitParentsClosure(a3, []expected{
-		{1, a1a},
 		{2, a2a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(b1, []expected{
 		{1, a1a},
 	})
 	assertCommitParentsClosure(b2, []expected{
-		{1, a1a},
 		{2, b1a},
+		{1, a1a},
 	})
 	assertCommitParentsClosure(b3, []expected{
-		{1, a1a},
-		{2, b1a},
 		{3, b2a},
+		{2, b1a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(c1, []expected{
-		{1, a1a},
-		{2, a2a},
-		{2, b1a},
-		{3, a3a},
-		{3, b2a},
 		{4, b3a},
+		{3, b2a},
+		{3, a3a},
+		{2, b1a},
+		{2, a2a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(d1, []expected{
-		{1, a1a},
-		{2, a2a},
-		{2, b1a},
-		{3, a3a},
-		{3, b2a},
-		{4, b3a},
 		{5, c1a},
+		{4, b3a},
+		{3, b2a},
+		{3, a3a},
+		{2, b1a},
+		{2, a2a},
+		{1, a1a},
 	})
 }
 
