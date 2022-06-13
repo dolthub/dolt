@@ -2,8 +2,9 @@ package merge
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 	"io"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -14,6 +15,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 func prollyParentFkConstraintViolations(
@@ -65,6 +67,7 @@ func prollyParentFkConstraintViolations(
 			}
 			if err == nil {
 				// some other equivalent parents exist
+				return nil
 			}
 
 			// All equivalent parents were deleted, let's check for dangling children.
@@ -183,12 +186,9 @@ func createCVIfNoPartialKeyMatches(
 		return false, nil
 	}
 
-	data, err := json.Marshal(prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v})
-	if err != nil {
-		return false, err
-	}
+	meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v}
 
-	err = editor.Add(ctx, k, ourCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
+	err = editor.ReplaceFKConstraintViolation(ctx, k, ourCmHash[:], meta)
 	if err != nil {
 		return false, err
 	}
@@ -199,7 +199,7 @@ func createCVIfNoPartialKeyMatches(
 func createCVsForPartialKeyMatches(
 	ctx context.Context,
 	partialKeyRange prolly.Range,
-	artifactEditor prolly.ArtifactsEditor,
+	editor prolly.ArtifactsEditor,
 	primaryKD val.TupleDesc,
 	primaryIdx prolly.Map,
 	secondaryIdx prolly.Map,
@@ -236,13 +236,9 @@ func createCVsForPartialKeyMatches(
 		if err != nil {
 			return false, err
 		}
+		meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value}
 
-		data, err := json.Marshal(prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value})
-		if err != nil {
-			return false, err
-		}
-
-		err = artifactEditor.Add(ctx, primaryIdxKey, ourCmHash[:], prolly.ArtifactTypeForeignKeyViol, data)
+		err = editor.ReplaceFKConstraintViolation(ctx, primaryIdxKey, ourCmHash[:], meta)
 		if err != nil {
 			return false, err
 		}
@@ -276,4 +272,60 @@ func makePartialKey(kb *val.TupleBuilder, idxSch schema.Index, tblSch schema.Sch
 	}
 
 	return kb.Build(pool), false
+}
+
+// TODO: Change json.NomsJson string marshalling to match json.Marshall
+// Currently it returns additional whitespace which complicates things.
+// Another option is to implement a custom json encoder that matches json.NomsJson string marshalling.
+
+type FkCVMeta struct {
+	Columns           []string `json:"Columns"`
+	ForeignKey        string   `json:"ForeignKey"`
+	Index             string   `json:"Index"`
+	OnDelete          string   `json:"OnDelete"`
+	OnUpdate          string   `json:"OnUpdate"`
+	ReferencedColumns []string `json:"ReferencedColumns"`
+	ReferencedIndex   string   `json:"ReferencedIndex"`
+	ReferencedTable   string   `json:"ReferencedTable"`
+	Table             string   `json:"Table"`
+}
+
+func (m FkCVMeta) Unmarshall(ctx *sql.Context) (val sql.JSONDocument, err error) {
+	return sql.JSONDocument{Val: m}, nil
+}
+
+func (m FkCVMeta) Compare(ctx *sql.Context, v sql.JSONValue) (cmp int, err error) {
+	ours := sql.JSONDocument{Val: m}
+	return ours.Compare(ctx, v)
+}
+
+func (m FkCVMeta) ToString(ctx *sql.Context) (string, error) {
+	return m.PrettyPrint(), nil
+}
+
+var _ sql.JSONValue = FkCVMeta{}
+
+// PrettyPrint is a custom pretty print function to match the old format's
+// output which includes additional whitespace between keys, values, and array elements.
+func (m FkCVMeta) PrettyPrint() string {
+	jsonStr := fmt.Sprintf(`{`+
+		`"Columns": ["%s"], `+
+		`"ForeignKey": "%s", `+
+		`"Index": "%s", `+
+		`"OnDelete": "%s", `+
+		`"OnUpdate": "%s", `+
+		`"ReferencedColumns": ["%s"], `+
+		`"ReferencedIndex": "%s", `+
+		`"ReferencedTable": "%s", `+
+		`"Table": "%s"}`,
+		strings.Join(m.Columns, `', '`),
+		m.ForeignKey,
+		m.Index,
+		m.OnDelete,
+		m.OnUpdate,
+		strings.Join(m.ReferencedColumns, `', '`),
+		m.ReferencedIndex,
+		m.ReferencedTable,
+		m.Table)
+	return jsonStr
 }

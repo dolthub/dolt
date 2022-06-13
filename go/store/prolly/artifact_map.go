@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -313,6 +314,60 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, cmHash []by
 	value := wr.artVB.Build(wr.pool)
 
 	return wr.mut.Put(ctx, key, value)
+}
+
+// ReplaceFKConstraintViolation replaces foreign key constraint violations that
+// match the given one but have a different commit hash. If no existing violation
+// exists, the given will be inserted.
+func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, cmHash []byte, meta ConstraintViolationMeta) error {
+	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
+	itr, err := wr.mut.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+	aItr := artifactIterImpl{
+		itr:    itr,
+		artKD:  wr.artKD,
+		artVD:  wr.artVD,
+		pool:   wr.pool,
+		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
+		numPks: wr.srcKeyDesc.Count(),
+	}
+
+	var art Artifact
+	var currMeta ConstraintViolationMeta
+	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
+		if art.ArtType != ArtifactTypeForeignKeyViol {
+			continue
+		}
+
+		err = json.Unmarshal(art.Metadata, &currMeta)
+		if err != nil {
+			return err
+		}
+
+		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
+			// Key and Value is the same, so delete this
+			err = wr.Delete(ctx, art.ArtKey)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if err != io.EOF {
+		return err
+	}
+
+	d, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	err = wr.Add(ctx, srcKey, cmHash, ArtifactTypeForeignKeyViol, d)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -152,7 +153,14 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 		}
 	}
 	o += itr.vd.Count()
-	r[o] = meta.VInfo
+
+	var m merge.FkCVMeta
+	err = json.Unmarshal(meta.VInfo, &m)
+	if err != nil {
+		return nil, err
+	}
+	r[o] = m
+
 	return r, nil
 }
 
@@ -177,7 +185,8 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	// then the hash
-	h := hash.Parse(r[0].(string))
+	//h := hash.Parse(r[0].(string))
+	h := hash.Of(nil)
 	d.kb.PutAddress(d.kd.Count()-2, h[:])
 
 	// Finally the artifact type

@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -575,27 +574,24 @@ func foreignKeyCVJson(foreignKey doltdb.ForeignKey, sch, refSch schema.Schema) (
 			refFkCols[i] = col.Name
 		}
 	}
-	jsonStr := fmt.Sprintf(`{`+
-		`"ForeignKey":"%s",`+
-		`"Table":"%s",`+
-		`"Index":"%s",`+
-		`"Columns":["%s"],`+
-		`"ReferencedTable":"%s",`+
-		`"ReferencedIndex":"%s",`+
-		`"ReferencedColumns":["%s"],`+
-		`"OnUpdate":"%s",`+
-		`"OnDelete":"%s"}`,
-		foreignKey.Name,
-		foreignKey.TableName,
-		foreignKey.TableIndex,
-		strings.Join(fkCols, `','`),
-		foreignKey.ReferencedTableName,
-		foreignKey.ReferencedTableIndex,
-		strings.Join(refFkCols, `','`),
-		foreignKey.OnUpdate.ReducedString(),
-		foreignKey.OnDelete.ReducedString())
 
-	return []byte(jsonStr), nil
+	m := FkCVMeta{
+		Columns:           fkCols,
+		ForeignKey:        foreignKey.Name,
+		Index:             foreignKey.TableIndex,
+		OnDelete:          foreignKey.OnDelete.ReducedString(),
+		OnUpdate:          foreignKey.OnUpdate.ReducedString(),
+		ReferencedColumns: refFkCols,
+		ReferencedIndex:   foreignKey.ReferencedTableIndex,
+		ReferencedTable:   foreignKey.ReferencedTableName,
+		Table:             foreignKey.TableName,
+	}
+	d, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+
+	return d, nil
 }
 
 func jsonDataToNomsValue(ctx context.Context, vrw types.ValueReadWriter, data []byte) (types.JSON, error) {

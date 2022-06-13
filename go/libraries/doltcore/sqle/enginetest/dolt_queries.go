@@ -18,11 +18,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 )
 
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
@@ -734,552 +735,553 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 }
 
 var MergeScripts = []queries.ScriptTest{
-	//{
-	//	Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			// FF-Merge
-	//			Query:    "CALL DOLT_MERGE('feature-branch')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "INSERT INTO test VALUES (4)",
-	//			Expected: []sql.Row{{sql.NewOkResult(1)}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			// No-FF-Merge
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
-	//		},
-	//		{
-	//			Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-	//			Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"INSERT INTO test VALUES (5),(6),(7);",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-	//			Expected: []sql.Row{{0, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) from dolt_status",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{4}},
-	//		},
-	//		{
-	//			Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-	//			Expected: []sql.Row{{"add some more values"}},
-	//		},
-	//		{
-	//			Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			ExpectedErr: dsess.ErrWorkingSetChanges,
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key, val int)",
-	//		"INSERT INTO test VALUES (0, 0)",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (1, 1);",
-	//		"UPDATE test SET val=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"UPDATE test SET val=1001 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-	//			Expected: []sql.Row{{0, 1}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{4}},
-	//		},
-	//		{
-	//			Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-	//			Expected: []sql.Row{{"update a value"}},
-	//		},
-	//		{
-	//			Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			ExpectedErr: dsess.ErrWorkingSetChanges,
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "DELETE FROM dolt_conflicts_test",
-	//			Expected: []sql.Row{{sql.NewOkResult(1)}},
-	//		},
-	//		{
-	//			Query:    "commit",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT * from test ORDER BY pk",
-	//			Expected: []sql.Row{{0, 1001}, {1, 1}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE ff & squash correctly works with autocommit off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT count(*) from dolt_status",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{3}},
-	//		},
-	//		{
-	//			Query:    "SELECT * FROM test order by pk",
-	//			Expected: []sql.Row{{1}, {2}, {3}, {1000}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE ff & squash with a checkout in between",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
-	//			ExpectedErr: dsess.ErrWorkingSetChanges,
-	//		},
-	//		{
-	//			Query:    "SELECT * FROM test order by pk",
-	//			Expected: []sql.Row{{1}, {2}, {3}, {1000}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE ff",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			// FF-Merge
-	//			Query:    "CALL DOLT_MERGE('feature-branch')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "INSERT INTO test VALUES (4)",
-	//			Expected: []sql.Row{{sql.NewOkResult(1)}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE no-ff",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			// No-FF-Merge
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
-	//			Expected: []sql.Row{{1, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
-	//		},
-	//		{
-	//			Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-	//			Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE with no conflicts works",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key)",
-	//		"INSERT INTO test VALUES (0),(1),(2);",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (3);",
-	//		"UPDATE test SET pk=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"INSERT INTO test VALUES (5),(6),(7);",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-	//			Expected: []sql.Row{{0, 0}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) from dolt_status",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{4}},
-	//		},
-	//		{
-	//			Query:    "select message from dolt_log order by date DESC LIMIT 1;",
-	//			Expected: []sql.Row{{"add some more values"}},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key, val int)",
-	//		"INSERT INTO test VALUES (0, 0)",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (1, 1);",
-	//		"UPDATE test SET val=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"UPDATE test SET val=1001 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
-	//		"set dolt_allow_commit_conflicts = on",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch')",
-	//			Expected: []sql.Row{{0, 1}},
-	//		},
-	//		{
-	//			Query:    "SELECT count(*) from dolt_conflicts_test",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_MERGE('--abort')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * FROM test",
-	//			Expected: []sql.Row{{0, 1001}},
-	//		},
-	//		{
-	//			Query:    "SELECT count(*) from dolt_conflicts_test",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "SELECT count(*) from dolt_status",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "SET dolt_allow_commit_conflicts = 0",
-	//			Expected: []sql.Row{{}},
-	//		},
-	//		{
-	//			Query:          "SELECT DOLT_MERGE('feature-branch')",
-	//			ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
-	//		},
-	//		{
-	//			Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE with conflicts can be aborted when autocommit is off",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key, val int)",
-	//		"INSERT INTO test VALUES (0, 0)",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (1, 1);",
-	//		"UPDATE test SET val=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"UPDATE test SET val=1001 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-	//			Expected: []sql.Row{{0, 1}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_conflicts",
-	//			Expected: []sql.Row{{1}},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_MERGE('--abort')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//		{
-	//			Query:    "SELECT * from dolt_status",
-	//			Expected: []sql.Row{},
-	//		},
-	//		{
-	//			Query:    "SELECT COUNT(*) FROM dolt_log",
-	//			Expected: []sql.Row{{4}},
-	//		},
-	//		{
-	//			Query:    "SELECT * FROM test ORDER BY pk",
-	//			Expected: []sql.Row{{0, 1001}},
-	//		},
-	//		{
-	//			Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "CALL DOLT_MERGE complains when a merge overrides local changes",
-	//	SetUpScript: []string{
-	//		"CREATE TABLE test (pk int primary key, val int)",
-	//		"INSERT INTO test VALUES (0, 0)",
-	//		"SET autocommit = 0",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
-	//		"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
-	//		"INSERT INTO test VALUES (1, 1);",
-	//		"UPDATE test SET val=1000 WHERE pk=0;",
-	//		"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
-	//		"SELECT DOLT_CHECKOUT('main');",
-	//		"UPDATE test SET val=1001 WHERE pk=0;",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
-	//			ExpectedErr: dfunctions.ErrUncommittedChanges,
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "Drop and add primary key on two branches converges to same schema",
-	//	SetUpScript: []string{
-	//		"create table t1 (i int);",
-	//		"call dolt_commit('-am', 't1 table')",
-	//		"call dolt_checkout('-b', 'b1')",
-	//		"alter table t1 add primary key(i)",
-	//		"alter table t1 drop primary key",
-	//		"alter table t1 add primary key(i)",
-	//		"alter table t1 drop primary key",
-	//		"alter table t1 add primary key(i)",
-	//		"call dolt_commit('-am', 'b1 primary key changes')",
-	//		"call dolt_checkout('main')",
-	//		"alter table t1 add primary key(i)",
-	//		"call dolt_commit('-am', 'main primary key change')",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "call dolt_merge('b1')",
-	//			Expected: []sql.Row{{0, 0}},
-	//		},
-	//		{
-	//			Query:    "select count(*) from dolt_conflicts",
-	//			Expected: []sql.Row{{0}},
-	//		},
-	//	},
-	//},
-	//{
-	//	Name: "Constraint violations are persisted",
-	//	SetUpScript: []string{
-	//		"set dolt_force_transaction_commit = on;",
-	//		"CREATE table parent (pk int PRIMARY KEY, col1 int);",
-	//		"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
-	//		"CREATE table other (pk int);",
-	//		"INSERT INTO parent VALUES (1, 1), (2, 2);",
-	//		"CALL DOLT_COMMIT('-am', 'setup');",
-	//		"CALL DOLT_BRANCH('branch1');",
-	//		"CALL DOLT_BRANCH('branch2');",
-	//		"DELETE FROM parent where pk = 1;",
-	//		"CALL DOLT_COMMIT('-am', 'delete parent 1');",
-	//		"CALL DOLT_CHECKOUT('branch1');",
-	//		"INSERT INTO CHILD VALUES (1, 1);",
-	//		"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
-	//		"CALL DOLT_CHECKOUT('main');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('branch1');",
-	//			Expected: []sql.Row{{0, 1}},
-	//		},
-	//		{
-	//			Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
-	//			Expected: []sql.Row{{"foreign key", 1, 1}},
-	//		},
-	//	},
-	//},
 	{
-		Name: "DOLT_MERGE detects conflicts, returns them in dolt_conflicts table",
+		Name: "CALL DOLT_MERGE ff correctly works with autocommit off",
 		SetUpScript: []string{
-			"SET dolt_allow_commit_conflicts = 0;",
-			"CREATE TABLE one_pk ( pk1 BIGINT NOT NULL, c1 BIGINT, c2 BIGINT, PRIMARY KEY (pk1));",
-			"SELECT DOLT_COMMIT('-a', '-m', 'add tables');",
-			"SELECT DOLT_CHECKOUT('-b', 'feature-branch');",
-			"SELECT DOLT_CHECKOUT('main');",
-			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'changed main');",
-			"SELECT DOLT_CHECKOUT('feature-branch');",
-			"INSERT INTO one_pk (pk1,c1,c2) VALUES (0,1,1);",
-			"SELECT DOLT_COMMIT('-a', '-m', 'changed feature branch');",
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
 			"SELECT DOLT_CHECKOUT('main');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query: "CALL DOLT_MERGE('feature-branch');",
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
-				Query:            "SET autocommit = off;",
-				SkipResultsCheck: true,
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
 			},
 			{
-				Query: "SELECT DOLT_MERGE('feature-branch');",
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
+				Expected: []sql.Row{{0}},
 			},
 			{
-				Query:    "SELECT * FROM dolt_conflicts;",
-				Expected: []sql.Row{{"one_pk", 1}},
+				Query:    "INSERT INTO test VALUES (4)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE no-ff correctly works with autocommit off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// No-FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
 			},
 			{
-				Query: "CALL DOLT_MERGE('--abort');",
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
 			},
 			{
-				Query: "SELECT DOLT_MERGE('feature-branch');",
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
 			},
 			{
-				Query: "SELECT * from dolt_conflicts_one_pk;",
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE without conflicts correctly works with autocommit off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"add some more values"}},
+			},
+			{
+				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				ExpectedErr: dsess.ErrWorkingSetChanges,
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with conflicts can be correctly resolved when autocommit is off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"update a value"}},
+			},
+			{
+				Query:       "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				ExpectedErr: dsess.ErrWorkingSetChanges,
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "DELETE FROM dolt_conflicts_test",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "commit",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from test ORDER BY pk",
+				Expected: []sql.Row{{0, 1001}, {1, 1}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE ff & squash correctly works with autocommit off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_status",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{3}},
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE ff & squash with a checkout in between",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '--squash')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:       "SELECT DOLT_CHECKOUT('-b', 'other')",
+				ExpectedErr: dsess.ErrWorkingSetChanges,
+			},
+			{
+				Query:    "SELECT * FROM test order by pk",
+				Expected: []sql.Row{{1}, {2}, {3}, {1000}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE ff",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'new-branch')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "INSERT INTO test VALUES (4)",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE no-ff",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a ff');",
+			"SELECT DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				// No-FF-Merge
+				Query:    "CALL DOLT_MERGE('feature-branch', '-no-ff', '-m', 'this is a no-ff')",
+				Expected: []sql.Row{{1, 0}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{5}}, // includes the merge commit created by no-ff and setup commits
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"this is a no-ff"}}, // includes the merge commit created by no-ff
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with no conflicts works",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key)",
+			"INSERT INTO test VALUES (0),(1),(2);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (3);",
+			"UPDATE test SET pk=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"INSERT INTO test VALUES (5),(6),(7);",
+			"SELECT DOLT_COMMIT('-a', '-m', 'add some more values');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "SELECT COUNT(*) from dolt_status",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "select message from dolt_log order by date DESC LIMIT 1;",
+				Expected: []sql.Row{{"add some more values"}},
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with conflict is queryable and committable with dolt_allow_commit_conflicts on",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+			"set dolt_allow_commit_conflicts = on",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * FROM test",
+				Expected: []sql.Row{{0, 1001}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_conflicts_test",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT count(*) from dolt_status",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SET dolt_allow_commit_conflicts = 0",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:          "SELECT DOLT_MERGE('feature-branch')",
+				ExpectedErrStr: dsess.ErrUnresolvedConflictsCommit.Error(),
+			},
+			{
+				Query:    "SELECT count(*) from dolt_conflicts_test", // transaction has been rolled back, 0 results
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE with conflicts can be aborted when autocommit is off",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'update a value');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{{"test", true, "modified"}, {"test", false, "conflict"}},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_conflicts",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT DOLT_MERGE('--abort')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_status",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT COUNT(*) FROM dolt_log",
+				Expected: []sql.Row{{4}},
+			},
+			{
+				Query:    "SELECT * FROM test ORDER BY pk",
+				Expected: []sql.Row{{0, 1001}},
+			},
+			{
+				Query:    "SELECT DOLT_CHECKOUT('-b', 'other-branch')",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "CALL DOLT_MERGE complains when a merge overrides local changes",
+		SetUpScript: []string{
+			"CREATE TABLE test (pk int primary key, val int)",
+			"INSERT INTO test VALUES (0, 0)",
+			"SET autocommit = 0",
+			"SELECT DOLT_COMMIT('-a', '-m', 'Step 1');",
+			"SELECT DOLT_CHECKOUT('-b', 'feature-branch')",
+			"INSERT INTO test VALUES (1, 1);",
+			"UPDATE test SET val=1000 WHERE pk=0;",
+			"SELECT DOLT_COMMIT('-a', '-m', 'this is a normal commit');",
+			"SELECT DOLT_CHECKOUT('main');",
+			"UPDATE test SET val=1001 WHERE pk=0;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:       "CALL DOLT_MERGE('feature-branch', '-m', 'this is a merge')",
+				ExpectedErr: dfunctions.ErrUncommittedChanges,
+			},
+		},
+	},
+	{
+		Name: "Drop and add primary key on two branches converges to same schema",
+		SetUpScript: []string{
+			"create table t1 (i int);",
+			"call dolt_commit('-am', 't1 table')",
+			"call dolt_checkout('-b', 'b1')",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"alter table t1 drop primary key",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'b1 primary key changes')",
+			"call dolt_checkout('main')",
+			"alter table t1 add primary key(i)",
+			"call dolt_commit('-am', 'main primary key change')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "call dolt_merge('b1')",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query:    "select count(*) from dolt_conflicts",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Constraint violations are persisted",
+		SetUpScript: []string{
+			"set dolt_force_transaction_commit = on;",
+			"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+			"CREATE table other (pk int);",
+			"INSERT INTO parent VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+			"CALL DOLT_BRANCH('branch1');",
+			"CALL DOLT_BRANCH('branch2');",
+			"DELETE FROM parent where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'delete parent 1');",
+			"CALL DOLT_CHECKOUT('branch1');",
+			"INSERT INTO CHILD VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+			"CALL DOLT_CHECKOUT('main');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('branch1');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}},
+			},
+		},
+	},
+	{
+		// from constraint-violations.bats
+		Name: "ancestor contains fk, main parent remove with backup, other child add, restrict",
+		SetUpScript: []string{
+			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
+			"CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));",
+			"INSERT INTO parent VALUES (10, 1), (20, 2), (30, 2);",
+			"INSERT INTO child VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'MC1');",
+			"CALL DOLT_BRANCH('other');",
+			"DELETE from parent WHERE pk = 20;",
+			"CALL DOLT_COMMIT('-am', 'MC2');",
+			"CALL DOLT_CHECKOUT('other');",
+			"INSERT INTO child VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'OC1');",
+			"CALL DOLT_CHECKOUT('main');",
+			"set DOLT_FORCE_TRANSACTION_COMMIT = on;",
+			"CALL DOLT_MERGE('other');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations_parent",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations_child",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{{10, 1}, {30, 2}},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 		},
 	},
@@ -1428,7 +1430,7 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "violations on different branches can be merged",
+		Name: "violations with an older commit hash are overwritten if the value is the same",
 		SetUpScript: []string{
 			"set dolt_force_transaction_commit = on;",
 
@@ -1437,6 +1439,7 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			"CREATE TABLE child (pk int PRIMARY KEY, fk int, FOREIGN KEY (fk) REFERENCES parent (pk));",
 			"CALL DOLT_COMMIT('-am', 'setup table');",
 			"CALL DOLT_BRANCH('viol2');",
+			"CALL DOLT_BRANCH('other3');",
 			"INSERT INTO parent VALUES (1);",
 			"CALL DOLT_COMMIT('-am', 'viol1 setup');",
 
@@ -1463,6 +1466,10 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 			"CALL DOLT_COMMIT('-am', 'delete 2');",
 			"CALL DOLT_MERGE('other2');",
 			"CALL DOLT_COMMIT('-afm', 'commit violations 2');",
+
+			"CALL DOLT_CHECKOUT('other3');",
+			"INSERT INTO PARENT VALUES (3);",
+			"CALL DOLT_COMMIT('-am', 'edit needed to trigger three-way merge');",
 
 			"CALL DOLT_CHECKOUT('viol1');",
 		},
@@ -1499,9 +1506,42 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 				Query:    "CALL DOLT_MERGE('viol1');",
 				Expected: []sql.Row{{0, 1}},
 			},
+			// the commit hashes for the above two violations change in this merge
+			{
+				Query:    "SELECT violation_type, fk, pk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+			},
+			{
+				Query:    "SELECT pk, fk from child;",
+				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'commit active merge');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SET FOREIGN_KEY_CHECKS=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "UPDATE child set fk = 4;",
+				Expected: []sql.Row{{sql.OkResult{RowsAffected: 2, InsertID: 0, Info: plan.UpdateInfo{Matched: 2, Updated: 2}}}},
+			},
+			{
+				Query:            "CALL DOLT_COMMIT('-afm', 'update children to new value');",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_MERGE('other3');",
+				Expected: []sql.Row{{0, 1}},
+			},
 			{
 				Query:    "SELECT violation_type, pk, fk from dolt_constraint_violations_child;",
-				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 2, 2}},
+				Expected: []sql.Row{{"foreign key", 1, 1}, {"foreign key", 1, 4}, {"foreign key", 2, 2}, {"foreign key", 2, 4}},
 			},
 		},
 	},
