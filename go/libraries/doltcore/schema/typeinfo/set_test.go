@@ -30,50 +30,44 @@ func TestSetConvertNomsValueToValue(t *testing.T) {
 	tests := []struct {
 		typ         *setType
 		input       types.Uint
-		output      string
+		output      uint64
 		expectedErr bool
 	}{
 		{
 			generateSetType(t, 2),
 			0,
-			"",
+			0,
 			false,
 		},
 		{
 			generateSetType(t, 3),
 			1,
-			"aa",
+			1,
 			false,
 		},
 		{
 			generateSetType(t, 5),
 			2,
-			"ab",
+			2,
 			false,
 		},
 		{
 			generateSetType(t, 8),
 			3,
-			"aa,ab",
+			3,
 			false,
 		},
 		{
 			generateSetType(t, 7),
 			4,
-			"ac",
+			4,
 			false,
 		},
 		{
 			generateSetType(t, 4),
 			7,
-			"aa,ab,ac",
+			7,
 			false,
-		},
-		{
-			generateSetType(t, 3),
-			8,
-			"",
-			true,
 		},
 	}
 
