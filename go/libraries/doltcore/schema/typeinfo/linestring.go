@@ -17,6 +17,7 @@ package typeinfo
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -27,32 +28,33 @@ import (
 // This is a dolt implementation of the MySQL type Point, thus most of the functionality
 // within is directly reliant on the go-mysql-server implementation.
 type linestringType struct {
-	sqlLinestringType sql.LinestringType
+	sqlLineStringType sql.LineStringType
 }
 
 var _ TypeInfo = (*linestringType)(nil)
 
-var LinestringType = &linestringType{sql.LinestringType{}}
+var LineStringType = &linestringType{sql.LineStringType{}}
 
-// ConvertTypesLinestringToSQLLinestring basically makes a deep copy of sql.Linestring
-func ConvertTypesLinestringToSQLLinestring(l types.Linestring) sql.Linestring {
+// ConvertTypesLineStringToSQLLineString basically makes a deep copy of sql.LineString
+func ConvertTypesLineStringToSQLLineString(l types.LineString) sql.LineString {
 	points := make([]sql.Point, len(l.Points))
 	for i, p := range l.Points {
 		points[i] = ConvertTypesPointToSQLPoint(p)
 	}
-	return sql.Linestring{SRID: l.SRID, Points: points}
+	return sql.LineString{SRID: l.SRID, Points: points}
 }
 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
-	// Expect a types.Linestring, return a sql.Linestring
-	if val, ok := v.(types.Linestring); ok {
-		return ConvertTypesLinestringToSQLLinestring(val), nil
-	}
 	// Check for null
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
 	}
+	// Expect a types.LineString, return a sql.LineString
+	if val, ok := v.(types.LineString); ok {
+		return ConvertTypesLineStringToSQLLineString(val), nil
+	}
+
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), v.Kind())
 }
 
@@ -60,8 +62,8 @@ func (ti *linestringType) ConvertNomsValueToValue(v types.Value) (interface{}, e
 func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecReader) (interface{}, error) {
 	k := reader.ReadKind()
 	switch k {
-	case types.LinestringKind:
-		l, err := reader.ReadLinestring()
+	case types.LineStringKind:
+		l, err := reader.ReadLineString()
 		if err != nil {
 			return nil, err
 		}
@@ -73,12 +75,12 @@ func (ti *linestringType) ReadFrom(nbf *types.NomsBinFormat, reader types.CodecR
 	return nil, fmt.Errorf(`"%v" cannot convert NomsKind "%v" to a value`, ti.String(), k)
 }
 
-func ConvertSQLLinestringToTypesLinestring(l sql.Linestring) types.Linestring {
+func ConvertSQLLineStringToTypesLineString(l sql.LineString) types.LineString {
 	points := make([]types.Point, len(l.Points))
 	for i, p := range l.Points {
 		points[i] = ConvertSQLPointToTypesPoint(p)
 	}
-	return types.Linestring{SRID: l.SRID, Points: points}
+	return types.LineString{SRID: l.SRID, Points: points}
 }
 
 // ConvertValueToNomsValue implements TypeInfo interface.
@@ -88,13 +90,13 @@ func (ti *linestringType) ConvertValueToNomsValue(ctx context.Context, vrw types
 		return types.NullValue, nil
 	}
 
-	// Convert to sql.LinestringType
-	line, err := ti.sqlLinestringType.Convert(v)
+	// Convert to sql.LineStringType
+	line, err := ti.sqlLineStringType.Convert(v)
 	if err != nil {
 		return nil, err
 	}
 
-	return ConvertSQLLinestringToTypesLinestring(line.(sql.Linestring)), nil
+	return ConvertSQLLineStringToTypesLineString(line.(sql.LineString)), nil
 }
 
 // Equals implements TypeInfo interface.
@@ -102,13 +104,16 @@ func (ti *linestringType) Equals(other TypeInfo) bool {
 	if other == nil {
 		return false
 	}
-	_, ok := other.(*linestringType)
-	return ok
+	if o, ok := other.(*linestringType); ok {
+		// if either ti or other has defined SRID, then check SRID value; otherwise,
+		return (!ti.sqlLineStringType.DefinedSRID && !o.sqlLineStringType.DefinedSRID) || ti.sqlLineStringType.SRID == o.sqlLineStringType.SRID
+	}
+	return false
 }
 
 // FormatValue implements TypeInfo interface.
 func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
-	if val, ok := v.(types.Linestring); ok {
+	if val, ok := v.(types.LineString); ok {
 		buf := make([]byte, geometry.EWKBHeaderSize+types.LengthSize+geometry.PointSize*len(val.Points))
 		types.WriteEWKBHeader(val, buf[:geometry.EWKBHeaderSize])
 		types.WriteEWKBLineData(val, buf[geometry.EWKBHeaderSize:])
@@ -124,17 +129,18 @@ func (ti *linestringType) FormatValue(v types.Value) (*string, error) {
 
 // GetTypeIdentifier implements TypeInfo interface.
 func (ti *linestringType) GetTypeIdentifier() Identifier {
-	return LinestringTypeIdentifier
+	return LineStringTypeIdentifier
 }
 
 // GetTypeParams implements TypeInfo interface.
 func (ti *linestringType) GetTypeParams() map[string]string {
-	return map[string]string{}
+	return map[string]string{"SRID": strconv.FormatUint(uint64(ti.sqlLineStringType.SRID), 10),
+		"DefinedSRID": strconv.FormatBool(ti.sqlLineStringType.DefinedSRID)}
 }
 
 // IsValid implements TypeInfo interface.
 func (ti *linestringType) IsValid(v types.Value) bool {
-	if _, ok := v.(types.Linestring); ok {
+	if _, ok := v.(types.LineString); ok {
 		return true
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
@@ -145,22 +151,22 @@ func (ti *linestringType) IsValid(v types.Value) bool {
 
 // NomsKind implements TypeInfo interface.
 func (ti *linestringType) NomsKind() types.NomsKind {
-	return types.LinestringKind
+	return types.LineStringKind
 }
 
 // Promote implements TypeInfo interface.
 func (ti *linestringType) Promote() TypeInfo {
-	return &linestringType{ti.sqlLinestringType.Promote().(sql.LinestringType)}
+	return &linestringType{ti.sqlLineStringType.Promote().(sql.LineStringType)}
 }
 
 // String implements TypeInfo interface.
 func (ti *linestringType) String() string {
-	return "Linestring"
+	return "LineString"
 }
 
 // ToSqlType implements TypeInfo interface.
 func (ti *linestringType) ToSqlType() sql.Type {
-	return ti.sqlLinestringType
+	return ti.sqlLineStringType
 }
 
 // linestringTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.
@@ -191,7 +197,7 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	case *jsonType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *linestringType:
-		return identityTypeConverter, false, nil
+		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *pointType:
 		return wrapConvertValueToNomsValue(dest.ConvertValueToNomsValue)
 	case *polygonType:
@@ -213,4 +219,25 @@ func linestringTypeConverter(ctx context.Context, src *linestringType, destTi Ty
 	default:
 		return nil, false, UnhandledTypeConversion.New(src.String(), destTi.String())
 	}
+}
+
+func CreateLineStringTypeFromParams(params map[string]string) (TypeInfo, error) {
+	var (
+		err     error
+		sridVal uint64
+		def     bool
+	)
+	if s, ok := params["SRID"]; ok {
+		sridVal, err = strconv.ParseUint(s, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if d, ok := params["DefinedSRID"]; ok {
+		def, err = strconv.ParseBool(d)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &linestringType{sqlLineStringType: sql.LineStringType{SRID: uint32(sridVal), DefinedSRID: def}}, nil
 }

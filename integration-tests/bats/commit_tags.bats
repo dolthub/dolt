@@ -78,6 +78,7 @@ teardown() {
 }
 
 @test "commit_tags: use a tag as ref for diff" {
+    skip_nbf_dolt_1
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]
@@ -102,6 +103,7 @@ teardown() {
 }
 
 @test "commit_tags: push/pull tags to/from a remote" {
+    skip_nbf_dolt_1
     # reset env
     rm -rf .dolt
     mkdir repo remote

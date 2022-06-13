@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));
 CREATE TABLE child3 (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent3 (v1));
@@ -219,6 +220,13 @@ SQL
     [[ "$output" =~ "no_violations" ]] || false
     [[ "$output" =~ "1" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
+
+    run dolt sql -q "CALL DVERIFY_ALL_CONSTRAINTS('child1')" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "no_violations" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [[ ! "$output" =~ "child1_parent1" ]] || false
     [[ ! "$output" =~ "child1_parent2" ]] || false

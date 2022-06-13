@@ -21,10 +21,11 @@ import (
 )
 
 const (
-	HeadKeySuffix    = "_head"
-	HeadRefKeySuffix = "_head_ref"
-	WorkingKeySuffix = "_working"
-	StagedKeySuffix  = "_staged"
+	HeadKeySuffix          = "_head"
+	HeadRefKeySuffix       = "_head_ref"
+	WorkingKeySuffix       = "_working"
+	StagedKeySuffix        = "_staged"
+	DefaultBranchKeySuffix = "_default_branch"
 )
 
 const (
@@ -118,6 +119,14 @@ func defineSystemVariables(name string) {
 				Type:              sql.NewSystemStringType(StagedKey(name)),
 				Default:           "",
 			},
+			{
+				Name:              DefaultBranchKey(name),
+				Scope:             sql.SystemVariableScope_Global,
+				Dynamic:           true,
+				SetVarHintApplies: false,
+				Type:              sql.NewSystemStringType(DefaultBranchKey(name)),
+				Default:           "",
+			},
 		})
 	}
 }
@@ -136,6 +145,10 @@ func WorkingKey(dbName string) string {
 
 func StagedKey(dbName string) string {
 	return dbName + StagedKeySuffix
+}
+
+func DefaultBranchKey(dbName string) string {
+	return dbName + DefaultBranchKeySuffix
 }
 
 func IsHeadKey(key string) (bool, string) {
@@ -157,6 +170,14 @@ func IsHeadRefKey(key string) (bool, string) {
 func IsWorkingKey(key string) (bool, string) {
 	if strings.HasSuffix(key, WorkingKeySuffix) {
 		return true, key[:len(key)-len(WorkingKeySuffix)]
+	}
+
+	return false, ""
+}
+
+func IsDefaultBranchKey(key string) (bool, string) {
+	if strings.HasSuffix(key, DefaultBranchKeySuffix) {
+		return true, key[:len(key)-len(DefaultBranchKeySuffix)]
 	}
 
 	return false, ""

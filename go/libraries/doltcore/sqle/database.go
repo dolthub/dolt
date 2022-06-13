@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/dolthub/go-mysql-server/sql/grant_tables"
+	"github.com/dolthub/go-mysql-server/sql/mysql_db"
 	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
@@ -61,7 +61,7 @@ func DbsAsDSQLDBs(dbs []sql.Database) []SqlDatabase {
 		var sqlDb SqlDatabase
 		if sqlDatabase, ok := db.(SqlDatabase); ok {
 			sqlDb = sqlDatabase
-		} else if privDatabase, ok := db.(grant_tables.PrivilegedDatabase); ok {
+		} else if privDatabase, ok := db.(mysql_db.PrivilegedDatabase); ok {
 			if sqlDatabase, ok := privDatabase.Unwrap().(SqlDatabase); ok {
 				sqlDb = sqlDatabase
 			}
@@ -209,6 +209,11 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		return dsess.InitialDbState{}, err
 	}
 
+	backups, err := rsr.GetBackups()
+	if err != nil {
+		return dsess.InitialDbState{}, err
+	}
+
 	branches, err := rsr.GetBranches()
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -221,6 +226,7 @@ func GetInitialDBState(ctx context.Context, db SqlDatabase) (dsess.InitialDbStat
 		DbData:     db.DbData(),
 		Remotes:    remotes,
 		Branches:   branches,
+		Backups:    backups,
 		Err:        retainedErr,
 	}, nil
 }
@@ -309,16 +315,21 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 		}
 		return dt, true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltHistoryTablePrefix):
-		suffix := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		baseTableName := tblName[len(doltdb.DoltHistoryTablePrefix):]
+		baseTable, ok, err := db.GetTableInsensitiveWithRoot(ctx, root, baseTableName)
+		if err != nil {
+			return nil, false, err
+		}
+		if !ok {
+			return nil, false, nil
+		}
+
 		head, err := sess.GetHeadCommit(ctx, db.name)
 		if err != nil {
 			return nil, false, err
 		}
-		dt, err := dtables.NewHistoryTable(ctx, suffix, db.ddb, root, head)
-		if err != nil {
-			return nil, false, err
-		}
-		return dt, true, nil
+
+		return NewHistoryTable(baseTable.(*AlterableDoltTable).DoltTable, db.ddb, head), true, nil
 	case strings.HasPrefix(lwrName, doltdb.DoltConfTablePrefix):
 		suffix := tblName[len(doltdb.DoltConfTablePrefix):]
 		dt, err := dtables.NewConflictsTable(ctx, suffix, root, dtables.RootSetter(db))
@@ -364,7 +375,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 	case doltdb.CommitAncestorsTableName:
 		dt, found = dtables.NewCommitAncestorsTable(ctx, db.ddb), true
 	case doltdb.StatusTableName:
-		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}), db.drw), true
+		dt, found = dtables.NewStatusTable(ctx, db.name, db.ddb, dsess.NewSessionStateAdapter(sess.Session, db.name, map[string]env.Remote{}, map[string]env.BranchConfig{}, map[string]env.Remote{}), db.drw), true
 	}
 	if found {
 		return dt, found, nil
@@ -393,11 +404,23 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 	switch table := table.(type) {
 	case *DoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *AlterableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	case *WritableDoltTable:
-		return table.LockedToRoot(root), true, nil
+		tbl, err := table.LockedToRoot(ctx, root)
+		if err != nil {
+			return nil, false, err
+		}
+		return tbl, true, nil
 	default:
 		panic(fmt.Sprintf("unexpected table type %T", table))
 	}
@@ -783,7 +806,7 @@ func (db Database) CreateTemporaryTable(ctx *sql.Context, tableName string, pkSc
 	return nil
 }
 
-// renameTable implements sql.TableRenamer
+// RenameTable implements sql.TableRenamer
 func (db Database) RenameTable(ctx *sql.Context, oldName, newName string) error {
 	root, err := db.GetRoot(ctx)
 

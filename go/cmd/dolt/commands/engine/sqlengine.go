@@ -33,6 +33,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	dsqle "github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/mysql_file_handler"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 )
@@ -46,15 +47,22 @@ type SqlEngine struct {
 	resultFormat   PrintResultFormat
 }
 
+type SqlEngineConfig struct {
+	InitialDb    string
+	IsReadOnly   bool
+	PrivFilePath string
+	ServerUser   string
+	ServerPass   string
+	Autocommit   bool
+}
+
 // NewSqlEngine returns a SqlEngine
 func NewSqlEngine(
 	ctx context.Context,
 	mrEnv *env.MultiRepoEnv,
 	format PrintResultFormat,
-	initialDb string,
-	isReadOnly bool,
-	tempUsers []gms.TemporaryUser,
-	autocommit bool) (*SqlEngine, error) {
+	config *SqlEngineConfig,
+) (*SqlEngine, error) {
 
 	parallelism := runtime.GOMAXPROCS(0)
 
@@ -75,7 +83,29 @@ func NewSqlEngine(
 	b := env.GetDefaultInitBranch(mrEnv.Config())
 	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
 
-	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: isReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	// Load in privileges from file, if it exists
+	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
+	data, err := persister.LoadData()
+	if err != nil {
+		return nil, err
+	}
+
+	// Create temporary users if no privileges in config
+	var tempUsers []gms.TemporaryUser
+	if len(data) == 0 && len(config.ServerUser) > 0 {
+		tempUsers = append(tempUsers, gms.TemporaryUser{
+			Username: config.ServerUser,
+			Password: config.ServerPass,
+		})
+	}
+
+	// Set up engine
+	engine := gms.New(analyzer.NewBuilder(pro).WithParallelism(parallelism).Build(), &gms.Config{IsReadOnly: config.IsReadOnly, TemporaryUsers: tempUsers}).WithBackgroundThreads(bThreads)
+	engine.Analyzer.Catalog.MySQLDb.SetPersister(persister)
+	// Load MySQL Db information
+	if err = engine.Analyzer.Catalog.MySQLDb.LoadData(sql.NewEmptyContext(), data); err != nil {
+		return nil, err
+	}
 
 	if dbg, ok := os.LookupEnv("DOLT_SQL_DEBUG_LOG"); ok && strings.ToLower(dbg) == "true" {
 		engine.Analyzer.Debug = true
@@ -108,15 +138,15 @@ func NewSqlEngine(
 	}
 
 	// TODO: this should just be the session default like it is with MySQL
-	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, autocommit)
+	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
 	if err != nil {
 		return nil, err
 	}
 
 	return &SqlEngine{
 		dbs:            nameToDB,
-		contextFactory: newSqlContext(sess, initialDb),
-		dsessFactory:   newDoltSession(pro, mrEnv.Config(), autocommit),
+		contextFactory: newSqlContext(sess, config.InitialDb),
+		dsessFactory:   newDoltSession(pro, mrEnv.Config(), config.Autocommit),
 		engine:         engine,
 		resultFormat:   format,
 	}, nil
@@ -287,7 +317,7 @@ func getDbStates(ctx context.Context, dbs []dsqle.SqlDatabase) ([]dsess.InitialD
 		var init dsess.InitialDbState
 		var err error
 
-		_, val, ok := sql.SystemVariables.GetGlobal(dsqle.DefaultBranchKey)
+		_, val, ok := sql.SystemVariables.GetGlobal(dsess.DefaultBranchKey(db.Name()))
 		if ok && val != "" {
 			init, err = getInitialDBStateWithDefaultBranch(ctx, db, val.(string))
 		} else {
@@ -314,7 +344,7 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	head, err := ddb.ResolveCommitRef(ctx, r)
 	if err != nil {
-		init.Err = fmt.Errorf("@@GLOBAL.dolt_default_branch (%s) is not a valid branch", branch)
+		init.Err = fmt.Errorf("failed to connect to database default branch: '%s/%s'; %w", db.Name(), branch, err)
 	} else {
 		init.Err = nil
 	}

@@ -16,14 +16,12 @@ package actions
 
 import (
 	"context"
-	"sort"
 	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/hash"
 )
 
 type CommitStagedProps struct {
@@ -228,86 +226,4 @@ func GetCommitStaged(
 	}
 
 	return ddb.NewPendingCommit(ctx, roots, rsr.CWBHeadRef(), mergeParents, meta)
-}
-
-// TimeSortedCommits returns a reverse-chronological (latest-first) list of the most recent `n` ancestors of `commit`.
-// Passing a negative value for `n` will result in all ancestors being returned.
-func TimeSortedCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, n int) ([]*doltdb.Commit, error) {
-	hashToCommit := make(map[hash.Hash]*doltdb.Commit)
-	err := AddCommits(ctx, ddb, commit, hashToCommit, n)
-
-	if err != nil {
-		return nil, err
-	}
-
-	idx := 0
-	uniqueCommits := make([]*doltdb.Commit, len(hashToCommit))
-	for _, v := range hashToCommit {
-		uniqueCommits[idx] = v
-		idx++
-	}
-
-	var sortErr error
-	var metaI, metaJ *datas.CommitMeta
-	sort.Slice(uniqueCommits, func(i, j int) bool {
-		if sortErr != nil {
-			return false
-		}
-
-		metaI, sortErr = uniqueCommits[i].GetCommitMeta(ctx)
-
-		if sortErr != nil {
-			return false
-		}
-
-		metaJ, sortErr = uniqueCommits[j].GetCommitMeta(ctx)
-
-		if sortErr != nil {
-			return false
-		}
-
-		return metaI.UserTimestamp > metaJ.UserTimestamp
-	})
-
-	if sortErr != nil {
-		return nil, sortErr
-	}
-
-	return uniqueCommits, nil
-}
-
-func AddCommits(ctx context.Context, ddb *doltdb.DoltDB, commit *doltdb.Commit, hashToCommit map[hash.Hash]*doltdb.Commit, n int) error {
-	hash, err := commit.HashOf()
-
-	if err != nil {
-		return err
-	}
-
-	if _, ok := hashToCommit[hash]; ok {
-		return nil
-	}
-
-	hashToCommit[hash] = commit
-
-	numParents, err := commit.NumParents()
-
-	if err != nil {
-		return err
-	}
-
-	for i := 0; i < numParents && len(hashToCommit) != n; i++ {
-		parentCommit, err := ddb.ResolveParent(ctx, commit, i)
-
-		if err != nil {
-			return err
-		}
-
-		err = AddCommits(ctx, ddb, parentCommit, hashToCommit, n)
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

@@ -17,6 +17,8 @@ package skip
 import (
 	"math"
 	"math/rand"
+
+	"github.com/zeebo/xxh3"
 )
 
 const (
@@ -29,10 +31,12 @@ const (
 )
 
 type List struct {
-	head  skipPointer
 	nodes []skipNode
-	cmp   ValueCmp
-	src   rand.Source
+	count uint32
+
+	checkpoint nodeId
+	cmp        ValueCmp
+	salt       uint64
 }
 
 type ValueCmp func(left, right []byte) int
@@ -44,36 +48,61 @@ type nodeId uint32
 type skipPointer [maxHeight]nodeId
 
 type skipNode struct {
-	id       nodeId
 	key, val []byte
 
-	height uint8
+	id     nodeId
 	next   skipPointer
 	prev   nodeId
+	height uint8
 }
 
-func NewSkipList(cmp ValueCmp) (l *List) {
-	l = &List{
-		// todo(andy): buffer pool
-		nodes: make([]skipNode, 1, 128),
-		cmp:   cmp,
-		src:   rand.NewSource(0),
-	}
+func NewSkipList(cmp ValueCmp) *List {
+	nodes := make([]skipNode, 0, 8)
 
 	// initialize sentinel node
-	l.nodes[sentinelId] = skipNode{
+	nodes = append(nodes, skipNode{
 		id:  sentinelId,
 		key: nil, val: nil,
 		height: maxHeight,
 		next:   skipPointer{},
 		prev:   sentinelId,
-	}
+	})
 
-	return
+	return &List{
+		nodes:      nodes,
+		checkpoint: nodeId(1),
+		cmp:        cmp,
+		salt:       rand.Uint64(),
+	}
+}
+
+// Checkpoint records a checkpoint that can be reverted to.
+func (l *List) Checkpoint() {
+	l.checkpoint = l.nextNodeId()
+}
+
+// Revert reverts to the last recorded checkpoint.
+func (l *List) Revert() {
+	keepers := l.nodes[1:l.checkpoint]
+	l.Truncate()
+	for _, nd := range keepers {
+		l.Put(nd.key, nd.val)
+	}
+}
+
+// Truncate deletes all entries from the list.
+func (l *List) Truncate() {
+	l.nodes = l.nodes[:1]
+	// point sentinel.prev at itself
+	s := l.getNode(sentinelId)
+	s.next = skipPointer{}
+	s.prev = sentinelId
+	l.updateNode(s)
+	l.count = 0
 }
 
 func (l *List) Count() int {
-	return len(l.nodes) - 1
+	return int(l.count)
 }
 
 func (l *List) Has(key []byte) (ok bool) {
@@ -82,7 +111,8 @@ func (l *List) Has(key []byte) (ok bool) {
 }
 
 func (l *List) Get(key []byte) (val []byte, ok bool) {
-	node := l.seek(key)
+	path := l.pathToKey(key)
+	node := l.getNode(path[0])
 	if l.compareKeys(key, node.key) == 0 {
 		val, ok = node.val, true
 	}
@@ -97,62 +127,107 @@ func (l *List) Put(key, val []byte) {
 		panic("list has no capacity")
 	}
 
-	var curr, prev skipNode
-	var next, history skipPointer
+	// find the path to the greatest
+	// existing node key less than |key|
+	path := l.pathBeforeKey(key)
 
-	next = l.head
-	for h := int(highest); h >= 0; h-- {
+	// check if |key| exists in |l|
+	node := l.getNode(path[0])
+	node = l.getNode(node.next[0])
 
-		// for each skip level, advance until
-		//   prev.key < key <= curr.key
-		curr = l.getNode(next[h])
-		for l.compareKeys(key, curr.key) > 0 {
-			prev = curr
-			next = curr.next
-			curr = l.getNode(next[h])
-		}
-
-		if l.compareKeys(key, curr.key) == 0 {
-			// in-place update
-			curr.val = val
-			l.updateNode(curr)
-			return
-		}
-
-		// save our steps
-		history[h] = prev.id
+	if l.compareKeys(key, node.key) == 0 {
+		l.overwrite(key, val, path, node)
+	} else {
+		l.insert(key, val, path)
+		l.count++
 	}
-
-	insert := l.makeNode(key, val)
-	l.splice(insert, history)
-
-	return
 }
 
-func (l *List) splice(nd skipNode, history skipPointer) {
-	for h := uint8(0); h <= nd.height; h++ {
-		// if |node.key| is the smallest key for
-		// level |h| then update |l.head|
-		first := l.getNode(l.head[h])
-		if l.compare(nd, first) < 0 {
-			l.head[h] = nd.id
-			nd.next[h] = first.id
+func (l *List) pathToKey(key []byte) (path skipPointer) {
+	next := l.headPointer()
+	prev := sentinelId
+
+	for lvl := int(highest); lvl >= 0; {
+		curr := l.getNode(next[lvl])
+
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, curr.key) < 0 {
+			path[lvl] = prev
+			lvl--
 			continue
 		}
 
-		// otherwise, splice in |node| using |history|
-		prevNd := l.getNode(history[h])
-		nd.next[h] = prevNd.next[h]
-		prevNd.next[h] = nd.id
-		l.updateNode(prevNd)
+		// advance
+		next = curr.next
+		prev = curr.id
+	}
+	return
+}
+
+func (l *List) pathBeforeKey(key []byte) (path skipPointer) {
+	next := l.headPointer()
+	prev := sentinelId
+
+	for lvl := int(highest); lvl >= 0; {
+		curr := l.getNode(next[lvl])
+
+		// descend if we can't advance at |lvl|
+		if l.compareKeys(key, curr.key) <= 0 {
+			path[lvl] = prev
+			lvl--
+			continue
+		}
+
+		// advance
+		next = curr.next
+		prev = curr.id
+	}
+	return
+}
+
+func (l *List) insert(key, value []byte, path skipPointer) {
+	novel := skipNode{
+		key:    key,
+		val:    value,
+		id:     l.nextNodeId(),
+		height: rollHeight(key, l.salt),
+	}
+	l.nodes = append(l.nodes, novel)
+
+	for h := uint8(0); h <= novel.height; h++ {
+		// set forward pointers
+		n := l.getNode(path[h])
+		novel.next[h] = n.next[h]
+		n.next[h] = novel.id
+		l.updateNode(n)
 	}
 
-	// set back pointers for level 0
-	nextNd := l.getNode(nd.next[0])
-	nd.prev = nextNd.prev
-	nextNd.prev = nd.id
-	l.updateNode(nextNd)
-	l.updateNode(nd)
+	// set back pointers
+	n := l.getNode(novel.next[0])
+	novel.prev = n.prev
+	l.updateNode(novel)
+	n.prev = novel.id
+	l.updateNode(n)
+}
+
+func (l *List) overwrite(key, value []byte, path skipPointer, old skipNode) {
+	novel := old
+	novel.id = l.nextNodeId()
+	novel.key = key
+	novel.val = value
+	l.nodes = append(l.nodes, novel)
+
+	for h := uint8(0); h <= novel.height; h++ {
+		// set forward pointers
+		n := l.getNode(path[h])
+		n.next[h] = novel.id
+		l.updateNode(n)
+	}
+
+	// set back pointer
+	n := l.getNode(novel.next[0])
+	n.prev = novel.id
+	l.updateNode(n)
 }
 
 type ListIter struct {
@@ -225,7 +300,7 @@ func (l *List) seekWithCompare(key []byte, cmp ValueCmp) (node skipNode) {
 }
 
 func (l *List) seekWithSearchFn(kontinue SearchFn) (node skipNode) {
-	ptr := l.head
+	ptr := l.headPointer()
 	for h := int64(highest); h >= 0; h-- {
 		node = l.getNode(ptr[h])
 		for kontinue(node.key) {
@@ -236,8 +311,12 @@ func (l *List) seekWithSearchFn(kontinue SearchFn) (node skipNode) {
 	return
 }
 
+func (l *List) headPointer() skipPointer {
+	return l.nodes[0].next
+}
+
 func (l *List) firstNode() skipNode {
-	return l.getNode(l.head[0])
+	return l.getNode(l.nodes[0].next[0])
 }
 
 func (l *List) lastNode() skipNode {
@@ -251,6 +330,10 @@ func (l *List) getNode(id nodeId) skipNode {
 
 func (l *List) updateNode(node skipNode) {
 	l.nodes[node.id] = node
+}
+
+func (l *List) nextNodeId() nodeId {
+	return nodeId(len(l.nodes))
 }
 
 func (l *List) compare(left, right skipNode) int {
@@ -268,20 +351,6 @@ func (l *List) compareKeysWithFn(left, right []byte, cmp ValueCmp) int {
 	return cmp(left, right)
 }
 
-func (l *List) makeNode(key, val []byte) (n skipNode) {
-	n = skipNode{
-		id:     nodeId(len(l.nodes)),
-		key:    key,
-		val:    val,
-		height: rollHeight(l.src),
-		next:   skipPointer{},
-		prev:   sentinelId,
-	}
-	l.nodes = append(l.nodes, n)
-
-	return
-}
-
 const (
 	pattern0 = uint64(1<<3 - 1)
 	pattern1 = uint64(1<<6 - 1)
@@ -289,8 +358,8 @@ const (
 	pattern3 = uint64(1<<12 - 1)
 )
 
-func rollHeight(r rand.Source) (h uint8) {
-	roll := r.Int63()
+func rollHeight(key []byte, salt uint64) (h uint8) {
+	roll := xxh3.HashSeed(key, salt)
 	patterns := []uint64{
 		pattern0,
 		pattern1,

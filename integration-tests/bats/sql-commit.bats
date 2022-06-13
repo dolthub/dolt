@@ -30,6 +30,18 @@ teardown() {
     [[ "$output" =~ "$regex" ]] || false
 }
 
+@test "sql-commit: DCOMMIT without a message throws error" {
+    run dolt sql -q "CALL DADD('.')"
+    [ $status -eq 0 ]
+
+    run dolt sql -q "CALL DCOMMIT()"
+    [ $status -eq 1 ]
+    run dolt log
+    [ $status -eq 0 ]
+    regex='Initialize'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
 @test "sql-commit: CALL DOLT_COMMIT without a message throws error" {
     run dolt sql -q "CALL DOLT_ADD('.')"
     [ $status -eq 0 ]
@@ -72,6 +84,7 @@ teardown() {
     run dolt sql -q "SELECT DOLT_COMMIT('-a', '-m', 'Commit1')"
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -87,6 +100,7 @@ teardown() {
     run dolt sql -q "CALL DOLT_COMMIT('-a', '-m', 'Commit1')"
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -104,6 +118,7 @@ teardown() {
     DCOMMIT=$output
 
     # Check that everything was added
+    skip_nbf_dolt_1
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
@@ -175,6 +190,7 @@ SQL
 }
 
 @test "sql-commit: DOLT_COMMIT immediately updates dolt diff system table." {
+    skip_nbf_dolt_1
     original_hash=$(get_head_commit)
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Commit1');
@@ -187,6 +203,7 @@ SQL
 }
 
 @test "sql-commit: CALL DOLT_COMMIT immediately updates dolt diff system table." {
+    skip_nbf_dolt_1
     original_hash=$(get_head_commit)
     run dolt sql << SQL
 CALL DOLT_COMMIT('-a', '-m', 'Commit1');
@@ -239,6 +256,7 @@ SQL
 }
 
 @test "sql-commit: DOLT_COMMIT with unstaged tables leaves them in the working set" {
+    skip_nbf_dolt_1
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL
@@ -298,6 +316,7 @@ SQL
 }
 
 @test "sql-commit: CALL DOLT_COMMIT with unstaged tables leaves them in the working set" {
+    skip_nbf_dolt_1
     head_variable=@@dolt_repo_$$_head
 
     run dolt sql << SQL

@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -79,6 +80,43 @@ CALL DOLT_COMMIT('-a', '-m', 'this is a ff');
 CALL DOLT_CHECKOUT('main');
 SQL
     run dolt sql -q "CALL DOLT_MERGE('feature-branch');"
+    [ $status -eq 0 ]
+
+    run dolt log -n 1
+    [ $status -eq 0 ]
+    [[ "$output" =~ "this is a ff" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM dolt_log"
+    [ $status -eq 0 ]
+    [[ "$output" =~ "3" ]] || false
+
+    run dolt status
+    [ $status -eq 0 ]
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    run dolt sql -q "SELECT * FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2" ]] || false
+    [[ "$output" =~ "3" ]] || false
+    [[ "$output" =~ "1000" ]] || false
+
+    run dolt sql -q "SELECT COUNT(*) FROM test;" -r csv
+    [ $status -eq 0 ]
+    [[ "$output" =~ "4" ]] || false
+}
+
+@test "sql-merge: CALL DMERGE works with ff" {
+    dolt sql <<SQL
+CALL DCOMMIT('-a', '-m', 'Step 1');
+CALL DCHECKOUT('-b', 'feature-branch');
+INSERT INTO test VALUES (3);
+UPDATE test SET pk=1000 WHERE pk=0;
+CALL DCOMMIT('-a', '-m', 'this is a ff');
+CALL DCHECKOUT('main');
+SQL
+    run dolt sql -q "CALL DMERGE('feature-branch');"
     [ $status -eq 0 ]
 
     run dolt log -n 1
@@ -406,7 +444,7 @@ SQL
     [[ "$output" =~ "true" ]] || false
     [[ "$output" =~ "true" ]] || false
     [[ "${lines[1]}" =~ "DOLT_MERGE('feature-branch')" ]] || false # validate that merge returns 1 not "Updating..."
-    [[ "${lines[3]}" =~ "1" ]] || false
+    [[ "${lines[3]}" =~ "0" ]] || false
     ! [[ "$output" =~ "Updating" ]] || false
 
     run dolt sql -q "SELECT * FROM test" -r csv
@@ -604,7 +642,7 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
@@ -655,7 +693,7 @@ CALL DOLT_CHECKOUT('main');
 CALL DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     run dolt status
     [ $status -eq 0 ]
@@ -705,7 +743,7 @@ SELECT DOLT_CHECKOUT('main');
 SELECT DOLT_MERGE('feature-branch');
 SQL
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1" ]] || false
 
     # back on the command line, our session state is clean
     run dolt status
@@ -726,7 +764,7 @@ SQL
     [[ "${lines[2]}" =~ "table,num_conflicts" ]] || false
     [[ "${lines[3]}" =~ "one_pk,1" ]] || false
     [[ "${lines[4]}" =~ "DOLT_MERGE('--abort')" ]] || false
-    [[ "${lines[5]}" =~ "1" ]] || false
+    [[ "${lines[5]}" =~ "0" ]] || false
 
     # now resolve commits
     run dolt sql  << SQL
@@ -913,7 +951,7 @@ SQL
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
 @test "sql-merge: CALL DOLT_MERGE can commit unresolved conflicts with dolt_allow_commit_conflicts on" {
@@ -942,7 +980,7 @@ SQL
 
     run dolt sql -q "SELECT DOLT_MERGE('feature-branch');"
     [ $status -eq 1 ]
-    [[ $output =~ "merge has unresolved conflicts" ]] || false
+    [[ $output =~ "merging is not possible because you have not committed an active merge" ]] || false
 }
 
 @test "sql-merge: DOLT_MERGE during an active merge throws an error" {
@@ -1270,8 +1308,8 @@ rollback;
 SQL
     [ $status -eq 0 ]
     [[ "$output" =~ "| DOLT_MERGE('feature-branch') |" ]] || false
-    [[ "$output" =~ "| 0                            |" ]] || false # conflict should return 0
-    [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts. please use the dolt_conflicts table to resolve |" ]] || false
+    [[ "$output" =~ "| 1                            |" ]] || false # conflict should return 1
+    [[ "$output" =~ "| Warning | 1105 | merge has unresolved conflicts or constraint violations |" ]] || false
     [[ "$output" =~ "| COUNT(*) |" ]] || false
     [[ "$output" =~ "| 1        |" ]] || false
 }

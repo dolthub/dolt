@@ -31,6 +31,7 @@ teardown() {
 # see 'cp-and-mv.bats' for renaming a table with `dolt mv`
 
 @test "rename-tables: diff a renamed table" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 SQL
@@ -46,6 +47,7 @@ SQL
 }
 
 @test "rename-tables: sql diff a renamed table" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (pk int PRIMARY KEY);
 SQL

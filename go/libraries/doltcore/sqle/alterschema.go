@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -173,21 +174,16 @@ func modifyColumn(
 	existingCol schema.Column,
 	newCol schema.Column,
 	order *sql.ColumnOrder,
-	opts editor.Options,
 ) (*doltdb.Table, error) {
 	sch, err := tbl.GetSchema(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if strings.ToLower(existingCol.Name) == strings.ToLower(newCol.Name) {
-		newCol.Name = existingCol.Name
-	}
-	if err := validateModifyColumn(ctx, tbl, existingCol, newCol); err != nil {
-		return nil, err
-	}
+	// TODO: write test of changing column case
 
 	// Modify statements won't include key info, so fill it in from the old column
+	// TODO: fix this in GMS
 	if existingCol.IsPartOfPK {
 		newCol.IsPartOfPK = true
 		if schema.IsColSpatialType(newCol) {
@@ -210,212 +206,11 @@ func modifyColumn(
 		return nil, err
 	}
 
-	updatedTable, err := updateTableWithModifiedColumn(ctx, tbl, sch, newSchema, existingCol, newCol, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	return updatedTable, nil
-}
-
-// validateModifyColumn returns an error if the column as specified cannot be added to the schema given.
-func validateModifyColumn(ctx context.Context, tbl *doltdb.Table, existingCol schema.Column, modifiedCol schema.Column) error {
-	sch, err := tbl.GetSchema(ctx)
-	if err != nil {
-		return err
-	}
-
-	if existingCol.Name != modifiedCol.Name {
-		cols := sch.GetAllCols()
-		err = cols.Iter(func(currColTag uint64, currCol schema.Column) (stop bool, err error) {
-			if currColTag == modifiedCol.Tag {
-				return false, nil
-			} else if strings.ToLower(currCol.Name) == strings.ToLower(modifiedCol.Name) {
-				return true, fmt.Errorf("A column with the name %s already exists.", modifiedCol.Name)
-			}
-
-			return false, nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// updateTableWithModifiedColumn updates the existing table with the new schema. If the column type has changed, then
-// the data is updated.
-func updateTableWithModifiedColumn(ctx context.Context, tbl *doltdb.Table, oldSch, newSch schema.Schema, oldCol, modifiedCol schema.Column, opts editor.Options) (*doltdb.Table, error) {
-	vrw := tbl.ValueReadWriter()
-
-	rowData, err := tbl.GetNomsRowData(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
-		if schema.IsKeyless(newSch) {
-			return nil, fmt.Errorf("keyless table column type alteration is not yet supported")
-		}
-		rowData, err = updateRowDataWithNewType(ctx, rowData, tbl.ValueReadWriter(), oldSch, newSch, oldCol, modifiedCol)
-		if err != nil {
-			return nil, err
-		}
-	} else if !modifiedCol.IsNullable() {
-		err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-			r, err := row.FromNoms(newSch, key.(types.Tuple), value.(types.Tuple))
-			if err != nil {
-				return false, err
-			}
-			val, ok := r.GetColVal(modifiedCol.Tag)
-			if !ok || val == nil || val == types.NullValue {
-				return true, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
-			}
-			return false, nil
-		})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	indexData, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var autoVal uint64
-	if schema.HasAutoIncrement(newSch) && schema.HasAutoIncrement(oldSch) {
-		autoVal, err = tbl.GetAutoIncrementValue(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	updatedTable, err := doltdb.NewNomsTable(ctx, vrw, newSch, rowData, indexData, types.Uint(autoVal))
-	if err != nil {
-		return nil, err
-	}
-
-	if !oldCol.TypeInfo.Equals(modifiedCol.TypeInfo) {
-		// If we're modifying the primary key then all indexes are affected. Otherwise we just want to update the
-		// touched ones.
-		if modifiedCol.IsPartOfPK {
-			for _, index := range newSch.Indexes().AllIndexes() {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
-				if err != nil {
-					return nil, err
-				}
-				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
-				if err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			for _, index := range newSch.Indexes().IndexesWithTag(modifiedCol.Tag) {
-				indexRowData, err := editor.RebuildIndex(ctx, updatedTable, index.Name(), opts)
-				if err != nil {
-					return nil, err
-				}
-				updatedTable, err = updatedTable.SetNomsIndexRows(ctx, index.Name(), indexRowData)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	}
-
-	return updatedTable, nil
-}
-
-// updateRowDataWithNewType returns a new map of row data containing the updated rows from the changed schema column type.
-func updateRowDataWithNewType(
-	ctx context.Context,
-	rowData types.Map,
-	vrw types.ValueReadWriter,
-	oldSch, newSch schema.Schema,
-	oldCol, newCol schema.Column,
-) (types.Map, error) {
-	// If there are no rows then we can immediately return. All type conversions are valid for tables without rows, but
-	// when rows are present then it is no longer true. GetTypeConverter assumes that there are rows present, so it
-	// will return a failure on a type conversion that should work for the empty table.
-	if rowData.Len() == 0 {
-		return rowData, nil
-	}
-	convFunc, _, err := typeinfo.GetTypeConverter(ctx, oldCol.TypeInfo, newCol.TypeInfo)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-
-	if !newCol.IsNullable() {
-		originalConvFunc := convFunc
-		convFunc = func(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (types.Value, error) {
-			if v == nil || v == types.NullValue {
-				return nil, fmt.Errorf("cannot change column to NOT NULL when one or more values is NULL")
-			}
-			return originalConvFunc(ctx, vrw, v)
-		}
-	}
-
-	var lastKey types.Value
-	mapEditor := rowData.Edit()
-	err = rowData.Iter(ctx, func(key, value types.Value) (stop bool, err error) {
-		r, err := row.FromNoms(oldSch, key.(types.Tuple), value.(types.Tuple))
-		if err != nil {
-			return true, err
-		}
-		taggedVals, err := r.TaggedValues()
-		if err != nil {
-			return true, err
-		}
-		// We skip the "ok" check as nil is returned if the value does not exist, and we still want to check nil.
-		// The underscore is important, otherwise a missing value would result in a panic.
-		val, _ := taggedVals[oldCol.Tag]
-		delete(taggedVals, oldCol.Tag) // If there was no value then delete is a no-op so this is safe
-		newVal, err := convFunc(ctx, vrw, val)
-		if err != nil {
-			return true, err
-		}
-		// convFunc returns types.NullValue rather than nil so it's always safe to compare
-		if newVal.Equals(val) {
-			newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
-			if err != nil {
-				return true, err
-			}
-			if newCol.IsPartOfPK && newRowKey.Equals(lastKey) {
-				return true, fmt.Errorf("pk violation when altering column type and rewriting values")
-			}
-			lastKey = newRowKey
-			return false, nil
-		} else if newVal != types.NullValue {
-			taggedVals[newCol.Tag] = newVal
-		}
-		r, err = row.New(rowData.Format(), newSch, taggedVals)
-		if err != nil {
-			return true, err
-		}
-
-		newRowKey, err := r.NomsMapKey(newSch).Value(ctx)
-		if err != nil {
-			return true, err
-		}
-		if newCol.IsPartOfPK {
-			mapEditor.Remove(key)
-			if newRowKey.Equals(lastKey) {
-				return true, fmt.Errorf("pk violation when altering column type and rewriting values")
-			}
-		}
-		lastKey = newRowKey
-		mapEditor.Set(newRowKey, r.NomsMapValue(newSch))
-		return false, nil
-	})
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	return mapEditor.Map(ctx)
+	return tbl.UpdateSchema(ctx, newSchema)
 }
 
 // replaceColumnInSchema replaces the column with the name given with its new definition, optionally reordering it.
+// TODO: make this a schema API?
 func replaceColumnInSchema(sch schema.Schema, oldCol schema.Column, newCol schema.Column, order *sql.ColumnOrder) (schema.Schema, error) {
 	// If no order is specified, insert in the same place as the existing column
 	prevColumn := ""
@@ -776,6 +571,67 @@ func dropColumn(ctx context.Context, tbl *doltdb.Table, colName string) (*doltdb
 	}
 
 	return tbl.UpdateSchema(ctx, newSch)
+}
+
+// backupFkcIndexesForKeyDrop finds backup indexes to cover foreign key references during a primary
+// key drop. If multiple indexes are valid, we sort by unique and select the first.
+// This will not work with a non-pk index drop without an additional index filter argument.
+func backupFkcIndexesForPkDrop(ctx *sql.Context, sch schema.Schema, fkc *doltdb.ForeignKeyCollection) ([]doltdb.FkIndexUpdate, error) {
+	indexes := sch.Indexes().AllIndexes()
+
+	// pkBackups is a mapping from the table's PK tags to potentially compensating indexes
+	pkBackups := make(map[uint64][]schema.Index, len(sch.GetPKCols().TagToIdx))
+	for tag, _ := range sch.GetPKCols().TagToIdx {
+		pkBackups[tag] = nil
+	}
+
+	// prefer unique key backups
+	sort.Slice(indexes[:], func(i, j int) bool {
+		return indexes[i].IsUnique() && !indexes[j].IsUnique()
+	})
+
+	for _, idx := range indexes {
+		if !idx.IsUserDefined() {
+			continue
+		}
+
+		for _, tag := range idx.AllTags() {
+			if _, ok := pkBackups[tag]; ok {
+				pkBackups[tag] = append(pkBackups[tag], idx)
+			}
+		}
+	}
+
+	fkUpdates := make([]doltdb.FkIndexUpdate, 0)
+	for _, fk := range fkc.AllKeys() {
+		// check if this FK references a parent PK tag we are trying to change
+		if backups, ok := pkBackups[fk.ReferencedTableColumns[0]]; ok {
+			covered := false
+			for _, idx := range backups {
+				idxTags := idx.AllTags()
+				if len(fk.TableColumns) > len(idxTags) {
+					continue
+				}
+				failed := false
+				for i := 0; i < len(fk.ReferencedTableColumns); i++ {
+					if idxTags[i] != fk.ReferencedTableColumns[i] {
+						failed = true
+						break
+					}
+				}
+				if failed {
+					continue
+				}
+				fkUpdates = append(fkUpdates, doltdb.FkIndexUpdate{FkName: fk.Name, FromIdx: fk.ReferencedTableIndex, ToIdx: idx.Name()})
+				covered = true
+				break
+			}
+			if !covered {
+				return nil, sql.ErrCantDropIndex.New("PRIMARY")
+			}
+		}
+	}
+	return fkUpdates, nil
 }
 
 func dropPrimaryKeyFromTable(ctx context.Context, table *doltdb.Table, nbf *types.NomsBinFormat, opts editor.Options) (*doltdb.Table, error) {

@@ -95,8 +95,23 @@ func TestNewEmptyNode(t *testing.T) {
 	assert.Equal(t, 0, empty.Level())
 	assert.Equal(t, 0, empty.Count())
 	assert.Equal(t, 0, empty.TreeCount())
-	assert.Equal(t, 72, empty.Size())
+	assert.Equal(t, 75, empty.Size())
 	assert.True(t, empty.IsLeaf())
+}
+
+// credit: https://github.com/tailscale/tailscale/commit/88586ec4a43542b758d6f4e15990573970fb4e8a
+func TestMapGetAllocs(t *testing.T) {
+	ctx := context.Background()
+	m, tuples := makeProllyMap(t, 100_000)
+
+	// assert no allocs for Map.Get()
+	avg := testing.AllocsPerRun(100, func() {
+		k := tuples[testRand.Intn(len(tuples))][0]
+		_ = m.Get(ctx, k, func(key, val val.Tuple) (err error) {
+			return
+		})
+	})
+	assert.Equal(t, 0.0, avg)
 }
 
 func makeProllyMap(t *testing.T, count int) (testMap, [][2]val.Tuple) {

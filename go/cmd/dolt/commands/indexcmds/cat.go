@@ -71,6 +71,10 @@ func (cmd CatCmd) Description() string {
 	return "Internal debugging command to display the contents of an index."
 }
 
+func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 func (cmd CatCmd) CreateMarkdown(_ io.Writer, _ string) error {
 	return nil
 }
@@ -147,7 +151,7 @@ func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 
 // TODO: merge this with the cmd/sql.go code, which is what this was modified from
 func (cmd CatCmd) prettyPrintResults(ctx context.Context, doltSch schema.Schema, rowData types.Map) error {
-	nbf := types.Format_Default
+	nbf := rowData.Format()
 
 	untypedSch, err := untyped.UntypeUnkeySchema(doltSch)
 	if err != nil {

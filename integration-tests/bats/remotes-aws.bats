@@ -4,6 +4,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -47,6 +48,14 @@ skip_if_no_aws_tests() {
     skip_if_no_aws_tests
     rm -rf .dolt
     dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
+    cd "$DOLT_BATS_AWS_EXISTING_REPO"
+    dolt sql -q 'show tables'
+}
+
+@test "remotes-aws: can clone an existing aws remote without AWS_SDK_LOAD_CONFIG=1 set." {
+    skip_if_no_aws_tests
+    rm -rf .dolt
+    env -u AWS_SDK_LOAD_CONFIG dolt clone 'aws://['"$DOLT_BATS_AWS_TABLE"':'"$DOLT_BATS_AWS_BUCKET"']/'"$DOLT_BATS_AWS_EXISTING_REPO"
     cd "$DOLT_BATS_AWS_EXISTING_REPO"
     dolt sql -q 'show tables'
 }

@@ -53,6 +53,7 @@ type MoverOptions struct {
 	Force          bool
 	TableToWriteTo string
 	Operation      TableImportOp
+	DisableFks     bool
 }
 
 type DataMoverOptions interface {

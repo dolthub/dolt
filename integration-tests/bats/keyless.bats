@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE keyless (
@@ -17,16 +18,6 @@ SQL
 teardown() {
     assert_feature_version
     teardown_common
-}
-
-@test "keyless: feature gate add/drop column" {
-    run dolt sql -q "ALTER TABLE keyless DROP COLUMN c0;"
-    [ $status -ne 0 ]
-    [[ ! "$output" =~ "panic" ]] || false
-
-    run dolt sql -q "ALTER TABLE keyless ADD COLUMN c2 int;"
-    [ $status -ne 0 ]
-    [[ ! "$output" =~ "panic" ]] || false
 }
 
 @test "keyless: feature indexes and foreign keys" {
@@ -184,7 +175,7 @@ CSV
     [[ "${lines[1]}" = "CREATE TABLE \`keyless\` ("          ]] || false
     [[ "${lines[2]}" = "  \`c0\` int,"  ]] || false
     [[ "${lines[3]}" = "  \`c1\` int"   ]] || false
-    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"     ]] || false
+    [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"     ]] || false
     [[ "${lines[5]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
     [[ "${lines[6]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
     [[ "${lines[7]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false

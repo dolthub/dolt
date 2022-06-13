@@ -80,7 +80,7 @@ func (ts testSequence) writeTo(nomsWriter, *NomsBinFormat) error {
 }
 
 func (ts testSequence) format() *NomsBinFormat {
-	return Format_7_18
+	return Format_Default
 }
 
 func (ts testSequence) getChildSequence(_ context.Context, idx int) (sequence, error) {
@@ -117,10 +117,6 @@ func (ts testSequence) Compare(nbf *NomsBinFormat, other LesserValuable) (int, e
 }
 
 func (ts testSequence) Hash(*NomsBinFormat) (hash.Hash, error) {
-	panic("not reached")
-}
-
-func (ts testSequence) WalkValues(cb ValueCallback) error {
 	panic("not reached")
 }
 

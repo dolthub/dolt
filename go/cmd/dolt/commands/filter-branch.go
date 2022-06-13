@@ -42,6 +42,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/tracing"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -74,6 +75,10 @@ func (cmd FilterBranchCmd) Name() string {
 // Description returns a description of the command
 func (cmd FilterBranchCmd) Description() string {
 	return fmt.Sprintf("%s.", filterBranchDocs.ShortDesc)
+}
+
+func (cmd FilterBranchCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path

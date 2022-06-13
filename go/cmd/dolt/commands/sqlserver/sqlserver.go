@@ -223,7 +223,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withHost(host)
 	}
 	if port, ok := apr.GetInt(portFlag); ok {
-		serverConfig.withPort(port)
+		serverConfig.WithPort(port)
 	}
 	if user, ok := apr.GetValue(userFlag); ok {
 		serverConfig.withUser(user)

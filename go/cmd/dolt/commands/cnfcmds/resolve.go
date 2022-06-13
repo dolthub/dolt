@@ -78,6 +78,10 @@ func (cmd ResolveCmd) Description() string {
 	return "Removes rows from list of conflicts"
 }
 
+func (cmd ResolveCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResolveCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cmd.ArgParser()

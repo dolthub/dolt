@@ -39,7 +39,95 @@ teardown() {
     teardown_common
 }
 
+@test "sql: dolt sql -q without privilege file doesn't persist" {
+    # mysql database exists and has privilege tables
+    run dolt sql -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # create a new user, fails
+    run dolt sql -q "create user new_user;"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "no privilege file specified, to persist users/grants run with --privilege-file=<file_path>" ]] || false
+
+    # there shouldn't be a mysql.db file
+    run ls
+    ! [[ "$output" =~ "privs.db" ]] || false
+
+    # show users, expect just root user
+    run dolt sql -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # remove privs.db just in case
+    rm -f privs.db
+}
+
+@test "sql: dolt sql -q with privilege file persists" {
+    # mysql database exists and has privilege tables
+    run dolt sql --privilege-file=privs.db -q "show tables from mysql;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "user" ]] || false
+    [[ "$output" =~ "role_edges" ]] || false
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    ! [[ "$output" =~ "new_user" ]] || false
+
+    # create a new user, fails
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    # show users, expect just root user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # there should now be a mysql.db file
+    run ls
+    [[ "$output" =~ "privs.db" ]] || false
+
+    # show users, expect root and new_user
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    # remove mysql.db
+    rm -f privs.db
+}
+
+@test "sql: dolt sql -q create database and specify privilege file" {
+    run dolt sql --privilege-file=privs.db -q "create database inner_db;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "create user new_user;"
+    [ "$status" -eq 0 ]
+
+    run dolt sql --privilege-file=privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd inner_db
+
+    run dolt sql --privilege-file=../privs.db -q "select user from mysql.user;"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "root" ]] || false
+    [[ "$output" =~ "new_user" ]] || false
+
+    cd ..
+    rm -f privs.db
+}
+
 @test "sql: errors do not write incomplete rows" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE test (
     pk BIGINT PRIMARY KEY,
@@ -653,6 +741,41 @@ SQL
     cd ../
 }
 
+@test "sql: drop database with branches in use" {
+    skiponwindows "Dropping databases can fail on windows due to file in use errors, need to fix"
+    
+    mkdir new && cd new
+
+    # this works fine, no attempt to use a dropped database
+    dolt sql  <<SQL
+CREATE DATABASE test1;
+CREATE DATABASE test2;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`test1/newBranch\`;
+USE test2;
+DROP DATABASE test1;
+SHOW TABLES;
+SQL
+
+    # this fails, we're using test1 after dropping it
+    run dolt sql  <<SQL
+CREATE DATABASE test1;
+USE test1;
+CALL DOLT_CHECKOUT('-b', 'newBranch');
+USE \`TEST1/newBranch\`;
+USE test2;
+DROP DATABASE Test1;
+SHOW TABLES;
+USE \`test1/newBranch\`;
+SQL
+
+    [ $status -ne 0 ]
+    [[ "$output" =~ "database not found: test1/newBranch" ]] || false
+
+    cd ../
+}
+
 @test "sql: bad dolt db" {
     mkdir new && cd new
 
@@ -868,6 +991,7 @@ SQL
 }
 
 @test "sql: alter table to add and delete a column" {
+    skip_nbf_dolt_1
     run dolt sql -q "alter table one_pk add (c6 int)"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"
@@ -885,6 +1009,7 @@ SQL
 }
 
 @test "sql: alter table to rename a column" {
+    skip_nbf_dolt_1
     dolt sql -q "alter table one_pk add (c6 int)"
     run dolt sql -q "alter table one_pk rename column c6 to c7"
     [ $status -eq 0 ]
@@ -895,6 +1020,7 @@ SQL
 }
 
 @test "sql: alter table change column to rename a column" {
+    skip_nbf_dolt_1
     dolt sql -q "alter table one_pk add (c6 int)"
     dolt sql -q "alter table one_pk change column c6 c7 int"
     run dolt sql -q "describe one_pk"
@@ -951,6 +1077,7 @@ ALTER TABLE t1 MODIFY COLUMN v1 BIGINT;
 ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2000);
 ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP;
 SQL
+
     run dolt sql -q "SELECT * FROM t1 ORDER BY pk" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -983,23 +1110,18 @@ SQL
 }
 
 @test "sql: alter table modify column type failure" {
+    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
-CREATE TABLE t2(pk BIGINT PRIMARY KEY, v1 VARCHAR(20), INDEX(v1));
-CREATE TABLE t3(pk BIGINT PRIMARY KEY, v1 DATETIME, INDEX(v1));
 INSERT INTO t1 VALUES (0,-1),(1,1);
-INSERT INTO t2 VALUES (0,'hi'),(1,'bye');
-INSERT INTO t3 VALUES (0,'1999-11-02 17:39:38'),(1,'3021-01-08 02:59:27');
 SQL
     run dolt sql -q "ALTER TABLE t1 MODIFY COLUMN v1 INT UNSIGNED"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t2 MODIFY COLUMN v1 VARCHAR(2)"
-    [ "$status" -eq "1" ]
-    run dolt sql -q "ALTER TABLE t3 MODIFY COLUMN v1 TIMESTAMP"
     [ "$status" -eq "1" ]
 }
 
 @test "sql: alter table modify column type no data change" {
+    skip_nbf_dolt_1
+    
     # there was a bug on NULLs where it would register a change
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 VARCHAR(64), INDEX(v1));
@@ -1517,6 +1639,7 @@ SQL
 }
 
 @test "sql: dolt diff table correctly works with IN" {
+    skip_nbf_dolt_1
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
     dolt commit -am "Commit 1"

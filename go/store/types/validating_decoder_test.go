@@ -31,11 +31,13 @@ import (
 )
 
 func TestValidatingBatchingSinkDecode(t *testing.T) {
-	v := Float(42)
-	c, err := EncodeValue(v, Format_7_18)
-	require.NoError(t, err)
 	storage := &chunks.TestStorage{}
-	vdc := NewValidatingDecoder(storage.NewView())
+	sv := storage.NewView()
+	vdc := NewValidatingDecoder(sv)
+
+	v := Float(42)
+	c, err := EncodeValue(v, NewValueStore(sv).Format())
+	require.NoError(t, err)
 
 	dc, err := vdc.Decode(&c)
 	require.NoError(t, err)
@@ -45,12 +47,12 @@ func TestValidatingBatchingSinkDecode(t *testing.T) {
 func assertPanicsOnInvalidChunk(t *testing.T, data []interface{}) {
 	storage := &chunks.TestStorage{}
 	vs := NewValueStore(storage.NewView())
-	dataAsByteSlice := toBinaryNomsReaderData(data)
+	dataAsByteSlice := toBinaryNomsReaderData(vs.Format(), data)
 	dec := newValueDecoder(dataAsByteSlice, vs)
-	v, err := dec.readValue(Format_7_18)
+	v, err := dec.readValue(vs.Format())
 	require.NoError(t, err)
 
-	c, err := EncodeValue(v, Format_7_18)
+	c, err := EncodeValue(v, vs.Format())
 	require.NoError(t, err)
 	vdc := NewValidatingDecoder(storage.NewView())
 

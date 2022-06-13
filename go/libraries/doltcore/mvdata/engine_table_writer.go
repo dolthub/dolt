@@ -44,15 +44,16 @@ const (
 	tableWriterStatUpdateRate = 64 * 1024
 )
 
-// type SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
+// SqlEngineTableWriter is a utility for importing a set of rows through the sql engine.
 type SqlEngineTableWriter struct {
 	se     *engine.SqlEngine
 	sqlCtx *sql.Context
 
-	tableName string
-	database  string
-	contOnErr bool
-	force     bool
+	tableName  string
+	database   string
+	contOnErr  bool
+	force      bool
+	disableFks bool
 
 	statsCB noms.StatsCB
 	stats   types.AppliedEditStats
@@ -76,7 +77,21 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 		return true, nil
 	})
 
-	se, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatCsv, dbName, false, nil, false)
+	// Simplest path would have our import path be a layer over load data
+	config := &engine.SqlEngineConfig{
+		InitialDb:    dbName,
+		IsReadOnly:   false,
+		PrivFilePath: "",
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatCsv,
+		config,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -86,6 +101,9 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	if err != nil {
 		return nil, err
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
 
@@ -105,10 +123,11 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 
 	return &SqlEngineTableWriter{
-		se:        se,
-		sqlCtx:    sqlCtx,
-		contOnErr: options.ContinueOnErr,
-		force:     options.Force,
+		se:         se,
+		sqlCtx:     sqlCtx,
+		contOnErr:  options.ContinueOnErr,
+		force:      options.Force,
+		disableFks: options.DisableFks,
 
 		database:  dbName,
 		tableName: options.TableToWriteTo,
@@ -144,10 +163,11 @@ func NewSqlEngineTableWriterWithEngine(ctx *sql.Context, eng *sqle.Engine, db ds
 	}
 
 	return &SqlEngineTableWriter{
-		se:        engine.NewRebasedSqlEngine(eng, map[string]dsqle.SqlDatabase{db.Name(): db}),
-		sqlCtx:    ctx,
-		contOnErr: options.ContinueOnErr,
-		force:     options.Force,
+		se:         engine.NewRebasedSqlEngine(eng, map[string]dsqle.SqlDatabase{db.Name(): db}),
+		sqlCtx:     ctx,
+		contOnErr:  options.ContinueOnErr,
+		force:      options.Force,
+		disableFks: options.DisableFks,
 
 		database:  db.Name(),
 		tableName: options.TableToWriteTo,
@@ -168,6 +188,13 @@ func (s *SqlEngineTableWriter) WriteRows(ctx context.Context, inputChannel chan 
 	_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("START TRANSACTION"))
 	if err != nil {
 		return err
+	}
+
+	if s.disableFks {
+		_, _, err = s.se.Query(s.sqlCtx, fmt.Sprintf("SET FOREIGN_KEY_CHECKS = 0"))
+		if err != nil {
+			return err
+		}
 	}
 
 	err = s.createOrEmptyTableIfNeeded()

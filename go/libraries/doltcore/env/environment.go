@@ -438,7 +438,7 @@ func (dEnv *DoltEnv) InitDBWithTime(ctx context.Context, nbf *types.NomsBinForma
 
 	err = dEnv.DoltDB.WriteEmptyRepoWithCommitTime(ctx, branchName, name, email, t)
 	if err != nil {
-		return doltdb.ErrNomsIO
+		return fmt.Errorf("%w: %v", doltdb.ErrNomsIO, err)
 	}
 
 	return nil
@@ -697,13 +697,16 @@ func (dEnv *DoltEnv) DocsReadWriter() DocsReadWriter {
 }
 
 func (dEnv *DoltEnv) HeadRoot(ctx context.Context) (*doltdb.RootValue, error) {
-	commit, err := dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
-
+	commit, err := dEnv.HeadCommit(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return commit.GetRootValue(ctx)
+}
+
+func (dEnv *DoltEnv) HeadCommit(ctx context.Context) (*doltdb.Commit, error) {
+	return dEnv.DoltDB.ResolveCommitRef(ctx, dEnv.RepoState.CWBHeadRef())
 }
 
 func (dEnv *DoltEnv) DbData() DbData {

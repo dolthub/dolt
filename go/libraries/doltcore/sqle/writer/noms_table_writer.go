@@ -57,7 +57,7 @@ type nomsTableWriter struct {
 	vrw         types.ValueReadWriter
 	kvToSQLRow  *index.KVToSqlRowConverter
 	tableEditor editor.TableEditor
-	sess        WriteSession
+	flusher     WriteSessionFlusher
 	batched     bool
 
 	autoInc globalstate.AutoIncrementTracker
@@ -77,18 +77,26 @@ func (te *nomsTableWriter) duplicateKeyErrFunc(keyString, indexName string, k, v
 }
 
 func (te *nomsTableWriter) Insert(ctx *sql.Context, sqlRow sql.Row) error {
-	if !schema.IsKeyless(te.sch) {
-		k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
-		if err != nil {
-			return err
-		}
-		return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
+	if schema.IsKeyless(te.sch) {
+		return te.keylessInsert(ctx, sqlRow)
 	}
+	return te.keyedInsert(ctx, sqlRow)
+}
+
+func (te *nomsTableWriter) keylessInsert(ctx *sql.Context, sqlRow sql.Row) error {
 	dRow, err := sqlutil.SqlRowToDoltRow(ctx, te.vrw, sqlRow, te.sch)
 	if err != nil {
 		return err
 	}
 	return te.tableEditor.InsertRow(ctx, dRow, te.duplicateKeyErrFunc)
+}
+
+func (te *nomsTableWriter) keyedInsert(ctx *sql.Context, sqlRow sql.Row) error {
+	k, v, tagToVal, err := sqlutil.DoltKeyValueAndMappingFromSqlRow(ctx, te.vrw, sqlRow, te.sch)
+	if err != nil {
+		return err
+	}
+	return te.tableEditor.InsertKeyVal(ctx, k, v, tagToVal, te.duplicateKeyErrFunc)
 }
 
 func (te *nomsTableWriter) Delete(ctx *sql.Context, sqlRow sql.Row) error {
@@ -141,13 +149,13 @@ func (te *nomsTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 		writer:  te,
 		idxName: idx.ID(),
 		idxSch:  idx.IndexSchema(),
-		nrr:     index.ReadRangesFromIndexLookup(lookup)[0],
+		nrr:     index.NomsRangesFromIndexLookup(lookup)[0],
 	}
 }
 
 // Close implements Closer
 func (te *nomsTableWriter) Close(ctx *sql.Context) error {
-	// If we're running in batched mode, don'tbl flush the edits until explicitly told to do so
+	// If we're running in batched mode, don't flush the edits until explicitly told to do so
 	if te.batched {
 		return nil
 	}
@@ -171,7 +179,7 @@ func (te *nomsTableWriter) StatementComplete(ctx *sql.Context) error {
 }
 
 func (te *nomsTableWriter) flush(ctx *sql.Context) error {
-	ws, err := te.sess.Flush(ctx)
+	ws, err := te.flusher.Flush(ctx)
 	if err != nil {
 		return err
 	}

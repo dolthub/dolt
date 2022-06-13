@@ -49,10 +49,10 @@ type DoltDatabaseProvider struct {
 	dbFactoryUrl string
 }
 
-var _ sql.DatabaseProvider = DoltDatabaseProvider{}
-var _ sql.FunctionProvider = DoltDatabaseProvider{}
-var _ sql.MutableDatabaseProvider = DoltDatabaseProvider{}
-var _ dsess.RevisionDatabaseProvider = DoltDatabaseProvider{}
+var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
+var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.RevisionDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
@@ -96,10 +96,9 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
-	name = strings.ToLower(name)
 	var ok bool
 	p.mu.RLock()
-	db, ok = p.databases[name]
+	db, ok = p.databases[formatDbMapKeyName(name)]
 	p.mu.RUnlock()
 	if ok {
 		return db, nil
@@ -116,8 +115,8 @@ func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Da
 
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if found, ok := p.databases[name]; !ok {
-		p.databases[name] = db
+	if found, ok := p.databases[formatDbMapKeyName(name)]; !ok {
+		p.databases[formatDbMapKeyName(name)] = db
 		return db, nil
 	} else {
 		return found, nil
@@ -184,7 +183,7 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	db := NewDatabase(name, newEnv.DbData(), opts)
-	p.databases[strings.ToLower(db.Name())] = db
+	p.databases[formatDbMapKeyName(db.Name())] = db
 
 	dbstate, err := GetInitialDBState(ctx, db)
 	if err != nil {
@@ -198,28 +197,45 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// get the case-sensitive name for case-sensitive file systems
+	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
+	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
+	//  name in all cases, or else keep a mapping from database name to directory on disk.
+	dbKey := formatDbMapKeyName(name)
+	db := p.databases[dbKey]
+
 	// Get the DB's directory
-	exists, isDir := p.fs.Exists(name)
+	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
 		// engine should already protect against this
-		return sql.ErrDatabaseNotFound.New(name)
+		return sql.ErrDatabaseNotFound.New(db.Name())
 	} else if !isDir {
-		return fmt.Errorf("unexpected error: %s exists but is not a directory", name)
+		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
 
-	err := p.fs.Delete(name, true)
+	err := p.fs.Delete(db.Name(), true)
 	if err != nil {
 		return err
 	}
 
 	// TODO: delete database in current dir
 
-	delete(p.databases, strings.ToLower(name))
+	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
+	// connection strings
+	derivativeNamePrefix := dbKey + "/"
+	for dbName := range p.databases {
+		if strings.HasPrefix(dbName, derivativeNamePrefix) {
+			delete(p.databases, dbName)
+		}
+	}
+
+	delete(p.databases, dbKey)
 	return nil
 }
 
-func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
-	revDB = strings.ToLower(revDB)
+//TODO: databaseForRevision should call checkout on the given branch/commit, returning a non-mutable session
+// only if a non-branch revspec was indicated.
+func (p DoltDatabaseProvider) databaseForRevision(ctx *sql.Context, revDB string) (sql.Database, dsess.InitialDbState, bool, error) {
 	if !strings.Contains(revDB, dbRevisionDelimiter) {
 		return nil, dsess.InitialDbState{}, false, nil
 	}
@@ -228,7 +244,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	dbName, revSpec := parts[0], parts[1]
 
 	p.mu.RLock()
-	candidate, ok := p.databases[dbName]
+	candidate, ok := p.databases[formatDbMapKeyName(dbName)]
 	p.mu.RUnlock()
 	if !ok {
 		return nil, dsess.InitialDbState{}, false, nil
@@ -283,7 +299,7 @@ func (p DoltDatabaseProvider) databaseForRevision(ctx context.Context, revDB str
 	return nil, dsess.InitialDbState{}, false, nil
 }
 
-func (p DoltDatabaseProvider) RevisionDbState(ctx context.Context, revDB string) (dsess.InitialDbState, error) {
+func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (dsess.InitialDbState, error) {
 	_, init, ok, err := p.databaseForRevision(ctx, revDB)
 	if err != nil {
 		return dsess.InitialDbState{}, err
@@ -318,7 +334,7 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
 // does not exist on the ReadReplicaDatabase's remote. If the target branch is not a replication
 // head, the new branch will not be continuously fetched.
-func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplicaDatabase) error {
+func switchAndFetchReplicaHead(ctx *sql.Context, branch string, db ReadReplicaDatabase) error {
 	branchRef := ref.NewBranchRef(branch)
 
 	var branchExists bool
@@ -346,13 +362,6 @@ func switchAndFetchReplicaHead(ctx context.Context, branch string, db ReadReplic
 		if err != nil {
 			return err
 		}
-	}
-
-	// update ReadReplicaRemote with new HEAD
-	// dolt_replicate_heads configuration remains unchanged
-	db, err = db.SetHeadRef(branchRef)
-	if err != nil {
-		return err
 	}
 
 	// create workingSets/heads/branch and update the working set
@@ -444,11 +453,9 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				gs:       v.gs,
 				editOpts: v.editOpts,
 			},
-			headRef:        v.headRef,
-			remoteTrackRef: v.remoteTrackRef,
-			remote:         v.remote,
-			srcDB:          v.srcDB,
-			tmpDir:         v.tmpDir,
+			remote: v.remote,
+			srcDB:  v.srcDB,
+			tmpDir: v.tmpDir,
 		}
 	}
 
@@ -511,4 +518,17 @@ type staticRepoState struct {
 
 func (s staticRepoState) CWBHeadRef() ref.DoltRef {
 	return s.branch
+}
+
+// formatDbMapKeyName returns formatted string of database name and/or branch name. Database name is case-insensitive,
+// so it's stored in lower case name. Branch name is case-sensitive, so not changed.
+func formatDbMapKeyName(name string) string {
+	if !strings.Contains(name, dbRevisionDelimiter) {
+		return strings.ToLower(name)
+	}
+
+	parts := strings.SplitN(name, dbRevisionDelimiter, 2)
+	dbName, revSpec := parts[0], parts[1]
+
+	return strings.ToLower(dbName) + dbRevisionDelimiter + revSpec
 }

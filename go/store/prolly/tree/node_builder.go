@@ -16,14 +16,11 @@ package tree
 
 import (
 	"context"
+	"sync"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
 
 	"github.com/dolthub/dolt/go/store/hash"
-)
-
-const (
-	nodeBuilderListSize = 256
 )
 
 type novelNode struct {
@@ -58,11 +55,12 @@ func writeNewNode[S message.Serializer](ctx context.Context, ns NodeStore, bld *
 	}, nil
 }
 
-func newNodeBuilder[S message.Serializer](serializer S, level int) *nodeBuilder[S] {
-	return &nodeBuilder[S]{
+func newNodeBuilder[S message.Serializer](serializer S, level int) (nb *nodeBuilder[S]) {
+	nb = &nodeBuilder[S]{
 		level:      level,
 		serializer: serializer,
 	}
+	return
 }
 
 type nodeBuilder[S message.Serializer] struct {
@@ -72,16 +70,17 @@ type nodeBuilder[S message.Serializer] struct {
 	serializer   S
 }
 
-func (nb *nodeBuilder[S]) startNode() {
-	nb.reset()
-}
-
 func (nb *nodeBuilder[S]) hasCapacity(key, value Item) bool {
 	sum := nb.size + len(key) + len(value)
 	return sum <= int(message.MaxVectorOffset)
 }
 
 func (nb *nodeBuilder[S]) addItems(key, value Item, subtree uint64) {
+	if nb.keys == nil {
+		nb.keys = getItemSlices()
+		nb.values = getItemSlices()
+		nb.subtrees = getSubtreeSlice()
+	}
 	nb.keys = append(nb.keys, key)
 	nb.values = append(nb.values, value)
 	nb.size += len(key) + len(value)
@@ -94,14 +93,49 @@ func (nb *nodeBuilder[S]) count() int {
 
 func (nb *nodeBuilder[S]) build() (node Node) {
 	msg := nb.serializer.Serialize(nb.keys, nb.values, nb.subtrees, nb.level)
-	nb.reset()
+	nb.recycleBuffers()
+	nb.size = 0
 	return NodeFromBytes(msg)
 }
 
-func (nb *nodeBuilder[S]) reset() {
-	// buffers are copied, it's safe to re-use the memory.
-	nb.keys = nb.keys[:0]
-	nb.values = nb.values[:0]
-	nb.size = 0
-	nb.subtrees = nb.subtrees[:0]
+func (nb *nodeBuilder[S]) recycleBuffers() {
+	putItemSlices(nb.keys[:0])
+	putItemSlices(nb.values[:0])
+	putSubtreeSlice(nb.subtrees[:0])
+	nb.keys = nil
+	nb.values = nil
+	nb.subtrees = nil
+}
+
+// todo(andy): replace with NodeStore.Pool()
+const nodeBuilderListSize = 256
+
+var itemsPool = sync.Pool{
+	New: func() any {
+		return make([][]byte, 0, nodeBuilderListSize)
+	},
+}
+
+func getItemSlices() [][]byte {
+	sl := itemsPool.Get().([][]byte)
+	return sl[:0]
+}
+
+func putItemSlices(sl [][]byte) {
+	itemsPool.Put(sl[:0])
+}
+
+var subtreePool = sync.Pool{
+	New: func() any {
+		return make([]uint64, 0, nodeBuilderListSize)
+	},
+}
+
+func getSubtreeSlice() []uint64 {
+	sl := subtreePool.Get().([]uint64)
+	return sl[:0]
+}
+
+func putSubtreeSlice(sl []uint64) {
+	subtreePool.Put(sl[:0])
 }

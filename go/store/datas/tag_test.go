@@ -39,13 +39,13 @@ func TestNewTag(t *testing.T) {
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
 	defer db.Close()
 
-	if db.Format() == types.Format_DOLT_DEV {
+	if db.Format().UsesFlatbuffers() {
 		t.Skip()
 	}
 
 	parents := mustList(types.NewList(ctx, db))
 	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(ctx, db, parents))
-	commit, err := newCommit(ctx, types.Float(1), parents, parentsClosure, false, types.EmptyStruct(types.Format_Default))
+	commit, err := newCommit(ctx, types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	require.NoError(t, err)
 
 	cmRef, err := db.WriteValue(ctx, commit)

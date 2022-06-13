@@ -74,7 +74,7 @@ func (s *perfSuite) Test02BuildList10mStructs() {
 	out := types.NewStreamingList(context.Background(), s.VS, ae, in)
 
 	for i := 0; i < 1e7; i++ {
-		st, err := types.NewStruct(types.Format_7_18, "", types.StructData{
+		st, err := types.NewStruct(s.VS.Format(), "", types.StructData{
 			"number": types.Float(s.r.Int63()),
 		})
 

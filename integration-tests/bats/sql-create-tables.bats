@@ -581,9 +581,9 @@ SQL
 }
 
 @test "sql-create-tables: Alter on a temporary table" {
-    skip "unskip once DDL operations are moved to the SQL engine"
-
-    run dolt sql <<SQL
+    skip "cannot alter temporary tables"
+    
+    dolt sql <<SQL
 CREATE TEMPORARY TABLE goodtable(pk int PRIMARY KEY);
 ALTER TABLE goodtable ADD COLUMN val int;
 

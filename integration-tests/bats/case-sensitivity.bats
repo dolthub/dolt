@@ -30,14 +30,17 @@ teardown() {
     dolt add -A
     dolt commit -m "random commit"
     dolt sql -q "INSERT INTO test VALUES (3, 'ccc', 'CCC')"
+
     run dolt sql -q "SELECT * FROM dOlT_dIfF_tEsT"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "ccc" ]] || false
     run dolt sql -q "SELECT * FROM InFoRmAtIoN_sChEmA.tAbLeS;"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "information_schema" ]] || false
+
     dolt add -A
     dolt commit -m "Some commit"
+
     run dolt sql -q "SELECT * FROM dOlT_cOmMiT_dIfF_tEsT WHERE to_commit='working' AND from_commit='working'"
     [ "$status" -eq 0 ]
     run dolt sql -q "SELECT * FROM dOlT_hIsToRy_tEsT"

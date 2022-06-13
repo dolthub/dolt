@@ -15,7 +15,6 @@
 package message
 
 import (
-	"encoding/binary"
 	"math"
 
 	fb "github.com/google/flatbuffers/go"
@@ -29,8 +28,8 @@ const (
 
 func getFlatbufferBuilder(pool pool.BuffPool, sz int) (b *fb.Builder) {
 	b = fb.NewBuilder(0)
-	buf := pool.Get(uint64(sz))
-	b.Bytes = buf[:0]
+	b.Bytes = pool.Get(uint64(sz))
+	b.Reset()
 	return
 }
 
@@ -59,31 +58,10 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 	return b.EndVector(cnt)
 }
 
-func writeCountArray(b *fb.Builder, sc []uint64) fb.UOffsetT {
-	// todo(andy) write without copy
-	arr := WriteSubtreeCounts(sc)
-	return b.CreateByteVector(arr)
-}
-
-func readSubtreeCounts(n int, buf []byte) (sc []uint64) {
-	sc = make([]uint64, 0, n)
-	for len(buf) > 0 {
-		count, n := binary.Uvarint(buf)
-		sc = append(sc, count)
-		buf = buf[n:]
-	}
-	assertTrue(len(sc) == n)
-	return
-}
-
-func WriteSubtreeCounts(sc []uint64) []byte {
-	buf := make([]byte, len(sc)*binary.MaxVarintLen64)
-	pos := 0
-	for _, count := range sc {
-		n := binary.PutUvarint(buf[pos:], count)
-		pos += n
-	}
-	return buf[:pos]
+func writeCountArray(b *fb.Builder, counts []uint64) fb.UOffsetT {
+	// todo(andy): encode without alloc
+	buf := make([]byte, maxEncodedSize(len(counts)))
+	return b.CreateByteVector(encodeVarints(counts, buf))
 }
 
 func sumSubtrees(subtrees []uint64) (sum uint64) {

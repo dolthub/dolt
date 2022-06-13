@@ -173,7 +173,7 @@ func (ti *boolType) String() string {
 
 // ToSqlType implements TypeInfo interface.
 func (ti *boolType) ToSqlType() sql.Type {
-	return ti.sqlBitType
+	return sql.Boolean
 }
 
 // boolTypeConverter is an internal function for GetTypeConverter that handles the specific type as the source TypeInfo.

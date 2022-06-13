@@ -23,38 +23,34 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
+const MessageTypesKind int = 28
+
+const messagePrefixSz = 3
+
 type Message []byte
 
 type Serializer interface {
 	Serialize(keys, values [][]byte, subtrees []uint64, level int) Message
 }
 
-func GetKeys(msg Message) val.SlicedBuffer {
-	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapKeys(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapKeys(msg)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
-	}
-}
+func GetKeysAndValues(msg Message) (keys, values val.SlicedBuffer, cnt uint16) {
+	id := serial.GetFileID(msg[messagePrefixSz:])
 
-func GetValues(msg Message) val.SlicedBuffer {
-	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapValues(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapValues(msg)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
+	if id == serial.ProllyTreeNodeFileID {
+		return getProllyMapKeysAndValues(msg)
 	}
+	if id == serial.AddressMapFileID {
+		keys = getAddressMapKeys(msg)
+		values = getAddressMapValues(msg)
+		cnt = getAddressMapCount(msg)
+		return
+	}
+
+	panic(fmt.Sprintf("unknown message id %s", id))
 }
 
 func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context, addr hash.Hash) error) error {
-	id := serial.GetFileID(msg)
+	id := serial.GetFileID(msg[messagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return walkProllyMapAddresses(ctx, msg, cb)
@@ -65,20 +61,8 @@ func WalkAddresses(ctx context.Context, msg Message, cb func(ctx context.Context
 	}
 }
 
-func GetCount(msg Message) uint16 {
-	id := serial.GetFileID(msg)
-	switch id {
-	case serial.ProllyTreeNodeFileID:
-		return getProllyMapCount(msg)
-	case serial.AddressMapFileID:
-		return getAddressMapCount(msg)
-	default:
-		panic(fmt.Sprintf("unknown message id %s", id))
-	}
-}
-
 func GetTreeLevel(msg Message) int {
-	id := serial.GetFileID(msg)
+	id := serial.GetFileID(msg[messagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeLevel(msg)
@@ -90,7 +74,7 @@ func GetTreeLevel(msg Message) int {
 }
 
 func GetTreeCount(msg Message) int {
-	id := serial.GetFileID(msg)
+	id := serial.GetFileID(msg[messagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapTreeCount(msg)
@@ -102,7 +86,7 @@ func GetTreeCount(msg Message) int {
 }
 
 func GetSubtrees(msg Message) []uint64 {
-	id := serial.GetFileID(msg)
+	id := serial.GetFileID(msg[messagePrefixSz:])
 	switch id {
 	case serial.ProllyTreeNodeFileID:
 		return getProllyMapSubtrees(msg)

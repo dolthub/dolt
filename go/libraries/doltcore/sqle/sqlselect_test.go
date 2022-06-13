@@ -88,7 +88,7 @@ func LoadedLocalLocation() *time.Location {
 func BasicSelectTests() []SelectTest {
 	headCommitHash := "73hc2robs4v0kt9taoe3m5hd49dmrgun"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		headCommitHash = "8hrmmj29n9keblqs7r9423f69uesfgn6"
+		headCommitHash = "hqcfvhaumjtetijsqdnnjhj87f0lesbo"
 	}
 	return []SelectTest{
 		{
@@ -655,8 +655,8 @@ func BasicSelectTests() []SelectTest {
 						where age >= 40`,
 			ExpectedRows: ToSqlRows(PeopleTestSchema, Homer, Moe, Barney),
 			ExpectedSchema: NewResultSetSchema("i", types.IntKind, "f", types.StringKind,
-				"l", types.StringKind, "m", types.BoolKind, "a", types.IntKind, "r", types.FloatKind,
-				"u", types.UUIDKind, "n", types.UintKind),
+				"l", types.StringKind, "m", types.IntKind, "a", types.IntKind, "r", types.FloatKind,
+				"u", types.StringKind, "n", types.UintKind),
 		},
 		{
 			Name:           "select *, not equals",
@@ -795,7 +795,7 @@ var sqlDiffSchema = sql.Schema{
 	&sql.Column{Name: "from_first_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_last_name", Type: typeinfo.StringDefaultType.ToSqlType()},
 	&sql.Column{Name: "from_addr", Type: typeinfo.StringDefaultType.ToSqlType()},
-	&sql.Column{Name: "diff_type", Type: sql.Text},
+	&sql.Column{Name: "diff_type", Type: typeinfo.StringDefaultType.ToSqlType()},
 }
 
 var SelectDiffTests = []SelectTest{

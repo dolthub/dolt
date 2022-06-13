@@ -3,6 +3,8 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
+
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v1 BIGINT)"
     dolt add -A
     dolt commit -m "Created table"
@@ -71,6 +73,7 @@ teardown() {
 }
 
 @test "revert: constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
@@ -137,6 +140,16 @@ SQL
 
 @test "revert: SQL HEAD" {
     dolt sql -q "SELECT DOLT_REVERT('HEAD')"
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+}
+
+@test "revert: SQL HEAD dfunc" {
+    dolt sql -q "CALL drevert('HEAD')"
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -232,6 +245,7 @@ SQL
 }
 
 @test "revert: SQL constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));
@@ -252,6 +266,7 @@ SQL
 }
 
 @test "revert: Stored Procedure constraint violations" {
+    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
 CREATE TABLE child (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name FOREIGN KEY (v1) REFERENCES parent (v1));

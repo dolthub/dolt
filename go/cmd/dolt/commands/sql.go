@@ -82,17 +82,18 @@ By default this command uses the dolt database in the current working directory,
 }
 
 const (
-	QueryFlag      = "query"
-	FormatFlag     = "result-format"
-	saveFlag       = "save"
-	executeFlag    = "execute"
-	listSavedFlag  = "list-saved"
-	messageFlag    = "message"
-	BatchFlag      = "batch"
-	multiDBDirFlag = "multi-db-dir"
-	continueFlag   = "continue"
-	fileInputFlag  = "file"
-	welcomeMsg     = `# Welcome to the DoltSQL shell.
+	QueryFlag             = "query"
+	FormatFlag            = "result-format"
+	saveFlag              = "save"
+	executeFlag           = "execute"
+	listSavedFlag         = "list-saved"
+	messageFlag           = "message"
+	BatchFlag             = "batch"
+	multiDBDirFlag        = "multi-db-dir"
+	continueFlag          = "continue"
+	fileInputFlag         = "file"
+	privilegeFilePathFlag = "privilege-file"
+	welcomeMsg            = `# Welcome to the DoltSQL shell.
 # Statements must be terminated with ';'.
 # "exit" or "quit" (or Ctrl-D) to exit.`
 )
@@ -143,6 +144,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
 	ap.SupportsFlag(continueFlag, "c", "continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
+	ap.SupportsString(privilegeFilePathFlag, "", "Privilege File", "Points to the file that privileges will be loaded from, in addition to being overwritten when privileges have been modified.")
 	return ap
 }
 
@@ -171,6 +173,8 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
+
+	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
@@ -204,9 +208,9 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if query, queryOK := apr.GetValue(QueryFlag); queryOK {
 		return queryMode(ctx, mrEnv, initialRoots, apr, query, currentDb, format, usage)
 	} else if savedQueryName, exOk := apr.GetValue(executeFlag); exOk {
-		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage)
+		return savedQueryMode(ctx, mrEnv, initialRoots, savedQueryName, currentDb, format, usage, privsFp)
 	} else if apr.Contains(listSavedFlag) {
-		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage)
+		return listSavedQueriesMode(ctx, mrEnv, initialRoots, currentDb, format, usage, privsFp)
 	} else {
 		// Run in either batch mode for piped input, or shell mode for interactive
 		isTty := false
@@ -233,17 +237,17 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		}
 
 		if isTty {
-			verr := execShell(ctx, mrEnv, format, currentDb)
+			verr := execShell(ctx, mrEnv, format, currentDb, privsFp)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else if runInBatchMode {
-			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb)
+			verr := execBatch(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
 		} else {
-			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
+			verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
 			if verr != nil {
 				return HandleVErrAndExitCode(verr, usage)
 			}
@@ -260,6 +264,7 @@ func listSavedQueriesMode(
 	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	privsFp string,
 ) int {
 	hasQC, err := initialRoots[currentDb].HasTable(ctx, doltdb.DoltQueryCatalogTableName)
 
@@ -273,7 +278,7 @@ func listSavedQueriesMode(
 	}
 
 	query := "SELECT * FROM " + doltdb.DoltQueryCatalogTableName
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, query, format, currentDb, privsFp), usage)
 }
 
 func savedQueryMode(
@@ -284,6 +289,7 @@ func savedQueryMode(
 	currentDb string,
 	format engine.PrintResultFormat,
 	usage cli.UsagePrinter,
+	privsFp string,
 ) int {
 	sq, err := dtables.RetrieveFromQueryCatalog(ctx, initialRoots[currentDb], savedQueryName)
 
@@ -292,7 +298,7 @@ func savedQueryMode(
 	}
 
 	cli.PrintErrf("Executing saved query '%s':\n%s\n", savedQueryName, sq.Query)
-	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb), usage)
+	return HandleVErrAndExitCode(execQuery(ctx, mrEnv, sq.Query, format, currentDb, privsFp), usage)
 }
 
 func queryMode(
@@ -315,8 +321,9 @@ func queryMode(
 
 	_, continueOnError := apr.GetValue(continueFlag)
 
+	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
 	if saveName != "" {
-		verr := execQuery(ctx, mrEnv, query, format, currentDb)
+		verr := execQuery(ctx, mrEnv, query, format, currentDb, privsFp)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -335,13 +342,13 @@ func queryMode(
 		}
 	} else if batchMode {
 		batchInput := strings.NewReader(query)
-		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb)
+		verr := execBatch(ctx, continueOnError, mrEnv, batchInput, format, currentDb, privsFp)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
 	} else {
 		input := strings.NewReader(query)
-		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb)
+		verr := execMultiStatements(ctx, continueOnError, mrEnv, input, format, currentDb, privsFp)
 		if verr != nil {
 			return HandleVErrAndExitCode(verr, usage)
 		}
@@ -376,8 +383,22 @@ func execShell(
 	mrEnv *env.MultiRepoEnv,
 	format engine.PrintResultFormat,
 	initialDb string,
+	privsFp string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	config := &engine.SqlEngineConfig{
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: privsFp,
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -397,8 +418,22 @@ func execBatch(
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
 	initialDb string,
+	privsFp string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, false)
+	config := &engine.SqlEngineConfig{
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: privsFp,
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -408,6 +443,9 @@ func execBatch(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	// In batch mode, we need to set a couple flags on the session to prevent constant flushes to disk
 	dsess.DSessFromSess(sqlCtx.Session).EnableBatchedMode()
@@ -432,8 +470,22 @@ func execMultiStatements(
 	batchInput io.Reader,
 	format engine.PrintResultFormat,
 	initialDb string,
+	privsFp string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	config := &engine.SqlEngineConfig{
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: privsFp,
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -443,6 +495,9 @@ func execMultiStatements(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	err = runMultiStatementMode(sqlCtx, se, batchInput, continueOnErr)
 	return errhand.VerboseErrorFromError(err)
@@ -454,8 +509,22 @@ func execQuery(
 	query string,
 	format engine.PrintResultFormat,
 	initialDb string,
+	privsFp string,
 ) errhand.VerboseError {
-	se, err := engine.NewSqlEngine(ctx, mrEnv, format, initialDb, false, nil, true)
+	config := &engine.SqlEngineConfig{
+		InitialDb:    initialDb,
+		IsReadOnly:   false,
+		PrivFilePath: privsFp,
+		ServerUser:   "root",
+		ServerPass:   "",
+		Autocommit:   true,
+	}
+	se, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		format,
+		config,
+	)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -465,6 +534,9 @@ func execQuery(
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
 	if err != nil {
@@ -666,14 +738,6 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 				if err != nil {
 					return errhand.VerboseErrorFromError(err)
 				}
-				if err != nil {
-					verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
-					cli.PrintErrln(verr.Verbose())
-					// If continueOnErr is set keep executing the remaining queries but print the error out anyway.
-					if !continueOnErr {
-						return err
-					}
-				}
 			}
 		}
 		query = ""
@@ -739,6 +803,9 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 
 	currentDB := sqlCtx.Session.GetCurrentDatabase()
 	currEnv := mrEnv.GetEnv(currentDB)
+
+	// Add root client
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
 	historyFile := filepath.Join(".sqlhistory") // history file written to working dir
 	initialPrompt := fmt.Sprintf("%s> ", sqlCtx.GetCurrentDatabase())

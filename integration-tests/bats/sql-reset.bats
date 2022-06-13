@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -80,6 +81,41 @@ teardown() {
 
     # Reset to head results in clean main.
     run dolt sql -q "CALL DOLT_RESET('--hard', 'head');"
+    [ "$status" -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
+@test "sql-reset: CALL DRESET --hard works on unstaged and staged table changes" {
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    run dolt sql -q "CALL DRESET('--hard')"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    dolt add .
+
+    run dolt sql -q "CALL DRESET('--hard')"
+    [ $status -eq 0 ]
+
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "On branch main" ]] || false
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt sql -q "INSERT INTO test VALUES (1)"
+
+    # Reset to head results in clean main.
+    run dolt sql -q "CALL DRESET('--hard', 'head');"
     [ "$status" -eq 0 ]
 
     run dolt status

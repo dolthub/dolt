@@ -307,10 +307,6 @@ func (b Blob) Kind() NomsKind {
 	return b.sequence.Kind()
 }
 
-func (b Blob) WalkValues(ctx context.Context, cb ValueCallback) error {
-	return nil
-}
-
 type BlobReader struct {
 	b   Blob
 	pos int64

@@ -20,8 +20,8 @@ import (
 	"github.com/dolthub/go-mysql-server/sql"
 )
 
-// dolt_add is the stored procedure version of the function `dolt_add`.
-func dolt_add(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+// doltAdd is the stored procedure version of the function `dolt_add`.
+func doltAdd(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	res, err := dfunctions.DoDoltAdd(ctx, args)
 	if err != nil {
 		return nil, err

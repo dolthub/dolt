@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -184,16 +184,16 @@ var testCases = []testCase{
 		true,
 		false,
 	},
-	// TODO (dhruv): Fix this bug in the old storage format
+	// TODO (dhruv): need to fix this test case for new storage format
 	//{
 	//	"add rows but one holds a new column",
 	//	build(1, 1),
 	//	build(1, 1, 1),
 	//	nil,
 	//	2, 3, 2,
-	//	nil,
-	//	false,
+	//	build(1, 1, 1),
 	//	true,
+	//	false,
 	//},
 	{
 		"Delete a row in one, set all null in the other",
@@ -223,7 +223,7 @@ func TestRowMerge(t *testing.T) {
 
 			merged, isConflict := v.tryMerge(test.row, test.mergeRow, test.ancRow)
 			assert.Equal(t, test.expectConflict, isConflict)
-			vD := prolly.ValueDescriptorFromSchema(test.mergedSch)
+			vD := shim.ValueDescriptorFromSchema(test.mergedSch)
 			assert.Equal(t, vD.Format(test.expectedResult), vD.Format(merged))
 		})
 	}
@@ -342,7 +342,7 @@ func buildTup(sch schema.Schema, r []*int) val.Tuple {
 		return nil
 	}
 
-	vD := prolly.ValueDescriptorFromSchema(sch)
+	vD := shim.ValueDescriptorFromSchema(sch)
 	vB := val.NewTupleBuilder(vD)
 	for i, v := range r {
 		if v != nil {

@@ -97,19 +97,19 @@ func TestRowAsInsertStmt(t *testing.T) {
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,'normie');",
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,'normie');",
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,FALSE,'normie');",
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','It\\'s \\\"Mister Perfect\\\" to you',100,0,'normie');",
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,FALSE,NULL);",
+			expectedOutput: "INSERT INTO `people` (`id`,`name`,`age`,`is_married`,`title`) VALUES ('00000000-0000-0000-0000-000000000000','some guy',100,0,NULL);",
 		},
 	}
 
@@ -168,21 +168,21 @@ func TestRowAsUpdateStmt(t *testing.T) {
 			name:           "simple row",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=0,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "embedded quotes",
 			row:            dtestutils.NewTypedRow(id, `It's "Mister Perfect" to you`, 100, false, strPointer("normie")),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=FALSE,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE `people` SET `name`='It\\'s \\\"Mister Perfect\\\" to you',`age`=100,`is_married`=0,`title`='normie' WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{
 			name:           "null values",
 			row:            dtestutils.NewTypedRow(id, "some guy", 100, false, nil),
 			sch:            dtestutils.TypedSchema,
-			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=FALSE,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
+			expectedOutput: "UPDATE `people` SET `name`='some guy',`age`=100,`is_married`=0,`title`=NULL WHERE (`id`='00000000-0000-0000-0000-000000000000');",
 			collDiff:       set.NewStrSet([]string{"name", "age", "is_married", "title"}),
 		},
 		{

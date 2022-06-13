@@ -35,6 +35,14 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 )
 
+//TODO: server tests need to expose a higher granularity for server interactions:
+// - replication readers and writers that are connected through configs
+// - configs need to be dynamic
+// - interleave inter and intra-session queries
+// - simulate server/connection failures
+// - load balancing?
+// - multi-master?
+
 type testPerson struct {
 	Name       string
 	Age        int
@@ -146,17 +154,17 @@ func TestServerGoodParams(t *testing.T) {
 
 	tests := []ServerConfig{
 		DefaultServerConfig(),
-		DefaultServerConfig().withHost("127.0.0.1").withPort(15400),
-		DefaultServerConfig().withHost("localhost").withPort(15401),
-		//DefaultServerConfig().withHost("::1").withPort(15402), // Fails on Jenkins, assuming no IPv6 support
-		DefaultServerConfig().withUser("testusername").withPort(15403),
-		DefaultServerConfig().withPassword("hunter2").withPort(15404),
-		DefaultServerConfig().withTimeout(0).withPort(15405),
-		DefaultServerConfig().withTimeout(5).withPort(15406),
-		DefaultServerConfig().withLogLevel(LogLevel_Debug).withPort(15407),
-		DefaultServerConfig().withLogLevel(LogLevel_Info).withPort(15408),
-		DefaultServerConfig().withReadOnly(true).withPort(15409),
-		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).withPort(15410),
+		DefaultServerConfig().withHost("127.0.0.1").WithPort(15400),
+		DefaultServerConfig().withHost("localhost").WithPort(15401),
+		//DefaultServerConfig().withHost("::1").WithPort(15402), // Fails on Jenkins, assuming no IPv6 support
+		DefaultServerConfig().withUser("testusername").WithPort(15403),
+		DefaultServerConfig().withPassword("hunter2").WithPort(15404),
+		DefaultServerConfig().withTimeout(0).WithPort(15405),
+		DefaultServerConfig().withTimeout(5).WithPort(15406),
+		DefaultServerConfig().withLogLevel(LogLevel_Debug).WithPort(15407),
+		DefaultServerConfig().withLogLevel(LogLevel_Info).WithPort(15408),
+		DefaultServerConfig().withReadOnly(true).WithPort(15409),
+		DefaultServerConfig().withUser("testusernamE").withPassword("hunter2").withTimeout(4).WithPort(15410),
 	}
 
 	for _, test := range tests {
@@ -180,7 +188,7 @@ func TestServerGoodParams(t *testing.T) {
 
 func TestServerSelect(t *testing.T) {
 	env := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15300)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15300)
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -255,7 +263,7 @@ func TestServerFailsIfPortInUse(t *testing.T) {
 
 func TestServerSetDefaultBranch(t *testing.T) {
 	dEnv := dtestutils.CreateEnvWithSeedData(t)
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15302)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15302)
 
 	sc := NewServerController()
 	defer sc.StopServer()
@@ -405,7 +413,7 @@ func TestReadReplica(t *testing.T) {
 
 	// start server as read replica
 	sc := NewServerController()
-	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).withPort(15303)
+	serverConfig := DefaultServerConfig().withLogLevel(LogLevel_Fatal).WithPort(15303)
 
 	func() {
 		os.Chdir(multiSetup.DbPaths[readReplicaDbName])

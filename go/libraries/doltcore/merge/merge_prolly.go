@@ -16,25 +16,26 @@ package merge
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type cellWiseMerge struct {
-	leftDiff  tree.Diff
-	rightDiff tree.Diff
-	merged    tree.Diff
+type mergeResult struct {
+	tbl   *doltdb.Table
+	arts  durable.ArtifactIndex
+	stats *MergeStats
 }
 
 // mergeTableData three-way merges rows and indexes for a given table. First,
@@ -49,67 +50,103 @@ type cellWiseMerge struct {
 // entries are set to values consistent the cell-wise merge result. When the
 // root and merge secondary indexes are merged, they will produce entries
 // consistent with the primary row data.
-func mergeTableData(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, *MergeStats, error) {
+func mergeTableData(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
+	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	ancRows durable.Index,
+	ancIndexSet durable.IndexSet,
+	cmHash hash.Hash,
+	mergeTblHash, ancTblHash hash.Hash) (mergeResult, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
-	cellWiseMerges := make(chan cellWiseMerge, 128)
+	stats := &MergeStats{Operation: TableModified}
+
+	indexEdits := make(chan indexEdit, 128)
+	conflicts := make(chan confVals, 128)
 	var updatedTable *doltdb.Table
 	var mergedData durable.Index
 
 	group.Go(func() error {
 		var err error
-		// TODO (dhruv): update this function definition to return any conflicts
-		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, ancTbl, tableToUpdate, cellWiseMerges)
+		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, tableToUpdate, ancRows, indexEdits, conflicts)
 		if err != nil {
 			return err
 		}
-		defer close(cellWiseMerges)
+		defer close(indexEdits)
+		defer close(conflicts)
 		return nil
 	})
 
 	rootIndexSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
 	}
 	mergeIndexSet, err := mergeTbl.GetIndexSet(ctx)
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
 	}
 
 	var updatedRootIndexSet durable.IndexSet
 	var updatedMergeIndexSet durable.IndexSet
 	group.Go(func() error {
 		var err error
-		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, cellWiseMerges, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
+		updatedRootIndexSet, updatedMergeIndexSet, err = updateProllySecondaryIndexes(gCtx, indexEdits, rootSchema, mergeSchema, tbl, mergeTbl, rootIndexSet, mergeIndexSet)
 		return err
+	})
+
+	artIdx, err := tbl.GetArtifacts(ctx)
+	if err != nil {
+		return mergeResult{}, err
+	}
+	artM := durable.ProllyMapFromArtifactIndex(artIdx)
+	artifactEditor := artM.Editor()
+	kd, vd := artM.Descriptors()
+	p, err := newConflictProcessor(artM.Pool(), kd, vd, cmHash, ancTblHash, mergeTblHash)
+	if err != nil {
+		return mergeResult{}, err
+	}
+	group.Go(func() error {
+		return p.process(gCtx, stats, conflicts, artifactEditor)
 	})
 
 	err = group.Wait()
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
 	}
 
 	tbl, err = tbl.SetIndexSet(ctx, updatedRootIndexSet)
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
 	}
 	mergeTbl, err = mergeTbl.SetIndexSet(ctx, updatedMergeIndexSet)
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
 	}
 
-	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, ancTbl, updatedTable)
+	artifactMap, err := artifactEditor.Flush(ctx)
 	if err != nil {
-		return nil, nil, err
+		return mergeResult{}, err
+	}
+	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
+
+	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
+	if err != nil {
+		return mergeResult{}, err
 	}
 
 	// TODO (dhruv): populate merge stats
-	return updatedTable, &MergeStats{Operation: TableModified}, nil
+	return mergeResult{
+		tbl:   updatedTable,
+		arts:  artIdx,
+		stats: stats,
+	}, nil
 }
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
 // and |ancTbl|. It stores the merged row data into |tableToUpdate| and returns the new value along with the row data.
-func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table, cellWiseMerges chan cellWiseMerge) (*doltdb.Table, durable.Index, error) {
+func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancRows durable.Index, indexEdits chan indexEdit, conflicts chan confVals) (*doltdb.Table, durable.Index, error) {
 	rootR, err := tbl.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -118,22 +155,36 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	if err != nil {
 		return nil, nil, err
 	}
-	ancR, err := ancTbl.GetRowData(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
 	rootRP := durable.ProllyMapFromIndex(rootR)
 	mergeRP := durable.ProllyMapFromIndex(mergeR)
-	ancRP := durable.ProllyMapFromIndex(ancR)
+	ancRP := durable.ProllyMapFromIndex(ancRows)
 
 	m := durable.ProllyMapFromIndex(rootR)
 	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
 
-	conflicted := false
 	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			conflicted = true
+			c := confVals{
+				key:      val.Tuple(left.Key),
+				ourVal:   val.Tuple(left.To),
+				theirVal: val.Tuple(right.To),
+				baseVal:  val.Tuple(left.From),
+			}
+			select {
+			case conflicts <- c:
+			case <-ctx.Done():
+				return tree.Diff{}, false
+			}
+			// Reset the change on the right
+			e := conflictEdit{
+				right: right,
+			}
+			select {
+			case indexEdits <- e:
+			case <-ctx.Done():
+				return tree.Diff{}, false
+			}
 			return tree.Diff{}, false
 		}
 
@@ -145,7 +196,7 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 		}
 
 		select {
-		case cellWiseMerges <- cellWiseMerge{left, right, d}:
+		case indexEdits <- cellWiseMergeEdit{left, right, d}:
 			break
 		case <-ctx.Done():
 			return tree.Diff{}, false
@@ -155,9 +206,6 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	})
 	if err != nil {
 		return nil, nil, err
-	}
-	if conflicted {
-		return nil, nil, errors.New("row conflicts not supported yet")
 	}
 
 	updatedTbl, err := tableToUpdate.UpdateRows(ctx, durable.IndexFromProllyMap(mergedRP))
@@ -201,7 +249,7 @@ func newValueMerger(merged, leftSch, rightSch, baseSch schema.Schema, syncPool p
 
 	return &valueMerger{
 		numCols:      n,
-		vD:           prolly.ValueDescriptorFromSchema(merged),
+		vD:           shim.ValueDescriptorFromSchema(merged),
 		leftMapping:  leftMapping,
 		rightMapping: rightMapping,
 		baseMapping:  baseMapping,
@@ -278,198 +326,71 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 	}
 }
 
-// Given cellWiseMerge's sent on |cellWiseChan|, update the secondary indexes in
-// |rootIndexSet| and |mergeIndexSet| such that when the index sets are merged,
-// they produce entries consistent with the cell-wise merges. The updated
-// |rootIndexSet| and |mergeIndexSet| are returned.
-func updateProllySecondaryIndexes(
-	ctx context.Context,
-	cellWiseChan chan cellWiseMerge,
-	rootSchema, mergeSchema schema.Schema,
-	tbl, mergeTbl *doltdb.Table,
-	rootIndexSet, mergeIndexSet durable.IndexSet) (durable.IndexSet, durable.IndexSet, error) {
+type conflictProcessor struct {
+	cmHash       []byte
+	metadataJson []byte
+	keyBD, valBD *val.TupleBuilder
+	pool         pool.BuffPool
+}
 
-	rootIdxs, err := getMutableSecondaryIdxs(ctx, rootSchema, tbl)
-	if err != nil {
-		return nil, nil, err
+func newConflictProcessor(pool pool.BuffPool, artKD, artVD val.TupleDesc, cmHash, baseTblHash, theirTblHash hash.Hash) (*conflictProcessor, error) {
+	h := make([]byte, 20)
+	copy(h, cmHash[:])
+	m := prolly.ConflictMetadata{
+		BaseTblHash:  make([]byte, 20),
+		TheirTblHash: make([]byte, 20),
 	}
-	mergeIdxs, err := getMutableSecondaryIdxs(ctx, mergeSchema, mergeTbl)
+	copy(m.BaseTblHash, baseTblHash[:])
+	copy(m.TheirTblHash, theirTblHash[:])
+	data, err := json.Marshal(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+	p := conflictProcessor{
+		cmHash:       h,
+		metadataJson: data,
+		keyBD:        val.NewTupleBuilder(artKD),
+		valBD:        val.NewTupleBuilder(artVD),
+		pool:         pool,
+	}
+	return &p, nil
+}
 
+func (p *conflictProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
 OUTER:
 	for {
 		select {
-		case m, ok := <-cellWiseChan:
+		case conflict, ok := <-conflictChan:
 			if !ok {
 				break OUTER
 			}
-			for _, idx := range rootIdxs {
-				// Revert corresponding idx entry in left
-				err = idx.UpdateEntry(ctx, val.Tuple(m.leftDiff.Key), val.Tuple(m.leftDiff.To), val.Tuple(m.leftDiff.From))
-				if err != nil {
-					return nil, nil, err
-				}
+			stats.Conflicts++
+			k, v, err := p.buildConflictArtifact(conflict.key)
+			if err != nil {
+				return err
 			}
-			for _, idx := range mergeIdxs {
-				// Update corresponding idx entry to merged value in right
-				err = idx.UpdateEntry(ctx, val.Tuple(m.rightDiff.Key), val.Tuple(m.rightDiff.To), val.Tuple(m.merged.To))
-				if err != nil {
-					return nil, nil, err
-				}
+			err = artEditor.Add(ctx, k, v)
+			if err != nil {
+				return err
 			}
 		case <-ctx.Done():
-			return nil, nil, ctx.Err()
+			return ctx.Err()
 		}
 	}
 
-	persistIndexMuts := func(indexSet durable.IndexSet, idxs []MutableSecondaryIdx) (durable.IndexSet, error) {
-		for _, idx := range idxs {
-			m, err := idx.Map(ctx)
-			if err != nil {
-				return nil, err
-			}
-			indexSet, err = indexSet.PutIndex(ctx, idx.Name, durable.IndexFromProllyMap(m))
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return indexSet, nil
-	}
-
-	updatedRootIndexSet, err := persistIndexMuts(rootIndexSet, rootIdxs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	updatedMergeIndexSet, err := persistIndexMuts(mergeIndexSet, mergeIdxs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return updatedRootIndexSet, updatedMergeIndexSet, nil
+	return nil
 }
 
-// getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index
-// defined in |schema| and |tbl|.
-func getMutableSecondaryIdxs(ctx context.Context, schema schema.Schema, tbl *doltdb.Table) ([]MutableSecondaryIdx, error) {
-	indexSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
+func (p *conflictProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple, err error) {
+	for i := 0; i < key.Count(); i++ {
+		p.keyBD.PutRaw(i, key.GetField(i))
 	}
+	p.keyBD.PutAddress(key.Count(), p.cmHash)
+	p.keyBD.PutUint8(key.Count()+1, uint8(prolly.ArtifactTypeConflict))
+	k = p.keyBD.Build(p.pool)
 
-	mods := make([]MutableSecondaryIdx, schema.Indexes().Count())
-	for i, index := range schema.Indexes().AllIndexes() {
-		idx, err := indexSet.GetIndex(ctx, schema, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		m := durable.ProllyMapFromIndex(idx)
+	p.valBD.PutJSON(0, p.metadataJson)
+	v = p.valBD.Build(p.pool)
 
-		mods[i] = NewMutableSecondaryIdx(m, schema, index, m.Pool())
-	}
-
-	return mods, nil
-}
-
-// mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
-// |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
-// and returns its updated value.
-func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
-	rootSet, err := tbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mergeSet, err := mergeTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ancSet, err := ancTbl.GetIndexSet(ctx)
-	if err != nil {
-		return nil, err
-	}
-	mergedSet, err := mergeProllyIndexSets(ctx, vrw, postMergeSchema, rootSch, mergeSch, ancSch, mergedData, rootSet, mergeSet, ancSet)
-	if err != nil {
-		return nil, err
-	}
-	updatedTbl, err := tableToUpdate.SetIndexSet(ctx, mergedSet)
-	if err != nil {
-		return nil, err
-	}
-	return updatedTbl, nil
-}
-
-// mergeProllyIndexSets merges the |root|, |merge|, and |anc| index sets based
-// on the provided |postMergeSchema|. It returns the merged index set.
-func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, root, merge, anc durable.IndexSet) (durable.IndexSet, error) {
-	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
-
-	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (idx durable.Index, ok bool, err error) {
-		ok = sch.Indexes().Contains(indexName)
-		if ok {
-			idx, err = iS.GetIndex(ctx, sch, indexName)
-			if err != nil {
-				return nil, false, err
-			}
-			return idx, true, nil
-		}
-		return nil, false, nil
-	}
-
-	// Based on the indexes in the post merge schema, merge the root, merge,
-	// and ancestor indexes.
-	for _, index := range postMergeSchema.Indexes().AllIndexes() {
-
-		rootI, rootOK, err := tryGetIdx(rootSch, root, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		mergeI, mergeOK, err := tryGetIdx(mergeSch, merge, index.Name())
-		if err != nil {
-			return nil, err
-		}
-		ancI, ancOK, err := tryGetIdx(ancSch, anc, index.Name())
-		if err != nil {
-			return nil, err
-		}
-
-		mergedIndex, err := func() (durable.Index, error) {
-			if !rootOK || !mergeOK || !ancOK {
-				mergedIndex, err := creation.BuildSecondaryProllyIndex(ctx, vrw, postMergeSchema, index, durable.ProllyMapFromIndex(mergedData))
-				if err != nil {
-					return nil, err
-				}
-				return mergedIndex, nil
-			}
-
-			left := durable.ProllyMapFromIndex(rootI)
-			right := durable.ProllyMapFromIndex(mergeI)
-			base := durable.ProllyMapFromIndex(ancI)
-
-			var collision = false
-			merged, err := prolly.MergeMaps(ctx, left, right, base, func(left, right tree.Diff) (tree.Diff, bool) {
-				collision = true
-				return tree.Diff{}, true
-			})
-			if err != nil {
-				return nil, err
-			}
-			if collision {
-				return nil, errors.New("collisions not implemented")
-			}
-			return durable.IndexFromProllyMap(merged), nil
-		}()
-		if err != nil {
-			return nil, err
-		}
-
-		mergedIndexSet, err = mergedIndexSet.PutIndex(ctx, index.Name(), mergedIndex)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return mergedIndexSet, nil
+	return
 }

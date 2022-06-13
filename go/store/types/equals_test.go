@@ -66,8 +66,8 @@ func TestValueEquals(t *testing.T) {
 			}
 
 			return newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
-				mustMetaTuple(newMetaTuple(mustRef(NewRef(b1, Format_7_18)), mustOrdKey(orderedKeyFromInt(2, Format_7_18)), 2)),
-				mustMetaTuple(newMetaTuple(mustRef(NewRef(b2, Format_7_18)), mustOrdKey(orderedKeyFromInt(5, Format_7_18)), 5)),
+				mustMetaTuple(newMetaTuple(mustRef(NewRef(b1, vrw.Format())), mustOrdKey(orderedKeyFromInt(2, vrw.Format())), 2)),
+				mustMetaTuple(newMetaTuple(mustRef(NewRef(b2, vrw.Format())), mustOrdKey(orderedKeyFromInt(5, vrw.Format())), 5)),
 			}, vrw))), nil
 		},
 		func() (Value, error) { return NewList(context.Background(), vrw) },
@@ -108,7 +108,7 @@ func TestValueEquals(t *testing.T) {
 		v, err := f1()
 		require.NoError(t, err)
 		if v != nil {
-			r, err := NewRef(v, Format_7_18)
+			r, err := NewRef(v, vrw.Format())
 			require.NoError(t, err)
 			assert.False(r.Equals(v))
 			assert.False(v.Equals(r))

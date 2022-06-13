@@ -19,7 +19,8 @@ namespace serial;
 table RootValue {
   feature_version:int64;
 
-  tables:RefMap (required);
+  tables:[ubyte]; // Serialized AddressMap.
+
   foreign_key_addr:[ubyte];
   super_schemas_addr:[ubyte];
 }

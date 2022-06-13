@@ -3,6 +3,8 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
+
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{rem1,repo1}
 
@@ -50,6 +52,16 @@ teardown() {
 @test "sql-pull: CALL dolt_pull main" {
     cd repo2
     dolt sql -q "CALL dolt_pull('origin')"
+    run dolt sql -q "show tables" -r csv
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "Table" ]] || false
+    [[ "$output" =~ "t1" ]] || false
+}
+
+@test "sql-pull: CALL dpull main" {
+    cd repo2
+    dolt sql -q "CALL dpull('origin')"
     run dolt sql -q "show tables" -r csv
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]

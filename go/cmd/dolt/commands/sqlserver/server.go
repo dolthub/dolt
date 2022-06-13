@@ -22,7 +22,6 @@ import (
 	"strconv"
 	"time"
 
-	gms "github.com/dolthub/go-mysql-server"
 	"github.com/dolthub/go-mysql-server/server"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/mysql"
@@ -33,7 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/privileges"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
@@ -64,6 +63,7 @@ func Serve(
 		}
 		serverController.StopServer()
 		serverController.serverStopped(closeError)
+		sqlserver.SetRunningServer(nil)
 	}()
 
 	if startError = ValidateConfig(serverConfig); startError != nil {
@@ -165,31 +165,25 @@ func Serve(
 	serverConf.TLSConfig = tlsConfig
 	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
-	if serverConfig.PrivilegeFilePath() != "" {
-		privileges.SetFilePath(serverConfig.PrivilegeFilePath())
+	// Create SQL Engine with users
+	config := &engine.SqlEngineConfig{
+		InitialDb:    "",
+		IsReadOnly:   isReadOnly,
+		PrivFilePath: serverConfig.PrivilegeFilePath(),
+		ServerUser:   serverConfig.User(),
+		ServerPass:   serverConfig.Password(),
+		Autocommit:   serverConfig.AutoCommit(),
 	}
-	users, roles, colStats, err := privileges.LoadPrivileges()
-	if err != nil {
-		return err, nil
-	}
-	var tempUsers []gms.TemporaryUser
-	if len(users) == 0 && len(serverConfig.User()) > 0 {
-		tempUsers = append(tempUsers, gms.TemporaryUser{
-			Username: serverConfig.User(),
-			Password: serverConfig.Password(),
-		})
-	}
-	sqlEngine, err := engine.NewSqlEngine(ctx, mrEnv, engine.FormatTabular, "", isReadOnly, tempUsers, serverConfig.AutoCommit())
+	sqlEngine, err := engine.NewSqlEngine(
+		ctx,
+		mrEnv,
+		engine.FormatTabular,
+		config,
+	)
 	if err != nil {
 		return err, nil
 	}
 	defer sqlEngine.Close()
-
-	sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.SetPersistCallback(privileges.SavePrivileges)
-	err = sqlEngine.GetUnderlyingEngine().Analyzer.Catalog.GrantTables.LoadData(sql.NewEmptyContext(), users, roles, colStats)
-	if err != nil {
-		return err, nil
-	}
 
 	labels := serverConfig.MetricsLabels()
 	listener := newMetricsListener(labels)
@@ -205,6 +199,8 @@ func Serve(
 	if startError != nil {
 		cli.PrintErr(startError)
 		return
+	} else {
+		sqlserver.SetRunningServer(mySQLServer)
 	}
 
 	var metSrv *http.Server

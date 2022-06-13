@@ -21,10 +21,14 @@ import (
 	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/diff"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type DiffSummaryProgress struct {
@@ -33,19 +37,50 @@ type DiffSummaryProgress struct {
 
 type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error
 
+// Summary reports a summary of diff changes between two values
 // todo: make package private once dolthub is migrated
-// Summary reports a summary of diff changes between two values
-// Summary reports a summary of diff changes between two values
-func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map) (err error) {
+func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
+	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
+
+	if from.Format() == types.Format_DOLT_1 {
+		return prollySummary(ctx, ch, from, to, fromSch, toSch)
+	}
+
+	return nomsSummary(ctx, ch, from, to)
+}
+
+func prollySummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) error {
+	_, vMapping, err := MapSchemaBasedOnName(fromSch, toSch)
+	if err != nil {
+		return err
+	}
+
+	f := durable.ProllyMapFromIndex(from)
+	t := durable.ProllyMapFromIndex(to)
+	_, fVD := f.Descriptors()
+	_, tVD := t.Descriptors()
+
+	err = prolly.DiffMaps(ctx, f, t, func(ctx context.Context, diff tree.Diff) error {
+		err := reportPkChanges(ctx, vMapping, fVD, tVD, diff, ch)
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func nomsSummary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index) (err error) {
 	ad := NewAsyncDiffer(1024)
-	ad.Start(ctx, from, to)
+	ad.Start(ctx, durable.NomsMapFromIndex(from), durable.NomsMapFromIndex(to))
 	defer func() {
 		if cerr := ad.Close(); cerr != nil && err == nil {
 			err = cerr
 		}
 	}()
-
-	ch <- DiffSummaryProgress{OldSize: from.Len(), NewSize: to.Len()}
 
 	hasMore := true
 	var diffs []*diff.Difference
@@ -57,7 +92,7 @@ func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Ma
 
 		for i := range diffs {
 			curr := diffs[i]
-			err := reportPkChanges(ctx, curr, ch)
+			err := reportNomsPkChanges(ctx, curr, ch)
 			if err != nil {
 				return err
 			}
@@ -91,7 +126,7 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 	if keyless {
 		rpr = reportKeylessChanges
 	} else {
-		rpr = reportPkChanges
+		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
 			OldSize: fromRows.Len(),
 			NewSize: toRows.Len(),
@@ -133,7 +168,59 @@ func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from,
 	return nil
 }
 
-func reportPkChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
+func reportPkChanges(ctx context.Context, vMapping val.OrdinalMapping, fromD, toD val.TupleDesc, change tree.Diff, ch chan<- DiffSummaryProgress) error {
+	var summary DiffSummaryProgress
+	switch change.Type {
+	case tree.AddedDiff:
+		summary = DiffSummaryProgress{Adds: 1}
+	case tree.RemovedDiff:
+		summary = DiffSummaryProgress{Removes: 1}
+	case tree.ModifiedDiff:
+		cellChanges := prollyCountCellDiff(vMapping, fromD, toD, val.Tuple(change.From), val.Tuple(change.To))
+		summary = DiffSummaryProgress{Changes: 1, CellChanges: cellChanges}
+	default:
+		return errors.New("unknown change type")
+	}
+	select {
+	case ch <- summary:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// prollyCountCellDiff counts the number of changes columns between two tuples
+// |from| and |to|. |mapping| should map columns from |from| to |to|.
+func prollyCountCellDiff(mapping val.OrdinalMapping, fromD, toD val.TupleDesc, from val.Tuple, to val.Tuple) uint64 {
+	newCols := uint64(toD.Count())
+	changed := uint64(0)
+	for i, j := range mapping {
+		newCols--
+		if j == -1 {
+			// column was dropped
+			changed++
+			continue
+		}
+
+		if fromD.Types[i].Enc != toD.Types[j].Enc {
+			// column type is different
+			changed++
+			continue
+		}
+
+		if fromD.CompareField(toD.GetField(j, to), i, from) != 0 {
+			// column was modified
+			changed++
+			continue
+		}
+	}
+
+	// some columns were added
+	changed += newCols
+	return changed
+}
+
+func reportNomsPkChanges(ctx context.Context, change *diff.Difference, ch chan<- DiffSummaryProgress) error {
 	var summary DiffSummaryProgress
 	switch change.ChangeType {
 	case types.DiffChangeAdded:
@@ -194,4 +281,47 @@ func reportKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// MapSchemaBasedOnName can be used to map column values from one schema to
+// another schema. A column in |inSch| is mapped to |outSch| if they share the
+// same name and primary key membership status. It returns ordinal mappings that
+// can be use to map key, value val.Tuple's of schema |inSch| to a sql.Row of
+// |outSch|. The first ordinal map is for keys, and the second is for values. If
+// a column of |inSch| is missing in |outSch| then that column's index in the
+// ordinal map holds -1.
+// TODO (dhruv): Unit tests
+func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
+	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
+	valMapping := make(val.OrdinalMapping, inSch.GetNonPKCols().Size())
+
+	err := inSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		i := inSch.GetPKCols().TagToIdx[tag]
+		if col, ok := outSch.GetPKCols().GetByName(col.Name); ok {
+			j := outSch.GetAllCols().TagToIdx[col.Tag]
+			keyMapping[i] = j
+		} else {
+			return true, fmt.Errorf("could not map primary key column %s", col.Name)
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = inSch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
+		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
+			j := outSch.GetAllCols().TagToIdx[col.Tag]
+			valMapping[i] = j
+		} else {
+			valMapping[i] = -1
+		}
+		return false, nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return keyMapping, valMapping, nil
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/nbs"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/spec"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -61,7 +62,11 @@ func (cmd RootsCmd) RequiresRepo() bool {
 
 // Description returns a description of the command
 func (cmd RootsCmd) Description() string {
-	return "Displays the current Dolt cli version."
+	return "Displays store root values (or potential store root values) that we find in the current database."
+}
+
+func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return false
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -148,7 +153,10 @@ func (cmd RootsCmd) processTableFile(ctx context.Context, path string, modified 
 			}
 		} else if sm, ok := value.(types.SerialMessage); ok {
 			if serial.GetFileID([]byte(sm)) == serial.StoreRootFileID {
-				err := types.WriteEncodedValue(ctx, cli.OutStream, value)
+				msg := serial.GetRootAsStoreRoot([]byte(sm), 0)
+				ambytes := msg.AddressMapBytes()
+				node := tree.NodeFromBytes(ambytes)
+				err := tree.OutputAddressMapNode(cli.OutStream, node)
 				if err != nil {
 					return false, err
 				}

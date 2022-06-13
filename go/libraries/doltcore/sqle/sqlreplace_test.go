@@ -191,7 +191,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewPeopleRow(11, "Selma", "Bouvier", false, 40, 7),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 	},
 	{
 		Name:         "replace partial columns multiple rows null pk",
@@ -231,7 +231,7 @@ var BasicReplaceTests = []ReplaceTest{
 			NewPeopleRow(8, "Milhouse", "Van Houten", false, 8, 100),
 		),
 		ExpectedSchema: NewResultSetSchema("id", types.IntKind, "first_name", types.StringKind, "last_name", types.StringKind,
-			"is_married", types.BoolKind, "age", types.IntKind, "rating", types.FloatKind),
+			"is_married", types.IntKind, "age", types.IntKind, "rating", types.FloatKind),
 	},
 	{
 		Name: "replace partial columns multiple rows null pk",

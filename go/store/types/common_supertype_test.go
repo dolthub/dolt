@@ -183,8 +183,10 @@ func TestContainCommonSupertype(t *testing.T) {
 		},
 	}
 
+	vrw := newTestValueStore()
+
 	for i, c := range cases {
-		act := ContainCommonSupertype(Format_7_18, c.a, c.b)
+		act := ContainCommonSupertype(vrw.Format(), c.a, c.b)
 		aDesc, err := c.a.Describe(context.Background())
 		require.NoError(t, err)
 		bDesc, err := c.b.Describe(context.Background())

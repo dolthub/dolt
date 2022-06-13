@@ -33,10 +33,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/hash"
 )
 
-func toBinaryNomsReaderData(data []interface{}) []byte {
+func toBinaryNomsReaderData(nbf *NomsBinFormat, data []interface{}) []byte {
 	w := newBinaryNomsWriter()
 	for i, v := range data {
 		switch v := v.(type) {
@@ -45,7 +46,7 @@ func toBinaryNomsReaderData(data []interface{}) []byte {
 		case string:
 			w.writeString(v)
 		case Float:
-			w.writeFloat(v, Format_7_18)
+			w.writeFloat(v, nbf)
 		case uint64:
 			w.writeCount(v)
 		case bool:
@@ -65,15 +66,15 @@ func toBinaryNomsReaderData(data []interface{}) []byte {
 }
 
 func assertEncoding(t *testing.T, expect []interface{}, v Value) {
-	expectedAsByteSlice := toBinaryNomsReaderData(expect)
 	vs := newTestValueStore()
+	expectedAsByteSlice := toBinaryNomsReaderData(vs.Format(), expect)
 	w := newBinaryNomsWriter()
-	err := v.writeTo(&w, Format_7_18)
+	err := v.writeTo(&w, vs.Format())
 	require.NoError(t, err)
 	assert.EqualValues(t, expectedAsByteSlice, w.data())
 
 	dec := newValueDecoder(expectedAsByteSlice, vs)
-	v2, err := dec.readValue(Format_7_18)
+	v2, err := dec.readValue(vs.Format())
 	require.NoError(t, err)
 	assert.True(t, v.Equals(v2))
 }
@@ -82,7 +83,7 @@ func TestRoundTrips(t *testing.T) {
 	vs := newTestValueStore()
 
 	assertRoundTrips := func(v Value) {
-		chnk, err := EncodeValue(v, Format_7_18)
+		chnk, err := EncodeValue(v, vs.Format())
 		require.NoError(t, err)
 		out, err := DecodeValue(chnk, vs)
 		require.NoError(t, err)
@@ -130,7 +131,7 @@ func TestRoundTrips(t *testing.T) {
 	assertRoundTrips(String("AINT NO THANG"))
 	assertRoundTrips(String("💩"))
 
-	st, err := NewStruct(Format_7_18, "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)})
+	st, err := NewStruct(vs.Format(), "", StructData{"a": Bool(true), "b": String("foo"), "c": Float(2.3)})
 	require.NoError(t, err)
 	assertRoundTrips(st)
 
@@ -139,11 +140,11 @@ func TestRoundTrips(t *testing.T) {
 	listLeaf := newList(ll)
 	assertRoundTrips(listLeaf)
 
-	ref, err := NewRef(listLeaf, Format_7_18)
+	ref, err := NewRef(listLeaf, vs.Format())
 	require.NoError(t, err)
-	k10, err := orderedKeyFromInt(10, Format_7_18)
+	k10, err := orderedKeyFromInt(10, vs.Format())
 	require.NoError(t, err)
-	k20, err := orderedKeyFromInt(20, Format_7_18)
+	k20, err := orderedKeyFromInt(20, vs.Format())
 	require.NoError(t, err)
 	mt1, err := newMetaTuple(ref, k10, 10)
 	require.NoError(t, err)
@@ -155,6 +156,8 @@ func TestRoundTrips(t *testing.T) {
 }
 
 func TestNonFiniteNumbers(tt *testing.T) {
+	vs := newTestValueStore_7_18()
+
 	t := func(f float64) (err error) {
 		defer func() {
 			if r := recover(); r != nil {
@@ -165,7 +168,7 @@ func TestNonFiniteNumbers(tt *testing.T) {
 		}()
 
 		v := Float(f)
-		_, err = EncodeValue(v, Format_7_18)
+		_, err = EncodeValue(v, vs.Format())
 		return
 	}
 
@@ -248,12 +251,12 @@ func TestWriteList(t *testing.T) {
 	)
 }
 func TestWriteTuple(t *testing.T) {
-
+	vrw := newTestValueStore()
 	assertEncoding(t,
 		[]interface{}{
 			TupleKind, uint64(4) /* len */, FloatKind, Float(0), FloatKind, Float(1), FloatKind, Float(2), FloatKind, Float(3),
 		},
-		mustValue(NewTuple(Format_7_18, Float(0), Float(1), Float(2), Float(3))),
+		mustValue(NewTuple(vrw.Format(), Float(0), Float(1), Float(2), Float(3))),
 	)
 }
 
@@ -310,7 +313,7 @@ func TestWriteMap(t *testing.T) {
 			StringKind, "b", BoolKind, true,
 			StringKind, "c", TupleKind, uint64(1), FloatKind, Float(1.0),
 		},
-		mustValue(NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), mustValue(NewTuple(Format_7_18, Float(1.0))))),
+		mustValue(NewMap(context.Background(), vrw, String("a"), Bool(false), String("b"), Bool(true), String("c"), mustValue(NewTuple(vrw.Format(), Float(1.0))))),
 	)
 }
 
@@ -333,7 +336,7 @@ func TestWriteCompoundBlob(t *testing.T) {
 	r1 := hash.Parse("00000000000000000000000000000001")
 	r2 := hash.Parse("00000000000000000000000000000002")
 	r3 := hash.Parse("00000000000000000000000000000003")
-
+	vrw := newTestValueStore()
 	assertEncoding(t,
 		[]interface{}{
 			BlobKind, uint64(1),
@@ -343,52 +346,56 @@ func TestWriteCompoundBlob(t *testing.T) {
 			RefKind, r3, BlobKind, uint64(33), FloatKind, Float(60), uint64(60),
 		},
 		newBlob(mustSeq(newBlobMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r1, PrimitiveTypeMap[BlobKind], 11)), mustOrdKey(orderedKeyFromInt(20, Format_7_18)), 20)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r2, PrimitiveTypeMap[BlobKind], 22)), mustOrdKey(orderedKeyFromInt(40, Format_7_18)), 40)),
-			mustMetaTuple(newMetaTuple(mustRef(constructRef(Format_7_18, r3, PrimitiveTypeMap[BlobKind], 33)), mustOrdKey(orderedKeyFromInt(60, Format_7_18)), 60)),
-		}, newTestValueStore()))),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r1, PrimitiveTypeMap[BlobKind], 11)), mustOrdKey(orderedKeyFromInt(20, vrw.Format())), 20)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r2, PrimitiveTypeMap[BlobKind], 22)), mustOrdKey(orderedKeyFromInt(40, vrw.Format())), 40)),
+			mustMetaTuple(newMetaTuple(mustRef(constructRef(vrw.Format(), r3, PrimitiveTypeMap[BlobKind], 33)), mustOrdKey(orderedKeyFromInt(60, vrw.Format())), 60)),
+		}, vrw))),
 	)
 }
 
 func TestWriteEmptyStruct(t *testing.T) {
+	vrw := newTestValueStore()
 	assertEncoding(t,
 		[]interface{}{
 			StructKind, "S", uint64(0), /* len */
 		},
-		mustValue(NewStruct(Format_7_18, "S", nil)),
+		mustValue(NewStruct(vrw.Format(), "S", nil)),
 	)
 }
 
 func TestWriteEmptyTuple(t *testing.T) {
+	vrw := newTestValueStore()
 	assertEncoding(t,
 		[]interface{}{
 			TupleKind, uint64(0), /* len */
 		},
-		mustValue(NewTuple(Format_7_18)),
+		mustValue(NewTuple(vrw.Format())),
 	)
 }
 
 func TestWriteStruct(t *testing.T) {
+	vrw := newTestValueStore()
 	assertEncoding(t,
 		[]interface{}{
 			StructKind, "S", uint64(2), /* len */
 			"b", BoolKind, true, "x", FloatKind, Float(42),
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"x": Float(42), "b": Bool(true)})),
 	)
 }
 
 func TestWriteStructTooMuchData(t *testing.T) {
-	s, err := NewStruct(Format_7_18, "S", StructData{"x": Float(42), "b": Bool(true)})
+	vrw := newTestValueStore()
+	s, err := NewStruct(vrw.Format(), "S", StructData{"x": Float(42), "b": Bool(true)})
 	require.NoError(t, err)
-	c, err := EncodeValue(s, Format_7_18)
+	c, err := EncodeValue(s, vrw.Format())
 	require.NoError(t, err)
 	data := c.Data()
 	buff := make([]byte, len(data)+1)
 	copy(buff, data)
 	buff[len(data)] = 5 // Add a bogus extrabyte
 	assert.Panics(t, func() {
-		_, err := decodeFromBytes(buff, newTestValueStore())
+		_, err := decodeFromBytes(buff, vrw)
 		require.NoError(t, err)
 	})
 }
@@ -402,7 +409,7 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"l": mustValue(NewList(context.Background(), vrw, String("a"), String("b")))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"l": mustValue(NewList(context.Background(), vrw, String("a"), String("b")))})),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -411,18 +418,19 @@ func TestWriteStructWithList(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"l", ListKind, uint64(0), uint64(0), /* len */
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"l": mustList(NewList(context.Background(), vrw))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"l": mustList(NewList(context.Background(), vrw))})),
 	)
 }
 
 func TestWriteStructWithTuple(t *testing.T) {
+	vrw := newTestValueStore()
 	// struct S {l: List<String>}({l: ["a", "b"]})
 	assertEncoding(t,
 		[]interface{}{
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(2) /* len */, StringKind, "a", StringKind, "b",
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"t": mustValue(NewTuple(Format_7_18, String("a"), String("b")))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"t": mustValue(NewTuple(vrw.Format(), String("a"), String("b")))})),
 	)
 
 	// struct S {l: List<>}({l: []})
@@ -431,11 +439,12 @@ func TestWriteStructWithTuple(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"t", TupleKind, uint64(0), /* len */
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"t": mustValue(NewTuple(Format_7_18))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"t": mustValue(NewTuple(vrw.Format()))})),
 	)
 }
 
 func TestWriteStructWithStruct(t *testing.T) {
+	vrw := newTestValueStore()
 	// struct S2 {
 	//   x: Float
 	// }
@@ -449,7 +458,7 @@ func TestWriteStructWithStruct(t *testing.T) {
 			"x", FloatKind, Float(42),
 		},
 		// {s: {x: 42}}
-		mustValue(NewStruct(Format_7_18, "S", StructData{"s": mustValue(NewStruct(Format_7_18, "S2", StructData{"x": Float(42)}))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"s": mustValue(NewStruct(vrw.Format(), "S2", StructData{"x": Float(42)}))})),
 	)
 }
 
@@ -461,7 +470,7 @@ func TestWriteStructWithBlob(t *testing.T) {
 			StructKind, "S", uint64(1), /* len */
 			"b", BlobKind, uint64(0), []byte{0x00, 0x01},
 		},
-		mustValue(NewStruct(Format_7_18, "S", StructData{"b": mustBlob(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})))})),
+		mustValue(NewStruct(vrw.Format(), "S", StructData{"b": mustBlob(NewBlob(context.Background(), vrw, bytes.NewBuffer([]byte{0x00, 0x01})))})),
 	)
 }
 
@@ -473,12 +482,12 @@ func TestWriteCompoundList(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			ListKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(list1.Hash(Format_7_18)), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
-			RefKind, mustHash(list2.Hash(Format_7_18)), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
+			RefKind, mustHash(list1.Hash(vrw.Format())), ListKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(1),
+			RefKind, mustHash(list2.Hash(vrw.Format())), ListKind, FloatKind, uint64(1), FloatKind, Float(3), uint64(3),
 		},
 		newList(mustSeq(newListMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(list1, Format_7_18)), mustOrdKey(orderedKeyFromInt(1, Format_7_18)), 1)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(list2, Format_7_18)), mustOrdKey(orderedKeyFromInt(3, Format_7_18)), 3)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(list1, vrw.Format())), mustOrdKey(orderedKeyFromInt(1, vrw.Format())), 1)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(list2, vrw.Format())), mustOrdKey(orderedKeyFromInt(3, vrw.Format())), 3)),
 		}, vrw))),
 	)
 }
@@ -496,12 +505,12 @@ func TestWriteCompoundSet(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(set1.Hash(Format_7_18)), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
-			RefKind, mustHash(set2.Hash(Format_7_18)), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
+			RefKind, mustHash(set1.Hash(vrw.Format())), SetKind, FloatKind, uint64(1), FloatKind, Float(1), uint64(2),
+			RefKind, mustHash(set2.Hash(vrw.Format())), SetKind, FloatKind, uint64(1), FloatKind, Float(4), uint64(3),
 		},
 		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, Format_7_18)), mustOrdKey(orderedKeyFromInt(1, Format_7_18)), 2)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, Format_7_18)), mustOrdKey(orderedKeyFromInt(4, Format_7_18)), 3)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, vrw.Format())), mustOrdKey(orderedKeyFromInt(1, vrw.Format())), 2)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, vrw.Format())), mustOrdKey(orderedKeyFromInt(4, vrw.Format())), 3)),
 		}, vrw))),
 	)
 }
@@ -526,12 +535,12 @@ func TestWriteCompoundSetOfBlobs(t *testing.T) {
 	assertEncoding(t,
 		[]interface{}{
 			SetKind, uint64(1), uint64(2), // len,
-			RefKind, mustHash(set1.Hash(Format_7_18)), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob1.Hash(Format_7_18)), uint64(2),
-			RefKind, mustHash(set2.Hash(Format_7_18)), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob4.Hash(Format_7_18)), uint64(3),
+			RefKind, mustHash(set1.Hash(vrw.Format())), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob1.Hash(vrw.Format())), uint64(2),
+			RefKind, mustHash(set2.Hash(vrw.Format())), SetKind, BlobKind, uint64(1), hashKind, mustHash(blob4.Hash(vrw.Format())), uint64(3),
 		},
 		newSet(mustOrdSeq(newSetMetaSequence(1, []metaTuple{
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, Format_7_18)), mustOrdKey(newOrderedKey(blob1, Format_7_18)), 2)),
-			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, Format_7_18)), mustOrdKey(newOrderedKey(blob4, Format_7_18)), 3)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set1, vrw.Format())), mustOrdKey(newOrderedKey(blob1, vrw.Format())), 2)),
+			mustMetaTuple(newMetaTuple(mustRef(NewRef(set2, vrw.Format())), mustOrdKey(newOrderedKey(blob4, vrw.Format())), 3)),
 		}, vrw))),
 	)
 }
@@ -562,7 +571,7 @@ func TestWriteListOfStruct(t *testing.T) {
 			ListKind, uint64(0), uint64(1), /* len */
 			StructKind, "S", uint64(1) /* len */, "x", FloatKind, Float(42),
 		},
-		mustValue(NewList(context.Background(), vrw, mustValue(NewStruct(Format_7_18, "S", StructData{"x": Float(42)})))),
+		mustValue(NewList(context.Background(), vrw, mustValue(NewStruct(vrw.Format(), "S", StructData{"x": Float(42)})))),
 	)
 }
 
@@ -591,12 +600,13 @@ func TestWriteListOfUnionWithType(t *testing.T) {
 
 func TestWriteRef(t *testing.T) {
 	r := hash.Parse("0123456789abcdefghijklmnopqrstuv")
+	vrw := newTestValueStore()
 
 	assertEncoding(t,
 		[]interface{}{
 			RefKind, r, FloatKind, uint64(4),
 		},
-		mustValue(constructRef(Format_7_18, r, PrimitiveTypeMap[FloatKind], 4)),
+		mustValue(constructRef(vrw.Format(), r, PrimitiveTypeMap[FloatKind], 4)),
 	)
 }
 
@@ -636,9 +646,15 @@ func TestWriteEmptyUnionList(t *testing.T) {
 }
 
 func TestNomsBinFormat(t *testing.T) {
-	if v, ok := os.LookupEnv(doltFormatFeatureFlag); ok && v != "" {
-		assert.Equal(t, Format_DOLT_1, Format_Default)
-	} else {
+	v, _ := os.LookupEnv("DOLT_DEFAULT_BIN_FORMAT")
+	switch v {
+	case constants.Format718String:
+		assert.Equal(t, Format_7_18, Format_Default)
+	case constants.FormatLD1String:
 		assert.Equal(t, Format_LD_1, Format_Default)
+	case constants.FormatDolt1String:
+		assert.Equal(t, Format_DOLT_1, Format_Default)
+	case constants.FormatDoltDevString:
+		assert.Equal(t, Format_DOLT_DEV, Format_Default)
 	}
 }

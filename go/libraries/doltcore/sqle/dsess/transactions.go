@@ -38,6 +38,8 @@ const (
 )
 
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
+var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
+var ErrUnresolvedConstraintViolationsCommit = errors.New("Constraint violation from merge detected, cannot commit transaction. Constraint violations from a merge must be resolved using the dolt_constraint_violations table before committing a transaction. To commit transactions with constraint violations set @@dolt_force_transaction_commit=1")
 
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
@@ -189,7 +191,7 @@ func (tx *DoltTransaction) doCommit(
 				return nil, nil, err
 			}
 
-			wsHash, err := existingWs.HashOf()
+			existingWSHash, err := existingWs.HashOf()
 			if err != nil {
 				return nil, nil, err
 			}
@@ -202,7 +204,7 @@ func (tx *DoltTransaction) doCommit(
 				}
 
 				var newCommit *doltdb.Commit
-				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, wsHash)
+				workingSet, newCommit, err = writeFn(ctx, tx, commit, workingSet, existingWSHash)
 				if err == datas.ErrOptimisticLockFailed {
 					// this is effectively a `continue` in the loop
 					return nil, nil, nil
@@ -232,7 +234,7 @@ func (tx *DoltTransaction) doCommit(
 			}
 
 			var newCommit *doltdb.Commit
-			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, wsHash)
+			mergedWorkingSet, newCommit, err = writeFn(ctx, tx, commit, mergedWorkingSet, existingWSHash)
 			if err == datas.ErrOptimisticLockFailed {
 				// this is effectively a `continue` in the loop
 				return nil, nil, nil
@@ -262,8 +264,18 @@ func (tx *DoltTransaction) mergeRoots(
 	workingSet *doltdb.WorkingSet,
 ) (*doltdb.WorkingSet, error) {
 
+	headCm, err := tx.dbData.Ddb.ResolveCommitRef(ctx, tx.dbData.Rsr.CWBHeadRef())
+	if err != nil {
+		return nil, err
+	}
+	headCmHash, err := headCm.HashOf()
+	if err != nil {
+		return nil, err
+	}
+
 	mergedRoot, mergeStats, err := merge.MergeRoots(
 		ctx,
+		headCmHash,
 		existingWorkingRoot.WorkingRoot(),
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
@@ -357,7 +369,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 				return rollbackErr
 			}
 
-			return doltdb.ErrUnresolvedConflicts
+			return ErrUnresolvedConflictsCommit
 		}
 	}
 
@@ -369,7 +381,7 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 			return err
 		}
 		if hasConstraintViolations {
-			return doltdb.ErrUnresolvedConstraintViolations
+			return ErrUnresolvedConstraintViolationsCommit
 		}
 	}
 

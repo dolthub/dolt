@@ -19,11 +19,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/message"
@@ -62,6 +64,7 @@ const (
 	fileTypeParam     = "file-type"
 	delimParam        = "delim"
 	ignoreSkippedRows = "ignore-skipped-rows"
+	disableFkChecks   = "disable-fk-checks"
 )
 
 var importDocs = cli.CommandDocumentationContent{
@@ -85,11 +88,13 @@ A mapping file can be used to map fields between the file being imported and the
 In create, update, and replace scenarios the file's extension is used to infer the type of the file.  If a file does not have the expected extension then the {{.EmphasisLeft}}--file-type{{.EmphasisRight}} parameter should be used to explicitly define the format of the file in one of the supported formats (csv, psv, json, xlsx).  For files separated by a delimiter other than a ',' (type csv) or a '|' (type psv), the --delim parameter can be used to specify a delimiter`,
 
 	Synopsis: []string{
-		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
+		"-c [-f] [--pk {{.LessThan}}field{{.GreaterThan}}] [--schema {{.LessThan}}file{{.GreaterThan}}] [--map {{.LessThan}}file{{.GreaterThan}}] [--continue]  [--ignore-skipped-rows] [--disable-fk-checks] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-u [--map {{.LessThan}}file{{.GreaterThan}}] [--continue] [--ignore-skipped-rows] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
+
+var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
 	operation         mvdata.TableImportOp
@@ -102,6 +107,7 @@ type importOptions struct {
 	src               mvdata.DataLocation
 	srcOptions        interface{}
 	ignoreSkippedRows bool
+	disableFkChecks   bool
 }
 
 func (m importOptions) IsBatched() bool {
@@ -164,6 +170,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 	force := apr.Contains(forceParam)
 	contOnErr := apr.Contains(contOnErrParam)
 	ignore := apr.Contains(ignoreSkippedRows)
+	disableFks := apr.Contains(disableFkChecks)
 
 	val, _ := apr.GetValue(primaryKeyParam)
 	pks := funcitr.MapStrings(strings.Split(val, ","), strings.TrimSpace)
@@ -229,15 +236,6 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		if !exists {
 			return nil, errhand.BuildDError("The following table could not be found: %s", tableName).Build()
 		}
-		fkc, err := root.GetForeignKeyCollection(ctx)
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-		decFks, refFks := fkc.KeysForTable(tableName)
-		if len(decFks) > 0 || len(refFks) > 0 {
-			return nil, errhand.BuildDError("The following table is used in a foreign key and does not work "+
-				"with import: %s\nThe recommended alternative is LOAD DATA", tableName).Build()
-		}
 	}
 
 	return &importOptions{
@@ -251,6 +249,7 @@ func getImportMoveOptions(ctx context.Context, apr *argparser.ArgParseResults, d
 		src:               srcLoc,
 		srcOptions:        srcOpts,
 		ignoreSkippedRows: ignore,
+		disableFkChecks:   disableFks,
 	}, nil
 
 }
@@ -341,6 +340,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(replaceParam, "r", "Replace existing table with imported data while preserving the original schema.")
 	ap.SupportsFlag(contOnErrParam, "", "Continue importing when row import errors are encountered.")
 	ap.SupportsFlag(ignoreSkippedRows, "", "Ignore the skipped rows printed by the --continue flag.")
+	ap.SupportsFlag(disableFkChecks, "", "Disables foreign key checks.")
 	ap.SupportsString(schemaParam, "s", "schema_file", "The schema for the output data.")
 	ap.SupportsString(mappingFileParam, "m", "mapping_file", "A file that lays out how fields should be mapped from input data to output data.")
 	ap.SupportsString(primaryKeyParam, "pk", "primary_key", "Explicitly define the name of the field in the schema which should be used as the primary key.")
@@ -462,7 +462,7 @@ func newImportDataReader(ctx context.Context, root *doltdb.RootValue, dEnv *env.
 }
 
 func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema schema.Schema, imOpts *importOptions) (*mvdata.SqlEngineTableWriter, *mvdata.DataMoverCreationError) {
-	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation}
+	moveOps := &mvdata.MoverOptions{Force: imOpts.force, TableToWriteTo: imOpts.destTableName, ContinueOnErr: imOpts.contOnErr, Operation: imOpts.operation, DisableFks: imOpts.disableFkChecks}
 
 	// Returns the schema of the table to be created or the existing schema
 	tableSchema, dmce := getImportSchema(ctx, dEnv, imOpts)
@@ -728,24 +728,51 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
 
 	for i, col := range rowOperationSchema.Schema {
-		switch col.Type {
-		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			switch row[i].(type) {
-			case int8:
-				val, ok := stringToBoolean(strconv.Itoa(int(row[i].(int8))))
-				if ok {
+		// Check if this a string that can be converted to a boolean
+		val, ok := detectAndConvertToBoolean(row[i], col.Type)
+		if ok {
+			row[i] = val
+			continue
+		}
+
+		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
+		// be interpreted in the correct manner.
+		if _, ok := col.Type.(sql.BitType); ok {
+			colAsString, ok := row[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("error: column value should be of type string")
+			}
+
+			// Check if the column can be parsed an uint64
+			val, err := strconv.ParseUint(colAsString, 10, 64)
+			if err == nil {
+				row[i] = val
+				continue
+			}
+
+			// Check if the column is of type b'110'
+			groups := bitTypeRegex.FindStringSubmatch(colAsString)
+			// Note that we use the second element as the first value in `groups` is the entire string.
+			if len(groups) > 1 {
+				val, err = strconv.ParseUint(groups[1], 2, 64)
+				if err == nil {
 					row[i] = val
+					continue
 				}
-			case string:
-				val, ok := stringToBoolean(row[i].(string))
-				if ok {
-					row[i] = val
-				}
-			case bool:
-				row[i] = row[i].(bool)
+			}
+
+			// Check if the column can be parsed as a hex string
+			numberStr := strings.Replace(colAsString, "0x", "", -1)
+			val, err = strconv.ParseUint(numberStr, 16, 64)
+			if err == nil {
+				row[i] = val
+			} else {
+				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
 			}
 		}
 
+		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
+		// an empty string value
 		switch col.Type.(type) {
 		case sql.StringType:
 		default:
@@ -754,6 +781,23 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	}
 
 	return row, nil
+}
+
+// detectAndConvertToBoolean determines whether a column is potentially a boolean and converts it accordingly.
+func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
+	switch columnType.Type() {
+	case sqltypes.Int8, sqltypes.Bit: // TODO: noms bool wraps MustCreateBitType
+		switch columnVal.(type) {
+		case int8:
+			return stringToBoolean(strconv.Itoa(int(columnVal.(int8))))
+		case string:
+			return stringToBoolean(columnVal.(string))
+		case bool:
+			return columnVal.(bool), true
+		}
+	}
+
+	return false, false
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
@@ -766,7 +810,7 @@ func stringToBoolean(s string) (result bool, canConvert bool) {
 	case "0":
 		return false, true
 	case "1":
-		return true, false
+		return true, true
 	default:
 		return false, false
 	}

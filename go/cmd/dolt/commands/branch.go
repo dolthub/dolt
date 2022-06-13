@@ -65,7 +65,7 @@ const (
 	moveFlag        = "move"
 	deleteFlag      = "delete"
 	deleteForceFlag = "D"
-	verboseFlag     = "verbose"
+	verboseFlag     = cli.VerboseFlag
 	allFlag         = "all"
 	remoteFlag      = "remote"
 	showCurrentFlag = "show-current"
@@ -220,7 +220,7 @@ func moveBranch(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseR
 	force := apr.Contains(forceFlag)
 	src := apr.Arg(0)
 	dest := apr.Arg(1)
-	err := actions.RenameBranch(ctx, dEnv, src, apr.Arg(1), force)
+	err := actions.RenameBranch(ctx, dEnv.DbData(), dEnv.Config, src, apr.Arg(1), force)
 
 	var verr errhand.VerboseError
 	if err != nil {
@@ -285,7 +285,7 @@ func handleDeleteBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser
 	for i := 0; i < apr.NArg(); i++ {
 		brName := apr.Arg(i)
 
-		err := actions.DeleteBranch(ctx, dEnv, brName, actions.DeleteOptions{
+		err := actions.DeleteBranch(ctx, dEnv.DbData(), dEnv.Config, brName, actions.DeleteOptions{
 			Force:  force,
 			Remote: apr.Contains(remoteFlag),
 		})

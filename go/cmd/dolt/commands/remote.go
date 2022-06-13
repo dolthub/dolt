@@ -21,6 +21,8 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -68,8 +70,7 @@ const (
 	removeRemoteShortId = "rm"
 )
 
-var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
-var credTypes = []string{dbfactory.RoleCS.String(), dbfactory.EnvCS.String(), dbfactory.FileCS.String()}
+var credTypes = dbfactory.AWSCredTypes
 
 type RemoteCmd struct{}
 
@@ -81,6 +82,10 @@ func (cmd RemoteCmd) Name() string {
 // Description returns a description of the command
 func (cmd RemoteCmd) Description() string {
 	return "Manage set of tracked repositories."
+}
+
+func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
@@ -195,48 +200,18 @@ func addRemote(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.Verbos
 func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (map[string]string, errhand.VerboseError) {
 	params := map[string]string{}
 
-	var verr errhand.VerboseError
+	var err error
 	if scheme == dbfactory.AWSScheme {
-		verr = addAWSParams(remoteUrl, apr, params)
+		err = cli.AddAWSParams(remoteUrl, apr, params)
 	} else {
-		verr = verifyNoAwsParams(apr)
+		err = cli.VerifyNoAwsParams(apr)
 	}
 
-	return params, verr
-}
-
-func addAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) errhand.VerboseError {
-	isAWS := strings.HasPrefix(remoteUrl, "aws")
-
-	if !isAWS {
-		for _, p := range awsParams {
-			if _, ok := apr.GetValue(p); ok {
-				return errhand.BuildDError(p + " param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database").Build()
-			}
-		}
+	if err != nil {
+		return nil, errhand.VerboseErrorFromError(err)
 	}
 
-	for _, p := range awsParams {
-		if val, ok := apr.GetValue(p); ok {
-			params[p] = val
-		}
-	}
-
-	return nil
-}
-
-func verifyNoAwsParams(apr *argparser.ArgParseResults) errhand.VerboseError {
-	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
-		awsParamKeys := make([]string, 0, len(awsParams))
-		for k := range awsParams {
-			awsParamKeys = append(awsParamKeys, k)
-		}
-
-		keysStr := strings.Join(awsParamKeys, ",")
-		return errhand.BuildDError("The parameters %s, are only valid for aws remotes", keysStr).SetPrintUsage().Build()
-	}
-
-	return nil
+	return params, nil
 }
 
 func printRemotes(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) errhand.VerboseError {

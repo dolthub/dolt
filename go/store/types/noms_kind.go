@@ -21,6 +21,10 @@
 
 package types
 
+import (
+	"github.com/dolthub/dolt/go/store/prolly/message"
+)
+
 // NomsKind allows a TypeDesc to indicate what kind of type is described.
 type NomsKind uint8
 
@@ -58,7 +62,7 @@ const (
 	JSONKind
 	GeometryKind
 	PointKind
-	LinestringKind
+	LineStringKind
 	PolygonKind
 
 	SerialMessageKind
@@ -85,14 +89,14 @@ func init() {
 	KindToType[IntKind] = Int(0)
 	KindToType[UintKind] = Uint(0)
 	KindToType[NullKind] = NullValue
-	KindToType[TupleKind] = EmptyTuple(Format_Default)
+	KindToType[TupleKind] = Tuple{}
 	KindToType[InlineBlobKind] = InlineBlob{}
 	KindToType[TimestampKind] = Timestamp{}
 	KindToType[DecimalKind] = Decimal{}
 	KindToType[JSONKind] = JSON{}
 	KindToType[GeometryKind] = Geometry{}
 	KindToType[PointKind] = Point{}
-	KindToType[LinestringKind] = Linestring{}
+	KindToType[LineStringKind] = LineString{}
 	KindToType[PolygonKind] = Polygon{}
 	KindToType[SerialMessageKind] = SerialMessage{}
 	KindToType[TupleRowStorageKind] = TupleRowStorage{}
@@ -121,10 +125,14 @@ func init() {
 	SupportedKinds[JSONKind] = true
 	SupportedKinds[GeometryKind] = true
 	SupportedKinds[PointKind] = true
-	SupportedKinds[LinestringKind] = true
+	SupportedKinds[LineStringKind] = true
 	SupportedKinds[PolygonKind] = true
 	SupportedKinds[SerialMessageKind] = true
 	SupportedKinds[TupleRowStorageKind] = true
+
+	if message.MessageTypesKind != int(TupleRowStorageKind) {
+		panic("internal error: message.MessageTypesKind != TupleRowStorageKind")
+	}
 }
 
 var KindToTypeSlice []Value
@@ -155,7 +163,7 @@ var KindToString = map[NomsKind]string{
 	JSONKind:            "JSON",
 	GeometryKind:        "Geometry",
 	PointKind:           "Point",
-	LinestringKind:      "Linestring",
+	LineStringKind:      "LineString",
 	PolygonKind:         "Polygon",
 	SerialMessageKind:   "SerialMessage",
 	TupleRowStorageKind: "TupleRowStorage",
@@ -180,7 +188,7 @@ func isKindOrderedByValue(k NomsKind) bool {
 func IsGeometryKind(k NomsKind) bool {
 	switch k {
 	case PointKind,
-		LinestringKind,
+		LineStringKind,
 		PolygonKind,
 		GeometryKind:
 		return true

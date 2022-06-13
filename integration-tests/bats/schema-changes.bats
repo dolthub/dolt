@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -203,9 +204,9 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,column,tag" ]] || false
     [[ "$output" =~ "test2,pk1,6801" ]] || false
-    [[ "$output" =~ "test2,pk2,4776" ]] || false
-    [[ "$output" =~ "test2,v1,10579" ]] || false
-    [[ "$output" =~ "test2,v2,7704" ]] || false
+    [[ "$output" =~ "test2,PK2,4776" ]] || false
+    [[ "$output" =~ "test2,V1,10579" ]] || false
+    [[ "$output" =~ "test2,V2,7704" ]] || false
 
     dolt diff
     run dolt diff
@@ -213,9 +214,9 @@ SQL
     [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
     [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
     [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
-    [[ "$output" =~ '+  `pk2` tinyint NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `v1` varchar(300) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `v2` varchar(1024) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 
     dolt add .
@@ -231,8 +232,8 @@ SQL
 
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
 
     run dolt sql -q 'select * from test2' -r csv
     [ "$status" -eq 0 ]
@@ -253,8 +254,8 @@ SQL
     dolt pull
     run dolt sql -q 'show create table test2'
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '`pk2` tinyint NOT NULL' ]] || false
-    [[ "$output" =~ '`v1` varchar(300) NOT NULL' ]] || false
+    [[ "$output" =~ '`PK2` tinyint NOT NULL' ]] || false
+    [[ "$output" =~ '`V1` varchar(300) NOT NULL' ]] || false
 
     run dolt sql -q 'select * from test2' -r csv
     [ "$status" -eq 0 ]
@@ -269,9 +270,9 @@ SQL
     [[ "$output" =~ '-  `pk2` bigint NOT NULL,' ]] || false
     [[ "$output" =~ '-  `v1` varchar(100) NOT NULL,' ]] || false
     [[ "$output" =~ '-  `v2` varchar(120),' ]] || false
-    [[ "$output" =~ '+  `pk2` tinyint NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `v1` varchar(300) NOT NULL,' ]] || false
-    [[ "$output" =~ '+  `v2` varchar(1024) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `PK2` tinyint NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V1` varchar(300) NOT NULL,' ]] || false
+    [[ "$output" =~ '+  `V2` varchar(1024) NOT NULL,' ]] || false
     [[ "$output" =~ 'PRIMARY KEY' ]] || false
 }
 

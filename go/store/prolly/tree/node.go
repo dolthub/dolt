@@ -69,10 +69,11 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 }
 
 func NodeFromBytes(msg []byte) Node {
+	keys, values, count := message.GetKeysAndValues(msg)
 	return Node{
-		keys:   message.GetKeys(msg),
-		values: message.GetValues(msg),
-		count:  message.GetCount(msg),
+		keys:   keys,
+		values: values,
+		count:  count,
 		msg:    msg,
 	}
 }
@@ -175,6 +176,23 @@ func OutputProllyNode(w io.Writer, node Node) error {
 		}
 	}
 
+	w.Write([]byte("\n]\n"))
+	return nil
+}
+
+func OutputAddressMapNode(w io.Writer, node Node) error {
+	w.Write([]byte("["))
+	for i := 0; i < int(node.count); i++ {
+		k := node.GetKey(i)
+		w.Write([]byte("\n    { key: "))
+		w.Write(k)
+
+		ref := node.getAddress(i)
+
+		w.Write([]byte(" ref: #"))
+		w.Write([]byte(ref.String()))
+		w.Write([]byte(" }"))
+	}
 	w.Write([]byte("\n]\n"))
 	return nil
 }

@@ -26,6 +26,44 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+// NewConflictsTable returns a new ConflictsTable instance
+func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
+	if err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, sql.ErrTableNotFound.New(tblName)
+	}
+
+	if tbl.Format() == types.Format_DOLT_1 {
+		return newProllyConflictsTable(ctx, tbl, tblName, root, rs)
+	}
+
+	return newNomsConflictsTable(ctx, tbl, tblName, root, rs)
+}
+
+func newNomsConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
+	rd, err := merge.NewConflictReader(ctx, tbl)
+	if err != nil {
+		return nil, err
+	}
+	confSch := rd.GetSchema()
+
+	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, confSch)
+	if err != nil {
+		return nil, err
+	}
+
+	return ConflictsTable{
+		tblName: tblName,
+		sqlSch:  sqlSch,
+		root:    root,
+		tbl:     tbl,
+		rd:      rd,
+		rs:      rs,
+	}, nil
+}
+
 var _ sql.Table = ConflictsTable{}
 
 // ConflictsTable is a sql.Table implementation that provides access to the conflicts that exist for a user table
@@ -40,35 +78,6 @@ type ConflictsTable struct {
 
 type RootSetter interface {
 	SetRoot(ctx *sql.Context, root *doltdb.RootValue) error
-}
-
-// NewConflictsTable returns a new ConflictsTableTable instance
-func NewConflictsTable(ctx *sql.Context, tblName string, root *doltdb.RootValue, rs RootSetter) (sql.Table, error) {
-	tbl, tblName, ok, err := root.GetTableInsensitive(ctx, tblName)
-	if err != nil {
-		return nil, err
-	} else if !ok {
-		return nil, sql.ErrTableNotFound.New(tblName)
-	}
-
-	rd, err := merge.NewConflictReader(ctx, tbl)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlSch, err := sqlutil.FromDoltSchema(doltdb.DoltConfTablePrefix+tblName, rd.GetSchema())
-	if err != nil {
-		return nil, err
-	}
-
-	return ConflictsTable{
-		tblName: tblName,
-		sqlSch:  sqlSch,
-		root:    root,
-		tbl:     tbl,
-		rd:      rd,
-		rs:      rs,
-	}, nil
 }
 
 // Name returns the name of the table
@@ -98,7 +107,7 @@ func (ct ConflictsTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sq
 
 // Deleter returns a RowDeleter for this table. The RowDeleter will get one call to Delete for each row to be deleted,
 // and will end with a call to Close() to finalize the delete operation.
-func (ct ConflictsTable) Deleter(*sql.Context) sql.RowDeleter {
+func (ct ConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 	return &conflictDeleter{ct: ct, rs: ct.rs}
 }
 
@@ -123,13 +132,13 @@ func (itr conflictRowIter) Close(*sql.Context) error {
 	return itr.rd.Close()
 }
 
-var _ sql.RowDeleter = &conflictDeleter{}
-
 type conflictDeleter struct {
 	ct  ConflictsTable
 	rs  RootSetter
 	pks []types.Value
 }
+
+var _ sql.RowDeleter = &conflictDeleter{}
 
 // Delete deletes the given row. Returns ErrDeleteRowNotFound if the row was not found. Delete will be called once for
 // each row to process for the delete operation, which may involve many rows. After all rows have been processed,

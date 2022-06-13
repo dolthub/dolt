@@ -32,7 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
 	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/types"
 )
@@ -77,15 +76,12 @@ const (
 )
 
 var PeopleTestSchema = createPeopleTestSchema()
-var untypedPeopleSch, _ = untyped.UntypeUnkeySchema(PeopleTestSchema)
 var PeopleTableName = "people"
 
 var EpisodesTestSchema = createEpisodesTestSchema()
-var untypedEpisodesSch, _ = untyped.UntypeUnkeySchema(EpisodesTestSchema)
 var EpisodesTableName = "episodes"
 
 var AppearancesTestSchema = createAppearancesTestSchema()
-var untypedAppearacesSch, _ = untyped.UntypeUnkeySchema(AppearancesTestSchema)
 var AppearancesTableName = "appearances"
 
 func createPeopleTestSchema() schema.Schema {
@@ -93,10 +89,10 @@ func createPeopleTestSchema() schema.Schema {
 		schema.NewColumn("id", IdTag, types.IntKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first_name", FirstNameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last_name", LastNameTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", IsMarriedTag, types.BoolKind, false),
+		schema.NewColumn("is_married", IsMarriedTag, types.IntKind, false),
 		schema.NewColumn("age", AgeTag, types.IntKind, false),
 		schema.NewColumn("rating", RatingTag, types.FloatKind, false),
-		schema.NewColumn("uuid", UuidTag, types.UUIDKind, false),
+		schema.NewColumn("uuid", UuidTag, types.StringKind, false),
 		schema.NewColumn("num_episodes", NumEpisodesTag, types.UintKind, false),
 	)
 	return schema.MustSchemaFromCols(colColl)
@@ -130,11 +126,16 @@ func newColumnWithTypeInfo(name string, tag uint64, info typeinfo.TypeInfo, part
 }
 
 func NewPeopleRow(id int, first, last string, isMarried bool, age int, rating float64) row.Row {
+	isMarriedVal := types.Int(0)
+	if isMarried {
+		isMarriedVal = types.Int(1)
+	}
+
 	vals := row.TaggedValues{
 		IdTag:        types.Int(id),
 		FirstNameTag: types.String(first),
 		LastNameTag:  types.String(last),
-		IsMarriedTag: types.Bool(isMarried),
+		IsMarriedTag: isMarriedVal,
 		AgeTag:       types.Int(age),
 		RatingTag:    types.Float(rating),
 	}
@@ -191,14 +192,19 @@ func newAppsRow2(charId, epId int, comment string) row.Row {
 
 // Most rows don't have these optional fields set, as they aren't needed for basic testing
 func NewPeopleRowWithOptionalFields(id int, first, last string, isMarried bool, age int, rating float64, uid uuid.UUID, numEpisodes uint64) row.Row {
+	isMarriedVal := types.Int(0)
+	if isMarried {
+		isMarriedVal = types.Int(1)
+	}
+
 	vals := row.TaggedValues{
 		IdTag:          types.Int(id),
 		FirstNameTag:   types.String(first),
 		LastNameTag:    types.String(last),
-		IsMarriedTag:   types.Bool(isMarried),
+		IsMarriedTag:   isMarriedVal,
 		AgeTag:         types.Int(age),
 		RatingTag:      types.Float(rating),
-		UuidTag:        types.UUID(uid),
+		UuidTag:        types.String(uid.String()),
 		NumEpisodesTag: types.Uint(numEpisodes),
 	}
 
@@ -251,20 +257,6 @@ func Rs(rows ...row.Row) []row.Row {
 	return rows
 }
 
-// Returns the index of the first row in the list that has the same primary key as the one given, or -1 otherwise.
-func FindRowIndex(find row.Row, rows []row.Row) int {
-	idx := -1
-	for i, updatedRow := range rows {
-		rowId, _ := find.GetColVal(IdTag)
-		updatedId, _ := updatedRow.GetColVal(IdTag)
-		if rowId.Equals(updatedId) {
-			idx = i
-			break
-		}
-	}
-	return idx
-}
-
 // Mutates the row given with pairs of {tag,value} given in the varargs param. Converts built-in types to noms types.
 func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row {
 	if len(tagsAndVals)%2 != 0 {
@@ -295,9 +287,12 @@ func MutateRow(sch schema.Schema, r row.Row, tagsAndVals ...interface{}) row.Row
 			case string:
 				nomsVal = types.String(v)
 			case uuid.UUID:
-				nomsVal = types.UUID(v)
+				nomsVal = types.String(v.String())
 			case bool:
-				nomsVal = types.Bool(v)
+				nomsVal = types.Int(0)
+				if v {
+					nomsVal = types.Int(1)
+				}
 			case time.Time:
 				nomsVal = types.Timestamp(v)
 			default:

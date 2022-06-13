@@ -601,6 +601,7 @@ SQL
 }
 
 @test "sql-server: JSON queries" {
+    skip_nbf_dolt_1
     cd repo1
     start_sql_server repo1
 
@@ -655,6 +656,7 @@ SQL
 
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
+    skip_nbf_dolt_1
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
 
     cd repo1
@@ -753,8 +755,8 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'refs/heads/new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nrefs/heads/new"
+    server_query repo1 1 "set GLOBAL repo1_default_branch = 'refs/heads/new';" ""
+    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nrefs/heads/new"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }
@@ -773,8 +775,8 @@ SQL
     INSERT INTO t VALUES (2,2),(3,3);' ""
 
     server_query repo1 1 "SHOW tables" "" # no tables on main
-    server_query repo1 1 "set GLOBAL dolt_default_branch = 'new';" ""
-    server_query repo1 1 "select @@GLOBAL.dolt_default_branch;" "@@GLOBAL.dolt_default_branch\nnew"
+    server_query repo1 1 "set GLOBAL repo1_default_branch = 'new';" ""
+    server_query repo1 1 "select @@GLOBAL.repo1_default_branch;" "@@GLOBAL.repo1_default_branch\nnew"
     server_query repo1 1 "select active_branch()" "active_branch()\nnew"
     server_query repo1 1 "SHOW tables" "Tables_in_repo1\nt"
 }
@@ -976,6 +978,7 @@ END""")
 
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir rem1
     cd repo1
@@ -995,6 +998,7 @@ END""")
 
 @test "sql-server: replicate to backup after sql-session commit" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir bac1
     cd repo1
@@ -1074,6 +1078,78 @@ END""")
     stop_sql_server
     start_sql_server
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest3"
+}
+
+@test "sql-server: drop database with active connections" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
+    
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+
+    server_query "" 1 "create database test1"
+    server_query "" 1 "create database test2"
+    server_query "" 1 "create database test3"
+    
+    server_query "" 1 "show databases" "Database\ninformation_schema\ntest1\ntest2\ntest3"
+    server_query "test1" 1 "create table a(x int)"
+    server_query "test1" 1 "insert into a values (1), (2)"
+    run server_query "test1" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    server_query "test2" 1 "create table a(x int)"
+    server_query "test2" 1 "insert into a values (3), (4)"
+    run server_query "test2" 1 "select dolt_commit('-a', '-m', 'new table a')"
+
+    server_query "test3" 1 "create table a(x int)"
+    server_query "test3" 1 "insert into a values (5), (6)"
+    run server_query "test3" 1 "select dolt_commit('-a', '-m', 'new table a')"
+    
+    run server_query "test1" 1 "select dolt_checkout('-b', 'newbranch')"
+    server_query "test1/newbranch" 1 "select * from a" "x\n1\n2"
+
+    run server_query "test2" 1 "select dolt_checkout('-b', 'newbranch')"
+    server_query "test2/newbranch" 1 "select * from a" "x\n3\n4"
+
+    server_query "" 1 "drop database TEST1"
+
+    run server_query "test1/newbranch" 1 "select * from a"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found: test1/newbranch" ]] || false
+
+    # can't drop a branch-qualified database name
+    run server_query "" 1 "drop database \`test2/newbranch\`"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+
+    server_query "" 1 "drop database TEST2"
+
+    run server_query "test2/newbranch" 1 "select * from a"
+    [ "$status" -ne 0 ]
+    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    
+    server_query "test3" 1 "select * from a" "x\n5\n6"
+}
+
+@test "sql-server: connect to databases case insensitive" {
+    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
+
+    mkdir no_dolt && cd no_dolt
+    start_sql_server
+
+    server_query "" 1 "create database Test1"
+
+    server_query "" 1 "show databases" "Database\nTest1\ninformation_schema"
+    multi_query "" 1 "use test1; create table a(x int);"
+    multi_query "" 1 "use TEST1; insert into a values (1), (2);"
+    run multi_query "" 1 "use test1; select dolt_commit('-a', '-m', 'new table a');"
+    run multi_query "" 1 "use test1; select dolt_checkout('-b', 'newbranch');"
+    multi_query "" 1 "use \`TEST1/newbranch\`; select * from a" "x\n1\n2"
+    multi_query "" 1 "use \`test1/newbranch\`; select * from a" "x\n1\n2"
+    server_query "" 1 "use \`TEST1/NEWBRANCH\`" "" "database not found: TEST1/NEWBRANCH"
+
+    multi_query "" 1 "create database test2; use test2; select database();" "database()\ntest2"
+    multi_query "" 1 "use test2; drop database TEST2; select database();" "null"
 }
 
 @test "sql-server: create and drop database with --multi-db-dir" {
@@ -1179,6 +1255,7 @@ END""")
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skip_nbf_dolt_1
 
     mkdir remote1
     cd repo2

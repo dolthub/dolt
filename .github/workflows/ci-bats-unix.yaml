@@ -7,6 +7,10 @@ on:
       - 'go/**'
       - 'integration-tests/**'
 
+concurrency:
+  group: ci-bats-unix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Bats tests
@@ -18,10 +22,10 @@ jobs:
       fail-fast: true
       matrix:
         os: [ ubuntu-18.04, macos-10.15 ]
-        dolt_fmt: [ "", "__DOLT_DEV__" ]
+        dolt_fmt: [ "", "__DOLT_DEV__", "__DOLT_1__" ]
         exclude:
           - os: "macos-10.15"
-            dolt_fmt: "__DOLT_DEV__"
+            dolt_fmt: ["__DOLT_DEV__", "__DOLT_1__" ]
     env:
       use_credentials: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' && secrets.AWS_ACCESS_KEY_ID != '' }}
     steps:

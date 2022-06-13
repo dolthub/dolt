@@ -28,8 +28,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/encoding"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
-	"github.com/dolthub/dolt/go/store/datas"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -78,7 +80,7 @@ func tmIterAll(ctx context.Context, tm tableMap, cb func(name string, addr hash.
 type rvStorage interface {
 	GetFeatureVersion() (FeatureVersion, bool, error)
 
-	GetTablesMap(ctx context.Context, vr types.ValueReader) (tableMap, error)
+	GetTablesMap(ctx context.Context, vr types.ValueReadWriter) (tableMap, error)
 	GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 	GetForeignKeyMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
 
@@ -108,7 +110,7 @@ func (r nomsRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	}
 }
 
-func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReader) (tableMap, error) {
+func (r nomsRvStorage) GetTablesMap(context.Context, types.ValueReadWriter) (tableMap, error) {
 	v, found, err := r.valueSt.MaybeGet(tablesKey)
 	if err != nil {
 		return nil, err
@@ -250,7 +252,7 @@ func (r nomsRvStorage) nomsValue() types.Value {
 func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) {
 	var storage rvStorage
 
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		srv := serial.GetRootAsRootValue([]byte(v.(types.SerialMessage)), 0)
 		storage = fbRvStorage{srv}
 	} else {
@@ -278,7 +280,7 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
-	if nbf == types.Format_DOLT_DEV {
+	if nbf.UsesFlatbuffers() {
 		if sm, ok := val.(types.SerialMessage); ok {
 			return string(serial.GetFileID([]byte(sm))) == serial.RootValueFileID
 		}
@@ -291,11 +293,15 @@ func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {
 }
 
 func EmptyRootValue(ctx context.Context, vrw types.ValueReadWriter) (*RootValue, error) {
-	if vrw.Format() == types.Format_DOLT_DEV {
+	if vrw.Format().UsesFlatbuffers() {
 		builder := flatbuffers.NewBuilder(80)
+
+		ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
+		emptyam := prolly.NewEmptyAddressMap(ns)
+		ambytes := []byte(tree.ValueFromNode(emptyam.Node()).(types.TupleRowStorage))
+		tablesoff := builder.CreateByteVector(ambytes)
+
 		var empty hash.Hash
-		serial.RefMapStart(builder)
-		tablesoff := serial.RefMapEnd(builder)
 		fkoff := builder.CreateByteVector(empty[:])
 		ssoff := builder.CreateByteVector(empty[:])
 		serial.RootValueStart(builder)
@@ -470,7 +476,10 @@ func (root *RootValue) GenerateTagsForNewColumns(
 	if headRoot != nil {
 		for _, col := range existingCols {
 			for i := range newColNames {
-				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) {
+				// Only re-use tags if the noms kind didn't change
+				// TODO: revisit this when new storage format is further along
+				if strings.ToLower(newColNames[i]) == strings.ToLower(col.Name) &&
+					newColKinds[i] == col.TypeInfo.NomsKind() {
 					newTags[i] = col.Tag
 					break
 				}
@@ -1052,7 +1061,7 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 			return nil, err
 		}
 		if a.IsEmpty() {
-			return nil, ErrTableNotFound
+			return nil, fmt.Errorf("%w: '%s'", ErrTableNotFound, name)
 		}
 		edits[i].name = name
 	}
@@ -1307,6 +1316,10 @@ func validateTagUniqueness(ctx context.Context, root *RootValue, tableName strin
 	return nil
 }
 
+type debugStringer interface {
+	DebugString(ctx context.Context) string
+}
+
 // DebugString returns a human readable string with the contents of this root. If |transitive| is true, row data from
 // all tables is also included. This method is very expensive for large root values, so |transitive| should only be used
 // when debugging tests.
@@ -1319,8 +1332,10 @@ func (root *RootValue) DebugString(ctx context.Context, transitive bool) string 
 		root.IterTables(ctx, func(name string, table *Table, sch schema.Schema) (stop bool, err error) {
 			buf.WriteString("\nTable ")
 			buf.WriteString(name)
-			buf.WriteString(": \n")
-			buf.WriteString(table.table.DebugString(ctx))
+			buf.WriteString(":\n")
+
+			buf.WriteString(table.DebugString(ctx))
+
 			return false, nil
 		})
 	}
@@ -1356,33 +1371,36 @@ func (r fbRvStorage) GetFeatureVersion() (FeatureVersion, bool, error) {
 	return FeatureVersion(r.srv.FeatureVersion()), true, nil
 }
 
-func (r fbRvStorage) GetTablesMap(ctx context.Context, vr types.ValueReader) (tableMap, error) {
-	return fbTableMap{r.srv.Tables(nil)}, nil
+func (r fbRvStorage) getAddressMap(vrw types.ValueReadWriter) prolly.AddressMap {
+	tbytes := r.srv.TablesBytes()
+	node := shim.NodeFromValue(types.TupleRowStorage(tbytes))
+	ns := tree.NewNodeStore(shim.ChunkStoreFromVRW(vrw))
+	return prolly.NewAddressMap(node, ns)
+}
+
+func (r fbRvStorage) GetTablesMap(ctx context.Context, vrw types.ValueReadWriter) (tableMap, error) {
+	am := r.getAddressMap(vrw)
+	return fbTableMap{am}, nil
 }
 
 type fbTableMap struct {
-	*serial.RefMap
+	prolly.AddressMap
 }
 
 func (m fbTableMap) Get(ctx context.Context, name string) (hash.Hash, error) {
-	return datas.RefMapLookup(m.RefMap, name), nil
+	return m.AddressMap.Get(ctx, name)
 }
 
 func (m fbTableMap) Iter(ctx context.Context, cb func(string, hash.Hash) (bool, error)) error {
-	refs := m.RefArrayBytes()
-	for i := 0; i < m.NamesLength(); i++ {
-		off := i * 20
-		addr := hash.New(refs[off : off+20])
-		name := string(m.Names(i))
-		stop, err := cb(name, addr)
-		if err != nil {
+	var stop bool
+	return m.AddressMap.IterAll(ctx, func(n string, a hash.Hash) error {
+		if !stop {
+			var err error
+			stop, err = cb(n, a)
 			return err
 		}
-		if stop {
-			return nil
-		}
-	}
-	return nil
+		return nil
+	})
 }
 
 func (r fbRvStorage) GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error) {
@@ -1426,30 +1444,53 @@ func (r fbRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadW
 func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error) {
 	builder := flatbuffers.NewBuilder(80)
 
-	tables := r.srv.Tables(nil)
-
-	var rmedits []datas.RefMapEdit
+	am := r.getAddressMap(vrw)
+	ae := am.Editor()
 	for _, e := range edits {
 		if e.old_name != "" {
-			oldaddr := datas.RefMapLookup(tables, e.old_name)
-			newaddr := datas.RefMapLookup(tables, e.name)
+			oldaddr, err := am.Get(ctx, e.old_name)
+			if err != nil {
+				return nil, err
+			}
+			newaddr, err := am.Get(ctx, e.name)
+			if err != nil {
+				return nil, err
+			}
 			if oldaddr.IsEmpty() {
 				return nil, ErrTableNotFound
 			}
 			if !newaddr.IsEmpty() {
 				return nil, ErrTableExists
 			}
-			rmedits = append(rmedits, datas.RefMapEdit{Name: e.old_name})
-			rmedits = append(rmedits, datas.RefMapEdit{Name: e.name, Addr: oldaddr})
+			err = ae.Delete(ctx, e.old_name)
+			if err != nil {
+				return nil, err
+			}
+			err = ae.Update(ctx, e.name, oldaddr)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			if e.ref == nil {
-				rmedits = append(rmedits, datas.RefMapEdit{Name: e.name})
+				err := ae.Delete(ctx, e.name)
+				if err != nil {
+					return nil, err
+				}
 			} else {
-				rmedits = append(rmedits, datas.RefMapEdit{Name: e.name, Addr: e.ref.TargetHash()})
+				err := ae.Update(ctx, e.name, e.ref.TargetHash())
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
-	tablesoff := datas.RefMapApplyEdits(tables, builder, rmedits)
+	am, err := ae.Flush(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ambytes := []byte(tree.ValueFromNode(am.Node()).(types.TupleRowStorage))
+	tablesoff := builder.CreateByteVector(ambytes)
 
 	fkoff := builder.CreateByteVector(r.srv.ForeignKeyAddrBytes())
 	ssoff := builder.CreateByteVector(r.srv.SuperSchemasAddrBytes())

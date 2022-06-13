@@ -20,11 +20,11 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 )
 
-// dolt_pull is the stored procedure version of the function `dolt_pull`.
-func dolt_pull(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltPull(ctx, args)
+// doltPull is the stored procedure version of the function `dolt_pull`.
+func doltPull(ctx *sql.Context, args ...string) (sql.RowIter, error) {
+	conflicts, ff, err := dfunctions.DoDoltPull(ctx, args)
 	if err != nil {
 		return nil, err
 	}
-	return rowToIter(int64(res)), nil
+	return rowToIter(int64(ff), int64(conflicts)), nil
 }

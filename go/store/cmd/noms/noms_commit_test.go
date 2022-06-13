@@ -95,7 +95,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitReadPathFromStdin() {
 	value, err := datas.GetCommittedValue(context.Background(), vrw, commit)
 	s.NoError(err)
 	s.NotNil(value)
-	h, err := value.Hash(types.Format_7_18)
+	h, err := value.Hash(vrw.Format())
 	s.NoError(err)
 	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
@@ -125,7 +125,7 @@ func (s *nomsCommitTestSuite) TestNomsCommitToDatasetWithoutHead() {
 	value, err := datas.GetCommittedValue(context.Background(), vrw, commit)
 	s.NoError(err)
 	s.NotNil(value)
-	h, err := value.Hash(types.Format_7_18)
+	h, err := value.Hash(vrw.Format())
 	s.NoError(err)
 	s.True(h == ref.TargetHash(), "commit.value hash == writevalue hash")
 
@@ -169,13 +169,14 @@ func (s *nomsCommitTestSuite) runDuplicateTest(allowDuplicate bool) {
 
 	sp, _ = spec.ForDataset(sp.String())
 	defer sp.Close()
+	vrw := sp.GetVRW(context.Background())
 
 	value, ok, err := sp.GetDataset(context.Background()).MaybeHeadValue()
 	s.NoError(err)
 	s.True(ok, "should still have a commit")
-	valH, err := value.Hash(types.Format_7_18)
+	valH, err := value.Hash(vrw.Format())
 	s.NoError(err)
-	refH, err := ref.Hash(types.Format_7_18)
+	refH, err := ref.Hash(vrw.Format())
 	s.NoError(err)
 	s.True(valH == refH, "commit.value hash == previous commit hash")
 }

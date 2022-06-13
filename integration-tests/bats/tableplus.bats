@@ -5,6 +5,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
   setup_common
+  skip_nbf_dolt_1
 
   mkdir test
   cd test
@@ -219,4 +220,27 @@ SQL
   [ "$status" -eq 0 ]
   run dolt sql -q "show full tables from test"
   [ "$status" -eq 0 ]
+}
+
+@test "tableplus: information_schema.routines excludes procedure aliases, but works with CALL" {
+  run dolt sql -q "SELECT ROUTINE_SCHEMA as function_schema,ROUTINE_NAME as function_name,ROUTINE_DEFINITION as create_statement,ROUTINE_TYPE as function_type FROM information_schema.routines where ROUTINE_SCHEMA='test';"
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "dadd" ]] || false
+  [[ ! "$output" =~ "dadd" ]] || false
+  [[ ! "$output" =~ "dbranch" ]] || false
+  [[ ! "$output" =~ "dcheckout" ]] || false
+  [[ ! "$output" =~ "dclean" ]] || false
+  [[ ! "$output" =~ "dcommit" ]] || false
+  [[ ! "$output" =~ "dfetch" ]] || false
+  [[ ! "$output" =~ "dmerge" ]] || false
+  [[ ! "$output" =~ "dpull" ]] || false
+  [[ ! "$output" =~ "dpush" ]] || false
+  [[ ! "$output" =~ "dreset" ]] || false
+  [[ ! "$output" =~ "drevert" ]] || false
+  [[ ! "$output" =~ "dverify_constraints" ]] || false
+  [[ ! "$output" =~ "dverify_all_constraints" ]] || false
+
+  run dolt sql -q "CALL dbranch('branch1')"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "status" ]] || false
 }

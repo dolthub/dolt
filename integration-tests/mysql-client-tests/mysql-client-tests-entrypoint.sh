@@ -8,4 +8,3 @@ dolt config --global --add user.email mysql-test-runner@liquidata.co
 
 echo "Running mysql-client-tests:"
 bats /mysql-client-tests/mysql-client-tests.bats
-bats /mysql-client-tests/import-mysqldump.bats

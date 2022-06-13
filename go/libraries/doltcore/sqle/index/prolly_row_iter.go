@@ -15,7 +15,6 @@
 package index
 
 import (
-	"context"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -27,6 +26,7 @@ import (
 )
 
 func init() {
+	// todo: multiple query types can map to a single encoding
 	encodingToType[val.Int8Enc] = query.Type_INT8
 	encodingToType[val.Uint8Enc] = query.Type_UINT8
 	encodingToType[val.Int16Enc] = query.Type_INT16
@@ -38,9 +38,7 @@ func init() {
 	encodingToType[val.Float32Enc] = query.Type_FLOAT32
 	encodingToType[val.Float64Enc] = query.Type_FLOAT64
 	encodingToType[val.DecimalEnc] = query.Type_DECIMAL
-	encodingToType[val.TimeEnc] = query.Type_TIME
 	encodingToType[val.YearEnc] = query.Type_YEAR
-	encodingToType[val.TimestampEnc] = query.Type_TIMESTAMP
 	encodingToType[val.DateEnc] = query.Type_TIMESTAMP
 	encodingToType[val.DatetimeEnc] = query.Type_TIMESTAMP
 	encodingToType[val.StringEnc] = query.Type_VARCHAR
@@ -53,6 +51,7 @@ var encodingToType [256]query.Type
 type prollyRowIter struct {
 	iter prolly.MapIter
 
+	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
 	valDesc val.TupleDesc
 	keyProj []int
@@ -64,8 +63,8 @@ var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
 func NewProllyRowIter(
-	ctx context.Context,
 	sch schema.Schema,
+	schSch sql.Schema,
 	rows prolly.Map,
 	iter prolly.MapIter,
 	projections []string,
@@ -92,6 +91,7 @@ func NewProllyRowIter(
 
 	return prollyRowIter{
 		iter:    iter,
+		sqlSch:  schSch,
 		keyDesc: kd,
 		valDesc: vd,
 		keyProj: keyProj,
@@ -160,8 +160,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 			return nil, err
 		}
 	}
-
-	return row, nil
+	return DenormalizeRow(it.sqlSch, row)
 }
 
 func (it prollyRowIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {

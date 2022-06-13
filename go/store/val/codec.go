@@ -18,7 +18,14 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math"
+	"math/big"
+	"math/bits"
 	"time"
+	"unsafe"
+
+	"github.com/dolthub/dolt/go/gen/fb/serial"
+
+	"github.com/shopspring/decimal"
 )
 
 type Type struct {
@@ -33,72 +40,71 @@ const (
 type ByteSize uint16
 
 const (
-	int8Size    ByteSize = 1
-	uint8Size   ByteSize = 1
-	int16Size   ByteSize = 2
-	uint16Size  ByteSize = 2
-	int32Size   ByteSize = 4
-	uint32Size  ByteSize = 4
-	int64Size   ByteSize = 8
-	uint64Size  ByteSize = 8
-	float32Size ByteSize = 4
-	float64Size ByteSize = 8
-
-	// todo(andy): experimental encoding
-	timestampSize ByteSize = 8
-	hash128Size   ByteSize = 16
+	int8Size     ByteSize = 1
+	uint8Size    ByteSize = 1
+	int16Size    ByteSize = 2
+	uint16Size   ByteSize = 2
+	int32Size    ByteSize = 4
+	uint32Size   ByteSize = 4
+	int64Size    ByteSize = 8
+	uint64Size   ByteSize = 8
+	float32Size  ByteSize = 4
+	float64Size  ByteSize = 8
+	bit64Size    ByteSize = 8
+	hash128Size  ByteSize = 16
+	addressSize  ByteSize = 20
+	yearSize     ByteSize = 1
+	dateSize     ByteSize = 4
+	timeSize     ByteSize = 8
+	datetimeSize ByteSize = 8
+	enumSize     ByteSize = 2
+	setSize      ByteSize = 8
 )
 
-type Encoding uint8
+type Encoding byte
 
-// Constant Size Encodings
+// Fixed Width Encodings
 const (
-	NullEnc    Encoding = 0
-	Int8Enc    Encoding = 1
-	Uint8Enc   Encoding = 2
-	Int16Enc   Encoding = 3
-	Uint16Enc  Encoding = 4
-	Int32Enc   Encoding = 7
-	Uint32Enc  Encoding = 8
-	Int64Enc   Encoding = 9
-	Uint64Enc  Encoding = 10
-	Float32Enc Encoding = 11
-	Float64Enc Encoding = 12
-
-	// todo(andy): experimental encodings
-	TimestampEnc Encoding = 14
-	DateEnc      Encoding = 15
-	DatetimeEnc  Encoding = 16
-	YearEnc      Encoding = 17
-	Hash128Enc   Encoding = 18
+	NullEnc     = Encoding(serial.EncodingNull)
+	Int8Enc     = Encoding(serial.EncodingInt8)
+	Uint8Enc    = Encoding(serial.EncodingUint8)
+	Int16Enc    = Encoding(serial.EncodingInt16)
+	Uint16Enc   = Encoding(serial.EncodingUint16)
+	Int32Enc    = Encoding(serial.EncodingInt32)
+	Uint32Enc   = Encoding(serial.EncodingUint32)
+	Int64Enc    = Encoding(serial.EncodingInt64)
+	Uint64Enc   = Encoding(serial.EncodingUint64)
+	Float32Enc  = Encoding(serial.EncodingFloat32)
+	Float64Enc  = Encoding(serial.EncodingFloat64)
+	Bit64Enc    = Encoding(serial.EncodingBit64)
+	Hash128Enc  = Encoding(serial.EncodingHash128)
+	AddressEnc  = Encoding(serial.EncodingAddress)
+	YearEnc     = Encoding(serial.EncodingYear)
+	DateEnc     = Encoding(serial.EncodingDate)
+	TimeEnc     = Encoding(serial.EncodingTime)
+	DatetimeEnc = Encoding(serial.EncodingDatetime)
+	EnumEnc     = Encoding(serial.EncodingEnum)
+	SetEnc      = Encoding(serial.EncodingSet)
 
 	sentinel Encoding = 127
 )
 
-// Variable Size Encodings
+// Variable Width Encodings
 const (
-	StringEnc     Encoding = 128
-	ByteStringEnc Encoding = 129
-
-	// todo(andy): experimental encodings
-	DecimalEnc  Encoding = 130
-	JSONEnc     Encoding = 131
-	TimeEnc     Encoding = 132
-	GeometryEnc Encoding = 133
+	StringEnc     = Encoding(serial.EncodingString)
+	ByteStringEnc = Encoding(serial.EncodingBytes)
+	DecimalEnc    = Encoding(serial.EncodingDecimal)
+	JSONEnc       = Encoding(serial.EncodingJSON)
+	GeometryEnc   = Encoding(serial.EncodingGeometry)
 
 	// TODO
-	//  BitEnc
 	//  CharEnc
-	//  VarCharEnc
-	//  TextEnc
 	//  BinaryEnc
-	//  VarBinaryEnc
+	//  TextEnc
 	//  BlobEnc
-	//  JSONEnc
 	//  EnumEnc
 	//  SetEnc
 	//  ExpressionEnc
-	//  GeometryEnc
 )
 
 func sizeFromType(t Type) (ByteSize, bool) {
@@ -123,10 +129,24 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float32Size, true
 	case Float64Enc:
 		return float64Size, true
-	case DateEnc, DatetimeEnc, TimestampEnc:
-		return timestampSize, true
+	case Hash128Enc:
+		return hash128Size, true
+	case AddressEnc:
+		return addressSize, true
 	case YearEnc:
-		return int16Size, true
+		return yearSize, true
+	case DateEnc:
+		return dateSize, true
+	case TimeEnc:
+		return timeSize, true
+	case DatetimeEnc:
+		return datetimeSize, true
+	case EnumEnc:
+		return enumSize, true
+	case SetEnc:
+		return setSize, true
+	case Bit64Enc:
+		return bit64Size, true
 	default:
 		return 0, false
 	}
@@ -357,18 +377,117 @@ func compareFloat64(l, r float64) int {
 	}
 }
 
-func readTimestamp(buf []byte) (t time.Time) {
-	expectSize(buf, timestampSize)
-	t = time.Unix(0, readInt64(buf)).UTC()
+func readBit64(val []byte) uint64 {
+	return readUint64(val)
+}
+
+func writeBit64(buf []byte, val uint64) {
+	writeUint64(buf, val)
+}
+
+func compareBit64(l, r uint64) int {
+	return compareUint64(l, r)
+}
+
+func readDecimal(val []byte) decimal.Decimal {
+	e := readInt32(val[:int32Size])
+	s := readInt8(val[int32Size : int32Size+int8Size])
+	b := big.NewInt(0).SetBytes(val[int32Size+int8Size:])
+	if s < 0 {
+		b = b.Neg(b)
+	}
+	return decimal.NewFromBigInt(b, e)
+}
+
+func writeDecimal(buf []byte, val decimal.Decimal) {
+	expectSize(buf, sizeOfDecimal(val))
+	writeInt32(buf[:int32Size], val.Exponent())
+	b := val.Coefficient()
+	writeInt8(buf[int32Size:int32Size+int8Size], int8(b.Sign()))
+	b.FillBytes(buf[int32Size+int8Size:])
+}
+
+func sizeOfDecimal(val decimal.Decimal) ByteSize {
+	bsz := len(val.Coefficient().Bits()) * (bits.UintSize / 8)
+	return int32Size + int8Size + ByteSize(bsz)
+}
+
+func compareDecimal(l, r decimal.Decimal) int {
+	return l.Cmp(r)
+}
+
+const minYear int16 = 1901
+
+func readYear(val []byte) int16 {
+	expectSize(val, yearSize)
+	return int16(readUint8(val)) + minYear
+}
+
+func writeYear(buf []byte, val int16) {
+	expectSize(buf, yearSize)
+	writeUint8(buf, uint8(val-minYear))
+}
+
+func compareYear(l, r int16) int {
+	return compareInt16(l, r)
+}
+
+// adapted from:
+// https://dev.mysql.com/doc/internals/en/date-and-time-data-type-representation.html
+const (
+	yearShift  uint32 = 16
+	monthShift uint32 = 8
+	monthMask  uint32 = 255 << monthShift
+	dayMask    uint32 = 255
+)
+
+func readDate(val []byte) (date time.Time) {
+	expectSize(val, dateSize)
+	t := readUint32(val)
+	y := t >> yearShift
+	m := (t & monthMask) >> monthShift
+	d := (t & dayMask)
+	return time.Date(int(y), time.Month(m), int(d), 0, 0, 0, 0, time.UTC)
+}
+
+func writeDate(buf []byte, val time.Time) {
+	expectSize(buf, dateSize)
+	t := uint32(val.Year() << yearShift)
+	t += uint32(val.Month() << monthShift)
+	t += uint32(val.Day())
+	writeUint32(buf, t)
+}
+
+func compareDate(l, r time.Time) int {
+	return compareDatetime(l, r)
+}
+
+func readTime(val []byte) int64 {
+	expectSize(val, timeSize)
+	return readInt64(val)
+}
+
+func writeTime(buf []byte, val int64) {
+	expectSize(buf, timeSize)
+	writeInt64(buf, val)
+}
+
+func compareTime(l, r int64) int {
+	return compareInt64(l, r)
+}
+
+func readDatetime(buf []byte) (t time.Time) {
+	expectSize(buf, datetimeSize)
+	t = time.UnixMicro(readInt64(buf)).UTC()
 	return
 }
 
-func writeTimestamp(buf []byte, val time.Time) {
-	expectSize(buf, timestampSize)
-	writeInt64(buf, val.UnixNano())
+func writeDatetime(buf []byte, val time.Time) {
+	expectSize(buf, datetimeSize)
+	writeInt64(buf, val.UnixMicro())
 }
 
-func compareTimestamp(l, r time.Time) int {
+func compareDatetime(l, r time.Time) int {
 	if l.Equal(r) {
 		return 0
 	} else if l.Before(r) {
@@ -378,9 +497,32 @@ func compareTimestamp(l, r time.Time) int {
 	}
 }
 
+func readEnum(val []byte) uint16 {
+	return readUint16(val)
+}
+
+func writeEnum(buf []byte, val uint16) {
+	writeUint16(buf, val)
+}
+
+func compareEnum(l, r uint16) int {
+	return compareUint16(l, r)
+}
+
+func readSet(val []byte) uint64 {
+	return readUint64(val)
+}
+
+func writeSet(buf []byte, val uint64) {
+	writeUint64(buf, val)
+}
+
+func compareSet(l, r uint64) int {
+	return compareUint64(l, r)
+}
+
 func readString(val []byte) string {
-	// todo(andy): fix allocation
-	return string(readByteString(val))
+	return stringFromBytes(readByteString(val))
 }
 
 func writeString(buf []byte, val string) {
@@ -406,6 +548,33 @@ func compareByteString(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
+func readHash128(val []byte) []byte {
+	expectSize(val, hash128Size)
+	return val
+}
+
+func writeHash128(buf, val []byte) {
+	expectSize(buf, hash128Size)
+	copy(buf, val)
+}
+
+func readAddress(val []byte) []byte {
+	expectSize(val, addressSize)
+	return val
+}
+func writeAddress(buf, val []byte) {
+	expectSize(buf, addressSize)
+	copy(buf, val)
+}
+
+func compareHash128(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
+func compareAddress(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
 func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
@@ -417,14 +586,7 @@ func expectSize(buf []byte, sz ByteSize) {
 	}
 }
 
-func expectTrue(b bool) {
-	if !b {
-		panic("expected true")
-	}
-}
-
-func expectFalse(b bool) {
-	if b {
-		panic("expected false")
-	}
+// stringFromBytes converts a []byte to string without a heap allocation.
+func stringFromBytes(b []byte) string {
+	return *(*string)(unsafe.Pointer(&b))
 }

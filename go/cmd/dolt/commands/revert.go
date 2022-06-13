@@ -18,6 +18,8 @@ import (
 	"context"
 	"io"
 
+	"github.com/dolthub/dolt/go/store/types"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -55,6 +57,10 @@ func (cmd RevertCmd) Description() string {
 	return "Undo the changes introduced in a commit."
 }
 
+func (cmd RevertCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
+	return types.IsFormat_DOLT_1(nbf)
+}
+
 // CreateMarkdown implements the interface cli.Command.
 func (cmd RevertCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 	ap := cli.CreateRevertArgParser()
@@ -68,7 +74,7 @@ func (cmd RevertCmd) ArgParser() *argparser.ArgParser {
 // Exec implements the interface cli.Command.
 func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateRevertArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// This command creates a commit, so we need user identity
@@ -80,7 +86,11 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 		usage()
 		return 1
 	}
-	headRoot, err := dEnv.HeadRoot(ctx)
+	headCommit, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+	headRoot, err := headCommit.GetRootValue(ctx)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
@@ -116,7 +126,7 @@ func (cmd RevertCmd) Exec(ctx context.Context, commandStr string, args []string,
 	}
 
 	opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, commits, opts)
+	workingRoot, revertMessage, err := merge.Revert(ctx, dEnv.DoltDB, workingRoot, headCommit, commits, opts)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

@@ -53,7 +53,7 @@ func TestValidateRef(t *testing.T) {
 
 	_, err = db.validateRefAsCommit(context.Background(), r)
 	assert.Error(t, err)
-	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, types.Format_Default)))
+	_, err = db.validateRefAsCommit(context.Background(), mustRef(types.NewRef(b, db.Format())))
 }
 
 type DatabaseSuite struct {
@@ -92,7 +92,7 @@ func (suite *DatabaseSuite) TearDownTest() {
 func (suite *RemoteDatabaseSuite) TestWriteRefToNonexistentValue() {
 	ds, err := suite.db.GetDataset(context.Background(), "foo")
 	suite.NoError(err)
-	r, err := types.NewRef(types.Bool(true), types.Format_Default)
+	r, err := types.NewRef(types.Bool(true), suite.db.Format())
 	suite.NoError(err)
 	suite.Panics(func() { CommitValue(context.Background(), suite.db, ds, r) })
 }
@@ -121,7 +121,7 @@ func (suite *DatabaseSuite) TestCompletenessCheck() {
 	suite.NoError(err)
 
 	s = mustHeadValue(ds1).(types.Set)
-	ref, err := types.NewRef(types.Float(1000), types.Format_Default)
+	ref, err := types.NewRef(types.Float(1000), suite.db.Format())
 	suite.NoError(err)
 	se, err = s.Edit().Insert(ref)
 	suite.NoError(err)
@@ -278,7 +278,7 @@ func mustNomsMap(t *testing.T, dsm DatasetsMap) types.Map {
 }
 
 func (suite *DatabaseSuite) TestDatasetsMapType() {
-	if suite.db.Format() == types.Format_DOLT_DEV {
+	if suite.db.Format().UsesFlatbuffers() {
 		suite.T().Skip()
 	}
 

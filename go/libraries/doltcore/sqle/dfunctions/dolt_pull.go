@@ -66,31 +66,33 @@ func (d DoltPullFunc) WithChildren(children ...sql.Expression) (sql.Expression, 
 func (d DoltPullFunc) Eval(ctx *sql.Context, row sql.Row) (interface{}, error) {
 	args, err := getDoltArgs(ctx, row, d.Children())
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, err
 	}
-	return DoDoltPull(ctx, args)
+	conflicts, _, err := DoDoltPull(ctx, args)
+	return conflicts, err
 }
 
-func DoDoltPull(ctx *sql.Context, args []string) (int, error) {
+// DoDoltPull returns conflicts, fast_forward statuses
+func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	dbName := ctx.GetCurrentDatabase()
 
 	if len(dbName) == 0 {
-		return noConflicts, fmt.Errorf("empty database name.")
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("empty database name.")
 	}
 
 	sess := dsess.DSessFromSess(ctx.Session)
 	dbData, ok := sess.GetDbData(ctx, dbName)
 	if !ok {
-		return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+		return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 	}
 
 	apr, err := cli.CreatePullArgParser().Parse(args)
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
 	if apr.NArg() > 1 {
-		return noConflicts, actions.ErrInvalidPullArgs
+		return noConflictsOrViolations, threeWayMerge, actions.ErrInvalidPullArgs
 	}
 
 	var remoteName string
@@ -100,20 +102,21 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, error) {
 
 	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
 	srcDB, err := pullSpec.Remote.GetRemoteDBWithoutCaching(ctx, dbData.Ddb.ValueReadWriter().Format())
 	if err != nil {
-		return noConflicts, fmt.Errorf("failed to get remote db; %w", err)
+		return noConflictsOrViolations, threeWayMerge, fmt.Errorf("failed to get remote db; %w", err)
 	}
 
 	ws, err := sess.WorkingSet(ctx, dbName)
 	if err != nil {
-		return noConflicts, err
+		return noConflictsOrViolations, threeWayMerge, err
 	}
 
 	var conflicts int
+	var fastForward int
 	for _, refSpec := range pullSpec.RefSpecs {
 		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
 
@@ -122,42 +125,42 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, error) {
 			// todo: can we pass nil for either of the channels?
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, runProgFuncs, stopProgFuncs)
 			if err != nil {
-				return noConflicts, err
+				return noConflictsOrViolations, threeWayMerge, err
 			}
 
 			// TODO: this could be replaced with a canFF check to test for error
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if err != nil {
-				return noConflicts, fmt.Errorf("fetch failed; %w", err)
+				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
 			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
 			if !ok {
-				return noConflicts, sql.ErrDatabaseNotFound.New(dbName)
+				return noConflictsOrViolations, threeWayMerge, sql.ErrDatabaseNotFound.New(dbName)
 			}
 
 			mergeSpec, err := createMergeSpec(ctx, sess, dbName, apr, remoteTrackRef.String())
 			if err != nil {
-				return noConflicts, err
+				return noConflictsOrViolations, threeWayMerge, err
 			}
-			ws, conflicts, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
+			ws, conflicts, fastForward, err = mergeIntoWorkingSet(ctx, sess, roots, ws, dbName, mergeSpec)
 			if err != nil && !errors.Is(doltdb.ErrUpToDate, err) {
-				return conflicts, err
+				return conflicts, fastForward, err
 			}
 
 			err = sess.SetWorkingSet(ctx, dbName, ws)
 			if err != nil {
-				return conflicts, err
+				return conflicts, fastForward, err
 			}
 		}
 	}
 
 	err = actions.FetchFollowTags(ctx, dbData.Rsw.TempTableFilesDir(), srcDB, dbData.Ddb, runProgFuncs, stopProgFuncs)
 	if err != nil {
-		return noConflicts, err
+		return conflicts, fastForward, err
 	}
 
-	return noConflicts, nil
+	return conflicts, fastForward, nil
 }
 
 func pullerProgFunc(ctx context.Context, statsCh <-chan pull.Stats) {

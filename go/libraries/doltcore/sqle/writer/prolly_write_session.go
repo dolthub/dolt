@@ -59,26 +59,32 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 	if err != nil {
 		return nil, err
 	}
-	autoCol := autoIncrementColFromSchema(sch)
-
 	pkSch, err := sqlutil.FromDoltSchema(table, sch)
 	if err != nil {
 		return nil, err
 	}
+	autoCol := autoIncrementColFromSchema(sch)
 
 	var pw indexWriter
+	var sws map[string]indexWriter
 	if schema.IsKeyless(sch) {
-		pw, err = getKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+		pw, err = getPrimaryKeylessProllyWriter(ctx, t, pkSch.Schema, sch)
+		if err != nil {
+			return nil, err
+		}
+		sws, err = getSecondaryKeylessProllyWriters(ctx, t, pkSch.Schema, sch, pw.(prollyKeylessWriter))
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		pw, err = getPrimaryProllyWriter(ctx, t, pkSch.Schema, sch)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	sws, err := getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
-	if err != nil {
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		sws, err = getSecondaryProllyIndexWriters(ctx, t, pkSch.Schema, sch)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	twr := &prollyTableWriter{
@@ -88,9 +94,10 @@ func (s *prollyWriteSession) GetTableWriter(ctx context.Context, table, db strin
 		secondary: sws,
 		tbl:       t,
 		sch:       sch,
+		sqlSch:    pkSch.Schema,
 		aiCol:     autoCol,
 		aiTracker: s.tracker,
-		sess:      s,
+		flusher:   s,
 		setter:    setter,
 		batched:   batched,
 	}
@@ -182,6 +189,7 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 			return nil, err
 		}
 	}
+
 	s.workingSet = s.workingSet.WithWorkingRoot(flushed)
 
 	return s.workingSet, nil
@@ -189,8 +197,25 @@ func (s *prollyWriteSession) flush(ctx context.Context) (*doltdb.WorkingSet, err
 
 // setRoot is the inner implementation for SetRoot that does not acquire any locks
 func (s *prollyWriteSession) setWorkingSet(ctx context.Context, ws *doltdb.WorkingSet) error {
-	for name := range s.tables {
-		delete(s.tables, name)
+	root := ws.WorkingRoot()
+	for tableName, tableWriter := range s.tables {
+		t, ok, err := root.GetTable(ctx, tableName)
+		if err != nil {
+			return err
+		}
+		if !ok { // table was removed in newer root
+			delete(s.tables, tableName)
+			continue
+		}
+		tSch, err := t.GetSchema(ctx)
+		if err != nil {
+			return err
+		}
+
+		err = tableWriter.Reset(ctx, s, t, tSch)
+		if err != nil {
+			return err
+		}
 	}
 	s.workingSet = ws
 	return nil

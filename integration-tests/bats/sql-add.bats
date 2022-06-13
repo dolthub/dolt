@@ -3,6 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
+    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -23,6 +24,22 @@ teardown() {
 @test "sql-add: DOLT_ADD all flag works" {
     run dolt sql -q "SELECT DOLT_ADD('-A')"
     run dolt sql -q "SELECT DOLT_COMMIT('-m', 'Commit1')"
+
+    # Check that everything was added
+    run dolt diff
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+
+    run dolt log
+    [ $status -eq 0 ]
+    [[ "$output" =~ "Commit1" ]] || false
+    regex='Bats Tests <bats@email.fake>'
+    [[ "$output" =~ "$regex" ]] || false
+}
+
+@test "sql-add: DADD all flag works" {
+    run dolt sql -q "call dadd('-A')"
+    run dolt sql -q "call dcommit('-m', 'Commit1')"
 
     # Check that everything was added
     run dolt diff

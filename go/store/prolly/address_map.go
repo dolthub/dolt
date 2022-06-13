@@ -30,9 +30,13 @@ type AddressMap struct {
 }
 
 func NewEmptyAddressMap(ns tree.NodeStore) AddressMap {
+	return NewAddressMap(newEmptyMapNode(ns.Pool()), ns)
+}
+
+func NewAddressMap(node tree.Node, ns tree.NodeStore) AddressMap {
 	return AddressMap{
 		addresses: orderedTree[stringSlice, address, lexicographic]{
-			root:  newEmptyMapNode(ns.Pool()),
+			root:  node,
 			ns:    ns,
 			order: lexicographic{},
 		},
@@ -57,6 +61,10 @@ func (c AddressMap) Count() int {
 
 func (c AddressMap) Height() int {
 	return c.addresses.height()
+}
+
+func (c AddressMap) Node() tree.Node {
+	return c.addresses.root
 }
 
 func (c AddressMap) HashOf() hash.Hash {

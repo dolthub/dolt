@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // TupleDesc describes a Tuple set.
@@ -239,35 +241,24 @@ func (td TupleDesc) GetFloat64(i int, tup Tuple) (v float64, ok bool) {
 	return
 }
 
+// GetBit reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetBit(i int, tup Tuple) (v uint64, ok bool) {
+	td.expectEncoding(i, Bit64Enc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readBit64(b), true
+	}
+	return
+}
+
 // GetDecimal reads a float64 from the ith field of the Tuple.
 // If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetDecimal(i int, tup Tuple) (v string, ok bool) {
+func (td TupleDesc) GetDecimal(i int, tup Tuple) (v decimal.Decimal, ok bool) {
 	td.expectEncoding(i, DecimalEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readString(b), true
-	}
-	return
-}
-
-// GetTimestamp reads a time.Time from the ith field of the Tuple.
-// If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetTimestamp(i int, tup Tuple) (v time.Time, ok bool) {
-	td.expectEncoding(i, TimestampEnc, DateEnc, DatetimeEnc, YearEnc)
-	b := td.GetField(i, tup)
-	if b != nil {
-		v, ok = readTimestamp(b), true
-	}
-	return
-}
-
-// GetSqlTime reads a string encoded Time value from the ith field of the Tuple.
-// If the ith field is NULL, |ok| is set to false.
-func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v string, ok bool) {
-	td.expectEncoding(i, TimeEnc)
-	b := td.GetField(i, tup)
-	if b != nil {
-		v, ok = readString(b), true
+		v, ok = readDecimal(b), true
 	}
 	return
 }
@@ -278,7 +269,62 @@ func (td TupleDesc) GetYear(i int, tup Tuple) (v int16, ok bool) {
 	td.expectEncoding(i, YearEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v, ok = readInt16(b), true
+		v, ok = readYear(b), true
+	}
+	return
+}
+
+// GetDate reads a time.Time from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetDate(i int, tup Tuple) (v time.Time, ok bool) {
+	td.expectEncoding(i, DateEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readDate(b), true
+	}
+	return
+}
+
+// GetSqlTime reads a string encoded Time value from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSqlTime(i int, tup Tuple) (v int64, ok bool) {
+	td.expectEncoding(i, TimeEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readInt64(b), true
+	}
+	return
+}
+
+// GetDatetime reads a time.Time from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetDatetime(i int, tup Tuple) (v time.Time, ok bool) {
+	td.expectEncoding(i, DatetimeEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readDatetime(b), true
+	}
+	return
+}
+
+// GetEnum reads a uin16 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetEnum(i int, tup Tuple) (v uint16, ok bool) {
+	td.expectEncoding(i, EnumEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readEnum(b), true
+	}
+	return
+}
+
+// GetSet reads a uint64 from the ith field of the Tuple.
+// If the ith field is NULL, |ok| is set to false.
+func (td TupleDesc) GetSet(i int, tup Tuple) (v uint64, ok bool) {
+	td.expectEncoding(i, SetEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v, ok = readSet(b), true
 	}
 	return
 }
@@ -331,6 +377,26 @@ func (td TupleDesc) GetGeometry(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, Hash128Enc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = b
+		ok = true
+	}
+	return
+}
+
+func (td TupleDesc) GetAddress(i int, tup Tuple) (v []byte, ok bool) {
+	td.expectEncoding(i, AddressEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = b
+		ok = true
+	}
+	return
+}
+
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
 		if enc == td.Types[i].Enc {
@@ -365,9 +431,11 @@ func (td TupleDesc) FormatValue(i int, value []byte) string {
 	if value == nil {
 		return "NULL"
 	}
-
+	return formatValue(td.Types[i].Enc, value)
+}
+func formatValue(enc Encoding, value []byte) string {
 	// todo(andy): complete cases
-	switch td.Types[i].Enc {
+	switch enc {
 	case Int8Enc:
 		v := readInt8(value)
 		return strconv.Itoa(int(v))
@@ -398,9 +466,37 @@ func (td TupleDesc) FormatValue(i int, value []byte) string {
 	case Float64Enc:
 		v := readFloat64(value)
 		return fmt.Sprintf("%f", v)
+	case Bit64Enc:
+		v := readUint64(value)
+		return strconv.FormatUint(v, 10)
+	case DecimalEnc:
+		v := readDecimal(value)
+		return v.String()
+	case YearEnc:
+		v := readYear(value)
+		return strconv.Itoa(int(v))
+	case DateEnc:
+		v := readDate(value)
+		return v.Format("2006-01-02")
+	case TimeEnc:
+		v := readTime(value)
+		return strconv.FormatInt(v, 10)
+	case DatetimeEnc:
+		v := readDatetime(value)
+		return v.Format(time.RFC3339)
+	case EnumEnc:
+		v := readEnum(value)
+		return strconv.Itoa(int(v))
+	case SetEnc:
+		v := readSet(value)
+		return strconv.FormatUint(v, 10)
 	case StringEnc:
 		return readString(value)
 	case ByteStringEnc:
+		return string(value)
+	case Hash128Enc:
+		return string(value)
+	case AddressEnc:
 		return string(value)
 	default:
 		return string(value)

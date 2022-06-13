@@ -16,7 +16,7 @@ package sqle
 
 import (
 	"context"
-	"errors"
+	goerrors "errors"
 	"fmt"
 	"testing"
 
@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
@@ -38,7 +39,7 @@ import (
 func TestRenameTable(t *testing.T) {
 	otherTable := "other"
 	cc := schema.NewColCollection(
-		schema.NewColumn("id", uint64(100), types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("id", uint64(100), types.StringKind, true, schema.NotNullConstraint{}),
 	)
 	otherSch, err := schema.SchemaFromCols(cc)
 	require.NoError(t, err)
@@ -136,10 +137,10 @@ func TestAddColumnToTable(t *testing.T) {
 			name:       "bool column no default",
 			tag:        dtestutils.NextTag,
 			newColName: "newCol",
-			colKind:    types.BoolKind,
+			colKind:    types.IntKind,
 			nullable:   Null,
 			expectedSchema: dtestutils.AddColumnToSchema(dtestutils.TypedSchema,
-				schema.NewColumn("newCol", dtestutils.NextTag, types.BoolKind, false)),
+				schema.NewColumn("newCol", dtestutils.NextTag, types.IntKind, false)),
 			expectedRows: dtestutils.TypedRows,
 		},
 		{
@@ -173,10 +174,10 @@ func TestAddColumnToTable(t *testing.T) {
 			order:      &sql.ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -190,11 +191,11 @@ func TestAddColumnToTable(t *testing.T) {
 			defaultVal: mustStringToColumnDefault("42"),
 			order:      &sql.ColumnOrder{AfterColumn: "age"},
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 				schemaNewColumnWithDefault("newCol", dtestutils.NextTag, types.IntKind, false, "42"),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 			expectedRows: dtestutils.AddColToRows(t, dtestutils.TypedRows, dtestutils.NextTag, types.NullValue),
@@ -445,10 +446,10 @@ func TestDropColumnUsedByIndex(t *testing.T) {
 
 func TestDropPks(t *testing.T) {
 	var dropTests = []struct {
-		name      string
-		setup     []string
-		exit      int
-		fkIdxName string
+		name        string
+		setup       []string
+		expectedErr *errors.Kind
+		fkIdxName   string
 	}{
 		{
 			name: "no error on drop pk",
@@ -456,7 +457,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id))",
 				"insert into parent values (1,1,1),(2,2,2)",
 			},
-			exit: 0,
 		},
 		{
 			name: "no error if backup index",
@@ -464,7 +464,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id), key `backup` (id))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -473,7 +472,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (age))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (age) references parent (age))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -482,7 +480,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (id, age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id, age) references parent (id, age))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -491,7 +488,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age, name), key `backup` (id, age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id, age) references parent (id, age))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -500,7 +496,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `backup` (id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -509,7 +504,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup1` (age, id), key `bad_backup2` (age), key `backup` (id, age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -518,7 +512,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id), key `backup2` (id, age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      0,
 			fkIdxName: "backup1",
 		},
 		{
@@ -527,7 +520,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id, age), key `bad_backup` (age, id), key `backup1` (id, age, name), unique key `backup2` (id, age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      0,
 			fkIdxName: "backup2",
 		},
 		{
@@ -536,7 +528,6 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, other int, primary key (id, age, name), key `backup` (id, age, other))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id, age) references parent (id, age))",
 			},
-			exit:      0,
 			fkIdxName: "backup",
 		},
 		{
@@ -545,8 +536,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id))",
 				"create table child (id int, name varchar(1), age int, primary key (id), constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      1,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if FK ref but bad backup index",
@@ -554,8 +545,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, primary key (id), key `bad_backup2` (age))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      1,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if misordered compound backup index for FK",
@@ -563,8 +554,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (id), key `backup` (age, id))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (id) references parent (id))",
 			},
-			exit:      1,
-			fkIdxName: "id",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "id",
 		},
 		{
 			name: "error if incomplete compound backup index for FK",
@@ -572,8 +563,8 @@ func TestDropPks(t *testing.T) {
 				"create table parent (id int, name varchar(1), age int, constraint `primary` primary key (age, id), key `backup` (age, name))",
 				"create table child (id int, name varchar(1), age int, constraint `fk` foreign key (age, id) references parent (age,  id))",
 			},
-			exit:      1,
-			fkIdxName: "ageid",
+			expectedErr: sql.ErrCantDropIndex,
+			fkIdxName:   "ageid",
 		},
 	}
 
@@ -598,11 +589,14 @@ func TestDropPks(t *testing.T) {
 			}
 
 			drop := "alter table parent drop primary key"
-			_, _, err = engine.Query(sqlCtx, drop)
-			switch tt.exit {
-			case 1:
+			_, iter, err := engine.Query(sqlCtx, drop)
+			require.NoError(t, err)
+
+			err = drainIter(sqlCtx, iter)
+			if tt.expectedErr != nil {
 				require.Error(t, err)
-			default:
+				assert.True(t, tt.expectedErr.Is(err), "Expected error of type %s but got %s", tt.expectedErr, err)
+			} else {
 				require.NoError(t, err)
 			}
 
@@ -635,7 +629,7 @@ func TestNewPkOrdinals(t *testing.T) {
 			schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 			schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 			schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-			schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+			schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 			schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 		),
 	)
@@ -654,7 +648,7 @@ func TestNewPkOrdinals(t *testing.T) {
 				schema.NewColCollection(
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
-					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
@@ -668,7 +662,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("new", dtestutils.NextTag, types.StringKind, false),
-					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
@@ -682,7 +676,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 				),
 			),
 			expPkOrdinals: []int{4, 1},
@@ -692,7 +686,7 @@ func TestNewPkOrdinals(t *testing.T) {
 			newSch: schema.MustSchemaFromCols(
 				schema.NewColCollection(
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
@@ -719,7 +713,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 					schema.NewColumn("new", dtestutils.NextTag, types.StringKind, true),
 				),
@@ -733,7 +727,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("is_married", dtestutils.NextTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("is_married", dtestutils.NextTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
@@ -746,7 +740,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("new", dtestutils.IsMarriedTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("new", dtestutils.IsMarriedTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
@@ -759,7 +753,7 @@ func TestNewPkOrdinals(t *testing.T) {
 					schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, false, schema.NotNullConstraint{}),
 					schema.NewColumn("name", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-					schema.NewColumn("new", dtestutils.NextTag, types.BoolKind, true, schema.NotNullConstraint{}),
+					schema.NewColumn("new", dtestutils.NextTag, types.IntKind, true, schema.NotNullConstraint{}),
 					schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 				),
 			),
@@ -771,7 +765,7 @@ func TestNewPkOrdinals(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			res, err := modifyPkOrdinals(oldSch, tt.newSch)
 			if tt.err != nil {
-				require.True(t, errors.Is(err, tt.err))
+				require.True(t, goerrors.Is(err, tt.err))
 			} else {
 				require.Equal(t, res, tt.expPkOrdinals)
 			}
@@ -784,7 +778,7 @@ func TestModifyColumn(t *testing.T) {
 		schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 	)
 	ti, err := typeinfo.FromSqlType(sql.MustCreateStringWithDefaults(sqltypes.VarChar, 599))
@@ -792,10 +786,10 @@ func TestModifyColumn(t *testing.T) {
 	newNameColSameTag, err := schema.NewColumnWithTypeInfo("name", dtestutils.NameTag, ti, false, "", false, "", schema.NotNullConstraint{})
 	require.NoError(t, err)
 	alteredTypeSch2 := dtestutils.CreateSchema(
-		schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 		newNameColSameTag,
 		schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+		schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 	)
 
@@ -810,13 +804,13 @@ func TestModifyColumn(t *testing.T) {
 	}{
 		{
 			name:           "column rename",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("newId", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 			expectedRows: dtestutils.TypedRows,
@@ -826,10 +820,10 @@ func TestModifyColumn(t *testing.T) {
 			existingColumn: schema.NewColumn("age", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false),
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 			expectedRows: dtestutils.TypedRows,
@@ -841,9 +835,9 @@ func TestModifyColumn(t *testing.T) {
 			order:          &sql.ColumnOrder{First: true},
 			expectedSchema: dtestutils.CreateSchema(
 				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
 			expectedRows: dtestutils.TypedRows,
@@ -854,9 +848,9 @@ func TestModifyColumn(t *testing.T) {
 			newColumn:      schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 			order:          &sql.ColumnOrder{AfterColumn: "is_married"},
 			expectedSchema: dtestutils.CreateSchema(
-				schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+				schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 				schema.NewColumn("name", dtestutils.NameTag, types.StringKind, false, schema.NotNullConstraint{}),
-				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.BoolKind, false, schema.NotNullConstraint{}),
+				schema.NewColumn("is_married", dtestutils.IsMarriedTag, types.IntKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("newAge", dtestutils.AgeTag, types.UintKind, false, schema.NotNullConstraint{}),
 				schema.NewColumn("title", dtestutils.TitleTag, types.StringKind, false),
 			),
@@ -864,19 +858,19 @@ func TestModifyColumn(t *testing.T) {
 		},
 		{
 			name:           "tag collision",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("newId", dtestutils.NameTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("newId", dtestutils.NameTag, types.StringKind, true, schema.NotNullConstraint{}),
 			expectedErr:    "two different columns with the same tag",
 		},
 		{
 			name:           "name collision",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
-			expectedErr:    "A column with the name name already exists",
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			newColumn:      schema.NewColumn("name", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
+			expectedErr:    "two different columns with the same name exist",
 		},
 		{
 			name:           "type change",
-			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+			existingColumn: schema.NewColumn("id", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 			newColumn:      schema.NewColumn("newId", dtestutils.IdTag, types.StringKind, true, schema.NotNullConstraint{}),
 			expectedSchema: alteredTypeSch,
 			expectedRows: []row.Row{
@@ -885,7 +879,7 @@ func TestModifyColumn(t *testing.T) {
 					types.String("00000000-0000-0000-0000-000000000000"),
 					types.String("Bill Billerson"),
 					types.Uint(32),
-					types.Bool(true),
+					types.Int(1),
 					types.String("Senior Dufus"),
 				),
 				dtestutils.NewRow(
@@ -893,7 +887,7 @@ func TestModifyColumn(t *testing.T) {
 					types.String("00000000-0000-0000-0000-000000000001"),
 					types.String("John Johnson"),
 					types.Uint(25),
-					types.Bool(false),
+					types.Int(0),
 					types.String("Dufus"),
 				),
 				dtestutils.NewRow(
@@ -901,7 +895,7 @@ func TestModifyColumn(t *testing.T) {
 					types.String("00000000-0000-0000-0000-000000000002"),
 					types.String("Rob Robertson"),
 					types.Uint(21),
-					types.Bool(false),
+					types.Int(0),
 					types.String(""),
 				),
 			},
@@ -926,7 +920,7 @@ func TestModifyColumn(t *testing.T) {
 			assert.NoError(t, err)
 
 			opts := editor.Options{Deaf: dEnv.DbEaFactory(), Tempdir: dEnv.TempTableFilesDir()}
-			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order, opts)
+			updatedTable, err := modifyColumn(ctx, tbl, tt.existingColumn, tt.newColumn, tt.order)
 			if len(tt.expectedErr) > 0 {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedErr)
