@@ -84,26 +84,27 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "primary key table: non-pk column type changes",
+			Name: "failed statements data validation for INSERT, UPDATE",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 text);",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
-				"alter table t modify column c2 int;",
-				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
+				"CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
+				"INSERT INTO test VALUES (1,1), (4,4), (5,5);",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select count(*) from dolt_history_t;",
-					Expected: []sql.Row{{4}},
+					Query:          "INSERT INTO test VALUES (2,2), (3,3), (1,1);",
+					ExpectedErrStr: "duplicate primary key given: [1]",
 				},
 				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
-					Expected: []sql.Row{{1, nil}, {4, nil}},
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
 				},
 				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-					Expected: []sql.Row{{1, 3}, {4, 6}},
+					Query:          "UPDATE test SET pk = pk + 1 ORDER BY pk;",
+					ExpectedErrStr: "duplicate primary key given: [5]",
+				},
+				{
+					Query:    "SELECT * FROM test;",
+					Expected: []sql.Row{{1, 1}, {4, 4}, {5, 5}},
 				},
 			},
 		},
@@ -315,17 +316,8 @@ func TestTruncate(t *testing.T) {
 func TestScripts(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
@@ -945,17 +937,8 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 func TestScriptsPrepared(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
@@ -1190,6 +1173,16 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		assert.False(t, newIdx.Empty())
 		assert.Equal(t, newIdx.Count(), uint64(2))
 	})
+}
+
+var newFormatSkippedScripts = []string{
+	// Different error output for primary key error
+	//"failed statements data validation for INSERT, UPDATE",
+	// wrong results
+	"Indexed Join On Keyless Table",
+	// Different query plans
+	"Partial indexes are used and return the expected result",
+	"Multiple indexes on the same columns in a different order",
 }
 
 func skipNewFormat(t *testing.T) {
