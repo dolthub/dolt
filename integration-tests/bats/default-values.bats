@@ -524,6 +524,7 @@ DELIM
     dolt sql -q "ALTER TABLE test CHANGE c2 c2 TIMESTAMP NULL DEFAULT '2008-04-22 16:16:16'"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,NO,2020-04-01 16:16:16" ]] || false
     [[ "$output" =~ "c2,YES,2008-04-22 16:16:16" ]] || false
