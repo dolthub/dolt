@@ -16,10 +16,8 @@ package doltdb
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
