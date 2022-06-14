@@ -43,6 +43,7 @@ const (
 	directoryFlag = "directory"
 	filenameFlag  = "file-name"
 	batchFlag     = "batch"
+	bulkFlag      = "bulk"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -56,11 +57,13 @@ var dumpDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Export all tables.`,
 	LongDesc: `{{.EmphasisLeft}}dolt dump{{.EmphasisRight}} dumps all tables in the working set. 
 If a dump file already exists then the operation will fail, unless the {{.EmphasisLeft}}--force | -f{{.EmphasisRight}} flag 
-is provided. The force flag forces the existing dump file to be overwritten.
+is provided. The force flag forces the existing dump file to be overwritten. The {{.EmphasisLeft}}-r{{.EmphasisRight}} flag 
+is used to support different file formats of the dump. In the case of non .sql files each table is written to a separate
+csv,json or parquet file. 
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--bulk] ",
 	},
 }
 
@@ -84,12 +87,12 @@ func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
 
 func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
+	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv, json and parquet.")
+	ap.SupportsString(filenameFlag, "fn", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
+	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
-	ap.SupportsString(FormatFlag, "r", "result_file_type", "Define the type of the output file. Defaults to sql. Valid values are sql, csv, json and parquet.")
-	ap.SupportsString(filenameFlag, "", "file_name", "Define file name for dump file. Defaults to `doltdump.sql`.")
-	ap.SupportsString(directoryFlag, "", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
-
+	ap.SupportsFlag(bulkFlag, "", "Support bulk loading paradigms for the dump file. Includes statements to turn off autocommit and foreign_key_checks. Only used for .sql files")
 	return ap
 }
 
@@ -125,6 +128,7 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	force := apr.Contains(forceParam)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
+	bulk := apr.Contains(bulkFlag)
 
 	name, vErr := validateArgs(apr)
 	if vErr != nil {
@@ -160,7 +164,16 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		dumpOpts := getDumpOptions(name, resFormat)
 		fPath, err := checkAndCreateOpenDestFile(ctx, root, dEnv, force, dumpOpts, name)
 		if err != nil {
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			return HandleVErrAndExitCode(err, usage)
+		}
+
+		// When the user is dump a .sql file and wants to support bulk loading paradigms we preprend to the
+		// export job SET_FOREIGN_KEY_CHECKS=0 and SET_AUTOCOMMIT = 0
+		if bulk {
+			err2 := supportBulkLoadingParadigms(dEnv, fPath)
+			if err2 != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
+			}
 		}
 
 		for _, tbl := range tblNames {
@@ -423,5 +436,26 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 			return err
 		}
 	}
+	return nil
+}
+
+// supportBulkLoadingParadigms adds statements that are used to expedite dump file ingestion.
+// cc. https://dev.mysql.com/doc/refman/8.0/en/optimizing-innodb-bulk-data-loading.html
+func supportBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
+	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write([]byte("SET AUTOCOMMIT = 0;\n"))
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS = 0;\n"))
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

@@ -646,6 +646,33 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
+@test "dump: --bulk flag works correctly" {
+    dolt sql -q "CREATE TABLE new_table(pk int primary key);"
+    dolt sql -q "INSERT INTO new_Table values (1)"
+
+    run dolt dump --bulk
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run head -n 2 doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "$output" =~ "SET AUTOCOMMIT = 0;" ]] || false
+    [[ "$output" =~ "SET FOREIGN_KEY_CHECKS = 0;" ]] || false
+
+    dolt sql < doltdump.sql
+
+    run dolt sql -r csv -q "select * from new_table"
+    [ "$status" -eq 0 ]
+    [[ "${lines[0]}" = "pk" ]] || false
+    [[ "${lines[1]}" = "1" ]] || false
+
+    # try with a csv output and ensure that there are no problems
+    run dolt dump -r csv --bulk
+    [ "$status" -eq 0 ]
+}
+
 function create_tables() {
   dolt sql -q "CREATE TABLE new_table(pk int primary key);"
   dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name varchar(100));"
