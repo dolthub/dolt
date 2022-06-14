@@ -46,7 +46,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/atomicerr"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 type diffOutput int
@@ -690,8 +689,22 @@ func writeDiffResults(
 		}
 
 		newRow, oldRow, err := ds.splitDiffResultRow(r)
+		if err != nil {
+			return err
+		}
 
-		writer.WriteRow(ctx, newRow.row, oldRow.colDiffs)
+		if oldRow.row != nil {
+			err := writer.WriteRow(ctx, oldRow.row, oldRow.colDiffs)
+			if err != nil {
+				return err
+			}
+		}
+		if newRow.row != nil {
+			err := writer.WriteRow(ctx, newRow.row, newRow.colDiffs)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
@@ -721,7 +734,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 	// TODO: need a better mapping from diff result row to output row
 	//  1st col needs to be reserved for +-><
 	//  need to handle union of all schemas
-	diffTypeStr := diffType.(types.String)
+	diffTypeStr := diffType.(string)
 	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		oldRow.row = make(sql.Row, len(ds.targetSch))
 		for i := range ds.diffQuerySch {
@@ -761,67 +774,6 @@ func getColumnNamesString(sch schema.Schema) string {
 		return false, nil
 	})
 	return strings.Join(cols, ",")
-}
-
-func splitDiff(tableSchema schema.Schema, resultSetSchema schema.Schema) diff.RowSplitter {
-	return func(r row.Row) ([]row.Row, error) {
-		var oldRow, newRow row.Row
-
-		// split rows in the result set into old, new
-		diffTypeCol, _ := resultSetSchema.GetAllCols().GetByName("diff_type")
-		diffType, ok := r.GetColVal(diffTypeCol.Tag)
-		if !ok {
-			return nil, fmt.Errorf("no value for column %s", "diff_type")
-		}
-
-		diffTypeStr := diffType.(types.String)
-		if diffTypeStr == "added" || diffTypeStr == "modified" {
-			taggedVals := make(row.TaggedValues)
-			resultSetSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				if int(tag) >= tableSchema.GetAllCols().Size() {
-					return true, nil
-				}
-
-				val, ok := r.GetColVal(tag)
-				if !ok {
-					val = types.NullValue
-				}
-				taggedVals[tag] = val
-				return false, nil
-			})
-
-			var err error
-			oldRow, err = row.New(types.Format_Default, tableSchema, taggedVals)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if diffTypeStr == "removed" || diffTypeStr == "modified" {
-			taggedVals := make(row.TaggedValues)
-			resultSetSchema.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-				if int(tag) < tableSchema.GetAllCols().Size() {
-					return true, nil
-				}
-
-				val, ok := r.GetColVal(tag)
-				if !ok {
-					val = types.NullValue
-				}
-
-				taggedVals[tag - (uint64(tableSchema.GetAllCols().Size()))] = val
-				return false, nil
-			})
-
-			var err error
-			oldRow, err = row.New(types.Format_Default, tableSchema, taggedVals)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		return []row.Row{oldRow, newRow}, nil
-	}
 }
 
 func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {

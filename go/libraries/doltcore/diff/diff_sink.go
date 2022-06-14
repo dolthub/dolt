@@ -15,17 +15,11 @@
 package diff
 
 import (
-	"context"
-	"errors"
-	"io"
-
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -39,26 +33,6 @@ type ColorFunc func(...interface{}) string
 
 type ColorDiffSink struct {
 	sch schema.Schema
-	ttw *tabular.TextTableWriter
-}
-
-// NewColorDiffSink returns a ColorDiffSink that uses  the writer and schema given to print its output. numHeaderRows
-// will change how many rows of output are considered part of the table header. Use 1 for diffs where the schemas are
-// the same between the two table revisions, and 2 for when they differ.
-func NewColorDiffSink(wr io.WriteCloser, sch schema.Schema, numHeaderRows int) (*ColorDiffSink, error) {
-	_, additionalCols := untyped.NewUntypedSchemaWithFirstTag(diffColTag, diffColName)
-	outSch, err := untyped.UntypedSchemaUnion(additionalCols, sch)
-	if err != nil {
-		panic(err)
-	}
-
-	ttw, err := tabular.NewTextTableWriterWithNumHeaderRows(wr, outSch, numHeaderRows)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &ColorDiffSink{outSch, ttw}, nil
 }
 
 // GetSchema gets the schema of the rows that this writer writes
@@ -153,18 +127,6 @@ func (cds *ColorDiffSink) ProcRowWithProps(r row.Row, props pipeline.ReadableMap
 		return err
 	}
 
-	return cds.ttw.WriteRow(context.TODO(), r)
-}
-
-// Close should release resources being held
-func (cds *ColorDiffSink) Close() error {
-	if cds.ttw != nil {
-		if err := cds.ttw.Close(context.TODO()); err != nil {
-			return err
-		}
-		cds.ttw = nil
-		return nil
-	} else {
-		return errors.New("Already closed.")
-	}
+	return nil
+	// return cds.ttw.WriteRow(context.TODO(), r)
 }
