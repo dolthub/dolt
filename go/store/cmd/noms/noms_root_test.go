@@ -56,7 +56,7 @@ func (s *nomsRootTestSuite) TestBasic() {
 	goldenGoodbye := "70b9adi6amrab3a5t4hcibdob0cq49m0\n"
 	if types.Format_Default == types.Format_DOLT_DEV {
 		goldenHello = "mmvr5g771a7eo56qpor2o0t5pvsolq75\n"
-		goldenGoodbye = "at0meqe6023ejm7re9ojskhnogd4drrl\n"
+		goldenGoodbye = "103spr29q69oq3b9a1ane7egt9uo4tkj\n"
 	}
 
 	ds, _ = datas.CommitValue(context.Background(), db, ds, types.String("hello!"))
