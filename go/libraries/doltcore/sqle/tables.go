@@ -93,6 +93,10 @@ func (sb *SingletonBucket) SetFrequency(value float64) {
 	sb.frequency = value
 }
 
+func (sb *SingletonBucket) IsSingleton() bool {
+	return true
+}
+
 func (sb *SingletonBucket) GetValue() float64 {
 	return sb.value
 }
@@ -102,40 +106,20 @@ func (sb *SingletonBucket) GetFrequency() float64 {
 }
 
 type DoltColumnStatistic struct {
-	buckets   map[float64]sql.Bucket
+	nullCount uint64
 	mean      float64
 	min       float64
 	max       float64
-	nullCount uint64
+	buckets   sql.Histogram
 }
 
-var _ sql.ColumnStatistics = &DoltColumnStatistic{}
-
-func (dcs *DoltColumnStatistic) SetBucket(value float64, bucket sql.Bucket) {
-	dcs.buckets[value] = bucket
-}
-
-func (dcs *DoltColumnStatistic) SetMean(value float64) {
-	dcs.mean = value
-}
-
-func (dcs *DoltColumnStatistic) SetMin(value float64) {
-	dcs.min = value
-}
-
-func (dcs *DoltColumnStatistic) SetMax(value float64) {
-	dcs.max = value
-}
-
-func (dcs *DoltColumnStatistic) SetNullCount(value uint64) {
-	dcs.nullCount = value
-}
+var _ sql.ColumnStatistic = &DoltColumnStatistic{}
 
 func (dcs *DoltColumnStatistic) GetBucket(value float64) sql.Bucket {
 	return dcs.buckets[value]
 }
 
-func (dcs *DoltColumnStatistic) GetBucketMap() map[float64]sql.Bucket {
+func (dcs *DoltColumnStatistic) GetHistogram() sql.Histogram {
 	return dcs.buckets
 }
 
@@ -156,12 +140,16 @@ func (dcs *DoltColumnStatistic) GetNullCount() uint64 {
 }
 
 type DoltStatistics struct {
-	ColumnStatisticsMap map[string]sql.ColumnStatistics
+	ColumnStatisticsMap sql.ColumnStatisticsMap
 }
 
 var _ sql.Statistics = &DoltStatistics{}
 
-func (ds *DoltStatistics) GetColumnStatistics(colName string) (sql.ColumnStatistics, error) {
+func (ds *DoltStatistics) GetColumnStatistics() sql.ColumnStatisticsMap {
+	return ds.ColumnStatisticsMap
+}
+
+func (ds *DoltStatistics) GetColumnStatistic(colName string) (sql.ColumnStatistic, error) {
 	if res, ok := ds.ColumnStatisticsMap[colName]; ok {
 		return res, nil
 	}
@@ -467,7 +455,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 
 	cols := t.sch.GetAllCols()
 	t.doltStats = &DoltStatistics{
-		ColumnStatisticsMap: make(map[string]sql.ColumnStatistics, cols.Size()),
+		ColumnStatisticsMap: make(map[string]sql.ColumnStatistic, cols.Size()),
 	}
 
 	// no rows, mark everything as 0 or empty
@@ -484,7 +472,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		return nil
 	}
 
-	// initialize column stats
+	// initialize column stats map
 	for _, col := range cols.GetColumns() {
 		t.doltStats.ColumnStatisticsMap[col.Name] = &DoltColumnStatistic{
 			buckets:   map[float64]sql.Bucket{},
@@ -524,11 +512,11 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 
 			for i := 0; i < cols.Size(); i++ {
 				col := cols.GetAtIndex(i)
-				colStats := colStatsMap[col.Name]
+				colStats := colStatsMap[col.Name].(*DoltColumnStatistic)
 
 				if row[i] == nil {
-					colStats.SetNullCount(colStats.GetNullCount() + 1)
-					continue // TODO: should you skip?
+					colStats.nullCount++
+					continue
 				}
 
 				val, err := sql.Float64.Convert(row[i])
@@ -537,30 +525,19 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 				}
 				v := val.(float64)
 
-				if bucket := colStats.GetBucket(v); bucket == nil {
-					colStats.SetBucket(v, &SingletonBucket{
-						value:     v,
-						frequency: 1.0,
-					})
+				if bucket, ok := colStats.buckets[v]; ok {
+					bucket.(*SingletonBucket).frequency += 1.0 / float64(t.count)
 				} else {
-					bucket.SetFrequency(bucket.GetFrequency() + 1)
+					colStats.buckets[v] = &SingletonBucket{
+						value:     v,
+						frequency: 1.0 / float64(t.count),
+					}
 				}
 
-				colStats.SetMean(colStats.GetMean() + v)
-				colStats.SetMin(math.Min(colStats.GetMin(), v))
-				colStats.SetMax(math.Max(colStats.GetMax(), v))
+				colStats.mean += v / float64(t.count)
+				colStats.min = math.Min(colStats.GetMin(), v)
+				colStats.max = math.Max(colStats.GetMax(), v)
 			}
-		}
-	}
-
-	// fix mean and frequencies
-	for i := 0; i < cols.Size(); i++ {
-		for _, colStats := range colStatsMap {
-			for _, bucket := range colStats.GetBucketMap() {
-				bucket.SetFrequency(bucket.GetFrequency() / float64(t.count))
-			}
-
-			colStats.SetMean(colStats.GetMean() / float64(t.count))
 		}
 	}
 
