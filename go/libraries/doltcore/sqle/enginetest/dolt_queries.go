@@ -21,6 +21,7 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
+	"github.com/dolthub/go-mysql-server/sql/plan"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
@@ -1256,6 +1257,186 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	//{
+	//	Name: "Constraint violations are persisted",
+	//	SetUpScript: []string{
+	//		"set dolt_force_transaction_commit = on;",
+	//		"CREATE table parent (pk int PRIMARY KEY, col1 int);",
+	//		"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));",
+	//		"CREATE table other (pk int);",
+	//		"INSERT INTO parent VALUES (1, 1), (2, 2);",
+	//		"CALL DOLT_COMMIT('-am', 'setup');",
+	//		"CALL DOLT_BRANCH('branch1');",
+	//		"CALL DOLT_BRANCH('branch2');",
+	//		"DELETE FROM parent where pk = 1;",
+	//		"CALL DOLT_COMMIT('-am', 'delete parent 1');",
+	//		"CALL DOLT_CHECKOUT('branch1');",
+	//		"INSERT INTO CHILD VALUES (1, 1);",
+	//		"CALL DOLT_COMMIT('-am', 'insert child of parent 1');",
+	//		"CALL DOLT_CHECKOUT('main');",
+	//	},
+	//	Assertions: []queries.ScriptTestAssertion{
+	//		{
+	//			Query:    "CALL DOLT_MERGE('branch1');",
+	//			Expected: []sql.Row{{0, 1}},
+	//		},
+	//		{
+	//			Query:    "SELECT violation_type, pk, parent_fk from dolt_constraint_violations_child;",
+	//			Expected: []sql.Row{{"foreign key", 1, 1}},
+	//		},
+	//	},
+	//},
+}
+
+// MergeViolationsAndConflictsMergeScripts tests new format merge behavior where
+// existing violations and conflicts are merged together.
+var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
+	{
+		Name: "conflicts on different branches can be merged",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on",
+			"CALL DOLT_CHECKOUT('-b', 'conflicts1');",
+			"CREATE table t (pk int PRIMARY KEY, col1 int);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+			"CALL DOLT_BRANCH('conflicts2');",
+
+			// branches conflicts1 and conflicts2 both have a table t with no rows
+
+			// create a conflict for pk 1 in conflicts1
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert pk 1');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t set col1 = 100 where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE T set col1 = -100 where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+			"CALL DOLT_CHECKOUT('conflicts1');",
+			"CALL DOLT_MERGE('other');",
+			"CALL DOLT_COMMIT('-afm', 'commit conflicts on conflicts1');",
+
+			// create a conflict for pk 2 in conflicts2
+			"CALL DOLT_CHECKOUT('conflicts2');",
+			"INSERT INTO t VALUES (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'insert pk 2');",
+			"CALL DOLT_BRANCH('other2');",
+			"UPDATE t set col1 = 100 where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+			"CALL DOLT_CHECKOUT('other2');",
+			"UPDATE T set col1 = -100 where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+			"CALL DOLT_CHECKOUT('conflicts2');",
+			"CALL DOLT_MERGE('other2');",
+			"CALL DOLT_COMMIT('-afm', 'commit conflicts on conflicts2');",
+
+			"CALL DOLT_CHECKOUT('conflicts1');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 1, 1, 100, 1, -100}},
+			},
+			{
+				Query:    "SELECT pk, col1 from t;",
+				Expected: []sql.Row{{1, 100}},
+			},
+			{
+				Query:    "CALL DOLT_CHECKOUT('conflicts2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{2, 2, 2, 100, 2, -100}},
+			},
+			{
+				Query:    "SELECT pk, col1 from t;",
+				Expected: []sql.Row{{2, 100}},
+			},
+			{
+				Query:    "CALL DOLT_MERGE('conflicts1');",
+				Expected: []sql.Row{{0, 0}},
+			},
+			{
+				Query: "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, 1, 1, 100, 1, -100},
+					{2, 2, 2, 100, 2, -100},
+				},
+			},
+			{
+				Query: "SELECT pk, col1 from t;",
+				Expected: []sql.Row{
+					{1, 100},
+					{2, 100},
+				},
+			},
+			{
+				Query: "UPDATE t SET col1 = 300;",
+				Expected: []sql.Row{{sql.OkResult{
+					RowsAffected: 2,
+					Info: plan.UpdateInfo{
+						Matched: 2,
+						Updated: 2,
+					},
+				}}},
+			},
+			{
+				Query: "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{
+					{1, 1, 1, 300, 1, -100},
+					{2, 2, 2, 300, 2, -100},
+				},
+			},
+		},
+	},
+	{
+		Name: "conflicts of different schemas can't coexist",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on",
+			"CREATE table t (pk int PRIMARY KEY, col1 int);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert pk 1');",
+			"CALL DOLT_BRANCH('other');",
+			"UPDATE t set col1 = 100 where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+			"CALL DOLT_CHECKOUT('other');",
+			"UPDATE T set col1 = -100 where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+			"CALL DOLT_CHECKOUT('main');",
+			"CALL DOLT_MERGE('other');",
+			"CALL DOLT_COMMIT('-afm', 'commit conflicts on main');",
+			"ALTER TABLE t ADD COLUMN col2 int;",
+			"CALL DOLT_COMMIT('-afm', 'alter schema');",
+			"CALL DOLT_CHECKOUT('-b', 'other2');",
+			"UPDATE t set col2 = -1000 where pk = 1;",
+			"CALL DOLT_COMMIT('-afm', 'update pk 1 to -1000');",
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE t set col2 = 1000 where pk = 1;",
+			"CALL DOLT_COMMIT('-afm', 'update pk 1 to 1000');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('other2');",
+				ExpectedErrStr: "the existing conflicts are of a different schema than the conflicts generated by this merge. Please resolve them and try again",
+			},
+			{
+				Query:    "SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{1, 1, 1, 100, 1, -100}},
+			},
+			{
+				Query:    "SELECT pk, col1, col2 from t;",
+				Expected: []sql.Row{{1, 100, 1000}},
+			},
+		},
+	},
+	// TODO: Violation merging
+}
+
+// AppendViolationsAbortOnConflictsMergeScripts tests old format merge behavior
+// where violations are appended and merges are aborted if there are existing
+// violations and/or conflicts.
+var AppendViolationsAbortOnConflictsMergeScripts = []queries.ScriptTest{
 	{
 		Name: "merging branches into a constraint violated head. Any new violations are appended",
 		SetUpScript: []string{
