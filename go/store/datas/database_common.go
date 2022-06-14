@@ -309,6 +309,24 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	return db.datasetFromMap(ctx, datasetID, datasets)
 }
 
+func (db *database) GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error) {
+
+	if db.Format().UsesFlatbuffers() {
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+		if err != nil {
+			return nil, err
+		}
+		return refmapDatasetsMap{rm}, nil
+	}
+
+	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsDatasetsMap{m}, nil
+}
+
 func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap DatasetsMap) (Dataset, error) {
 	if ndsmap, ok := dsmap.(nomsDatasetsMap); ok {
 		datasets := ndsmap.m
