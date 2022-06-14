@@ -143,7 +143,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	r := make(sql.Row, itr.sch.GetAllCols().Size()+3)
-	r[0] = hash.Of(art.HeadCmHash).String()
+	r[0] = hash.New(art.HeadCmHash).String()
 	r[1] = mapCVType(art.ArtType)
 
 	var meta prolly.ConstraintViolationMeta
@@ -212,12 +212,11 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	}
 
 	// then the hash
-	//h := hash.Parse(r[0].(string))
-	h := hash.Of(nil)
+	h := hash.Parse(r[0].(string))
 	d.kb.PutAddress(d.kd.Count()-2, h[:])
 
 	// Finally the artifact type
-	artType := unmapCVType(r[1].(merge.CvType))
+	artType := unmapCVType(merge.CvType(r[1].(uint64)))
 	d.kb.PutUint8(d.kd.Count()-1, uint8(artType))
 
 	key := d.kb.Build(d.pool)
