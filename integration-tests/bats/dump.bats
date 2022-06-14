@@ -655,11 +655,12 @@ teardown() {
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f doltdump.sql ]
 
-    run head -n 2 doltdump.sql
+    run head -n 3 doltdump.sql
     [ "$status" -eq 0 ]
-    [ "${#lines[@]}" -eq 2 ]
+    [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "SET AUTOCOMMIT = 0;" ]] || false
     [[ "$output" =~ "SET FOREIGN_KEY_CHECKS = 0;" ]] || false
+    [[ "$output" =~ "SET UNIQUE_CHECKS = 0;" ]] || false
 
     dolt sql < doltdump.sql
 
@@ -671,6 +672,7 @@ teardown() {
     # try with a csv output and ensure that there are no problems
     run dolt dump -r csv --bulk
     [ "$status" -eq 0 ]
+    [ -f doltdump/new_table.csv ]
 }
 
 function create_tables() {

@@ -167,8 +167,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		// When the user is dump a .sql file and wants to support bulk loading paradigms we preprend to the
-		// export job SET_FOREIGN_KEY_CHECKS=0 and SET_AUTOCOMMIT = 0
 		if bulk {
 			err2 := supportBulkLoadingParadigms(dEnv, fPath)
 			if err2 != nil {
@@ -453,6 +451,11 @@ func supportBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
 	}
 
 	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS = 0;\n"))
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.Write([]byte("SET UNIQUE_CHECKS = 0;\n"))
 	if err != nil {
 		return err
 	}
