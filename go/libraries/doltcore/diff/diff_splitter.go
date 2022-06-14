@@ -34,8 +34,11 @@ const (
 type ChangeType int
 
 const (
+	// None is no change
+	None ChangeType = iota
+
 	// Inserted is the DiffTypeProp value for a row that was newly added (In new, but not in old)
-	Inserted ChangeType = iota
+	Inserted
 
 	// Deleted is the DiffTypeProp value for a row that was newly deleted (In old, but not in new)
 	Deleted

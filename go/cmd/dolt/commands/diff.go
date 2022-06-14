@@ -669,7 +669,18 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 }
 
 // TODO: SQL writer
-func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.Schema, iter sql.RowIter, writer *tabular.FixedWidthTableWriter) error {
+func writeDiffResults(
+		ctx *sql.Context,
+		diffQuerySch sql.Schema,
+		targetSch sql.Schema,
+		iter sql.RowIter,
+		writer *tabular.FixedWidthTableWriter,
+) error {
+	ds := diffSplitter{
+		targetSch: targetSch,
+		diffQuerySch: diffQuerySch,
+	}
+
 	for {
 		r, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -678,7 +689,9 @@ func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.S
 			return err
 		}
 
-		newRow, oldRow, err := splitDiffResultRow(diffQuerySch)
+		newRow, oldRow, err := ds.splitDiffResultRow(r)
+
+		writer.WriteRow(ctx, newRow.row, oldRow.colDiffs)
 	}
 
 	return nil

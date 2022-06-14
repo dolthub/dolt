@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/acarl005/stripansi"
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -84,9 +85,16 @@ func (w *FixedWidthTableWriter) Close(ctx context.Context) error {
 	return w.closer.Close()
 }
 
-func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
+var colDiffColors = map[diff.ChangeType]*color.Color{
+	diff.Inserted:    color.New(color.Bold, color.FgGreen),
+	diff.ModifiedOld: color.New(color.FgRed),
+	diff.ModifiedNew: color.New(color.FgGreen),
+	diff.Deleted:     color.New(color.Bold, color.FgRed),
+}
+
+func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiffTypes []diff.ChangeType) error {
 	if w.numSamples < len(w.rowBuffer) {
-		strRow, err := w.sampleRow(r, colors)
+		strRow, err := w.sampleRow(r, colDiffTypes)
 		if err != nil {
 			return err
 		}
@@ -108,7 +116,7 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors 
 	return nil
 }
 
-func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) ([]string, error) {
+func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeType) ([]string, error) {
 	strRow := make([]string, len(r))
 	for i := range r {
 		str, err := w.stringValue(r[i])
@@ -127,14 +135,21 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) ([]s
 			w.maxRunes[i] = numRunes
 		}
 
-		if colors[i] != nil {
-			str = colors[i].Sprint(str)
-		}
-
 		strRow[i] = str
 	}
 
-	return strRow, nil
+	return applyColors(strRow, colDiffTypes), nil
+}
+
+func applyColors(strRow []string, colDiffTypes []diff.ChangeType) []string {
+	for i := range strRow {
+		if colDiffTypes[i] != diff.None {
+			color := colDiffColors[colDiffTypes[i]]
+			strRow[i] = color.Sprint(strRow[i])
+		}
+	}
+
+	return strRow
 }
 
 func (w *FixedWidthTableWriter) flushSampleBuffer() error {
