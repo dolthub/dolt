@@ -153,3 +153,28 @@ teardown() {
     [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
     [[ ! "$output" =~ "sqlserver.global.auto_increment_increment = 1000" ]] || false
 }
+
+@test "sql-server-config: set max_connections with yaml config" {
+    cd repo1
+    DEFAULT_DB="repo1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: 0.0.0.0
+  port: $PORT
+  max_connections: 999
+
+behavior:
+  read_only: false
+  autocommit: true" > server.yaml
+    dolt sql-server --config server.yaml &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
+}
