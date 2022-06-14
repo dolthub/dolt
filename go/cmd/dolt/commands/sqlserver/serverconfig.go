@@ -171,11 +171,23 @@ func (cfg *commandLineServerConfig) Password() string {
 
 // ReadTimeout returns the read and write timeouts.
 func (cfg *commandLineServerConfig) ReadTimeout() uint64 {
+	if cfg.timeout == 0 && cfg.PersistenceBehavior() == loadPerisistentGlobals {
+		rt := getPersistentReadTimeout()
+		cfg.withTimeout(rt)
+	} else if cfg.PersistenceBehavior() != loadPerisistentGlobals {
+		return defaultTimeout
+	}
 	return cfg.timeout
 }
 
 // WriteTimeout returns the read and write timeouts.
 func (cfg *commandLineServerConfig) WriteTimeout() uint64 {
+	if cfg.timeout == 0 && cfg.PersistenceBehavior() == loadPerisistentGlobals {
+		wt := getPersistentWriteTimeout()
+		cfg.withTimeout(wt)
+	} else if cfg.PersistenceBehavior() != loadPerisistentGlobals {
+		return defaultTimeout
+	}
 	return cfg.timeout
 }
 

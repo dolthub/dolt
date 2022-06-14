@@ -43,10 +43,6 @@ func Serve(
 	serverController *ServerController,
 	dEnv *env.DoltEnv,
 ) (startError error, closeError error) {
-	if serverConfig == nil {
-		cli.Println("No configuration given, using defaults")
-		serverConfig = DefaultServerConfig()
-	}
 
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
@@ -90,13 +86,6 @@ func Serve(
 	}
 
 	serverConf := server.Config{Protocol: "tcp"}
-
-	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
-		serverConf, startError = serverConf.NewConfig()
-		if startError != nil {
-			return
-		}
-	}
 
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
 

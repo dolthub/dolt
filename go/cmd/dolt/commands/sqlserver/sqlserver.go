@@ -30,6 +30,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 const (
@@ -239,7 +240,11 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withTimeout(timeout * 1000)
+	} else {
+		// represent undefined
+		serverConfig.withTimeout(0)
 	}
+
 	if _, ok := apr.GetValue(readonlyFlag); ok {
 		serverConfig.withReadOnly(true)
 	}
@@ -264,6 +269,9 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
 		serverConfig.withMaxConnections(uint64(maxConnections))
+	} else if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		mc := getPersistentMaxConnections()
+		serverConfig.withMaxConnections(mc)
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
@@ -289,5 +297,50 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
 
+	if cfg.PersistenceBehavior() == loadPerisistentGlobals {
+		if cfg.ListenerConfig.MaxConnections == nil {
+			mc := getPersistentMaxConnections()
+			cfg.ListenerConfig.MaxConnections = &mc
+		}
+		if cfg.ListenerConfig.ReadTimeoutMillis == nil {
+			rt := getPersistentReadTimeout()
+			cfg.ListenerConfig.ReadTimeoutMillis = &rt
+		}
+		if cfg.ListenerConfig.WriteTimeoutMillis == nil {
+			wt := getPersistentWriteTimeout()
+			cfg.ListenerConfig.WriteTimeoutMillis = &wt
+		}
+	}
+
 	return cfg, nil
+}
+
+func getPersistentMaxConnections() uint64 {
+	if _, val, ok := sql.SystemVariables.GetGlobal("max_connections"); ok {
+		mc, ok := val.(int64)
+		if ok {
+			return uint64(mc)
+		}
+	}
+	return defaultMaxConnections
+}
+
+func getPersistentReadTimeout() uint64 {
+	if _, val, ok := sql.SystemVariables.GetGlobal("net_read_timeout"); ok {
+		rt, ok := val.(uint64)
+		if ok {
+			return rt
+		}
+	}
+	return defaultTimeout
+}
+
+func getPersistentWriteTimeout() uint64 {
+	if _, val, ok := sql.SystemVariables.GetGlobal("net_write_timeout"); ok {
+		rt, ok := val.(uint64)
+		if ok {
+			return rt
+		}
+	}
+	return defaultTimeout
 }
