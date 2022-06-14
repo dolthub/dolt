@@ -75,8 +75,6 @@ type projected interface {
 	Project() []string
 }
 
-// TODO: interfaces?
-
 // TODO: equi-height buckets
 type SingletonBucket struct {
 	value     float64
@@ -106,10 +104,11 @@ func (sb *SingletonBucket) GetFrequency() float64 {
 }
 
 type DoltColumnStatistic struct {
-	nullCount uint64
 	mean      float64
 	min       float64
 	max       float64
+	count     uint64
+	nullCount uint64
 	buckets   sql.Histogram
 }
 
@@ -133,6 +132,10 @@ func (dcs *DoltColumnStatistic) GetMin() float64 {
 
 func (dcs *DoltColumnStatistic) GetMax() float64 {
 	return dcs.max
+}
+
+func (dcs *DoltColumnStatistic) GetCount() uint64 {
+	return dcs.count
 }
 
 func (dcs *DoltColumnStatistic) GetNullCount() uint64 {
@@ -466,6 +469,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 				mean:      0,
 				min:       0,
 				max:       0,
+				count:     0,
 				nullCount: 0,
 			}
 		}
@@ -479,6 +483,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 			mean:      0,
 			min:       math.MaxFloat64,
 			max:       -math.MaxFloat64,
+			count:     t.count,
 			nullCount: 0,
 		}
 	}
