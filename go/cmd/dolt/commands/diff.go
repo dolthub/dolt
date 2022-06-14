@@ -628,7 +628,7 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 
 	// TODO: need to do anything different for different added / dropped tables?
 	// TODO: where clause
-	columns := getColumnNamesString(td.ToSch)
+	columns := getColumnNamesString(td.FromSch, td.ToSch)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", td.ToName, from, to)
 	sqlCtx, err := newSqlContext(ctx, engine)
 	if err != nil {
@@ -640,31 +640,43 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	// TODO: union old and new schemas together
-	outputSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+	toSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
+	fromSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
+	if err != nil {
+		return errhand.VerboseErrorFromError(err)
+	}
+
+	unionSch := unionSchemas(fromSch.Schema, toSch.Schema)
+
 	// TODO: default sample size
-	resultsWriter := tabular.NewFixedWidthTableWriter(outputSch.Schema, iohelp.NopWrCloser(cli.CliOut), 100)
+	resultsWriter := tabular.NewFixedWidthTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
 
 		// TODO: SQL writer
 		// sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, td.CurName())
 
-
-	// TODO: fill in sch
-	// diffSrc, err := diffSource(sqlCtx, td.ToTable.ValueReadWriter(), sch, rowIter)
-	// if err != nil {
-	// 	return errhand.VerboseErrorFromError(err)
-	// }
-
-	err = writeDiffResults(sqlCtx, sch, outputSch.Schema, rowIter, resultsWriter)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, resultsWriter)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
 	return nil
+}
+
+func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
+	var union sql.Schema
+	for i := range s1 {
+		union = append(union, s1[i])
+	}
+	for i := range s2 {
+		if union.IndexOfColName(s2[i].Name) < 0 {
+			union = append(union, s2[i])
+		}
+	}
+	return union
 }
 
 // TODO: SQL writer
@@ -675,9 +687,9 @@ func writeDiffResults(
 		iter sql.RowIter,
 		writer *tabular.FixedWidthTableWriter,
 ) error {
-	ds := diffSplitter{
-		targetSch: targetSch,
-		diffQuerySch: diffQuerySch,
+	ds, err := newDiffSplitter(diffQuerySch, targetSch)
+	if err != nil {
+		return err
 	}
 
 	for {
@@ -717,8 +729,46 @@ type rowDiff struct {
 }
 
 type diffSplitter struct {
-	diffQuerySch sql.Schema
-	targetSch sql.Schema
+	diffQuerySch  sql.Schema
+	targetSch     sql.Schema
+	queryToTarget map[int]int
+	fromTo        map[int]int
+	toFrom        map[int]int
+}
+
+func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitter, error) {
+	resultToTarget := make(map[int]int)
+	fromTo := make(map[int]int)
+	toFrom := make(map[int]int)
+	for i := 0; i < len(diffQuerySch) -1; i++ {
+		var baseColName string
+		if strings.HasPrefix(diffQuerySch[i].Name, "from_") {
+			baseColName = diffQuerySch[i].Name[5:]
+			if to := diffQuerySch.IndexOfColName("to_"+baseColName); to >= 0 {
+				fromTo[i] = to
+			}
+		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
+			baseColName = diffQuerySch[i].Name[3:]
+			if from := diffQuerySch.IndexOfColName("from_"+baseColName); from >= 0 {
+				toFrom[i] = from
+			}
+		}
+
+		targetIdx := targetSch.IndexOfColName(baseColName)
+		if targetIdx < 0 {
+			return nil, fmt.Errorf("couldn't find a column named %s", baseColName)
+		}
+
+		resultToTarget[i] = targetIdx
+	}
+
+	return &diffSplitter{
+		diffQuerySch:  diffQuerySch,
+		targetSch:     targetSch,
+		queryToTarget: resultToTarget,
+		fromTo:        fromTo,
+		toFrom:        toFrom,
+	}, nil
 }
 
 func newRowDiff(size int) rowDiff {
@@ -738,30 +788,27 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 
 	oldRow, newRow := newRowDiff(len(ds.targetSch)), newRowDiff(len(ds.targetSch))
 
-	// TODO: need a better mapping from diff result row to output row
-	//  1st col needs to be reserved for +-><
-	//  need to handle union of all schemas
+	// TODO: 1st col needs to be reserved for +-><
 	diffTypeStr := diffType.(string)
 	if diffTypeStr == "removed" || diffTypeStr == "modified" {
 		oldRow.row = make(sql.Row, len(ds.targetSch))
 		for i := range ds.diffQuerySch {
-			if i >= len(ds.targetSch) {
+			if i >= len(ds.queryToTarget) {
 				break
 			}
 
-			oldRow.row[i] = row[i]
-			// TODO: column change type
+			oldRow.row[ds.queryToTarget[i]] = row[i]
+
+			if diffTypeStr == "modified" {
+
+			}
 		}
 	}
 
 	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		newRow.row = make(sql.Row, len(ds.targetSch))
-		for i := 0; i < len(ds.diffQuerySch) -1; i++ {
-			if i < len(ds.targetSch) {
-				continue
-			}
-
-			newRow.row[i-len(ds.targetSch)] = row[i]
+		for i := len(ds.queryToTarget); i < len(ds.diffQuerySch) -1; i++ {
+			newRow.row[ds.queryToTarget[i]] = row[i]
 			// TODO: column change type
 		}
 	}
@@ -769,14 +816,13 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 	return oldRow, newRow, nil
 }
 
-func getColumnNamesString(sch schema.Schema) string {
-	// TODO: do we need to consider from schema as well? yeah probably
+func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		cols = append(cols, fmt.Sprintf("cast (from_%s as char)", col.Name))
 		return false, nil
 	})
-	sch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+	toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		cols = append(cols, fmt.Sprintf("cast (to_%s as char)", col.Name))
 		return false, nil
 	})

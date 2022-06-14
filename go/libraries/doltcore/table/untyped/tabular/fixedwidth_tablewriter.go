@@ -56,13 +56,25 @@ type FixedWidthTableWriter struct {
 
 func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthTableWriter {
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
-	return &FixedWidthTableWriter{
-		printWidths:         make([]int, len(schema)),
-		maxRunes:            make([]int, len(schema)),
-		rowBuffer:           make([][]string, numSamples),
-		schema:              schema,
-		closer:              wr,
-		wr:                  bwr,
+	fwtw := FixedWidthTableWriter{
+		printWidths: make([]int, len(schema)),
+		maxRunes:    make([]int, len(schema)),
+		rowBuffer:   make([][]string, numSamples),
+		schema:      schema,
+		closer:      wr,
+		wr:          bwr,
+	}
+	fwtw.seedColumnWidthsWithColumnNames()
+	return &fwtw
+}
+
+func (w *FixedWidthTableWriter) seedColumnWidthsWithColumnNames() {
+	for i := range w.schema {
+		colName := w.schema[i].Name
+		printWidth := fwt.StringWidth(colName)
+		numRunes := len([]rune(colName))
+		w.printWidths[i] = printWidth
+		w.maxRunes[i] = numRunes
 	}
 }
 
@@ -240,7 +252,7 @@ func (w *FixedWidthTableWriter) writeHeader() error {
 
 	colNames := make([]string, len(w.schema))
 	for i := range w.schema {
-		colNames[i] = " "
+		colNames[i] = w.schema[i].Name
 	}
 
 	formattedColNames, err := w.formatter.Format(colNames)
@@ -251,9 +263,9 @@ func (w *FixedWidthTableWriter) writeHeader() error {
 	var colNameLine strings.Builder
 	colNameLine.WriteString("|")
 	for _, name := range formattedColNames {
-		colNameLine.WriteString("-")
+		colNameLine.WriteString(" ")
 		colNameLine.WriteString(name)
-		colNameLine.WriteString("-|")
+		colNameLine.WriteString(" |")
 	}
 
 	err = iohelp.WriteLine(w.wr, colNameLine.String())
@@ -293,4 +305,3 @@ func (w *FixedWidthTableWriter) writeSepararator() error {
 func (w *FixedWidthTableWriter) writeFooter() error {
 	return w.writeSepararator()
 }
-

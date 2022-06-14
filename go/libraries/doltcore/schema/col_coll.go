@@ -234,6 +234,12 @@ func (cc *ColCollection) Size() int {
 	return len(cc.cols)
 }
 
+// Contains returns whether this column collection contains a column with the name given, case insensitive
+func (cc *ColCollection) Contains(name string) bool {
+	_, ok := cc.GetByNameCaseInsensitive(name)
+	return ok
+}
+
 // ColCollsAreEqual determines whether two ColCollections are equal.
 func ColCollsAreEqual(cc1, cc2 *ColCollection) bool {
 	if cc1.Size() != cc2.Size() {
