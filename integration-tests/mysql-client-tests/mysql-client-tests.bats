@@ -113,7 +113,6 @@ cmake ..
 }
 
 @test "elixir myxql test" {
-    skip "Elixir installation is currently broken"
     cd $BATS_TEST_DIRNAME/elixir/
     # install some mix dependencies
     mix local.hex --force
