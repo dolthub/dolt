@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -29,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/constants"
 	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
@@ -97,14 +100,14 @@ func TestNomsMarshalling(t *testing.T) {
 
 }
 
-func TestTypeInfoMarshalling(t *testing.T) {
+func getSqlTypes() []sql.Type {
 	//TODO: determine the storage format for BINARY
 	//TODO: determine the storage format for BLOB
 	//TODO: determine the storage format for LONGBLOB
 	//TODO: determine the storage format for MEDIUMBLOB
 	//TODO: determine the storage format for TINYBLOB
 	//TODO: determine the storage format for VARBINARY
-	sqlTypes := []sql.Type{
+	return []sql.Type{
 		sql.Int64,  //BIGINT
 		sql.Uint64, //BIGINT UNSIGNED
 		//sql.MustCreateBinary(sqltypes.Binary, 10), //BINARY(10)
@@ -141,8 +144,10 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		sql.MustCreateString(sqltypes.VarChar, 10, sql.Collation_utf8mb3_bin), //VARCHAR(10) CHARACTER SET utf8mb3 COLLATE utf8mb3_bin
 		sql.Year, //YEAR
 	}
+}
 
-	for _, sqlType := range sqlTypes {
+func TestTypeInfoMarshalling(t *testing.T) {
+	for _, sqlType := range getSqlTypes() {
 		t.Run(sqlType.String(), func(t *testing.T) {
 			ti, err := typeinfo.FromSqlType(sqlType)
 			require.NoError(t, err)
@@ -270,4 +275,75 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 	}
 
 	return sch, nil
+}
+
+func TestSchemaMarshalling(t *testing.T) {
+	t.Run("format __LD_1__", func(t *testing.T) {
+		testSchemaMarshalling(t, types.Format_LD_1)
+	})
+	t.Run("format __DOLT_1__", func(t *testing.T) {
+		testSchemaMarshalling(t, types.Format_DOLT_1)
+	})
+}
+func testSchemaMarshalling(t *testing.T, nbf *types.NomsBinFormat) {
+	ctx := context.Background()
+	vrw := getTestVRW(nbf)
+	schemas := getSchemas(t, 1000)
+	for _, sch := range schemas {
+		v, err := MarshalSchemaAsNomsValue(ctx, vrw, sch)
+		require.NoError(t, err)
+		s, err := UnmarshalSchemaNomsValue(ctx, nbf, v)
+		require.NoError(t, err)
+		assert.Equal(t, sch, s)
+	}
+}
+
+func getTypeinfo(t *testing.T) (ti []typeinfo.TypeInfo) {
+	st := getSqlTypes()
+	ti = make([]typeinfo.TypeInfo, len(st))
+	for i := range st {
+		var err error
+		ti[i], err = typeinfo.FromSqlType(st[i])
+		require.NoError(t, err)
+	}
+	return
+}
+
+func getColumns(t *testing.T) (cols []schema.Column) {
+	ti := getTypeinfo(t)
+	cols = make([]schema.Column, len(ti))
+	var err error
+	for i := range cols {
+		name := "col" + strconv.Itoa(i)
+		tag := uint64(i)
+		cols[i], err = schema.NewColumnWithTypeInfo(
+			name, tag, ti[i], false, "", false, "")
+		require.NoError(t, err)
+	}
+	return
+}
+
+func getSchemas(t *testing.T, n int) (schemas []schema.Schema) {
+	cols := getColumns(t)
+	schemas = make([]schema.Schema, n)
+	var err error
+	for i := range schemas {
+		rand.Shuffle(len(cols), func(i, j int) {
+			cols[i], cols[j] = cols[j], cols[i]
+		})
+		k := rand.Intn(len(cols)-1) + 1
+		cc := make([]schema.Column, k)
+		copy(cc, cols)
+		cc[0].IsPartOfPK = true
+		schemas[i], err = schema.SchemaFromCols(
+			schema.NewColCollection(cc...))
+		require.NoError(t, err)
+	}
+	return
+}
+
+func getTestVRW(nbf *types.NomsBinFormat) types.ValueReadWriter {
+	ts := &chunks.TestStorage{}
+	cs := ts.NewViewWithFormat(nbf.VersionString())
+	return types.NewValueStore(cs)
 }

@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	builderBufferSize = 4096
+	builderBufferSize = 1500
 )
 
 func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
@@ -63,40 +63,39 @@ func serializeSchemaAsFlatbuffer(ctx context.Context, sch schema.Schema) ([]byte
 		panic("keyless indexes not supported")
 	}
 
-	b := fb.NewBuilder(builderBufferSize)
-	columns := serializeColumns(b, sch.GetAllCols().GetColumns())
+	b := fb.NewBuilder(1024)
+	cols := serializeSchemaColumns(b, sch.GetAllCols().GetColumns())
 
 	serial.TableSchemaStart(b)
-	serial.TableSchemaAddColumns(b, columns)
-	b.Finish(serial.TableSchemaEnd(b))
+	serial.TableSchemaAddColumns(b, cols)
+	root := serial.TableSchemaEnd(b)
+	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
 	return b.FinishedBytes(), nil
 }
 
-func serializeColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
-	// first serialize Column objects
+func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 	offs := make([]fb.UOffsetT, len(cols))
-	for i, col := range cols {
+	for i := len(cols) - 1; i >= 0; i-- {
+		col := cols[i]
 		no := b.CreateString(col.Name)
-		do := b.CreateString(sqlTypeString(col.TypeInfo))
-		vo := b.CreateString(col.Default)
-		co := b.CreateString(col.Comment)
+		to := b.CreateString(sqlTypeString(col.TypeInfo))
 		serial.ColumnStart(b)
 		serial.ColumnAddName(b, no)
-		serial.ColumnAddSqlType(b, do)
-		serial.ColumnAddDefaultValue(b, vo)
-		serial.ColumnAddComment(b, co)
-		serial.ColumnAddDisplayOrder(b, int16(i)) // todo(andy)
+		serial.ColumnAddSqlType(b, to)
+		serial.ColumnAddDisplayOrder(b, int16(i))
+		serial.ColumnAddTag(b, col.Tag)
 		serial.ColumnAddEncoding(b, getEncoding(col.TypeInfo))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
+		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
-		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
-		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
+		serial.ColumnAddGenerated(b, false)
+		serial.ColumnAddVirtual(b, false)
+		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
-	// then serialize a vector of offsets to the Columns
 	serial.TableSchemaStartColumnsVector(b, len(offs))
-	for i := len(offs) - 1; i >= 0; i-- {
-		b.PlaceUOffsetT(offs[i])
+	for i := len(cols) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offs[i])
 	}
 	return b.EndVector(len(offs))
 }
@@ -111,31 +110,32 @@ func getEncoding(t typeinfo.TypeInfo) serial.Encoding {
 }
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
+	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
 	s := serial.GetRootAsTableSchema(buf, 0)
+
 	cols := make([]schema.Column, s.ColumnsLength())
-
+	c := new(serial.Column)
 	for i := range cols {
-		var c *serial.Column
-		assertTrue(s.Columns(c, i))
+		ok := s.Columns(c, i)
+		assertTrue(ok)
 
-		typeInfo, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
+		sqlType, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
 		if err != nil {
 			return nil, err
 		}
 
 		cols[i], err = schema.NewColumnWithTypeInfo(
-			string(c.Name()), uint64(i),
-			typeInfo,
+			string(c.Name()),
+			c.Tag(),
+			sqlType,
 			c.PrimaryKey(),
 			string(c.DefaultValue()),
 			c.AutoIncrement(),
-			string(c.Comment()),
-		)
+			string(c.Comment()))
 		if err != nil {
 			return nil, err
 		}
 	}
-
 	cc := schema.NewColCollection(cols...)
 	return schema.SchemaFromCols(cc)
 }

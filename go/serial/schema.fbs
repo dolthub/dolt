@@ -32,13 +32,16 @@ table Column {
   sql_type:string (required);
 
   // sql default value
-  default_value:string; // todo(andy): required?
+  default_value:string;
 
   // sql comment
-  comment:string; // todo(andy): required?
+  comment:string;
 
   // sql display order
   display_order:int16;
+
+  // included for compatibility
+  tag: uint64;
 
   // storage encoding
   encoding:Encoding;
