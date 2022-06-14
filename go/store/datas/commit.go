@@ -179,7 +179,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, pa
 
 var commitKeyTupleDesc = val.NewTupleDescriptor(
 	val.Type{Enc: val.Uint64Enc, Nullable: false},
-	val.Type{Enc: val.ByteStringEnc, Nullable: false},
+	val.Type{Enc: val.AddressEnc, Nullable: false},
 )
 var commitValueTupleDesc = val.NewTupleDescriptor()
 
