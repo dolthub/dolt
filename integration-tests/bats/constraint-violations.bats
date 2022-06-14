@@ -12,7 +12,6 @@ teardown() {
 
 @test "constraint-violations: functions blocked with violations" {
     # TODO: unique key constraint violation
-    skip_nbf_dolt_1
 
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
@@ -65,7 +64,6 @@ SQL
 
 @test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {
     # TODO: unique key constraint violation
-    skip_nbf_dolt_1
 
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
@@ -2846,9 +2844,6 @@ SQL
 }
 
 @test "constraint-violations: unique keys, insert violation" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2878,19 +2873,23 @@ SQL
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
+    echo $output
     [[ "$output" =~ "pk,v1" ]] || false
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
     [[ "$output" =~ "5,5" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
+
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+        [[ "$output" =~ "6,3" ]] || false
+        [[ "${#lines[@]}" = "7" ]] || false
+    else
+        [[ "${#lines[@]}" = "6" ]] || false
+    fi
 }
 
 @test "constraint-violations: unique keys, update violation from ours" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2923,13 +2922,16 @@ SQL
     [[ "$output" =~ "pk,v1" ]] || false
     [[ "$output" =~ "1,1" ]] || false
     [[ "$output" =~ "2,3" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
+
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+        [[ "$output" =~ "3,3" ]] || false
+        [[ "${#lines[@]}" = "4" ]] || false
+    else
+        [[ "${#lines[@]}" = "3" ]] || false
+    fi
 }
 
 @test "constraint-violations: unique keys, update violation from theirs" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2961,8 +2963,14 @@ SQL
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
     [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
     [[ "$output" =~ "3,3" ]] || false
-    [[ "${#lines[@]}" = "4" ]] || false
+
+    if [ "$DOLT_DEFAULT_BIN_FORMAT" = "__DOLT_1__" ]; then
+        [[ "$output" =~ "2,3" ]] || false
+        [[ "${#lines[@]}" = "4" ]] || false
+    else
+        [[ "$output" =~ "2,2" ]] || false
+        [[ "${#lines[@]}" = "4" ]] || false
+    fi
 }
 
