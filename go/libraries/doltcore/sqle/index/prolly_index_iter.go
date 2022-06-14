@@ -94,21 +94,13 @@ func newProllyIndexIter(
 }
 
 // Next returns the next row from the iterator.
-func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
-	for {
-		var ok bool
-		select {
-		case r, ok = <-p.rowChan:
-			if ok {
-				return r, nil
-			}
-		}
-		if !ok {
-			break
-		}
+func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	r, ok := <-p.rowChan
+	if ok {
+		return r, nil
 	}
 
-	if err = p.eg.Wait(); err != nil {
+	if err := p.eg.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +172,7 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 }
 
 func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
-	if idx.ID() == "PRIMARY" {
+	if idx.IsPrimaryKey() {
 		// todo(andy)
 		m = make(val.OrdinalMapping, idx.Schema().GetPKCols().Size())
 		for i := range m {
@@ -435,21 +427,13 @@ func newProllyKeylessIndexIter(
 }
 
 // Next returns the next row from the iterator.
-func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
-	for {
-		var ok bool
-		select {
-		case r, ok = <-p.rowChan:
-			if ok {
-				return r, nil
-			}
-		}
-		if !ok {
-			break
-		}
+func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	r, ok := <-p.rowChan
+	if ok {
+		return r, nil
 	}
 
-	if err = p.eg.Wait(); err != nil {
+	if err := p.eg.Wait(); err != nil {
 		return nil, err
 	}
 
