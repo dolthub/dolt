@@ -202,7 +202,7 @@ func (db *SingleTableInfoDatabase) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
-func (db *SingleTableInfoDatabase) GetStatistics(ctx *sql.Context) (sql.Statistics, error) {
+func (db *SingleTableInfoDatabase) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return nil, nil
 }
 

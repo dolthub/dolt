@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -75,88 +76,41 @@ type projected interface {
 	Project() []string
 }
 
-// TODO: equi-height buckets
-type SingletonBucket struct {
-	value     float64
-	frequency float64 // indicates what % of values are <= value
+type DoltTableStatistics struct {
+	rowCount     uint64
+	colCount     uint64
+	nullCount    uint64
+	createdAt    time.Time
+	histogramMap sql.HistogramMap
 }
 
-var _ sql.Bucket = &SingletonBucket{}
+var _ sql.TableStatistics = &DoltTableStatistics{}
 
-func (sb *SingletonBucket) SetValue(value float64) {
-	sb.value = value
+func (ds *DoltTableStatistics) CreatedAt() time.Time {
+	return ds.createdAt
 }
 
-func (sb *SingletonBucket) SetFrequency(value float64) {
-	sb.frequency = value
+func (ds *DoltTableStatistics) ColumnCount() uint64 {
+	return ds.colCount
 }
 
-func (sb *SingletonBucket) IsSingleton() bool {
-	return true
+func (ds *DoltTableStatistics) RowCount() uint64 {
+	return ds.rowCount
 }
 
-func (sb *SingletonBucket) GetValue() float64 {
-	return sb.value
+func (ds *DoltTableStatistics) NullCount() uint64 {
+	return ds.nullCount
 }
 
-func (sb *SingletonBucket) GetFrequency() float64 {
-	return sb.frequency
-}
-
-type DoltColumnStatistic struct {
-	mean      float64
-	min       float64
-	max       float64
-	count     uint64
-	nullCount uint64
-	buckets   sql.Histogram
-}
-
-var _ sql.ColumnStatistic = &DoltColumnStatistic{}
-
-func (dcs *DoltColumnStatistic) GetBucket(value float64) sql.Bucket {
-	return dcs.buckets[value]
-}
-
-func (dcs *DoltColumnStatistic) GetHistogram() sql.Histogram {
-	return dcs.buckets
-}
-
-func (dcs *DoltColumnStatistic) GetMean() float64 {
-	return dcs.mean
-}
-
-func (dcs *DoltColumnStatistic) GetMin() float64 {
-	return dcs.min
-}
-
-func (dcs *DoltColumnStatistic) GetMax() float64 {
-	return dcs.max
-}
-
-func (dcs *DoltColumnStatistic) GetCount() uint64 {
-	return dcs.count
-}
-
-func (dcs *DoltColumnStatistic) GetNullCount() uint64 {
-	return dcs.nullCount
-}
-
-type DoltStatistics struct {
-	ColumnStatisticsMap sql.ColumnStatisticsMap
-}
-
-var _ sql.Statistics = &DoltStatistics{}
-
-func (ds *DoltStatistics) GetColumnStatistics() sql.ColumnStatisticsMap {
-	return ds.ColumnStatisticsMap
-}
-
-func (ds *DoltStatistics) GetColumnStatistic(colName string) (sql.ColumnStatistic, error) {
-	if res, ok := ds.ColumnStatisticsMap[colName]; ok {
+func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
+	if res, ok := ds.histogramMap[colName]; ok {
 		return res, nil
 	}
-	return nil, fmt.Errorf("column %s not found", colName)
+	return &sql.Histogram{}, fmt.Errorf("column %s not found", colName)
+}
+
+func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
+	return ds.histogramMap
 }
 
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
@@ -173,8 +127,7 @@ type DoltTable struct {
 
 	opts editor.Options
 
-	count     uint64
-	doltStats *DoltStatistics
+	doltStats *DoltTableStatistics
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -448,47 +401,37 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		return err
 	}
 
-	t.count = m.Count()
-
 	//TODO: async?
 	partIter, err := t.Partitions(ctx)
 	if err != nil {
 		return err
 	}
 
-	cols := t.sch.GetAllCols()
-	t.doltStats = &DoltStatistics{
-		ColumnStatisticsMap: make(map[string]sql.ColumnStatistic, cols.Size()),
+	cols := t.sch.GetAllCols().GetColumns()
+	t.doltStats = &DoltTableStatistics{
+		rowCount:     m.Count(),
+		colCount:     uint64(len(cols)),
+		nullCount:    0,
+		createdAt:    time.Now(),
+		histogramMap: make(sql.HistogramMap),
 	}
 
-	// no rows, mark everything as 0 or empty
-	if t.count == 0 {
-		for _, col := range cols.GetColumns() {
-			t.doltStats.ColumnStatisticsMap[col.Name] = &DoltColumnStatistic{
-				buckets:   map[float64]sql.Bucket{},
-				mean:      0,
-				min:       0,
-				max:       0,
-				count:     0,
-				nullCount: 0,
-			}
-		}
+	// TODO: no rows, mark everything as 0 or empty
+	if t.doltStats.rowCount == 0 {
 		return nil
 	}
 
-	// initialize column stats map
-	for _, col := range cols.GetColumns() {
-		t.doltStats.ColumnStatisticsMap[col.Name] = &DoltColumnStatistic{
-			buckets:   map[float64]sql.Bucket{},
-			mean:      0,
-			min:       math.MaxFloat64,
-			max:       -math.MaxFloat64,
-			count:     t.count,
-			nullCount: 0,
-		}
+	// initialize histogram map
+	for _, col := range cols {
+		t.doltStats.histogramMap[col.Name] = new(sql.Histogram)
 	}
 
-	colStatsMap := t.doltStats.ColumnStatisticsMap
+	// this can be adapted to a histogram with any number of buckets
+	freqMap := make(map[string]map[float64]uint64)
+	for _, col := range cols {
+		freqMap[col.Name] = make(map[float64]uint64)
+	}
+
 	for {
 		part, err := partIter.Next(ctx)
 		if err == io.EOF {
@@ -515,12 +458,14 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 				return err
 			}
 
-			for i := 0; i < cols.Size(); i++ {
-				col := cols.GetAtIndex(i)
-				colStats := colStatsMap[col.Name].(*DoltColumnStatistic)
+			for i, col := range cols {
+				hist, ok := t.doltStats.histogramMap[col.Name]
+				if !ok {
+					panic("histogram was not initialiize for this column; shouldn't be possible")
+				}
 
 				if row[i] == nil {
-					colStats.nullCount++
+					hist.NullCount++
 					continue
 				}
 
@@ -530,16 +475,14 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 				}
 				v := val.(float64)
 
-				if bucket, ok := colStats.buckets[v]; ok {
-					bucket.(*SingletonBucket).frequency += 1.0 / float64(t.count)
+				// place into frequency map
+				if bucket, ok := freqMap[col.Name][v]; ok {
+					bucket++
 				} else {
-					colStats.buckets[v] = &SingletonBucket{
-						value:     v,
-						frequency: 1.0 / float64(t.count),
-					}
+					freqMap[col.Name][v] = 1
 				}
 
-				colStats.mean += v / float64(t.count)
+				hist.mean += v / float64(t.count)
 				colStats.min = math.Min(colStats.GetMin(), v)
 				colStats.max = math.Max(colStats.GetMax(), v)
 			}
@@ -549,7 +492,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
-func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.Statistics, error) {
+func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return t.doltStats, nil
 }
 
