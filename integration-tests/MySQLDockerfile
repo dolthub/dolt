@@ -7,8 +7,6 @@ RUN apt update -y && \
         curl \
         gnupg \
         software-properties-common && \
-    curl -OL https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && \
-    dpkg -i erlang-solutions_2.0_all.deb && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt update -y && \
@@ -45,12 +43,8 @@ RUN apt update -y && \
         libpq-dev \
         nodejs \
         postgresql-server-dev-all && \
-    update-ca-certificates -f && \
-    echo 'deb https://packages.erlang-solutions.com/ubuntu xenial contrib' | tee -a /etc/apt/sources.list && \
-    wget https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc && \
-    apt-key add erlang_solutions.asc && \
-    apt -y update && \
-    apt install -y esl-erlang elixir
+        update-ca-certificates -f
+
 # install go
 WORKDIR /root
 ENV GO_VERSION=1.18

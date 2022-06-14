@@ -683,6 +683,27 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+// eventually this will be part of TestDoltMerge
+func TestDoltMergeArtifacts(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
+
+	for _, script := range MergeViolationsAndConflictsMergeScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
+// these tests are temporary while there is a difference between the old format
+// and new format merge behaviors.
+func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
+	skipNewFormat(t)
+
+	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 func TestDoltReset(t *testing.T) {
 	for _, script := range DoltReset {
 		// dolt versioning conflicts with reset harness -- use new harness every time
