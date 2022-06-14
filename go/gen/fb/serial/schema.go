@@ -47,8 +47,21 @@ func (rcv *TableSchema) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *TableSchema) Columns(obj *Column, j int) bool {
+func (rcv *TableSchema) Rows(obj *Index) *Index {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Index)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *TableSchema) Columns(obj *Column, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -60,7 +73,7 @@ func (rcv *TableSchema) Columns(obj *Column, j int) bool {
 }
 
 func (rcv *TableSchema) ColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -68,7 +81,7 @@ func (rcv *TableSchema) ColumnsLength() int {
 }
 
 func (rcv *TableSchema) Indexes(obj *Index, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -80,24 +93,27 @@ func (rcv *TableSchema) Indexes(obj *Index, j int) bool {
 }
 
 func (rcv *TableSchema) IndexesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-func (rcv *TableSchema) Checks(j int) []byte {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+func (rcv *TableSchema) Checks(obj *CheckConstraint, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
-		a := rcv._tab.Vector(o)
-		return rcv._tab.ByteVector(a + flatbuffers.UOffsetT(j*4))
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
 	}
-	return nil
+	return false
 }
 
 func (rcv *TableSchema) ChecksLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -105,22 +121,25 @@ func (rcv *TableSchema) ChecksLength() int {
 }
 
 func TableSchemaStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
+	builder.StartObject(4)
+}
+func TableSchemaAddRows(builder *flatbuffers.Builder, rows flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(rows), 0)
 }
 func TableSchemaAddColumns(builder *flatbuffers.Builder, columns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(columns), 0)
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(columns), 0)
 }
 func TableSchemaStartColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func TableSchemaAddIndexes(builder *flatbuffers.Builder, indexes flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(indexes), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(indexes), 0)
 }
 func TableSchemaStartIndexesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func TableSchemaAddChecks(builder *flatbuffers.Builder, checks flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(checks), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(checks), 0)
 }
 func TableSchemaStartChecksVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
@@ -377,7 +396,7 @@ func (rcv *Index) Name() []byte {
 	return nil
 }
 
-func (rcv *Index) Definition() []byte {
+func (rcv *Index) Comment() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.ByteVector(o + rcv._tab.Pos)
@@ -385,8 +404,34 @@ func (rcv *Index) Definition() []byte {
 	return nil
 }
 
-func (rcv *Index) KeyColumns(j int) uint16 {
+func (rcv *Index) IndexColumns(j int) uint16 {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
+	}
+	return 0
+}
+
+func (rcv *Index) IndexColumnsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
+func (rcv *Index) MutateIndexColumns(j int, n uint16) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		a := rcv._tab.Vector(o)
+		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
+	}
+	return false
+}
+
+func (rcv *Index) KeyColumns(j int) uint16 {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
@@ -395,7 +440,7 @@ func (rcv *Index) KeyColumns(j int) uint16 {
 }
 
 func (rcv *Index) KeyColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -403,7 +448,7 @@ func (rcv *Index) KeyColumnsLength() int {
 }
 
 func (rcv *Index) MutateKeyColumns(j int, n uint16) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
@@ -412,7 +457,7 @@ func (rcv *Index) MutateKeyColumns(j int, n uint16) bool {
 }
 
 func (rcv *Index) ValueColumns(j int) uint16 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.GetUint16(a + flatbuffers.UOffsetT(j*2))
@@ -421,7 +466,7 @@ func (rcv *Index) ValueColumns(j int) uint16 {
 }
 
 func (rcv *Index) ValueColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -429,7 +474,7 @@ func (rcv *Index) ValueColumnsLength() int {
 }
 
 func (rcv *Index) MutateValueColumns(j int, n uint16) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		a := rcv._tab.Vector(o)
 		return rcv._tab.MutateUint16(a+flatbuffers.UOffsetT(j*2), n)
@@ -437,19 +482,7 @@ func (rcv *Index) MutateValueColumns(j int, n uint16) bool {
 	return false
 }
 
-func (rcv *Index) Unique() bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
-	if o != 0 {
-		return rcv._tab.GetBool(o + rcv._tab.Pos)
-	}
-	return false
-}
-
-func (rcv *Index) MutateUnique(n bool) bool {
-	return rcv._tab.MutateBoolSlot(12, n)
-}
-
-func (rcv *Index) SystemDefined() bool {
+func (rcv *Index) PrimaryKey() bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(14))
 	if o != 0 {
 		return rcv._tab.GetBool(o + rcv._tab.Pos)
@@ -457,37 +490,141 @@ func (rcv *Index) SystemDefined() bool {
 	return false
 }
 
-func (rcv *Index) MutateSystemDefined(n bool) bool {
+func (rcv *Index) MutatePrimaryKey(n bool) bool {
 	return rcv._tab.MutateBoolSlot(14, n)
 }
 
+func (rcv *Index) UniqueKey() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(16))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateUniqueKey(n bool) bool {
+	return rcv._tab.MutateBoolSlot(16, n)
+}
+
+func (rcv *Index) SystemDefined() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(18))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *Index) MutateSystemDefined(n bool) bool {
+	return rcv._tab.MutateBoolSlot(18, n)
+}
+
 func IndexStart(builder *flatbuffers.Builder) {
-	builder.StartObject(6)
+	builder.StartObject(8)
 }
 func IndexAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
-func IndexAddDefinition(builder *flatbuffers.Builder, definition flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(definition), 0)
+func IndexAddComment(builder *flatbuffers.Builder, comment flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(comment), 0)
+}
+func IndexAddIndexColumns(builder *flatbuffers.Builder, indexColumns flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(indexColumns), 0)
+}
+func IndexStartIndexColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(2, numElems, 2)
 }
 func IndexAddKeyColumns(builder *flatbuffers.Builder, keyColumns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(keyColumns), 0)
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(keyColumns), 0)
 }
 func IndexStartKeyColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
 func IndexAddValueColumns(builder *flatbuffers.Builder, valueColumns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(valueColumns), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(valueColumns), 0)
 }
 func IndexStartValueColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(2, numElems, 2)
 }
-func IndexAddUnique(builder *flatbuffers.Builder, unique bool) {
-	builder.PrependBoolSlot(4, unique, false)
+func IndexAddPrimaryKey(builder *flatbuffers.Builder, primaryKey bool) {
+	builder.PrependBoolSlot(5, primaryKey, false)
+}
+func IndexAddUniqueKey(builder *flatbuffers.Builder, uniqueKey bool) {
+	builder.PrependBoolSlot(6, uniqueKey, false)
 }
 func IndexAddSystemDefined(builder *flatbuffers.Builder, systemDefined bool) {
-	builder.PrependBoolSlot(5, systemDefined, false)
+	builder.PrependBoolSlot(7, systemDefined, false)
 }
 func IndexEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+	return builder.EndObject()
+}
+
+type CheckConstraint struct {
+	_tab flatbuffers.Table
+}
+
+func GetRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) *CheckConstraint {
+	n := flatbuffers.GetUOffsetT(buf[offset:])
+	x := &CheckConstraint{}
+	x.Init(buf, n+offset)
+	return x
+}
+
+func GetSizePrefixedRootAsCheckConstraint(buf []byte, offset flatbuffers.UOffsetT) *CheckConstraint {
+	n := flatbuffers.GetUOffsetT(buf[offset+flatbuffers.SizeUint32:])
+	x := &CheckConstraint{}
+	x.Init(buf, n+offset+flatbuffers.SizeUint32)
+	return x
+}
+
+func (rcv *CheckConstraint) Init(buf []byte, i flatbuffers.UOffsetT) {
+	rcv._tab.Bytes = buf
+	rcv._tab.Pos = i
+}
+
+func (rcv *CheckConstraint) Table() flatbuffers.Table {
+	return rcv._tab
+}
+
+func (rcv *CheckConstraint) Name() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *CheckConstraint) Expression() []byte {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *CheckConstraint) Enforced() bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	if o != 0 {
+		return rcv._tab.GetBool(o + rcv._tab.Pos)
+	}
+	return false
+}
+
+func (rcv *CheckConstraint) MutateEnforced(n bool) bool {
+	return rcv._tab.MutateBoolSlot(8, n)
+}
+
+func CheckConstraintStart(builder *flatbuffers.Builder) {
+	builder.StartObject(3)
+}
+func CheckConstraintAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
+}
+func CheckConstraintAddExpression(builder *flatbuffers.Builder, expression flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(expression), 0)
+}
+func CheckConstraintAddEnforced(builder *flatbuffers.Builder, enforced bool) {
+	builder.PrependBoolSlot(2, enforced, false)
+}
+func CheckConstraintEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()
 }

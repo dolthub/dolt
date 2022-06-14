@@ -64,13 +64,89 @@ func serializeSchemaAsFlatbuffer(ctx context.Context, sch schema.Schema) ([]byte
 	}
 
 	b := fb.NewBuilder(1024)
-	cols := serializeSchemaColumns(b, sch.GetAllCols().GetColumns())
+	rows := serializeClusteredIndex(b, sch)
+	columns := serializeSchemaColumns(b, sch.GetAllCols().GetColumns())
+	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
+	checks := serializeChecks(b, sch.Checks().AllChecks())
 
 	serial.TableSchemaStart(b)
-	serial.TableSchemaAddColumns(b, cols)
+	serial.TableSchemaAddRows(b, rows)
+	serial.TableSchemaAddColumns(b, columns)
+	serial.TableSchemaAddIndexes(b, indexes)
+	serial.TableSchemaAddChecks(b, checks)
 	root := serial.TableSchemaEnd(b)
 	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
 	return b.FinishedBytes(), nil
+}
+
+func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
+	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
+	s := serial.GetRootAsTableSchema(buf, 0)
+
+	cols, err := deserializeColumns(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	sch, err := schema.SchemaFromCols(schema.NewColCollection(cols...))
+	if err != nil {
+		return nil, err
+	}
+
+	err = sch.SetPkOrdinals(deserializeClusteredIndex(s))
+	if err != nil {
+		return nil, err
+	}
+
+	err = deserializeSecondaryIndexes(sch, s)
+	if err != nil {
+		return nil, err
+	}
+
+	err = deserializeChecks(sch, s)
+	if err != nil {
+		return nil, err
+	}
+
+	return sch, nil
+}
+
+func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
+	// serialize key columns
+	pkMap := sch.GetPkOrdinals()
+	serial.IndexStartIndexColumnsVector(b, len(pkMap))
+	for i := len(pkMap) - 1; i >= 0; i-- {
+		b.PrependUint16(uint16(pkMap[i]))
+	}
+	// key_columns == index_columns
+	ko := b.EndVector(len(pkMap))
+
+	// serialize value columns
+	nonPk := sch.GetNonPKCols().GetColumns()
+	serial.IndexStartValueColumnsVector(b, len(nonPk))
+	for i := len(nonPk) - 1; i >= 0; i-- {
+		col := nonPk[i]
+		idx := sch.GetAllCols().TagToIdx[col.Tag]
+		b.PrependUint16(uint16(idx))
+	}
+	vo := b.EndVector(len(nonPk))
+
+	serial.IndexStart(b)
+	serial.IndexAddIndexColumns(b, ko)
+	serial.IndexAddKeyColumns(b, ko)
+	serial.IndexAddValueColumns(b, vo)
+	serial.IndexAddPrimaryKey(b, true)
+	serial.IndexAddUniqueKey(b, true)
+	serial.IndexAddSystemDefined(b, false)
+	return serial.IndexEnd(b)
+}
+
+func deserializeClusteredIndex(s *serial.TableSchema) []int {
+	idx := s.Rows(nil)
+	pkOrdinals := make([]int, idx.KeyColumnsLength())
+	for i := range pkOrdinals {
+		pkOrdinals[i] = int(idx.KeyColumns(i))
+	}
+	return pkOrdinals
 }
 
 func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
@@ -84,7 +160,7 @@ func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 		serial.ColumnAddSqlType(b, to)
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
-		serial.ColumnAddEncoding(b, getEncoding(col.TypeInfo))
+		serial.ColumnAddEncoding(b, encodingFromType(col.TypeInfo))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
@@ -100,19 +176,7 @@ func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 	return b.EndVector(len(offs))
 }
 
-func sqlTypeString(t typeinfo.TypeInfo) string {
-	return t.ToSqlType().String()
-}
-
-func getEncoding(t typeinfo.TypeInfo) serial.Encoding {
-	// todo(andy)
-	return serial.EncodingNull
-}
-
-func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
-	assertTrue(serial.GetFileID(buf) == serial.TableSchemaFileID)
-	s := serial.GetRootAsTableSchema(buf, 0)
-
+func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Column, error) {
 	cols := make([]schema.Column, s.ColumnsLength())
 	c := new(serial.Column)
 	for i := range cols {
@@ -136,8 +200,116 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 			return nil, err
 		}
 	}
-	cc := schema.NewColCollection(cols...)
-	return schema.SchemaFromCols(cc)
+	return cols, nil
+}
+
+func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schema.Index) fb.UOffsetT {
+	ordinalMap := sch.GetAllCols().TagToIdx
+	offs := make([]fb.UOffsetT, len(indexes))
+	for i := len(offs) - 1; i >= 0; i-- {
+		idx := indexes[i]
+		no := b.CreateString(idx.Name())
+		co := b.CreateString(idx.Comment())
+
+		// serialize indexed columns
+		tags := idx.IndexedColumnTags()
+		serial.IndexStartIndexColumnsVector(b, len(tags))
+		for j := len(tags) - 1; j >= 0; j-- {
+			ord := ordinalMap[tags[j]]
+			b.PrependUint16(uint16(ord))
+		}
+		ico := b.EndVector(len(tags))
+
+		// serialize key columns
+		tags = idx.AllTags()
+		serial.IndexStartKeyColumnsVector(b, len(tags))
+		for j := len(tags) - 1; j >= 0; j-- {
+			ord := ordinalMap[tags[j]]
+			b.PrependUint16(uint16(ord))
+		}
+		ko := b.EndVector(len(tags))
+
+		serial.IndexStart(b)
+		serial.IndexAddName(b, no)
+		serial.IndexAddComment(b, co)
+		serial.IndexAddIndexColumns(b, ico)
+		serial.IndexAddKeyColumns(b, ko)
+		serial.IndexAddPrimaryKey(b, false)
+		serial.IndexAddUniqueKey(b, idx.IsUnique())
+		serial.IndexAddSystemDefined(b, !idx.IsUserDefined())
+		offs[i] = serial.IndexEnd(b)
+	}
+
+	serial.TableSchemaStartIndexesVector(b, len(indexes))
+	for i := len(offs) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offs[i])
+	}
+	return b.EndVector(len(indexes))
+}
+
+func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error {
+	idx := new(serial.Index)
+	col := new(serial.Column)
+	for i := 0; i < s.IndexesLength(); i++ {
+		s.Indexes(idx, i)
+		assertTrue(!idx.PrimaryKey())
+
+		name := string(idx.Name())
+		props := schema.IndexProperties{
+			IsUnique:      idx.UniqueKey(),
+			IsUserDefined: !idx.SystemDefined(),
+			Comment:       string(idx.Comment()),
+		}
+
+		tags := make([]uint64, idx.IndexColumnsLength())
+		for j := range tags {
+			ord := idx.IndexColumns(j)
+			s.Columns(col, int(ord))
+			tags[j] = col.Tag()
+		}
+
+		_, err := sch.Indexes().AddIndexByColTags(name, tags, props)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func serializeChecks(b *fb.Builder, checks []schema.Check) fb.UOffsetT {
+	offs := make([]fb.UOffsetT, len(checks))
+	for i := len(offs) - 1; i >= 0; i-- {
+		eo := b.CreateString(checks[i].Expression())
+		no := b.CreateString(checks[i].Name())
+		serial.CheckConstraintStart(b)
+		serial.CheckConstraintAddEnforced(b, checks[i].Enforced())
+		serial.CheckConstraintAddExpression(b, eo)
+		serial.CheckConstraintAddName(b, no)
+		offs[i] = serial.CheckConstraintEnd(b)
+	}
+
+	serial.TableSchemaStartChecksVector(b, len(checks))
+	for i := len(offs) - 1; i >= 0; i-- {
+		b.PrependUOffsetT(offs[i])
+	}
+	return b.EndVector(len(checks))
+}
+
+func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
+	coll := sch.Checks()
+	c := new(serial.CheckConstraint)
+	for i := 0; i < s.ChecksLength(); i++ {
+		s.Checks(c, i)
+		n, e := string(c.Name()), string(c.Expression())
+		if _, err := coll.AddCheck(n, e, c.Enforced()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func sqlTypeString(t typeinfo.TypeInfo) string {
+	return t.ToSqlType().String()
 }
 
 func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, error) {
@@ -146,6 +318,11 @@ func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, erro
 		return nil, err
 	}
 	return typeinfo.FromSqlType(t)
+}
+
+func encodingFromType(t typeinfo.TypeInfo) serial.Encoding {
+	// todo(andy)
+	return serial.EncodingNull
 }
 
 func assertTrue(b bool) {

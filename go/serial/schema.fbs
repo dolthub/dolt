@@ -18,10 +18,10 @@ namespace serial;
 
 
 table TableSchema {
+  rows:Index;
   columns:[Column];
   indexes:[Index];
-  checks:[string];
-
+  checks:[CheckConstraint];
 }
 
 table Column {
@@ -57,22 +57,39 @@ table Column {
 
 table Index {
   // index name
-  name:string (required);
+  name:string;
 
-  // full sql index definition
-  definition:string (required);
+  // sql comment
+  comment:string;
 
-  // key columns of the index stored as
-  // indicies into the schema columns array
+  // ordered list of columns defining the index,
+  // stored as indices into table schema columns list.
+  index_columns:[uint16] (required);
+
+  // ordered list of columns corresponding to
+  // key tuple fields within index storage.
+  //
+  // for secondary indexes, this is typically
+  // index columns + primary key columns.
   key_columns:[uint16] (required);
 
-  // values columns of the index stored as
-  // indicies into the schema columns array
+  // ordered list of columns corresponding to
+  // value tuple fields within index storage.
+  //
+  // typically, this is only populated for
+  // clustered primary key indexes.
   value_columns:[uint16];
 
   // index meta
-  unique:bool;
+  primary_key:bool;
+  unique_key:bool;
   system_defined:bool;
+}
+
+table CheckConstraint {
+    name:string;
+    expression:string;
+    enforced:bool;
 }
 
 // KEEP THIS IN SYNC WITH fileidentifiers.go
