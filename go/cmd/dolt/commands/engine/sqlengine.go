@@ -144,9 +144,12 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
-	err = sql.SystemVariables.SetGlobal("max_connections", config.MaxConnection)
-	if err != nil {
-		return nil, err
+
+	if config.MaxConnection > 0 {
+		err = sql.SystemVariables.SetGlobal("max_connections", config.MaxConnection)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &SqlEngine{
