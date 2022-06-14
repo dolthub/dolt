@@ -363,7 +363,7 @@ func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
 
 func (m UniqCVMeta) PrettyPrint() string {
 	jsonStr := fmt.Sprintf(`{`+
-		`"Columns": [%s], `+
+		`"Columns": ["%s"], `+
 		`"Name": "%s"}`,
 		strings.Join(m.Columns, `', '`),
 		m.Name)
