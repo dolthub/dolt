@@ -167,12 +167,13 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:    "",
-		IsReadOnly:   isReadOnly,
-		PrivFilePath: serverConfig.PrivilegeFilePath(),
-		ServerUser:   serverConfig.User(),
-		ServerPass:   serverConfig.Password(),
-		Autocommit:   serverConfig.AutoCommit(),
+		InitialDb:     "",
+		IsReadOnly:    isReadOnly,
+		PrivFilePath:  serverConfig.PrivilegeFilePath(),
+		ServerUser:    serverConfig.User(),
+		ServerPass:    serverConfig.Password(),
+		Autocommit:    serverConfig.AutoCommit(),
+		MaxConnection: serverConfig.MaxConnections(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,

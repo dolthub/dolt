@@ -48,13 +48,14 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb    string
-	IsReadOnly   bool
-	PrivFilePath string
-	ServerUser   string
-	ServerPass   string
-	Autocommit   bool
-	Bulk         bool
+	InitialDb     string
+	IsReadOnly    bool
+	PrivFilePath  string
+	ServerUser    string
+	ServerPass    string
+	Autocommit    bool
+	Bulk          bool
+	MaxConnection uint64
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -143,6 +144,10 @@ func NewSqlEngine(
 	if err != nil {
 		return nil, err
 	}
+	err = sql.SystemVariables.SetGlobal("max_connections", config.MaxConnection)
+	if err != nil {
+		return nil, err
+	}
 
 	return &SqlEngine{
 		dbs:            nameToDB,
@@ -153,7 +158,7 @@ func NewSqlEngine(
 	}, nil
 }
 
-// NewRebasedEngine returns a smalled rebased engine primarily used in filterbranch.
+// NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,
