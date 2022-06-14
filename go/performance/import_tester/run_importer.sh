@@ -27,22 +27,24 @@ python3 csv_gen.py '{
         {"name":"c3", "type":"float"},
         {"name":"c4", "type":"int"}
     ],
-    "row_count": 1000000
+    "row_count": 10000000
 }' > benchmark.csv
 
-# Run the current version of dolt TODO: Assumes no storage version changes... Change if there is
+# Run the current version of dolt
 echo "Running the current version of import"
 rm -rf .dolt
 dolt init
 time dolt table import -c --pk=pk current_version benchmark.csv
 
-# Run the old version of dolt
-echo "Running version 0.34.5"
-time ./old-dolt table import -c --pk=pk old_version benchmark.csv
-
 # Run the current version of export
 echo "Running the current version of export"
-time dolt table export current_version export.csv
+time dolt table export -f current_version export.csv
+
+# Run the old version of dolt
+rm -rf .dolt
+./old-dolt init
+echo "Running version 0.34.5"
+time ./old-dolt table import -c --pk=pk old_version benchmark.csv
 
 # Run the old version of export
 time ./old-dolt table export -f old_version export.csv

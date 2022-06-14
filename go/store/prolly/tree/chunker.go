@@ -220,7 +220,7 @@ func (tc *chunker[S]) AdvanceTo(ctx context.Context, next *Cursor) error {
 	if err != nil {
 		return err
 	}
-	tc.cur.invalidate()
+	tc.cur.invalidateAtEnd()
 
 	// no more pending chunks at this level, recurse
 	// into parent

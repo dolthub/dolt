@@ -147,9 +147,14 @@ func (m Map) Last(ctx context.Context) (key, value val.Tuple, err error) {
 	return m.tuples.last(ctx)
 }
 
-// IterAll returns a mutableMapIter that iterates over the entire Map.
+// IterAll returns a MapIter that iterates over the entire Map.
 func (m Map) IterAll(ctx context.Context) (MapIter, error) {
 	return m.tuples.iterAll(ctx)
+}
+
+// IterAllReverse returns a MapIter that iterates over the entire Map from the end to the beginning.
+func (m Map) IterAllReverse(ctx context.Context) (MapIter, error) {
+	return m.tuples.iterAllReverse(ctx)
 }
 
 // IterOrdinalRange returns a MapIter for the ordinal range beginning at |start| and ending before |stop|.
@@ -232,11 +237,15 @@ func treeIterFromRange(
 		return nil, err
 	}
 
-	if start.Compare(stop) >= 0 {
+	stopF := func(curr *tree.Cursor) bool {
+		return curr.Compare(stop) >= 0
+	}
+
+	if stopF(start) {
 		start = nil // empty range
 	}
 
-	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stop}, nil
+	return &orderedTreeIter[val.Tuple, val.Tuple]{curr: start, stop: stopF, step: start.Advance}, nil
 }
 
 type pointLookup struct {

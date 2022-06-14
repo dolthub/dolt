@@ -129,7 +129,7 @@ func TestNewCommit(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit, err := newCommit(context.Background(), types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at, err := types.TypeOf(commit)
@@ -150,7 +150,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Committing another Float
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit2, err := newCommit(context.Background(), types.Float(2), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at2, err := types.TypeOf(commit2)
@@ -169,7 +169,7 @@ func TestNewCommit(t *testing.T) {
 
 	// Now commit a String
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit3, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, types.EmptyStruct(db.Format()))
 	assert.NoError(err)
 	at3, err := types.TypeOf(commit3)
@@ -195,7 +195,7 @@ func TestNewCommit(t *testing.T) {
 	}`)
 	assertTypeEquals(metaType, mustType(types.TypeOf(meta)))
 	parents = mustList(types.NewList(context.Background(), db, mustRef(types.NewRef(commit2, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit4, err := newCommit(context.Background(), types.String("Hi"), parents, parentsClosure, true, meta)
 	assert.NoError(err)
 	at4, err := types.TypeOf(commit4)
@@ -219,7 +219,7 @@ func TestNewCommit(t *testing.T) {
 	parents = mustList(types.NewList(context.Background(), db,
 		mustRef(types.NewRef(commit2, db.Format())),
 		mustRef(types.NewRef(commit3, db.Format()))))
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	commit5, err := newCommit(
 		context.Background(),
 		types.String("Hi"),
@@ -303,7 +303,7 @@ func commonAncWithLazyClosure(ctx context.Context, c1, c2 *Commit, vr1, vr2 type
 }
 
 // Assert that c is the common ancestor of a and b, using multiple common ancestor methods.
-func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database) {
+func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *database, desc string) {
 	type caFinder func(ctx context.Context, c1, c2 *Commit, vr1, vr2 types.ValueReader) (a hash.Hash, ok bool, err error)
 
 	methods := map[string]caFinder{
@@ -321,7 +321,7 @@ func assertCommonAncestor(t *testing.T, expected, a, b types.Value, ldb, rdb *da
 	require.NoError(t, err)
 
 	for name, method := range methods {
-		t.Run(fmt.Sprintf("%s/%s_%s", name, aref.TargetHash().String(), bref.TargetHash().String()), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s", name, desc), func(t *testing.T) {
 			assert := assert.New(t)
 			ctx := context.Background()
 			found, ok, err := method(ctx, ac, bc, ldb, rdb)
@@ -412,6 +412,7 @@ func TestCommitParentsClosure(t *testing.T) {
 
 	storage := &chunks.TestStorage{}
 	db := NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+	ctx := context.Background()
 
 	type expected struct {
 		height int
@@ -419,88 +420,46 @@ func TestCommitParentsClosure(t *testing.T) {
 	}
 
 	assertCommitParentsClosure := func(v types.Value, es []expected) {
-		if _, ok := v.(types.SerialMessage); ok {
-			t.Skip("__DOLT_DEV__ does not implement ParentsClosure yet.")
-		}
-		s, ok := v.(types.Struct)
-		if !assert.True(ok) {
+		c, err := commitPtr(db.Format(), v, nil)
+		if !assert.NoError(err) {
 			return
 		}
-		v, ok, err := s.MaybeGet(parentsClosureField)
+		iter, err := newParentsClosureIterator(ctx, c, db)
 		if !assert.NoError(err) {
 			return
 		}
 		if len(es) == 0 {
-			assert.False(ok, "must not find parents_closure field when its length is 0")
+			assert.Nil(iter)
 			return
 		}
-		if !assert.True(ok, "must find parents_closure field in commit.") {
-			return
+		for _, e := range es {
+			if !assert.True(iter.Next(ctx)) {
+				return
+			}
+			if !assert.Equal(e.hash, iter.Hash()) {
+				return
+			}
+			if !assert.Equal(uint64(e.height), iter.Height()) {
+				return
+			}
 		}
-		r, ok := v.(types.Ref)
-		if !assert.True(ok, "parents_closure field must contain a ref value.") {
-			return
-		}
-		tv, err := r.TargetValue(context.Background(), db)
-		if !assert.NoError(err, "getting target value of parents_closure field must not error") {
-			return
-		}
-		m, ok := tv.(types.Map)
-		if !assert.True(ok, "parents_closure ref target value must contain a map value.") {
-			return
-		}
-		if !assert.Equal(len(es), int(m.Len()), "expected length %v and got %v", len(es), m.Len()) {
-			return
-		}
-		i := 0
-		err = m.IterAll(context.Background(), func(k, v types.Value) error {
-			j := i
-			i++
-			kt, ok := k.(types.Tuple)
-			if !assert.True(ok, "key type must be Tuple") {
-				return nil
-			}
-			if !assert.Equal(2, int(kt.Len()), "key must have length 2") {
-				return nil
-			}
-			hv, err := kt.Get(0)
-			if !assert.NoError(err) {
-				return nil
-			}
-			h, ok := hv.(types.Uint)
-			if !assert.True(ok, "key first field must be Uint") {
-				return nil
-			}
-			if !assert.Equal(es[j].height, int(uint64(h))) {
-				return nil
-			}
-			hv, err = kt.Get(1)
-			if !assert.NoError(err) {
-				return nil
-			}
-			b, ok := hv.(types.InlineBlob)
-			if !assert.True(ok, "key second field must be InlineBlob") {
-				return nil
-			}
-			var fh hash.Hash
-			copy(fh[:], []byte(b))
-			if !assert.Equal(es[j].hash, fh, "hash for idx %d did not match", j) {
-				return nil
-			}
-			assertClosureMapValue(t, db, v, fh)
-			return nil
-		})
-		assert.NoError(err)
+		assert.False(iter.Next(ctx))
+		assert.NoError(iter.Err())
 	}
+
+	// TODO: These tests rely on the hash values of the commits
+	// to assert the order of commits that are at the same height in the
+	// parent closure map. The values have been tweaked to currently pass
+	// with LD_1 and DOLT_DEV.
 
 	a, b, c, d := "ds-a", "ds-b", "ds-c", "ds-d"
 	a1, a1a := addCommit(t, db, a, "a1")
 	a2, a2a := addCommit(t, db, a, "a2", a1)
-	a3, a3a := addCommit(t, db, a, "a3", a2)
+	a3, a3a := addCommit(t, db, a, "a3 ", a2)
 
 	b1, b1a := addCommit(t, db, b, "b1", a1)
-	b2, b2a := addCommit(t, db, b, "b2", b1)
-	b3, b3a := addCommit(t, db, b, "b3", b2)
+	b2, b2a := addCommit(t, db, b, "b2 ", b1)
+	b3, b3a := addCommit(t, db, b, "b3 ", b2)
 
 	c1, c1a := addCommit(t, db, c, "c1", a3, b3)
 
@@ -511,40 +470,40 @@ func TestCommitParentsClosure(t *testing.T) {
 		{1, a1a},
 	})
 	assertCommitParentsClosure(a3, []expected{
-		{1, a1a},
 		{2, a2a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(b1, []expected{
 		{1, a1a},
 	})
 	assertCommitParentsClosure(b2, []expected{
-		{1, a1a},
 		{2, b1a},
+		{1, a1a},
 	})
 	assertCommitParentsClosure(b3, []expected{
-		{1, a1a},
-		{2, b1a},
 		{3, b2a},
+		{2, b1a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(c1, []expected{
-		{1, a1a},
-		{2, a2a},
-		{2, b1a},
-		{3, a3a},
-		{3, b2a},
 		{4, b3a},
+		{3, b2a},
+		{3, a3a},
+		{2, b1a},
+		{2, a2a},
+		{1, a1a},
 	})
 
 	assertCommitParentsClosure(d1, []expected{
-		{1, a1a},
-		{2, a2a},
-		{2, b1a},
-		{3, a3a},
-		{3, b2a},
-		{4, b3a},
 		{5, c1a},
+		{4, b3a},
+		{3, b2a},
+		{3, a3a},
+		{2, b1a},
+		{2, a2a},
+		{1, a1a},
 	})
 }
 
@@ -584,11 +543,11 @@ func TestFindCommonAncestor(t *testing.T) {
 	b5, _ := addCommit(t, db, b, "b5", b4, a3)
 	a6, _ := addCommit(t, db, a, "a6", a5, b5)
 
-	assertCommonAncestor(t, a1, a1, a1, db, db) // All self
-	assertCommonAncestor(t, a1, a1, a2, db, db) // One side self
-	assertCommonAncestor(t, a2, a3, b3, db, db) // Common parent
-	assertCommonAncestor(t, a2, a4, b4, db, db) // Common grandparent
-	assertCommonAncestor(t, a1, a6, c3, db, db) // Traversing multiple parents on both sides
+	assertCommonAncestor(t, a1, a1, a1, db, db, "all self")
+	assertCommonAncestor(t, a1, a1, a2, db, db, "one side self")
+	assertCommonAncestor(t, a2, a3, b3, db, db, "common parent")
+	assertCommonAncestor(t, a2, a4, b4, db, db, "common grandeparent")
+	assertCommonAncestor(t, a1, a6, c3, db, db, "traversing multiple parents on both sides")
 
 	// No common ancestor
 	ctx := context.Background()
@@ -616,69 +575,71 @@ func TestFindCommonAncestor(t *testing.T) {
 
 	assert.NoError(db.Close())
 
-	storage = &chunks.TestStorage{}
-	db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
-	defer db.Close()
+	t.Run("DifferentVRWs", func(t *testing.T) {
+		storage = &chunks.TestStorage{}
+		db = NewDatabase(storage.NewViewWithDefaultFormat()).(*database)
+		defer db.Close()
 
-	rstorage := &chunks.TestStorage{}
-	rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
-	defer rdb.Close()
+		rstorage := &chunks.TestStorage{}
+		rdb := NewDatabase(rstorage.NewViewWithDefaultFormat()).(*database)
+		defer rdb.Close()
 
-	// Rerun the tests when using two difference Databases for left and
-	// right commits. Both databases have all the previous commits.
-	a, b, c, d = "ds-a", "ds-b", "ds-c", "ds-d"
-	a1, _ = addCommit(t, db, a, "a1")
-	d1, _ = addCommit(t, db, d, "d1")
-	a2, _ = addCommit(t, db, a, "a2", a1)
-	c2, _ = addCommit(t, db, c, "c2", a1)
-	d2, _ = addCommit(t, db, d, "d2", d1)
-	a3, _ = addCommit(t, db, a, "a3", a2)
-	b3, _ = addCommit(t, db, b, "b3", a2)
-	c3, _ = addCommit(t, db, c, "c3", c2, d2)
-	a4, _ = addCommit(t, db, a, "a4", a3)
-	b4, _ = addCommit(t, db, b, "b4", b3)
-	a5, _ = addCommit(t, db, a, "a5", a4)
-	b5, _ = addCommit(t, db, b, "b5", b4, a3)
-	a6, _ = addCommit(t, db, a, "a6", a5, b5)
+		// Rerun the tests when using two difference Databases for left and
+		// right commits. Both databases have all the previous commits.
+		a, b, c, d = "ds-a", "ds-b", "ds-c", "ds-d"
+		a1, _ = addCommit(t, db, a, "a1")
+		d1, _ = addCommit(t, db, d, "d1")
+		a2, _ = addCommit(t, db, a, "a2", a1)
+		c2, _ = addCommit(t, db, c, "c2", a1)
+		d2, _ = addCommit(t, db, d, "d2", d1)
+		a3, _ = addCommit(t, db, a, "a3", a2)
+		b3, _ = addCommit(t, db, b, "b3", a2)
+		c3, _ = addCommit(t, db, c, "c3", c2, d2)
+		a4, _ = addCommit(t, db, a, "a4", a3)
+		b4, _ = addCommit(t, db, b, "b4", b3)
+		a5, _ = addCommit(t, db, a, "a5", a4)
+		b5, _ = addCommit(t, db, b, "b5", b4, a3)
+		a6, _ = addCommit(t, db, a, "a6", a5, b5)
 
-	addCommit(t, rdb, a, "a1")
-	addCommit(t, rdb, d, "d1")
-	addCommit(t, rdb, a, "a2", a1)
-	addCommit(t, rdb, c, "c2", a1)
-	addCommit(t, rdb, d, "d2", d1)
-	addCommit(t, rdb, a, "a3", a2)
-	addCommit(t, rdb, b, "b3", a2)
-	addCommit(t, rdb, c, "c3", c2, d2)
-	addCommit(t, rdb, a, "a4", a3)
-	addCommit(t, rdb, b, "b4", b3)
-	addCommit(t, rdb, a, "a5", a4)
-	addCommit(t, rdb, b, "b5", b4, a3)
-	addCommit(t, rdb, a, "a6", a5, b5)
+		addCommit(t, rdb, a, "a1")
+		addCommit(t, rdb, d, "d1")
+		addCommit(t, rdb, a, "a2", a1)
+		addCommit(t, rdb, c, "c2", a1)
+		addCommit(t, rdb, d, "d2", d1)
+		addCommit(t, rdb, a, "a3", a2)
+		addCommit(t, rdb, b, "b3", a2)
+		addCommit(t, rdb, c, "c3", c2, d2)
+		addCommit(t, rdb, a, "a4", a3)
+		addCommit(t, rdb, b, "b4", b3)
+		addCommit(t, rdb, a, "a5", a4)
+		addCommit(t, rdb, b, "b5", b4, a3)
+		addCommit(t, rdb, a, "a6", a5, b5)
 
-	// Additionally, |db| has a6<-a7<-a8<-a9.
-	// |rdb| has a6<-ra7<-ra8<-ra9.
-	a7, _ := addCommit(t, db, a, "a7", a6)
-	a8, _ := addCommit(t, db, a, "a8", a7)
-	a9, _ := addCommit(t, db, a, "a9", a8)
+		// Additionally, |db| has a6<-a7<-a8<-a9.
+		// |rdb| has a6<-ra7<-ra8<-ra9.
+		a7, _ := addCommit(t, db, a, "a7", a6)
+		a8, _ := addCommit(t, db, a, "a8", a7)
+		a9, _ := addCommit(t, db, a, "a9", a8)
 
-	ra7, _ := addCommit(t, rdb, a, "ra7", a6)
-	ra8, _ := addCommit(t, rdb, a, "ra8", ra7)
-	ra9, _ := addCommit(t, rdb, a, "ra9", ra8)
+		ra7, _ := addCommit(t, rdb, a, "ra7", a6)
+		ra8, _ := addCommit(t, rdb, a, "ra8", ra7)
+		ra9, _ := addCommit(t, rdb, a, "ra9", ra8)
 
-	assertCommonAncestor(t, a1, a1, a1, db, rdb) // All self
-	assertCommonAncestor(t, a1, a1, a2, db, rdb) // One side self
-	assertCommonAncestor(t, a2, a3, b3, db, rdb) // Common parent
-	assertCommonAncestor(t, a2, a4, b4, db, rdb) // Common grandparent
-	assertCommonAncestor(t, a1, a6, c3, db, rdb) // Traversing multiple parents on both sides
+		assertCommonAncestor(t, a1, a1, a1, db, rdb, "all self")
+		assertCommonAncestor(t, a1, a1, a2, db, rdb, "one side self")
+		assertCommonAncestor(t, a2, a3, b3, db, rdb, "common parent")
+		assertCommonAncestor(t, a2, a4, b4, db, rdb, "common grandeparent")
+		assertCommonAncestor(t, a1, a6, c3, db, rdb, "traversing multiple parents on both sides")
 
-	assertCommonAncestor(t, a6, a9, ra9, db, rdb) // Common third parent
+		assertCommonAncestor(t, a6, a9, ra9, db, rdb, "common third parent")
 
-	a9c, err := commitFromValue(db.Format(), a9)
-	require.NoError(t, err)
-	ra9c, err := commitFromValue(rdb.Format(), ra9)
-	require.NoError(t, err)
-	_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
-	assert.Error(err)
+		a9c, err := commitFromValue(db.Format(), a9)
+		require.NoError(t, err)
+		ra9c, err := commitFromValue(rdb.Format(), ra9)
+		require.NoError(t, err)
+		_, _, err = FindCommonAncestor(context.Background(), ra9c, a9c, db, rdb)
+		assert.Error(err)
+	})
 }
 
 func TestNewCommitRegressionTest(t *testing.T) {
@@ -687,7 +648,7 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	defer db.Close()
 
 	parents := mustList(types.NewList(context.Background(), db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	c1, err := newCommit(context.Background(), types.String("one"), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	assert.NoError(t, err)
 	cx, err := newCommit(context.Background(), types.Bool(true), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
@@ -699,7 +660,7 @@ func TestNewCommitRegressionTest(t *testing.T) {
 	value := types.String("two")
 	parents, err = types.NewList(context.Background(), db, mustRef(types.NewRef(c1, db.Format())))
 	assert.NoError(t, err)
-	parentsClosure = mustParentsClosure(t, true)(getParentsClosure(context.Background(), db, parents))
+	parentsClosure = mustParentsClosure(t, true)(writeTypesCommitParentClosure(context.Background(), db, parents))
 	meta, err := types.NewStruct(db.Format(), "", types.StructData{
 		"basis": cx,
 	})
