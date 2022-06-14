@@ -127,6 +127,19 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
+	updatedTable, err = mergeProllySecondaryIndexes(
+		ctx,
+		vrw,
+		postMergeSchema, rootSchema, mergeSchema, ancSchema,
+		mergedData,
+		tbl, mergeTbl, updatedTable,
+		ancIndexSet,
+		artifactEditor,
+		cmHash)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	artifactMap, err := artifactEditor.Flush(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -134,11 +147,6 @@ func mergeTableData(
 	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
 	updatedTable, err = updatedTable.SetArtifacts(ctx, artIdx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
 	if err != nil {
 		return nil, nil, err
 	}

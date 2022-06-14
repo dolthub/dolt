@@ -70,10 +70,11 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	ctx context.Context,
 	l, r, base orderedTree[K, V, O],
 	cb tree.CollisionFn,
+	flt tree.FilterFn,
 	serializer S,
 ) (orderedTree[K, V, O], error) {
 	cfn := base.compareItems
-	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, serializer)
+	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, flt, serializer)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err
 	}

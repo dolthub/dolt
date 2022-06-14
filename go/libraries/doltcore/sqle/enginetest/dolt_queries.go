@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
@@ -25,8 +27,6 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
 
 var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
@@ -1590,6 +1590,38 @@ var MergeViolationsAndConflictsMergeScripts = []queries.ScriptTest{
 					{uint64(merge.CvType_ForeignKey), 1, 4},
 					{uint64(merge.CvType_ForeignKey), 2, 2},
 					{uint64(merge.CvType_ForeignKey), 2, 4}},
+			},
+		},
+	},
+	{
+		Name: "Unique key violations are persisted to artifacts and are applied to the left",
+		SetUpScript: []string{
+			"set dolt_force_transaction_commit = 1;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"CALL DOLT_COMMIT('-am', 'add table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO T VALUES (2, 1);",
+			"INSERT INTO T VALUES (3, 2);",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO T VALUES (1, 1);",
+			"INSERT INTO T VALUES (3, 2);",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 2, 1}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 2}},
 			},
 		},
 	},

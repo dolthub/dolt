@@ -342,3 +342,30 @@ func (m FkCVMeta) PrettyPrint() string {
 		m.Table)
 	return jsonStr
 }
+
+type UniqCVMeta struct {
+	Columns []string `json:"Columns"`
+	Name    string   `json:"Name"`
+}
+
+func (m UniqCVMeta) Unmarshall(ctx *sql.Context) (val sql.JSONDocument, err error) {
+	return sql.JSONDocument{Val: m}, nil
+}
+
+func (m UniqCVMeta) Compare(ctx *sql.Context, v sql.JSONValue) (cmp int, err error) {
+	ours := sql.JSONDocument{Val: m}
+	return ours.Compare(ctx, v)
+}
+
+func (m UniqCVMeta) ToString(ctx *sql.Context) (string, error) {
+	return m.PrettyPrint(), nil
+}
+
+func (m UniqCVMeta) PrettyPrint() string {
+	jsonStr := fmt.Sprintf(`{`+
+		`"Columns": [%s], `+
+		`"Name": "%s"}`,
+		strings.Join(m.Columns, `', '`),
+		m.Name)
+	return jsonStr
+}

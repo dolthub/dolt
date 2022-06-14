@@ -82,8 +82,12 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
+	return FilterMergeMaps(ctx, left, right, base, cb, nil)
+}
+
+func FilterMergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn, flt tree.FilterFn) (Map, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, flt, serializer)
 	if err != nil {
 		return Map{}, err
 	}

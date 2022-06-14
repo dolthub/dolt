@@ -43,6 +43,7 @@ func ThreeWayMerge[S message.Serializer](
 	left, right, base Node,
 	compare CompareFn,
 	collide CollisionFn,
+	flt FilterFn,
 	serializer S,
 ) (final Node, err error) {
 
@@ -57,7 +58,13 @@ func ThreeWayMerge[S message.Serializer](
 	}
 
 	eg, ctx := errgroup.WithContext(ctx)
-	patches := newPatchBuffer(patchBufferSize)
+
+	var patches patchBuffer
+	if flt != nil {
+		patches = newFilterPatchBuffer(patchBufferSize, flt)
+	} else {
+		patches = newPatchBuffer(patchBufferSize)
+	}
 
 	// iterate |ld| and |rd| in parallel, populating |patches|
 	eg.Go(func() (err error) {
@@ -83,22 +90,35 @@ func ThreeWayMerge[S message.Serializer](
 	return final, nil
 }
 
-// patchBuffer implements MutationIter. It consumes Diffs
+// FilterFn is a function that filters diffs from being applied to the left
+type FilterFn func(ctx context.Context, diff Diff) (bool, error)
+
+type patchBuffer interface {
+	MutationIter
+	patchReceiver
+}
+
+type patchReceiver interface {
+	sendPatch(ctx context.Context, diff Diff) error
+}
+
+// patchBufferImpl implements patchBuffer. It consumes Diffs
 // from the parallel treeDiffers and transforms them into
 // patches for the chunker to apply.
-type patchBuffer struct {
+type patchBufferImpl struct {
 	buf chan patch
 }
 
-var _ MutationIter = patchBuffer{}
+var _ MutationIter = patchBufferImpl{}
+var _ patchReceiver = filterPatchBufferImpl{}
 
 type patch [2]Item
 
-func newPatchBuffer(sz int) patchBuffer {
-	return patchBuffer{buf: make(chan patch, sz)}
+func newPatchBuffer(sz int) patchBufferImpl {
+	return patchBufferImpl{buf: make(chan patch, sz)}
 }
 
-func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
+func (ps patchBufferImpl) sendPatch(ctx context.Context, diff Diff) error {
 	p := patch{diff.Key, diff.To}
 	select {
 	case <-ctx.Done():
@@ -109,7 +129,7 @@ func (ps patchBuffer) sendPatch(ctx context.Context, diff Diff) error {
 }
 
 // NextMutation implements MutationIter.
-func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
+func (ps patchBufferImpl) NextMutation(ctx context.Context) (Item, Item) {
 	var p patch
 	select {
 	case p = <-ps.buf:
@@ -119,12 +139,56 @@ func (ps patchBuffer) NextMutation(ctx context.Context) (Item, Item) {
 	}
 }
 
-func (ps patchBuffer) Close() error {
+func (ps patchBufferImpl) Close() error {
 	close(ps.buf)
 	return nil
 }
 
-func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb CollisionFn) (err error) {
+type filterPatchBufferImpl struct {
+	buf    chan patch
+	filter FilterFn
+}
+
+var _ MutationIter = filterPatchBufferImpl{}
+var _ patchReceiver = filterPatchBufferImpl{}
+
+func newFilterPatchBuffer(sz int, filter FilterFn) filterPatchBufferImpl {
+	return filterPatchBufferImpl{buf: make(chan patch, sz), filter: filter}
+}
+
+func (ps filterPatchBufferImpl) sendPatch(ctx context.Context, diff Diff) error {
+	if ok, err := ps.filter(ctx, diff); err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
+
+	p := patch{diff.Key, diff.To}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case ps.buf <- p:
+		return nil
+	}
+}
+
+// NextMutation implements MutationIter.
+func (ps filterPatchBufferImpl) NextMutation(ctx context.Context) (Item, Item) {
+	var p patch
+	select {
+	case p = <-ps.buf:
+		return p[0], p[1]
+	case <-ctx.Done():
+		return nil, nil
+	}
+}
+
+func (ps filterPatchBufferImpl) Close() error {
+	close(ps.buf)
+	return nil
+}
+
+func sendPatches(ctx context.Context, l, r Differ, buf patchReceiver, cb CollisionFn) (err error) {
 	var (
 		left, right Diff
 		lok, rok    = true, true

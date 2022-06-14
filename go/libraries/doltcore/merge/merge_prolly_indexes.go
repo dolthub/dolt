@@ -15,14 +15,20 @@
 package merge
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
+	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
@@ -99,7 +105,15 @@ type confVals struct {
 // mergeProllySecondaryIndexes merges the secondary indexes of the given |tbl|,
 // |mergeTbl|, and |ancTbl|. It stores the merged indexes into |tableToUpdate|
 // and returns its updated value.
-func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, tbl, mergeTbl, tableToUpdate *doltdb.Table, ancSet durable.IndexSet) (*doltdb.Table, error) {
+func mergeProllySecondaryIndexes(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	mergedData durable.Index,
+	tbl, mergeTbl, tblToUpdate *doltdb.Table,
+	ancSet durable.IndexSet,
+	artEditor prolly.ArtifactsEditor,
+	cmHash hash.Hash) (*doltdb.Table, error) {
 	rootSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
@@ -108,11 +122,19 @@ func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter,
 	if err != nil {
 		return nil, err
 	}
-	mergedSet, err := mergeProllyIndexSets(ctx, vrw, postMergeSchema, rootSch, mergeSch, ancSch, mergedData, rootSet, mergeSet, ancSet)
+
+	mergedSet, err := mergeProllyIndexSets(
+		ctx,
+		vrw,
+		postMergeSchema, rootSch, mergeSch, ancSch,
+		mergedData,
+		rootSet, mergeSet, ancSet,
+		artEditor,
+		cmHash)
 	if err != nil {
 		return nil, err
 	}
-	updatedTbl, err := tableToUpdate.SetIndexSet(ctx, mergedSet)
+	updatedTbl, err := tblToUpdate.SetIndexSet(ctx, mergedSet)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +143,14 @@ func mergeProllySecondaryIndexes(ctx context.Context, vrw types.ValueReadWriter,
 
 // mergeProllyIndexSets merges the |root|, |merge|, and |anc| index sets based
 // on the provided |postMergeSchema|. It returns the merged index set.
-func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema, rootSch, mergeSch, ancSch schema.Schema, mergedData durable.Index, root, merge, anc durable.IndexSet) (durable.IndexSet, error) {
+func mergeProllyIndexSets(
+	ctx context.Context,
+	vrw types.ValueReadWriter,
+	postMergeSchema, rootSch, mergeSch, ancSch schema.Schema,
+	mergedData durable.Index,
+	root, merge, anc durable.IndexSet,
+	artEditor prolly.ArtifactsEditor,
+	cmHash hash.Hash) (durable.IndexSet, error) {
 	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
 
 	tryGetIdx := func(sch schema.Schema, iS durable.IndexSet, indexName string) (idx durable.Index, ok bool, err error) {
@@ -165,19 +194,13 @@ func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMe
 			left := durable.ProllyMapFromIndex(rootI)
 			right := durable.ProllyMapFromIndex(mergeI)
 			base := durable.ProllyMapFromIndex(ancI)
+			primary := durable.ProllyMapFromIndex(mergedData)
 
-			var collision = false
-			merged, err := prolly.MergeMaps(ctx, left, right, base, func(left, right tree.Diff) (tree.Diff, bool) {
-				collision = true
-				return tree.Diff{}, true
-			})
+			m, err := mergeProllySecondaryIdx(ctx, left, right, base, primary, mergeSch, index, artEditor, cmHash)
 			if err != nil {
 				return nil, err
 			}
-			if collision {
-				return nil, errors.New("collisions not implemented")
-			}
-			return durable.IndexFromProllyMap(merged), nil
+			return durable.IndexFromProllyMap(m), nil
 		}()
 		if err != nil {
 			return nil, err
@@ -190,6 +213,153 @@ func mergeProllyIndexSets(ctx context.Context, vrw types.ValueReadWriter, postMe
 	}
 
 	return mergedIndexSet, nil
+}
+
+func mergeProllySecondaryIdx(ctx context.Context, left, right, base, primary prolly.Map, sch schema.Schema, index schema.Index, artEditor prolly.ArtifactsEditor, cmHash hash.Hash) (prolly.Map, error) {
+	if index.IsUnique() {
+		return mergeProllyUniqueIdx(ctx, left, right, base, primary, sch, index, artEditor, cmHash)
+	}
+
+	var collision = false
+	merged, err := prolly.MergeMaps(ctx, left, right, base, func(left, right tree.Diff) (tree.Diff, bool) {
+		collision = true
+		return tree.Diff{}, true
+	})
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	if collision {
+		return prolly.Map{}, errors.New("collisions not implemented")
+	}
+	return merged, nil
+}
+
+func mergeProllyUniqueIdx(ctx context.Context, left, right, base, primary prolly.Map, sch schema.Schema, index schema.Index, artEditor prolly.ArtifactsEditor, cmHash hash.Hash) (prolly.Map, error) {
+	idxDesc := shim.KeyDescriptorFromSchema(index.Schema())
+	partialDesc := makePartialDescriptor(idxDesc, index.Count())
+	partialKB := val.NewTupleBuilder(partialDesc)
+	pool := left.Pool()
+
+	suffixDesc := makeSuffixDescriptor(idxDesc, idxDesc.Count()-index.Count())
+	suffixKB := val.NewTupleBuilder(suffixDesc)
+
+	m, err := makeUniqViolMeta(sch, index)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+	vInfo, err := json.Marshal(m)
+	if err != nil {
+		return prolly.Map{}, err
+	}
+
+	var collision = false
+	merged, err := prolly.FilterMergeMaps(ctx, left, right, base,
+		func(left, right tree.Diff) (tree.Diff, bool) {
+			collision = true
+			return tree.Diff{}, true
+		},
+		func(ctx context.Context, diff tree.Diff) (bool, error) {
+			if diff.Type != tree.AddedDiff {
+				return true, nil
+			}
+
+			// partial scan the left to see if we have this key already
+
+			// TODO (dhruv):
+			// 	I want an iter that can update its range. When the
+			// 	new range's start is greater than the current cursor, it seeks
+			// 	to the start of the updated range.
+
+			prefix := getPrefix(partialKB, pool, val.Tuple(diff.Key))
+			rng := prolly.ClosedRange(prefix, prefix, partialDesc)
+			itr, err := left.IterRange(ctx, rng)
+			if err != nil {
+				return false, err
+			}
+
+			// We only need to itr once. Left either doesn't have the partial key, has the partial key and it is a
+			// convergent edit, or has the partial key and it is a unique key conflict.
+			k, _, err := itr.Next(ctx)
+			if err != nil && err != io.EOF {
+				return false, err
+			}
+			if err == io.EOF {
+				// no partial key
+				return true, nil
+			}
+
+			left := getSuffix(suffixKB, pool, k)
+			right := getSuffix(suffixKB, pool, val.Tuple(diff.Key))
+			if bytes.Compare(left, right) == 0 {
+				// convergent edit
+				return true, nil
+			}
+
+			// TODO: throw a unique key violation for the right's pk
+
+			err = addUniqueKeyViolation(ctx, artEditor, primary, right, cmHash, vInfo)
+			if err != nil {
+				return false, err
+			}
+
+			// Eventually we want to filter the edit, but we can't do it when
+			// merging secondary indexes. It needs to be done when we merge
+			// primary data because we need to update the other indexes too.
+			return true, nil
+		})
+	if collision {
+		return prolly.Map{}, errors.New("collisions not implemented")
+	}
+
+	return merged, nil
+}
+
+func addUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, cmHash hash.Hash, vInfo []byte) error {
+	var value val.Tuple
+	err := m.Get(ctx, k, func(_, v val.Tuple) error {
+		value = v
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	meta := prolly.ConstraintViolationMeta{
+		VInfo: vInfo,
+		Value: value,
+	}
+	d, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+
+	err = edt.Add(ctx, k, cmHash[:], prolly.ArtifactTypeUniqueKeyViol, d)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getPrefix(pKB *val.TupleBuilder, pool pool.BuffPool, k val.Tuple) val.Tuple {
+	n := pKB.Desc.Count()
+	for i := 0; i < n; i++ {
+		pKB.PutRaw(i, k.GetField(i))
+	}
+	return pKB.Build(pool)
+}
+
+func makeSuffixDescriptor(d val.TupleDesc, n int) val.TupleDesc {
+	return val.NewTupleDescriptor(d.Types[len(d.Types)-n:]...)
+}
+
+func getSuffix(sKB *val.TupleBuilder, pool pool.BuffPool, k val.Tuple) val.Tuple {
+	n := sKB.Desc.Count()
+	m := k.Count()
+	for i, j := 0, m-n; j < k.Count(); i, j = i+1, j+1 {
+		sKB.PutRaw(i, k.GetField(j))
+	}
+	return sKB.Build(pool)
 }
 
 // Given cellWiseMergeEdit's sent on |cellWiseChan|, update the secondary indexes in

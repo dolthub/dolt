@@ -282,7 +282,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, nil, serializer)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -427,7 +427,7 @@ type ConflictMetadata struct {
 	TheirTblHash []byte `json:"tc"`
 }
 
-// ConstraintViolationMeta is the json metadata for foreign key constraint violations
+// ConstraintViolationMeta is the json metadata for constraint violations
 type ConstraintViolationMeta struct {
 	// marshalled json information about the fk
 	VInfo []byte `json:"v_info"`

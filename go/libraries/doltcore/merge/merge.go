@@ -16,12 +16,10 @@ package merge
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
@@ -628,31 +626,14 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 func applyPkChangeUnqErr(ctx context.Context, err error, k, v types.Tuple, tableEditor editor.TableEditor) error {
 	if uke, ok := err.(uniqueKeyError); ok {
 		sch := tableEditor.Schema()
-		schCols := sch.GetAllCols()
 		idx := sch.Indexes().GetByName(uke.indexName)
-		idxTags := idx.IndexedColumnTags()
-		colNames := make([]string, len(idxTags))
-		for i, tag := range idxTags {
-			if col, ok := schCols.TagToCol[tag]; !ok {
-				return fmt.Errorf("unique key '%s' references tag '%d' on table '%s' but it cannot be found",
-					idx.Name(), tag, tableEditor.Name())
-			} else {
-				colNames[i] = col.Name
-			}
-		}
-		jsonStr := fmt.Sprintf(`{`+
-			`"Name":"%s",`+
-			`"Columns":["%s"]`+
-			`}`,
-			uke.indexName,
-			strings.Join(colNames, `','`))
 
-		var doc interface{}
-		if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
+		m, err := makeUniqViolMeta(sch, idx)
+		if err != nil {
 			return err
 		}
-		sqlDoc := sql.JSONDocument{Val: doc}
-		nomsJson, err := json2.NomsJSONFromJSONValue(ctx, tableEditor.ValueReadWriter(), sqlDoc)
+
+		nomsJson, err := json2.NomsJSONFromJSONValue(ctx, tableEditor.ValueReadWriter(), m)
 		if err != nil {
 			return err
 		}
@@ -668,6 +649,25 @@ func applyPkChangeUnqErr(ctx context.Context, err error, k, v types.Tuple, table
 		return err
 	}
 	return nil
+}
+
+func makeUniqViolMeta(sch schema.Schema, idx schema.Index) (UniqCVMeta, error) {
+	schCols := sch.GetAllCols()
+	idxTags := idx.IndexedColumnTags()
+	colNames := make([]string, len(idxTags))
+	for i, tag := range idxTags {
+		if col, ok := schCols.TagToCol[tag]; !ok {
+			return UniqCVMeta{}, fmt.Errorf("unique key '%s' references tag '%d' on table but it cannot be found",
+				idx.Name(), tag)
+		} else {
+			colNames[i] = col.Name
+		}
+	}
+
+	return UniqCVMeta{
+		Columns: colNames,
+		Name:    idx.Name(),
+	}, nil
 }
 
 func applyKeylessChange(ctx context.Context, sch schema.Schema, tableEditor editor.TableEditor, _ types.Map, stats *MergeStats, change types.ValueChanged) (err error) {
