@@ -350,7 +350,9 @@ func TestDecimalMarshal(t *testing.T) {
 				assert.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, test.expectedVal, sql.MustConvert(typ.sqlDecimalType.Convert(decimal.Decimal(val.(types.Decimal)))))
+				expectedDecimal, err := decimal.NewFromString(test.expectedVal)
+				require.NoError(t, err)
+				assert.True(t, expectedDecimal.Equal(decimal.Decimal(val.(types.Decimal))))
 				umar, err := typ.ConvertNomsValueToValue(val)
 				require.NoError(t, err)
 				testVal := sql.MustConvert(typ.sqlDecimalType.Convert(test.val))

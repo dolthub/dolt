@@ -106,7 +106,7 @@ func (pr *ParquetReader) ReadSqlRow(ctx context.Context) (sql.Row, error) {
 			if _, ok := sqlType.(sql.DatetimeType); ok {
 				val = time.Unix(val.(int64), 0)
 			} else if _, ok := sqlType.(sql.TimeType); ok {
-				val = sql.Time.Unmarshal(val.(int64))
+				val = sql.Timespan(val.(int64))
 			}
 		}
 

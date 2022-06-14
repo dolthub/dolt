@@ -143,7 +143,7 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return index.DenormalizeRow(iter.sqlSch, nextRow)
+	return nextRow, nil
 }
 
 // Close implements the interface sql.RowIter.
@@ -186,7 +186,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	if err != nil {
 		return nil, err
 	}
-	return index.DenormalizeRow(iter.sqlSch, nextRow)
+	return nextRow, nil
 }
 
 // Close implements the interface sql.RowIter.

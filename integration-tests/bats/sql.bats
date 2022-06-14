@@ -342,17 +342,17 @@ SQL
     run dolt sql -r csv -q "select * from test order by a"
     [ $status -eq 0 ]
     [[ "$output" =~ "a,b,c,d" ]] || false
-    [[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00 +0000 UTC' ]] || false
-    [[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00 +0000 UTC' ]] || false
-    [[ "$output" =~ '3,,3,2020-03-03 00:00:00 +0000 UTC' ]] || false
-    [[ "$output" =~ '4,4.5,,2020-04-04 00:00:00 +0000 UTC' ]] || false
+    [[ "$output" =~ '1,1.5,1,2020-01-01 00:00:00' ]] || false
+    [[ "$output" =~ '2,2.5,2,2020-02-02 00:00:00' ]] || false
+    [[ "$output" =~ '3,,3,2020-03-03 00:00:00' ]] || false
+    [[ "$output" =~ '4,4.5,,2020-04-04 00:00:00' ]] || false
     [[ "$output" =~ '5,5.5,5,' ]] || false
     [ "${#lines[@]}" -eq 6 ]
 
     run dolt sql -r json -q "select * from test order by a"
     [ $status -eq 0 ]
     echo $output
-    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00 +0000 UTC"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00 +0000 UTC"},{"a":3,"c":"3","d":"2020-03-03 00:00:00 +0000 UTC"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00 +0000 UTC"},{"a":5,"b":5.5,"c":"5"}]}' ]
+    [ "$output" == '{"rows": [{"a":1,"b":1.5,"c":"1","d":"2020-01-01 00:00:00"},{"a":2,"b":2.5,"c":"2","d":"2020-02-02 00:00:00"},{"a":3,"c":"3","d":"2020-03-03 00:00:00"},{"a":4,"b":4.5,"d":"2020-04-04 00:00:00"},{"a":5,"b":5.5,"c":"5"}]}' ]
 }
 
 @test "sql: output for escaped longtext exports properly" {
@@ -1633,7 +1633,7 @@ SQL
     run dolt sql -q "INSERT INTO mytable values (1, b'');"
     [ "$status" -eq 0 ]
 
-    run dolt sql -q "SELECT * from mytable"
+    run dolt sql -q "SELECT pk, convert(val, unsigned) from mytable"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "1  | 0" ]] || false
 }
