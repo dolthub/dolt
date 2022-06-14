@@ -162,7 +162,7 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 		w.formatter = &formatter
 	}
 
-	for i := range w.rowBuffer {
+	for i := 0; i < w.numSamples; i++ {
 		err := w.writeRow(w.rowBuffer[i])
 		if err != nil {
 			return err
@@ -219,9 +219,13 @@ func rowToStrings(row sql.Row) []string {
 	strs := make([]string, len(row))
 	for i := range row {
 		var ok bool
-		strs[i], ok = row[i].(string)
-		if !ok {
-			panic(fmt.Sprintf("expected string but got %T", row[i]))
+		if row[i] == nil {
+			strs[i] = "NULL"
+		} else {
+			strs[i], ok = row[i].(string)
+			if !ok {
+				panic(fmt.Sprintf("expected string but got %T", row[i]))
+			}
 		}
 	}
 

@@ -688,7 +688,7 @@ func writeDiffResults(
 			return err
 		}
 
-		newRow, oldRow, err := ds.splitDiffResultRow(r)
+		oldRow, newRow, err := ds.splitDiffResultRow(r)
 		if err != nil {
 			return err
 		}
@@ -699,6 +699,7 @@ func writeDiffResults(
 				return err
 			}
 		}
+
 		if newRow.row != nil {
 			err := writer.WriteRow(ctx, newRow.row, newRow.colDiffs)
 			if err != nil {
@@ -720,6 +721,12 @@ type diffSplitter struct {
 	targetSch sql.Schema
 }
 
+func newRowDiff(size int) rowDiff {
+	return rowDiff{
+		colDiffs: make([]diff.ChangeType, size),
+	}
+}
+
 func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error) {
 	// split rows in the result set into old, new
 	diffTypeColIdx := ds.diffQuerySch.IndexOfColName("diff_type")
@@ -729,13 +736,13 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 
 	diffType := row[diffTypeColIdx]
 
-	var oldRow, newRow rowDiff
+	oldRow, newRow := newRowDiff(len(ds.targetSch)), newRowDiff(len(ds.targetSch))
 
 	// TODO: need a better mapping from diff result row to output row
 	//  1st col needs to be reserved for +-><
 	//  need to handle union of all schemas
 	diffTypeStr := diffType.(string)
-	if diffTypeStr == "added" || diffTypeStr == "modified" {
+	if diffTypeStr == "removed" || diffTypeStr == "modified" {
 		oldRow.row = make(sql.Row, len(ds.targetSch))
 		for i := range ds.diffQuerySch {
 			if i >= len(ds.targetSch) {
@@ -747,9 +754,9 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		}
 	}
 
-	if diffTypeStr == "removed" || diffTypeStr == "modified" {
+	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		newRow.row = make(sql.Row, len(ds.targetSch))
-		for i := range ds.diffQuerySch {
+		for i := 0; i < len(ds.diffQuerySch) -1; i++ {
 			if i < len(ds.targetSch) {
 				continue
 			}
