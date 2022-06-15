@@ -16,6 +16,7 @@ package encoding
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -32,7 +33,7 @@ const (
 )
 
 func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
-	buf, err := serializeSchemaAsFlatbuffer(ctx, sch)
+	buf, err := serializeSchemaAsFlatbuffer(sch)
 	if err != nil {
 		return nil, err
 	}
@@ -45,22 +46,16 @@ func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.
 }
 
 func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) (schema.Schema, error) {
-	assertTrue(types.IsFormat_DOLT_1(nbf))
+	assertTrue(nbf.UsesFlatbuffers())
 	sm, ok := v.(types.SerialMessage)
 	assertTrue(ok)
-	return deserializeSchemaFromFlatbuffer(ctx, []byte(sm))
+	return deserializeSchemaFromFlatbuffer(ctx, sm)
 }
 
-func serializeSchemaAsFlatbuffer(ctx context.Context, sch schema.Schema) ([]byte, error) {
-	if sch.Indexes().Count() > 0 {
-		panic("indexes not supported")
-	}
-	if sch.Checks().Count() > 0 {
-		panic("check constraints not supported")
-	}
+func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	if schema.IsKeyless(sch) {
 		// todo(andy): keyless id column
-		panic("keyless indexes not supported")
+		return nil, fmt.Errorf("keyless schemas not supported")
 	}
 
 	b := fb.NewBuilder(1024)
@@ -153,11 +148,16 @@ func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 	offs := make([]fb.UOffsetT, len(cols))
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
-		no := b.CreateString(col.Name)
+		co := b.CreateString(col.Comment)
+		do := b.CreateString(col.Default)
 		to := b.CreateString(sqlTypeString(col.TypeInfo))
+		no := b.CreateString(col.Name)
+
 		serial.ColumnStart(b)
 		serial.ColumnAddName(b, no)
 		serial.ColumnAddSqlType(b, to)
+		serial.ColumnAddDefaultValue(b, do)
+		serial.ColumnAddComment(b, co)
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
 		serial.ColumnAddEncoding(b, encodingFromType(col.TypeInfo))
@@ -188,6 +188,11 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
+		var constraints []schema.ColConstraint
+		if !c.Nullable() || c.PrimaryKey() {
+			constraints = append(constraints, schema.NotNullConstraint{})
+		}
+
 		cols[i], err = schema.NewColumnWithTypeInfo(
 			string(c.Name()),
 			c.Tag(),
@@ -195,7 +200,8 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			c.PrimaryKey(),
 			string(c.DefaultValue()),
 			c.AutoIncrement(),
-			string(c.Comment()))
+			string(c.Comment()),
+			constraints...)
 		if err != nil {
 			return nil, err
 		}
