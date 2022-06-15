@@ -69,7 +69,7 @@ func (cmd SqlClientCmd) Description() string {
 
 func (cmd SqlClientCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(sqlClientDocs, ap)
+	return cli.NewCommandDocumentation(sqlClientDocs, ap)
 }
 
 func (cmd SqlClientCmd) ArgParser() *argparser.ArgParser {
@@ -88,7 +88,7 @@ func (cmd SqlClientCmd) Hidden() bool {
 
 func (cmd SqlClientCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, sqlClientDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlClientDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	var serverConfig ServerConfig

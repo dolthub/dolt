@@ -75,7 +75,7 @@ func (cmd LoginCmd) RequiresRepo() bool {
 
 func (cmd LoginCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(loginDocs, ap)
+	return cli.NewCommandDocumentation(loginDocs, ap)
 }
 
 func (cmd LoginCmd) ArgParser() *argparser.ArgParser {
@@ -95,7 +95,7 @@ func (cmd LoginCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LoginCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, loginDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, loginDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// use config values over defaults, flag values over config values

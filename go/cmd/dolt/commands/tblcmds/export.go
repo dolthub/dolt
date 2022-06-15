@@ -116,7 +116,7 @@ func getExportDestination(apr *argparser.ArgParseResults) mvdata.DataLocation {
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, exportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
@@ -163,7 +163,7 @@ func (cmd ExportCmd) Description() string {
 
 func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(exportDocs, ap)
+	return cli.NewCommandDocumentation(exportDocs, ap)
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
@@ -183,7 +183,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, exportDocs, ap))
+	_, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, exportDocs, ap))
 
 	exOpts, verr := parseExportArgs(ap, commandStr, args)
 	if verr != nil {

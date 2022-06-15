@@ -128,7 +128,7 @@ func (cmd SqlCmd) Description() string {
 
 func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(sqlDocs, ap)
+	return cli.NewCommandDocumentation(sqlDocs, ap)
 }
 
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
@@ -165,7 +165,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 // necessary when committing work.
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, sqlDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	err := validateSqlArgs(apr)

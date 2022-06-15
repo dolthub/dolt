@@ -66,7 +66,7 @@ func (cmd InitCmd) RequiresRepo() bool {
 
 func (cmd InitCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(initDocs, ap)
+	return cli.NewCommandDocumentation(initDocs, ap)
 }
 
 func (cmd InitCmd) ArgParser() *argparser.ArgParser {
@@ -81,7 +81,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, initDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if dEnv.HasDoltDir() {

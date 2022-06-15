@@ -83,7 +83,7 @@ func (cmd ResolveCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd ResolveCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(resDocumentation, ap)
+	return cli.NewCommandDocumentation(resDocumentation, ap)
 }
 
 // EventType returns the type of the event to log
@@ -104,7 +104,7 @@ func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, resDocumentation, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

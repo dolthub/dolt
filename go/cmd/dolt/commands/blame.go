@@ -93,7 +93,7 @@ func (cmd BlameCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd BlameCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(blameDocs, ap)
+	return cli.NewCommandDocumentation(blameDocs, ap)
 }
 
 func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
@@ -124,7 +124,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, blameDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 || apr.NArg() > 2 {

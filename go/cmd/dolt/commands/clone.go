@@ -71,7 +71,7 @@ func (cmd CloneCmd) RequiresRepo() bool {
 
 func (cmd CloneCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(cloneDocs, ap)
+	return cli.NewCommandDocumentation(cloneDocs, ap)
 }
 
 func (cmd CloneCmd) ArgParser() *argparser.ArgParser {
@@ -93,7 +93,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cloneDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := clone(ctx, apr, dEnv)

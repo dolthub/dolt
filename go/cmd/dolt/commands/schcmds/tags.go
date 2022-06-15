@@ -53,7 +53,7 @@ func (cmd TagsCmd) Description() string {
 
 func (cmd TagsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(tblTagsDocs, ap)
+	return cli.NewCommandDocumentation(tblTagsDocs, ap)
 }
 
 func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
@@ -65,7 +65,7 @@ func (cmd TagsCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd TagsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tblTagsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblTagsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	tables := apr.Args

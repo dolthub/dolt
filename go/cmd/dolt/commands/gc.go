@@ -76,7 +76,7 @@ func (cmd GarbageCollectionCmd) RequiresRepo() bool {
 
 func (cmd GarbageCollectionCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(gcDocs, ap)
+	return cli.NewCommandDocumentation(gcDocs, ap)
 }
 
 func (cmd GarbageCollectionCmd) ArgParser() *argparser.ArgParser {
@@ -96,7 +96,7 @@ func (cmd GarbageCollectionCmd) Exec(ctx context.Context, commandStr string, arg
 	var verr errhand.VerboseError
 
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, gcDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, gcDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var err error

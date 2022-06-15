@@ -127,8 +127,9 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 	}, nil
 }
 
-// Creates a CommandDocumentation given command string, arg parser, and a CommandDocumentationContent
-func GetCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
+// NewCommandDocumentation returns a |CommandDocumentation| for the content and arg parser given.
+// Does not include a command string, which must be filled in separately.
+func NewCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
 	return &CommandDocumentation{
 		ShortDesc:  cmdDoc.ShortDesc,
 		LongDesc:   cmdDoc.LongDesc,
@@ -137,7 +138,9 @@ func GetCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argp
 	}
 }
 
-func NewCommandDocumentation(command string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
+// CommandDocsForCommandString returns a |CommandDocumentation| for the the command string, doc contents, and arg
+// parser given.
+func CommandDocsForCommandString(command string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
 	return &CommandDocumentation{
 		CommandStr: command,
 		ShortDesc:  cmdDoc.ShortDesc,

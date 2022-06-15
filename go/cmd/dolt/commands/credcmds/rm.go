@@ -47,7 +47,7 @@ func (cmd RmCmd) Description() string {
 
 func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(rmDocs, ap)
+	return cli.NewCommandDocumentation(rmDocs, ap)
 }
 
 func (cmd RmCmd) ArgParser() *argparser.ArgParser {
@@ -69,7 +69,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, rmDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 

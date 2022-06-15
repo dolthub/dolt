@@ -59,7 +59,7 @@ func (cmd PullCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreatePullArgParser()
-	return cli.GetCommandDocumentation(pullDocs, ap)
+	return cli.NewCommandDocumentation(pullDocs, ap)
 }
 
 func (cmd PullCmd) ArgParser() *argparser.ArgParser {
@@ -76,7 +76,7 @@ func (cmd PullCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreatePullArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, pullDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pullDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 

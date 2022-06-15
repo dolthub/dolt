@@ -57,7 +57,7 @@ func (cmd ShowCmd) Description() string {
 
 func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(tblSchemaDocs, ap)
+	return cli.NewCommandDocumentation(tblSchemaDocs, ap)
 }
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
@@ -75,7 +75,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)

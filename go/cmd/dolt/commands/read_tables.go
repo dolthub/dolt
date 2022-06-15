@@ -62,7 +62,7 @@ func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(readTablesDocs, ap)
+	return cli.NewCommandDocumentation(readTablesDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -86,7 +86,7 @@ func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, readTablesDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, readTablesDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 2 {

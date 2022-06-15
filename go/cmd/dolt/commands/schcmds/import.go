@@ -137,7 +137,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 
 func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(schImportDocs, ap)
+	return cli.NewCommandDocumentation(schImportDocs, ap)
 }
 
 func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
@@ -161,7 +161,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, schImportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, schImportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {

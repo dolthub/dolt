@@ -62,7 +62,7 @@ func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(catDocs, ap)
+	return cli.NewCommandDocumentation(catDocs, ap)
 }
 
 // EventType returns the type of the event to log
@@ -80,7 +80,7 @@ func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, catDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 

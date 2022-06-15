@@ -53,7 +53,7 @@ func (cmd CpCmd) Description() string {
 
 func (cmd CpCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(tblCpDocs, ap)
+	return cli.NewCommandDocumentation(tblCpDocs, ap)
 }
 
 func (cmd CpCmd) ArgParser() *argparser.ArgParser {
@@ -72,7 +72,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tblCpDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {

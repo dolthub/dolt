@@ -73,7 +73,7 @@ func (cmd ResetCmd) Description() string {
 
 func (cmd ResetCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateResetArgParser()
-	return cli.GetCommandDocumentation(resetDocContent, ap)
+	return cli.NewCommandDocumentation(resetDocContent, ap)
 }
 
 func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
@@ -83,7 +83,7 @@ func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateResetArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, resetDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

@@ -50,7 +50,7 @@ func (cmd MergeBaseCmd) Description() string {
 
 func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(mergeBaseDocs, ap)
+	return cli.NewCommandDocumentation(mergeBaseDocs, ap)
 }
 
 func (cmd MergeBaseCmd) ArgParser() *argparser.ArgParser {
@@ -67,7 +67,7 @@ func (cmd MergeBaseCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MergeBaseCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, mergeBaseDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, mergeBaseDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

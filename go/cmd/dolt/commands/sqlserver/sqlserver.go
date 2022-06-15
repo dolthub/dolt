@@ -121,7 +121,7 @@ func (cmd SqlServerCmd) Description() string {
 
 func (cmd SqlServerCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(sqlServerDocs, ap)
+	return cli.NewCommandDocumentation(sqlServerDocs, ap)
 }
 
 func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
@@ -172,7 +172,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, sqlServerDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, sqlServerDocs, ap))
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)

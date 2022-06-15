@@ -66,7 +66,7 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 
 func (cmd FetchCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateFetchArgParser()
-	return cli.GetCommandDocumentation(fetchDocs, ap)
+	return cli.NewCommandDocumentation(fetchDocs, ap)
 }
 
 func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
@@ -76,7 +76,7 @@ func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateFetchArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, fetchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())

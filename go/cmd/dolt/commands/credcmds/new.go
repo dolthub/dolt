@@ -50,7 +50,7 @@ func (cmd NewCmd) Description() string {
 
 func (cmd NewCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(newDocs, ap)
+	return cli.NewCommandDocumentation(newDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -72,7 +72,7 @@ func (cmd NewCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, newDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, newDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

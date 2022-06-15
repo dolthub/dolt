@@ -62,7 +62,7 @@ func (cmd TagCmd) Description() string {
 
 func (cmd TagCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(tagDocs, ap)
+	return cli.NewCommandDocumentation(tagDocs, ap)
 }
 
 func (cmd TagCmd) ArgParser() *argparser.ArgParser {
@@ -83,7 +83,7 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tagDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// list tags

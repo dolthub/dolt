@@ -97,7 +97,7 @@ func (cmd BackupCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(backupDocs, ap)
+	return cli.NewCommandDocumentation(backupDocs, ap)
 }
 
 func (cmd BackupCmd) ArgParser() *argparser.ArgParser {
@@ -112,7 +112,7 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, backupDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

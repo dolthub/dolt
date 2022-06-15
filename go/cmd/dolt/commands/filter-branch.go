@@ -83,7 +83,7 @@ func (cmd FilterBranchCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd FilterBranchCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(filterBranchDocs, ap)
+	return cli.NewCommandDocumentation(filterBranchDocs, ap)
 }
 
 func (cmd FilterBranchCmd) ArgParser() *argparser.ArgParser {
@@ -100,7 +100,7 @@ func (cmd FilterBranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd FilterBranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, filterBranchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, filterBranchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 1 || apr.NArg() > 2 {

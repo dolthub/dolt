@@ -52,7 +52,7 @@ func (cmd AddCmd) Description() string {
 
 func (cmd AddCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateAddArgParser()
-	return cli.GetCommandDocumentation(addDocs, ap)
+	return cli.NewCommandDocumentation(addDocs, ap)
 }
 
 func (cmd AddCmd) ArgParser() *argparser.ArgParser {
@@ -62,7 +62,7 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateAddArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, addDocs, ap))
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

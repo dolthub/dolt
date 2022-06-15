@@ -89,7 +89,7 @@ func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd RemoteCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(remoteDocs, ap)
+	return cli.NewCommandDocumentation(remoteDocs, ap)
 }
 
 func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
@@ -113,7 +113,7 @@ func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, remoteDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

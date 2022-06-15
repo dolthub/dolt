@@ -73,7 +73,7 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 
 func (cmd ConfigCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(cfgDocs, ap)
+	return cli.NewCommandDocumentation(cfgDocs, ap)
 }
 
 func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
@@ -91,7 +91,7 @@ func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cfgDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)

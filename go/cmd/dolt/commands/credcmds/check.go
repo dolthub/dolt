@@ -55,7 +55,7 @@ func (cmd CheckCmd) Description() string {
 
 func (cmd CheckCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(checkDocs, ap)
+	return cli.NewCommandDocumentation(checkDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -79,7 +79,7 @@ func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, checkDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)

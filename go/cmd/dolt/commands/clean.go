@@ -57,7 +57,7 @@ func (cmd CleanCmd) Description() string {
 
 func (cmd CleanCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCleanArgParser()
-	return cli.GetCommandDocumentation(cleanDocContent, ap)
+	return cli.NewCommandDocumentation(cleanDocContent, ap)
 }
 
 func (cmd CleanCmd) ArgParser() *argparser.ArgParser {
@@ -67,7 +67,7 @@ func (cmd CleanCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCleanArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cleanDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cleanDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	roots, err := dEnv.Roots(ctx)

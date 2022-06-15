@@ -131,7 +131,7 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 
 func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(diffDocs, ap)
+	return cli.NewCommandDocumentation(diffDocs, ap)
 }
 
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
@@ -149,7 +149,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, diffDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fromRoot, toRoot, dArgs, err := parseDiffArgs(ctx, dEnv, apr)

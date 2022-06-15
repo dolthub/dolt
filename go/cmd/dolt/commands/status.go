@@ -45,7 +45,7 @@ func (cmd StatusCmd) Description() string {
 
 func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(statusDocs, ap)
+	return cli.NewCommandDocumentation(statusDocs, ap)
 }
 
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
@@ -56,7 +56,7 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, statusDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
 	roots, err := dEnv.Roots(ctx)

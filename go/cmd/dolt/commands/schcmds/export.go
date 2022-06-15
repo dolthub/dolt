@@ -58,7 +58,7 @@ func (cmd ExportCmd) Description() string {
 
 func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(schExportDocs, ap)
+	return cli.NewCommandDocumentation(schExportDocs, ap)
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
@@ -76,7 +76,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, schExportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)

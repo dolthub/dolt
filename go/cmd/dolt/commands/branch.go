@@ -84,7 +84,7 @@ func (cmd BranchCmd) Description() string {
 
 func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return cli.GetCommandDocumentation(branchDocs, ap)
+	return cli.NewCommandDocumentation(branchDocs, ap)
 }
 
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
@@ -111,7 +111,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, branchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, branchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	switch {

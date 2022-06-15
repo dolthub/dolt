@@ -68,7 +68,7 @@ func (cmd CommitCmd) Description() string {
 
 func (cmd CommitCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCommitArgParser()
-	return cli.GetCommandDocumentation(commitDocs, ap)
+	return cli.NewCommandDocumentation(commitDocs, ap)
 }
 
 func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
@@ -78,7 +78,7 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	allFlag := apr.Contains(cli.AllFlag)
