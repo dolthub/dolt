@@ -16,7 +16,6 @@ package encoding
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -30,6 +29,9 @@ import (
 
 const (
 	builderBufferSize = 1500
+
+	keylessIdCol   = "keyless_hash_id"
+	keylessCardCol = "keyless_cardinality"
 )
 
 func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
@@ -53,14 +55,9 @@ func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Va
 }
 
 func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
-	if schema.IsKeyless(sch) {
-		// todo(andy): keyless id column
-		return nil, fmt.Errorf("keyless schemas not supported")
-	}
-
 	b := fb.NewBuilder(1024)
+	columns := serializeSchemaColumns(b, sch)
 	rows := serializeClusteredIndex(b, sch)
-	columns := serializeSchemaColumns(b, sch.GetAllCols().GetColumns())
 	indexes := serializeSecondaryIndexes(b, sch, sch.Indexes().AllIndexes())
 	checks := serializeChecks(b, sch.Checks().AllChecks())
 
@@ -106,6 +103,8 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 }
 
 func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
+	// todo(andy): place hidden keyless columns
+
 	// serialize key columns
 	pkMap := sch.GetPkOrdinals()
 	serial.IndexStartIndexColumnsVector(b, len(pkMap))
@@ -136,6 +135,11 @@ func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 }
 
 func deserializeClusteredIndex(s *serial.TableSchema) []int {
+	// check for keyless schema
+	if keylessSerialSchema(s) {
+		return nil
+	}
+
 	idx := s.Rows(nil)
 	pkOrdinals := make([]int, idx.KeyColumnsLength())
 	for i := range pkOrdinals {
@@ -144,8 +148,18 @@ func deserializeClusteredIndex(s *serial.TableSchema) []int {
 	return pkOrdinals
 }
 
-func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
+func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
+	cols := sch.GetAllCols().GetColumns()
 	offs := make([]fb.UOffsetT, len(cols))
+
+	if schema.IsKeyless(sch) {
+		// append hidden, generated keyless columns
+		// to the end of the columns array
+		id, card := serializeHiddenKeylessColumns(b)
+		offs = append(offs, id, card)
+	}
+
+	// serialize columns in |cols|
 	for i := len(cols) - 1; i >= 0; i-- {
 		col := cols[i]
 		co := b.CreateString(col.Comment)
@@ -160,7 +174,7 @@ func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 		serial.ColumnAddComment(b, co)
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
-		serial.ColumnAddEncoding(b, encodingFromType(col.TypeInfo))
+		serial.ColumnAddEncoding(b, encodingFromTypeinfo(col.TypeInfo))
 		serial.ColumnAddPrimaryKey(b, col.IsPartOfPK)
 		serial.ColumnAddAutoIncrement(b, col.AutoIncrement)
 		serial.ColumnAddNullable(b, col.IsNullable())
@@ -169,15 +183,58 @@ func serializeSchemaColumns(b *fb.Builder, cols []schema.Column) fb.UOffsetT {
 		serial.ColumnAddHidden(b, false)
 		offs[i] = serial.ColumnEnd(b)
 	}
+
+	// create the columns array with all columns
 	serial.TableSchemaStartColumnsVector(b, len(offs))
-	for i := len(cols) - 1; i >= 0; i-- {
+	for i := len(offs) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(offs[i])
 	}
 	return b.EndVector(len(offs))
 }
 
+func serializeHiddenKeylessColumns(b *fb.Builder) (id, card fb.UOffsetT) {
+	// cardinality column
+	no := b.CreateString(keylessCardCol)
+	serial.ColumnStart(b)
+	serial.ColumnAddName(b, no)
+	serial.ColumnAddDisplayOrder(b, int16(-1))
+	serial.ColumnAddTag(b, schema.KeylessRowCardinalityTag)
+	serial.ColumnAddEncoding(b, serial.EncodingUint64)
+	// set hidden and generated to true
+	serial.ColumnAddGenerated(b, true)
+	serial.ColumnAddHidden(b, true)
+	serial.ColumnAddPrimaryKey(b, false)
+	serial.ColumnAddAutoIncrement(b, false)
+	serial.ColumnAddNullable(b, false)
+	serial.ColumnAddVirtual(b, false)
+	card = serial.ColumnEnd(b)
+
+	// hash id column
+	no = b.CreateString(keylessIdCol)
+	serial.ColumnStart(b)
+	serial.ColumnAddName(b, no)
+	serial.ColumnAddDisplayOrder(b, int16(-1))
+	serial.ColumnAddTag(b, schema.KeylessRowIdTag)
+	serial.ColumnAddEncoding(b, serial.EncodingHash128)
+	// set hidden and generated to true
+	serial.ColumnAddGenerated(b, true)
+	serial.ColumnAddHidden(b, true)
+	serial.ColumnAddPrimaryKey(b, false)
+	serial.ColumnAddAutoIncrement(b, false)
+	serial.ColumnAddNullable(b, false)
+	serial.ColumnAddVirtual(b, false)
+	id = serial.ColumnEnd(b)
+
+	return
+}
+
 func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Column, error) {
-	cols := make([]schema.Column, s.ColumnsLength())
+	length := s.ColumnsLength()
+	if keylessSerialSchema(s) {
+		length -= 2 // omit hidden columns
+	}
+
+	cols := make([]schema.Column, length)
 	c := new(serial.Column)
 	for i := range cols {
 		ok := s.Columns(c, i)
@@ -314,6 +371,12 @@ func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 	return nil
 }
 
+func keylessSerialSchema(s *serial.TableSchema) bool {
+	// todo(andy)
+	rows := s.Rows(nil)
+	return rows.IndexColumnsLength() == 0
+}
+
 func sqlTypeString(t typeinfo.TypeInfo) string {
 	return t.ToSqlType().String()
 }
@@ -326,9 +389,8 @@ func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, erro
 	return typeinfo.FromSqlType(t)
 }
 
-func encodingFromType(t typeinfo.TypeInfo) serial.Encoding {
-	// todo(andy)
-	return serial.EncodingNull
+func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
+	return schema.EncodingFromSqlType(t.ToSqlType().Type())
 }
 
 func assertTrue(b bool) {

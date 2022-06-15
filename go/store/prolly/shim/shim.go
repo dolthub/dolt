@@ -15,8 +15,6 @@
 package shim
 
 import (
-	"fmt"
-
 	"github.com/dolthub/vitess/go/vt/proto/query"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -119,72 +117,5 @@ func ValueDescriptorFromSchema(sch schema.Schema) val.TupleDesc {
 }
 
 func encodingFromSqlType(typ query.Type) val.Encoding {
-
-	// todo(andy): replace temp encodings
-	switch typ {
-	case query.Type_BLOB:
-		// todo: temporary hack for enginetests
-		return val.StringEnc
-	case query.Type_TEXT:
-		return val.StringEnc
-	case query.Type_JSON:
-		return val.JSONEnc
-	}
-
-	switch typ {
-	case query.Type_INT8:
-		return val.Int8Enc
-	case query.Type_UINT8:
-		return val.Uint8Enc
-	case query.Type_INT16:
-		return val.Int16Enc
-	case query.Type_UINT16:
-		return val.Uint16Enc
-	case query.Type_INT24:
-		return val.Int32Enc
-	case query.Type_UINT24:
-		return val.Uint32Enc
-	case query.Type_INT32:
-		return val.Int32Enc
-	case query.Type_UINT32:
-		return val.Uint32Enc
-	case query.Type_INT64:
-		return val.Int64Enc
-	case query.Type_UINT64:
-		return val.Uint64Enc
-	case query.Type_FLOAT32:
-		return val.Float32Enc
-	case query.Type_FLOAT64:
-		return val.Float64Enc
-	case query.Type_BIT:
-		return val.Uint64Enc
-	case query.Type_DECIMAL:
-		return val.DecimalEnc
-	case query.Type_YEAR:
-		return val.YearEnc
-	case query.Type_DATE:
-		return val.DateEnc
-	case query.Type_TIME:
-		return val.TimeEnc
-	case query.Type_TIMESTAMP:
-		return val.DatetimeEnc
-	case query.Type_DATETIME:
-		return val.DatetimeEnc
-	case query.Type_ENUM:
-		return val.EnumEnc
-	case query.Type_SET:
-		return val.SetEnc
-	case query.Type_BINARY:
-		return val.ByteStringEnc
-	case query.Type_VARBINARY:
-		return val.ByteStringEnc
-	case query.Type_CHAR:
-		return val.StringEnc
-	case query.Type_VARCHAR:
-		return val.StringEnc
-	case query.Type_GEOMETRY:
-		return val.GeometryEnc
-	default:
-		panic(fmt.Sprintf("unknown encoding %v", typ))
-	}
+	return val.Encoding(schema.EncodingFromSqlType(typ))
 }

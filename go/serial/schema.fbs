@@ -29,7 +29,7 @@ table Column {
   name:string (required);
 
   // sql column type
-  sql_type:string (required);
+  sql_type:string;
 
   // sql default value
   default_value:string;

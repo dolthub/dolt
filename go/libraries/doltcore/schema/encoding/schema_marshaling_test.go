@@ -335,6 +335,7 @@ func getSchemas(t *testing.T, n int) (schemas []schema.Schema) {
 		cc := make([]schema.Column, k)
 		copy(cc, cols)
 		cc[0].IsPartOfPK = true
+		cc[0].Constraints = []schema.ColConstraint{schema.NotNullConstraint{}}
 		schemas[i], err = schema.SchemaFromCols(
 			schema.NewColCollection(cc...))
 		require.NoError(t, err)
