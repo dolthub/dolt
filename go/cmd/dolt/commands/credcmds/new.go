@@ -48,7 +48,6 @@ func (cmd NewCmd) Description() string {
 	return newDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd NewCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(newDocs, ap)

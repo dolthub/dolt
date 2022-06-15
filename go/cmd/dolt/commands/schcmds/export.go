@@ -56,7 +56,6 @@ func (cmd ExportCmd) Description() string {
 	return "Exports a table's schema in SQL form."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(schExportDocs, ap)

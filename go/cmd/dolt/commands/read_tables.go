@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 	"path"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -61,10 +60,9 @@ func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
+	return cli.GetCommandDocumentation(readTablesDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -88,7 +86,7 @@ func (cmd ReadTablesCmd) ArgParser() *argparser.ArgParser {
 func (cmd ReadTablesCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, readTablesDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() < 2 {

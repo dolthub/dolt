@@ -17,7 +17,6 @@ package credcmds
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"google.golang.org/grpc"
 
@@ -54,10 +53,9 @@ func (cmd CheckCmd) Description() string {
 	return checkShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkDocs, ap))
+	return cli.GetCommandDocumentation(checkDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -81,7 +79,7 @@ func (cmd CheckCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CheckCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, checkDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	endpoint := loadEndpoint(dEnv, apr)

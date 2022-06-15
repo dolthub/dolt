@@ -126,10 +126,9 @@ func (cmd SqlCmd) Description() string {
 	return "Run a SQL query against tables in repository."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	return cli.GetCommandDocumentation(sqlDocs, ap)
 }
 
 func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
@@ -166,7 +165,7 @@ func (cmd SqlCmd) RequiresRepo() bool {
 // necessary when committing work.
 func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, sqlDocs, ap))
 
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	err := validateSqlArgs(apr)

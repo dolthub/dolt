@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -56,10 +55,9 @@ func (cmd CleanCmd) Description() string {
 	return "Remove untracked tables from working set."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CleanCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCleanArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cleanDocContent, ap))
+	return cli.GetCommandDocumentation(cleanDocContent, ap)
 }
 
 func (cmd CleanCmd) ArgParser() *argparser.ArgParser {
@@ -69,7 +67,7 @@ func (cmd CleanCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CleanCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCleanArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cleanDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cleanDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	roots, err := dEnv.Roots(ctx)

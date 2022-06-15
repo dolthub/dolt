@@ -16,7 +16,6 @@ package cvcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -64,7 +63,7 @@ func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 
 func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
+	return cli.GetCommandDocumentation(verifyConstraintsDocs, ap)
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
@@ -77,7 +76,7 @@ func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verifyAllRows := apr.Contains(vcAllParam)

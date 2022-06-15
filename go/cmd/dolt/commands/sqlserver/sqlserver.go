@@ -18,14 +18,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
@@ -121,10 +119,9 @@ func (cmd SqlServerCmd) Description() string {
 	return sqlServerDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd SqlServerCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	return cli.GetCommandDocumentation(sqlServerDocs, ap)
 }
 
 func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
@@ -175,7 +172,7 @@ func (cmd SqlServerCmd) Exec(ctx context.Context, commandStr string, args []stri
 
 func startServer(ctx context.Context, versionStr, commandStr string, args []string, dEnv *env.DoltEnv, serverController *ServerController) int {
 	ap := SqlServerCmd{}.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, sqlServerDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, sqlServerDocs, ap))
 
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 	"os"
 	"path"
 
@@ -70,10 +69,9 @@ func (cmd CloneCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CloneCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
+	return cli.GetCommandDocumentation(cloneDocs, ap)
 }
 
 func (cmd CloneCmd) ArgParser() *argparser.ArgParser {
@@ -95,7 +93,7 @@ func (cmd CloneCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cloneDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := clone(ctx, apr, dEnv)

@@ -43,7 +43,6 @@ func (cmd StatusCmd) Description() string {
 	return "Show the working tree status."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(statusDocs, ap)

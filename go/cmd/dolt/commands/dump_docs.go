@@ -66,7 +66,6 @@ func (cmd *DumpDocsCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd *DumpDocsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
@@ -81,7 +80,7 @@ func (cmd *DumpDocsCmd) ArgParser() *argparser.ArgParser {
 func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fileStr := apr.GetValueOrDefault(fileParamName, "cli.md")

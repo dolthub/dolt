@@ -60,7 +60,6 @@ func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(catDocs, ap)

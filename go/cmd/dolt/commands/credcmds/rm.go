@@ -16,7 +16,6 @@ package credcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/fatih/color"
 
@@ -46,10 +45,9 @@ func (cmd RmCmd) Description() string {
 	return rmDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+	return cli.GetCommandDocumentation(rmDocs, ap)
 }
 
 func (cmd RmCmd) ArgParser() *argparser.ArgParser {
@@ -71,7 +69,7 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rmDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, rmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 

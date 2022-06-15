@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -72,10 +71,9 @@ func (cmd ResetCmd) Description() string {
 	return "Remove table changes from the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ResetCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateResetArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	return cli.GetCommandDocumentation(resetDocContent, ap)
 }
 
 func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
@@ -85,7 +83,7 @@ func (cmd ResetCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResetCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateResetArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, resetDocContent, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

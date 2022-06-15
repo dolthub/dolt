@@ -59,7 +59,6 @@ func (cmd LsCmd) Description() string {
 	return "List tables in the working set."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(lsDocs, ap)

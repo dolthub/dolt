@@ -69,7 +69,6 @@ func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
@@ -83,7 +82,7 @@ func (cmd RootsCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd RootsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dir := filepath.Join(dEnv.GetDoltDir(), dbfactory.DataDir)

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -61,10 +60,9 @@ func (cmd CheckoutCmd) Description() string {
 	return "Checkout a branch or overwrite a table from HEAD."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd CheckoutCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCheckoutArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
+	return cli.GetCommandDocumentation(checkoutDocs, ap)
 }
 
 func (cmd CheckoutCmd) ArgParser() *argparser.ArgParser {
@@ -79,7 +77,7 @@ func (cmd CheckoutCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCheckoutArgParser()
-	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
+	helpPrt, usagePrt := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, checkoutDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPrt)
 
 	if (apr.Contains(cli.CheckoutCoBranch) && apr.NArg() > 1) || (!apr.Contains(cli.CheckoutCoBranch) && apr.NArg() == 0) {

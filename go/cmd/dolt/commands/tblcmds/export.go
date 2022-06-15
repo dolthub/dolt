@@ -161,7 +161,6 @@ func (cmd ExportCmd) Description() string {
 	return "Export a table to a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.GetCommandDocumentation(exportDocs, ap)

@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -61,10 +60,9 @@ func (cmd TagCmd) Description() string {
 	return "Create, list, delete tags."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd TagCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tagDocs, ap))
+	return cli.GetCommandDocumentation(tagDocs, ap)
 }
 
 func (cmd TagCmd) ArgParser() *argparser.ArgParser {
@@ -85,7 +83,7 @@ func (cmd TagCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd TagCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tagDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tagDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	// list tags

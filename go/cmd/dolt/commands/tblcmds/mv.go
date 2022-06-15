@@ -17,7 +17,6 @@ package tblcmds
 import (
 	"context"
 	"fmt"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -54,10 +53,9 @@ func (cmd MvCmd) Description() string {
 	return "Moves a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
 func (cmd MvCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+	return cli.GetCommandDocumentation(tblMvDocs, ap)
 }
 
 func (cmd MvCmd) ArgParser() *argparser.ArgParser {
@@ -76,7 +74,7 @@ func (cmd MvCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MvCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblMvDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, tblMvDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {
