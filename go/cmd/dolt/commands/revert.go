@@ -37,7 +37,7 @@ var revertDocs = cli.CommandDocumentationContent{
 		"influence of the specified commit. If multiple commits are specified, then this process is repeated for each " +
 		"commit in the order specified. This requires a clean working set." +
 
-"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
+		"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
 	Synopsis: []string{
 		"<revision>...",
 	},
