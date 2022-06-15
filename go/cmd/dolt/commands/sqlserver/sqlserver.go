@@ -308,30 +308,33 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
 	load := cfg.PersistenceBehavior() == loadPerisistentGlobals
-	var v uint64
-	if load && cfg.ListenerConfig.MaxConnections == nil {
+
+	if cfg.ListenerConfig.MaxConnections == nil {
+		var mc uint64
 		if load {
-			v = getPersistentMaxConnections()
+			mc = getPersistentMaxConnections()
 		} else {
-			v = uint64(defaultMaxConnections)
+			mc = uint64(defaultMaxConnections)
 		}
-		cfg.ListenerConfig.MaxConnections = &v
+		cfg.ListenerConfig.MaxConnections = &mc
 	}
 	if cfg.ListenerConfig.ReadTimeoutMillis == nil {
+		var rt uint64
 		if load {
-			v = getPersistentReadTimeout()
+			rt = getPersistentReadTimeout()
 		} else {
-			v = getPersistentReadTimeout()
+			rt = uint64(defaultTimeout)
 		}
-		cfg.ListenerConfig.ReadTimeoutMillis = &v
+		cfg.ListenerConfig.ReadTimeoutMillis = &rt
 	}
 	if cfg.ListenerConfig.WriteTimeoutMillis == nil {
+		var wt uint64
 		if load {
-			v = getPersistentWriteTimeout()
+			wt = getPersistentWriteTimeout()
 		} else {
-			v = uint64(defaultTimeout)
+			wt = uint64(defaultTimeout)
 		}
-		cfg.ListenerConfig.WriteTimeoutMillis = &v
+		cfg.ListenerConfig.WriteTimeoutMillis = &wt
 	}
 
 	return cfg, nil
