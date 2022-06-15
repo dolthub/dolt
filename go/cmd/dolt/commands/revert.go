@@ -30,13 +30,14 @@ import (
 
 var revertDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Undo the changes introduced in a commit",
-	LongDesc: `Removes the changes made in a commit (or series of commits) from the working set, and then automatically commits the
-result. This is done by way of a three-way merge. Given a specific commit (e.g. HEAD~1), this is similar to applying the
-patch from HEAD~1..HEAD~2, giving us a patch of what to remove to effectively remove the influence of the specified
-commit. If multiple commits are specified, then this process is repeated for each commit in the order specified. This
-requires a clean working set.
+	LongDesc: "Removes the changes made in a commit (or series of commits) from the working set, and then automatically " +
+		"commits the result. This is done by way of a three-way merge. Given a specific commit " +
+		"(e.g. {{.EmphasisLeft}}HEAD~1{{.EmphasisRight}}), this is similar to applying the patch from " +
+		"{{.EmphasisLeft}}HEAD~1..HEAD~2{{.EmphasisRight}}, giving us a patch of what to remove to effectively remove the " +
+		"influence of the specified commit. If multiple commits are specified, then this process is repeated for each " +
+		"commit in the order specified. This requires a clean working set." +
 
-For now, any conflicts or constraint violations that are brought by the merge cause the command to fail.`,
+"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
 	Synopsis: []string{
 		"<revision>...",
 	},
@@ -60,7 +61,6 @@ func (cmd RevertCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown implements the interface cli.Command.
 func (cmd RevertCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateRevertArgParser()
 	return cli.NewCommandDocumentation(revertDocs, ap)

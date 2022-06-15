@@ -70,33 +70,33 @@ var sqlServerDocs = cli.CommandDocumentationContent{
 		indentLines(serverConfigAsYAMLConfig(DefaultServerConfig()).String()) + "\n\n" + `
 SUPPORTED CONFIG FILE FIELDS:
 
-		{{.EmphasisLeft}}vlog_level{{.EmphasisRight}} - Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
+{{.EmphasisLeft}}vlog_level{{.EmphasisRight}}: Level of logging provided. Options are: {{.EmphasisLeft}}trace{{.EmphasisRight}}, {{.EmphasisLeft}}debug{{.EmphasisRight}}, {{.EmphasisLeft}}info{{.EmphasisRight}}, {{.EmphasisLeft}}warning{{.EmphasisRight}}, {{.EmphasisLeft}}error{{.EmphasisRight}}, and {{.EmphasisLeft}}fatal{{.EmphasisRight}}.
 
-		{{.EmphasisLeft}}behavior.read_only{{.EmphasisRight}} - If true database modification is disabled
+{{.EmphasisLeft}}behavior.read_only{{.EmphasisRight}}: If true database modification is disabled
 
-		{{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}} - If true write queries will automatically alter the working set. When working with autocommit enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise
+{{.EmphasisLeft}}behavior.autocommit{{.EmphasisRight}}: If true write queries will automatically alter the working set. When working with autocommit enabled it is highly recommended that listener.max_connections be set to 1 as concurrency issues will arise otherwise
 
-		{{.EmphasisLeft}}user.name{{.EmphasisRight}} - The username that connections should use for authentication
+{{.EmphasisLeft}}user.name{{.EmphasisRight}}: The username that connections should use for authentication
 
-		{{.EmphasisLeft}}user.password{{.EmphasisRight}} - The password that connections should use for authentication.
+{{.EmphasisLeft}}user.password{{.EmphasisRight}}: The password that connections should use for authentication.
 
-		{{.EmphasisLeft}}listener.host{{.EmphasisRight}} - The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
+{{.EmphasisLeft}}listener.host{{.EmphasisRight}}: The host address that the server will run on.  This may be {{.EmphasisLeft}}localhost{{.EmphasisRight}} or an IPv4 or IPv6 address
 
-		{{.EmphasisLeft}}listener.port{{.EmphasisRight}} - The port that the server should listen on
+{{.EmphasisLeft}}listener.port{{.EmphasisRight}}: The port that the server should listen on
 
-		{{.EmphasisLeft}}listener.max_connections{{.EmphasisRight}} - The number of simultaneous connections that the server will accept
+{{.EmphasisLeft}}listener.max_connections{{.EmphasisRight}}: The number of simultaneous connections that the server will accept
 
-		{{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a read operation
+{{.EmphasisLeft}}listener.read_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a read operation
 
-		{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}} - The number of milliseconds that the server will wait for a write operation
+{{.EmphasisLeft}}listener.write_timeout_millis{{.EmphasisRight}}: The number of milliseconds that the server will wait for a write operation
 
-		{{.EmphasisLeft}}performance.query_parallelism{{.EmphasisRight}} - Amount of go routines spawned to process each query
+{{.EmphasisLeft}}performance.query_parallelism{{.EmphasisRight}}: Amount of go routines spawned to process each query
 
-		{{.EmphasisLeft}}databases{{.EmphasisRight}} - a list of dolt data repositories to make available as SQL databases. If databases is missing or empty then the working directory must be a valid dolt data repository which will be made available as a SQL database
-		
-		{{.EmphasisLeft}}databases[i].path{{.EmphasisRight}} - A path to a dolt data repository
-		
-		{{.EmphasisLeft}}databases[i].name{{.EmphasisRight}} - The name that the database corresponding to the given path should be referenced via SQL
+{{.EmphasisLeft}}databases{{.EmphasisRight}}: a list of dolt data repositories to make available as SQL databases. If databases is missing or empty then the working directory must be a valid dolt data repository which will be made available as a SQL database
+
+{{.EmphasisLeft}}databases[i].path{{.EmphasisRight}}: A path to a dolt data repository
+
+{{.EmphasisLeft}}databases[i].name{{.EmphasisRight}}: The name that the database corresponding to the given path should be referenced via SQL
 
 If a config file is not provided many of these settings may be configured on the command line.`,
 	Synopsis: []string{
