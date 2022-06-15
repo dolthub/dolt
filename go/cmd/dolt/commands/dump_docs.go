@@ -66,8 +66,7 @@ func (cmd *DumpDocsCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd *DumpDocsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd *DumpDocsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -81,7 +80,7 @@ func (cmd *DumpDocsCmd) ArgParser() *argparser.ArgParser {
 func (cmd *DumpDocsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fileStr := apr.GetValueOrDefault(fileParamName, "cli.md")
@@ -132,11 +131,14 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 					return err
 				}
 			} else {
-				currCmdStr := fmt.Sprintf("%s %s", cmdStr, curr.Name())
-				err := curr.CreateMarkdown(wr, currCmdStr)
+				docs := curr.Docs()
 
-				if err != nil {
-					return err
+				if docs != nil {
+					docs.CommandStr = fmt.Sprintf("%s %s", cmdStr, curr.Name())
+					err := CreateMarkdown(wr, docs)
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -145,7 +147,7 @@ func (cmd *DumpDocsCmd) dumpDocs(wr io.Writer, cmdStr string, subCommands []cli.
 	return nil
 }
 
-func CreateMarkdown(wr io.Writer, cmdDoc cli.CommandDocumentation) error {
+func CreateMarkdown(wr io.Writer, cmdDoc *cli.CommandDocumentation) error {
 	markdownDoc, err := cmdDoc.CmdDocToMd()
 	if err != nil {
 		return err

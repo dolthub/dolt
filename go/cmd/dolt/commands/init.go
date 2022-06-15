@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"time"
 
 	"github.com/fatih/color"
@@ -65,10 +64,9 @@ func (cmd InitCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd InitCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, initDocs, ap))
+	return cli.NewCommandDocumentation(initDocs, ap)
 }
 
 func (cmd InitCmd) ArgParser() *argparser.ArgParser {
@@ -83,7 +81,7 @@ func (cmd InitCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, initDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, initDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if dEnv.HasDoltDir() {
