@@ -74,7 +74,7 @@ func readLineSlice(buf []byte, srid uint32) (lines []sql.LineString) {
 	for i := range lines {
 		lines[i].SRID = srid
 		lines[i].Points = readPointSlice(buf, srid)
-		sz := len(lines[i].Points) * PointSize
+		sz := CountSize + len(lines[i].Points)*PointSize
 		buf = buf[sz:]
 	}
 	return
