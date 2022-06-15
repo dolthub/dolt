@@ -37,7 +37,7 @@ in a new table and a deleted table in the working set. These changes can be stag
 using {{.EmphasisLeft}}dolt commit{{.EmphasisRight}}.`,
 
 	Synopsis: []string{
-		"[-f] {{.LessThan}}oldtable{{.EmphasisRight}} {{.LessThan}}newtable{{.EmphasisRight}}",
+		"[-f] {{.LessThan}}oldtable{{.GreaterThan}} {{.LessThan}}newtable{{.GreaterThan}}",
 	},
 }
 
