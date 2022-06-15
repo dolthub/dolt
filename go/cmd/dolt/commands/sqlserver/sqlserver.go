@@ -144,7 +144,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "When provided sessions will not automatically commit their changes to the working set. Anything not manually committed will be lost.")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
-	ap.SupportsInt(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
+	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(privilegeFilePathFlag, "", "Privilege File", "Points to the file that privileges will be loaded from, in addition to being overwritten when privileges have been modified.")
 	return ap
 }
@@ -223,15 +223,23 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	if host, ok := apr.GetValue(hostFlag); ok {
 		serverConfig.withHost(host)
 	}
+
 	if port, ok := apr.GetInt(portFlag); ok {
 		serverConfig.WithPort(port)
 	}
+
 	if user, ok := apr.GetValue(userFlag); ok {
 		serverConfig.withUser(user)
 	}
+
 	if password, ok := apr.GetValue(passwordFlag); ok {
 		serverConfig.withPassword(password)
 	}
+
+	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
+		serverConfig.withPersistenceBehavior(persistenceBehavior)
+	}
+
 	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
 		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
 
@@ -240,17 +248,24 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withTimeout(timeout * 1000)
-	} else {
-		// represent undefined
-		serverConfig.withTimeout(0)
+	} else if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		rt := getPersistentReadTimeout()
+		wt := getPersistentWriteTimeout()
+		if rt == wt {
+			serverConfig.withTimeout(rt)
+		} else {
+			serverConfig.withTimeout(defaultTimeout)
+		}
 	}
 
 	if _, ok := apr.GetValue(readonlyFlag); ok {
 		serverConfig.withReadOnly(true)
 	}
+
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
+
 	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, multiDBDir)
 
@@ -275,10 +290,6 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		serverConfig.withPersistenceBehavior(persistenceBehavior)
-	}
-
 	if privilegeFilePath, ok := apr.GetValue(privilegeFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privilegeFilePath)
 	}
@@ -296,20 +307,31 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
-
-	if cfg.PersistenceBehavior() == loadPerisistentGlobals {
-		if cfg.ListenerConfig.MaxConnections == nil {
-			mc := getPersistentMaxConnections()
-			cfg.ListenerConfig.MaxConnections = &mc
+	load := cfg.PersistenceBehavior() == loadPerisistentGlobals
+	var v uint64
+	if load && cfg.ListenerConfig.MaxConnections == nil {
+		if load {
+			v = getPersistentMaxConnections()
+		} else {
+			v = uint64(defaultMaxConnections)
 		}
-		if cfg.ListenerConfig.ReadTimeoutMillis == nil {
-			rt := getPersistentReadTimeout()
-			cfg.ListenerConfig.ReadTimeoutMillis = &rt
+		cfg.ListenerConfig.MaxConnections = &v
+	}
+	if cfg.ListenerConfig.ReadTimeoutMillis == nil {
+		if load {
+			v = getPersistentReadTimeout()
+		} else {
+			v = getPersistentReadTimeout()
 		}
-		if cfg.ListenerConfig.WriteTimeoutMillis == nil {
-			wt := getPersistentWriteTimeout()
-			cfg.ListenerConfig.WriteTimeoutMillis = &wt
+		cfg.ListenerConfig.ReadTimeoutMillis = &v
+	}
+	if cfg.ListenerConfig.WriteTimeoutMillis == nil {
+		if load {
+			v = getPersistentWriteTimeout()
+		} else {
+			v = uint64(defaultTimeout)
 		}
+		cfg.ListenerConfig.WriteTimeoutMillis = &v
 	}
 
 	return cfg, nil

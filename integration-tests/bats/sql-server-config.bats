@@ -27,7 +27,6 @@ teardown() {
     start_sql_server repo1
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
-
 }
 
 @test "sql-server-config: invalid persisted global variable name throws warning on server startup, but does not crash" {
@@ -177,4 +176,33 @@ behavior:
     wait_for_connection $PORT 5000
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
+}
+
+@test "sql-server-config: persistence behavior set to load" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior load repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n151"
+}
+
+@test "sql-server-config: persistence behavior set to ignore" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n100"
+}
+
+@test "sql-server-config: persisted global variable defined on the command line" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --max-connections 555 repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n555"
+}
+
+@test "sql-server-config: persist global variable before server startup with persistence behavior with ignore" {
+    cd repo1
+    echo '{"sqlserver.global.max_connections":"1000"}' > .dolt/config.json
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n100"
 }
