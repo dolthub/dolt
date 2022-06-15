@@ -43,7 +43,7 @@ type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffS
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
 	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
 
-	if from.Format() == types.Format_DOLT_1 {
+	if types.IsFormat_DOLT_1(from.Format()) {
 		return prollySummary(ctx, ch, from, to, fromSch, toSch)
 	}
 

@@ -185,7 +185,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		return nil, nil, err
 	}
 
-	if updatedTbl.Format() == types.Format_DOLT_1 {
+	if types.IsFormat_DOLT_1(updatedTbl.Format()) {
 		var stats *MergeStats
 		updatedTbl, stats, err = mergeTableData(
 			ctx,
@@ -945,7 +945,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 	var conflictStash *conflictStash
 	var violationStash *violationStash
 	var err error
-	if ourRoot.VRW().Format() != types.Format_DOLT_1 {
+	if !types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
 		ourRoot, conflictStash, err = stashConflicts(ctx, ourRoot)
 		if err != nil {
 			return nil, nil, err
@@ -1034,7 +1034,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		return nil, nil, err
 	}
 
-	if ourRoot.VRW().Format() == types.Format_DOLT_1 {
+	if types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
 		err = calculateViolationStats(ctx, mergedRoot, tblToStats)
 		if err != nil {
 			return nil, nil, err

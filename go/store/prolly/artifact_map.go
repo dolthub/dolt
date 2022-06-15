@@ -147,8 +147,6 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 			keyDesc: m.keyDesc,
 			valDesc: m.valDesc,
 		},
-		artKD: artKD,
-		artVD: artVD,
 		artKB: val.NewTupleBuilder(artKD),
 		artVB: val.NewTupleBuilder(artVD),
 		pool:  m.Pool(),
@@ -297,7 +295,6 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 type ArtifactsEditor struct {
 	mut          MutableMap
 	srcKeyDesc   val.TupleDesc
-	artKD, artVD val.TupleDesc
 	artKB, artVB *val.TupleBuilder
 	pool         pool.BuffPool
 }
@@ -327,8 +324,8 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	}
 	aItr := artifactIterImpl{
 		itr:    itr,
-		artKD:  wr.artKD,
-		artVD:  wr.artVD,
+		artKD:  wr.mut.keyDesc,
+		artVD:  wr.mut.valDesc,
 		pool:   wr.pool,
 		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
 		numPks: wr.srcKeyDesc.Count(),
