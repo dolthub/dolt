@@ -21,6 +21,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
 )
 
 // FixedWidthDiffTableWriter wraps a |FixedWidthTableWriter| to provide appropriate coloring and a leading diff type
@@ -68,7 +69,20 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 	newRow := append(sql.Row{diffMarker}, row...)
 	newColDiffTypes := append([]diff.ChangeType{rowDiffType}, colDiffTypes...)
 
-	return w.tableWriter.WriteRow(ctx, newRow, newColDiffTypes)
+	return w.tableWriter.WriteRow(ctx, newRow, colorsForDiffTypes(newColDiffTypes))
+}
+
+func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
+	// TODO: remove me (just for goland debugging)
+	color.NoColor = false
+	colors := make([]*color.Color, len(colDiffTypes))
+	for i := range colDiffTypes {
+		if colDiffTypes[i] != diff.None {
+			colors[i] = colDiffColors[colDiffTypes[i]]
+		}
+	}
+
+	return colors
 }
 
 func (w FixedWidthDiffTableWriter) Close(ctx *sql.Context) error {

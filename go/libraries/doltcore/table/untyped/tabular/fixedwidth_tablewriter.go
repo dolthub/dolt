@@ -44,7 +44,7 @@ type FixedWidthTableWriter struct {
 	// Schema for results
 	schema sql.Schema
 	// closer is a writer to close when Close is called
-	closer        io.Closer
+	closer io.Closer
 	// wr is where to direct tableRow output
 	wr *bufio.Writer
 	// writtenHeader returns whether we've written the table header yet
@@ -58,6 +58,7 @@ type tableRow struct {
 	colors  []*color.Color
 }
 
+// applyColors rewrites the strings with the colors given
 func (r tableRow) applyColors(strs []string) {
 	for i, color := range r.colors {
 		if color == nil {
@@ -117,9 +118,17 @@ var colDiffColors = map[diff.ChangeType]*color.Color{
 	diff.Deleted:     color.New(color.Bold, color.FgRed),
 }
 
-func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiffTypes []diff.ChangeType) error {
+func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {
+	if colors == nil {
+		colors = make([]*color.Color, len(r))
+	}
+
+	if len(r) != len(colors) {
+		return fmt.Errorf("different sizes for row and colors: got %d and %d", len(r), len(colors))
+	}
+
 	if w.numSamples < len(w.rowBuffer) {
-		strRow, err := w.sampleRow(r, colDiffTypes)
+		strRow, err := w.sampleRow(r, colors)
 		if err != nil {
 			return err
 		}
@@ -132,7 +141,7 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiff
 			return err
 		}
 
-		row, err := rowToTableRow(r, colDiffTypes)
+		row, err := rowToTableRow(r, colors)
 		if err != nil {
 			return err
 		}
@@ -146,9 +155,11 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiff
 	return nil
 }
 
-func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeType) (tableRow, error) {
-	row := tableRow{}
-	row.columns = make([]string, len(r))
+func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colors []*color.Color) (tableRow, error) {
+	row := tableRow{
+		columns: make([]string, len(r)),
+		colors:  colors,
+	}
 
 	for i := range r {
 		str, err := stringValue(r[i])
@@ -170,21 +181,7 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeT
 		row.columns[i] = str
 	}
 
-	row.colors = colorsForDiffTypes(colDiffTypes)
 	return row, nil
-}
-
-func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
-	// TODO: remove me (just for goland debugging)
-	color.NoColor = false
-	colors := make([]*color.Color, len(colDiffTypes))
-	for i := range colDiffTypes {
-		if colDiffTypes[i] != diff.None {
-			colors[i] = colDiffColors[colDiffTypes[i]]
-		}
-	}
-
-	return colors
 }
 
 func (w *FixedWidthTableWriter) flushSampleBuffer() error {
@@ -252,9 +249,10 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 	return iohelp.WriteLine(w.wr, rowStr.String())
 }
 
-func rowToTableRow(row sql.Row, colDiffTypes []diff.ChangeType) (tableRow, error) {
+func rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
 	tRow := tableRow{
 		columns: make([]string, len(row)),
+		colors: colors,
 	}
 
 	var err error
@@ -265,7 +263,6 @@ func rowToTableRow(row sql.Row, colDiffTypes []diff.ChangeType) (tableRow, error
 		}
 	}
 
-	tRow.colors = colorsForDiffTypes(colDiffTypes)
 	return tRow, nil
 }
 
