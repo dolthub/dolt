@@ -35,7 +35,8 @@ const (
 	keylessCardCol = "keyless_cardinality"
 )
 
-func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.Value, error) {
+// SerializeSchema serializes a schema.Schema as a Flatbuffer message wrapped in a serial.Message.
+func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema) (types.SerialMessage, error) {
 	buf, err := serializeSchemaAsFlatbuffer(sch)
 	if err != nil {
 		return nil, err
@@ -46,13 +47,6 @@ func SerializeSchema(ctx context.Context, vrw types.ValueReadWriter, sch schema.
 		return nil, err
 	}
 	return v, nil
-}
-
-func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) (schema.Schema, error) {
-	assertTrue(nbf.UsesFlatbuffers())
-	sm, ok := v.(types.SerialMessage)
-	assertTrue(ok)
-	return deserializeSchemaFromFlatbuffer(ctx, sm)
 }
 
 func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
@@ -70,6 +64,14 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	root := serial.TableSchemaEnd(b)
 	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
 	return b.FinishedBytes(), nil
+}
+
+// DeserializeSchema deserializes a schema.Schema from a serial.Message.
+func DeserializeSchema(ctx context.Context, nbf *types.NomsBinFormat, v types.Value) (schema.Schema, error) {
+	assertTrue(nbf.UsesFlatbuffers())
+	sm, ok := v.(types.SerialMessage)
+	assertTrue(ok)
+	return deserializeSchemaFromFlatbuffer(ctx, sm)
 }
 
 func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Schema, error) {
@@ -103,6 +105,8 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 	return sch, nil
 }
 
+// clustered indexes
+
 func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	keyless := schema.IsKeyless(sch)
 
@@ -110,8 +114,9 @@ func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	var ko fb.UOffsetT
 	if keyless {
 		// keyless id is the 2nd to last column
-		// in the columns array and the only field
-		// in key tuples of the clustered index.
+		// in the columns vector (by convention)
+		// and the only field in key tuples of
+		// the clustered index.
 		idPos := sch.GetAllCols().Size()
 		serial.IndexStartIndexColumnsVector(b, 1)
 		b.PrependUint16(uint16(idPos))
@@ -139,8 +144,9 @@ func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	}
 	if keyless {
 		// keyless cardinality is the last column
-		// in the columns array and the first field
-		// in value tuples of the clustered index.
+		// in the columns vector (by convention)
+		// and the first field in value tuples of
+		// the clustered index.
 		cardPos := sch.GetAllCols().Size() + 1
 		b.PrependUint16(uint16(cardPos))
 	}
@@ -163,10 +169,10 @@ func deserializeClusteredIndex(s *serial.TableSchema) []int {
 		return nil
 	}
 
-	idx := s.ClusteredIndex(nil)
-	pkOrdinals := make([]int, idx.KeyColumnsLength())
+	ci := s.ClusteredIndex(nil)
+	pkOrdinals := make([]int, ci.KeyColumnsLength())
 	for i := range pkOrdinals {
-		pkOrdinals[i] = int(idx.KeyColumns(i))
+		pkOrdinals[i] = int(ci.KeyColumns(i))
 	}
 	return pkOrdinals
 }
@@ -176,9 +182,13 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	offs := make([]fb.UOffsetT, len(cols))
 
 	if schema.IsKeyless(sch) {
-		// (6/15/22) keyless id and cardinality columns are
-		// included in the serialized flatbuffers object,
-		// but are omitted from schema.Schema
+		// (6/15/22)
+		// currently, keyless id and cardinality columns
+		// do not exist in schema.Schema
+		// we do serialize them in the flatbuffer
+		// message, in order to describe index storage.
+		// by convention, they are stored as the last
+		// two columns in the columns vector.
 		id, card := serializeHiddenKeylessColumns(b)
 		offs = append(offs, id, card)
 	}
@@ -196,6 +206,7 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 		serial.ColumnAddSqlType(b, to)
 		serial.ColumnAddDefaultValue(b, do)
 		serial.ColumnAddComment(b, co)
+		// schema.Schema determines display order
 		serial.ColumnAddDisplayOrder(b, int16(i))
 		serial.ColumnAddTag(b, col.Tag)
 		serial.ColumnAddEncoding(b, encodingFromTypeinfo(col.TypeInfo))
@@ -255,9 +266,13 @@ func serializeHiddenKeylessColumns(b *fb.Builder) (id, card fb.UOffsetT) {
 func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Column, error) {
 	length := s.ColumnsLength()
 	if keylessSerialSchema(s) {
-		// (6/15/22) keyless id and cardinality columns are
-		// included in the serialized flatbuffers object,
-		// but are omitted from schema.Schema
+		// (6/15/22)
+		// currently, keyless id and cardinality columns
+		// do not exist in schema.Schema
+		// we do serialize them in the flatbuffer
+		// message, in order to describe index storage.
+		// by convention, they are stored as the last
+		// two columns in the columns vector.
 		length -= 2
 	}
 
@@ -300,8 +315,8 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		tags := idx.IndexedColumnTags()
 		serial.IndexStartIndexColumnsVector(b, len(tags))
 		for j := len(tags) - 1; j >= 0; j-- {
-			ord := ordinalMap[tags[j]]
-			b.PrependUint16(uint16(ord))
+			pos := ordinalMap[tags[j]]
+			b.PrependUint16(uint16(pos))
 		}
 		ico := b.EndVector(len(tags))
 
@@ -309,8 +324,8 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		tags = idx.AllTags()
 		serial.IndexStartKeyColumnsVector(b, len(tags))
 		for j := len(tags) - 1; j >= 0; j-- {
-			ord := ordinalMap[tags[j]]
-			b.PrependUint16(uint16(ord))
+			pos := ordinalMap[tags[j]]
+			b.PrependUint16(uint16(pos))
 		}
 		ko := b.EndVector(len(tags))
 
@@ -348,8 +363,8 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 
 		tags := make([]uint64, idx.IndexColumnsLength())
 		for j := range tags {
-			ord := idx.IndexColumns(j)
-			s.Columns(col, int(ord))
+			pos := idx.IndexColumns(j)
+			s.Columns(col, int(pos))
 			tags[j] = col.Tag()
 		}
 
@@ -398,7 +413,10 @@ func keylessSerialSchema(s *serial.TableSchema) bool {
 	if n < 2 {
 		return false
 	}
-
+	// keyless id is the 2nd to last column
+	// in the columns vector (by convention)
+	// and the only field in key tuples of
+	// the clustered index.
 	id := serial.Column{}
 	s.Columns(&id, n-2)
 	ok := id.Generated() && id.Hidden() &&
@@ -407,6 +425,10 @@ func keylessSerialSchema(s *serial.TableSchema) bool {
 		return false
 	}
 
+	// keyless cardinality is the last column
+	// in the columns vector (by convention)
+	// and the first field in value tuples of
+	// the clustered index.
 	card := serial.Column{}
 	s.Columns(&card, n-1)
 	return card.Generated() && card.Hidden() &&
@@ -416,6 +438,7 @@ func keylessSerialSchema(s *serial.TableSchema) bool {
 func sqlTypeString(t typeinfo.TypeInfo) string {
 	typ := t.ToSqlType()
 	if st, ok := typ.(sql.SpatialColumnType); ok {
+		// for spatial types, we must append the SRID
 		if srid, ok := st.GetSpatialTypeSRID(); ok {
 			return fmt.Sprintf("%s SRID %d", typ.String(), srid)
 		}

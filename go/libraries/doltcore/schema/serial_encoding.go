@@ -22,17 +22,13 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 )
 
+// EncodingFromSqlType returns a serial.Encoding for a query.Type.
 func EncodingFromSqlType(typ query.Type) serial.Encoding {
-
 	// todo(andy): replace temp encodings
 	switch typ {
-	case query.Type_BLOB:
+	case query.Type_BLOB, query.Type_TEXT:
 		// todo: temporary hack for enginetests
 		return serial.EncodingString
-	case query.Type_TEXT:
-		return serial.EncodingString
-	case query.Type_JSON:
-		return serial.EncodingJSON
 	}
 
 	switch typ {
@@ -86,6 +82,8 @@ func EncodingFromSqlType(typ query.Type) serial.Encoding {
 		return serial.EncodingString
 	case query.Type_VARCHAR:
 		return serial.EncodingString
+	case query.Type_JSON:
+		return serial.EncodingJSON
 	case query.Type_GEOMETRY:
 		return serial.EncodingGeometry
 	default:

@@ -40,7 +40,9 @@ table Column {
   // sql display order
   display_order:int16;
 
-  // included for compatibility
+  // todo(andy): ideally we'd resolve column identity
+  //  without using tags, but the current implementation
+  //  of schema.Schema is tightly coupled to tags.
   tag: uint64;
 
   // storage encoding
