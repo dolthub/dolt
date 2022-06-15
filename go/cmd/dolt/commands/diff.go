@@ -725,6 +725,7 @@ func writeDiffResults(
 
 type rowDiff struct {
 	row sql.Row
+	rowDiff diff.ChangeType
 	colDiffs []diff.ChangeType
 }
 
@@ -792,24 +793,50 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 	diffTypeStr := diffType.(string)
 	if diffTypeStr == "removed" || diffTypeStr == "modified" {
 		oldRow.row = make(sql.Row, len(ds.targetSch))
+		if diffTypeStr == "modified" {
+			oldRow.rowDiff = diff.ModifiedOld
+		} else {
+			oldRow.rowDiff = diff.Deleted
+		}
+
 		for i := range ds.diffQuerySch {
-			if i >= len(ds.queryToTarget) {
+			// TODO: not right
+			if i >= len(ds.targetSch) {
 				break
 			}
 
 			oldRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
-
+				if row[i] != row[ds.fromTo[i]] {
+					oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
+				}
+			} else {
+				oldRow.colDiffs[ds.queryToTarget[i]] = diff.Deleted
 			}
 		}
 	}
 
 	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		newRow.row = make(sql.Row, len(ds.targetSch))
-		for i := len(ds.queryToTarget); i < len(ds.diffQuerySch) -1; i++ {
+		if diffTypeStr == "modified" {
+			oldRow.rowDiff = diff.ModifiedNew
+		} else {
+			oldRow.rowDiff = diff.Inserted
+		}
+
+
+		// TODO: not right
+		for i := len(ds.targetSch); i < len(ds.diffQuerySch) -1; i++ {
 			newRow.row[ds.queryToTarget[i]] = row[i]
-			// TODO: column change type
+
+			if diffTypeStr == "modified" {
+				if row[i] != row[ds.toFrom[i]] {
+					newRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedNew
+				}
+			} else {
+				newRow.colDiffs[ds.queryToTarget[i]] = diff.Inserted
+			}
 		}
 	}
 
@@ -819,11 +846,11 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
 	fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, fmt.Sprintf("cast (from_%s as char)", col.Name))
+		cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
 		return false, nil
 	})
 	toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, fmt.Sprintf("cast (to_%s as char)", col.Name))
+		cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
 		return false, nil
 	})
 	return strings.Join(cols, ",")

@@ -54,6 +54,11 @@ type FixedWidthTableWriter struct {
 	flushedSampleBuffer bool
 }
 
+type row struct {
+	columns []string
+	colors  []color.Color
+}
+
 func NewFixedWidthTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthTableWriter {
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
 	fwtw := FixedWidthTableWriter{
@@ -154,6 +159,7 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeT
 }
 
 func applyColors(strRow []string, colDiffTypes []diff.ChangeType) []string {
+	color.NoColor = false
 	for i := range strRow {
 		if colDiffTypes[i] != diff.None {
 			color := colDiffColors[colDiffTypes[i]]
@@ -245,7 +251,7 @@ func rowToStrings(row sql.Row) []string {
 }
 
 func (w *FixedWidthTableWriter) writeHeader() error {
-	err := w.writeSepararator()
+	err := w.writeSeparator()
 	if err != nil {
 		return err
 	}
@@ -273,10 +279,10 @@ func (w *FixedWidthTableWriter) writeHeader() error {
 		return err
 	}
 
-	return w.writeSepararator()
+	return w.writeSeparator()
 }
 
-func (w *FixedWidthTableWriter) writeSepararator() error {
+func (w *FixedWidthTableWriter) writeSeparator() error {
 	colNames := make([]string, len(w.schema))
 	for i := range w.schema {
 		colNames[i] = " "
@@ -303,5 +309,5 @@ func (w *FixedWidthTableWriter) writeSepararator() error {
 }
 
 func (w *FixedWidthTableWriter) writeFooter() error {
-	return w.writeSepararator()
+	return w.writeSeparator()
 }
