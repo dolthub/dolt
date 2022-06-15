@@ -133,7 +133,12 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiff
 			return err
 		}
 
-		err = w.writeRow(rowToTableRow(r, colDiffTypes))
+		row, err := rowToTableRow(r, colDiffTypes)
+		if err != nil {
+			return err
+		}
+
+		err = w.writeRow(row)
 		if err != nil {
 			return err
 		}
@@ -145,8 +150,9 @@ func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colDiff
 func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeType) (tableRow, error) {
 	row := tableRow{}
 	row.columns = make([]string, len(r))
+
 	for i := range r {
-		str, err := w.stringValue(r[i])
+		str, err := stringValue(r[i])
 		if err != nil {
 			return row, err
 		}
@@ -165,20 +171,21 @@ func (w *FixedWidthTableWriter) sampleRow(r sql.Row, colDiffTypes []diff.ChangeT
 		row.columns[i] = str
 	}
 
-	return applyColors(row, colDiffTypes), nil
+	row.colors = colorsForDiffTypes(colDiffTypes)
+	return row, nil
 }
 
-func applyColors(r tableRow, colDiffTypes []diff.ChangeType) tableRow {
+func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
 	// TODO: remove me (just for goland debugging)
 	color.NoColor = false
-	r.colors = make([]*color.Color, len(r.columns))
-	for i := range r.columns {
+	colors := make([]*color.Color, len(colDiffTypes))
+	for i := range colDiffTypes {
 		if colDiffTypes[i] != diff.None {
-			r.colors[i] = colDiffColors[colDiffTypes[i]]
+			colors[i] = colDiffColors[colDiffTypes[i]]
 		}
 	}
 
-	return r
+	return colors
 }
 
 func (w *FixedWidthTableWriter) flushSampleBuffer() error {
@@ -205,7 +212,7 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	return nil
 }
 
-func (w *FixedWidthTableWriter) stringValue(i interface{}) (string, error) {
+func stringValue(i interface{}) (string, error) {
 	str := ""
 	if i == nil {
 		str = "NULL"
@@ -246,25 +253,21 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 	return iohelp.WriteLine(w.wr, rowStr.String())
 }
 
-func rowToTableRow(row sql.Row, types []diff.ChangeType) tableRow {
+func rowToTableRow(row sql.Row, colDiffTypes []diff.ChangeType) (tableRow, error) {
 	tRow := tableRow{
 		columns: make([]string, len(row)),
-		colors:  make([]*color.Color, len(row)),
 	}
 
+	var err error
 	for i := range row {
-		var ok bool
-		if row[i] == nil {
-			tRow.columns[i] = "NULL"
-		} else {
-			tRow.columns[i], ok = row[i].(string)
-			if !ok {
-				panic(fmt.Sprintf("expected string but got %T", row[i]))
-			}
+		tRow.columns[i], err = stringValue(row[i])
+		if err != nil {
+			return tableRow{}, err
 		}
 	}
 
-	return tRow
+	tRow.colors = colorsForDiffTypes(colDiffTypes)
+	return tRow, nil
 }
 
 func (w *FixedWidthTableWriter) writeHeader() error {

@@ -824,8 +824,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		} else {
 			oldRow.rowDiff = diff.Inserted
 		}
-
-
+		
 		// TODO: not right
 		for i := len(ds.targetSch); i < len(ds.diffQuerySch) -1; i++ {
 			newRow.row[ds.queryToTarget[i]] = row[i]
