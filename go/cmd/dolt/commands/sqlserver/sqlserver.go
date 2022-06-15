@@ -141,7 +141,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
 	ap.SupportsInt(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
-	ap.SupportsString(privilegeFilePathFlag, "", "Privilege File", "Points to the file that privileges will be loaded from, in addition to being overwritten when privileges have been modified.")
+	ap.SupportsString(privilegeFilePathFlag, "", "Privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
 	return ap
 }
 
