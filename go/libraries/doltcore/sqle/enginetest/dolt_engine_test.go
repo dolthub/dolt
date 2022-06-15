@@ -80,7 +80,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
@@ -315,17 +315,8 @@ func TestTruncate(t *testing.T) {
 func TestScripts(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
@@ -627,11 +618,9 @@ func TestTransactions(t *testing.T) {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConflictHandlingTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -685,7 +674,6 @@ func TestShowCreateTableAsOf(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)
@@ -697,7 +685,6 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-
 	for _, script := range MergeViolationsAndConflictsMergeScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
@@ -706,8 +693,9 @@ func TestDoltMergeArtifacts(t *testing.T) {
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
-	skipNewFormat(t)
-
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
@@ -966,17 +954,8 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 func TestScriptsPrepared(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
@@ -1213,10 +1192,10 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 }
 
-func skipNewFormat(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
+var newFormatSkippedScripts = []string{
+	// Different query plans
+	"Partial indexes are used and return the expected result",
+	"Multiple indexes on the same columns in a different order",
 }
 
 func skipPreparedTests(t *testing.T) {

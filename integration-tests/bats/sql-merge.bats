@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -788,6 +787,8 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE(--abort) clears session state and allows additional edits" {
+    skip_nbf_dolt_1
+
     run dolt sql  << SQL
 set autocommit = off;
 CREATE TABLE one_pk (
@@ -827,6 +828,8 @@ SQL
 }
 
 @test "sql-merge: CALL DOLT_MERGE(--abort) clears session state and allows additional edits" {
+    skip_nbf_dolt_1
+
     run dolt sql  << SQL
 set autocommit = off;
 CREATE TABLE one_pk (

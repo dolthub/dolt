@@ -25,6 +25,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	geo "github.com/dolthub/dolt/go/store/geometry"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -177,7 +178,7 @@ func PutField(tb *val.TupleBuilder, i int, v interface{}) error {
 	case val.Hash128Enc:
 		tb.PutHash128(i, v.([]byte))
 	case val.AddressEnc:
-		tb.PutAddress(i, v.([]byte))
+		tb.PutAddress(i, v.(hash.Hash))
 	default:
 		panic(fmt.Sprintf("unknown encoding %v %v", enc, v))
 	}

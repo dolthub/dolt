@@ -118,6 +118,8 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 2, Additions: 2, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+    # Sanity check
+    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
 
     # Validate that a successful import with no bad rows does not print the following
     ! [[ "$output" =~ "The following rows were skipped:" ]] || false
@@ -553,6 +555,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -573,6 +576,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -595,6 +599,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "${lines[1]}" = "0,1,2,3,4,6" ]
@@ -615,6 +620,7 @@ DELIM
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
+    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
 
     run dolt sql -r csv -q "select * from test"
     [ "${lines[1]}" = "0,1,2,3,4,6" ]
@@ -635,6 +641,7 @@ DELIM
 
     run dolt table import -u test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 0, Modifications: 1, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -674,6 +681,7 @@ DELIM
 
     run dolt table import -u keyless data.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 

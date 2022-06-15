@@ -21,15 +21,9 @@ import (
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/plan"
-
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 func TestSysbenchTransactionCV(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
-
 	harness := newDoltHarness(t)
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "Sysbench Transactions Shouldn't Cause Constraint Violations",

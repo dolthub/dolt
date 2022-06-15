@@ -233,7 +233,7 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 	case val.AddressEnc:
 		buf := make([]byte, 20)
 		testRand.Read(buf)
-		tb.PutAddress(idx, buf)
+		tb.PutAddress(idx, hash.New(buf))
 	default:
 		panic("unknown encoding")
 	}

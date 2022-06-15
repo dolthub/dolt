@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -71,10 +70,9 @@ func (cmd PushCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PushCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd PushCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	return cli.NewCommandDocumentation(pushDocs, ap)
 }
 
 func (cmd PushCmd) ArgParser() *argparser.ArgParser {
@@ -92,7 +90,7 @@ func (cmd PushCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd PushCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, pushDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, pushDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	opts, err := env.NewPushOpts(ctx, apr, dEnv.RepoStateReader(), dEnv.DoltDB, apr.Contains(cli.ForceFlag), apr.Contains(cli.SetUpstreamFlag))

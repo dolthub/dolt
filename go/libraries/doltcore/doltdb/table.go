@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -176,6 +177,24 @@ func (t *Table) NumRowsInConflict(ctx context.Context) (uint64, error) {
 	return cons.Count(), nil
 }
 
+// NumConstraintViolations returns the number of constraint violations for this table.
+func (t *Table) NumConstraintViolations(ctx context.Context) (uint64, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		artIdx, err := t.table.GetArtifacts(ctx)
+		if err != nil {
+			return 0, err
+		}
+		return artIdx.ConstraintViolationCount(ctx)
+	}
+
+	cvs, err := t.table.GetConstraintViolations(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return cvs.Len(), nil
+}
+
 // ClearConflicts deletes all merge conflicts for this table.
 func (t *Table) ClearConflicts(ctx context.Context) (*Table, error) {
 	if t.Format() == types.Format_DOLT_1 {
@@ -210,9 +229,9 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 }
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
-func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
 	if t.Format() == types.Format_DOLT_1 {
-		return t.getProllyConflictSchemas(ctx)
+		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
 	return t.getNomsConflictSchemas(ctx)
@@ -221,7 +240,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.
 // For now, we will enforce that all conflicts in the artifacts table must have the same schema set (base, ours, theirs).
 // In the future, we may be able to display conflicts in a way that allows different conflict schemas to coexist.
-func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
 	arts, err := t.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -250,13 +269,11 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeS
 		return nil, nil, nil, err
 	}
 
-	h := hash.New(art.Metadata.BaseTblHash)
-	baseTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	baseTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.Metadata.BaseRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	h = hash.New(art.Metadata.TheirTblHash)
-	theirTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	theirTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.TheirRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -271,6 +288,21 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeS
 	}
 
 	return baseSch, ourSch, theirSch, nil
+}
+
+func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash, tblName string) (*Table, error) {
+	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	tbl, ok, err := rv.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("could not find tbl %s in root value", tblName)
+	}
+	return tbl, nil
 }
 
 func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
@@ -303,6 +335,12 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	}
 
 	colColl := schema.NewColCollection()
+
+	if t.Format() == types.Format_DOLT_1 {
+		// the commit hash or working set hash of the right side during merge
+		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
+	}
+
 	colColl = colColl.Append(typeCol)
 	colColl = colColl.Append(sch.GetAllCols().GetColumns()...)
 	colColl = colColl.Append(infoCol)
@@ -312,12 +350,18 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 // GetConstraintViolations returns a map of all constraint violations for this table, along with a bool indicating
 // whether the table has any violations.
 func (t *Table) GetConstraintViolations(ctx context.Context) (types.Map, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		panic("should use artifacts")
+	}
 	return t.table.GetConstraintViolations(ctx)
 }
 
 // SetConstraintViolations sets this table's violations to the given map. If the map is empty, then the constraint
 // violations entry on the embedded struct is removed.
 func (t *Table) SetConstraintViolations(ctx context.Context, violationsMap types.Map) (*Table, error) {
+	if t.Format() == types.Format_DOLT_1 {
+		panic("should use artifacts")
+	}
 	table, err := t.table.SetConstraintViolations(ctx, violationsMap)
 	if err != nil {
 		return nil, err

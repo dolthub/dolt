@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -83,10 +82,9 @@ func (cmd BranchCmd) Description() string {
 	return "Create, list, edit, delete branches."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BranchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd BranchCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	return cli.NewCommandDocumentation(branchDocs, ap)
 }
 
 func (cmd BranchCmd) ArgParser() *argparser.ArgParser {
@@ -113,7 +111,7 @@ func (cmd BranchCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BranchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, branchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, branchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	switch {

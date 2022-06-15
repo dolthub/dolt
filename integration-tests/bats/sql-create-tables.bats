@@ -346,7 +346,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CREATE TABLE \`test2\`" ]] || false
     [[ "$output" =~ "\`pk\` bigint NOT NULL" ]] || false
-    [[ "$output" =~ "\`c1\` bigint DEFAULT 5 COMMENT 'hi'" ]] || false
+    [[ "$output" =~ "\`c1\` bigint DEFAULT '5' COMMENT 'hi'" ]] || false
     [[ "$output" =~ "PRIMARY KEY (\`pk\`)" ]] || false
 }
 

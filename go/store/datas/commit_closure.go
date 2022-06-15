@@ -126,7 +126,7 @@ func commitToFbKeyTuple(c *Commit, p pool.BuffPool) val.Tuple {
 	tb := val.NewTupleBuilder(commitKeyTupleDesc)
 	tb.PutUint64(0, c.Height())
 	h := c.Addr()
-	tb.PutAddress(1, h[:])
+	tb.PutAddress(1, h)
 	return tb.Build(p)
 }
 
@@ -237,7 +237,7 @@ func (i *fbParentsClosureIterator) Hash() hash.Hash {
 		return hash.Hash{}
 	}
 	bs, _ := commitKeyTupleDesc.GetAddress(1, i.curr)
-	return hash.New(bs)
+	return bs
 }
 
 func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
@@ -441,7 +441,7 @@ func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw t
 	tb := val.NewTupleBuilder(commitKeyTupleDesc)
 	for i := 0; i < len(parents); i++ {
 		tb.PutUint64(0, parents[i].Height())
-		tb.PutAddress(1, parentAddrs[i][:])
+		tb.PutAddress(1, parentAddrs[i])
 		err = editor.Put(ctx, tb.Build(ns.Pool()), val.EmptyTuple)
 		if err != nil {
 			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Put: %w", err)

@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"encoding/json"
-	"io"
 	"os"
 	"strings"
 
@@ -96,10 +95,9 @@ func (cmd BackupCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BackupCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, backupDocs, ap))
+	return cli.NewCommandDocumentation(backupDocs, ap)
 }
 
 func (cmd BackupCmd) ArgParser() *argparser.ArgParser {
@@ -114,7 +112,7 @@ func (cmd BackupCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BackupCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, backupDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, backupDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError
