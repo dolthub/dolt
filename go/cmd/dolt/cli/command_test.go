@@ -16,7 +16,6 @@ package cli
 
 import (
 	"context"
-	"io"
 	"reflect"
 	"strings"
 	"testing"

@@ -131,10 +131,10 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 // Does not include a command string, which must be filled in separately.
 func NewCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
 	return &CommandDocumentation{
-		ShortDesc:  cmdDoc.ShortDesc,
-		LongDesc:   cmdDoc.LongDesc,
-		Synopsis:   cmdDoc.Synopsis,
-		ArgParser:  argParser,
+		ShortDesc: cmdDoc.ShortDesc,
+		LongDesc:  cmdDoc.LongDesc,
+		Synopsis:  cmdDoc.Synopsis,
+		ArgParser: argParser,
 	}
 }
 
