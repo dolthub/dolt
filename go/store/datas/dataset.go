@@ -293,7 +293,7 @@ func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader,
 		}
 		return GetCommittedValue(ctx, vr, dsCm.NomsValue())
 	default:
-		panic(fmt.Sprintf("loading root value from dsHead type %s not implemented"))
+		panic(fmt.Sprintf("loading root value from dsHead type %s not implemented", h.TypeName()))
 	}
 }
 
