@@ -481,3 +481,5 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
 }
+
+# TODO: Dolt dump with ymsql

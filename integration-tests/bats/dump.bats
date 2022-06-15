@@ -702,7 +702,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
-    run grep "\bCOMMIT;\b" doltdump.sql
+    run grep "COMMIT;" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
@@ -716,7 +716,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
-    run grep "\bCOMMIT;\b" doltdump.sql
+    run grep "COMMIT;" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 }
