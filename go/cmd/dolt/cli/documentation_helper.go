@@ -33,11 +33,11 @@ type commandDocumentForMarkdown struct {
 
 var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.ShortDesc}}\n\n" +
-	"### Synopsis\n\n" +
+	"**Synopsis**\n\n" +
 	"{{.Synopsis}}\n\n" +
-	"### Description\n\n" +
+	"**Description**\n\n" +
 	"{{.Description}}\n\n" +
-	"### Arguments and options\n\n" +
+	"**Arguments and options**\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
