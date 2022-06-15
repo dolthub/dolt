@@ -26,16 +26,11 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 // TODO: we need tests for manual DOLT_COMMIT as well, but that's difficult with the way that functions are resolved
 //  in the engine.
 func TestDoltTransactionCommitOneClient(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
-
 	// In this test, we're setting only one client to match transaction commits to dolt commits.
 	// Autocommit is disabled for the enabled client, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
@@ -177,10 +172,6 @@ func TestDoltTransactionCommitOneClient(t *testing.T) {
 }
 
 func TestDoltTransactionCommitTwoClients(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
-
 	// In this test, we're setting both clients to match transaction commits to dolt commits.
 	// Autocommit is disabled, as it's the recommended way to use this feature.
 	harness := newDoltHarness(t)
@@ -315,10 +306,6 @@ func TestDoltTransactionCommitTwoClients(t *testing.T) {
 }
 
 func TestDoltTransactionCommitAutocommit(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
-
 	// In this test, each insertion from both clients cause a commit as autocommit is enabled.
 	// Not the recommended way to use the feature, but it's permitted.
 	harness := newDoltHarness(t)
@@ -399,10 +386,6 @@ func TestDoltTransactionCommitAutocommit(t *testing.T) {
 }
 
 func TestDoltTransactionCommitLateFkResolution(t *testing.T) {
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		t.Skip()
-	}
-
 	harness := newDoltHarness(t)
 	enginetest.TestTransactionScript(t, harness, queries.TransactionTest{
 		Name: "delayed foreign key resolution with transaction commits",
