@@ -137,7 +137,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(FormatFlag, "r", "result output format", "How to format result output. Valid values are tabular, csv, json, vertical. Defaults to tabular. ")
 	ap.SupportsString(saveFlag, "s", "saved query name", "Used with --query, save the query to the query catalog with the name provided. Saved queries can be examined in the dolt_query_catalog system table.")
 	ap.SupportsString(executeFlag, "x", "saved query name", "Executes a saved query with the given name")
-	ap.SupportsFlag(listSavedFlag, "l", "list all saved queries")
+	ap.SupportsFlag(listSavedFlag, "l", "List all saved queries")
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
 	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
