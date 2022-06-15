@@ -12,16 +12,17 @@ fi
 
 # generate golang (de)serialization package
 flatc -o $GEN_DIR --gen-onefile --filename-suffix "" --gen-mutable --go-namespace "serial" --go \
-  commit.fbs \
-  prolly.fbs \
   addressmap.fbs \
+  commit.fbs \
+  commitclosure.fbs \
+  encoding.fbs \
+  prolly.fbs \
   rootvalue.fbs \
   schema.fbs \
   storeroot.fbs \
   table.fbs \
   tag.fbs \
-  workingset.fbs \
-  encoding.fbs
+  workingset.fbs
 
 # prefix files with copyright header
 for FILE in $GEN_DIR/*.go;

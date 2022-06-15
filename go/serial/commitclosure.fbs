@@ -1,4 +1,4 @@
-// Copyright 2021 Dolthub, Inc.
+// Copyright 2022 Dolthub, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,35 +14,13 @@
 
 namespace serial;
 
-enum ItemType : uint8 {
-  Unknown,
-  TupleFormatAlpha = 1,
-}
-
-table ProllyTreeNode {
-  // sorted array of key items
+table CommitClosure {
+  // sorted array of key items;
+  // key items are [uint64; address].
   key_items:[ubyte] (required);
-  // items offets for |key_items|, zeroth offset omitted
-  key_offsets:[uint16] (required);
-  // item type for |key_items|
-  key_type:ItemType;
 
-  // array of values items, ordered by paired key
-  value_items:[ubyte];
-  // item offsets for |value_items|, zeroth offset omitted
-  value_offsets:[uint16];
-  // item type for |value_items|
-  value_type:ItemType;
-  // offsets for each address (if any) in |value_items|
-  // (eg value tuples containing out-of-line BLOB addresses)
-  value_address_offsets:[uint16];
-
-
-  // array of chunk addresses
-  //  - subtree addresses for internal prolly tree nodes
-  //  - value addresses for AddressMap leaf nodes
+  // array of subtree addresses for internal prolly tree nodes
   address_array:[ubyte];
-
 
   // array of uvarint encoded subtree counts
   subtree_counts:[ubyte];
@@ -52,7 +30,8 @@ table ProllyTreeNode {
   tree_level:uint8;
 }
 
-// KEEP THIS IN SYNC WITH fileidentifiers.go
-file_identifier "TUPM";
 
-root_type ProllyTreeNode;
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "CMCL";
+
+root_type CommitClosure;
