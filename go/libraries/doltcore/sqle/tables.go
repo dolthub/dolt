@@ -127,6 +127,7 @@ type DoltTable struct {
 
 	opts editor.Options
 
+	analyzed  bool
 	doltStats *DoltTableStatistics
 }
 
@@ -511,7 +512,12 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		}
 	}
 
+	t.analyzed = true
 	return nil
+}
+
+func (t *DoltTable) IsAnalyzed() bool {
+	return t.analyzed
 }
 
 func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
