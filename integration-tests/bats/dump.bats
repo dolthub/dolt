@@ -41,7 +41,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
-     run grep UNIQUE_CHECKS=0 doltdump.sql
+    run grep UNIQUE_CHECKS=0 doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
@@ -702,7 +702,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
-    run grep "\COMMIT;\b" doltdump.sql
+    run grep "\bCOMMIT;\b" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
@@ -716,7 +716,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 
-    run grep "\COMMIT;\b" doltdump.sql
+    run grep "\bCOMMIT;\b" doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 2 ]
 }
