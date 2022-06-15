@@ -653,7 +653,7 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 	unionSch := unionSchemas(fromSch.Schema, toSch.Schema)
 
 	// TODO: default sample size
-	resultsWriter := tabular.NewFixedWidthTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
+	resultsWriter := tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
 
 		// TODO: SQL writer
 		// sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, td.CurName())
@@ -680,13 +680,7 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 }
 
 // TODO: SQL writer
-func writeDiffResults(
-		ctx *sql.Context,
-		diffQuerySch sql.Schema,
-		targetSch sql.Schema,
-		iter sql.RowIter,
-		writer *tabular.FixedWidthTableWriter,
-) error {
+func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.Schema, iter sql.RowIter, writer *tabular.FixedWidthDiffTableWriter, ) error {
 	ds, err := newDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return err
@@ -706,14 +700,14 @@ func writeDiffResults(
 		}
 
 		if oldRow.row != nil {
-			err := writer.WriteRow(ctx, oldRow.row, oldRow.colDiffs)
+			err := writer.WriteRow(ctx, oldRow.row, oldRow.rowDiff, oldRow.colDiffs)
 			if err != nil {
 				return err
 			}
 		}
 
 		if newRow.row != nil {
-			err := writer.WriteRow(ctx, newRow.row, newRow.colDiffs)
+			err := writer.WriteRow(ctx, newRow.row, newRow.rowDiff, newRow.colDiffs)
 			if err != nil {
 				return err
 			}
@@ -820,11 +814,11 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 	if diffTypeStr == "added" || diffTypeStr == "modified" {
 		newRow.row = make(sql.Row, len(ds.targetSch))
 		if diffTypeStr == "modified" {
-			oldRow.rowDiff = diff.ModifiedNew
+			newRow.rowDiff = diff.ModifiedNew
 		} else {
-			oldRow.rowDiff = diff.Inserted
+			newRow.rowDiff = diff.Inserted
 		}
-		
+
 		// TODO: not right
 		for i := len(ds.targetSch); i < len(ds.diffQuerySch) -1; i++ {
 			newRow.row[ds.queryToTarget[i]] = row[i]

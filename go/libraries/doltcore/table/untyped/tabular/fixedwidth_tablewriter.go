@@ -21,7 +21,6 @@ import (
 	"io"
 	"strings"
 
-	"github.com/acarl005/stripansi"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
@@ -317,8 +316,7 @@ func (w *FixedWidthTableWriter) writeSeparator() error {
 	separator.WriteString("+")
 	for _, name := range formattedColNames {
 		separator.WriteString("-")
-		normalized := stripansi.Strip(name)
-		strLen := fwt.StringWidth(normalized)
+		strLen := fwt.StringWidth(name)
 		for i := 0; i < strLen; i++ {
 			separator.WriteString("-")
 		}
