@@ -190,6 +190,8 @@ func (w *FixedWidthTableWriter) flushSampleBuffer() error {
 	}
 
 	if w.formatter == nil {
+		// TODO: a better behavior might be to re-sample after the initial buffer runs out, and just let each buffer range
+		//  have its own local set of fixed widths
 		formatter := fwt.NewFixedWidthFormatter(fwt.PrintAllWhenTooLong, w.printWidths, w.maxRunes)
 		w.formatter = &formatter
 	}
