@@ -20,8 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/shopspring/decimal"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // TupleDesc describes a Tuple set.

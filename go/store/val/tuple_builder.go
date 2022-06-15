@@ -17,9 +17,9 @@ package val
 import (
 	"time"
 
-	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
