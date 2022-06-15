@@ -402,12 +402,12 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		return err
 	}
 
-	//TODO: async?
-	partIter, err := t.Partitions(ctx)
-	if err != nil {
-		return err
+	// skip empty table
+	if m.Count() == 0 {
+		return nil
 	}
 
+	// initialize dolt stats
 	cols := t.sch.GetAllCols().GetColumns()
 	t.doltStats = &DoltTableStatistics{
 		rowCount:     m.Count(),
@@ -415,11 +415,6 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		nullCount:    0,
 		createdAt:    time.Now(),
 		histogramMap: make(sql.HistogramMap),
-	}
-
-	// TODO: no rows, mark everything as 0 or empty
-	if t.doltStats.rowCount == 0 {
-		return nil
 	}
 
 	// initialize histogram map
@@ -431,6 +426,12 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 	freqMap := make(map[string]map[float64]uint64)
 	for _, col := range cols {
 		freqMap[col.Name] = make(map[float64]uint64)
+	}
+
+	//TODO: async?
+	partIter, err := t.Partitions(ctx)
+	if err != nil {
+		return err
 	}
 
 	for {
