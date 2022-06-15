@@ -73,7 +73,7 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ConfigCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ConfigCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
 }

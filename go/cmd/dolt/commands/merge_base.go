@@ -50,7 +50,7 @@ func (cmd MergeBaseCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MergeBaseCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd MergeBaseCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, mergeBaseDocs, ap))
 }

@@ -62,7 +62,7 @@ func (cmd TagCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd TagCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd TagCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tagDocs, ap))
 }

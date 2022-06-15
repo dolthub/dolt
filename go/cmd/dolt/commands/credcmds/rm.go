@@ -47,7 +47,7 @@ func (cmd RmCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, rmDocs, ap))
 }

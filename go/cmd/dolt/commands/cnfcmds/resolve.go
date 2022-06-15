@@ -16,7 +16,6 @@ package cnfcmds
 
 import (
 	"context"
-	"io"
 	"strings"
 
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -82,10 +81,9 @@ func (cmd ResolveCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResolveCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ResolveCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
+	return cli.GetCommandDocumentation(resDocumentation, ap)
 }
 
 // EventType returns the type of the event to log
@@ -106,7 +104,7 @@ func (cmd ResolveCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ResolveCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, resDocumentation, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, resDocumentation, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

@@ -66,7 +66,7 @@ func (cmd InitCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd InitCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, initDocs, ap))
 }

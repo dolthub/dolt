@@ -60,9 +60,9 @@ func (cmd LsCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	return cli.GetCommandDocumentation(lsDocs, ap)
 }
 
 func (cmd LsCmd) ArgParser() *argparser.ArgParser {
@@ -81,7 +81,7 @@ func (cmd LsCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(systemFlag) && apr.Contains(allFlag) {

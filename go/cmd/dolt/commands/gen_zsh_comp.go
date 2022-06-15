@@ -255,7 +255,7 @@ func formatOption(opt *argparser.Option) string {
 	}
 }
 
-func (z GenZshCompCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
+func (z GenZshCompCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

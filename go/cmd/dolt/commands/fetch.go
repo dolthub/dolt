@@ -66,7 +66,7 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FetchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd FetchCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateFetchArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
 }

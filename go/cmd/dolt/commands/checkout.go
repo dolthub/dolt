@@ -62,7 +62,7 @@ func (cmd CheckoutCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CheckoutCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CheckoutCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCheckoutArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, checkoutDocs, ap))
 }

@@ -64,7 +64,7 @@ func (cmd SendMetricsCmd) Hidden() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

@@ -52,7 +52,7 @@ func (cmd TagsCmd) Description() string {
 	return "Shows the column tags of one or more tables."
 }
 
-func (cmd TagsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd TagsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblTagsDocs, ap))
 }

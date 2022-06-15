@@ -16,7 +16,6 @@ package credcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
@@ -50,9 +49,9 @@ func (cmd NewCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd NewCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd NewCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, newDocs, ap))
+	return cli.GetCommandDocumentation(newDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -74,7 +73,7 @@ func (cmd NewCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd NewCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, newDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, newDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
 	_, newCreds, verr := actions.NewCredsFile(dEnv)

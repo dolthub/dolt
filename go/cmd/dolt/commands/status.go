@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -45,9 +44,9 @@ func (cmd StatusCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd StatusCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd StatusCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	return cli.GetCommandDocumentation(statusDocs, ap)
 }
 
 func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
@@ -58,7 +57,7 @@ func (cmd StatusCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, statusDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, statusDocs, ap))
 	cli.ParseArgsOrDie(ap, args, help)
 
 	roots, err := dEnv.Roots(ctx)

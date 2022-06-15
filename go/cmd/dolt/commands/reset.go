@@ -73,7 +73,7 @@ func (cmd ResetCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ResetCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ResetCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateResetArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, resetDocContent, ap))
 }

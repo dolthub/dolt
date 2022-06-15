@@ -52,7 +52,7 @@ func (cmd LsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd LsCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

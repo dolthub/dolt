@@ -71,7 +71,7 @@ func (cmd CloneCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CloneCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CloneCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cloneDocs, ap))
 }

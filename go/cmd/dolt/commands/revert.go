@@ -62,7 +62,7 @@ func (cmd RevertCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 }
 
 // CreateMarkdown implements the interface cli.Command.
-func (cmd RevertCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RevertCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateRevertArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, revertDocs, ap))
 }

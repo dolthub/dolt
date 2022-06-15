@@ -75,7 +75,7 @@ func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd CatCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

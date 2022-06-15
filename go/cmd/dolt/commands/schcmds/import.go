@@ -137,7 +137,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, schImportDocs, ap))
 }

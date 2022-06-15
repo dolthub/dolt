@@ -16,7 +16,6 @@ package indexcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -52,7 +51,7 @@ func (cmd RebuildCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd RebuildCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

@@ -57,9 +57,9 @@ func (cmd ExportCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+	return cli.GetCommandDocumentation(schExportDocs, ap)
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
@@ -77,7 +77,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, schExportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, schExportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	root, verr := commands.GetWorkingWithVErr(dEnv)

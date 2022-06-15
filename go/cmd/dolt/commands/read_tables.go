@@ -62,7 +62,7 @@ func (cmd ReadTablesCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ReadTablesCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ReadTablesCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, readTablesDocs, ap))
 }

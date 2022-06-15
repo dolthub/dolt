@@ -59,7 +59,7 @@ func (cmd PullCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd PullCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd PullCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreatePullArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, pullDocs, ap))
 }

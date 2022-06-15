@@ -127,7 +127,7 @@ func (cmd SqlCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SqlCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd SqlCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, sqlDocs, ap))
 }

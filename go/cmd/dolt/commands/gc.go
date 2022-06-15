@@ -76,7 +76,7 @@ func (cmd GarbageCollectionCmd) RequiresRepo() bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd GarbageCollectionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd GarbageCollectionCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, gcDocs, ap))
 }

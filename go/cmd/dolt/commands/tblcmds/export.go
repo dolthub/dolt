@@ -16,7 +16,6 @@ package tblcmds
 
 import (
 	"context"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -117,7 +116,7 @@ func getExportDestination(apr *argparser.ArgParseResults) mvdata.DataLocation {
 }
 
 func parseExportArgs(ap *argparser.ArgParser, commandStr string, args []string) (*exportOptions, errhand.VerboseError) {
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, exportDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {
@@ -163,9 +162,9 @@ func (cmd ExportCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ExportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ExportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	return cli.GetCommandDocumentation(exportDocs, ap)
 }
 
 func (cmd ExportCmd) ArgParser() *argparser.ArgParser {
@@ -185,7 +184,7 @@ func (cmd ExportCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ExportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	_, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, exportDocs, ap))
+	_, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, exportDocs, ap))
 
 	exOpts, verr := parseExportArgs(ap, commandStr, args)
 	if verr != nil {

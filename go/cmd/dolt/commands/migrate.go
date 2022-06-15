@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/fatih/color"
 
@@ -58,8 +57,7 @@ func (cmd MigrateCmd) Description() string {
 	return migrateDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd MigrateCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd MigrateCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -78,7 +76,7 @@ func (cmd MigrateCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd MigrateCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, migrateDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, migrateDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains(migratePushFlag) && apr.Contains(migratePullFlag) {

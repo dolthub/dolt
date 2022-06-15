@@ -67,7 +67,7 @@ func (cmd CommitCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CommitCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCommitArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
 }

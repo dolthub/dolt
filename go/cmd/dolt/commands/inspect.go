@@ -62,8 +62,7 @@ func (cmd InspectCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd InspectCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd InspectCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -76,7 +75,7 @@ func (cmd InspectCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd InspectCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.NewCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

@@ -89,7 +89,7 @@ func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RemoteCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RemoteCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
 }

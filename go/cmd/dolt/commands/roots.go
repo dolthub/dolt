@@ -70,7 +70,7 @@ func (cmd RootsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RootsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RootsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

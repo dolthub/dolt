@@ -62,7 +62,7 @@ func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
 }

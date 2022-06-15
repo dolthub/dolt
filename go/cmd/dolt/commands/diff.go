@@ -131,7 +131,7 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd DiffCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 }

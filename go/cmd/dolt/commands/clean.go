@@ -57,7 +57,7 @@ func (cmd CleanCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CleanCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CleanCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCleanArgParser()
 	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cleanDocContent, ap))
 }
