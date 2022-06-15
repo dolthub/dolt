@@ -480,12 +480,34 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 					bucket++
 				} else {
 					freqMap[col.Name][v] = 1
+					hist.DistinctCount++
 				}
 
-				hist.mean += v / float64(t.count)
-				colStats.min = math.Min(colStats.GetMin(), v)
-				colStats.max = math.Max(colStats.GetMax(), v)
+				hist.Mean += v / float64(t.doltStats.rowCount)
+				hist.Min = math.Min(hist.Min, v)
+				hist.Max = math.Max(hist.Max, v)
+				hist.Count++
 			}
+		}
+	}
+
+	// TODO: logic to determine ranges for buckets
+	// add buckets to histogram in sorted order
+	for colName, freqs := range freqMap {
+		keys := make([]float64, 0)
+		for k, _ := range freqs {
+			keys = append(keys, k)
+		}
+		sort.Float64s(keys)
+
+		hist := t.doltStats.histogramMap[colName]
+		for _, k := range keys {
+			bucket := &sql.HistogramBucket{
+				LowerBound: k,
+				UpperBound: k,
+				Frequency:  float64(freqs[k]) / float64(t.doltStats.rowCount),
+			}
+			hist.Buckets = append(hist.Buckets, bucket)
 		}
 	}
 
