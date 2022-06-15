@@ -682,7 +682,9 @@ func TestDoltMerge(t *testing.T) {
 
 // eventually this will be part of TestDoltMerge
 func TestDoltMergeArtifacts(t *testing.T) {
-	t.Skip()
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 	for _, script := range MergeViolationsAndConflictsMergeScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
@@ -691,7 +693,9 @@ func TestDoltMergeArtifacts(t *testing.T) {
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
 func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
-	t.Skip()
+	if types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
