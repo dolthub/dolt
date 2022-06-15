@@ -32,6 +32,9 @@ type ArtifactIndex interface {
 	HasConflicts(ctx context.Context) (bool, error)
 	// ConflictCount returns the number of conflicts
 	ConflictCount(ctx context.Context) (uint64, error)
+	// ConstraintViolationCount returns the sum total of foreign key violations,
+	// unique key violations, and check constraint violations.
+	ConstraintViolationCount(ctx context.Context) (uint64, error)
 	// ClearConflicts clears all conflicts
 	ClearConflicts(ctx context.Context) (ArtifactIndex, error)
 }
@@ -129,6 +132,10 @@ func (i prollyArtifactIndex) HasConflicts(ctx context.Context) (bool, error) {
 
 func (i prollyArtifactIndex) ConflictCount(ctx context.Context) (uint64, error) {
 	return i.index.CountOfType(ctx, prolly.ArtifactTypeConflict)
+}
+
+func (i prollyArtifactIndex) ConstraintViolationCount(ctx context.Context) (uint64, error) {
+	return i.index.CountOfTypes(ctx, prolly.ArtifactTypeForeignKeyViol, prolly.ArtifactTypeUniqueKeyViol, prolly.ArtifactTypeChkConsViol)
 }
 
 func (i prollyArtifactIndex) ClearConflicts(ctx context.Context) (ArtifactIndex, error) {

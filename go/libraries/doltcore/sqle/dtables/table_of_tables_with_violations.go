@@ -81,11 +81,11 @@ func (totwv *TableOfTablesWithViolations) PartitionRows(ctx *sql.Context, part s
 	if !ok {
 		return nil, fmt.Errorf("TablesWithConstraintViolations returned %s but it cannot be found", tblName)
 	}
-	data, err := tbl.GetConstraintViolations(ctx)
+	n, err := tbl.NumConstraintViolations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	rows = append(rows, sql.Row{tblName, data.Len()})
+	rows = append(rows, sql.Row{tblName, n})
 	return sql.RowsToRowIter(rows...), nil
 }
 

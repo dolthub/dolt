@@ -618,11 +618,9 @@ func TestTransactions(t *testing.T) {
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConflictHandlingTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 	for _, script := range DoltConstraintViolationTransactionTests {
-		skipNewFormat(t)
 		enginetest.TestTransactionScript(t, newDoltHarness(t), script)
 	}
 }
@@ -676,7 +674,6 @@ func TestShowCreateTableAsOf(t *testing.T) {
 }
 
 func TestDoltMerge(t *testing.T) {
-	skipNewFormat(t)
 	for _, script := range MergeScripts {
 		// dolt versioning conflicts with reset harness -- use new harness every time
 		enginetest.TestScript(t, newDoltHarness(t), script)

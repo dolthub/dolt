@@ -49,7 +49,7 @@ type ConflictReader struct {
 
 // NewConflictReader returns a new conflict reader for a given table
 func NewConflictReader(ctx context.Context, tbl *doltdb.Table) (*ConflictReader, error) {
-	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx)
+	base, sch, mergeSch, err := tbl.GetConflictSchemas(ctx, "") // tblName unused by old storage format
 	if err != nil {
 		return nil, err
 	}

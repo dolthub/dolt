@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -12,6 +11,9 @@ teardown() {
 }
 
 @test "constraint-violations: functions blocked with violations" {
+    # TODO: unique key constraint violation
+    skip_nbf_dolt_1
+
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -62,6 +64,9 @@ SQL
 }
 
 @test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {
+    # TODO: unique key constraint violation
+    skip_nbf_dolt_1
+
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -172,6 +177,7 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_child" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
+    echo $output
     [[ "$output" =~ 'foreign key,2,2,"{""Columns"": [""v1""], ""ForeignKey"": ""fk_name"", ""Index"": ""v1"", ""OnDelete"": ""RESTRICT"", ""OnUpdate"": ""RESTRICT"", ""ReferencedColumns"": [""v1""], ""ReferencedIndex"": ""v1"", ""ReferencedTable"": ""parent"", ""Table"": ""child""}"' ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM parent" -r=csv
@@ -2662,6 +2668,9 @@ SQL
 }
 
 @test "constraint-violations: cyclic foreign keys, illegal deletion" {
+    # TODO: uses dolt constraints verify
+    skip_nbf_dolt_1
+
     # We're deleting a reference in a cycle from each table to make sure it properly applies a violation in both instances
     dolt sql <<"SQL"
 CREATE TABLE t1 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));
@@ -2837,6 +2846,9 @@ SQL
 }
 
 @test "constraint-violations: unique keys, insert violation" {
+    # TODO: unique key checks
+    skip_nbf_dolt_1
+
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2876,6 +2888,9 @@ SQL
 }
 
 @test "constraint-violations: unique keys, update violation from ours" {
+    # TODO: unique key checks
+    skip_nbf_dolt_1
+
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2912,6 +2927,9 @@ SQL
 }
 
 @test "constraint-violations: unique keys, update violation from theirs" {
+    # TODO: unique key checks
+    skip_nbf_dolt_1
+
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
