@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -187,9 +186,6 @@ func (fwf FixedWidthFormatter) FormatColumn(colStr string, colIdx int) (string, 
 	}
 
 	strWidth := StringWidth(colStr)
-
-	fmt.Fprintf(cli.CliErr, "width for col %d is %d\n", colIdx, strWidth)
-
 	if strWidth > colWidth {
 		switch fwf.tooLngBhv {
 		case ErrorWhenTooLong:
