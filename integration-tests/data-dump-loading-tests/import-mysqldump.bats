@@ -482,4 +482,38 @@ SQL
     [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
 }
 
-# TODO: Dolt dump with ymsql
+@test "import mysqldump: dolt dump --no-autocommit can be loaded back into mysql" {
+    service mysql start
+    mysql <<SQL
+CREATE DATABASE IF NOT EXISTS testdb;
+USE testdb;
+CREATE TABLE IF NOT EXISTS mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL);
+INSERT IGNORE INTO mytable VALUES (0, 'one'), (1, 'two');
+SQL
+
+    mysqldump -B 'testdb' --result-file=dump.sql
+    run dolt sql < dump.sql
+    [ "$status" -eq 0 ]
+
+    mysql <<SQL
+USE testdb;
+DROP TABLE mytable
+SQL
+
+    # go to created database
+    cd testdb
+
+    run dolt dump --no-autocommit
+    [ -f doltdump.sql ]
+    mysql testdb < doltdump.sql
+
+    run mysql <<SQL
+SELECT count(*) from testdb.mytable
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    # Give the server a chance to drop the database
+    sleep 1
+    service mysql stop
+}
