@@ -278,15 +278,8 @@ func (tsd testSchemaData) decodeSchema() (schema.Schema, error) {
 }
 
 func TestSchemaMarshalling(t *testing.T) {
-	t.Run("format __LD_1__", func(t *testing.T) {
-		testSchemaMarshalling(t, types.Format_LD_1)
-	})
-	t.Run("format __DOLT_1__", func(t *testing.T) {
-		testSchemaMarshalling(t, types.Format_DOLT_1)
-	})
-}
-func testSchemaMarshalling(t *testing.T, nbf *types.NomsBinFormat) {
 	ctx := context.Background()
+	nbf := types.Format_Default
 	vrw := getTestVRW(nbf)
 	schemas := getSchemas(t, 1000)
 	for _, sch := range schemas {
