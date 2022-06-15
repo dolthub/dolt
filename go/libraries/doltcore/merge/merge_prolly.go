@@ -47,12 +47,13 @@ import (
 func mergeTableData(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
 	tbl, mergeTbl, tableToUpdate *doltdb.Table,
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
-	cmHash hash.Hash,
-	mergeTblHash, ancTblHash hash.Hash) (*doltdb.Table, *MergeStats, error) {
+	mergeRootIsh hash.Hash,
+	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	stats := &MergeStats{Operation: TableModified}
@@ -98,10 +99,10 @@ func mergeTableData(
 	artifactEditor := artM.Editor()
 
 	var p conflictProcessor
-	if can, err := isNewConflictsCompatible(ctx, tbl, ancSchema, rootSchema, mergeSchema); err != nil {
+	if can, err := isNewConflictsCompatible(ctx, tbl, tblName, ancSchema, rootSchema, mergeSchema); err != nil {
 		return nil, nil, err
 	} else if can {
-		p, err = newInsertingProcessor(cmHash, ancTblHash, mergeTblHash)
+		p, err = newInsertingProcessor(mergeRootIsh, ancRootIsh)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -181,7 +182,7 @@ func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpda
 }
 
 // returns true if newly generated conflicts are compatible with existing conflicts in the artifact table.
-func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, base, ours, theirs schema.Schema) (bool, error) {
+func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName string, base, ours, theirs schema.Schema) (bool, error) {
 	has, err := tbl.HasConflicts(ctx)
 	if err != nil {
 		return false, err
@@ -191,7 +192,7 @@ func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, base, ours
 		return true, nil
 	}
 
-	eBase, eOurs, eTheirs, err := tbl.GetConflictSchemas(ctx)
+	eBase, eOurs, eTheirs, err := tbl.GetConflictSchemas(ctx, tblName)
 	if err != nil {
 		return false, err
 	}
@@ -392,26 +393,21 @@ type conflictProcessor interface {
 }
 
 type insertingProcessor struct {
-	cmHash       []byte
-	metadataJson []byte
+	theirRootIsh hash.Hash
+	jsonMetaData []byte
 }
 
-func newInsertingProcessor(cmHash, baseTblHash, theirTblHash hash.Hash) (*insertingProcessor, error) {
-	h := make([]byte, 20)
-	copy(h, cmHash[:])
+func newInsertingProcessor(theirRootIsh, baseRootIsh hash.Hash) (*insertingProcessor, error) {
 	m := prolly.ConflictMetadata{
-		BaseTblHash:  make([]byte, 20),
-		TheirTblHash: make([]byte, 20),
+		BaseRootIsh: baseRootIsh,
 	}
-	copy(m.BaseTblHash, baseTblHash[:])
-	copy(m.TheirTblHash, theirTblHash[:])
 	data, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
 	p := insertingProcessor{
-		cmHash:       h,
-		metadataJson: data,
+		theirRootIsh: theirRootIsh,
+		jsonMetaData: data,
 	}
 	return &p, nil
 }
@@ -425,7 +421,7 @@ OUTER:
 				break OUTER
 			}
 			stats.Conflicts++
-			err := artEditor.Add(ctx, conflict.key, p.cmHash, prolly.ArtifactTypeConflict, p.metadataJson)
+			err := artEditor.Add(ctx, conflict.key, p.theirRootIsh, prolly.ArtifactTypeConflict, p.jsonMetaData)
 			if err != nil {
 				return err
 			}

@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/shopspring/decimal"
 )
 
@@ -387,11 +388,11 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-func (td TupleDesc) GetAddress(i int, tup Tuple) (v []byte, ok bool) {
+func (td TupleDesc) GetAddress(i int, tup Tuple) (v hash.Hash, ok bool) {
 	td.expectEncoding(i, AddressEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
-		v = b
+		v = hash.New(b)
 		ok = true
 	}
 	return

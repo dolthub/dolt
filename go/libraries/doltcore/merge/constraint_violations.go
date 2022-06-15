@@ -58,7 +58,7 @@ const (
 )
 
 // AddConstraintViolations adds all constraint violations to each table.
-func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, ourCmHash hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
+func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -103,13 +103,13 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx, ourCmHash, jsonData)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, postParent.Schema, emptyIdx, theirRootIsh, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
 		} else {
 			// Parent exists in the ancestor
-			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, ourCmHash, jsonData)
+			postChild.Table, foundViolations, err = parentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParent.Schema, preParent.RowData, theirRootIsh, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -126,7 +126,7 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 			if err != nil {
 				return nil, nil, err
 			}
-			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx, ourCmHash, jsonData)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, postChild.Schema, emptyIdx, theirRootIsh, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -134,7 +134,7 @@ func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.Root
 		} else {
 			// Child exists in the ancestor
 			innerFoundViolations := false
-			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData, ourCmHash, jsonData)
+			postChild.Table, innerFoundViolations, err = childFkConstraintViolations(ctx, foreignKey, postParent, postChild, preChild.Schema, preChild.RowData, theirRootIsh, jsonData)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -159,12 +159,12 @@ func parentFkConstraintViolations(
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentSch schema.Schema,
 	preParentRowData durable.Index,
-	ourCmHash hash.Hash,
+	theirRootIsh hash.Hash,
 	jsonData []byte,
 ) (*doltdb.Table, bool, error) {
 	if preParentRowData.Format() == types.Format_DOLT_1 {
 		m := durable.ProllyMapFromIndex(preParentRowData)
-		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, ourCmHash, jsonData)
+		return prollyParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, m, theirRootIsh, jsonData)
 	}
 	m := durable.NomsMapFromIndex(preParentRowData)
 	return nomsParentFkConstraintViolations(ctx, foreignKey, postParent, postChild, preParentSch, m, jsonData)

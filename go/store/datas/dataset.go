@@ -266,6 +266,37 @@ type Dataset struct {
 	head dsHead
 }
 
+// LoadRootNomsValueFromRootIshAddr returns the types.Value encoded root value
+// from a "root-ish" |addr|. The |addr| might be the |addr| of a working set or
+// the |addr| of a commit.
+func LoadRootNomsValueFromRootIshAddr(ctx context.Context, vr types.ValueReader, addr hash.Hash) (types.Value, error) {
+	v, err := vr.ReadValue(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	h, err := newHead(v, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	switch h.TypeName() {
+	case workingSetName:
+		ws, err := h.HeadWorkingSet()
+		if err != nil {
+			return nil, err
+		}
+		return vr.ReadValue(ctx, ws.WorkingAddr)
+	case commitName:
+		dsCm, err := LoadCommitAddr(ctx, vr, h.Addr())
+		if err != nil {
+			return nil, err
+		}
+		return GetCommittedValue(ctx, vr, dsCm.NomsValue())
+	default:
+		panic(fmt.Sprintf("loading root value from dsHead type %s not implemented"))
+	}
+}
+
 func newHead(head types.Value, addr hash.Hash) (dsHead, error) {
 	if head == nil {
 		return nil, nil

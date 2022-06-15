@@ -38,7 +38,7 @@ func prollyParentFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preParentRowData prolly.Map,
-	ourCmHash hash.Hash,
+	theirRootIsh hash.Hash,
 	jsonData []byte) (*doltdb.Table, bool, error) {
 	postParentRowData := durable.ProllyMapFromIndex(postParent.RowData)
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
@@ -86,7 +86,7 @@ func prollyParentFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			found, err := createCVsForPartialKeyMatches(ctx, partialKeyRange, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, ourCmHash)
+			found, err := createCVsForPartialKeyMatches(ctx, partialKeyRange, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh)
 			if err != nil {
 				return err
 			}
@@ -186,7 +186,7 @@ func createCVIfNoPartialKeyMatches(
 	idx prolly.Map,
 	editor prolly.ArtifactsEditor,
 	jsonData []byte,
-	ourCmHash hash.Hash) (bool, error) {
+	theirRootIsh hash.Hash) (bool, error) {
 	itr, err := idx.IterRange(ctx, partialKeyRange)
 	if err != nil {
 		return false, err
@@ -201,7 +201,7 @@ func createCVIfNoPartialKeyMatches(
 
 	meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v}
 
-	err = editor.ReplaceFKConstraintViolation(ctx, k, ourCmHash[:], meta)
+	err = editor.ReplaceFKConstraintViolation(ctx, k, theirRootIsh, meta)
 	if err != nil {
 		return false, err
 	}
@@ -218,7 +218,7 @@ func createCVsForPartialKeyMatches(
 	secondaryIdx prolly.Map,
 	pool pool.BuffPool,
 	jsonData []byte,
-	ourCmHash hash.Hash,
+	theirRootIsh hash.Hash,
 ) (bool, error) {
 	createdViolation := false
 
@@ -251,7 +251,7 @@ func createCVsForPartialKeyMatches(
 		}
 		meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value}
 
-		err = editor.ReplaceFKConstraintViolation(ctx, primaryIdxKey, ourCmHash[:], meta)
+		err = editor.ReplaceFKConstraintViolation(ctx, primaryIdxKey, theirRootIsh, meta)
 		if err != nil {
 			return false, err
 		}

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dolthub/dolt/go/store/datas"
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
@@ -277,6 +278,28 @@ func newRootValue(vrw types.ValueReadWriter, v types.Value) (*RootValue, error) 
 	}
 
 	return &RootValue{vrw, storage, nil}, nil
+}
+
+// LoadRootValueFromRootIshAddr takes the hash of the commit or the hash of a
+// working set and returns the corresponding RootValue.
+func LoadRootValueFromRootIshAddr(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash) (*RootValue, error) {
+	val, err := datas.LoadRootNomsValueFromRootIshAddr(ctx, vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	return decodeRootNomsValue(vrw, val)
+}
+
+func decodeRootNomsValue(vrw types.ValueReadWriter, val types.Value) (*RootValue, error) {
+	if val == nil {
+		return nil, ErrNoRootValAtHash
+	}
+
+	if !isRootValue(vrw.Format(), val) {
+		return nil, ErrNoRootValAtHash
+	}
+
+	return newRootValue(vrw, val)
 }
 
 func isRootValue(nbf *types.NomsBinFormat, val types.Value) bool {

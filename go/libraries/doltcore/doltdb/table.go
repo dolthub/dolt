@@ -17,6 +17,7 @@ package doltdb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -228,9 +229,9 @@ func (t *Table) clearConflicts(ctx context.Context) (*Table, error) {
 }
 
 // GetConflictSchemas returns the merge conflict schemas for this table.
-func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) GetConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
 	if t.Format() == types.Format_DOLT_1 {
-		return t.getProllyConflictSchemas(ctx)
+		return t.getProllyConflictSchemas(ctx, tblName)
 	}
 
 	return t.getNomsConflictSchemas(ctx)
@@ -239,7 +240,7 @@ func (t *Table) GetConflictSchemas(ctx context.Context) (base, sch, mergeSch sch
 // The conflict schema is implicitly determined based on the first conflict in the artifacts table.
 // For now, we will enforce that all conflicts in the artifacts table must have the same schema set (base, ours, theirs).
 // In the future, we may be able to display conflicts in a way that allows different conflict schemas to coexist.
-func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
+func (t *Table) getProllyConflictSchemas(ctx context.Context, tblName string) (base, sch, mergeSch schema.Schema, err error) {
 	arts, err := t.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -268,13 +269,11 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeS
 		return nil, nil, nil, err
 	}
 
-	h := hash.New(art.Metadata.BaseTblHash)
-	baseTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	baseTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.Metadata.BaseRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	h = hash.New(art.Metadata.TheirTblHash)
-	theirTbl, err := durable.TableFromAddr(ctx, t.ValueReadWriter(), h)
+	theirTbl, err := tableFromRootIsh(ctx, t.ValueReadWriter(), art.TheirRootIsh, tblName)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -289,6 +288,21 @@ func (t *Table) getProllyConflictSchemas(ctx context.Context) (base, sch, mergeS
 	}
 
 	return baseSch, ourSch, theirSch, nil
+}
+
+func tableFromRootIsh(ctx context.Context, vrw types.ValueReadWriter, h hash.Hash, tblName string) (*Table, error) {
+	rv, err := LoadRootValueFromRootIshAddr(ctx, vrw, h)
+	if err != nil {
+		return nil, err
+	}
+	tbl, ok, err := rv.GetTable(ctx, tblName)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("could not find tbl %s in root value", tblName)
+	}
+	return tbl, nil
 }
 
 func (t *Table) getNomsConflictSchemas(ctx context.Context) (base, sch, mergeSch schema.Schema, err error) {
@@ -323,8 +337,8 @@ func (t *Table) GetConstraintViolationsSchema(ctx context.Context) (schema.Schem
 	colColl := schema.NewColCollection()
 
 	if t.Format() == types.Format_DOLT_1 {
-		// new format also includes the commit hash of the left branch's head
-		colColl = colColl.Append(schema.NewColumn("created_at_cm", 0, types.StringKind, false))
+		// the commit hash or working set hash of the right side during merge
+		colColl = colColl.Append(schema.NewColumn("from_root_ish", 0, types.StringKind, false))
 	}
 
 	colColl = colColl.Append(typeCol)

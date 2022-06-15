@@ -302,11 +302,11 @@ type ArtifactsEditor struct {
 	pool         pool.BuffPool
 }
 
-func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, cmHash []byte, artType ArtifactType, meta []byte) error {
+func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta []byte) error {
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
-	wr.artKB.PutAddress(srcKey.Count(), cmHash)
+	wr.artKB.PutAddress(srcKey.Count(), theirRootIsh)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
 	key := wr.artKB.Build(wr.pool)
 
@@ -319,7 +319,7 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, cmHash []by
 // ReplaceFKConstraintViolation replaces foreign key constraint violations that
 // match the given one but have a different commit hash. If no existing violation
 // exists, the given will be inserted.
-func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, cmHash []byte, meta ConstraintViolationMeta) error {
+func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, meta ConstraintViolationMeta) error {
 	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
 	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
@@ -362,7 +362,7 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	if err != nil {
 		return err
 	}
-	err = wr.Add(ctx, srcKey, cmHash, ArtifactTypeForeignKeyViol, d)
+	err = wr.Add(ctx, srcKey, theirRootIsh, ArtifactTypeForeignKeyViol, d)
 	if err != nil {
 		return err
 	}
@@ -406,25 +406,24 @@ func (itr *ConflictArtifactIter) Next(ctx context.Context) (ConflictArtifact, er
 	}
 
 	return ConflictArtifact{
-		Key:        art.Key,
-		HeadCmHash: art.HeadCmHash,
-		Metadata:   parsedMeta,
+		Key:          art.Key,
+		TheirRootIsh: art.TheirRootIsh,
+		Metadata:     parsedMeta,
 	}, nil
 }
 
 // ConflictArtifact is the decoded conflict from the artifacts table
 type ConflictArtifact struct {
-	Key        val.Tuple
-	HeadCmHash []byte
-	Metadata   ConflictMetadata
+	Key          val.Tuple
+	TheirRootIsh hash.Hash
+	Metadata     ConflictMetadata
 }
 
 // ConflictMetadata is the json metadata associated with a conflict
 type ConflictMetadata struct {
-	// BaseTblHash is the target hash of the table holding the base value for the conflict
-	BaseTblHash []byte `json:"bc"`
-	// TheirTblHash is the target hash of the table holding the their value for the conflict
-	TheirTblHash []byte `json:"tc"`
+	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
+	BaseRootIsh hash.Hash `json:"bc"`
+	TableName   string    `json:"tn"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
@@ -507,11 +506,11 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
 	return Artifact{
-		ArtKey:     artKey,
-		Key:        srcKey,
-		HeadCmHash: cmHash,
-		ArtType:    ArtifactType(artType),
-		Metadata:   metadata,
+		ArtKey:       artKey,
+		Key:          srcKey,
+		TheirRootIsh: cmHash,
+		ArtType:      ArtifactType(artType),
+		Metadata:     metadata,
 	}, nil
 }
 
@@ -528,8 +527,8 @@ type Artifact struct {
 	ArtKey val.Tuple
 	// Key is the key of the source row that the artifact references
 	Key val.Tuple
-	// HeadCmHash is the cm hash of the left branch's head at the time of artifact creation
-	HeadCmHash []byte
+	// TheirRootIsh is the working set hash or commit hash of the right in the merge
+	TheirRootIsh hash.Hash
 	// ArtType is the type of the artifact
 	ArtType ArtifactType
 	// Metadata is the encoded json metadata

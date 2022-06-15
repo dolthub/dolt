@@ -17,6 +17,7 @@ package val
 import (
 	"time"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/shopspring/decimal"
 
 	"github.com/dolthub/dolt/go/store/pool"
@@ -262,7 +263,7 @@ func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.pos += hash128Size
 }
 
-func (tb *TupleBuilder) PutAddress(i int, v []byte) {
+func (tb *TupleBuilder) PutAddress(i int, v hash.Hash) {
 	tb.Desc.expectEncoding(i, AddressEnc)
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+addressSize]
 	writeAddress(tb.fields[i], v)
