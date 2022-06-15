@@ -332,7 +332,8 @@ func MarshalSchemaAsNomsValue(ctx context.Context, vrw types.ValueReadWriter, sc
 		return nil, err
 	}
 
-	if vrw.Format().UsesFlatbuffers() {
+	// todo(andy): __DOLT_DEV__
+	if types.IsFormat_DOLT_1(vrw.Format()) {
 		return SerializeSchema(ctx, vrw, sch)
 	}
 
@@ -367,7 +368,8 @@ var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
 
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
-	if nbf.UsesFlatbuffers() {
+	// todo(andy): __DOLT_DEV__
+	if types.IsFormat_DOLT_1(nbf) {
 		// todo(andy): caching
 		return DeserializeSchema(ctx, nbf, schemaVal)
 	}

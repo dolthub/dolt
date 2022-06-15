@@ -151,7 +151,7 @@ func TestTypeInfoMarshalling(t *testing.T) {
 		t.Run(sqlType.String(), func(t *testing.T) {
 			ti, err := typeinfo.FromSqlType(sqlType)
 			require.NoError(t, err)
-			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", false, "")
+			col, err := schema.NewColumnWithTypeInfo("pk", 1, ti, true, "", false, "", schema.NotNullConstraint{})
 			require.NoError(t, err)
 			colColl := schema.NewColCollection(col)
 			originalSch, err := schema.SchemaFromCols(colColl)

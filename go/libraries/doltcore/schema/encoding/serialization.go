@@ -16,6 +16,7 @@ package encoding
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/parse"
@@ -378,7 +379,13 @@ func keylessSerialSchema(s *serial.TableSchema) bool {
 }
 
 func sqlTypeString(t typeinfo.TypeInfo) string {
-	return t.ToSqlType().String()
+	typ := t.ToSqlType()
+	if st, ok := typ.(sql.SpatialColumnType); ok {
+		if srid, ok := st.GetSpatialTypeSRID(); ok {
+			return fmt.Sprintf("%s SRID %d", typ.String(), srid)
+		}
+	}
+	return typ.String()
 }
 
 func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, error) {
