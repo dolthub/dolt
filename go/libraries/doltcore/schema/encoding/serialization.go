@@ -63,9 +63,9 @@ func serializeSchemaAsFlatbuffer(sch schema.Schema) ([]byte, error) {
 	checks := serializeChecks(b, sch.Checks().AllChecks())
 
 	serial.TableSchemaStart(b)
-	serial.TableSchemaAddRows(b, rows)
+	serial.TableSchemaAddClusteredIndex(b, rows)
 	serial.TableSchemaAddColumns(b, columns)
-	serial.TableSchemaAddIndexes(b, indexes)
+	serial.TableSchemaAddSecondaryIndexes(b, indexes)
 	serial.TableSchemaAddChecks(b, checks)
 	root := serial.TableSchemaEnd(b)
 	b.FinishWithFileIdentifier(root, []byte(serial.TableSchemaFileID))
@@ -104,28 +104,50 @@ func deserializeSchemaFromFlatbuffer(ctx context.Context, buf []byte) (schema.Sc
 }
 
 func serializeClusteredIndex(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
-	// todo(andy): place hidden keyless columns
+	keyless := schema.IsKeyless(sch)
 
 	// serialize key columns
-	pkMap := sch.GetPkOrdinals()
-	serial.IndexStartIndexColumnsVector(b, len(pkMap))
-	for i := len(pkMap) - 1; i >= 0; i-- {
-		b.PrependUint16(uint16(pkMap[i]))
+	var ko fb.UOffsetT
+	if keyless {
+		// keyless id is the 2nd to last column
+		// in the columns array and the only field
+		// in key tuples of the clustered index.
+		idPos := sch.GetAllCols().Size()
+		serial.IndexStartIndexColumnsVector(b, 1)
+		b.PrependUint16(uint16(idPos))
+		ko = b.EndVector(1)
+	} else {
+		pkMap := sch.GetPkOrdinals()
+		serial.IndexStartIndexColumnsVector(b, len(pkMap))
+		for i := len(pkMap) - 1; i >= 0; i-- {
+			b.PrependUint16(uint16(pkMap[i]))
+		}
+		ko = b.EndVector(len(pkMap))
 	}
-	// key_columns == index_columns
-	ko := b.EndVector(len(pkMap))
 
 	// serialize value columns
 	nonPk := sch.GetNonPKCols().GetColumns()
-	serial.IndexStartValueColumnsVector(b, len(nonPk))
+	length := len(nonPk)
+	if keyless {
+		length++
+	}
+	serial.IndexStartValueColumnsVector(b, length)
 	for i := len(nonPk) - 1; i >= 0; i-- {
 		col := nonPk[i]
-		idx := sch.GetAllCols().TagToIdx[col.Tag]
-		b.PrependUint16(uint16(idx))
+		pos := sch.GetAllCols().TagToIdx[col.Tag]
+		b.PrependUint16(uint16(pos))
 	}
-	vo := b.EndVector(len(nonPk))
+	if keyless {
+		// keyless cardinality is the last column
+		// in the columns array and the first field
+		// in value tuples of the clustered index.
+		cardPos := sch.GetAllCols().Size() + 1
+		b.PrependUint16(uint16(cardPos))
+	}
+	vo := b.EndVector(length)
 
 	serial.IndexStart(b)
+	// key_columns == index_columns for clustered index
 	serial.IndexAddIndexColumns(b, ko)
 	serial.IndexAddKeyColumns(b, ko)
 	serial.IndexAddValueColumns(b, vo)
@@ -141,7 +163,7 @@ func deserializeClusteredIndex(s *serial.TableSchema) []int {
 		return nil
 	}
 
-	idx := s.Rows(nil)
+	idx := s.ClusteredIndex(nil)
 	pkOrdinals := make([]int, idx.KeyColumnsLength())
 	for i := range pkOrdinals {
 		pkOrdinals[i] = int(idx.KeyColumns(i))
@@ -154,8 +176,9 @@ func serializeSchemaColumns(b *fb.Builder, sch schema.Schema) fb.UOffsetT {
 	offs := make([]fb.UOffsetT, len(cols))
 
 	if schema.IsKeyless(sch) {
-		// append hidden, generated keyless columns
-		// to the end of the columns array
+		// (6/15/22) keyless id and cardinality columns are
+		// included in the serialized flatbuffers object,
+		// but are omitted from schema.Schema
 		id, card := serializeHiddenKeylessColumns(b)
 		offs = append(offs, id, card)
 	}
@@ -232,7 +255,10 @@ func serializeHiddenKeylessColumns(b *fb.Builder) (id, card fb.UOffsetT) {
 func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Column, error) {
 	length := s.ColumnsLength()
 	if keylessSerialSchema(s) {
-		length -= 2 // omit hidden columns
+		// (6/15/22) keyless id and cardinality columns are
+		// included in the serialized flatbuffers object,
+		// but are omitted from schema.Schema
+		length -= 2
 	}
 
 	cols := make([]schema.Column, length)
@@ -246,11 +272,6 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			return nil, err
 		}
 
-		var constraints []schema.ColConstraint
-		if !c.Nullable() || c.PrimaryKey() {
-			constraints = append(constraints, schema.NotNullConstraint{})
-		}
-
 		cols[i], err = schema.NewColumnWithTypeInfo(
 			string(c.Name()),
 			c.Tag(),
@@ -259,7 +280,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			string(c.DefaultValue()),
 			c.AutoIncrement(),
 			string(c.Comment()),
-			constraints...)
+			constraintsFromSerialColumn(c)...)
 		if err != nil {
 			return nil, err
 		}
@@ -304,7 +325,7 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 		offs[i] = serial.IndexEnd(b)
 	}
 
-	serial.TableSchemaStartIndexesVector(b, len(indexes))
+	serial.TableSchemaStartSecondaryIndexesVector(b, len(indexes))
 	for i := len(offs) - 1; i >= 0; i-- {
 		b.PrependUOffsetT(offs[i])
 	}
@@ -314,8 +335,8 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error {
 	idx := new(serial.Index)
 	col := new(serial.Column)
-	for i := 0; i < s.IndexesLength(); i++ {
-		s.Indexes(idx, i)
+	for i := 0; i < s.SecondaryIndexesLength(); i++ {
+		s.SecondaryIndexes(idx, i)
 		assertTrue(!idx.PrimaryKey())
 
 		name := string(idx.Name())
@@ -373,9 +394,23 @@ func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 }
 
 func keylessSerialSchema(s *serial.TableSchema) bool {
-	// todo(andy)
-	rows := s.Rows(nil)
-	return rows.IndexColumnsLength() == 0
+	n := s.ColumnsLength()
+	if n < 2 {
+		return false
+	}
+
+	id := serial.Column{}
+	s.Columns(&id, n-2)
+	ok := id.Generated() && id.Hidden() &&
+		string(id.Name()) == keylessIdCol
+	if !ok {
+		return false
+	}
+
+	card := serial.Column{}
+	s.Columns(&card, n-1)
+	return card.Generated() && card.Hidden() &&
+		string(card.Name()) == keylessCardCol
 }
 
 func sqlTypeString(t typeinfo.TypeInfo) string {
@@ -398,6 +433,13 @@ func typeinfoFromSqlType(ctx context.Context, s string) (typeinfo.TypeInfo, erro
 
 func encodingFromTypeinfo(t typeinfo.TypeInfo) serial.Encoding {
 	return schema.EncodingFromSqlType(t.ToSqlType().Type())
+}
+
+func constraintsFromSerialColumn(col *serial.Column) (cc []schema.ColConstraint) {
+	if !col.Nullable() || col.PrimaryKey() {
+		cc = append(cc, schema.NotNullConstraint{})
+	}
+	return
 }
 
 func assertTrue(b bool) {

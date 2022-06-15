@@ -47,21 +47,8 @@ func (rcv *TableSchema) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *TableSchema) Rows(obj *Index) *Index {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
-	if o != 0 {
-		x := rcv._tab.Indirect(o + rcv._tab.Pos)
-		if obj == nil {
-			obj = new(Index)
-		}
-		obj.Init(rcv._tab.Bytes, x)
-		return obj
-	}
-	return nil
-}
-
 func (rcv *TableSchema) Columns(obj *Column, j int) bool {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -73,14 +60,27 @@ func (rcv *TableSchema) Columns(obj *Column, j int) bool {
 }
 
 func (rcv *TableSchema) ColumnsLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
 	return 0
 }
 
-func (rcv *TableSchema) Indexes(obj *Index, j int) bool {
+func (rcv *TableSchema) ClusteredIndex(obj *Index) *Index {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(Index)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *TableSchema) SecondaryIndexes(obj *Index, j int) bool {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
@@ -92,7 +92,7 @@ func (rcv *TableSchema) Indexes(obj *Index, j int) bool {
 	return false
 }
 
-func (rcv *TableSchema) IndexesLength() int {
+func (rcv *TableSchema) SecondaryIndexesLength() int {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
@@ -123,19 +123,19 @@ func (rcv *TableSchema) ChecksLength() int {
 func TableSchemaStart(builder *flatbuffers.Builder) {
 	builder.StartObject(4)
 }
-func TableSchemaAddRows(builder *flatbuffers.Builder, rows flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(rows), 0)
-}
 func TableSchemaAddColumns(builder *flatbuffers.Builder, columns flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(columns), 0)
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(columns), 0)
 }
 func TableSchemaStartColumnsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
-func TableSchemaAddIndexes(builder *flatbuffers.Builder, indexes flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(indexes), 0)
+func TableSchemaAddClusteredIndex(builder *flatbuffers.Builder, clusteredIndex flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(clusteredIndex), 0)
 }
-func TableSchemaStartIndexesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+func TableSchemaAddSecondaryIndexes(builder *flatbuffers.Builder, secondaryIndexes flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(secondaryIndexes), 0)
+}
+func TableSchemaStartSecondaryIndexesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func TableSchemaAddChecks(builder *flatbuffers.Builder, checks flatbuffers.UOffsetT) {

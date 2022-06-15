@@ -18,9 +18,9 @@ namespace serial;
 
 
 table TableSchema {
-  rows:Index;
-  columns:[Column];
-  indexes:[Index];
+  columns:[Column] (required);
+  clustered_index:Index (required);
+  secondary_indexes:[Index];
   checks:[CheckConstraint];
 }
 
@@ -62,12 +62,13 @@ table Index {
   // sql comment
   comment:string;
 
-  // ordered list of columns defining the index,
-  // stored as indices into table schema columns list.
+  // ordered list of columns defining the index.
+  // stored as indices into columns vector.
   index_columns:[uint16] (required);
 
   // ordered list of columns corresponding to
   // key tuple fields within index storage.
+  // stored as indices into columns vector.
   //
   // for secondary indexes, this is typically
   // index columns + primary key columns.
@@ -75,6 +76,7 @@ table Index {
 
   // ordered list of columns corresponding to
   // value tuple fields within index storage.
+  // stored as indices into columns vector.
   //
   // typically, this is only populated for
   // clustered primary key indexes.

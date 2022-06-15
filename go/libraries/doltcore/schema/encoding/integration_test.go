@@ -35,12 +35,12 @@ func TestSchemaSerializationIntegration(t *testing.T) {
 		s := integrationTests[i].schema
 		t.Run(getTestName(s), func(t *testing.T) {
 			sch := parseSchemaString(t, s)
-			testDolt1SchemaSerialization(t, sch)
+			testSchemaSerialization(t, sch)
 		})
 	}
 }
 
-func testDolt1SchemaSerialization(t *testing.T, sch schema.Schema) {
+func testSchemaSerialization(t *testing.T, sch schema.Schema) {
 	ctx := context.Background()
 	nbf := types.Format_Default
 	vrw := getTestVRW(nbf)
