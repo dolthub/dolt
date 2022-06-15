@@ -42,10 +42,11 @@ type SqlExportWriter struct {
 	root            *doltdb.RootValue
 	writtenFirstRow bool
 	editOpts        editor.Options
+	autocommitOff   bool
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
@@ -60,13 +61,14 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 	foreignKeys, _ := fkc.KeysForTable(tableName)
 
 	return &SqlExportWriter{
-		tableName:   tableName,
-		sch:         sch,
-		parentSchs:  allSchemas,
-		foreignKeys: foreignKeys,
-		root:        root,
-		wr:          wr,
-		editOpts:    editOpts,
+		tableName:     tableName,
+		sch:           sch,
+		parentSchs:    allSchemas,
+		foreignKeys:   foreignKeys,
+		root:          root,
+		wr:            wr,
+		editOpts:      editOpts,
+		autocommitOff: autocommitOff,
 	}, nil
 }
 
@@ -132,6 +134,12 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	}
 	if !w.writtenFirstRow {
 		var b strings.Builder
+		// In the case that autocommit is off we wrap this table drop,create,insert sequence with a SET AUTOCOMMIT=0
+		if w.autocommitOff {
+			b.WriteString("SET AUTOCOMMIT=0;")
+			b.WriteRune('\n')
+		}
+
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
 		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
@@ -153,6 +161,17 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
+	}
+
+	// We have to commit the changes of this tables insert by adding a COMMIT statement.
+	if w.autocommitOff {
+		var b strings.Builder
+		b.WriteString("COMMIT;")
+		b.WriteRune('\n')
+		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+			return err
+		}
+		w.writtenFirstRow = true
 	}
 
 	if w.wr != nil {

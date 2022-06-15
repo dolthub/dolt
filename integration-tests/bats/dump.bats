@@ -37,6 +37,14 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
 
+    run grep FOREIGN_KEY_CHECKS=0 doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
+     run grep UNIQUE_CHECKS=0 doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
+
     run dolt dump
     [ "$status" -ne 0 ]
     [[ "$output" =~ "doltdump.sql already exists" ]] || false
@@ -646,11 +654,11 @@ teardown() {
     [[ "$output" = "" ]] || false
 }
 
-@test "dump: --bulk flag works correctly" {
+@test "dump: -na flag works correctly" {
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_Table values (1)"
 
-    run dolt dump --bulk
+    run dolt dump -na
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f doltdump.sql ]
@@ -658,9 +666,12 @@ teardown() {
     run head -n 3 doltdump.sql
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 3 ]
-    [[ "$output" =~ "SET AUTOCOMMIT = 0;" ]] || false
-    [[ "$output" =~ "SET FOREIGN_KEY_CHECKS = 0;" ]] || false
-    [[ "$output" =~ "SET UNIQUE_CHECKS = 0;" ]] || false
+    [[ "$output" =~ "SET FOREIGN_KEY_CHECKS=0;" ]] || false
+    [[ "$output" =~ "SET UNIQUE_CHECKS=0;" ]] || false
+    [[ "$output" =~ "SET AUTOCOMMIT=0;" ]] || false
+
+    run tail -n 2 doltdump.sql
+    [[ "$output" =~ "COMMIT;" ]] || false
 
     dolt sql < doltdump.sql
 
@@ -670,9 +681,44 @@ teardown() {
     [[ "${lines[1]}" = "1" ]] || false
 
     # try with a csv output and ensure that there are no problems
-    run dolt dump -r csv --bulk
+    run dolt dump -r csv -na
     [ "$status" -eq 0 ]
     [ -f doltdump/new_table.csv ]
+}
+
+@test "dump: --no-autocommit flag works with multiple tables" {
+    dolt sql -q "CREATE TABLE table1(pk int primary key);"
+    dolt sql -q "CREATE TABLE table2(pk int primary key);"
+
+    dolt sql -q "INSERT INTO table1 VALUES (1)"
+    dolt sql -q "INSERT INTO table2 VALUES (1)"
+
+    run dolt dump --no-autocommit
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run grep AUTOCOMMIT doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    run grep "\COMMIT;\b" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    # test with batch mode
+    run dolt dump --batch -f --no-autocommit
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f doltdump.sql ]
+
+    run grep AUTOCOMMIT doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+
+    run grep "\COMMIT;\b" doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
 }
 
 function create_tables() {

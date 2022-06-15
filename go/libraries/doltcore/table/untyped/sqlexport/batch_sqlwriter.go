@@ -45,10 +45,11 @@ type BatchSqlExportWriter struct {
 	writtenFirstRow bool
 	numInserts      int
 	editOpts        editor.Options
+	autocommitOff   bool
 }
 
 // OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*BatchSqlExportWriter, error) {
+func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*BatchSqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
@@ -63,13 +64,14 @@ func OpenBatchedSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *do
 	foreignKeys, _ := fkc.KeysForTable(tableName)
 
 	return &BatchSqlExportWriter{
-		tableName:   tableName,
-		sch:         sch,
-		parentSchs:  allSchemas,
-		foreignKeys: foreignKeys,
-		root:        root,
-		wr:          wr,
-		editOpts:    editOpts,
+		tableName:     tableName,
+		sch:           sch,
+		parentSchs:    allSchemas,
+		foreignKeys:   foreignKeys,
+		root:          root,
+		wr:            wr,
+		editOpts:      editOpts,
+		autocommitOff: autocommitOff,
 	}, nil
 }
 
@@ -191,6 +193,10 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	if !w.writtenFirstRow {
 		var b strings.Builder
+		if w.autocommitOff {
+			b.WriteString("SET AUTOCOMMIT=0;")
+			b.WriteRune('\n')
+		}
 		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
 		b.WriteRune('\n')
 		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
@@ -220,6 +226,17 @@ func (w *BatchSqlExportWriter) Close(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// We have to commit the changes of this tables insert by adding a COMMIT statement.
+	if w.autocommitOff {
+		var b strings.Builder
+		b.WriteString("COMMIT;")
+		b.WriteRune('\n')
+		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+			return err
+		}
+		w.writtenFirstRow = true
 	}
 
 	if w.wr != nil {

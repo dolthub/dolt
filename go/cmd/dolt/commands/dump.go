@@ -39,11 +39,11 @@ import (
 )
 
 const (
-	forceParam    = "force"
-	directoryFlag = "directory"
-	filenameFlag  = "file-name"
-	batchFlag     = "batch"
-	bulkFlag      = "bulk"
+	forceParam       = "force"
+	directoryFlag    = "directory"
+	filenameFlag     = "file-name"
+	batchFlag        = "batch"
+	noAutocommitFlag = "no-autocommit"
 
 	sqlFileExt     = "sql"
 	csvFileExt     = "csv"
@@ -63,7 +63,7 @@ csv,json or parquet file.
 `,
 
 	Synopsis: []string{
-		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--bulk] ",
+		"[-f] [-r {{.LessThan}}result-format{{.GreaterThan}}] [-fn {{.LessThan}}file_name{{.GreaterThan}}]  [-d {{.LessThan}}directory{{.GreaterThan}}] [--batch] [--no-autocommit] ",
 	},
 }
 
@@ -92,7 +92,7 @@ func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(directoryFlag, "d", "directory_name", "Define directory name to dump the files in. Defaults to `doltdump/`.")
 	ap.SupportsFlag(forceParam, "f", "If data already exists in the destination, the force flag will allow the target to be overwritten.")
 	ap.SupportsFlag(batchFlag, "", "Returns batch insert statements wherever possible.")
-	ap.SupportsFlag(bulkFlag, "", "Support bulk loading paradigms for the dump file. Includes statements to turn off autocommit and foreign_key_checks. Only used for .sql files")
+	ap.SupportsFlag(noAutocommitFlag, "na", "Turns off autocommit for each dumped table. Used to speed up loading of outputted sql file")
 	return ap
 }
 
@@ -128,7 +128,6 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	force := apr.Contains(forceParam)
 	resFormat, _ := apr.GetValue(FormatFlag)
 	resFormat = strings.TrimPrefix(resFormat, ".")
-	bulk := apr.Contains(bulkFlag)
 
 	name, vErr := validateArgs(apr)
 	if vErr != nil {
@@ -167,15 +166,13 @@ func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, d
 			return HandleVErrAndExitCode(err, usage)
 		}
 
-		if bulk {
-			err2 := supportBulkLoadingParadigms(dEnv, fPath)
-			if err2 != nil {
-				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
-			}
+		err2 := addBulkLoadingParadigms(dEnv, fPath)
+		if err2 != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err2), usage)
 		}
 
 		for _, tbl := range tblNames {
-			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag))
+			tblOpts := newTableArgs(tbl, dumpOpts.dest, apr.Contains(batchFlag), apr.Contains(noAutocommitFlag))
 			err = dumpTable(ctx, dEnv, tblOpts, fPath)
 			if err != nil {
 				return HandleVErrAndExitCode(err, usage)
@@ -211,13 +208,18 @@ type dumpOptions struct {
 }
 
 type tableOptions struct {
-	tableName string
-	dest      mvdata.DataLocation
-	batched   bool
+	tableName     string
+	dest          mvdata.DataLocation
+	batched       bool
+	autocommitOff bool
 }
 
 func (m tableOptions) IsBatched() bool {
 	return m.batched
+}
+
+func (m tableOptions) IsAutocommitOff() bool {
+	return m.autocommitOff
 }
 
 func (m tableOptions) WritesToTable() bool {
@@ -398,11 +400,12 @@ func getDumpOptions(fileName string, rf string) *dumpOptions {
 
 // newTableArgs returns tableOptions of table name and src table location and dest file location
 // corresponding to the input parameters
-func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool) *tableOptions {
+func newTableArgs(tblName string, destination mvdata.DataLocation, batched bool, autocommitOff bool) *tableOptions {
 	return &tableOptions{
-		tableName: tblName,
-		dest:      destination,
-		batched:   batched,
+		tableName:     tblName,
+		dest:          destination,
+		batched:       batched,
+		autocommitOff: autocommitOff,
 	}
 }
 
@@ -427,7 +430,7 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 			return err
 		}
 
-		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched)
+		tblOpts := newTableArgs(tbl, dumpOpts.dest, batched, false)
 
 		err = dumpTable(ctx, dEnv, tblOpts, fPath)
 		if err != nil {
@@ -437,28 +440,25 @@ func dumpTables(ctx context.Context, root *doltdb.RootValue, dEnv *env.DoltEnv, 
 	return nil
 }
 
-// supportBulkLoadingParadigms adds statements that are used to expedite dump file ingestion.
+// addBulkLoadingParadigms adds statements that are used to expedite dump file ingestion.
 // cc. https://dev.mysql.com/doc/refman/8.0/en/optimizing-innodb-bulk-data-loading.html
-func supportBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
+// This includes turning off FOREIGN_KEY_CHECKS and UNIQUE_CHECKS off at the beginning of the file.
+// Note that the standard mysqldump program turns these variables off.
+func addBulkLoadingParadigms(dEnv *env.DoltEnv, fPath string) error {
 	writer, err := dEnv.FS.OpenForWriteAppend(fPath, os.ModePerm)
 	if err != nil {
 		return err
 	}
 
-	_, err = writer.Write([]byte("SET AUTOCOMMIT = 0;\n"))
+	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS=0;\n"))
 	if err != nil {
 		return err
 	}
 
-	_, err = writer.Write([]byte("SET FOREIGN_KEY_CHECKS = 0;\n"))
+	_, err = writer.Write([]byte("SET UNIQUE_CHECKS=0;\n"))
 	if err != nil {
 		return err
 	}
 
-	_, err = writer.Write([]byte("SET UNIQUE_CHECKS = 0;\n"))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return writer.Close()
 }

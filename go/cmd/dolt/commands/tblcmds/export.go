@@ -69,6 +69,10 @@ func (m exportOptions) IsBatched() bool {
 	return false
 }
 
+func (m exportOptions) IsAutocommitOff() bool {
+	return false
+}
+
 func (m exportOptions) WritesToTable() bool {
 	return false
 }
