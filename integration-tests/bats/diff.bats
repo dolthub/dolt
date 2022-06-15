@@ -29,22 +29,27 @@ teardown() {
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
     dolt commit -m row
+
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+
     run dolt diff head
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+
     dolt diff head^
     run dolt diff head^
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+
     run dolt diff head^ head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+
     run dolt diff head head^
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-  | 0" ]] || false
+    [[ "$output" =~ "- | 0" ]] || false
 }
 
 @test "diff: dirty working set" {
@@ -53,17 +58,17 @@ teardown() {
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     run dolt diff head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     dolt add .
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt diff head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
 }
 
 @test "diff: data diff only" {
@@ -75,8 +80,8 @@ teardown() {
     run dolt diff
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "CREATE TABLE" ]]
-    [[ "$output" =~ "|     | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
-    [[ "$output" =~ "|  +  | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
+    [[ "$output" =~ "|   | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
+    [[ "$output" =~ "| + | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
 }
 
 @test "diff: schema diff only" {
@@ -91,8 +96,8 @@ teardown() {
 
     # TODO: column ordering on the first line should respect original
     # schema order, seems to be putting non-common columns at end
-    [[ "$output" =~ "|  <  | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
-    [[ "$output" =~ "|  >  | pk | c2 | c3 | c4 | c5 |    |" ]] || false
+    [[ "$output" =~ "| < | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
+    [[ "$output" =~ "| > | pk | c2 | c3 | c4 | c5 |    |" ]] || false
 }
 
 @test "diff: with table args" {
@@ -103,26 +108,26 @@ teardown() {
     dolt sql -q 'insert into other values (9)'
     run dolt diff test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ ! "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ ! "$output" =~ "+ | 9" ]] || false
     run dolt diff other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
     run dolt diff test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
     dolt add .
     run dolt diff head test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
     dolt commit -m rows
     run dolt diff head^ head test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
     run dolt diff head^ head fake
     [ "$status" -ne 0 ]
     [[ "$output" =~ "table fake does not exist in either diff root" ]] || false
@@ -140,26 +145,26 @@ teardown() {
     # branch/commit args get preference over tables
     run dolt diff dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     run dolt diff dolomite test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ ! "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ ! "$output" =~ "+ | 9" ]] || false
     run dolt diff dolomite head dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
     run dolt diff head^ head dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
     dolt branch -D dolomite
     dolt sql -q 'insert into dolomite values (8)'
     run dolt diff dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 8" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 8" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
 }
 
 @test "diff: with index and foreign key changes" {
@@ -185,14 +190,14 @@ SQL
     run dolt diff test
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`c1`)' ]] || false
-    [[ "$output" =~ '+  KEY `c2` (`c2`),' ]] || false
-    [[ "$output" =~ '+  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
+    [[ "$output" =~ '+ KEY `c2` (`c2`),' ]] || false
+    [[ "$output" =~ '+ CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
 
     dolt diff parent
     run dolt diff parent
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  KEY `c1` (`c1`)' ]] || false
-    [[ "$output" =~ '+  KEY `c2` (`c2`)' ]] || false
+    [[ "$output" =~ '+ KEY `c2` (`c2`)' ]] || false
 }
 
 @test "diff: summary comparing working table to last commit" {
@@ -643,12 +648,12 @@ SQL
   run dolt diff HEAD~3 HEAD~1
   [[ $output =~ 'added table' ]] || false
   [[ $output =~ '+CREATE TABLE `a` (' ]] || false
-  [[ $output =~ "+  | 1 " ]] || false
+  [[ $output =~ "+ | 1 " ]] || false
 
   run dolt diff HEAD~1 HEAD
   [[ $output =~ 'deleted table' ]] || false
   [[ $output =~ '-CREATE TABLE `a` (' ]] || false
-  [[ $output =~ "-  | 1 " ]] || false
+  [[ $output =~ "- | 1 " ]] || false
 }
 
 @test "diff: large diff does not drop rows" {

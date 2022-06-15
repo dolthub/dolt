@@ -2,7 +2,6 @@
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
-    skip_nbf_dolt_1
     setup_common
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{rem1,repo1}
@@ -41,7 +40,7 @@ teardown() {
     cd repo2
     dolt sql -q "select dolt_fetch()"
 
-    run dolt diff main origin/main
+    dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
