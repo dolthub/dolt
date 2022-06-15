@@ -30,10 +30,12 @@ import (
 	flatbuffers "github.com/google/flatbuffers/go"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/d"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/nomdl"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -125,15 +127,15 @@ func newCommit(ctx context.Context, value types.Value, parentsList types.List, p
 	}
 }
 
-func NewCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+func NewCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Parents == nil || len(opts.Parents) == 0 {
 		return nil, errors.New("cannot create commit without parents")
 	}
 
-	return newCommitForValue(ctx, vrw, v, opts)
+	return newCommitForValue(ctx, cs, vrw, v, opts)
 }
 
-func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([]byte, uint64) {
+func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64, parentsClosureAddr hash.Hash) ([]byte, uint64) {
 	builder := flatbuffers.NewBuilder(1024)
 	vaddroff := builder.CreateByteVector(vaddr[:])
 
@@ -156,6 +158,8 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 		}
 	}
 
+	pcaddroff := builder.CreateByteVector(parentsClosureAddr[:])
+
 	nameoff := builder.CreateString(opts.Meta.Name)
 	emailoff := builder.CreateString(opts.Meta.Email)
 	descoff := builder.CreateString(opts.Meta.Description)
@@ -163,6 +167,7 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	serial.CommitAddRoot(builder, vaddroff)
 	serial.CommitAddHeight(builder, maxheight+1)
 	serial.CommitAddParentAddrs(builder, parentaddrsoff)
+	serial.CommitAddParentClosure(builder, pcaddroff)
 	serial.CommitAddName(builder, nameoff)
 	serial.CommitAddEmail(builder, emailoff)
 	serial.CommitAddDescription(builder, descoff)
@@ -172,7 +177,13 @@ func commit_flatbuffer(vaddr hash.Hash, opts CommitOptions, heights []uint64) ([
 	return builder.FinishedBytes(), maxheight + 1
 }
 
-func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
+var commitKeyTupleDesc = val.NewTupleDescriptor(
+	val.Type{Enc: val.Uint64Enc, Nullable: false},
+	val.Type{Enc: val.AddressEnc, Nullable: false},
+)
+var commitValueTupleDesc = val.NewTupleDescriptor()
+
+func newCommitForValue(ctx context.Context, cs chunks.ChunkStore, vrw types.ValueReadWriter, v types.Value, opts CommitOptions) (*Commit, error) {
 	if opts.Meta == nil {
 		opts.Meta = &CommitMeta{}
 	}
@@ -182,15 +193,21 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		if err != nil {
 			return nil, err
 		}
+		parents := make([]*serial.Commit, len(opts.Parents))
 		heights := make([]uint64, len(opts.Parents))
-		parents, err := vrw.ReadManyValues(ctx, opts.Parents)
+		parentValues, err := vrw.ReadManyValues(ctx, opts.Parents)
 		if err != nil {
 			return nil, err
 		}
 		for i := range heights {
-			heights[i] = serial.GetRootAsCommit([]byte(parents[i].(types.SerialMessage)), 0).Height()
+			parents[i] = serial.GetRootAsCommit([]byte(parentValues[i].(types.SerialMessage)), 0)
+			heights[i] = parents[i].Height()
 		}
-		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights)
+		parentClosureAddr, err := writeFbCommitParentClosure(ctx, cs, vrw, parents, opts.Parents)
+		if err != nil {
+			return nil, err
+		}
+		bs, height := commit_flatbuffer(r.TargetHash(), opts, heights, parentClosureAddr)
 		v := types.SerialMessage(bs)
 		addr, err := v.Hash(vrw.Format())
 		if err != nil {
@@ -224,7 +241,7 @@ func newCommitForValue(ctx context.Context, vrw types.ValueReadWriter, v types.V
 		return nil, err
 	}
 
-	parentsClosure, includeParentsClosure, err := getParentsClosure(ctx, vrw, parentsList)
+	parentsClosure, includeParentsClosure, err := writeTypesCommitParentClosure(ctx, vrw, parentsList)
 	if err != nil {
 		return nil, err
 	}
@@ -638,138 +655,11 @@ func getRefElementType(t *types.Type) *types.Type {
 	return t.Desc.(types.CompoundDesc).ElemTypes[0]
 }
 
-type parentsClosureIterator struct {
-	mi   types.MapIterator
-	err  error
-	curr types.Tuple
-}
-
-func (i *parentsClosureIterator) Err() error {
-	return i.err
-}
-
-func (i *parentsClosureIterator) Hash() hash.Hash {
-	if i.err != nil {
-		return hash.Hash{}
-	}
-	var h hash.Hash
-	field, err := i.curr.Get(1)
-	if err != nil {
-		i.err = err
-		return hash.Hash{}
-	}
-	ib, ok := field.(types.InlineBlob)
-	if !ok {
-		i.err = fmt.Errorf("second field of tuple key parents closure should have been InlineBlob")
-		return hash.Hash{}
-	}
-	copy(h[:], []byte(ib))
-	return h
-}
-
-func (i *parentsClosureIterator) Less(f *types.NomsBinFormat, other *parentsClosureIterator) bool {
-	if i.err != nil || other.err != nil {
-		return false
-	}
-	ret, err := i.curr.Less(f, other.curr)
-	if err != nil {
-		i.err = err
-		other.err = err
-		return false
-	}
-	return ret
-}
-
-func (i *parentsClosureIterator) Next(ctx context.Context) bool {
-	if i.err != nil {
-		return false
-	}
-	n, _, err := i.mi.Next(ctx)
-	if err != nil {
-		i.err = err
-		return false
-	}
-	if n == nil || types.IsNull(n) {
-		return false
-	}
-	t, ok := n.(types.Tuple)
-	if !ok {
-		i.err = fmt.Errorf("key value of parents closure map should have been Tuple")
-		return false
-	}
-	i.curr = t
-	return true
-}
-
-func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error) {
-	h := c.Addr()
-	ib := make([]byte, len(hash.Hash{}))
-	copy(ib, h[:])
-	return types.NewTuple(f, types.Uint(c.Height()), types.InlineBlob(ib))
-}
-
 func firstError(l, r error) error {
 	if l != nil {
 		return l
 	}
 	return r
-}
-
-func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueReader) (*parentsClosureIterator, error) {
-	sv := c.NomsValue()
-
-	if _, ok := sv.(types.SerialMessage); ok {
-		// TODO: __DOLT_DEV__ should support parent closures.
-		return nil, nil
-	}
-
-	s, ok := sv.(types.Struct)
-	if !ok {
-		return nil, fmt.Errorf("target ref is not struct: %v", sv)
-	}
-	if s.Name() != commitName {
-		return nil, fmt.Errorf("target ref is not commit: %v", sv)
-	}
-
-	fv, ok, err := s.MaybeGet(parentsClosureField)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, nil
-	}
-
-	mr, ok := fv.(types.Ref)
-	if !ok {
-		return nil, fmt.Errorf("value of parents_closure field is not Ref: %v", fv)
-	}
-
-	mv, err := mr.TargetValue(ctx, vr)
-	if err != nil {
-		return nil, err
-	}
-
-	m, ok := mv.(types.Map)
-	if !ok {
-		return nil, fmt.Errorf("target value of parents_closure Ref is not Map: %v", mv)
-	}
-
-	maxKeyTuple, err := types.NewTuple(vr.Format(), types.Uint(18446744073709551615))
-	if err != nil {
-		return nil, err
-	}
-
-	mi, err := m.IteratorBackFrom(ctx, maxKeyTuple)
-	if err != nil {
-		return nil, err
-	}
-
-	initialCurr, err := commitToMapKeyTuple(vr.Format(), c)
-	if err != nil {
-		return nil, err
-	}
-
-	return &parentsClosureIterator{mi, nil, initialCurr}, nil
 }
 
 func IsCommitType(nbf *types.NomsBinFormat, t *types.Type) bool {

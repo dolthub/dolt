@@ -80,7 +80,7 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	// t.Skip()
+	t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
@@ -315,17 +315,8 @@ func TestTruncate(t *testing.T) {
 func TestScripts(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	enginetest.TestScripts(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
 
@@ -963,17 +954,8 @@ func TestDeleteQueriesPrepared(t *testing.T) {
 func TestScriptsPrepared(t *testing.T) {
 	var skipped []string
 	if types.IsFormat_DOLT_1(types.Format_Default) {
-		skipped = append(skipped,
-			// Different error output for primary key error
-			"failed statements data validation for INSERT, UPDATE",
-			// wrong results
-			"Indexed Join On Keyless Table",
-			// Different query plans
-			"Partial indexes are used and return the expected result",
-			"Multiple indexes on the same columns in a different order",
-		)
+		skipped = append(skipped, newFormatSkippedScripts...)
 	}
-
 	skipPreparedTests(t)
 	enginetest.TestScriptsPrepared(t, newDoltHarness(t).WithSkippedQueries(skipped))
 }
@@ -1208,6 +1190,12 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		assert.False(t, newIdx.Empty())
 		assert.Equal(t, newIdx.Count(), uint64(2))
 	})
+}
+
+var newFormatSkippedScripts = []string{
+	// Different query plans
+	"Partial indexes are used and return the expected result",
+	"Multiple indexes on the same columns in a different order",
 }
 
 func skipNewFormat(t *testing.T) {
