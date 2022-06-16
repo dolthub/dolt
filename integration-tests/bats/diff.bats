@@ -79,7 +79,7 @@ teardown() {
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "CREATE TABLE" ]]
+    [[ ! "$output" =~ "CREATE TABLE" ]] || false
     [[ "$output" =~ "|   | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
     [[ "$output" =~ "| + | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
 }
@@ -87,18 +87,38 @@ teardown() {
 @test "diff: schema diff only" {
     dolt commit -am "First commit"
 
-    dolt sql -q "alter table test drop column c1"
+    dolt sql -q <<SQL
+alter table test 
+drop column c3, 
+add column c6 varchar(10) after c2, 
+modify column c4 tinyint comment 'new comment'
+SQL
 
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE" ]]
+    
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` bigint NOT NULL COMMENT 'tag:0',
+   `c1` bigint COMMENT 'tag:1',
+   `c2` bigint COMMENT 'tag:2',
+-  `c3` bigint COMMENT 'tag:3',
+-  `c4` bigint COMMENT 'tag:4',
++  `c6` varchar(10),
++  `c4` tinyint COMMENT 'new comment',
+   `c5` bigint COMMENT 'tag:5',
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
 
-    # TODO: column ordering on the first line should respect original
-    # schema order, seems to be putting non-common columns at end
-    [[ "$output" =~ "| < | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
-    [[ "$output" =~ "| > | pk | c2 | c3 | c4 | c5 |    |" ]] || false
-}
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # We want to make sure there is no trailing table output, so count the lines of output
+    # 3 lines of metadata plus 11 of schema diff
+    [ "${#lines[@]}" -eq 14 ]
+ }
 
 @test "diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
