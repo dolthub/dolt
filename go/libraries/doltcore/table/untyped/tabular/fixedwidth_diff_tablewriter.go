@@ -73,8 +73,6 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 }
 
 func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
-	// TODO: remove me (just for goland debugging)
-	color.NoColor = false
 	colors := make([]*color.Color, len(colDiffTypes))
 	for i := range colDiffTypes {
 		if colDiffTypes[i] != diff.None {
