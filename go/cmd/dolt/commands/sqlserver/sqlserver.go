@@ -207,7 +207,7 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
-// GetServerConfig returns  that is set either from yaml file if given, if not it is set with values defined
+// GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
 // on command line. Server config variables not defined are set to default values.
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
