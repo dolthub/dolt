@@ -54,10 +54,9 @@ func (cmd RmCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_TABLE_RM
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RmCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RmCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
+	return cli.NewCommandDocumentation(tblRmDocs, ap)
 }
 
 func (cmd RmCmd) ArgParser() *argparser.ArgParser {
@@ -69,7 +68,7 @@ func (cmd RmCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd RmCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblRmDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblRmDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {

@@ -16,7 +16,6 @@ package cnfcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -61,10 +60,9 @@ func (cmd CatCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CatCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CatCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, catDocs, ap))
+	return cli.NewCommandDocumentation(catDocs, ap)
 }
 
 // EventType returns the type of the event to log
@@ -82,7 +80,7 @@ func (cmd CatCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CatCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, catDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, catDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 	args = apr.Args
 

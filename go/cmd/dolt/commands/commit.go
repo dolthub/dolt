@@ -41,14 +41,13 @@ import (
 var commitDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Record changes to the repository",
 	LongDesc: `
-	Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
-	
-	The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables before using the commit command (Note: even modified files must be \"added\").
-	
-	The log message can be added with the parameter {{.EmphasisLeft}}-m <msg>{{.EmphasisRight}}.  If the {{.LessThan}}-m{{.GreaterThan}} parameter is not provided an editor will be opened where you can review the commit and provide a log message.
-	
-	The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats {{.LessThan}}YYYY-MM-DD{{.GreaterThan}}, {{.LessThan}}YYYY-MM-DDTHH:MM:SS{{.GreaterThan}}, or {{.LessThan}}YYYY-MM-DDTHH:MM:SSZ07:00{{.GreaterThan}} (where {{.LessThan}}07:00{{.GreaterThan}} is the time zone offset)."
-	`,
+Stores the current contents of the staged tables in a new commit along with a log message from the user describing the changes.
+
+The content to be added can be specified by using dolt add to incrementally \"add\" changes to the staged tables before using the commit command (Note: even modified files must be \"added\").
+
+The log message can be added with the parameter {{.EmphasisLeft}}-m <msg>{{.EmphasisRight}}.  If the {{.LessThan}}-m{{.GreaterThan}} parameter is not provided an editor will be opened where you can review the commit and provide a log message.
+
+The commit timestamp can be modified using the --date parameter.  Dates can be specified in the formats {{.LessThan}}YYYY-MM-DD{{.GreaterThan}}, {{.LessThan}}YYYY-MM-DDTHH:MM:SS{{.GreaterThan}}, or {{.LessThan}}YYYY-MM-DDTHH:MM:SSZ07:00{{.GreaterThan}} (where {{.LessThan}}07:00{{.GreaterThan}} is the time zone offset)."`,
 	Synopsis: []string{
 		"[options]",
 	},
@@ -66,10 +65,9 @@ func (cmd CommitCmd) Description() string {
 	return "Record changes to the repository."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CommitCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CommitCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateCommitArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	return cli.NewCommandDocumentation(commitDocs, ap)
 }
 
 func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
@@ -79,7 +77,7 @@ func (cmd CommitCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd CommitCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateCommitArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, commitDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, commitDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	allFlag := apr.Contains(cli.AllFlag)

@@ -15,8 +15,8 @@
 package dtables
 
 import (
-	"bytes"
 	"context"
+	"fmt"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -40,7 +40,7 @@ func newProllyConflictsTable(ctx *sql.Context, tbl *doltdb.Table, tblName string
 	}
 	m := durable.ProllyMapFromArtifactIndex(arts)
 
-	baseSch, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx)
+	baseSch, ourSch, theirSch, err := tbl.GetConflictSchemas(ctx, tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -104,18 +104,19 @@ func (ct ProllyConflictsTable) Deleter(ctx *sql.Context) sql.RowDeleter {
 
 type prollyConflictRowIter struct {
 	itr     prolly.ConflictArtifactIter
+	tblName string
 	vrw     types.ValueReadWriter
 	ourRows prolly.Map
-
-	baseHash, theirHash []byte
-	baseRows            prolly.Map
-	theirRows           prolly.Map
 
 	kd                       val.TupleDesc
 	baseVD, oursVD, theirsVD val.TupleDesc
 	// offsets for each version
 	b, o, t int
 	n       int
+
+	baseHash, theirHash hash.Hash
+	baseRows            prolly.Map
+	theirRows           prolly.Map
 }
 
 var _ sql.RowIter = &prollyConflictRowIter{}
@@ -144,6 +145,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 
 	return &prollyConflictRowIter{
 		itr:      itr,
+		tblName:  ct.tblName,
 		vrw:      ct.tbl.ValueReadWriter(),
 		ourRows:  ourRows,
 		kd:       kd,
@@ -171,31 +173,45 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if err != nil {
 			return nil, err
 		}
-		r[itr.b+i], r[itr.o+i], r[itr.t+i] = f, f, f
+		if c.bV != nil {
+			r[itr.b+i] = f
+		}
+		if c.oV != nil {
+			r[itr.o+i] = f
+		}
+		if c.tV != nil {
+			r[itr.t+i] = f
+		}
 	}
 
-	for i := 0; i < itr.baseVD.Count(); i++ {
-		f, err := index.GetField(itr.baseVD, i, c.bV)
-		if err != nil {
-			return nil, err
+	if c.bV != nil {
+		for i := 0; i < itr.baseVD.Count(); i++ {
+			f, err := index.GetField(itr.baseVD, i, c.bV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.b+itr.kd.Count()+i] = f
 		}
-		r[itr.b+itr.kd.Count()+i] = f
 	}
 
-	for i := 0; i < itr.oursVD.Count(); i++ {
-		f, err := index.GetField(itr.oursVD, i, c.oV)
-		if err != nil {
-			return nil, err
+	if c.oV != nil {
+		for i := 0; i < itr.oursVD.Count(); i++ {
+			f, err := index.GetField(itr.oursVD, i, c.oV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.o+itr.kd.Count()+i] = f
 		}
-		r[itr.o+itr.kd.Count()+i] = f
 	}
 
-	for i := 0; i < itr.theirsVD.Count(); i++ {
-		f, err := index.GetField(itr.theirsVD, i, c.tV)
-		if err != nil {
-			return nil, err
+	if c.tV != nil {
+		for i := 0; i < itr.theirsVD.Count(); i++ {
+			f, err := index.GetField(itr.theirsVD, i, c.tV)
+			if err != nil {
+				return nil, err
+			}
+			r[itr.t+itr.kd.Count()+i] = f
 		}
-		r[itr.t+itr.kd.Count()+i] = f
 	}
 
 	return r, nil
@@ -212,9 +228,9 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, er
 		return conf{}, err
 	}
 	c.k = ca.Key
-	c.h = hash.New(ca.HeadCmHash)
+	c.h = ca.TheirRootIsh
 
-	err = itr.loadTableMaps(ctx, ca.Metadata)
+	err = itr.loadTableMaps(ctx, ca.Metadata.BaseRootIsh, ca.TheirRootIsh)
 	if err != nil {
 		return conf{}, err
 	}
@@ -245,32 +261,48 @@ func (itr *prollyConflictRowIter) nextConflictVals(ctx *sql.Context) (c conf, er
 }
 
 // loadTableMaps loads the maps specified in the metadata if they are different from
-// the currently loaded maps.
-func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, meta prolly.ConflictMetadata) error {
-	if bytes.Compare(itr.baseHash, meta.BaseTblHash) != 0 {
-		baseTbl, err := durable.TableFromAddr(ctx, itr.vrw, hash.New(meta.BaseTblHash))
+// the currently loaded maps. |baseHash| and |theirHash| are table hashes.
+func (itr *prollyConflictRowIter) loadTableMaps(ctx context.Context, baseHash, theirHash hash.Hash) error {
+	if itr.baseHash.Compare(baseHash) != 0 {
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, baseHash)
 		if err != nil {
 			return err
 		}
-		idx, err := baseTbl.GetTableRows(ctx)
+		baseTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("failed to find table %s in base root value", itr.tblName)
+		}
+
+		idx, err := baseTbl.GetRowData(ctx)
 		if err != nil {
 			return err
 		}
 		itr.baseRows = durable.ProllyMapFromIndex(idx)
-		itr.baseHash = meta.BaseTblHash
+		itr.baseHash = baseHash
 	}
 
-	if bytes.Compare(itr.theirHash, meta.TheirTblHash) != 0 {
-		theirTbl, err := durable.TableFromAddr(ctx, itr.vrw, hash.New(meta.TheirTblHash))
+	if itr.theirHash.Compare(theirHash) != 0 {
+		rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, itr.vrw, theirHash)
 		if err != nil {
 			return err
 		}
-		idx, err := theirTbl.GetTableRows(ctx)
+		theirTbl, ok, err := rv.GetTable(ctx, itr.tblName)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("failed to find table %s in right root value", itr.tblName)
+		}
+
+		idx, err := theirTbl.GetRowData(ctx)
 		if err != nil {
 			return err
 		}
 		itr.theirRows = durable.ProllyMapFromIndex(idx)
-		itr.theirHash = meta.TheirTblHash
+		itr.theirHash = theirHash
 	}
 
 	return nil
@@ -305,9 +337,23 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 }
 
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
+
+	// get keys from either base, ours, or theirs
+	o := func() int {
+		if o := 1; r[o] != nil {
+			return o
+		} else if o = 1 + cd.kd.Count(); r[o] != nil {
+			return o
+		} else if o = 1 + cd.kd.Count()*2; r[o] != nil {
+			return o
+		} else {
+			panic("neither base, ours, or theirs had a key")
+		}
+	}()
+
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := index.PutField(cd.kB, i, r[i+1])
+		err := index.PutField(cd.kB, i, r[o+i])
 		if err != nil {
 			return err
 		}
@@ -315,7 +361,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 
 	// then the hash follows. It is the first column of the row and the second to last in the key
 	h := hash.Parse(r[0].(string))
-	cd.kB.PutAddress(cd.kd.Count()-2, h[:])
+	cd.kB.PutAddress(cd.kd.Count()-2, h)
 
 	// Finally the artifact type which is always a conflict
 	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
@@ -369,8 +415,8 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, error) {
 	cols := make([]schema.Column, 1+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
 
-	// the commit hash of the left branch's head when the conflict was created
-	cols[0] = schema.NewColumn("created_at_cm", 0, types.StringKind, false)
+	// the commit hash or working set hash of the right side during merge
+	cols[0] = schema.NewColumn("from_root_ish", 0, types.StringKind, false)
 
 	i := 1
 	putWithPrefix := func(prefix string, sch schema.Schema) error {

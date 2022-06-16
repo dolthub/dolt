@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,9 +79,9 @@ func (cmd DumpCmd) Description() string {
 }
 
 // CreateMarkdown creates a markdown file containing the help text for the command at the given path
-func (cmd DumpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd DumpCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
+	return cli.NewCommandDocumentation(dumpDocs, ap)
 }
 
 func (cmd DumpCmd) ArgParser() *argparser.ArgParser {
@@ -104,7 +103,7 @@ func (cmd DumpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd DumpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, dumpDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, dumpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 0 {

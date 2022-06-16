@@ -16,7 +16,6 @@ package schcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/fatih/color"
 
@@ -56,10 +55,9 @@ func (cmd ShowCmd) Description() string {
 	return "Shows the schema of one or more tables."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ShowCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ShowCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	return cli.NewCommandDocumentation(tblSchemaDocs, ap)
 }
 
 func (cmd ShowCmd) ArgParser() *argparser.ArgParser {
@@ -77,7 +75,7 @@ func (cmd ShowCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd ShowCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblSchemaDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblSchemaDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := printSchemas(ctx, apr, dEnv)

@@ -112,6 +112,9 @@ teardown() {
     run dolt table import -c --pk=pk test people.csv
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Import completed successfully." ]] || false
+    # Sanity Check
+    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
+
     run dolt sql -q "select * from test"
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 8 ]
@@ -664,7 +667,7 @@ DELIM
     [ "${lines[1]}" = "0,1,2" ]
 }
 
-@test "import-create-tables: csv files has less columns filled with default value" {
+@test "import-create-tables: csv files has fewer columns filled with default value" {
     cat <<SQL > schema.sql
 CREATE TABLE subset (
     pk INT NOT NULL,
@@ -680,6 +683,7 @@ DELIM
 
     run dolt table import -s schema.sql -c subset data.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
 
     # schema argument subsets the data and adds empty column
     run dolt sql -r csv -q "select * from subset ORDER BY pk"

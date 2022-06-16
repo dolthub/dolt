@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 	"time"
@@ -92,10 +91,9 @@ func (cmd BlameCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd BlameCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd BlameCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, blameDocs, ap))
+	return cli.NewCommandDocumentation(blameDocs, ap)
 }
 
 func (cmd BlameCmd) ArgParser() *argparser.ArgParser {
@@ -126,7 +124,7 @@ func (cmd BlameCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd BlameCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, blameDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, blameDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 || apr.NArg() > 2 {
