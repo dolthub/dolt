@@ -61,12 +61,18 @@ func RowIterForIndexLookup(ctx *sql.Context, t *doltdb.Table, ilu sql.IndexLooku
 	}
 }
 
-func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, ranges prolly.Range, pkSch sql.PrimaryKeySchema, columns []string, primary, secondary durable.Index) (sql.RowIter2, error) {
+func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSch sql.PrimaryKeySchema, columns []string, primary, secondary durable.Index) (sql.RowIter2, error) {
+	if sql.IsKeyless(pkSch.Schema) {
+		// in order to resolve row cardinality, keyless indexes must always perform
+		// an indirect lookup through the clustered index.
+		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, primary, secondary)
+	}
+
 	covers := indexCoversCols(idx, columns)
 	if covers {
-		return newProllyCoveringIndexIter(ctx, idx, ranges, pkSch, secondary)
+		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, secondary)
 	} else {
-		return newProllyIndexIter(ctx, idx, ranges, pkSch, primary, secondary)
+		return newProllyIndexIter(ctx, idx, r, pkSch, primary, secondary)
 	}
 }
 

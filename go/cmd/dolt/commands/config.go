@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -72,10 +71,9 @@ func (cmd ConfigCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ConfigCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ConfigCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
+	return cli.NewCommandDocumentation(cfgDocs, ap)
 }
 
 func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
@@ -93,7 +91,7 @@ func (cmd ConfigCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ConfigCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cfgDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cfgDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	cfgTypes := apr.FlagsEqualTo([]string{globalParamName, localParamName}, true)

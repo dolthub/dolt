@@ -64,8 +64,8 @@ func (s *nomsDsTestSuite) TestNomsDs() {
 	golden1 := "oetp3jigkp5pid2f5c4mknpo17mso31b"
 	golden2 := "tsbj1qq88llk3k8qqqb5n3188sbpiu7r"
 	if types.Format_Default == types.Format_DOLT_DEV {
-		golden1 = "v5hvf758gu5gkbe987gcju2de2sunkul"
-		golden2 = "c5j2ve21fdtr8vmqu548lc7546tmv6sl"
+		golden1 = "mr1ksgmbdqfpa5s4kbv6rqs25c8pklqs"
+		golden2 = "339b2ojpn2a14jpf0t7cq9f6v0tnt2a0"
 	}
 
 	s.NoError(err)

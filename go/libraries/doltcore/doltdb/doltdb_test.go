@@ -305,6 +305,17 @@ func TestLDNoms(t *testing.T) {
 			t.Error("Failed to commit")
 		}
 
+		rootHash, err := ddb.NomsRoot(context.Background())
+		if err != nil {
+			t.Error("Failed to get root hash")
+		}
+		branches, err := ddb.GetBranchesByRootHash(context.Background(), rootHash)
+		if err != nil {
+			t.Error("Failed to get branches by root hash")
+		}
+		assert.Equal(t, len(branches), 1)
+		assert.Equal(t, branches[0].Ref.GetPath(), "master")
+
 		numParents, err := commit.NumParents()
 		assert.NoError(t, err)
 

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -51,10 +50,9 @@ func (cmd AddCmd) Description() string {
 	return "Add table changes to the list of staged table changes."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd AddCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
+func (cmd AddCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateAddArgParser()
-	return CreateMarkdown(writer, cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	return cli.NewCommandDocumentation(addDocs, ap)
 }
 
 func (cmd AddCmd) ArgParser() *argparser.ArgParser {
@@ -64,7 +62,7 @@ func (cmd AddCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd AddCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateAddArgParser()
-	helpPr, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, addDocs, ap))
+	helpPr, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, addDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, helpPr)
 
 	if apr.ContainsArg(doltdb.DocTableName) {

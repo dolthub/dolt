@@ -397,20 +397,10 @@ func (ddb *DoltDB) writeRootValue(ctx context.Context, rv *RootValue) (*RootValu
 // be read, or if the hash given doesn't represent a dolt RootValue.
 func (ddb *DoltDB) ReadRootValue(ctx context.Context, h hash.Hash) (*RootValue, error) {
 	val, err := ddb.vrw.ReadValue(ctx, h)
-
 	if err != nil {
 		return nil, err
 	}
-	if val == nil {
-		return nil, ErrNoRootValAtHash
-	}
-
-	rootSt, ok := val.(types.Struct)
-	if !ok || rootSt.Name() != ddbRootStructName {
-		return nil, ErrNoRootValAtHash
-	}
-
-	return newRootValue(ddb.vrw, rootSt)
+	return decodeRootNomsValue(ddb.vrw, val)
 }
 
 // Commit will update a branch's head value to be that of a previously committed root value hash
@@ -575,7 +565,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	dcommit, err := datas.NewCommitForValue(ctx, ddb.vrw, val, commitOpts)
+	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, val, commitOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -1201,4 +1191,36 @@ func (ddb *DoltDB) ExecuteCommitHooks(ctx context.Context, datasetId string) err
 	}
 	ddb.db.ExecuteCommitHooks(ctx, ds)
 	return nil
+}
+
+func (ddb *DoltDB) GetBranchesByRootHash(ctx context.Context, rootHash hash.Hash) ([]BranchWithHash, error) {
+	dss, err := ddb.db.GetDatasetsByRootHash(ctx, rootHash)
+	if err != nil {
+		return nil, err
+	}
+
+	var refs []BranchWithHash
+
+	err = dss.IterAll(ctx, func(key string, addr hash.Hash) error {
+		keyStr := key
+
+		var dref ref.DoltRef
+		if ref.IsRef(keyStr) {
+			dref, err = ref.Parse(keyStr)
+			if err != nil {
+				return err
+			}
+
+			if _, ok := branchRefFilter[dref.GetType()]; ok {
+				refs = append(refs, BranchWithHash{dref, addr})
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return refs, nil
 }

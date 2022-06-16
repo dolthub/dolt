@@ -24,6 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/shopspring/decimal"
 )
@@ -562,9 +563,10 @@ func readAddress(val []byte) []byte {
 	expectSize(val, addressSize)
 	return val
 }
-func writeAddress(buf, val []byte) {
+
+func writeAddress(buf []byte, val hash.Hash) {
 	expectSize(buf, addressSize)
-	copy(buf, val)
+	copy(buf, val[:])
 }
 
 func compareHash128(l, r []byte) int {

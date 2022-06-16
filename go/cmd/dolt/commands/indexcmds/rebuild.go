@@ -16,7 +16,6 @@ package indexcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -52,7 +51,7 @@ func (cmd RebuildCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd RebuildCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd RebuildCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -65,7 +64,7 @@ func (cmd RebuildCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, rebuildDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, rebuildDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() == 0 {

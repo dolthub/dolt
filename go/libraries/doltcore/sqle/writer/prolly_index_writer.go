@@ -41,11 +41,12 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Sch
 	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyIndexWriter{
-		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc),
-		keyMap: keyMap,
-		valBld: val.NewTupleBuilder(valDesc),
-		valMap: valMap,
+		mut:     m.Mutate(),
+		primary: true,
+		keyBld:  val.NewTupleBuilder(keyDesc),
+		keyMap:  keyMap,
+		valBld:  val.NewTupleBuilder(valDesc),
+		valMap:  valMap,
 	}, nil
 }
 
@@ -81,8 +82,9 @@ type indexWriter interface {
 }
 
 type prollyIndexWriter struct {
-	name string
-	mut  prolly.MutableMap
+	name    string
+	mut     prolly.MutableMap
+	primary bool
 
 	keyBld *val.TupleBuilder
 	keyMap val.OrdinalMapping
@@ -169,9 +171,17 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	}
 	newKey := m.keyBld.Build(sharePool)
 
-	_, err := m.mut.Has(ctx, newKey)
+	ok, err := m.mut.Has(ctx, newKey)
 	if err != nil {
 		return err
+	} else if ok {
+		if m.primary {
+			return m.keyError(ctx, newKey, true)
+		} else {
+			// If this is a secondary writer, the keyError()
+			// will be constructed by the primary writer.
+			return sql.ErrUniqueKeyViolation.New()
+		}
 	}
 
 	for to := range m.valMap {

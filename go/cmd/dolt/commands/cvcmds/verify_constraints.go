@@ -16,7 +16,6 @@ package cvcmds
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -62,9 +61,9 @@ func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd VerifyConstraintsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
+	return cli.NewCommandDocumentation(verifyConstraintsDocs, ap)
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
@@ -77,7 +76,7 @@ func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, verifyConstraintsDocs, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verifyAllRows := apr.Contains(vcAllParam)
@@ -105,7 +104,17 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to create an empty root.").AddCause(err).Build(), nil)
 		}
 	}
-	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet)
+
+	cm, err := dEnv.HeadCommit(ctx)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit.").AddCause(err).Build(), nil)
+	}
+	h, err := cm.HashOf()
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
+	}
+
+	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}
