@@ -382,7 +382,7 @@ type prollyUniqueKeyErr struct {
 // Error implements the error interface.
 func (u *prollyUniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(u.k, u.kd)
-	return fmt.Sprintf("UNIQUE constraint violation on index '%s': %s", u.IndexName, keyStr)
+	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 
 // formatKey returns a comma-separated string representation of the key given

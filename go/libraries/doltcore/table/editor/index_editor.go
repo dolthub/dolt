@@ -42,7 +42,7 @@ type uniqueKeyErr struct {
 // Error implements the error interface.
 func (u *uniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(context.Background(), u.IndexTuple)
-	return fmt.Sprintf("UNIQUE constraint violation on index '%s': %s", u.IndexName, keyStr)
+	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 
 // NOTE: Regarding partial keys and full keys. For this example, let's say that our table has a primary key W, with
