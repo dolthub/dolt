@@ -103,6 +103,8 @@ In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{
 type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
+	fromRoot   *doltdb.RootValue
+	toRoot     *doltdb.RootValue
 	fromArg    string
 	toArg      string
 	tableSet   *set.StrSet
@@ -152,19 +154,23 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	fromRoot, toRoot, dArgs, err := parseDiffArgs(ctx, dEnv, apr)
-
+	err := cmd.validateArgs(apr)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr := diffUserTables(ctx, dEnv, fromRoot, toRoot, dArgs, apr)
+	dArgs, err := parseDiffArgs(ctx, dEnv, apr)
+	if err != nil {
+		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	}
+
+	verr := diffUserTables(ctx, dEnv, dArgs, apr)
 
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	err = diffDoltDocs(ctx, dEnv, fromRoot, toRoot, dArgs)
+	err = diffDoltDocs(ctx, dEnv, dArgs)
 
 	if err != nil {
 		verr = errhand.BuildDError("error diffing dolt docs").AddCause(err).Build()
@@ -173,48 +179,61 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	return HandleVErrAndExitCode(verr, usage)
 }
 
-func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (from, to *doltdb.RootValue, dArgs *diffArgs, err error) {
-	dArgs = &diffArgs{}
+func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseError {
+	if apr.Contains(SummaryFlag) {
+		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
+			return errhand.BuildDError("invalid Arguments: --summary cannot be combined with --schema or --data").Build()
+		}
+	}
+
+	f, _ := apr.GetValue(FormatFlag)
+	switch strings.ToLower(f) {
+	case "tabular":
+	case "sql":
+	case "":
+	default:
+		return errhand.BuildDError("invalid output format: %s", f).Build()
+	}
+
+
+	return nil
+}
+
+func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (*diffArgs, error) {
+	dArgs := &diffArgs{}
 
 	dArgs.diffParts = SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
 		dArgs.diffParts = DataOnlyDiff
 	} else if apr.Contains(SchemaFlag) && !apr.Contains(DataFlag) {
 		dArgs.diffParts = SchemaOnlyDiff
+	} else if apr.Contains(SummaryFlag) {
+		dArgs.diffParts = Summary
 	}
 
-	f, _ := apr.GetValue(FormatFlag)
+	f := apr.GetValueOrDefault(FormatFlag, "tabular")
 	switch strings.ToLower(f) {
 	case "tabular":
 		dArgs.diffOutput = TabularDiffOutput
 	case "sql":
 		dArgs.diffOutput = SQLDiffOutput
-	case "":
-		dArgs.diffOutput = TabularDiffOutput
-	default:
-		return nil, nil, nil, fmt.Errorf("invalid output format: %s", f)
-	}
-
-	if apr.Contains(SummaryFlag) {
-		if apr.Contains(SchemaFlag) || apr.Contains(DataFlag) {
-			return nil, nil, nil, fmt.Errorf("invalid Arguments: --summary cannot be combined with --schema or --data")
-		}
-		dArgs.diffParts = Summary
 	}
 
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	from, to, leftover, err := getDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
-
+	from, to, leftoverArgs, err := getDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
+
+	dArgs.fromRoot = from
+	dArgs.toRoot = to
 
 	dArgs.tableSet = set.NewStrSet(nil)
 	dArgs.docSet = set.NewStrSet(nil)
 
-	for _, arg := range leftover {
+	for _, arg := range leftoverArgs {
 		if arg == doltdocs.ReadmeDoc || arg == doltdocs.LicenseDoc {
 			dArgs.docSet.Add(arg)
 			continue
@@ -223,7 +242,7 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 		// verify table args exist in at least one root
 		_, ok, err := from.GetTable(ctx, arg)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		if ok {
 			dArgs.tableSet.Add(arg)
@@ -232,27 +251,27 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 		_, ok, err = to.GetTable(ctx, arg)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		if !ok {
-			return nil, nil, nil, fmt.Errorf("table %s does not exist in either diff root", arg)
+			return nil, fmt.Errorf("table %s does not exist in either revision", arg)
 		}
 	}
 
 	// if no tables or docs were specified as args, diff all tables and docs
-	if len(leftover) == 0 {
+	if len(leftoverArgs) == 0 {
 		utn, err := doltdb.UnionTableNames(ctx, from, to)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, err
 		}
 		dArgs.tableSet.Add(utn...)
 		dArgs.docSet.Add(doltdocs.ReadmeDoc, doltdocs.LicenseDoc)
 	}
 
-	return from, to, dArgs, nil
+	return dArgs, nil
 }
 
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (from, to *doltdb.RootValue, leftover []string, err error) {
+func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (fromRoot, toRoot *doltdb.RootValue, leftover []string, err error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
 		return nil, nil, nil, err
@@ -278,55 +297,68 @@ func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCache
 		return nil, nil, nil, err
 	}
 
+	// from, to := "HEAD", "WORKING"
+	// if isCached {
+	// 	to = "STAGED"
+	// }
+	//
+	// // TODO: this is too simplistic, we need to get these from diffArgs (table name can be an arg e.g.)
+	// if apr.NArg() > 0 {
+	// 	from = apr.Arg(0)
+	// }
+	// if apr.NArg() > 1 {
+	// 	to = apr.Arg(1)
+	// }
+
 	if len(args) == 0 {
 		// `dolt diff`
-		from = stagedRoot
-		to = workingRoot
+		fromRoot = stagedRoot
+		toRoot = workingRoot
 		if isCached {
-			from = headRoot
-			to = stagedRoot
+			fromRoot = headRoot
+			toRoot = stagedRoot
 		}
-		return from, to, nil, nil
+		return fromRoot, toRoot, nil, nil
 	}
 
-	from, ok := maybeResolve(ctx, dEnv, args[0])
+	fromRoot, ok := maybeResolve(ctx, dEnv, args[0])
 
 	if !ok {
 		// `dolt diff ...tables`
-		from = stagedRoot
-		to = workingRoot
+		fromRoot = stagedRoot
+		toRoot = workingRoot
 		if isCached {
-			from = headRoot
-			to = stagedRoot
+			fromRoot = headRoot
+			toRoot = stagedRoot
 		}
 		leftover = args
-		return from, to, leftover, nil
+		return fromRoot, toRoot, leftover, nil
 	}
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
-		to = workingRoot
+		toRoot = workingRoot
 		if isCached {
-			to = stagedRoot
+			toRoot = stagedRoot
 		}
-		return from, to, nil, nil
+		return fromRoot, toRoot, nil, nil
 	}
 
-	to, ok = maybeResolve(ctx, dEnv, args[1])
+	toRoot, ok = maybeResolve(ctx, dEnv, args[1])
 
 	if !ok {
 		// `dolt diff from_commit ...tables`
-		to = workingRoot
+		toRoot = workingRoot
 		if isCached {
-			to = stagedRoot
+			toRoot = stagedRoot
 		}
 		leftover = args[1:]
-		return from, to, leftover, nil
+		return fromRoot, toRoot, leftover, nil
 	}
 
 	// `dolt diff from_commit to_commit ...tables`
 	leftover = args[2:]
-	return from, to, leftover, nil
+	return fromRoot, toRoot, leftover, nil
 }
 
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
@@ -349,10 +381,10 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *doltdb.RootValue, dArgs *diffArgs, apr *argparser.ArgParseResults) (verr errhand.VerboseError) {
+func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs, apr *argparser.ArgParseResults) (verr errhand.VerboseError) {
 	var err error
 
-	tableDeltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
 	if err != nil {
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
@@ -397,7 +429,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, fromRoot, toRoot *do
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
-			verr = diffSchemas(ctx, toRoot, td, dArgs)
+			verr = diffSchemas(ctx, dArgs.toRoot, td, dArgs)
 		}
 
 		if dArgs.diffParts&DataOnlyDiff != 0 {
@@ -825,14 +857,14 @@ func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	return strings.Join(cols, ",")
 }
 
-func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, from, to *doltdb.RootValue, dArgs *diffArgs) error {
+func diffDoltDocs(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) error {
 	_, docs, err := actions.GetTablesOrDocs(dEnv.DocsReadWriter(), dArgs.docSet.AsSlice())
 
 	if err != nil {
 		return err
 	}
 
-	return printDocDiffs(ctx, from, to, docs)
+	return printDocDiffs(ctx, dArgs.fromRoot, dArgs.toRoot, docs)
 }
 
 func printDocDiffs(ctx context.Context, from, to *doltdb.RootValue, docsFilter doltdocs.Docs) error {
