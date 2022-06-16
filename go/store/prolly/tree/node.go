@@ -43,6 +43,10 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 			return err
 		}
 
+		if nd.IsLeaf() {
+			return nil
+		}
+
 		child, err := ns.Read(ctx, addr)
 		if err != nil {
 			return err
@@ -57,6 +61,10 @@ type NodeCb func(ctx context.Context, nd Node) error
 func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
+	}
+
+	if nd.IsLeaf() {
+		return nil
 	}
 
 	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {

@@ -241,7 +241,7 @@ func (cur *Cursor) firstKey() Item {
 }
 
 func (cur *Cursor) lastKey() Item {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.nd.GetKey(lastKeyIdx)
 }
 
@@ -250,7 +250,7 @@ func (cur *Cursor) skipToNodeStart() {
 }
 
 func (cur *Cursor) skipToNodeEnd() {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	cur.idx = lastKeyIdx
 }
 
@@ -258,7 +258,7 @@ func (cur *Cursor) keepInBounds() {
 	if cur.idx < 0 {
 		cur.skipToNodeStart()
 	}
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	if cur.idx > lastKeyIdx {
 		cur.skipToNodeEnd()
 	}
@@ -271,7 +271,7 @@ func (cur *Cursor) atNodeStart() bool {
 // atNodeEnd returns true if the cursor's current |idx|
 // points to the last node item
 func (cur *Cursor) atNodeEnd() bool {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.idx == lastKeyIdx
 }
 

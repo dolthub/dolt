@@ -23,11 +23,9 @@ import (
 	"github.com/dolthub/dolt/go/gen/fb/serial"
 	"github.com/dolthub/dolt/go/store/chunks"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/dolt/go/store/val"
 )
 
 func hackVRToCS(vr types.ValueReader) chunks.ChunkStore {
@@ -58,12 +56,12 @@ func newParentsClosureIterator(ctx context.Context, c *Commit, vr types.ValueRea
 		}
 		node := tree.NodeFromBytes(v.(types.TupleRowStorage))
 		ns := tree.NewNodeStore(hackVRToCS(vr))
-		m := prolly.NewMap(node, ns, commitKeyTupleDesc, commitValueTupleDesc)
-		mi, err := m.IterAllReverse(ctx)
+		cc := prolly.NewCommitClosure(node, ns)
+		ci, err := cc.IterAllReverse(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return &fbParentsClosureIterator{mi: mi, curr: commitToFbKeyTuple(c, ns.Pool()), err: nil}, nil
+		return &fbParentsClosureIterator{i: ci, curr: prolly.NewCommitClosureKey(ns.Pool(), c.Height(), c.Addr()), err: nil}, nil
 	}
 
 	s, ok := sv.(types.Struct)
@@ -120,14 +118,6 @@ func commitToMapKeyTuple(f *types.NomsBinFormat, c *Commit) (types.Tuple, error)
 	ib := make([]byte, len(hash.Hash{}))
 	copy(ib, h[:])
 	return types.NewTuple(f, types.Uint(c.Height()), types.InlineBlob(ib))
-}
-
-func commitToFbKeyTuple(c *Commit, p pool.BuffPool) val.Tuple {
-	tb := val.NewTupleBuilder(commitKeyTupleDesc)
-	tb.PutUint64(0, c.Height())
-	h := c.Addr()
-	tb.PutAddress(1, h)
-	return tb.Build(p)
 }
 
 type parentsClosureIter interface {
@@ -215,8 +205,8 @@ func (i *parentsClosureIterator) Next(ctx context.Context) bool {
 }
 
 type fbParentsClosureIterator struct {
-	mi   prolly.MapIter
-	curr val.Tuple
+	i    prolly.CommitClosureIter
+	curr prolly.CommitClosureKey
 	err  error
 }
 
@@ -228,23 +218,21 @@ func (i *fbParentsClosureIterator) Height() uint64 {
 	if i.err != nil {
 		return 0
 	}
-	h, _ := commitKeyTupleDesc.GetUint64(0, i.curr)
-	return h
+	return i.curr.Height()
 }
 
 func (i *fbParentsClosureIterator) Hash() hash.Hash {
 	if i.err != nil {
 		return hash.Hash{}
 	}
-	bs, _ := commitKeyTupleDesc.GetAddress(1, i.curr)
-	return bs
+	return i.curr.Addr()
 }
 
 func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 	if i.err != nil {
 		return false
 	}
-	i.curr, _, i.err = i.mi.Next(ctx)
+	i.curr, _, i.err = i.i.Next(ctx)
 	if i.err == io.EOF {
 		i.err = nil
 		return false
@@ -254,7 +242,7 @@ func (i *fbParentsClosureIterator) Next(ctx context.Context) bool {
 
 func (i *fbParentsClosureIterator) Less(f *types.NomsBinFormat, otherI parentsClosureIter) bool {
 	other := otherI.(*fbParentsClosureIterator)
-	return commitKeyTupleDesc.Comparator().Compare(i.curr, other.curr, commitKeyTupleDesc) == -1
+	return i.curr.Less(other.curr)
 }
 
 func writeTypesCommitParentClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
@@ -412,46 +400,39 @@ func writeFbCommitParentClosure(ctx context.Context, cs chunks.ChunkStore, vrw t
 	}
 	// Load them as ProllyTrees.
 	ns := tree.NewNodeStore(cs)
-	maps := make([]prolly.Map, len(parents))
+	closures := make([]prolly.CommitClosure, len(parents))
 	for i := range addrs {
 		if !types.IsNull(vs[i]) {
 			node := tree.NodeFromBytes(vs[i].(types.TupleRowStorage))
-			maps[i] = prolly.NewMap(node, ns, commitKeyTupleDesc, commitValueTupleDesc)
+			closures[i] = prolly.NewCommitClosure(node, ns)
 		} else {
-			maps[i], err = prolly.NewMapFromTuples(ctx, ns, commitKeyTupleDesc, commitValueTupleDesc)
-			if err != nil {
-				return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: NewMapFromTuples: %w", err)
-			}
+			closures[i] = prolly.NewEmptyCommitClosure(ns)
 		}
 	}
 	// Add all the missing entries from [1, ...) maps to the 0th map.
-	editor := maps[0].Mutate()
-	for i := 1; i < len(maps); i++ {
-		err = prolly.DiffMaps(ctx, maps[0], maps[i], func(ctx context.Context, diff tree.Diff) error {
+	editor := closures[0].Editor()
+	for i := 1; i < len(closures); i++ {
+		err = prolly.DiffCommitClosures(ctx, closures[0], closures[i], func(ctx context.Context, diff tree.Diff) error {
 			if diff.Type == tree.AddedDiff {
-				return editor.Put(ctx, val.Tuple(diff.Key), val.EmptyTuple)
+				return editor.Add(ctx, prolly.CommitClosureKey(diff.Key))
 			}
 			return nil
 		})
 		if err != nil && !errors.Is(err, io.EOF) {
-			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: DiffMaps: %w", err)
+			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: DiffCommitClosures: %w", err)
 		}
 	}
 	// Add the parents themselves to the new map.
-	tb := val.NewTupleBuilder(commitKeyTupleDesc)
 	for i := 0; i < len(parents); i++ {
-		tb.PutUint64(0, parents[i].Height())
-		tb.PutAddress(1, parentAddrs[i])
-		err = editor.Put(ctx, tb.Build(ns.Pool()), val.EmptyTuple)
+		err = editor.Add(ctx, prolly.NewCommitClosureKey(ns.Pool(), parents[i].Height(), parentAddrs[i]))
 		if err != nil {
-			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Put: %w", err)
+			return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableCommitClosure.Put: %w", err)
 		}
-		tb.Recycle()
 	}
-	// This puts the map in the NodeStore as well.
-	res, err := editor.Map(ctx)
+	// This puts the closure in the NodeStore as well.
+	res, err := editor.Flush(ctx)
 	if err != nil {
-		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableMap.Map: %w", err)
+		return hash.Hash{}, fmt.Errorf("writeCommitParentClosure: MutableCommitClosure.Flush: %w", err)
 	}
 	return res.HashOf(), nil
 }
