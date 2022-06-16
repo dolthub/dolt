@@ -3034,10 +3034,10 @@ var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
 			{
 				Query: "SELECT * FROM DOLT_DIFF WHERE COMMIT_HASH in ('WORKING', 'STAGED') ORDER BY table_name;",
 				Expected: []sql.Row{
-					{"STAGED", "addedTable", "NULL", "NULL", "NULL", "NULL", false, true},
-					{"STAGED", "droppedTable", "NULL", "NULL", "NULL", "NULL", true, true},
-					{"WORKING", "newRenamedEmptyTable", "NULL", "NULL", "NULL", "NULL", false, true},
-					{"WORKING", "regularTable", "NULL", "NULL", "NULL", "NULL", true, false},
+					{"STAGED", "addedTable", nil, nil, nil, nil, false, true},
+					{"STAGED", "droppedTable", nil, nil, nil, nil, true, true},
+					{"WORKING", "newRenamedEmptyTable", nil, nil, nil, nil, false, true},
+					{"WORKING", "regularTable", nil, nil, nil, nil, true, false},
 				},
 			},
 		},

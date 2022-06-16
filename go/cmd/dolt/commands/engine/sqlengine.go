@@ -153,7 +153,7 @@ func NewSqlEngine(
 	}, nil
 }
 
-// NewRebasedEngine returns a smalled rebased engine primarily used in filterbranch.
+// NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,

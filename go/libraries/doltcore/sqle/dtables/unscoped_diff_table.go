@@ -149,10 +149,10 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	sqlRow := sql.NewRow(
 		changeSet,
 		change.tableName,
-		"NULL", // committer
-		"NULL", // email
-		"NULL", // date
-		"NULL", // message
+		nil, // committer
+		nil, // email
+		nil, // date
+		nil, // message
 		change.dataChange,
 		change.schemaChange,
 	)

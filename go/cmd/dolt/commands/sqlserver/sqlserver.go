@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -140,7 +141,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
-	ap.SupportsInt(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
+	ap.SupportsString(persistenceBehaviorFlag, "", "persistence-behavior", fmt.Sprintf("Indicate whether to `load` or `ignore` persisted global variables (default `%s`)", serverConfig.PersistenceBehavior()))
 	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
 	return ap
 }
@@ -206,6 +207,8 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
+// GetServerConfig returns ServerConfig that is set either from yaml file if given, if not it is set with values defined
+// on command line. Server config variables not defined are set to default values.
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
 		return getYAMLServerConfig(dEnv.FS, cfgFile)
@@ -213,21 +216,31 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 	return getCommandLineServerConfig(dEnv, apr)
 }
 
+// getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
+// If not defined, it sets variables to default values.
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
 	if host, ok := apr.GetValue(hostFlag); ok {
 		serverConfig.withHost(host)
 	}
+
 	if port, ok := apr.GetInt(portFlag); ok {
 		serverConfig.WithPort(port)
 	}
+
 	if user, ok := apr.GetValue(userFlag); ok {
 		serverConfig.withUser(user)
 	}
+
 	if password, ok := apr.GetValue(passwordFlag); ok {
 		serverConfig.withPassword(password)
 	}
+
+	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
+		serverConfig.withPersistenceBehavior(persistenceBehavior)
+	}
+
 	if timeoutStr, ok := apr.GetValue(timeoutFlag); ok {
 		timeout, err := strconv.ParseUint(timeoutStr, 10, 64)
 
@@ -236,13 +249,25 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withTimeout(timeout * 1000)
+
+		err = sql.SystemVariables.SetGlobal("net_read_timeout", timeout*1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set net_read_timeout. Error: %s", err.Error())
+		}
+		err = sql.SystemVariables.SetGlobal("net_write_timeout", timeout*1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set net_write_timeout. Error: %s", err.Error())
+		}
 	}
+
 	if _, ok := apr.GetValue(readonlyFlag); ok {
 		serverConfig.withReadOnly(true)
 	}
+
 	if logLevel, ok := apr.GetValue(logLevelFlag); ok {
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
+
 	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, multiDBDir)
 
@@ -261,13 +286,13 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
 		serverConfig.withMaxConnections(uint64(maxConnections))
+		err := sql.SystemVariables.SetGlobal("max_connections", uint64(maxConnections))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set max_connections. Error: %s", err.Error())
+		}
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
-	if persistenceBehavior, ok := apr.GetValue(persistenceBehaviorFlag); ok {
-		serverConfig.withPersistenceBehavior(persistenceBehavior)
-	}
-
 	if privilegeFilePath, ok := apr.GetValue(privilegeFilePathFlag); ok {
 		serverConfig.withPrivilegeFilePath(privilegeFilePath)
 	}
@@ -275,6 +300,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	return serverConfig, nil
 }
 
+// getYAMLServerConfig returns server config variables with values defined in yaml file.
 func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) {
 	data, err := fs.ReadFile(path)
 	if err != nil {
@@ -284,6 +310,25 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 	cfg, err := NewYamlConfig(data)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
+	}
+
+	if cfg.ListenerConfig.MaxConnections != nil {
+		err = sql.SystemVariables.SetGlobal("max_connections", *cfg.ListenerConfig.MaxConnections)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set max_connections from yaml file '%s'. Error: %s", path, err.Error())
+		}
+	}
+	if cfg.ListenerConfig.ReadTimeoutMillis != nil {
+		err = sql.SystemVariables.SetGlobal("net_read_timeout", *cfg.ListenerConfig.ReadTimeoutMillis)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set net_read_timeout from yaml file '%s'. Error: %s", path, err.Error())
+		}
+	}
+	if cfg.ListenerConfig.WriteTimeoutMillis != nil {
+		err = sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %s", path, err.Error())
+		}
 	}
 
 	return cfg, nil
