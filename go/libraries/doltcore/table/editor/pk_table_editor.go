@@ -25,12 +25,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dolthub/dolt/go/store/hash"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/go-mysql-server/sql"
+	errors2 "gopkg.in/src-d/go-errors.v1"
 )
 
 const tfApproxCapacity = 64
@@ -366,7 +367,9 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 			return err
 		}
 		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
-		if uke, ok := err.(*uniqueKeyErr); ok {
+
+		if sql.ErrDuplicateEntry.Is(err) {
+			uke := err.(*errors2.Error).Cause().(*uniqueKeyErr)
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
 				return err
@@ -545,7 +548,8 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 			return err
 		}
 		err = indexEd.InsertRow(ctx, newFullKey, newPartialKey, newVal)
-		if uke, ok := err.(*uniqueKeyErr); ok {
+		if sql.ErrDuplicateEntry.Is(err) {
+			uke := err.(*errors2.Error).Cause().(*uniqueKeyErr)
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
 				return err

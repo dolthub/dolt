@@ -20,9 +20,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -30,6 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
+	"golang.org/x/sync/errgroup"
 )
 
 // keylessTableEditor accumulates and applies row edits to keyless tables.
@@ -530,11 +528,6 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				} else {
 					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						if uke, ok := err.(*uniqueKeyErr); ok {
-							keyStr, _ := formatKey(ctx, uke.IndexTuple)
-							return sql.NewUniqueKeyErr(keyStr, false, nil)
-						}
-
 						return err
 					}
 				}
