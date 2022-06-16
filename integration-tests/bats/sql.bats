@@ -1802,5 +1802,5 @@ SQL
 }
 
 @test "sql: skipped" {
-  skip "Skipping on purpose"
+  skip "Skipping on purposewww"
 }
