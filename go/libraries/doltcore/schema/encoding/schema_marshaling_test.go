@@ -78,8 +78,7 @@ func TestNomsMarshalling(t *testing.T) {
 	if !types.Format_Default.UsesFlatbuffers() {
 		validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
 		assert.NoError(t, err,
-			"Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %s",
-			err.Error())
+			"Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %v", err)
 		if !assert.Equal(t, tSchema, validated) {
 			t.Error("Value different after marshalling and unmarshalling.")
 		}
