@@ -484,29 +484,21 @@ SQL
 
 @test "import mysqldump: dolt dump --no-autocommit can be loaded back into mysql" {
     service mysql start
+    dolt sql -q "CREATE TABLE IF NOT EXISTS mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL)"
+    dolt sql -q "INSERT IGNORE INTO mytable VALUES (0, 'one'), (1, 'two')"
+
+    # Setup the database we are loading data into
     mysql <<SQL
 CREATE DATABASE IF NOT EXISTS testdb;
-USE testdb;
-CREATE TABLE IF NOT EXISTS mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL);
-INSERT IGNORE INTO mytable VALUES (0, 'one'), (1, 'two');
 SQL
-
-    mysqldump -B 'testdb' --result-file=dump.sql
-    run dolt sql < dump.sql
-    [ "$status" -eq 0 ]
-
-    mysql <<SQL
-DROP DATABASE testdb;
-CREATE DATABASE testdb /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */ ;
-SQL
-
-    # go to created database
-    cd testdb
 
     run dolt dump --no-autocommit
     [ -f doltdump.sql ]
-    mysql testdb < doltdump.sql
 
+    # remove the utf8mb4_0900_bin collation which is not supported in this installation of mysql
+    sed -i 's/COLLATE=utf8mb4_0900_bin//' doltdump.sql
+
+    mysql testdb < doltdump.sql
     run mysql <<SQL
 SELECT count(*) from testdb.mytable
 SQL
