@@ -54,6 +54,7 @@ type SqlEngineConfig struct {
 	ServerUser   string
 	ServerPass   string
 	Autocommit   bool
+	Bulk         bool
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -66,7 +67,7 @@ func NewSqlEngine(
 
 	parallelism := runtime.GOMAXPROCS(0)
 
-	dbs, err := CollectDBs(ctx, mrEnv)
+	dbs, err := CollectDBs(ctx, mrEnv, config.Bulk)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +153,7 @@ func NewSqlEngine(
 	}, nil
 }
 
-// NewRebasedEngine returns a smalled rebased engine primarily used in filterbranch.
+// NewRebasedSqlEngine returns a smalled rebased engine primarily used in filterbranch.
 func NewRebasedSqlEngine(engine *gms.Engine, dbs map[string]dsqle.SqlDatabase) *SqlEngine {
 	return &SqlEngine{
 		dbs:    dbs,

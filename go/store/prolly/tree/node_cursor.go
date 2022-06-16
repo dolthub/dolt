@@ -241,7 +241,7 @@ func (cur *Cursor) firstKey() Item {
 }
 
 func (cur *Cursor) lastKey() Item {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.nd.GetKey(lastKeyIdx)
 }
 
@@ -250,7 +250,7 @@ func (cur *Cursor) skipToNodeStart() {
 }
 
 func (cur *Cursor) skipToNodeEnd() {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	cur.idx = lastKeyIdx
 }
 
@@ -258,7 +258,7 @@ func (cur *Cursor) keepInBounds() {
 	if cur.idx < 0 {
 		cur.skipToNodeStart()
 	}
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	if cur.idx > lastKeyIdx {
 		cur.skipToNodeEnd()
 	}
@@ -271,7 +271,7 @@ func (cur *Cursor) atNodeStart() bool {
 // atNodeEnd returns true if the cursor's current |idx|
 // points to the last node item
 func (cur *Cursor) atNodeEnd() bool {
-	lastKeyIdx := int(cur.nd.count - 1)
+	lastKeyIdx := int(cur.nd.count) - 1
 	return cur.idx == lastKeyIdx
 }
 
@@ -325,9 +325,14 @@ func (cur *Cursor) search(item Item, cb CompareFn) (idx int) {
 	return idx
 }
 
-// invalidate sets the cursor's index to the node count.
-func (cur *Cursor) invalidate() {
+// invalidateAtEnd sets the cursor's index to the node count.
+func (cur *Cursor) invalidateAtEnd() {
 	cur.idx = int(cur.nd.count)
+}
+
+// invalidateAtStart sets the cursor's index to -1.
+func (cur *Cursor) invalidateAtStart() {
+	cur.idx = -1
 }
 
 // hasNext returns true if we do not need to recursively
@@ -375,7 +380,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 	}
 
 	if cur.parent == nil {
-		cur.invalidate()
+		cur.invalidateAtEnd()
 		return nil
 	}
 
@@ -387,7 +392,7 @@ func (cur *Cursor) Advance(ctx context.Context) error {
 
 	if cur.parent.outOfBounds() {
 		// exhausted every parent cursor
-		cur.invalidate()
+		cur.invalidateAtEnd()
 		return nil
 	}
 
@@ -412,7 +417,7 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 	}
 
 	if cur.parent == nil {
-		cur.invalidate()
+		cur.invalidateAtStart()
 		return nil
 	}
 
@@ -424,7 +429,7 @@ func (cur *Cursor) Retreat(ctx context.Context) error {
 
 	if cur.parent.outOfBounds() {
 		// exhausted every parent cursor
-		cur.invalidate()
+		cur.invalidateAtStart()
 		return nil
 	}
 

@@ -33,11 +33,11 @@ type commandDocumentForMarkdown struct {
 
 var cmdMdDocTempl = "## `{{.Command}}`\n\n" +
 	"{{.ShortDesc}}\n\n" +
-	"### Synopsis\n\n" +
+	"**Synopsis**\n\n" +
 	"{{.Synopsis}}\n\n" +
-	"### Description\n\n" +
+	"**Description**\n\n" +
 	"{{.Description}}\n\n" +
-	"### Arguments and options\n\n" +
+	"**Arguments and options**\n\n" +
 	"{{.Options}}\n\n"
 
 func (cmdDoc CommandDocumentation) CmdDocToMd() (string, error) {
@@ -127,10 +127,22 @@ func (cmdDoc CommandDocumentation) cmdDocToCmdDocMd(options string) (commandDocu
 	}, nil
 }
 
-// Creates a CommandDocumentation given command string, arg parser, and a CommandDocumentationContent
-func GetCommandDocumentation(commandStr string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) CommandDocumentation {
-	return CommandDocumentation{
-		CommandStr: commandStr,
+// NewCommandDocumentation returns a |CommandDocumentation| for the content and arg parser given.
+// Does not include a command string, which must be filled in separately.
+func NewCommandDocumentation(cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
+	return &CommandDocumentation{
+		ShortDesc: cmdDoc.ShortDesc,
+		LongDesc:  cmdDoc.LongDesc,
+		Synopsis:  cmdDoc.Synopsis,
+		ArgParser: argParser,
+	}
+}
+
+// CommandDocsForCommandString returns a |CommandDocumentation| for the the command string, doc contents, and arg
+// parser given.
+func CommandDocsForCommandString(command string, cmdDoc CommandDocumentationContent, argParser *argparser.ArgParser) *CommandDocumentation {
+	return &CommandDocumentation{
+		CommandStr: command,
 		ShortDesc:  cmdDoc.ShortDesc,
 		LongDesc:   cmdDoc.LongDesc,
 		Synopsis:   cmdDoc.Synopsis,

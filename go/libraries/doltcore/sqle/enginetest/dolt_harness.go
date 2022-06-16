@@ -91,13 +91,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		createdEnvs:    make(map[string]*env.DoltEnv),
 	}
 
-	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
-		dh = dh.WithSkippedQueries([]string{
-			"SHOW CREATE TABLE child", // todo(andy): "TestForeignKeys - ALTER TABLE RENAME COLUMN"
-			"typestable",
-		})
-	}
-
 	return dh
 }
 
@@ -276,15 +269,6 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
-	var firstEnv *env.DoltEnv
-	d.multiRepoEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		firstEnv = dEnv
-		return true, nil
-	})
-
-	if types.IsFormat_DOLT_1(firstEnv.DoltDB.Format()) {
-		return false
-	}
 	return true
 }
 

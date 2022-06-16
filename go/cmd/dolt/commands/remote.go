@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 
 	"github.com/dolthub/dolt/go/store/types"
@@ -88,10 +87,9 @@ func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd RemoteCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd RemoteCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
+	return cli.NewCommandDocumentation(remoteDocs, ap)
 }
 
 func (cmd RemoteCmd) ArgParser() *argparser.ArgParser {
@@ -115,7 +113,7 @@ func (cmd RemoteCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd RemoteCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, remoteDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, remoteDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	var verr errhand.VerboseError

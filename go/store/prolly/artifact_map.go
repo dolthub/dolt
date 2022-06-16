@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -138,6 +139,7 @@ func (m ArtifactMap) Pool() pool.BuffPool {
 }
 
 func (m ArtifactMap) Editor() ArtifactsEditor {
+	artKD, artVD := m.Descriptors()
 	return ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
 		mut: MutableMap{
@@ -145,6 +147,9 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 			keyDesc: m.keyDesc,
 			valDesc: m.valDesc,
 		},
+		artKB: val.NewTupleBuilder(artKD),
+		artVB: val.NewTupleBuilder(artVD),
+		pool:  m.Pool(),
 	}
 }
 
@@ -154,9 +159,9 @@ func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
 	tb := val.NewTupleBuilder(m.srcKeyDesc)
 	itr, err := m.tuples.iterAll(ctx)
 	if err != nil {
-		return ArtifactIter{}, err
+		return nil, err
 	}
-	return ArtifactIter{
+	return artifactIterImpl{
 		itr:    itr,
 		numPks: numPks,
 		tb:     tb,
@@ -164,6 +169,14 @@ func (m ArtifactMap) IterAll(ctx context.Context) (ArtifactIter, error) {
 		artKD:  m.keyDesc,
 		artVD:  m.valDesc,
 	}, nil
+}
+
+func (m ArtifactMap) IterAllCVs(ctx context.Context) (ArtifactIter, error) {
+	itr, err := m.iterAllOfTypes(ctx, ArtifactTypeForeignKeyViol, ArtifactTypeUniqueKeyViol, ArtifactTypeChkConsViol)
+	if err != nil {
+		return nil, err
+	}
+	return itr, nil
 }
 
 // IterAllConflicts returns an iterator for the conflicts.
@@ -196,7 +209,7 @@ func (m ArtifactMap) HasArtifactOfType(ctx context.Context, artType ArtifactType
 // ClearArtifactsOfType deletes all artifacts of |artType|.
 func (m ArtifactMap) ClearArtifactsOfType(ctx context.Context, artType ArtifactType) (ArtifactMap, error) {
 	edt := m.Editor()
-	itr, err := m.iterAllOfType(ctx, artType)
+	itr, err := m.iterAllOfTypes(ctx, artType)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -225,12 +238,26 @@ func (m ArtifactMap) CountOfType(ctx context.Context, artType ArtifactType) (cnt
 	if err != nil {
 		return 0, err
 	}
-	for err != io.EOF {
-		_, err = itr.Next(ctx)
-		if err != nil && err != io.EOF {
-			return 0, err
-		}
+	for _, err = itr.Next(ctx); err == nil; _, err = itr.Next(ctx) {
 		cnt++
+	}
+	if err != io.EOF {
+		return 0, err
+	}
+	return cnt, nil
+}
+
+// CountOfTypes returns the number of artifacts that match any type in |artTypes|.
+func (m ArtifactMap) CountOfTypes(ctx context.Context, artTypes ...ArtifactType) (cnt uint64, err error) {
+	itr, err := m.iterAllOfTypes(ctx, artTypes...)
+	if err != nil {
+		return 0, err
+	}
+	for _, err = itr.Next(ctx); err == nil; _, err = itr.Next(ctx) {
+		cnt++
+	}
+	if err != io.EOF {
+		return 0, err
 	}
 	return cnt, nil
 }
@@ -241,6 +268,14 @@ func (m ArtifactMap) iterAllOfType(ctx context.Context, artType ArtifactType) (a
 		return artifactTypeIter{}, err
 	}
 	return artifactTypeIter{itr, artType}, nil
+}
+
+func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactType) (multiArtifactTypeItr, error) {
+	itr, err := m.IterAll(ctx)
+	if err != nil {
+		return multiArtifactTypeItr{}, err
+	}
+	return newMultiArtifactTypeItr(itr, artTypes), nil
 }
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
@@ -258,12 +293,78 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 }
 
 type ArtifactsEditor struct {
-	mut        MutableMap
-	srcKeyDesc val.TupleDesc
+	mut          MutableMap
+	srcKeyDesc   val.TupleDesc
+	artKB, artVB *val.TupleBuilder
+	pool         pool.BuffPool
 }
 
-func (wr ArtifactsEditor) Add(ctx context.Context, key val.Tuple, val val.Tuple) error {
-	return wr.mut.Put(ctx, key, val)
+func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta []byte) error {
+	for i := 0; i < srcKey.Count(); i++ {
+		wr.artKB.PutRaw(i, srcKey.GetField(i))
+	}
+	wr.artKB.PutAddress(srcKey.Count(), theirRootIsh)
+	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
+	key := wr.artKB.Build(wr.pool)
+
+	wr.artVB.PutJSON(0, meta)
+	value := wr.artVB.Build(wr.pool)
+
+	return wr.mut.Put(ctx, key, value)
+}
+
+// ReplaceFKConstraintViolation replaces foreign key constraint violations that
+// match the given one but have a different commit hash. If no existing violation
+// exists, the given will be inserted.
+func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, meta ConstraintViolationMeta) error {
+	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
+	itr, err := wr.mut.IterRange(ctx, rng)
+	if err != nil {
+		return err
+	}
+	aItr := artifactIterImpl{
+		itr:    itr,
+		artKD:  wr.mut.keyDesc,
+		artVD:  wr.mut.valDesc,
+		pool:   wr.pool,
+		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
+		numPks: wr.srcKeyDesc.Count(),
+	}
+
+	var art Artifact
+	var currMeta ConstraintViolationMeta
+	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
+		if art.ArtType != ArtifactTypeForeignKeyViol {
+			continue
+		}
+
+		err = json.Unmarshal(art.Metadata, &currMeta)
+		if err != nil {
+			return err
+		}
+
+		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
+			// Key and Value is the same, so delete this
+			err = wr.Delete(ctx, art.ArtKey)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	if err != io.EOF {
+		return err
+	}
+
+	d, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	err = wr.Add(ctx, srcKey, theirRootIsh, ArtifactTypeForeignKeyViol, d)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
@@ -302,25 +403,32 @@ func (itr *ConflictArtifactIter) Next(ctx context.Context) (ConflictArtifact, er
 	}
 
 	return ConflictArtifact{
-		Key:        art.Key,
-		HeadCmHash: art.HeadCmHash,
-		Metadata:   parsedMeta,
+		Key:          art.Key,
+		TheirRootIsh: art.TheirRootIsh,
+		Metadata:     parsedMeta,
 	}, nil
 }
 
 // ConflictArtifact is the decoded conflict from the artifacts table
 type ConflictArtifact struct {
-	Key        val.Tuple
-	HeadCmHash []byte
-	Metadata   ConflictMetadata
+	Key          val.Tuple
+	TheirRootIsh hash.Hash
+	Metadata     ConflictMetadata
 }
 
 // ConflictMetadata is the json metadata associated with a conflict
 type ConflictMetadata struct {
-	// BaseTblHash is the target hash of the table holding the base value for the conflict
-	BaseTblHash []byte `json:"bc"`
-	// TheirTblHash is the target hash of the table holding the their value for the conflict
-	TheirTblHash []byte `json:"tc"`
+	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
+	BaseRootIsh hash.Hash `json:"bc"`
+	TableName   string    `json:"tn"`
+}
+
+// ConstraintViolationMeta is the json metadata for foreign key constraint violations
+type ConstraintViolationMeta struct {
+	// marshalled json information about the fk
+	VInfo []byte `json:"v_info"`
+	// value for the violating row
+	Value []byte `json:"value"`
 }
 
 // artifactTypeIter iters all artifacts of a given |artType|.
@@ -340,8 +448,40 @@ func (itr artifactTypeIter) Next(ctx context.Context) (art Artifact, err error) 
 	return art, nil
 }
 
+// multiArtifactTypeItr iters all artifacts of its member types.
+type multiArtifactTypeItr struct {
+	itr     ArtifactIter
+	members []bool
+}
+
+var _ ArtifactIter = multiArtifactTypeItr{}
+
+// newMultiArtifactTypeItr creates an iter that iterates an artifact if its type exists in |types|.
+func newMultiArtifactTypeItr(itr ArtifactIter, types []ArtifactType) multiArtifactTypeItr {
+	members := make([]bool, 5)
+	for _, t := range types {
+		members[uint8(t)] = true
+	}
+	return multiArtifactTypeItr{itr, members}
+}
+
+func (itr multiArtifactTypeItr) Next(ctx context.Context) (art Artifact, err error) {
+	for !itr.members[art.ArtType] {
+		art, err = itr.itr.Next(ctx)
+		if err != nil {
+			return Artifact{}, err
+		}
+	}
+
+	return art, nil
+}
+
+type ArtifactIter interface {
+	Next(ctx context.Context) (Artifact, error)
+}
+
 // ArtifactIter iterates artifacts as a decoded artifact struct.
-type ArtifactIter struct {
+type artifactIterImpl struct {
 	itr          MapIter
 	artKD, artVD val.TupleDesc
 	tb           *val.TupleBuilder
@@ -349,7 +489,9 @@ type ArtifactIter struct {
 	numPks       int
 }
 
-func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
+var _ ArtifactIter = artifactIterImpl{}
+
+func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	artKey, v, err := itr.itr.Next(ctx)
 	if err != nil {
 		return Artifact{}, err
@@ -361,15 +503,15 @@ func (itr ArtifactIter) Next(ctx context.Context) (Artifact, error) {
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
 	return Artifact{
-		ArtKey:     artKey,
-		Key:        srcKey,
-		HeadCmHash: cmHash,
-		ArtType:    ArtifactType(artType),
-		Metadata:   metadata,
+		ArtKey:       artKey,
+		Key:          srcKey,
+		TheirRootIsh: cmHash,
+		ArtType:      ArtifactType(artType),
+		Metadata:     metadata,
 	}, nil
 }
 
-func (itr ArtifactIter) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
+func (itr artifactIterImpl) getSrcKeyFromArtKey(k val.Tuple) val.Tuple {
 	for i := 0; i < itr.numPks; i++ {
 		itr.tb.PutRaw(0, k.GetField(i))
 	}
@@ -382,8 +524,8 @@ type Artifact struct {
 	ArtKey val.Tuple
 	// Key is the key of the source row that the artifact references
 	Key val.Tuple
-	// HeadCmHash is the cm hash of the left branch's head at the time of artifact creation
-	HeadCmHash []byte
+	// TheirRootIsh is the working set hash or commit hash of the right in the merge
+	TheirRootIsh hash.Hash
 	// ArtType is the type of the artifact
 	ArtType ArtifactType
 	// Metadata is the encoded json metadata

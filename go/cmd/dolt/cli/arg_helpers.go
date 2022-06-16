@@ -73,7 +73,7 @@ func ParseArgsOrDie(ap *argparser.ArgParser, args []string, usagePrinter UsagePr
 	return apr
 }
 
-func HelpAndUsagePrinters(cmdDoc CommandDocumentation) (UsagePrinter, UsagePrinter) {
+func HelpAndUsagePrinters(cmdDoc *CommandDocumentation) (UsagePrinter, UsagePrinter) {
 	// TODO handle error states
 	longDesc, _ := cmdDoc.GetLongDesc(CliFormat)
 	synopsis, _ := cmdDoc.GetSynopsis(CliFormat)

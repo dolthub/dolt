@@ -6,11 +6,16 @@ RUN apt update -y && \
     apt install -y \
         curl \
         gnupg \
+        libwxbase3.0-0v5 \
+        libwxgtk3.0-gtk3-0v5 \
+        libsctp1 \
         software-properties-common && \
-    curl -OL https://packages.erlang-solutions.com/erlang-solutions_2.0_all.deb && \
-    dpkg -i erlang-solutions_2.0_all.deb && \
     curl -sL https://deb.nodesource.com/setup_14.x | bash - && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
+    curl -OL http://packages.erlang-solutions.com/ubuntu/pool/esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
+    dpkg -i esl-erlang_22.3.4.9-1~ubuntu~bionic_amd64.deb && \
+    curl -LO http://packages.erlang-solutions.com/ubuntu/pool/elixir_1.10.1-1~ubuntu~bionic_all.deb && \
+    dpkg -i elixir_1.10.1-1~ubuntu~bionic_all.deb && \
     apt update -y && \
     apt install -y \
         python3.8 \
@@ -45,12 +50,8 @@ RUN apt update -y && \
         libpq-dev \
         nodejs \
         postgresql-server-dev-all && \
-    update-ca-certificates -f && \
-    echo 'deb https://packages.erlang-solutions.com/ubuntu xenial contrib' | tee -a /etc/apt/sources.list && \
-    wget https://packages.erlang-solutions.com/ubuntu/erlang_solutions.asc && \
-    apt-key add erlang_solutions.asc && \
-    apt -y update && \
-    apt install -y esl-erlang elixir
+        update-ca-certificates -f
+
 # install go
 WORKDIR /root
 ENV GO_VERSION=1.18

@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"strconv"
 	"time"
@@ -63,8 +62,7 @@ func (cmd SendMetricsCmd) Hidden() bool {
 	return true
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd SendMetricsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd SendMetricsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -79,7 +77,7 @@ func (cmd SendMetricsCmd) ArgParser() *argparser.ArgParser {
 func (cmd SendMetricsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, _ := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
+	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{ShortDesc: sendMetricsShortDesc}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	metricsDisabled := dEnv.Config.GetStringOrDefault(env.MetricsDisabled, "false")

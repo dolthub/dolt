@@ -16,7 +16,6 @@ package cli
 
 import (
 	"context"
-	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,7 +60,7 @@ func (cmd *trackedCommand) Description() string {
 	return cmd.description
 }
 
-func (cmd *trackedCommand) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd *trackedCommand) Docs() *CommandDocumentation {
 	return nil
 }
 

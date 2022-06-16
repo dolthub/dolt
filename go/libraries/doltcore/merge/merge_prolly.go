@@ -32,12 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type mergeResult struct {
-	tbl   *doltdb.Table
-	arts  durable.ArtifactIndex
-	stats *MergeStats
-}
-
 // mergeTableData three-way merges rows and indexes for a given table. First,
 // the primary row data is merged, then secondary indexes are merged. In the
 // process of merging the primary row data, we may need to perform cell-wise
@@ -53,12 +47,13 @@ type mergeResult struct {
 func mergeTableData(
 	ctx context.Context,
 	vrw types.ValueReadWriter,
+	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
 	tbl, mergeTbl, tableToUpdate *doltdb.Table,
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
-	cmHash hash.Hash,
-	mergeTblHash, ancTblHash hash.Hash) (mergeResult, error) {
+	mergeRootIsh hash.Hash,
+	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
 	stats := &MergeStats{Operation: TableModified}
@@ -81,11 +76,11 @@ func mergeTableData(
 
 	rootIndexSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 	mergeIndexSet, err := mergeTbl.GetIndexSet(ctx)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 
 	var updatedRootIndexSet durable.IndexSet
@@ -98,50 +93,117 @@ func mergeTableData(
 
 	artIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 	artM := durable.ProllyMapFromArtifactIndex(artIdx)
 	artifactEditor := artM.Editor()
-	kd, vd := artM.Descriptors()
-	p, err := newConflictProcessor(artM.Pool(), kd, vd, cmHash, ancTblHash, mergeTblHash)
-	if err != nil {
-		return mergeResult{}, err
+
+	var p conflictProcessor
+	if can, err := isNewConflictsCompatible(ctx, tbl, tblName, ancSchema, rootSchema, mergeSchema); err != nil {
+		return nil, nil, err
+	} else if can {
+		p, err = newInsertingProcessor(mergeRootIsh, ancRootIsh)
+		if err != nil {
+			return nil, nil, err
+		}
+	} else {
+		p = abortingProcessor{}
 	}
+
 	group.Go(func() error {
 		return p.process(gCtx, stats, conflicts, artifactEditor)
 	})
 
 	err = group.Wait()
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 
 	tbl, err = tbl.SetIndexSet(ctx, updatedRootIndexSet)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 	mergeTbl, err = mergeTbl.SetIndexSet(ctx, updatedMergeIndexSet)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 
 	artifactMap, err := artifactEditor.Flush(ctx)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
+	updatedTable, err = updatedTable.SetArtifacts(ctx, artIdx)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
 	if err != nil {
-		return mergeResult{}, err
+		return nil, nil, err
 	}
 
 	// TODO (dhruv): populate merge stats
-	return mergeResult{
-		tbl:   updatedTable,
-		arts:  artIdx,
-		stats: stats,
-	}, nil
+	return updatedTable, stats, nil
+}
+
+func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+	artsIdx, err := tbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mergeArtsIdx, err := mergeTbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ancArtsIdx, err := ancTbl.GetArtifacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	arts := durable.ProllyMapFromArtifactIndex(artsIdx)
+	mergeArts := durable.ProllyMapFromArtifactIndex(mergeArtsIdx)
+	ancArts := durable.ProllyMapFromArtifactIndex(ancArtsIdx)
+
+	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
+		panic("received a conflict when merging sets of conflicts")
+	})
+	if err != nil {
+		return nil, err
+	}
+	idx := durable.ArtifactIndexFromProllyMap(mergedArts)
+
+	updatedTable, err := tableToUpdate.SetArtifacts(ctx, idx)
+	if err != nil {
+		return nil, err
+	}
+
+	return updatedTable, nil
+}
+
+// returns true if newly generated conflicts are compatible with existing conflicts in the artifact table.
+func isNewConflictsCompatible(ctx context.Context, tbl *doltdb.Table, tblName string, base, ours, theirs schema.Schema) (bool, error) {
+	has, err := tbl.HasConflicts(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	if !has {
+		return true, nil
+	}
+
+	eBase, eOurs, eTheirs, err := tbl.GetConflictSchemas(ctx, tblName)
+	if err != nil {
+		return false, err
+	}
+
+	if schema.ColCollsAreEqual(eBase.GetAllCols(), base.GetAllCols()) &&
+		schema.ColCollsAreEqual(eOurs.GetAllCols(), ours.GetAllCols()) &&
+		schema.ColCollsAreEqual(eTheirs.GetAllCols(), theirs.GetAllCols()) {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // mergeProllyRowData merges the primary row table indexes of |tbl|, |mergeTbl|,
@@ -326,37 +388,31 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 	}
 }
 
-type conflictProcessor struct {
-	cmHash       []byte
-	metadataJson []byte
-	keyBD, valBD *val.TupleBuilder
-	pool         pool.BuffPool
+type conflictProcessor interface {
+	process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error
 }
 
-func newConflictProcessor(pool pool.BuffPool, artKD, artVD val.TupleDesc, cmHash, baseTblHash, theirTblHash hash.Hash) (*conflictProcessor, error) {
-	h := make([]byte, 20)
-	copy(h, cmHash[:])
+type insertingProcessor struct {
+	theirRootIsh hash.Hash
+	jsonMetaData []byte
+}
+
+func newInsertingProcessor(theirRootIsh, baseRootIsh hash.Hash) (*insertingProcessor, error) {
 	m := prolly.ConflictMetadata{
-		BaseTblHash:  make([]byte, 20),
-		TheirTblHash: make([]byte, 20),
+		BaseRootIsh: baseRootIsh,
 	}
-	copy(m.BaseTblHash, baseTblHash[:])
-	copy(m.TheirTblHash, theirTblHash[:])
 	data, err := json.Marshal(m)
 	if err != nil {
 		return nil, err
 	}
-	p := conflictProcessor{
-		cmHash:       h,
-		metadataJson: data,
-		keyBD:        val.NewTupleBuilder(artKD),
-		valBD:        val.NewTupleBuilder(artVD),
-		pool:         pool,
+	p := insertingProcessor{
+		theirRootIsh: theirRootIsh,
+		jsonMetaData: data,
 	}
 	return &p, nil
 }
 
-func (p *conflictProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+func (p *insertingProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
 OUTER:
 	for {
 		select {
@@ -365,11 +421,7 @@ OUTER:
 				break OUTER
 			}
 			stats.Conflicts++
-			k, v, err := p.buildConflictArtifact(conflict.key)
-			if err != nil {
-				return err
-			}
-			err = artEditor.Add(ctx, k, v)
+			err := artEditor.Add(ctx, conflict.key, p.theirRootIsh, prolly.ArtifactTypeConflict, p.jsonMetaData)
 			if err != nil {
 				return err
 			}
@@ -381,16 +433,17 @@ OUTER:
 	return nil
 }
 
-func (p *conflictProcessor) buildConflictArtifact(key val.Tuple) (k, v val.Tuple, err error) {
-	for i := 0; i < key.Count(); i++ {
-		p.keyBD.PutRaw(i, key.GetField(i))
+type abortingProcessor struct{}
+
+func (p abortingProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+	select {
+	case _, ok := <-conflictChan:
+		if !ok {
+			break
+		}
+		return ErrConflictsIncompatible
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	p.keyBD.PutAddress(key.Count(), p.cmHash)
-	p.keyBD.PutUint8(key.Count()+1, uint8(prolly.ArtifactTypeConflict))
-	k = p.keyBD.Build(p.pool)
-
-	p.valBD.PutJSON(0, p.metadataJson)
-	v = p.valBD.Build(p.pool)
-
-	return
+	return nil
 }

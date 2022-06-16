@@ -112,24 +112,34 @@ func (dt *UnscopedDiffTable) newWorkingSetRowItr(ctx *sql.Context) (sql.RowIter,
 	}
 
 	return &doltDiffWorkingSetRowItr{
-		tableDeltas: append(staged, unstaged[0:]...),
+		stagedTableDeltas:   staged,
+		unstagedTableDeltas: unstaged,
 	}, nil
 }
 
 var _ sql.RowIter = &doltDiffWorkingSetRowItr{}
 
 type doltDiffWorkingSetRowItr struct {
-	tableDeltas []diff.TableDelta
-	idx         int
+	stagedIndex         int
+	unstagedIndex       int
+	stagedTableDeltas   []diff.TableDelta
+	unstagedTableDeltas []diff.TableDelta
 }
 
 func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
-	if d.idx >= len(d.tableDeltas) {
+	var changeSet string
+	var tableDelta diff.TableDelta
+	if d.stagedIndex < len(d.stagedTableDeltas) {
+		changeSet = "STAGED"
+		tableDelta = d.stagedTableDeltas[d.stagedIndex]
+		d.stagedIndex++
+	} else if d.unstagedIndex < len(d.unstagedTableDeltas) {
+		changeSet = "WORKING"
+		tableDelta = d.unstagedTableDeltas[d.unstagedIndex]
+		d.unstagedIndex++
+	} else {
 		return nil, io.EOF
 	}
-
-	tableDelta := d.tableDeltas[d.idx]
-	d.idx++
 
 	change, err := processTableDelta(ctx, tableDelta)
 	if err != nil {
@@ -137,7 +147,7 @@ func (d *doltDiffWorkingSetRowItr) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 
 	sqlRow := sql.NewRow(
-		"WORKING",
+		changeSet,
 		change.tableName,
 		"NULL", // committer
 		"NULL", // email

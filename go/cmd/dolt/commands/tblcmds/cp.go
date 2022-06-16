@@ -51,10 +51,9 @@ func (cmd CpCmd) Description() string {
 	return "Copies a table"
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd CpCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd CpCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
+	return cli.NewCommandDocumentation(tblCpDocs, ap)
 }
 
 func (cmd CpCmd) ArgParser() *argparser.ArgParser {
@@ -73,7 +72,7 @@ func (cmd CpCmd) EventType() eventsapi.ClientEventType {
 // Exec executes the command
 func (cmd CpCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, tblCpDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, tblCpDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() != 2 {

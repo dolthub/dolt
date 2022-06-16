@@ -160,7 +160,7 @@ func ParseEWKBPoly(buf []byte, srid uint32) Polygon {
 	lines := make([]LineString, numLines)
 	for i := uint32(0); i < numLines; i++ {
 		lines[i] = ParseEWKBLine(buf[s:], srid)
-		s += LengthSize * geometry.PointSize * len(lines[i].Points)
+		s += LengthSize + geometry.PointSize*len(lines[i].Points)
 	}
 
 	return Polygon{SRID: srid, Lines: lines}
