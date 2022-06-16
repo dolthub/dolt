@@ -17,7 +17,6 @@ package encoding
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"reflect"
 	"strconv"
@@ -39,7 +38,7 @@ import (
 
 func createTestSchema() schema.Schema {
 	columns := []schema.Column{
-		schema.NewColumn("id", 4, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("id", 4, types.InlineBlobKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", 1, types.StringKind, false),
 		schema.NewColumn("last", 2, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("age", 3, types.UintKind, false),
@@ -71,18 +70,19 @@ func TestNomsMarshalling(t *testing.T) {
 		t.Fatal("Failed to unmarshal types.Value as Schema")
 	}
 
-	if !reflect.DeepEqual(tSchema, unMarshalled) {
+	if !assert.Equal(t, tSchema, unMarshalled) {
 		t.Error("Value different after marshalling and unmarshalling.")
 	}
 
-	validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
-
-	if err != nil {
-		t.Fatal(fmt.Sprintf("Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %s", err.Error()))
-	}
-
-	if !reflect.DeepEqual(tSchema, validated) {
-		t.Error("Value different after marshalling and unmarshalling.")
+	// this validation step only makes sense for Noms encoded schemas
+	if !types.Format_Default.UsesFlatbuffers() {
+		validated, err := validateUnmarshaledNomsValue(context.Background(), types.Format_Default, val)
+		assert.NoError(t, err,
+			"Failed compatibility test. Schema could not be unmarshalled with mirror type, error: %s",
+			err.Error())
+		if !assert.Equal(t, tSchema, validated) {
+			t.Error("Value different after marshalling and unmarshalling.")
+		}
 	}
 
 	tSuperSchema, err := schema.NewSuperSchema(tSchema)
