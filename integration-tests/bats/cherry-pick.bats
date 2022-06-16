@@ -212,7 +212,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "cherry-picking a merge or cherry-picked commit is not supported." ]] || false
+    [[ "$output" =~ "cherry-picking a merge commit is not supported." ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a cherry-picked commit" {
@@ -248,7 +248,6 @@ teardown() {
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
-    # [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE add column" {
