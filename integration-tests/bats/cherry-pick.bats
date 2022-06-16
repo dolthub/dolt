@@ -215,6 +215,30 @@ teardown() {
     [[ "$output" =~ "cherry-picking a merge or cherry-picked commit is not supported." ]] || false
 }
 
+@test "cherry-pick: cherry-pick commit is a cherry-picked commit" {
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
+    dolt commit -am "add more rows in branch2"
+
+    dolt checkout branch1
+    dolt sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
+    dolt commit -am "add more rows in branch1"
+    run dolt cherry-pick branch2
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "4,d" ]] || false
+    [[ "$output" =~ "5,e" ]] || false
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test" -r csv
+    [[ "$output" =~ "4,d" ]] || false
+    [[ "$output" =~ "5,e" ]] || false
+}
+
 @test "cherry-pick: ALTER TABLE rename table name" {
     dolt sql -q "INSERT INTO test VALUES (4, 'd')"
     dolt sql -q "ALTER TABLE test RENAME TO new_name"

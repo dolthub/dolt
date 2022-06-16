@@ -33,9 +33,11 @@ var cherryPickDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Apply the changes introduced by an existing commit.`,
 	LongDesc: `
 Updates tables in the clean working set with changes introduced in cherry-picked commit and creates a new commit with applied changes.
+
 Currently, schema changes introduced in cherry-pick commit are not supported. Row data changes are allowed with a table schema in working set 
-matching a table schema in cherry-pick commit with the same name. If there is a conflict, the working state stays clean.
-Cherry-picking a merge commit or cherry-picked commit is not supported.
+matching a table schema in cherry-pick commit with the same name. 
+
+If there is a conflict, the working state stays clean. Cherry-picking a merge commit is not supported.
 
 dolt cherry-pick {{.LessThan}}commit{{.GreaterThan}}
    To apply changes from an existing {{.LessThan}}commit{{.GreaterThan}} to current HEAD, the current working tree must be clean (no modifications from the HEAD commit). 
@@ -241,7 +243,7 @@ func getParentAndCherryRoots(ctx context.Context, ddb *doltdb.DoltDB, cherryComm
 
 	var parentRoot *doltdb.RootValue
 	if len(cherryCommit.DatasParents()) > 1 {
-		return nil, nil, errhand.BuildDError("cherry-picking a merge or cherry-picked commit is not supported.").Build()
+		return nil, nil, errhand.BuildDError("cherry-picking a merge commit is not supported.").Build()
 	} else if len(cherryCommit.DatasParents()) == 1 {
 		parentCM, err := ddb.ResolveParent(ctx, cherryCommit, 0)
 		if err != nil {
