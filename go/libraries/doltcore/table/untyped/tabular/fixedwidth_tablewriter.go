@@ -31,8 +31,10 @@ import (
 // FixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
 // expected to be strings.
 type FixedWidthTableWriter struct {
-	// number of samples to take before beginning to print rows
+	// number of samples taken during the auto fixed width calculation phase
 	numSamples int
+	// number of rows actually written (not just samples)
+	numRowsWritten int
 	// Max print width for each column
 	printWidths []int
 	// Max runes per column
@@ -47,8 +49,6 @@ type FixedWidthTableWriter struct {
 	closer io.Closer
 	// wr is where to direct tableRow output
 	wr *bufio.Writer
-	// writtenHeader returns whether we've written the table header yet
-	writtenHeader bool
 	// flushedSampleBuffer records whether we've already written buffered rows to output
 	flushedSampleBuffer bool
 }
@@ -98,14 +98,16 @@ func (w *FixedWidthTableWriter) Close(ctx context.Context) error {
 		return err
 	}
 
-	err = w.writeFooter()
-	if err != nil {
-		return err
-	}
+	if w.numRowsWritten > 0 {
+		err = w.writeFooter()
+		if err != nil {
+			return err
+		}
 
-	err = w.wr.Flush()
-	if err != nil {
-		return err
+		err = w.wr.Flush()
+		if err != nil {
+			return err
+		}
 	}
 
 	return w.closer.Close()
@@ -225,12 +227,11 @@ func stringValue(i interface{}) (string, error) {
 }
 
 func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
-	if !w.writtenHeader {
+	if w.numRowsWritten == 0 {
 		err := w.writeHeader()
 		if err != nil {
 			return err
 		}
-		w.writtenHeader = true
 	}
 
 	formattedCols, err := w.formatter.Format(row.columns)
@@ -248,6 +249,7 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 		rowStr.WriteString(" |")
 	}
 
+	w.numRowsWritten++
 	return iohelp.WriteLine(w.wr, rowStr.String())
 }
 
