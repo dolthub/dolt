@@ -103,11 +103,12 @@ In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{
 type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
+	fromArg    string
+	toArg      string
 	tableSet   *set.StrSet
 	docSet     *set.StrSet
 	limit      int
 	where      string
-	query      string
 }
 
 type DiffCmd struct{}
@@ -175,28 +176,6 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (from, to *doltdb.RootValue, dArgs *diffArgs, err error) {
 	dArgs = &diffArgs{}
 
-	if q, ok := apr.GetValue(QueryFlag); ok {
-		_, okWhere := apr.GetValue(whereParam)
-		_, okLimit := apr.GetInt(limitParam)
-		switch {
-		case okWhere:
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, whereParam)
-		case okLimit:
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, limitParam)
-		case apr.Contains(DataFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, DataFlag)
-		case apr.Contains(SchemaFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SchemaFlag)
-		case apr.Contains(SummaryFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SummaryFlag)
-		case apr.Contains(SQLFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, SQLFlag)
-		case apr.Contains(CachedFlag):
-			return nil, nil, nil, fmt.Errorf("arg %s cannot be combined with arg %s", QueryFlag, CachedFlag)
-		}
-		dArgs.query = q
-	}
-
 	dArgs.diffParts = SchemaAndDataDiff
 	if apr.Contains(DataFlag) && !apr.Contains(SchemaFlag) {
 		dArgs.diffParts = DataOnlyDiff
@@ -230,10 +209,6 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 
 	if err != nil {
 		return nil, nil, nil, err
-	}
-
-	if dArgs.query != "" && len(leftover) != 0 {
-		return nil, nil, nil, fmt.Errorf("too many arguments, diff -q does not take table args")
 	}
 
 	dArgs.tableSet = set.NewStrSet(nil)
@@ -619,6 +594,7 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		to = "STAGED"
 	}
 
+	// TODO: this is too simplistic, we need to get these from diffArgs (table name can be an arg e.g.)
 	if apr.NArg() > 0 {
 		from = apr.Arg(0)
 	}
