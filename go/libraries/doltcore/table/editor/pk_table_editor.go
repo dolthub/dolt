@@ -25,13 +25,14 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	errors2 "gopkg.in/src-d/go-errors.v1"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
-	errors2 "gopkg.in/src-d/go-errors.v1"
 )
 
 const tfApproxCapacity = 64
