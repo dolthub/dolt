@@ -87,7 +87,7 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 	}
 
 	if val == nil {
-		return nil, errors.New("Root hash doesn't exist")
+		return types.EmptyMap, errors.New("Root hash doesn't exist")
 	}
 
 	return val.(types.Map), nil
@@ -104,7 +104,7 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 	}
 
 	if val == nil {
-		return nil, errors.New("Root hash doesn't exist")
+		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
 	}
 
 	return parse_storeroot([]byte(val.(types.SerialMessage)), db.chunkStore()), nil
