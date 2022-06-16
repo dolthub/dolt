@@ -367,11 +367,6 @@ var unmarshalledSchemaCache = map[hash.Hash]schCacheData{}
 
 // UnmarshalSchemaNomsValue takes a types.Value instance and Unmarshalls it into a Schema.
 func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, schemaVal types.Value) (schema.Schema, error) {
-	if nbf.UsesFlatbuffers() {
-		// todo(andy): caching
-		return DeserializeSchema(ctx, nbf, schemaVal)
-	}
-
 	h, err := schemaVal.Hash(nbf)
 	if err != nil {
 		return nil, err
@@ -393,8 +388,15 @@ func UnmarshalSchemaNomsValue(ctx context.Context, nbf *types.NomsBinFormat, sch
 	}
 
 	var sd schemaData
-	err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
-
+	if nbf.UsesFlatbuffers() {
+		sch, err := DeserializeSchema(ctx, nbf, schemaVal)
+		if err != nil {
+			return nil, err
+		}
+		sd, err = toSchemaData(sch)
+	} else {
+		err = marshal.Unmarshal(ctx, nbf, schemaVal, &sd)
+	}
 	if err != nil {
 		return nil, err
 	}
