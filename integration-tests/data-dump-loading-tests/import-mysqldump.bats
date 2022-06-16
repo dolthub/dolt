@@ -385,7 +385,7 @@ d
     run dolt sql <<SQL
 CREATE TABLE film (
   film_id smallint unsigned NOT NULL AUTO_INCREMENT,
-  title varchar(128) NOT NULL,
+  title varchar(128) NOT NULL,  
   description text,
   PRIMARY KEY (film_id)
 );
