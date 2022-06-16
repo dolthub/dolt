@@ -44,7 +44,6 @@ teardown() {
     dolt commit -am "Updated 2b to 2x and inserted more rows"
 
     dolt checkout main
-
     run dolt cherry-pick branch1~2
     [ "$status" -eq "0" ]
 
@@ -163,7 +162,6 @@ teardown() {
     dolt commit -am "Added table_a with rows and delete pk=2 from test"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "0" ]
 
@@ -189,7 +187,6 @@ teardown() {
     [[ ! "$output" =~ "test" ]] || false
 
     dolt checkout main
-
     run dolt sql -q "SHOW TABLES" -r csv
     [[ "$output" =~ "test" ]] || false
 
@@ -201,14 +198,30 @@ teardown() {
     [[ "$output" =~ "test" ]] || false
 }
 
+@test "cherry-pick: cherry-pick commit is a merge commit" {
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO test VALUES (4, 'd'), (5, 'e')"
+    dolt commit -am "add more rows in branch2"
+
+    dolt checkout branch1
+    dolt sql -q "INSERT INTO test VALUES (6, 'f'), (7, 'g')"
+    dolt commit -am "add more rows in branch1"
+    dolt merge branch2
+    dolt commit -am "merge branch2"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "cherry-picking a merge or cherry-picked commit is not supported." ]] || false
+}
+
 @test "cherry-pick: ALTER TABLE rename table name" {
     dolt sql -q "INSERT INTO test VALUES (4, 'd')"
     dolt sql -q "ALTER TABLE test RENAME TO new_name"
     dolt commit -am "rename table name"
 
     dolt checkout main
-
-    dolt cherry-pick branch1
+    run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
     # [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -220,7 +233,6 @@ teardown() {
     dolt commit -am "alter table test add column c"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -232,7 +244,6 @@ teardown() {
     dolt commit -am "alter table test change column v"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -244,7 +255,6 @@ teardown() {
     dolt commit -am "alter table test modify column v"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -255,7 +265,6 @@ teardown() {
     dolt commit -am "alter table test drop column v"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -266,7 +275,6 @@ teardown() {
     dolt commit -am "alter table test rename column v"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
@@ -277,7 +285,6 @@ teardown() {
     dolt commit -am "alter table test drop and add primary key"
 
     dolt checkout main
-
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
     [[ "$output" =~ "table schema does not match in current HEAD and cherry-pick commit" ]] || false
