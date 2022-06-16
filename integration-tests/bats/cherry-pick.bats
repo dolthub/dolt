@@ -247,7 +247,7 @@ teardown() {
     dolt checkout main
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE add column" {
