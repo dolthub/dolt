@@ -496,8 +496,8 @@ SQL
     [ "$status" -eq 0 ]
 
     mysql <<SQL
-USE testdb;
-DROP TABLE mytable
+DROP DATABASE testdb;
+CREATE DATABASE testdb /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin */ ;
 SQL
 
     # go to created database
