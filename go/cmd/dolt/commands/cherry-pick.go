@@ -138,13 +138,12 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	if !stagedHash.Equal(workingHash) {
-		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\n commit you changes or ").Build()
+	if !headHash.Equal(stagedHash) {
+		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes to proceed.").Build()
 	}
 
-	// TODO : git functionality seems like it merges unless there is conflict???
 	if !headHash.Equal(workingHash) {
-		return errhand.BuildDError("You must commit any changes before using cherry-pick.").Build()
+		return errhand.BuildDError("Please commit your changes them before using cherry-pick.").Build()
 	}
 
 	newWorkingRoot, commitMsg, err := getCherryPickedRootValue(ctx, dEnv, workingRoot, headHash, cherryStr)

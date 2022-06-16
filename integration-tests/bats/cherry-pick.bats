@@ -90,7 +90,7 @@ teardown() {
     dolt sql -q "INSERT INTO test VALUES (4, 'f')"
     run dolt cherry-pick branch1~2
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "changes" ]] || false
+    [[ "$output" =~ "Please commit your changes them before using cherry-pick." ]] || false
 }
 
 @test "cherry-pick: staged changes" {
@@ -99,7 +99,7 @@ teardown() {
     dolt add -A
     run dolt cherry-pick branch1~2
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "You must commit any changes before using cherry-pick." ]] || false
+    [[ "$output" =~ "your local changes would be overwritten by cherry-pick" ]] || false
 }
 
 @test "cherry-pick: insert, update, delete rows and schema changes on non existent table in working set" {
