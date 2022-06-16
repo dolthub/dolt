@@ -1801,3 +1801,6 @@ SQL
     [ "$status" -eq 1 ]
 }
 
+@test "sql: skipped" {
+  skip "Skipping on purpose"
+}
