@@ -72,7 +72,7 @@ func Revert(ctx context.Context, ddb *doltdb.DoltDB, root *doltdb.RootValue, hea
 			return nil, "", err
 		}
 
-		root, _, err = MergeRoots(ctx, headCmHash, root, theirRoot, baseRoot, opts)
+		root, _, err = MergeRoots(ctx, headCmHash, root, theirRoot, baseRoot, opts, false)
 		if err != nil {
 			return nil, "", err
 		}

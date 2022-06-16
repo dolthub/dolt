@@ -280,6 +280,7 @@ func (tx *DoltTransaction) mergeRoots(
 		workingSet.WorkingRoot(),
 		tx.startState.WorkingRoot(),
 		tx.mergeEditOpts,
+		false,
 	)
 	if err != nil {
 		return nil, err
