@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 
@@ -49,8 +48,7 @@ func (cmd VersionCmd) RequiresRepo() bool {
 	return false
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd VersionCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd VersionCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 

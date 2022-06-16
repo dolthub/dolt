@@ -16,7 +16,6 @@ package credcmds
 
 import (
 	"context"
-	"io"
 	"strings"
 
 	"github.com/fatih/color"
@@ -52,10 +51,9 @@ func (cmd LsCmd) Description() string {
 	return lsDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd LsCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	return cli.NewCommandDocumentation(lsDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -78,7 +76,7 @@ func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.Contains("verbose") {

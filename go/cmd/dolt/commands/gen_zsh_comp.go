@@ -50,7 +50,7 @@ func (z GenZshCompCmd) Description() string {
 func (z GenZshCompCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := z.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, cli.CommandDocumentationContent{}, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, cli.CommandDocumentationContent{}, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	fileStr := apr.GetValueOrDefault(fileParamName, "_dolt")
@@ -255,7 +255,7 @@ func formatOption(opt *argparser.Option) string {
 	}
 }
 
-func (z GenZshCompCmd) CreateMarkdown(writer io.Writer, commandStr string) error {
+func (z GenZshCompCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
