@@ -48,14 +48,13 @@ type SqlEngine struct {
 }
 
 type SqlEngineConfig struct {
-	InitialDb     string
-	IsReadOnly    bool
-	PrivFilePath  string
-	ServerUser    string
-	ServerPass    string
-	Autocommit    bool
-	Bulk          bool
-	MaxConnection uint64
+	InitialDb    string
+	IsReadOnly   bool
+	PrivFilePath string
+	ServerUser   string
+	ServerPass   string
+	Autocommit   bool
+	Bulk         bool
 }
 
 // NewSqlEngine returns a SqlEngine
@@ -143,13 +142,6 @@ func NewSqlEngine(
 	err = sess.SetSessionVariable(sql.NewContext(ctx), sql.AutoCommitSessionVar, config.Autocommit)
 	if err != nil {
 		return nil, err
-	}
-
-	if config.MaxConnection > 0 {
-		err = sql.SystemVariables.SetGlobal("max_connections", config.MaxConnection)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return &SqlEngine{

@@ -207,6 +207,8 @@ func startServer(ctx context.Context, versionStr, commandStr string, args []stri
 	return 0
 }
 
+// GetServerConfig returns  that is set either from yaml file if given, if not it is set with values defined
+// on command line. Server config variables not defined are set to default values.
 func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	if cfgFile, ok := apr.GetValue(configFileFlag); ok {
 		return getYAMLServerConfig(dEnv.FS, cfgFile)
@@ -214,6 +216,8 @@ func GetServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerC
 	return getCommandLineServerConfig(dEnv, apr)
 }
 
+// getCommandLineServerConfig sets server config variables and persisted global variables with values defined on command line.
+// If not defined, it sets variables to default values.
 func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResults) (ServerConfig, error) {
 	serverConfig := DefaultServerConfig()
 
@@ -245,13 +249,14 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withTimeout(timeout * 1000)
-	} else if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
-		rt := getPersistentReadTimeout()
-		wt := getPersistentWriteTimeout()
-		if rt == wt {
-			serverConfig.withTimeout(rt)
-		} else {
-			serverConfig.withTimeout(defaultTimeout)
+
+		err = sql.SystemVariables.SetGlobal("net_read_timeout", timeout*1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set net_read_timeout. Error: %s", err.Error())
+		}
+		err = sql.SystemVariables.SetGlobal("net_write_timeout", timeout*1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set net_write_timeout. Error: %s", err.Error())
 		}
 	}
 
@@ -281,9 +286,10 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 
 	if maxConnections, ok := apr.GetInt(maxConnectionsFlag); ok {
 		serverConfig.withMaxConnections(uint64(maxConnections))
-	} else if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
-		mc := getPersistentMaxConnections()
-		serverConfig.withMaxConnections(mc)
+		err := sql.SystemVariables.SetGlobal("max_connections", uint64(maxConnections))
+		if err != nil {
+			return nil, fmt.Errorf("failed to set max_connections. Error: %s", err.Error())
+		}
 	}
 
 	serverConfig.autoCommit = !apr.Contains(noAutoCommitFlag)
@@ -294,6 +300,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 	return serverConfig, nil
 }
 
+// getYAMLServerConfig returns server config variables with values defined in yaml file.
 func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) {
 	data, err := fs.ReadFile(path)
 	if err != nil {
@@ -304,65 +311,25 @@ func getYAMLServerConfig(fs filesys.Filesys, path string) (ServerConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse yaml file '%s'. Error: %s", path, err.Error())
 	}
-	load := cfg.PersistenceBehavior() == loadPerisistentGlobals
 
-	if cfg.ListenerConfig.MaxConnections == nil {
-		var mc uint64
-		if load {
-			mc = getPersistentMaxConnections()
-		} else {
-			mc = uint64(defaultMaxConnections)
+	if cfg.ListenerConfig.MaxConnections != nil {
+		err = sql.SystemVariables.SetGlobal("max_connections", *cfg.ListenerConfig.MaxConnections)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set max_connections from yaml file '%s'. Error: %s", path, err.Error())
 		}
-		cfg.ListenerConfig.MaxConnections = &mc
 	}
-	if cfg.ListenerConfig.ReadTimeoutMillis == nil {
-		var rt uint64
-		if load {
-			rt = getPersistentReadTimeout()
-		} else {
-			rt = uint64(defaultTimeout)
+	if cfg.ListenerConfig.ReadTimeoutMillis != nil {
+		err = sql.SystemVariables.SetGlobal("net_read_timeout", *cfg.ListenerConfig.ReadTimeoutMillis)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set net_read_timeout from yaml file '%s'. Error: %s", path, err.Error())
 		}
-		cfg.ListenerConfig.ReadTimeoutMillis = &rt
 	}
-	if cfg.ListenerConfig.WriteTimeoutMillis == nil {
-		var wt uint64
-		if load {
-			wt = getPersistentWriteTimeout()
-		} else {
-			wt = uint64(defaultTimeout)
+	if cfg.ListenerConfig.WriteTimeoutMillis != nil {
+		err = sql.SystemVariables.SetGlobal("net_write_timeout", *cfg.ListenerConfig.WriteTimeoutMillis)
+		if err != nil {
+			return nil, fmt.Errorf("Failed to set net_write_timeout from yaml file '%s'. Error: %s", path, err.Error())
 		}
-		cfg.ListenerConfig.WriteTimeoutMillis = &wt
 	}
 
 	return cfg, nil
-}
-
-func getPersistentMaxConnections() uint64 {
-	if _, val, ok := sql.SystemVariables.GetGlobal("max_connections"); ok {
-		mc, ok := val.(int64)
-		if ok {
-			return uint64(mc)
-		}
-	}
-	return defaultMaxConnections
-}
-
-func getPersistentReadTimeout() uint64 {
-	if _, val, ok := sql.SystemVariables.GetGlobal("net_read_timeout"); ok {
-		rt, ok := val.(uint64)
-		if ok {
-			return rt
-		}
-	}
-	return defaultTimeout
-}
-
-func getPersistentWriteTimeout() uint64 {
-	if _, val, ok := sql.SystemVariables.GetGlobal("net_write_timeout"); ok {
-		rt, ok := val.(uint64)
-		if ok {
-			return rt
-		}
-	}
-	return defaultTimeout
 }

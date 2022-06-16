@@ -178,6 +178,33 @@ behavior:
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
 }
 
+@test "sql-server-config: set max_connections with yaml config with persistence ignore" {
+    cd repo1
+    DEFAULT_DB="repo1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: 0.0.0.0
+  port: $PORT
+  max_connections: 999
+
+behavior:
+  read_only: false
+  autocommit: true
+  persistence_behavior: ignore" > server.yaml
+
+    dolt sql-server --config server.yaml --max-connections 333 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
+}
+
 @test "sql-server-config: persistence behavior set to load" {
     cd repo1
     start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior load repo1
@@ -205,4 +232,11 @@ behavior:
     start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior ignore repo1
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n100"
+}
+
+@test "sql-server-config: persisted global variable defined on the command line with persistence ignored" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --max-connections 555 --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n555"
 }

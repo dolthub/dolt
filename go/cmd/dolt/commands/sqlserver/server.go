@@ -133,13 +133,12 @@ func Serve(
 
 	// Create SQL Engine with users
 	config := &engine.SqlEngineConfig{
-		InitialDb:     "",
-		IsReadOnly:    isReadOnly,
-		PrivFilePath:  serverConfig.PrivilegeFilePath(),
-		ServerUser:    serverConfig.User(),
-		ServerPass:    serverConfig.Password(),
-		Autocommit:    serverConfig.AutoCommit(),
-		MaxConnection: serverConfig.MaxConnections(),
+		InitialDb:    "",
+		IsReadOnly:   isReadOnly,
+		PrivFilePath: serverConfig.PrivilegeFilePath(),
+		ServerUser:   serverConfig.User(),
+		ServerPass:   serverConfig.Password(),
+		Autocommit:   serverConfig.AutoCommit(),
 	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
@@ -226,6 +225,7 @@ func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 	}
 }
 
+// getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
 func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
 	serverConf := server.Config{Protocol: "tcp"}
 	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
@@ -244,6 +244,20 @@ func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error,
 	if portInUse(hostPort) {
 		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
 		return server.Config{}, portInUseError, nil
+	}
+
+	// if persist is 'load' we use currently set persisted global variable,
+	// else if 'ignore' we set persisted global variable to current value from serverConfig
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		serverConf, err = serverConf.NewConfig()
+		if err != nil {
+			return server.Config{}, err, nil
+		}
+	} else {
+		err = sql.SystemVariables.SetGlobal("max_connections", serverConfig.MaxConnections())
+		if err != nil {
+			return server.Config{}, err, nil
+		}
 	}
 
 	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
