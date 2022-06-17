@@ -104,10 +104,10 @@ type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
 	fromRoot   *doltdb.RootValue
-	toRoot     *doltdb.RootValue
-	fromArg    string
-	toArg      string
-	tableSet   *set.StrSet
+	toRoot  *doltdb.RootValue
+	fromRef string
+	toRef   string
+	tableSet *set.StrSet
 	docSet     *set.StrSet
 	limit      int
 	where      string
@@ -154,9 +154,9 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	err := cmd.validateArgs(apr)
-	if err != nil {
-		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+	verr := cmd.validateArgs(apr)
+	if verr != nil {
+		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	dArgs, err := parseDiffArgs(ctx, dEnv, apr)
@@ -164,14 +164,12 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr := diffUserTables(ctx, dEnv, dArgs, apr)
-
+	verr = diffUserTables(ctx, dEnv, dArgs, apr)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
 	err = diffDoltDocs(ctx, dEnv, dArgs)
-
 	if err != nil {
 		verr = errhand.BuildDError("error diffing dolt docs").AddCause(err).Build()
 	}
@@ -222,45 +220,42 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	dArgs.limit, _ = apr.GetInt(limitParam)
 	dArgs.where = apr.GetValueOrDefault(whereParam, "")
 
-	from, to, leftoverArgs, err := getDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
+	tableNames, err := dArgs.applyDiffRoots(ctx, dEnv, apr.Args, apr.Contains(CachedFlag))
 	if err != nil {
 		return nil, err
 	}
 
-	dArgs.fromRoot = from
-	dArgs.toRoot = to
-
 	dArgs.tableSet = set.NewStrSet(nil)
 	dArgs.docSet = set.NewStrSet(nil)
 
-	for _, arg := range leftoverArgs {
-		if arg == doltdocs.ReadmeDoc || arg == doltdocs.LicenseDoc {
-			dArgs.docSet.Add(arg)
+	for _, tableName := range tableNames {
+		if tableName == doltdocs.ReadmeDoc || tableName == doltdocs.LicenseDoc {
+			dArgs.docSet.Add(tableName)
 			continue
 		}
 
 		// verify table args exist in at least one root
-		_, ok, err := from.GetTable(ctx, arg)
+		_, ok, err := dArgs.fromRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if ok {
-			dArgs.tableSet.Add(arg)
+			dArgs.tableSet.Add(tableName)
 			continue
 		}
 
-		_, ok, err = to.GetTable(ctx, arg)
+		_, ok, err = dArgs.toRoot.GetTable(ctx, tableName)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
-			return nil, fmt.Errorf("table %s does not exist in either revision", arg)
+			return nil, fmt.Errorf("table %s does not exist in either revision", tableName)
 		}
 	}
 
 	// if no tables or docs were specified as args, diff all tables and docs
-	if len(leftoverArgs) == 0 {
-		utn, err := doltdb.UnionTableNames(ctx, from, to)
+	if len(tableNames) == 0 {
+		utn, err := doltdb.UnionTableNames(ctx, dArgs.fromRoot, dArgs.toRoot)
 		if err != nil {
 			return nil, err
 		}
@@ -271,94 +266,78 @@ func parseDiffArgs(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	return dArgs, nil
 }
 
-func getDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) (fromRoot, toRoot *doltdb.RootValue, leftover []string, err error) {
+// applyDiffRoots applies the appropriate |from| and |to| root values to the receiver and returns the table names
+// (if any) given to the command.
+func (dArgs *diffArgs) applyDiffRoots(ctx context.Context, dEnv *env.DoltEnv, args []string, isCached bool) ([]string, error) {
 	headRoot, err := dEnv.HeadRoot(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	stagedRoot, err := dEnv.StagedRoot(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	workingRoot, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	docs, err := dEnv.DocsReadWriter().GetDocsOnDisk()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
 	workingRoot, err = doltdocs.UpdateRootWithDocs(ctx, workingRoot, docs)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 
-	// from, to := "HEAD", "WORKING"
-	// if isCached {
-	// 	to = "STAGED"
-	// }
-	//
-	// // TODO: this is too simplistic, we need to get these from diffArgs (table name can be an arg e.g.)
-	// if apr.NArg() > 0 {
-	// 	from = apr.Arg(0)
-	// }
-	// if apr.NArg() > 1 {
-	// 	to = apr.Arg(1)
-	// }
+	dArgs.fromRoot = stagedRoot
+	dArgs.fromRef = "STAGED"
+	dArgs.toRoot = workingRoot
+	dArgs.toRef = "WORKING"
+	if isCached {
+		dArgs.fromRoot = headRoot
+		dArgs.fromRef = "HEAD"
+		dArgs.toRoot = stagedRoot
+		dArgs.toRef = "STAGED"
+	}
 
 	if len(args) == 0 {
 		// `dolt diff`
-		fromRoot = stagedRoot
-		toRoot = workingRoot
-		if isCached {
-			fromRoot = headRoot
-			toRoot = stagedRoot
-		}
-		return fromRoot, toRoot, nil, nil
+		return nil, nil
 	}
 
+	// treat the first arg as a ref spec
 	fromRoot, ok := maybeResolve(ctx, dEnv, args[0])
 
+	// if it doesn't resolve, treat it as a table name
 	if !ok {
-		// `dolt diff ...tables`
-		fromRoot = stagedRoot
-		toRoot = workingRoot
-		if isCached {
-			fromRoot = headRoot
-			toRoot = stagedRoot
-		}
-		leftover = args
-		return fromRoot, toRoot, leftover, nil
+		return args, nil
 	}
+
+	dArgs.fromRoot = fromRoot
+	dArgs.fromRef = args[0]
 
 	if len(args) == 1 {
 		// `dolt diff from_commit`
-		toRoot = workingRoot
-		if isCached {
-			toRoot = stagedRoot
-		}
-		return fromRoot, toRoot, nil, nil
+		return nil, nil
 	}
 
-	toRoot, ok = maybeResolve(ctx, dEnv, args[1])
+	toRoot, ok := maybeResolve(ctx, dEnv, args[1])
 
 	if !ok {
 		// `dolt diff from_commit ...tables`
-		toRoot = workingRoot
-		if isCached {
-			toRoot = stagedRoot
-		}
-		leftover = args[1:]
-		return fromRoot, toRoot, leftover, nil
+		return args[1:], nil
 	}
 
+	dArgs.toRoot = toRoot
+	dArgs.toRef = args[1]
+
 	// `dolt diff from_commit to_commit ...tables`
-	leftover = args[2:]
-	return fromRoot, toRoot, leftover, nil
+	return args[2:], nil
 }
 
 // todo: distinguish between non-existent CommitSpec and other errors, don't assume non-existent
@@ -621,18 +600,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 }
 
 func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs, apr *argparser.ArgParseResults) errhand.VerboseError {
-	from, to := "HEAD", "WORKING"
-	if apr.Contains(CachedFlag) {
-		to = "STAGED"
-	}
-
-	// TODO: this is too simplistic, we need to get these from diffArgs (table name can be an arg e.g.)
-	if apr.NArg() > 0 {
-		from = apr.Arg(0)
-	}
-	if apr.NArg() > 1 {
-		to = apr.Arg(1)
-	}
+	from, to := dArgs.fromRef, dArgs.toRef
 
 	// TODO: need to do anything different for different added / dropped tables?
 	// TODO: where clause
