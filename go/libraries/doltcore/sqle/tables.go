@@ -513,15 +513,44 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		}
 	}
 
+	// Persist in stats in dbState
+	// TODO: eventually do something different?
+	dSess := ctx.Session.(*dsess.DoltSession)
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return err
+	}
+
+	if dbState.TblStats == nil {
+		dbState.TblStats = make(map[string]sql.TableStatistics)
+	}
+	dbState.TblStats[t.tableName] = t.doltStats
 	t.analyzed = true
 	return nil
 }
 
-func (t *DoltTable) IsAnalyzed() bool {
+func (t *DoltTable) IsAnalyzed(ctx *sql.Context) bool {
+	// TODO: I know this probably isn't great, but I'm lazy
+	// Note for future James iff we continue to place them here: need to expose database state in sql.Session
+	dSess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return false
+	}
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return false
+	}
+	stats, ok := dbState.TblStats[t.tableName]
+	if !ok {
+		return false
+	}
+	t.doltStats = stats.(*DoltTableStatistics)
+	t.analyzed = true // TODO: probably shouldn't even bother setting this variable
 	return t.analyzed
 }
 
 func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	// TODO: should probably move code from IsAnalyzed here
 	return t.doltStats, nil
 }
 

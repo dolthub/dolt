@@ -223,7 +223,7 @@ func (t *TempTable) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
-func (t *TempTable) IsAnalyzed() bool {
+func (t *TempTable) IsAnalyzed(ctx *sql.Context) bool {
 	return false
 }
 
