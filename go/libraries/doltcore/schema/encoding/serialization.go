@@ -279,9 +279,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 	cols := make([]schema.Column, length)
 	c := new(serial.Column)
 	for i := range cols {
-		ok := s.Columns(c, i)
-		assertTrue(ok)
-
+		s.Columns(c, i)
 		sqlType, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
 		if err != nil {
 			return nil, err
