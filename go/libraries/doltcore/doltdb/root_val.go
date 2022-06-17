@@ -1516,11 +1516,14 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 }
 
 func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
-	ref, err := vrw.WriteValue(ctx, v)
-	if err != nil {
-		return nil, err
+	var h hash.Hash
+	if !emptyForeignKeyCollection(v.(types.SerialMessage)) {
+		ref, err := vrw.WriteValue(ctx, v)
+		if err != nil {
+			return nil, err
+		}
+		h = ref.TargetHash()
 	}
-	h := ref.TargetHash()
 	ret := r.clone()
 	copy(ret.srv.ForeignKeyAddrBytes(), h[:])
 	return ret, nil

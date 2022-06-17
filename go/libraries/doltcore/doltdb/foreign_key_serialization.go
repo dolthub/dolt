@@ -31,7 +31,7 @@ const (
 
 func DeserializeForeignKeys(ctx context.Context, nbf *types.NomsBinFormat, fks types.Value) (*ForeignKeyCollection, error) {
 	if nbf.UsesFlatbuffers() {
-		return deserializeFlatbufferForeignKeys(ctx, fks.(types.SerialMessage))
+		return deserializeFlatbufferForeignKeys(fks.(types.SerialMessage))
 	} else {
 		return deserializeNomsForeignKeys(ctx, fks.(types.Map))
 	}
@@ -83,7 +83,7 @@ func serializeNomsForeignKeys(ctx context.Context, vrw types.ValueReadWriter, fk
 }
 
 // deserializeNomsForeignKeys returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
-func deserializeFlatbufferForeignKeys(ctx context.Context, msg types.SerialMessage) (*ForeignKeyCollection, error) {
+func deserializeFlatbufferForeignKeys(msg types.SerialMessage) (*ForeignKeyCollection, error) {
 	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
 		return nil, fmt.Errorf("expect Serial Message with ForeignKeyCollectionFileID")
 	}
@@ -225,4 +225,12 @@ func serializeUint64Vector(b *fb.Builder, u []uint64) fb.UOffsetT {
 		b.PrependUint64(u[j])
 	}
 	return b.EndVector(len(u))
+}
+
+func emptyForeignKeyCollection(msg types.SerialMessage) bool {
+	if serial.GetFileID(msg) != serial.ForeignKeyCollectionFileID {
+		return false
+	}
+	c := serial.GetRootAsForeignKeyCollection(msg, 0)
+	return c.ForeignKeysLength() == 0
 }
