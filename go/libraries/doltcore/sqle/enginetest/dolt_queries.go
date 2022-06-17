@@ -2992,12 +2992,20 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		Name:         "new table",
 		SetUpScript:  []string{
 			"create table t1 (a int primary key, b int)",
-			"insert into t1 values (1,1)",
+			"insert into t1 values (1,2)",
 		},
-		Assertions:   []queries.ScriptTestAssertion{
+		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:                           "select * from dolt_diff",
-				Expected:                        nil,
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
+			},
+			{
+				Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				ExpectedErr: sql.ErrColumnNotFound,
+			},
+			{
+				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'WORKING', 'HEAD')",
+				Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
 			},
 		},
 	},

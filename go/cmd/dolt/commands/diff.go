@@ -17,7 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"io"
 	"sort"
 	"strings"
 
@@ -444,13 +444,12 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (*engine.SqlEngine, er
 		ctx,
 		mrEnv,
 		engine.FormatCsv,
-		dbName,
-		false,
-		"",
-		"",
-		"root",
-		"",
-		false,
+		&engine.SqlEngineConfig{
+			InitialDb:    dbName,
+			IsReadOnly:   false,
+			ServerUser:   "root",
+			Autocommit:   false,
+		},
 	)
 }
 
