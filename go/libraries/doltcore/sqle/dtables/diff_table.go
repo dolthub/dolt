@@ -532,6 +532,12 @@ func GetDiffTableSchemaAndJoiner(format *types.NomsBinFormat, fromSch, toSch sch
 			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
 		toSch = schema.MustSchemaFromCols(colCollection)
 
+		colCollection = fromSch.GetAllCols()
+		colCollection = colCollection.Append(
+			schema.NewColumn("commit", schema.DiffCommitTag, types.StringKind, false),
+			schema.NewColumn("commit_date", schema.DiffCommitDateTag, types.TimestampKind, false))
+		fromSch = schema.MustSchemaFromCols(colCollection)
+
 		j, err = rowconv.NewJoiner(
 			[]rowconv.NamedSchema{{Name: diff.To, Sch: toSch}, {Name: diff.From, Sch: fromSch}},
 			map[string]rowconv.ColNamingFunc{
