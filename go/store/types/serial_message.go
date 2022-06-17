@@ -232,6 +232,8 @@ func (sm SerialMessage) walkRefs(nbf *NomsBinFormat, cb RefCallback) error {
 				return err
 			}
 		}
+	case serial.ForeignKeyCollectionFileID:
+		return nil
 	case serial.TableFileID:
 		msg := serial.GetRootAsTable([]byte(sm), 0)
 		addr := hash.New(msg.SchemaBytes())
