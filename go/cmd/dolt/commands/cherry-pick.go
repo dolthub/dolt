@@ -139,11 +139,11 @@ func cherryPick(ctx context.Context, dEnv *env.DoltEnv, cherryStr, authorStr str
 	}
 
 	if !headHash.Equal(stagedHash) {
-		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes to proceed.").Build()
+		return errhand.BuildDError("Please commit your staged changes before using cherry-pick.").Build()
 	}
 
 	if !headHash.Equal(workingHash) {
-		return errhand.BuildDError("Please commit your changes them before using cherry-pick.").Build()
+		return errhand.BuildDError("error: your local changes would be overwritten by cherry-pick.\nhint: commit your changes (dolt commit -am \"<message>\") or reset them (dolt reset --hard) to proceed.").Build()
 	}
 
 	newWorkingRoot, commitMsg, err := getCherryPickedRootValue(ctx, dEnv, workingRoot, headHash, cherryStr)
@@ -218,16 +218,9 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mergedRoot, mergeStat, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
+	mergedRoot, _, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
 	if err != nil {
 		return nil, "", err
-	}
-
-	for _, stats := range mergeStat {
-		if stats.Conflicts != 0 {
-			//cli.Println("conflict here")
-			return nil, "", errhand.BuildDError("conflict occurred").Build()
-		}
 	}
 
 	return mergedRoot, commitMsg, nil
