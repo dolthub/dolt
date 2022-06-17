@@ -80,26 +80,17 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "primary key table: non-pk column type changes",
+			Name: "table with commit column should maintain its data in diff",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 text);",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
-				"alter table t modify column c2 int;",
-				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
+				"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
+				"set @Commit1 = dolt_commit('-am', 'creating table t');",
+				"INSERT INTO t VALUES (1, 'hi');",
+				"set @Commit2 = dolt_commit('-am', 'insert data');",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select count(*) from dolt_history_t;",
-					Expected: []sql.Row{{4}},
-				},
-				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
-					Expected: []sql.Row{{1, nil}, {4, nil}},
-				},
-				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-					Expected: []sql.Row{{1, 3}, {4, 6}},
+					Query:    "SELECT to_pk, to_commit, from_pk, from_commit, diff_type from dolt_diff('t', @Commit1, @Commit2);",
+					Expected: []sql.Row{{1, "hi", nil, nil, "added"}},
 				},
 			},
 		},
