@@ -87,7 +87,7 @@ teardown() {
 @test "diff: schema diff only" {
     dolt commit -am "First commit"
 
-    dolt sql -q <<SQL
+    dolt sql <<SQL
 alter table test 
 drop column c3, 
 add column c6 varchar(10) after c2, 
@@ -126,31 +126,38 @@ EOF
     dolt commit -m tables
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt sql -q 'insert into other values (9)'
+
+    dolt diff test
     run dolt diff test
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 0" ]] || false
     [[ ! "$output" =~ "+ | 9" ]] || false
+
     run dolt diff other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 9" ]] || false
     [[ ! "$output" =~ "+ | 0" ]] || false
+
     run dolt diff test other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 0" ]] || false
     [[ "$output" =~ "+ | 9" ]] || false
+
     dolt add .
     run dolt diff head test other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 0" ]] || false
     [[ "$output" =~ "+ | 9" ]] || false
+
     dolt commit -m rows
     run dolt diff head^ head test other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+ | 0" ]] || false
     [[ "$output" =~ "+ | 9" ]] || false
+
     run dolt diff head^ head fake
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "table fake does not exist in either diff root" ]] || false
+    [[ "$output" =~ "table fake does not exist in either revision" ]] || false
 }
 
 @test "diff: with table and branch of the same name" {
