@@ -2449,7 +2449,7 @@ SQL
     dolt sql -q "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);"
     run dolt sql -q "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE constraint violation" ]] || false
+    [[ "$output" =~ "duplicate unique key given" ]] || false
 
     # Verify correct index present in schema
     run dolt schema show child
