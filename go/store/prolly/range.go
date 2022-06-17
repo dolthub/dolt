@@ -55,16 +55,18 @@ func SortRanges(ranges ...Range) []Range {
 }
 
 // Range defines a contiguous set of Tuples bounded by
-// RangeCut predicates. Tuples satisfying all predicates
-// must be included in the Range, but not all Tuples within
-// a Range will satisfy all predicates.
+// RangeCut predicates.
+// A Range over an index must include all Tuples that
+// satisfy all predicates, but might also include Tuples
+// that fail to satisfy some predicates.
 type Range struct {
 	Start, Stop []RangeCut
 	Desc        val.TupleDesc
 }
 
-// AboveStart returns true if |t| is a member of |r|.
-func (r Range) AboveStart(t val.Tuple) bool {
+// aboveStart returns true if |t| is a member of |r|.
+// todo(andy): add comment with range bounding explanation.
+func (r Range) aboveStart(t val.Tuple) bool {
 	if len(r.Start) == 0 {
 		return true
 	}
@@ -83,8 +85,9 @@ func (r Range) AboveStart(t val.Tuple) bool {
 	return cmp < 0 || (cut.Inclusive && cmp == 0)
 }
 
-// BelowStop returns true if |t| is a member of |r|.
-func (r Range) BelowStop(t val.Tuple) bool {
+// belowStop returns true if |t| is a member of |r|.
+// todo(andy): add comment with range bounding explanation.
+func (r Range) belowStop(t val.Tuple) bool {
 	if len(r.Stop) == 0 {
 		return true
 	}
@@ -252,7 +255,7 @@ func rangeStartSearchFn(rng Range) tree.SearchFn {
 		return sort.Search(nd.Count(), func(i int) (in bool) {
 			// if |tup| ∈ |rng|, set |in| to true
 			tup := val.Tuple(nd.GetKey(i))
-			in = rng.AboveStart(tup)
+			in = rng.aboveStart(tup)
 			return
 		})
 	}
@@ -264,7 +267,7 @@ func rangeStopSearchFn(rng Range) tree.SearchFn {
 		return sort.Search(nd.Count(), func(i int) (out bool) {
 			// if |tup| ∈ |rng|, set |out| to false
 			tup := val.Tuple(nd.GetKey(i))
-			out = !rng.BelowStop(tup)
+			out = !rng.belowStop(tup)
 			return
 		})
 	}

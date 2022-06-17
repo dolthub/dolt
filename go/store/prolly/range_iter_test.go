@@ -221,7 +221,7 @@ func getKeyPrefix(key val.Tuple, desc val.TupleDesc) (partial val.Tuple) {
 func getExpectedRangeSize(rng Range, tuples [][2]val.Tuple) (sz int) {
 	for i := range tuples {
 		k := tuples[i][0]
-		if rng.AboveStart(k) && rng.BelowStop(k) {
+		if rng.aboveStart(k) && rng.belowStop(k) {
 			sz++
 		}
 	}

@@ -121,14 +121,14 @@ func memIterFromRange(list *skip.List, rng Range) *memRangeIter {
 	var key val.Tuple
 	for {
 		key, _ = iter.Current()
-		if key == nil || rng.AboveStart(key) {
+		if key == nil || rng.aboveStart(key) {
 			break // |i| inside |rng|
 		}
 		iter.Advance()
 	}
 
 	// enforce range end
-	if key == nil || !rng.BelowStop(key) {
+	if key == nil || !rng.belowStop(key) {
 		iter = nil
 	}
 
@@ -147,7 +147,7 @@ func skipSearchFromRange(rng Range) skip.SearchFn {
 		if nodeKey == nil {
 			return false
 		}
-		return !rng.AboveStart(nodeKey)
+		return !rng.aboveStart(nodeKey)
 	}
 }
 
@@ -176,7 +176,7 @@ func (it *memRangeIter) iterate(context.Context) (err error) {
 		it.iter.Advance()
 
 		k, _ := it.current()
-		if k == nil || !it.rng.BelowStop(k) {
+		if k == nil || !it.rng.belowStop(k) {
 			it.iter = nil // range exhausted
 		}
 
