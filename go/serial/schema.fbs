@@ -18,21 +18,32 @@ namespace serial;
 
 
 table TableSchema {
-  columns:[Column];
-  indexes:[Index];
-  checks:[string];
-
+  columns:[Column] (required);
+  clustered_index:Index (required);
+  secondary_indexes:[Index];
+  checks:[CheckConstraint];
 }
 
 table Column {
   // column name
   name:string (required);
 
-  // full sql column definition
-  definition:string (required);
+  // sql column type
+  sql_type:string;
+
+  // sql default value
+  default_value:string;
+
+  // sql comment
+  comment:string;
 
   // sql display order
   display_order:int16;
+
+  // todo(andy): ideally we'd resolve column identity
+  //  without using tags, but the current implementation
+  //  of schema.Schema is tightly coupled to tags.
+  tag: uint64;
 
   // storage encoding
   encoding:Encoding;
@@ -48,20 +59,44 @@ table Column {
 
 table Index {
   // index name
-  name:string (required);
+  name:string;
 
-  // full sql index definition
-  definition:string (required);
+  // sql comment
+  comment:string;
 
-  // key columns of the index stored as
-  // indicies into the schema columns array
+  // ordered list of columns defining the index.
+  // stored as indices into columns vector.
+  index_columns:[uint16] (required);
+
+  // ordered list of columns corresponding to
+  // key tuple fields within index storage.
+  // stored as indices into columns vector.
+  //
+  // for secondary indexes, this is typically
+  // index columns + primary key columns.
   key_columns:[uint16] (required);
 
-  // values columns of the index stored as
-  // indicies into the schema columns array
+  // ordered list of columns corresponding to
+  // value tuple fields within index storage.
+  // stored as indices into columns vector.
+  //
+  // typically, this is only populated for
+  // clustered primary key indexes.
   value_columns:[uint16];
 
   // index meta
-  unique:bool;
+  primary_key:bool;
+  unique_key:bool;
   system_defined:bool;
 }
+
+table CheckConstraint {
+    name:string;
+    expression:string;
+    enforced:bool;
+}
+
+// KEEP THIS IN SYNC WITH fileidentifiers.go
+file_identifier "DSCH";
+
+root_type TableSchema;

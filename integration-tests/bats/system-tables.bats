@@ -224,6 +224,17 @@ teardown() {
     [[ "$output" =~ 0 ]] || false
 }
 
+@test "system-tables: query dolt_diff system table" {
+    dolt sql -q "CREATE TABLE testStaged (pk INT, c1 INT, PRIMARY KEY(pk))"
+    dolt add testStaged
+    dolt sql -q "CREATE TABLE testWorking (pk INT, c1 INT, PRIMARY KEY(pk))"
+
+    run dolt sql -r csv -q 'select * from dolt_diff'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STAGED,testStaged,,,,,false,true" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
+}
+
 @test "system-tables: query dolt_diff_ system table" {
     dolt sql -q "CREATE TABLE test (pk INT, c1 INT, PRIMARY KEY(pk))"
     dolt add test

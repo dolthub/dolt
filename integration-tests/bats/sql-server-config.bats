@@ -27,7 +27,6 @@ teardown() {
     start_sql_server repo1
 
     server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n1000"
-
 }
 
 @test "sql-server-config: invalid persisted global variable name throws warning on server startup, but does not crash" {
@@ -152,4 +151,92 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
     [[ ! "$output" =~ "sqlserver.global.auto_increment_increment = 1000" ]] || false
+}
+
+@test "sql-server-config: set max_connections with yaml config" {
+    cd repo1
+    DEFAULT_DB="repo1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: 0.0.0.0
+  port: $PORT
+  max_connections: 999
+
+behavior:
+  read_only: false
+  autocommit: true" > server.yaml
+    dolt sql-server --config server.yaml &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
+}
+
+@test "sql-server-config: set max_connections with yaml config with persistence ignore" {
+    cd repo1
+    DEFAULT_DB="repo1"
+    let PORT="$$ % (65536-1024) + 1024"
+    echo "
+log_level: debug
+
+user:
+  name: dolt
+
+listener:
+  host: 0.0.0.0
+  port: $PORT
+  max_connections: 999
+
+behavior:
+  read_only: false
+  autocommit: true
+  persistence_behavior: ignore" > server.yaml
+
+    dolt sql-server --config server.yaml --max-connections 333 &
+    SERVER_PID=$!
+    wait_for_connection $PORT 5000
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n999"
+}
+
+@test "sql-server-config: persistence behavior set to load" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior load repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n151"
+}
+
+@test "sql-server-config: persistence behavior set to ignore" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n100"
+}
+
+@test "sql-server-config: persisted global variable defined on the command line" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --max-connections 555 repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n555"
+}
+
+@test "sql-server-config: persist global variable before server startup with persistence behavior with ignore" {
+    cd repo1
+    echo '{"sqlserver.global.max_connections":"1000"}' > .dolt/config.json
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n100"
+}
+
+@test "sql-server-config: persisted global variable defined on the command line with persistence ignored" {
+    cd repo1
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --max-connections 555 --persistence-behavior ignore repo1
+
+    server_query repo1 1 "select @@GLOBAL.max_connections" "@@GLOBAL.max_connections\n555"
 }
