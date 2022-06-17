@@ -96,19 +96,13 @@ SQL
     run dolt sql -q "describe dolt_blame_blame_test;"
     [ "$status" -eq 0 ]
 
-    # TODO: go-mysql-server doesn't currently support describing views:
-    #       https://github.com/dolthub/go-mysql-server/issues/787
-    #       Enable this test when that issue is fixed
-    skip "BUG: views can't currently be described"
-
-    [[ "$output" =~ "| pk1          | bigint         | NO   | PRI |         |       |" ]]
-    [[ "$output" =~ "| pk1          | longtext       | NO   | PRI |         |       |" ]]
-    [[ "$output" =~ "| name         | longtext       | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| commit       | varchar(16383) | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| commit_date  | datetime       | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| committer    | text           | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| email        | text           | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| message      | text           | NO   |     |         |       |" ]]
+    [[ "$output" =~ "+-------------+----------------+------+-----+---------+-------+" ]] || false
+    [[ "$output" =~ "| pk1         | bigint         | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| commit      | varchar(16383) | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| commit_date | datetime       | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| committer   | text           | NO   |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| email       | text           | NO   |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| message     | text           | NO   |     | NULL    |       |" ]] || false
 }
 
 @test "blame-system-view: view is not included in show tables output" {
