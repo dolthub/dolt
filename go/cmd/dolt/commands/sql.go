@@ -735,6 +735,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			if rowIter != nil {
 				err = engine.PrettyPrintResults(ctx, se.GetReturnFormat(), sqlSch, rowIter, HasTopLevelOrderByClause(query))
 				if err != nil {
+					err = fmt.Errorf("error executing query on line %d: %v", scanner.statementStartLine, err)
 					return errhand.VerboseErrorFromError(err)
 				}
 			}
