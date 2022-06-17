@@ -155,6 +155,26 @@ teardown() {
     [[ ! "$output" =~ "branch1table" ]] || false
 }
 
+@test "cherry-pick: row data conflict, leave working set clean" {
+    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt sql -q "INSERT INTO other VALUES (1, 2)"
+    dolt sql -q "INSERT INTO test VALUES (4,'f')"
+    dolt commit -am "add other table"
+
+    dolt checkout main
+    dolt sql -q "CREATE TABLE other (pk int primary key, v int)"
+    dolt sql -q "INSERT INTO other VALUES (1, 3)"
+    dolt sql -q "INSERT INTO test VALUES (4,'k')"
+    dolt commit -am "add other table with conflict and test with conflict"
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "conflicts in table" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+}
+
 @test "cherry-pick: commit with CREATE TABLE" {
     dolt sql -q "CREATE TABLE table_a (pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt sql -q "INSERT INTO table_a VALUES (11, 'aa'), (22, 'ab'), (33, 'ac')"
@@ -180,6 +200,7 @@ teardown() {
 }
 
 @test "cherry-pick: commit with DROP TABLE" {
+    skip # drop or rename case
     dolt sql -q "DROP TABLE test"
     dolt commit -am "Drop table test"
 
@@ -192,10 +213,20 @@ teardown() {
 
     run dolt cherry-pick branch1
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [[ "$output" =~ "table was renamed or dropped" ]] || false
 
     run dolt sql -q "SHOW TABLES" -r csv
     [[ "$output" =~ "test" ]] || false
+}
+
+@test "cherry-pick: commit with ALTER TABLE rename table name" {
+    dolt sql -q "ALTER TABLE test RENAME TO new_name"
+    dolt commit -am "rename table name"
+
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "1" ]
+    [[ "$output" =~ "table was renamed or dropped" ]] || false
 }
 
 @test "cherry-pick: cherry-pick commit is a merge commit" {
@@ -239,19 +270,78 @@ teardown() {
     [[ "$output" =~ "5,e" ]] || false
 }
 
-@test "cherry-pick: ALTER TABLE rename table name" {
-    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
-    dolt sql -q "ALTER TABLE test RENAME TO new_name"
-    dolt commit -am "rename table name"
+@test "cherry-pick: add triggers" {
+    dolt sql -q "CREATE TRIGGER trigger1 BEFORE INSERT ON test FOR EACH ROW SET new.v = concat(new.v, ' inserted')"
+    dolt sql -q "INSERT INTO test VALUES (4,'z')"
+    run dolt sql -q "SELECT * FROM test"
+    [[ "$output" =~ "z inserted" ]] || false
+
+    dolt commit -am "add trigger"
+
+    dolt checkout main
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ ! "$output" =~ "trigger1" ]] || false
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SELECT * FROM test"
+    [[ "$output" =~ "z inserted" ]] || false
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ "$output" =~ "trigger1" ]] || false
+
+    dolt checkout branch1
+    dolt sql -q "DROP TRIGGER trigger1"
+    dolt commit -am "drop trigger"
+    dolt checkout main
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW TRIGGERS"
+    [[ ! "$output" =~ "trigger1" ]] || false
+}
+
+@test "cherry-pick: add procedures" {
+    dolt sql -q "CREATE PROCEDURE proc1 (in x int) select x from dual"
+    run dolt sql -q "CALL proc1(434)"
+    [[ "$output" =~ "434" ]] || false
+
+    dolt commit -am "add procedure"
+
+    dolt checkout main
+    run dolt sql -q "SHOW PROCEDURE STATUS"
+    [[ ! "$output" =~ "proc1" ]] || false
+
+    run dolt cherry-pick branch1
+    [ "$status" -eq "0" ]
+
+    run dolt sql -q "SHOW PROCEDURE STATUS"
+    [[ "$output" =~ "proc1" ]] || false
+
+    run dolt sql -q "CALL proc1(434)"
+    [[ "$output" =~ "434" ]] || false
+}
+
+@test "cherry-pick: keyless table" {
+    dolt checkout main
+    dolt sql -q "CREATE TABLE keyless (id int, name varchar(10))"
+    dolt commit -am "add keyless table"
+
+    dolt checkout -b branch2
+    dolt sql -q "INSERT INTO keyless VALUES (1,'1'), (2,'3')"
+    dolt commit -am "insert into keyless table"
 
     dolt checkout main
     run dolt cherry-pick branch1
-    [ "$status" -eq "1" ]
-    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+    [ "$status" -eq "0" ]
+
+    dolt sql -q "SELECT * FROM keyless" -r csv
+    [[ ! "$output" =~ "1,1" ]] || false
+    [[ ! "$output" =~ "2,3" ]] || false
 }
 
 @test "cherry-pick: commit with ALTER TABLE add column" {
-    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
     dolt sql -q "ALTER TABLE test ADD COLUMN c int"
     dolt commit -am "alter table test add column c"
 
@@ -262,7 +352,6 @@ teardown() {
 }
 
 @test "cherry-pick: commit with ALTER TABLE change column" {
-    dolt sql -q "INSERT INTO test VALUES (4, 'd')"
     dolt sql -q "ALTER TABLE test CHANGE COLUMN v c varchar(100)"
     dolt commit -am "alter table test change column v"
 

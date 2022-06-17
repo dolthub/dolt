@@ -145,6 +145,14 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 
 		// Deleted in root or in merge, either a conflict (if any changes in other root) or else a fast-forward
 		if ancHasTable && (!rootHasTable || !mergeHasTable) {
+			if isCherryPick && rootHasTable && !mergeHasTable {
+				// TODO : this is either drop table or rename table case
+				// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
+				// otherwise, return ErrTableDeletedAndModified
+				// We need to track renaming of a table --> the renamed table could be added as new table
+				return nil, &MergeStats{Operation: TableModified}, errors.New(fmt.Sprintf("error: %s table was renamed or dropped", tblName))
+			}
+
 			if (mergeHasTable && mergeHash != ancHash) ||
 				(rootHasTable && rootHash != ancHash) {
 				return nil, nil, ErrTableDeletedAndModified
@@ -159,7 +167,8 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		}
 
 		// Changes only in merge root, fast-forward
-		if rootHash == ancHash {
+		// TODO : no fast-forward when cherry-picking for now
+		if !isCherryPick && rootHash == ancHash {
 			ms := MergeStats{Operation: TableModified}
 			if rootHash != mergeHash {
 				ms, err = calcTableMergeStats(ctx, tbl, mergeTbl)

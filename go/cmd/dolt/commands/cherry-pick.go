@@ -16,6 +16,9 @@ package commands
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/store/hash"
@@ -32,16 +35,12 @@ import (
 var cherryPickDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Apply the changes introduced by an existing commit.`,
 	LongDesc: `
-Updates tables in the clean working set with changes introduced in cherry-picked commit and creates a new commit with applied changes.
+Applies the changes from an existing commit and creates a new commit from the current HEAD. This requires your working tree to be clean (no modifications from the HEAD commit).
 
-Currently, schema changes introduced in cherry-pick commit are not supported. Row data changes are allowed with a table schema in working set 
-matching a table schema in cherry-pick commit with the same name. 
+Cherry-picking merge commits or commits with schema changes or rename or drop tables is not currently supported. Row data changes are allowed as long as the two table schemas are exactly identical.
 
-If there is a conflict, the working state stays clean. Cherry-picking a merge commit is not supported.
-
-dolt cherry-pick {{.LessThan}}commit{{.GreaterThan}}
-   To apply changes from an existing {{.LessThan}}commit{{.GreaterThan}} to current HEAD, the current working tree must be clean (no modifications from the HEAD commit). 
-   By default, cherry-pick creates new commit with applied changes.`,
+If applying the row data changes from the cherry-picked commit results in a data conflict, the cherry-pick operation is aborted and no changes are made to the working tree or committed.
+`,
 	Synopsis: []string{
 		`{{.LessThan}}commit{{.GreaterThan}}`,
 	},
@@ -104,9 +103,6 @@ func (cmd CherryPickCmd) Exec(ctx context.Context, commandStr string, args []str
 	}
 
 	verr := cherryPick(ctx, dEnv, cherryStr, authorStr)
-	if verr != nil {
-		cli.PrintErrln("fatal: cherry-pick failed")
-	}
 	return HandleVErrAndExitCode(verr, usage)
 }
 
@@ -218,9 +214,21 @@ func getCherryPickedRootValue(ctx context.Context, dEnv *env.DoltEnv, workingRoo
 	}
 
 	// use parent of cherry-pick as ancestor to merge
-	mergedRoot, _, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
+	mergedRoot, mergeStats, err := merge.MergeRoots(ctx, toHash, fromHash, workingRoot, toRoot, fromRoot, opts, true)
 	if err != nil {
 		return nil, "", err
+	}
+
+	var tablesWithConflict []string
+	for tbl, stats := range mergeStats {
+		if stats.Conflicts > 0 {
+			tablesWithConflict = append(tablesWithConflict, tbl)
+		}
+	}
+
+	if len(tablesWithConflict) > 0 {
+		tblNames := strings.Join(tablesWithConflict, "', '")
+		return nil, "", errors.New(fmt.Sprintf("conflicts in table {'%s'}", tblNames))
 	}
 
 	return mergedRoot, commitMsg, nil
