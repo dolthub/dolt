@@ -2603,6 +2603,19 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:         "new table",
+		SetUpScript:  []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1,1)",
+		},
+		Assertions:   []queries.ScriptTestAssertion{
+			{
+				Query:                           "select * from dolt_diff",
+				Expected:                        nil,
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{
