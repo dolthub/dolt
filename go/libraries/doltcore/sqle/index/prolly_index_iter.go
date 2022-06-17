@@ -51,20 +51,14 @@ var _ sql.RowIter = prollyIndexIter{}
 var _ sql.RowIter2 = prollyIndexIter{}
 
 // NewProllyIndexIter returns a new prollyIndexIter.
-func newProllyIndexIter(
-	ctx *sql.Context,
-	idx DoltIndex,
-	rng prolly.Range,
-	pkSch sql.PrimaryKeySchema,
-	dprimary, dsecondary durable.Index,
-) (prollyIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(dsecondary)
+func newProllyIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range) (prollyIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyIndexIter{}, err
 	}
 
-	primary := durable.ProllyMapFromIndex(dprimary)
+	primary := durable.ProllyMapFromIndex(idx.TableData())
 	kd, _ := primary.Descriptors()
 	pkBld := val.NewTupleBuilder(kd)
 	pkMap := ordinalMappingFromIndex(idx)
@@ -83,7 +77,6 @@ func newProllyIndexIter(
 		rowChan:   make(chan sql.Row, indexLookupBufSize),
 		keyMap:    km,
 		valMap:    vm,
-		sqlSch:    pkSch.Schema,
 	}
 
 	eg.Go(func() error {
@@ -219,8 +212,8 @@ type prollyCoveringIndexIter struct {
 var _ sql.RowIter = prollyCoveringIndexIter{}
 var _ sql.RowIter2 = prollyCoveringIndexIter{}
 
-func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema, indexdata durable.Index) (prollyCoveringIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(indexdata)
+func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Range, pkSch sql.PrimaryKeySchema) (prollyCoveringIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyCoveringIndexIter{}, err
@@ -389,15 +382,14 @@ func newProllyKeylessIndexIter(
 	idx DoltIndex,
 	rng prolly.Range,
 	pkSch sql.PrimaryKeySchema,
-	rows, dsecondary durable.Index,
 ) (prollyKeylessIndexIter, error) {
-	secondary := durable.ProllyMapFromIndex(dsecondary)
+	secondary := durable.ProllyMapFromIndex(idx.IndexRowData())
 	indexIter, err := secondary.IterRange(ctx, rng)
 	if err != nil {
 		return prollyKeylessIndexIter{}, err
 	}
 
-	clustered := durable.ProllyMapFromIndex(rows)
+	clustered := durable.ProllyMapFromIndex(idx.IndexRowData())
 	keyDesc, valDesc := clustered.Descriptors()
 	indexMap := ordinalMappingFromIndex(idx)
 	keyBld := val.NewTupleBuilder(keyDesc)

@@ -279,12 +279,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		return nil, false, err
 	}
 
-	dt, err := tbl.doltTable(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	iter, err := index.RowIterForIndexLookup(ctx, dt, lookup, tbl.sqlSch, nil)
+	iter, err := index.RowIterForIndexLookup(ctx, lookup, tbl.sqlSch, nil)
 	if err != nil {
 		return nil, false, err
 	}

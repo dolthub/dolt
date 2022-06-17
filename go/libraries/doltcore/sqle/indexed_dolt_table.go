@@ -52,28 +52,17 @@ func (idt *IndexedDoltTable) Schema() sql.Schema {
 }
 
 func (idt *IndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	dt, err := idt.table.doltTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return index.NewRangePartitionIter(ctx, dt, idt.indexLookup)
+	rows := index.DoltIndexFromLookup(idt.indexLookup).IndexRowData()
+	return index.SinglePartitionIterFromNomsMap(rows), nil
 }
 
 func (idt *IndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
 	// todo(andy): only used by 'AS OF` queries
-	dt, err := idt.table.doltTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return index.RowIterForIndexLookup(ctx, dt, idt.indexLookup, idt.table.sqlSch, nil)
+	return index.RowIterForIndexLookup(ctx, idt.indexLookup, idt.table.sqlSch, nil)
 }
 
 func (idt *IndexedDoltTable) PartitionRows2(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {
-	dt, err := idt.table.doltTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return index.RowIterForIndexLookup(ctx, dt, idt.indexLookup, idt.table.sqlSch, nil)
+	return index.RowIterForIndexLookup(ctx, idt.indexLookup, idt.table.sqlSch, nil)
 }
 
 func (idt *IndexedDoltTable) IsTemporary() bool {
@@ -95,11 +84,7 @@ type WritableIndexedDoltTable struct {
 var _ sql.Table2 = (*WritableIndexedDoltTable)(nil)
 
 func (t *WritableIndexedDoltTable) Partitions(ctx *sql.Context) (sql.PartitionIter, error) {
-	dt, err := t.doltTable(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return index.NewRangePartitionIter(ctx, dt, t.indexLookup)
+	return index.NewRangePartitionIter(t.indexLookup), nil
 }
 
 func (t *WritableIndexedDoltTable) PartitionRows(ctx *sql.Context, part sql.Partition) (sql.RowIter, error) {

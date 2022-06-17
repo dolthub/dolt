@@ -221,7 +221,7 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	if t.lookup != nil {
-		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)
+		return index.RowIterForIndexLookup(ctx, t.lookup, t.pkSch, nil)
 	} else {
 		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}
