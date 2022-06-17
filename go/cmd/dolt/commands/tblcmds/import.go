@@ -19,11 +19,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/dolthub/vitess/go/sqltypes"
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/message"
@@ -91,6 +93,8 @@ In create, update, and replace scenarios the file's extension is used to infer t
 		"-r [--map {{.LessThan}}file{{.GreaterThan}}] [--file-type {{.LessThan}}type{{.GreaterThan}}] {{.LessThan}}table{{.GreaterThan}} {{.LessThan}}file{{.GreaterThan}}",
 	},
 }
+
+var bitTypeRegex = regexp.MustCompile(`(?m)b\'(\d+)\'`)
 
 type importOptions struct {
 	operation         mvdata.TableImportOp
@@ -320,10 +324,9 @@ func (cmd ImportCmd) Description() string {
 	return "Creates, overwrites, replaces, or updates a table from the data in a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	return cli.NewCommandDocumentation(importDocs, ap)
 }
 
 func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
@@ -354,7 +357,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
@@ -494,6 +497,12 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 	rowOperationSchema, err := schema.SchemaFromCols(rowOperationColColl)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+
+	// Leave a warning if the import operation is operating on fewer columns than the relevant table's schema.
+	// This can certainly be intentional, but it is often due to typos in the header of a csv file.
+	if rowOperationSchema.GetAllCols().Size() < tableSchema.GetAllCols().Size() {
+		cli.PrintErrln(color.YellowString("Warning: There are fewer columns in the import file's schema than the table's schema.\nIf unintentional, check for any typos in the import file's header."))
 	}
 
 	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)
@@ -724,24 +733,51 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	row = applyMapperToRow(row, rowOperationSchema, rdSchema, nameMapper)
 
 	for i, col := range rowOperationSchema.Schema {
-		switch col.Type {
-		case sql.Boolean, sql.Int8, sql.MustCreateBitType(1): // TODO: noms bool wraps MustCreateBitType
-			switch row[i].(type) {
-			case int8:
-				val, ok := stringToBoolean(strconv.Itoa(int(row[i].(int8))))
-				if ok {
+		// Check if this a string that can be converted to a boolean
+		val, ok := detectAndConvertToBoolean(row[i], col.Type)
+		if ok {
+			row[i] = val
+			continue
+		}
+
+		// Bit types need additional verification due to the differing values they can take on. "4", "0x04", b'100' should
+		// be interpreted in the correct manner.
+		if _, ok := col.Type.(sql.BitType); ok {
+			colAsString, ok := row[i].(string)
+			if !ok {
+				return nil, fmt.Errorf("error: column value should be of type string")
+			}
+
+			// Check if the column can be parsed an uint64
+			val, err := strconv.ParseUint(colAsString, 10, 64)
+			if err == nil {
+				row[i] = val
+				continue
+			}
+
+			// Check if the column is of type b'110'
+			groups := bitTypeRegex.FindStringSubmatch(colAsString)
+			// Note that we use the second element as the first value in `groups` is the entire string.
+			if len(groups) > 1 {
+				val, err = strconv.ParseUint(groups[1], 2, 64)
+				if err == nil {
 					row[i] = val
+					continue
 				}
-			case string:
-				val, ok := stringToBoolean(row[i].(string))
-				if ok {
-					row[i] = val
-				}
-			case bool:
-				row[i] = row[i].(bool)
+			}
+
+			// Check if the column can be parsed as a hex string
+			numberStr := strings.Replace(colAsString, "0x", "", -1)
+			val, err = strconv.ParseUint(numberStr, 16, 64)
+			if err == nil {
+				row[i] = val
+			} else {
+				return nil, fmt.Errorf("error: Unparsable bit value %s", colAsString)
 			}
 		}
 
+		// For non string types we want empty strings to be converted to nils. String types should be allowed to take on
+		// an empty string value
 		switch col.Type.(type) {
 		case sql.StringType:
 		default:
@@ -750,6 +786,23 @@ func NameAndTypeTransform(row sql.Row, rowOperationSchema sql.PrimaryKeySchema, 
 	}
 
 	return row, nil
+}
+
+// detectAndConvertToBoolean determines whether a column is potentially a boolean and converts it accordingly.
+func detectAndConvertToBoolean(columnVal interface{}, columnType sql.Type) (bool, bool) {
+	switch columnType.Type() {
+	case sqltypes.Int8, sqltypes.Bit: // TODO: noms bool wraps MustCreateBitType
+		switch columnVal.(type) {
+		case int8:
+			return stringToBoolean(strconv.Itoa(int(columnVal.(int8))))
+		case string:
+			return stringToBoolean(columnVal.(string))
+		case bool:
+			return columnVal.(bool), true
+		}
+	}
+
+	return false, false
 }
 
 func stringToBoolean(s string) (result bool, canConvert bool) {
@@ -762,7 +815,7 @@ func stringToBoolean(s string) (result bool, canConvert bool) {
 	case "0":
 		return false, true
 	case "1":
-		return true, false
+		return true, true
 	default:
 		return false, false
 	}

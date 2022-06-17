@@ -43,11 +43,6 @@ func Serve(
 	serverController *ServerController,
 	dEnv *env.DoltEnv,
 ) (startError error, closeError error) {
-	if serverConfig == nil {
-		cli.Println("No configuration given, using defaults")
-		serverConfig = DefaultServerConfig()
-	}
-
 	// Code is easier to work through if we assume that serverController is never nil
 	if serverController == nil {
 		serverController = NewServerController()
@@ -89,17 +84,6 @@ func Serve(
 		isReadOnly = true
 	}
 
-	serverConf := server.Config{Protocol: "tcp"}
-
-	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
-		serverConf, startError = serverConf.NewConfig()
-		if startError != nil {
-			return
-		}
-	}
-
-	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
-
 	var mrEnv *env.MultiRepoEnv
 	dbNamesAndPaths := serverConfig.DatabaseNamesAndPaths()
 
@@ -140,43 +124,27 @@ func Serve(
 		}
 	}
 
-	portAsString := strconv.Itoa(serverConfig.Port())
-	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
-
-	if portInUse(hostPort) {
-		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
-		return portInUseError, nil
+	serverConf, sErr, cErr := getConfigFromServerConfig(serverConfig)
+	if cErr != nil {
+		return nil, cErr
+	} else if sErr != nil {
+		return sErr, nil
 	}
-
-	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
-	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
-
-	tlsConfig, err := LoadTLSConfig(serverConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
-	// to the value of mysql that we support.
-	serverConf.Address = hostPort
-	serverConf.ConnReadTimeout = readTimeout
-	serverConf.ConnWriteTimeout = writeTimeout
-	serverConf.MaxConnections = serverConfig.MaxConnections()
-	serverConf.TLSConfig = tlsConfig
-	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
 
 	// Create SQL Engine with users
+	config := &engine.SqlEngineConfig{
+		InitialDb:    "",
+		IsReadOnly:   isReadOnly,
+		PrivFilePath: serverConfig.PrivilegeFilePath(),
+		ServerUser:   serverConfig.User(),
+		ServerPass:   serverConfig.Password(),
+		Autocommit:   serverConfig.AutoCommit(),
+	}
 	sqlEngine, err := engine.NewSqlEngine(
 		ctx,
 		mrEnv,
 		engine.FormatTabular,
-		"",
-		isReadOnly,
-		serverConfig.MySQLDbFilePath(),
-		serverConfig.PrivilegeFilePath(),
-		serverConfig.User(),
-		serverConfig.Password(),
-		serverConfig.AutoCommit(),
+		config,
 	)
 	if err != nil {
 		return err, nil
@@ -255,4 +223,51 @@ func newSessionBuilder(se *engine.SqlEngine) server.SessionBuilder {
 
 		return se.NewDoltSession(ctx, mysqlBaseSess)
 	}
+}
+
+// getConfigFromServerConfig processes ServerConfig and returns server.Config for sql-server.
+func getConfigFromServerConfig(serverConfig ServerConfig) (server.Config, error, error) {
+	serverConf := server.Config{Protocol: "tcp"}
+	serverConf.DisableClientMultiStatements = serverConfig.DisableClientMultiStatements()
+
+	readTimeout := time.Duration(serverConfig.ReadTimeout()) * time.Millisecond
+	writeTimeout := time.Duration(serverConfig.WriteTimeout()) * time.Millisecond
+
+	tlsConfig, err := LoadTLSConfig(serverConfig)
+	if err != nil {
+		return server.Config{}, nil, err
+	}
+
+	portAsString := strconv.Itoa(serverConfig.Port())
+	hostPort := net.JoinHostPort(serverConfig.Host(), portAsString)
+
+	if portInUse(hostPort) {
+		portInUseError := fmt.Errorf("Port %s already in use.", portAsString)
+		return server.Config{}, portInUseError, nil
+	}
+
+	// if persist is 'load' we use currently set persisted global variable,
+	// else if 'ignore' we set persisted global variable to current value from serverConfig
+	if serverConfig.PersistenceBehavior() == loadPerisistentGlobals {
+		serverConf, err = serverConf.NewConfig()
+		if err != nil {
+			return server.Config{}, err, nil
+		}
+	} else {
+		err = sql.SystemVariables.SetGlobal("max_connections", serverConfig.MaxConnections())
+		if err != nil {
+			return server.Config{}, err, nil
+		}
+	}
+
+	// Do not set the value of Version.  Let it default to what go-mysql-server uses.  This should be equivalent
+	// to the value of mysql that we support.
+	serverConf.Address = hostPort
+	serverConf.ConnReadTimeout = readTimeout
+	serverConf.ConnWriteTimeout = writeTimeout
+	serverConf.MaxConnections = serverConfig.MaxConnections()
+	serverConf.TLSConfig = tlsConfig
+	serverConf.RequireSecureTransport = serverConfig.RequireSecureTransport()
+
+	return serverConf, nil, nil
 }

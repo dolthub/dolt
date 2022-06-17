@@ -17,7 +17,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -66,8 +65,8 @@ type Command interface {
 	Description() string
 	// Exec executes the command
 	Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
-	// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-	CreateMarkdown(writer io.Writer, commandStr string) error
+	// Docs returns the documentation for this command, or nil if it's undocumented
+	Docs() *CommandDocumentation
 	// ArgParser returns the arg parser for this command
 	ArgParser() *argparser.ArgParser
 }
@@ -158,7 +157,7 @@ func (hc SubCommandHandler) RequiresRepo() bool {
 	return false
 }
 
-func (hc SubCommandHandler) CreateMarkdown(_ io.Writer, _ string) error {
+func (hc SubCommandHandler) Docs() *CommandDocumentation {
 	return nil
 }
 

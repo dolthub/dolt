@@ -54,10 +54,13 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 			continue
 		}
 		inColType := inSch.GetPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetAllCols().GetByIndex(j).TypeInfo.ToSqlType()
+		outColType := outSch.GetPKCols().GetByIndex(j).TypeInfo.ToSqlType()
 		if !inColType.Equals(outColType) {
 			pkTargetTypes[i] = outColType
 		}
+		// translate tuple offset to row placement
+		t := outSch.GetPKCols().GetByIndex(j).Tag
+		keyProj[i] = outSch.GetAllCols().TagToIdx[t]
 	}
 
 	for i, j := range valProj {
@@ -65,10 +68,14 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 			continue
 		}
 		inColType := inSch.GetNonPKCols().GetByIndex(i).TypeInfo.ToSqlType()
-		outColType := outSch.GetAllCols().GetByIndex(j).TypeInfo.ToSqlType()
+		outColType := outSch.GetNonPKCols().GetByIndex(j).TypeInfo.ToSqlType()
 		if !inColType.Equals(outColType) {
 			nonPkTargetTypes[i] = outColType
 		}
+
+		// translate tuple offset to row placement
+		t := outSch.GetNonPKCols().GetByIndex(j).Tag
+		valProj[i] = outSch.GetAllCols().TagToIdx[t]
 	}
 
 	kd, vd := shim.MapDescriptorsFromSchema(inSch)

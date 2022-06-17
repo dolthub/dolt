@@ -16,6 +16,7 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -97,6 +98,7 @@ const (
 
 const (
 	SyncBackupId        = "sync"
+	SyncBackupUrlId     = "sync-url"
 	RestoreBackupId     = "restore"
 	AddBackupId         = "add"
 	RemoveBackupId      = "remove"
@@ -115,7 +117,7 @@ func CreateCommitArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(AllowEmptyFlag, "", "Allow recording a commit that has the exact same data as its sole parent. This is usually a mistake, so it is disabled by default. This option bypasses that safety.")
 	ap.SupportsString(DateParam, "", "date", "Specify the date used in the commit. If not specified the current system time is used.")
 	ap.SupportsFlag(ForceFlag, "f", "Ignores any foreign key warnings and proceeds with the commit.")
-	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.SupportsFlag(AllFlag, "a", "Adds all edited files in working to staged.")
 	return ap
 }
@@ -171,7 +173,7 @@ func CreateFetchArgParser() *argparser.ArgParser {
 
 func CreateRevertArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor <author@example.com> format.")
+	ap.SupportsString(AuthorParam, "", "author", "Specify an explicit author using the standard A U Thor {{.LessThan}}author@example.com{{.GreaterThan}} format.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"revision",
 		"The commit revisions. If multiple revisions are given, they're applied in the order given."})
 
@@ -209,4 +211,53 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
 	return ap
+}
+
+var awsParams = []string{dbfactory.AWSRegionParam, dbfactory.AWSCredsTypeParam, dbfactory.AWSCredsFileParam, dbfactory.AWSCredsProfile}
+
+func ProcessBackupArgs(apr *argparser.ArgParseResults, scheme, backupUrl string) (map[string]string, error) {
+	params := map[string]string{}
+
+	var err error
+	if scheme == dbfactory.AWSScheme {
+		err = AddAWSParams(backupUrl, apr, params)
+	} else {
+		err = VerifyNoAwsParams(apr)
+	}
+
+	return params, err
+}
+
+func AddAWSParams(remoteUrl string, apr *argparser.ArgParseResults, params map[string]string) error {
+	isAWS := strings.HasPrefix(remoteUrl, "aws")
+
+	if !isAWS {
+		for _, p := range awsParams {
+			if _, ok := apr.GetValue(p); ok {
+				return fmt.Errorf("%s param is only valid for aws cloud remotes in the format aws://dynamo-table:s3-bucket/database", p)
+			}
+		}
+	}
+
+	for _, p := range awsParams {
+		if val, ok := apr.GetValue(p); ok {
+			params[p] = val
+		}
+	}
+
+	return nil
+}
+
+func VerifyNoAwsParams(apr *argparser.ArgParseResults) error {
+	if awsParams := apr.GetValues(awsParams...); len(awsParams) > 0 {
+		awsParamKeys := make([]string, 0, len(awsParams))
+		for k := range awsParams {
+			awsParamKeys = append(awsParamKeys, k)
+		}
+
+		keysStr := strings.Join(awsParamKeys, ",")
+		return fmt.Errorf("The parameters %s, are only valid for aws remotes", keysStr)
+	}
+
+	return nil
 }

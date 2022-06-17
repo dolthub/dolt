@@ -91,13 +91,6 @@ func newDoltHarness(t *testing.T) *DoltHarness {
 		createdEnvs:    make(map[string]*env.DoltEnv),
 	}
 
-	if types.IsFormat_DOLT_1(dEnv.DoltDB.Format()) {
-		dh = dh.WithSkippedQueries([]string{
-			"SHOW CREATE TABLE child", // todo(andy): "TestForeignKeys - ALTER TABLE RENAME COLUMN"
-			"typestable",
-		})
-	}
-
 	return dh
 }
 
@@ -162,10 +155,10 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 		var res []sql.Row
 		// todo(max): need better way to reset autoincrement regardless of test type
 		ctx := enginetest.NewContext(d)
-		res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
+		_, res = enginetest.MustQuery(ctx, e, "select count(*) from information_schema.tables where table_name = 'auto_increment_tbl';")
 		d.autoInc = res[0][0].(int64) > 0
 
-		res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+		_, res = enginetest.MustQuery(ctx, e, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 		var dbs []string
 		for i := range res {
 			dbs = append(dbs, res[i][0].(string))
@@ -185,7 +178,7 @@ func (d *DoltHarness) NewEngine(t *testing.T) (*gms.Engine, error) {
 
 	//todo(max): easier if tests specify their databases ahead of time
 	ctx := enginetest.NewContext(d)
-	res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
+	_, res := enginetest.MustQuery(ctx, d.engine, "select schema_name from information_schema.schemata where schema_name not in ('information_schema');")
 	var dbs []string
 	for i := range res {
 		dbs = append(dbs, res[i][0].(string))
@@ -276,15 +269,6 @@ func (d *DoltHarness) SupportsNativeIndexCreation() bool {
 }
 
 func (d *DoltHarness) SupportsForeignKeys() bool {
-	var firstEnv *env.DoltEnv
-	d.multiRepoEnv.Iter(func(name string, dEnv *env.DoltEnv) (stop bool, err error) {
-		firstEnv = dEnv
-		return true, nil
-	})
-
-	if types.IsFormat_DOLT_1(firstEnv.DoltDB.Format()) {
-		return false
-	}
 	return true
 }
 

@@ -17,7 +17,6 @@ package indexcmds
 import (
 	"context"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -52,7 +51,7 @@ func (cmd LsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
 	return types.IsFormat_DOLT_1(nbf)
 }
 
-func (cmd LsCmd) CreateMarkdown(_ io.Writer, _ string) error {
+func (cmd LsCmd) Docs() *cli.CommandDocumentation {
 	return nil
 }
 
@@ -64,7 +63,7 @@ func (cmd LsCmd) ArgParser() *argparser.ArgParser {
 
 func (cmd LsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, lsDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, lsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	if apr.NArg() > 1 {

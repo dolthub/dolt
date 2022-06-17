@@ -336,6 +336,7 @@ DELIM
 
     run dolt table import -r test 1pk5col-ints-updt.csv
     [ "$status" -eq 0 ]
+    [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [[ "$output" =~ "Rows Processed: 1, Additions: 1, Modifications: 0, Had No Effect: 0" ]] || false
     [[ "$output" =~ "Import completed successfully." ]] || false
 
@@ -362,6 +363,7 @@ DELIM
     dolt sql -q "insert into subset values (1000, 100, 1000, 10000)"
 
     run dolt table import -r subset data.csv
+    ! [[ "$output" =~ "Warning: There are fewer columns in the import file's schema than the table's schema" ]] || false
     [ "$status" -eq 0 ]
 
     # schema argument subsets the data and adds empty column

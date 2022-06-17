@@ -44,7 +44,7 @@ func TestNewTag(t *testing.T) {
 	}
 
 	parents := mustList(types.NewList(ctx, db))
-	parentsClosure := mustParentsClosure(t, false)(getParentsClosure(ctx, db, parents))
+	parentsClosure := mustParentsClosure(t, false)(writeTypesCommitParentClosure(ctx, db, parents))
 	commit, err := newCommit(ctx, types.Float(1), parents, parentsClosure, false, types.EmptyStruct(db.Format()))
 	require.NoError(t, err)
 

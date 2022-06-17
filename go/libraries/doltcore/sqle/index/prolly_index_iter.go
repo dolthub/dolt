@@ -22,7 +22,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -33,7 +32,6 @@ type prollyIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
 	primary   prolly.Map
-	keyless   bool
 
 	// pkMap transforms indexRows index keys
 	// into primary index keys
@@ -79,7 +77,6 @@ func newProllyIndexIter(
 		idx:       idx,
 		indexIter: indexIter,
 		primary:   primary,
-		keyless:   schema.IsKeyless(sch),
 		pkBld:     pkBld,
 		pkMap:     pkMap,
 		eg:        eg,
@@ -97,21 +94,13 @@ func newProllyIndexIter(
 }
 
 // Next returns the next row from the iterator.
-func (p prollyIndexIter) Next(ctx *sql.Context) (r sql.Row, err error) {
-	for {
-		var ok bool
-		select {
-		case r, ok = <-p.rowChan:
-			if ok {
-				return DenormalizeRow(p.sqlSch, r)
-			}
-		}
-		if !ok {
-			break
-		}
+func (p prollyIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	r, ok := <-p.rowChan
+	if ok {
+		return r, nil
 	}
 
-	if err = p.eg.Wait(); err != nil {
+	if err := p.eg.Wait(); err != nil {
 		return nil, err
 	}
 
@@ -125,12 +114,6 @@ func (p prollyIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
 func (p prollyIndexIter) queueRows(ctx context.Context) error {
 	defer close(p.rowChan)
 
-	// Keyless rows have hash and cardinality values which will not be included, but are a part of the keyMap/valMap
-	rLen := len(p.keyMap) + len(p.valMap)
-	if p.keyless {
-		rLen -= 2
-	}
-
 	for {
 		idxKey, _, err := p.indexIter.Next(ctx)
 		if err != nil {
@@ -143,7 +126,7 @@ func (p prollyIndexIter) queueRows(ctx context.Context) error {
 		}
 		pk := p.pkBld.Build(sharePool)
 
-		r := make(sql.Row, rLen)
+		r := make(sql.Row, len(p.keyMap)+len(p.valMap))
 		err = p.primary.Get(ctx, pk, func(key, value val.Tuple) error {
 			return p.rowFromTuples(key, value, r)
 		})
@@ -189,7 +172,7 @@ func (p prollyIndexIter) Close(*sql.Context) error {
 }
 
 func ordinalMappingFromIndex(idx DoltIndex) (m val.OrdinalMapping) {
-	if idx.ID() == "PRIMARY" {
+	if idx.IsPrimaryKey() {
 		// todo(andy)
 		m = make(val.OrdinalMapping, idx.Schema().GetPKCols().Size())
 		for i := range m {
@@ -244,13 +227,11 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 	}
 	keyDesc, valDesc := secondary.Descriptors()
 
-	var keyMap []int
-	var valMap []int
-
-	if idx.ID() == "PRIMARY" {
+	var keyMap, valMap val.OrdinalMapping
+	if idx.IsPrimaryKey() {
 		keyMap, valMap = primaryIndexMapping(idx, pkSch)
 	} else {
-		keyMap = coveringIndexMapping(idx, pkSch)
+		keyMap = coveringIndexMapping(idx)
 	}
 
 	iter := prollyCoveringIndexIter{
@@ -278,7 +259,7 @@ func (p prollyCoveringIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
 		return nil, err
 	}
 
-	return DenormalizeRow(p.sqlSch, r)
+	return r, nil
 }
 
 func (p prollyCoveringIndexIter) Next2(ctx *sql.Context, f *sql.RowFrame) error {
@@ -312,12 +293,10 @@ func (p prollyCoveringIndexIter) writeRowFromTuples(key, value val.Tuple, r sql.
 			return err
 		}
 	}
-
 	return
 }
 
 func (p prollyCoveringIndexIter) writeRow2FromTuples(key, value val.Tuple, f *sql.RowFrame) (err error) {
-
 	// TODO: handle out of order projections
 	for to := range p.keyMap {
 		from := p.keyMap.MapOrdinal(to)
@@ -344,7 +323,6 @@ func (p prollyCoveringIndexIter) writeRow2FromTuples(key, value val.Tuple, f *sq
 			Val: p.valDesc.GetField(from, value),
 		})
 	}
-
 	return
 }
 
@@ -352,7 +330,7 @@ func (p prollyCoveringIndexIter) Close(*sql.Context) error {
 	return nil
 }
 
-func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap val.OrdinalMapping) {
+func coveringIndexMapping(idx DoltIndex) (keyMap val.OrdinalMapping) {
 	allCols := idx.Schema().GetAllCols()
 	idxCols := idx.IndexSchema().GetAllCols()
 
@@ -365,24 +343,168 @@ func coveringIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap val
 			keyMap[i] = -1
 		}
 	}
-
 	return
 }
 
 func primaryIndexMapping(idx DoltIndex, pkSch sql.PrimaryKeySchema) (keyMap, valMap val.OrdinalMapping) {
 	sch := idx.Schema()
-
 	keyMap = make(val.OrdinalMapping, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		// if |col.Name| not found, IndexOf returns -1
 		keyMap[i] = sch.GetPKCols().IndexOf(col.Name)
 	}
-
 	valMap = make(val.OrdinalMapping, len(pkSch.Schema))
 	for i, col := range pkSch.Schema {
 		// if |col.Name| not found, IndexOf returns -1
 		valMap[i] = sch.GetNonPKCols().IndexOf(col.Name)
 	}
-
 	return
+}
+
+type prollyKeylessIndexIter struct {
+	idx       DoltIndex
+	indexIter prolly.MapIter
+	clustered prolly.Map
+
+	// clusteredMap transforms secondary index keys
+	// into clustered index keys
+	clusteredMap val.OrdinalMapping
+	clusteredBld *val.TupleBuilder
+
+	eg      *errgroup.Group
+	rowChan chan sql.Row
+
+	// valueMap transforms tuples from the
+	// clustered index into sql.Rows
+	valueMap  val.OrdinalMapping
+	valueDesc val.TupleDesc
+	sqlSch    sql.Schema
+}
+
+var _ sql.RowIter = prollyKeylessIndexIter{}
+var _ sql.RowIter2 = prollyKeylessIndexIter{}
+
+func newProllyKeylessIndexIter(
+	ctx *sql.Context,
+	idx DoltIndex,
+	rng prolly.Range,
+	pkSch sql.PrimaryKeySchema,
+	rows, dsecondary durable.Index,
+) (prollyKeylessIndexIter, error) {
+	secondary := durable.ProllyMapFromIndex(dsecondary)
+	indexIter, err := secondary.IterRange(ctx, rng)
+	if err != nil {
+		return prollyKeylessIndexIter{}, err
+	}
+
+	clustered := durable.ProllyMapFromIndex(rows)
+	keyDesc, valDesc := clustered.Descriptors()
+	indexMap := ordinalMappingFromIndex(idx)
+	keyBld := val.NewTupleBuilder(keyDesc)
+	sch := idx.Schema()
+	_, vm := projectionMappings(sch, sch.GetAllCols().GetColumnNames())
+
+	eg, c := errgroup.WithContext(ctx)
+
+	iter := prollyKeylessIndexIter{
+		idx:          idx,
+		indexIter:    indexIter,
+		clustered:    clustered,
+		clusteredMap: indexMap,
+		clusteredBld: keyBld,
+		eg:           eg,
+		rowChan:      make(chan sql.Row, indexLookupBufSize),
+		valueMap:     vm,
+		valueDesc:    valDesc,
+		sqlSch:       pkSch.Schema,
+	}
+
+	eg.Go(func() error {
+		return iter.queueRows(c)
+	})
+
+	return iter, nil
+}
+
+// Next returns the next row from the iterator.
+func (p prollyKeylessIndexIter) Next(ctx *sql.Context) (sql.Row, error) {
+	r, ok := <-p.rowChan
+	if ok {
+		return r, nil
+	}
+
+	if err := p.eg.Wait(); err != nil {
+		return nil, err
+	}
+
+	return nil, io.EOF
+}
+
+func (p prollyKeylessIndexIter) Next2(ctx *sql.Context, frame *sql.RowFrame) error {
+	panic("unimplemented")
+}
+
+func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
+	defer close(p.rowChan)
+
+	for {
+		idxKey, _, err := p.indexIter.Next(ctx)
+		if err != nil {
+			return err
+		}
+
+		for to := range p.clusteredMap {
+			from := p.clusteredMap.MapOrdinal(to)
+			p.clusteredBld.PutRaw(to, idxKey.GetField(from))
+		}
+		pk := p.clusteredBld.Build(sharePool)
+
+		var value val.Tuple
+		err = p.clustered.Get(ctx, pk, func(k, v val.Tuple) error {
+			value = v
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		rows, err := p.keylessRowsFromValueTuple(value)
+		if err != nil {
+			return err
+		}
+
+		for i := range rows {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case p.rowChan <- rows[i]:
+			}
+		}
+	}
+}
+
+func (p prollyKeylessIndexIter) keylessRowsFromValueTuple(value val.Tuple) (rows []sql.Row, err error) {
+	card := val.ReadKeylessCardinality(value)
+	rows = make([]sql.Row, card)
+	rows[0] = make(sql.Row, len(p.valueMap)-1) // omit cardinality field
+
+	for valIdx, rowIdx := range p.valueMap {
+		if rowIdx == -1 {
+			continue
+		}
+		rows[0][rowIdx], err = GetField(p.valueDesc, valIdx, value)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// duplicate row |card| times
+	for i := 1; i < len(rows); i++ {
+		rows[i] = rows[0].Copy()
+	}
+	return
+}
+
+func (p prollyKeylessIndexIter) Close(*sql.Context) error {
+	return nil
 }

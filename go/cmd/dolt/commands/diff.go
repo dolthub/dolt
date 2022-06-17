@@ -17,7 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -130,10 +130,9 @@ func (cmd DiffCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_DIFF
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd DiffCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd DiffCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, diffDocs, ap))
+	return cli.NewCommandDocumentation(diffDocs, ap)
 }
 
 func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
@@ -151,7 +150,7 @@ func (cmd DiffCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, diffDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, diffDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	verr := cmd.validateArgs(apr)

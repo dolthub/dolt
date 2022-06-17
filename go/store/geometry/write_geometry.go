@@ -91,7 +91,7 @@ func writeLineSlice(buf []byte, lines []sql.LineString) {
 	buf = buf[CountSize:]
 	for _, l := range lines {
 		writePointSlice(buf, l.Points)
-		sz := len(l.Points) * PointSize
+		sz := CountSize + len(l.Points)*PointSize
 		buf = buf[sz:]
 	}
 }

@@ -54,6 +54,11 @@ func (ms *MemoryStorage) NewView() ChunkStore {
 	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: version}
 }
 
+// NewViewWithFormat makes a MemoryStoreView with a specific NomsBinFormat.
+func (ms *MemoryStorage) NewViewWithFormat(nbf string) ChunkStore {
+	return &MemoryStoreView{storage: ms, rootHash: ms.rootHash, version: nbf}
+}
+
 // NewViewWithVersion vends a MemoryStoreView backed by this MemoryStorage. It's
 // initialized with the currently "persisted" root. Uses the default format.
 func (ms *MemoryStorage) NewViewWithDefaultFormat() ChunkStore {

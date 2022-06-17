@@ -24,6 +24,7 @@ import (
 	"unsafe"
 
 	"github.com/dolthub/dolt/go/gen/fb/serial"
+	"github.com/dolthub/dolt/go/store/hash"
 
 	"github.com/shopspring/decimal"
 )
@@ -52,6 +53,7 @@ const (
 	float64Size  ByteSize = 8
 	bit64Size    ByteSize = 8
 	hash128Size  ByteSize = 16
+	addressSize  ByteSize = 20
 	yearSize     ByteSize = 1
 	dateSize     ByteSize = 4
 	timeSize     ByteSize = 8
@@ -77,6 +79,7 @@ const (
 	Float64Enc  = Encoding(serial.EncodingFloat64)
 	Bit64Enc    = Encoding(serial.EncodingBit64)
 	Hash128Enc  = Encoding(serial.EncodingHash128)
+	AddressEnc  = Encoding(serial.EncodingAddress)
 	YearEnc     = Encoding(serial.EncodingYear)
 	DateEnc     = Encoding(serial.EncodingDate)
 	TimeEnc     = Encoding(serial.EncodingTime)
@@ -129,6 +132,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float64Size, true
 	case Hash128Enc:
 		return hash128Size, true
+	case AddressEnc:
+		return addressSize, true
 	case YearEnc:
 		return yearSize, true
 	case DateEnc:
@@ -554,7 +559,21 @@ func writeHash128(buf, val []byte) {
 	copy(buf, val)
 }
 
+func readAddress(val []byte) []byte {
+	expectSize(val, addressSize)
+	return val
+}
+
+func writeAddress(buf []byte, val hash.Hash) {
+	expectSize(buf, addressSize)
+	copy(buf, val[:])
+}
+
 func compareHash128(l, r []byte) int {
+	return bytes.Compare(l, r)
+}
+
+func compareAddress(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 

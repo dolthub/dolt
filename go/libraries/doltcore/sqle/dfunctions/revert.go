@@ -116,7 +116,7 @@ func DoDoltRevert(ctx *sql.Context, row sql.Row, args []string) (int, error) {
 		return 1, fmt.Errorf("Could not load database %s", dbName)
 	}
 
-	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, commits, dbState.EditOpts())
+	workingRoot, revertMessage, err := merge.Revert(ctx, ddb, workingRoot, headCommit, commits, dbState.EditOpts())
 	if err != nil {
 		return 1, err
 	}

@@ -34,18 +34,20 @@ import (
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
 type SqlExportWriter struct {
-	tableName       string
-	sch             schema.Schema
-	parentSchs      map[string]schema.Schema
-	foreignKeys     []doltdb.ForeignKey
-	wr              io.WriteCloser
-	root            *doltdb.RootValue
-	writtenFirstRow bool
-	editOpts        editor.Options
+	tableName            string
+	sch                  schema.Schema
+	parentSchs           map[string]schema.Schema
+	foreignKeys          []doltdb.ForeignKey
+	wr                   io.WriteCloser
+	root                 *doltdb.RootValue
+	writtenFirstRow      bool
+	writtenAutocommitOff bool
+	editOpts             editor.Options
+	autocommitOff        bool
 }
 
 // OpenSQLExportWriter returns a new SqlWriter for the table with the writer given.
-func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
+func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.RootValue, tableName string, autocommitOff bool, sch schema.Schema, editOpts editor.Options) (*SqlExportWriter, error) {
 
 	allSchemas, err := root.GetAllSchemas(ctx)
 	if err != nil {
@@ -60,13 +62,14 @@ func OpenSQLExportWriter(ctx context.Context, wr io.WriteCloser, root *doltdb.Ro
 	foreignKeys, _ := fkc.KeysForTable(tableName)
 
 	return &SqlExportWriter{
-		tableName:   tableName,
-		sch:         sch,
-		parentSchs:  allSchemas,
-		foreignKeys: foreignKeys,
-		root:        root,
-		wr:          wr,
-		editOpts:    editOpts,
+		tableName:     tableName,
+		sch:           sch,
+		parentSchs:    allSchemas,
+		foreignKeys:   foreignKeys,
+		root:          root,
+		wr:            wr,
+		editOpts:      editOpts,
+		autocommitOff: autocommitOff,
 	}, nil
 }
 
@@ -117,6 +120,10 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return err
 	}
 
+	if err := w.maybeWriteAutocommitoff(); err != nil {
+		return err
+	}
+
 	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
 	if err != nil {
 		return err
@@ -130,21 +137,42 @@ func (w *SqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
 	if w.tableName == doltdb.SchemasTableName || w.tableName == doltdb.ProceduresTableName {
 		return nil
 	}
-	if !w.writtenFirstRow {
-		var b strings.Builder
-		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
-		b.WriteRune('\n')
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
-		createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
-		if err != nil {
-			return err
-		}
-		b.WriteString(createTableStmt)
-		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
-			return err
-		}
-		w.writtenFirstRow = true
+
+	if w.writtenFirstRow {
+		return nil
 	}
+
+	var b strings.Builder
+	b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
+	b.WriteRune('\n')
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
+	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
+	if err != nil {
+		return err
+	}
+	b.WriteString(createTableStmt)
+	if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+		return err
+	}
+	w.writtenFirstRow = true
+
+	return nil
+}
+
+func (w *SqlExportWriter) maybeWriteAutocommitoff() error {
+	if w.writtenAutocommitOff || !w.autocommitOff {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString("SET AUTOCOMMIT=0;")
+
+	if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+		return err
+	}
+
+	w.writtenAutocommitOff = true
+
 	return nil
 }
 
@@ -153,6 +181,16 @@ func (w *SqlExportWriter) Close(ctx context.Context) error {
 	// exporting an empty table will not get any WriteRow calls, so write the drop / create here
 	if err := w.maybeWriteDropCreate(ctx); err != nil {
 		return err
+	}
+
+	// We have to commit the changes of this tables insert by adding a COMMIT statement.
+	if w.autocommitOff {
+		var b strings.Builder
+		b.WriteString("COMMIT;")
+		b.WriteRune('\n')
+		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+			return err
+		}
 	}
 
 	if w.wr != nil {

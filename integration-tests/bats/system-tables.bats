@@ -137,6 +137,7 @@ teardown() {
 }
 
 @test "system-tables: query dolt_remotes system table" {
+    skip "JSON formatting is weird, need to fix"
     skip_nbf_dolt_1 "dolt remote not supported"
     
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
@@ -154,7 +155,7 @@ teardown() {
     run dolt sql -q "select * from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,map[] ]] || false
+    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,{} ]] || false
 }
 
 @test "system-tables: check unsupported dolt_remote behavior" {
@@ -221,6 +222,17 @@ teardown() {
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
     [ $status -eq 0 ]
     [[ "$output" =~ 0 ]] || false
+}
+
+@test "system-tables: query dolt_diff system table" {
+    dolt sql -q "CREATE TABLE testStaged (pk INT, c1 INT, PRIMARY KEY(pk))"
+    dolt add testStaged
+    dolt sql -q "CREATE TABLE testWorking (pk INT, c1 INT, PRIMARY KEY(pk))"
+
+    run dolt sql -r csv -q 'select * from dolt_diff'
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "STAGED,testStaged,,,,,false,true" ]] || false
+    [[ "$output" =~ "WORKING,testWorking,,,,,false,true" ]] || false
 }
 
 @test "system-tables: query dolt_diff_ system table" {

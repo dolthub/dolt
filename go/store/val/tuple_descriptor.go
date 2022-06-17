@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/dolthub/dolt/go/store/hash"
 )
 
 // TupleDesc describes a Tuple set.
@@ -76,6 +78,16 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 		off += sz
 	}
 	return
+}
+
+// PrefixDesc returns a descriptor for the first n types.
+func (td TupleDesc) PrefixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[:n]...)
+}
+
+// SuffixDesc returns a descriptor for the last n types.
+func (td TupleDesc) SuffixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[len(td.Types)-n:]...)
 }
 
 // GetField returns the ith field of |tup|.
@@ -387,6 +399,16 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
+func (td TupleDesc) GetAddress(i int, tup Tuple) (v hash.Hash, ok bool) {
+	td.expectEncoding(i, AddressEnc)
+	b := td.GetField(i, tup)
+	if b != nil {
+		v = hash.New(b)
+		ok = true
+	}
+	return
+}
+
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
 	for _, enc := range encodings {
 		if enc == td.Types[i].Enc {
@@ -485,6 +507,8 @@ func formatValue(enc Encoding, value []byte) string {
 	case ByteStringEnc:
 		return string(value)
 	case Hash128Enc:
+		return string(value)
+	case AddressEnc:
 		return string(value)
 	default:
 		return string(value)

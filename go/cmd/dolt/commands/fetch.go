@@ -16,7 +16,6 @@ package commands
 
 import (
 	"context"
-	"io"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -65,10 +64,9 @@ func (cmd FetchCmd) EventType() eventsapi.ClientEventType {
 	return eventsapi.ClientEventType_FETCH
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd FetchCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd FetchCmd) Docs() *cli.CommandDocumentation {
 	ap := cli.CreateFetchArgParser()
-	return CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	return cli.NewCommandDocumentation(fetchDocs, ap)
 }
 
 func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
@@ -78,7 +76,7 @@ func (cmd FetchCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd FetchCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cli.CreateFetchArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, fetchDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, fetchDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	r, refSpecs, err := env.NewFetchOpts(apr.Args, dEnv.RepoStateReader())

@@ -19,6 +19,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 )
 
@@ -260,6 +261,13 @@ func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+hash128Size]
 	writeHash128(tb.fields[i], v)
 	tb.pos += hash128Size
+}
+
+func (tb *TupleBuilder) PutAddress(i int, v hash.Hash) {
+	tb.Desc.expectEncoding(i, AddressEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+addressSize]
+	writeAddress(tb.fields[i], v)
+	tb.pos += addressSize
 }
 
 // PutRaw writes a []byte to the ith field of the Tuple being built.

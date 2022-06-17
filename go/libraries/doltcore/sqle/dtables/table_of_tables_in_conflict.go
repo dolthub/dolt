@@ -19,7 +19,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 )
@@ -58,10 +57,9 @@ func (dt *TableOfTablesInConflict) Schema() sql.Schema {
 }
 
 type tableInConflict struct {
-	name    string
-	size    uint64
-	done    bool
-	schemas conflict.ConflictSchema
+	name string
+	size uint64
+	done bool
 }
 
 // Key returns a unique key for the partition
@@ -130,13 +128,11 @@ func (dt *TableOfTablesInConflict) Partitions(ctx *sql.Context) (sql.PartitionIt
 		if err != nil {
 			return nil, err
 		} else if ok {
-			schemas, m, err := tbl.GetConflicts(ctx)
-
+			n, err := tbl.NumRowsInConflict(ctx)
 			if err != nil {
 				return nil, err
 			}
-
-			partitions = append(partitions, &tableInConflict{tblName, m.Count(), false, schemas})
+			partitions = append(partitions, &tableInConflict{tblName, n, false})
 		}
 	}
 

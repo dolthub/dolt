@@ -18,10 +18,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"math"
-	"strconv"
-	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -307,55 +304,25 @@ func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
 }
 
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string
-func SqlColToStr(ctx context.Context, col interface{}) string {
+func SqlColToStr(ctx context.Context, sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {
-		case int:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int32:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int64:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int16:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case int8:
-			return strconv.FormatInt(int64(typedCol), 10)
-		case uint:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint32:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint64:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint16:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case uint8:
-			return strconv.FormatUint(uint64(typedCol), 10)
-		case float64:
-			return strconv.FormatFloat(float64(typedCol), 'g', -1, 64)
-		case float32:
-			return strconv.FormatFloat(float64(typedCol), 'g', -1, 32)
-		case string:
-			return typedCol
-		case []byte:
-			return string(typedCol)
 		case bool:
 			if typedCol {
-				return "true"
+				return "true", nil
 			} else {
-				return "false"
+				return "false", nil
 			}
-		case time.Time:
-			return typedCol.Format("2006-01-02 15:04:05.999999 -0700 MST")
-		case sql.Point:
+		case sql.Point: //TODO: remove these when fixed in GMS
 			buf := make([]byte, 25)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPointData(typedCol, buf[9:])
-			return SqlColToStr(ctx, buf)
+			return string(buf), nil
 		case sql.LineString:
 			buf := make([]byte, 9+4+16*len(typedCol.Points))
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBLineData(typedCol, buf[9:])
-			return SqlColToStr(ctx, buf)
+			return string(buf), nil
 		case sql.Polygon:
 			size := 0
 			for _, l := range typedCol.Lines {
@@ -364,17 +331,15 @@ func SqlColToStr(ctx context.Context, col interface{}) string {
 			buf := make([]byte, 9+4+size)
 			WriteEWKBHeader(typedCol, buf)
 			WriteEWKBPolyData(typedCol, buf[9:])
-			return SqlColToStr(ctx, buf)
-		case sql.JSONValue:
-			s, err := typedCol.ToString(sql.NewContext(ctx))
-			if err != nil {
-				s = err.Error()
-			}
-			return s
+			return string(buf), nil
 		default:
-			return fmt.Sprintf("no match: %v", typedCol)
+			res, err := sqlType.SQL(nil, col)
+			if err != nil {
+				return "", err
+			}
+			return res.ToString(), nil
 		}
 	}
 
-	return ""
+	return "", nil
 }

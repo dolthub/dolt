@@ -17,6 +17,7 @@ package writer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -40,11 +41,12 @@ func getPrimaryProllyWriter(ctx context.Context, t *doltdb.Table, sqlSch sql.Sch
 	keyMap, valMap := ordinalMappingsFromSchema(sqlSch, sch)
 
 	return prollyIndexWriter{
-		mut:    m.Mutate(),
-		keyBld: val.NewTupleBuilder(keyDesc),
-		keyMap: keyMap,
-		valBld: val.NewTupleBuilder(valDesc),
-		valMap: valMap,
+		mut:     m.Mutate(),
+		primary: true,
+		keyBld:  val.NewTupleBuilder(keyDesc),
+		keyMap:  keyMap,
+		valBld:  val.NewTupleBuilder(valDesc),
+		valMap:  valMap,
 	}, nil
 }
 
@@ -80,8 +82,9 @@ type indexWriter interface {
 }
 
 type prollyIndexWriter struct {
-	name string
-	mut  prolly.MutableMap
+	name    string
+	mut     prolly.MutableMap
+	primary bool
 
 	keyBld *val.TupleBuilder
 	keyMap val.OrdinalMapping
@@ -168,9 +171,17 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 	}
 	newKey := m.keyBld.Build(sharePool)
 
-	_, err := m.mut.Has(ctx, newKey)
+	ok, err := m.mut.Has(ctx, newKey)
 	if err != nil {
 		return err
+	} else if ok {
+		if m.primary {
+			return m.keyError(ctx, newKey, true)
+		} else {
+			// If this is a secondary writer, the keyError()
+			// will be constructed by the primary writer.
+			return sql.ErrUniqueKeyViolation.New()
+		}
 	}
 
 	for to := range m.valMap {
@@ -230,9 +241,19 @@ func (m prollyIndexWriter) keyError(ctx context.Context, key val.Tuple, isPk boo
 		return
 	})
 
-	s := m.keyBld.Desc.Format(key)
-
-	return sql.NewUniqueKeyErr(s, isPk, dupe)
+	var sb strings.Builder
+	sb.WriteString("[")
+	seenOne := false
+	d := m.keyBld.Desc
+	for i := range d.Types {
+		if seenOne {
+			sb.WriteString(",")
+		}
+		seenOne = true
+		sb.WriteString(d.FormatValue(i, key.GetField(i)))
+	}
+	sb.WriteString("]")
+	return sql.NewUniqueKeyErr(sb.String(), isPk, dupe)
 }
 
 type prollyKeylessWriter struct {
