@@ -337,8 +337,8 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 // todo(andy): copy string fields
 func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 
-	n := itr.targetToSch.GetAllCols().Size()
-	m := itr.targetFromSch.GetAllCols().Size()
+	n := schemaSize(itr.targetToSch)
+	m := schemaSize(itr.targetFromSch)
 	// 2 commit names, 2 commit dates, 1 diff_type
 	r = make(sql.Row, n+m+5)
 
@@ -368,6 +368,13 @@ func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 	r[o+2] = diffTypeString(d)
 
 	return r, nil
+}
+
+func schemaSize(sch schema.Schema) int {
+	if sch == nil {
+		return 0
+	}
+	return sch.GetAllCols().Size()
 }
 
 func diffTypeString(d tree.Diff) (s string) {

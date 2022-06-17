@@ -417,7 +417,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs, apr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
-			verr = diffRows(ctx, engine, td, dArgs, apr)
+			verr = diffRows(ctx, engine, td, dArgs)
 		}
 
 		if verr != nil {
@@ -591,6 +591,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
 			case diff.SchDiffModified:
 				cli.Println(sqlfmt.AlterTableDropForeignKeyStmt(fkDiff.From))
+
 				parentSch := toSchemas[fkDiff.To.ReferencedTableName]
 				cli.Println(sqlfmt.AlterTableAddForeignKeyStmt(fkDiff.To, toSch, parentSch))
 			}
@@ -599,7 +600,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return nil
 }
 
-func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs, apr *argparser.ArgParseResults) errhand.VerboseError {
+func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
 	// TODO: need to do anything different for different added / dropped tables?
@@ -616,17 +617,26 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	toSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	defer rowIter.Close(sqlCtx)
+
+	var toSch, fromSch sql.Schema
+	if td.FromSch != nil {
+		pkSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		fromSch = pkSch.Schema
 	}
 
-	fromSch, err := sqlutil.FromDoltSchema(td.FromName, td.FromSch)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	if td.ToSch != nil {
+		pkSch, err := sqlutil.FromDoltSchema(td.ToName, td.ToSch)
+		if err != nil {
+			return errhand.VerboseErrorFromError(err)
+		}
+		toSch = pkSch.Schema
 	}
 
-	unionSch := unionSchemas(fromSch.Schema, toSch.Schema)
+	unionSch := unionSchemas(fromSch, toSch)
 
 	// TODO: default sample size
 	resultsWriter := tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
@@ -705,12 +715,16 @@ type diffSplitter struct {
 	queryToTarget map[int]int
 	fromTo        map[int]int
 	toFrom        map[int]int
+	fromLen       int
+	toLen         int
 }
 
 func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitter, error) {
 	resultToTarget := make(map[int]int)
 	fromTo := make(map[int]int)
 	toFrom := make(map[int]int)
+	fromLen := 0
+
 	for i := 0; i < len(diffQuerySch) -1; i++ {
 		var baseColName string
 		if strings.HasPrefix(diffQuerySch[i].Name, "from_") {
@@ -719,6 +733,8 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 				fromTo[i] = to
 			}
 		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
+			// we order the columns so that all from_ come first
+			fromLen = i
 			baseColName = diffQuerySch[i].Name[3:]
 			if from := diffQuerySch.IndexOfColName("from_"+baseColName); from >= 0 {
 				toFrom[i] = from
@@ -733,9 +749,13 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 		resultToTarget[i] = targetIdx
 	}
 
+	toLen := len(diffQuerySch) - 1 - fromLen
+
 	return &diffSplitter{
 		diffQuerySch:  diffQuerySch,
 		targetSch:     targetSch,
+		fromLen: fromLen,
+		toLen: toLen,
 		queryToTarget: resultToTarget,
 		fromTo:        fromTo,
 		toFrom:        toFrom,
@@ -769,12 +789,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 			oldRow.rowDiff = diff.Deleted
 		}
 
-		for i := range ds.diffQuerySch {
-			// TODO: not right
-			if i >= len(ds.targetSch) {
-				break
-			}
-
+		for i := 0; i < ds.fromLen; i++ {
 			oldRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
@@ -795,8 +810,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 			newRow.rowDiff = diff.Inserted
 		}
 
-		// TODO: not right
-		for i := len(ds.targetSch); i < len(ds.diffQuerySch) -1; i++ {
+		for i := ds.fromLen; i < len(ds.diffQuerySch) -1; i++ {
 			newRow.row[ds.queryToTarget[i]] = row[i]
 
 			if diffTypeStr == "modified" {
@@ -814,14 +828,18 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 
 func getColumnNamesString(fromSch, toSch schema.Schema) string {
 	var cols []string
-	fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
-		return false, nil
-	})
-	toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-		cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
-		return false, nil
-	})
+	if fromSch != nil {
+		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
+			return false, nil
+		})
+	}
+	if toSch != nil {
+		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
+			cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
+			return false, nil
+		})
+	}
 	return strings.Join(cols, ",")
 }
 

@@ -292,41 +292,48 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 		return err
 	}
 
-	fromTable, _, ok, err := fromRoot.GetTableInsensitive(dtf.ctx, tableName)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return sql.ErrTableNotFound.New(tableName)
-	}
-
 	toRoot, err := sqledb.rootAsOf(dtf.ctx, toCommitVal)
 	if err != nil {
 		return err
 	}
 
-	toTable, _, ok, err := toRoot.GetTableInsensitive(dtf.ctx, tableName)
+	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(dtf.ctx, tableName)
 	if err != nil {
 		return err
 	}
-	if !ok {
+
+	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(dtf.ctx, tableName)
+	if err != nil {
+		return err
+	}
+
+	if !toTableExists && !fromTableExists {
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	fromSchema, err := fromTable.GetSchema(dtf.ctx)
-	if err != nil {
-		return err
+	var toSchema, fromSchema schema.Schema
+	var format *types.NomsBinFormat
+
+	if fromTableExists {
+		fromSchema, err = fromTable.GetSchema(dtf.ctx)
+		if err != nil {
+			return err
+		}
+		format = fromTable.Format()
 	}
 
-	toSchema, err := toTable.GetSchema(dtf.ctx)
-	if err != nil {
-		return err
+	if toTableExists {
+		toSchema, err = toTable.GetSchema(dtf.ctx)
+		if err != nil {
+			return err
+		}
+		format = toTable.Format()
 	}
 
 	dtf.fromSch = fromSchema
 	dtf.toSch = toSchema
 
-	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(toTable.Format(), fromSchema, toSchema)
+	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchema, toSchema)
 	if err != nil {
 		return err
 	}
