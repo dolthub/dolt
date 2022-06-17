@@ -45,6 +45,10 @@ teardown() {
     [ "$status" -eq 0 ]
     [ "${#lines[@]}" -eq 1 ]
 
+    # Sanity check
+    run grep AUTOCOMMIT doltdump.sql
+    [ "$status" -eq 1 ]
+
     run dolt dump
     [ "$status" -ne 0 ]
     [[ "$output" =~ "doltdump.sql already exists" ]] || false
@@ -668,7 +672,10 @@ teardown() {
     [ "${#lines[@]}" -eq 3 ]
     [[ "$output" =~ "SET FOREIGN_KEY_CHECKS=0;" ]] || false
     [[ "$output" =~ "SET UNIQUE_CHECKS=0;" ]] || false
-    [[ "$output" =~ "SET AUTOCOMMIT=0;" ]] || false
+
+    run grep AUTOCOMMIT doltdump.sql
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 1 ]
 
     run tail -n 2 doltdump.sql
     [[ "$output" =~ "COMMIT;" ]] || false

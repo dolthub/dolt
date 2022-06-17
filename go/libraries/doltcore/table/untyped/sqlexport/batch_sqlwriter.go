@@ -36,16 +36,17 @@ const batchSize = 10000
 // SqlExportWriter is a TableWriter that writes SQL drop, create and insert statements to re-create a dolt table in a
 // SQL database.
 type BatchSqlExportWriter struct {
-	tableName       string
-	sch             schema.Schema
-	parentSchs      map[string]schema.Schema
-	foreignKeys     []doltdb.ForeignKey
-	wr              io.WriteCloser
-	root            *doltdb.RootValue
-	writtenFirstRow bool
-	numInserts      int
-	editOpts        editor.Options
-	autocommitOff   bool
+	tableName            string
+	sch                  schema.Schema
+	parentSchs           map[string]schema.Schema
+	foreignKeys          []doltdb.ForeignKey
+	wr                   io.WriteCloser
+	root                 *doltdb.RootValue
+	writtenFirstRow      bool
+	writtenAutocommitOff bool
+	numInserts           int
+	editOpts             editor.Options
+	autocommitOff        bool
 }
 
 // OpenBatchedSQLExportWriter returns a new SqlWriter for the table with the writer given.
@@ -143,6 +144,10 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 		return err
 	}
 
+	if err := w.maybeWriteAutocommitOff(); err != nil {
+		return err
+	}
+
 	// Reached max number of inserts on one line
 	if w.numInserts == batchSize {
 		// Reset count
@@ -191,25 +196,42 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 }
 
 func (w *BatchSqlExportWriter) maybeWriteDropCreate(ctx context.Context) error {
-	if !w.writtenFirstRow {
-		var b strings.Builder
-		if w.autocommitOff {
-			b.WriteString("SET AUTOCOMMIT=0;")
-			b.WriteRune('\n')
-		}
-		b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
-		b.WriteRune('\n')
-		sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
-		createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
-		if err != nil {
-			return err
-		}
-		b.WriteString(createTableStmt)
-		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
-			return err
-		}
-		w.writtenFirstRow = true
+	if w.writtenFirstRow {
+		return nil
 	}
+
+	var b strings.Builder
+	b.WriteString(sqlfmt.DropTableIfExistsStmt(w.tableName))
+	b.WriteRune('\n')
+	sqlCtx, engine, _ := dsqle.PrepareCreateTableStmt(ctx, dsqle.NewUserSpaceDatabase(w.root, w.editOpts))
+	createTableStmt, err := dsqle.GetCreateTableStmt(sqlCtx, engine, w.tableName)
+	if err != nil {
+		return err
+	}
+	b.WriteString(createTableStmt)
+	if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+		return err
+	}
+
+	w.writtenFirstRow = true
+
+	return nil
+}
+
+func (w *BatchSqlExportWriter) maybeWriteAutocommitOff() error {
+	if w.writtenAutocommitOff || !w.autocommitOff {
+		return nil
+	}
+
+	var b strings.Builder
+	b.WriteString("SET AUTOCOMMIT=0;")
+
+	if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
+		return err
+	}
+
+	w.writtenAutocommitOff = true
+
 	return nil
 }
 
@@ -236,7 +258,6 @@ func (w *BatchSqlExportWriter) Close(ctx context.Context) error {
 		if err := iohelp.WriteLine(w.wr, b.String()); err != nil {
 			return err
 		}
-		w.writtenFirstRow = true
 	}
 
 	if w.wr != nil {
