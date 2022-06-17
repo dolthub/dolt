@@ -217,14 +217,14 @@ SQL
     run dolt diff test
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  CONSTRAINT `fk1` FOREIGN KEY (`c1`) REFERENCES `parent` (`c1`)' ]] || false
-    [[ "$output" =~ '+ KEY `c2` (`c2`),' ]] || false
-    [[ "$output" =~ '+ CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`),' ]] || false
+    [[ "$output" =~ '+  CONSTRAINT `fk2` FOREIGN KEY (`c2`) REFERENCES `parent` (`c2`)' ]] || false
 
     dolt diff parent
     run dolt diff parent
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  KEY `c1` (`c1`)' ]] || false
-    [[ "$output" =~ '+ KEY `c2` (`c2`)' ]] || false
+    [[ "$output" =~ '+  KEY `c2` (`c2`)' ]] || false
 }
 
 @test "diff: summary comparing working table to last commit" {
