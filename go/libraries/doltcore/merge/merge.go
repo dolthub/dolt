@@ -150,7 +150,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 				// We can delete only if the table in current HEAD and parent commit contents are exact the same (same schema and same data);
 				// otherwise, return ErrTableDeletedAndModified
 				// We need to track renaming of a table --> the renamed table could be added as new table
-				return nil, &MergeStats{Operation: TableModified}, errors.New(fmt.Sprintf("error: %s table was renamed or dropped", tblName))
+				return nil, &MergeStats{Operation: TableModified}, errors.New(fmt.Sprintf("schema changes not supported: %s table was renamed or dropped in cherry-pick commit", tblName))
 			}
 
 			if (mergeHasTable && mergeHash != ancHash) ||
