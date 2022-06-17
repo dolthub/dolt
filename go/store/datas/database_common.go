@@ -86,6 +86,10 @@ func (db *database) loadDatasetsNomsMap(ctx context.Context, rootHash hash.Hash)
 		return types.EmptyMap, err
 	}
 
+	if val == nil {
+		return types.EmptyMap, errors.New("Root hash doesn't exist")
+	}
+
 	return val.(types.Map), nil
 }
 
@@ -99,146 +103,11 @@ func (db *database) loadDatasetsRefmap(ctx context.Context, rootHash hash.Hash) 
 		return prolly.AddressMap{}, err
 	}
 
-	return parse_storeroot([]byte(val.(types.SerialMessage)), db.chunkStore()), nil
-}
+	if val == nil {
+		return prolly.AddressMap{}, errors.New("Root hash doesn't exist")
+	}
 
-func getParentsClosure(ctx context.Context, vrw types.ValueReadWriter, parentRefsL types.List) (types.Ref, bool, error) {
-	parentRefs := make([]types.Ref, int(parentRefsL.Len()))
-	parents := make([]types.Struct, len(parentRefs))
-	if len(parents) == 0 {
-		return types.Ref{}, false, nil
-	}
-	err := parentRefsL.IterAll(ctx, func(v types.Value, i uint64) error {
-		r, ok := v.(types.Ref)
-		if !ok {
-			return errors.New("parentsRef element was not a Ref")
-		}
-		parentRefs[int(i)] = r
-		tv, err := r.TargetValue(ctx, vrw)
-		if err != nil {
-			return err
-		}
-		s, ok := tv.(types.Struct)
-		if !ok {
-			return errors.New("parentRef target value was not a Struct")
-		}
-		parents[int(i)] = s
-		return nil
-	})
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	parentMaps := make([]types.Map, len(parents))
-	parentParentLists := make([]types.List, len(parents))
-	for i, p := range parents {
-		v, ok, err := p.MaybeGet(parentsClosureField)
-		if err != nil {
-			return types.Ref{}, false, err
-		}
-		if !ok || types.IsNull(v) {
-			empty, err := types.NewMap(ctx, vrw)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			parentMaps[i] = empty
-		} else {
-			r, ok := v.(types.Ref)
-			if !ok {
-				return types.Ref{}, false, errors.New("unexpected field value type for parents_closure in commit struct")
-			}
-			tv, err := r.TargetValue(ctx, vrw)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			parentMaps[i], ok = tv.(types.Map)
-			if !ok {
-				return types.Ref{}, false, fmt.Errorf("unexpected target value type for parents_closure in commit struct: %v", tv)
-			}
-		}
-		v, ok, err = p.MaybeGet(parentsListField)
-		if err != nil {
-			return types.Ref{}, false, err
-		}
-		if !ok || types.IsNull(v) {
-			empty, err := types.NewList(ctx, vrw)
-			if err != nil {
-				return types.Ref{}, false, err
-			}
-			parentParentLists[i] = empty
-		} else {
-			parentParentLists[i], ok = v.(types.List)
-			if !ok {
-				return types.Ref{}, false, errors.New("unexpected field value or type for parents_list in commit struct")
-			}
-		}
-		if parentMaps[i].Len() == 0 && parentParentLists[i].Len() != 0 {
-			// If one of the commits has an empty parents_closure, but non-empty parents, we will not record
-			// a parents_closure here.
-			return types.Ref{}, false, nil
-		}
-	}
-	// Convert parent lists to List<Ref<Value>>
-	for i, l := range parentParentLists {
-		newRefs := make([]types.Value, int(l.Len()))
-		err := l.IterAll(ctx, func(v types.Value, i uint64) error {
-			r, ok := v.(types.Ref)
-			if !ok {
-				return errors.New("unexpected entry type for parents_list in commit struct")
-			}
-			newRefs[int(i)], err = types.ToRefOfValue(r, vrw.Format())
-			if err != nil {
-				return err
-			}
-			return nil
-		})
-		if err != nil {
-			return types.Ref{}, false, err
-		}
-		parentParentLists[i], err = types.NewList(ctx, vrw, newRefs...)
-		if err != nil {
-			return types.Ref{}, false, err
-		}
-	}
-	editor := parentMaps[0].Edit()
-	for i, r := range parentRefs {
-		h := r.TargetHash()
-		key, err := types.NewTuple(vrw.Format(), types.Uint(r.Height()), types.InlineBlob(h[:]))
-		if err != nil {
-			editor.Close(ctx)
-			return types.Ref{}, false, err
-		}
-		editor.Set(key, parentParentLists[i])
-	}
-	for i := 1; i < len(parentMaps); i++ {
-		changes := make(chan types.ValueChanged)
-		var derr error
-		go func() {
-			defer close(changes)
-			derr = parentMaps[1].Diff(ctx, parentMaps[0], changes)
-		}()
-		for c := range changes {
-			if c.ChangeType == types.DiffChangeAdded {
-				editor.Set(c.Key, c.NewValue)
-			}
-		}
-		if derr != nil {
-			editor.Close(ctx)
-			return types.Ref{}, false, derr
-		}
-	}
-	m, err := editor.Map(ctx)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	r, err := vrw.WriteValue(ctx, m)
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	r, err = types.ToRefOfValue(r, vrw.Format())
-	if err != nil {
-		return types.Ref{}, false, err
-	}
-	return r, true, nil
+	return parse_storeroot([]byte(val.(types.SerialMessage)), db.chunkStore()), nil
 }
 
 type refmapDatasetsMap struct {
@@ -307,6 +176,24 @@ func (db *database) GetDataset(ctx context.Context, datasetID string) (Dataset, 
 	}
 
 	return db.datasetFromMap(ctx, datasetID, datasets)
+}
+
+func (db *database) GetDatasetsByRootHash(ctx context.Context, rootHash hash.Hash) (DatasetsMap, error) {
+
+	if db.Format().UsesFlatbuffers() {
+		rm, err := db.loadDatasetsRefmap(ctx, rootHash)
+		if err != nil {
+			return nil, err
+		}
+		return refmapDatasetsMap{rm}, nil
+	}
+
+	m, err := db.loadDatasetsNomsMap(ctx, rootHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return nomsDatasetsMap{m}, nil
 }
 
 func (db *database) datasetFromMap(ctx context.Context, datasetID string, dsmap DatasetsMap) (Dataset, error) {
@@ -986,7 +873,7 @@ func buildNewCommit(ctx context.Context, ds Dataset, v types.Value, opts CommitO
 		}
 	}
 
-	return newCommitForValue(ctx, ds.db, v, opts)
+	return newCommitForValue(ctx, ds.db.chunkStore(), ds.db, v, opts)
 }
 
 func (db *database) doHeadUpdate(ctx context.Context, ds Dataset, updateFunc func(ds Dataset) error) (Dataset, error) {

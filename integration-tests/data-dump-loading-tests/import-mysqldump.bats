@@ -481,3 +481,31 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "\`location\` geometry NOT NULL SRID 0," ]] || false
 }
+
+@test "import mysqldump: dolt dump --no-autocommit can be loaded back into mysql" {
+    service mysql start
+    dolt sql -q "CREATE TABLE IF NOT EXISTS mytable (pk int NOT NULL PRIMARY KEY, c1 varchar(25) DEFAULT NULL)"
+    dolt sql -q "INSERT IGNORE INTO mytable VALUES (0, 'one'), (1, 'two')"
+
+    # Setup the database we are loading data into
+    mysql <<SQL
+CREATE DATABASE IF NOT EXISTS testdb;
+SQL
+
+    run dolt dump --no-autocommit
+    [ -f doltdump.sql ]
+
+    # remove the utf8mb4_0900_bin collation which is not supported in this installation of mysql
+    sed -i 's/COLLATE=utf8mb4_0900_bin//' doltdump.sql
+
+    mysql testdb < doltdump.sql
+    run mysql <<SQL
+SELECT count(*) from testdb.mytable
+SQL
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "2" ]] || false
+
+    # Give the server a chance to drop the database
+    sleep 1
+    service mysql stop
+}

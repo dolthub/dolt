@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -42,7 +43,7 @@ type reporter func(ctx context.Context, change *diff.Difference, ch chan<- DiffS
 func Summary(ctx context.Context, ch chan DiffSummaryProgress, from, to durable.Index, fromSch, toSch schema.Schema) (err error) {
 	ch <- DiffSummaryProgress{OldSize: from.Count(), NewSize: to.Count()}
 
-	if from.Format() == types.Format_DOLT_1 {
+	if types.IsFormat_DOLT_1(from.Format()) {
 		return prollySummary(ctx, ch, from, to, fromSch, toSch)
 	}
 
@@ -67,7 +68,7 @@ func prollySummary(ctx context.Context, ch chan DiffSummaryProgress, from, to du
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return err
 	}
 	return nil
@@ -286,10 +287,10 @@ func reportKeylessChanges(ctx context.Context, change *diff.Difference, ch chan<
 // MapSchemaBasedOnName can be used to map column values from one schema to
 // another schema. A column in |inSch| is mapped to |outSch| if they share the
 // same name and primary key membership status. It returns ordinal mappings that
-// can be use to map key, value val.Tuple's of schema |inSch| to a sql.Row of
-// |outSch|. The first ordinal map is for keys, and the second is for values. If
-// a column of |inSch| is missing in |outSch| then that column's index in the
-// ordinal map holds -1.
+// can be use to map key, value val.Tuple's of schema |inSch| to |outSch|. The
+// first ordinal map is for keys, and the second is for values. If a column of
+// |inSch| is missing in |outSch| then that column's index in the ordinal map
+// holds -1.
 // TODO (dhruv): Unit tests
 func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.OrdinalMapping, error) {
 	keyMapping := make(val.OrdinalMapping, inSch.GetPKCols().Size())
@@ -298,7 +299,7 @@ func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.
 	err := inSch.GetPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		i := inSch.GetPKCols().TagToIdx[tag]
 		if col, ok := outSch.GetPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
+			j := outSch.GetPKCols().TagToIdx[col.Tag]
 			keyMapping[i] = j
 		} else {
 			return true, fmt.Errorf("could not map primary key column %s", col.Name)
@@ -312,7 +313,7 @@ func MapSchemaBasedOnName(inSch, outSch schema.Schema) (val.OrdinalMapping, val.
 	err = inSch.GetNonPKCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
 		i := inSch.GetNonPKCols().TagToIdx[col.Tag]
 		if col, ok := outSch.GetNonPKCols().GetByName(col.Name); ok {
-			j := outSch.GetAllCols().TagToIdx[col.Tag]
+			j := outSch.GetNonPKCols().TagToIdx[col.Tag]
 			valMapping[i] = j
 		} else {
 			valMapping[i] = -1

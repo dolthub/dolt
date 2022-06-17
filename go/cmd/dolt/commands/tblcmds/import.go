@@ -324,10 +324,9 @@ func (cmd ImportCmd) Description() string {
 	return "Creates, overwrites, replaces, or updates a table from the data in a file."
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	return cli.NewCommandDocumentation(importDocs, ap)
 }
 
 func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
@@ -358,7 +357,7 @@ func (cmd ImportCmd) EventType() eventsapi.ClientEventType {
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
 
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	dEnv, err := commands.MaybeMigrateEnv(ctx, dEnv)
@@ -498,6 +497,12 @@ func newImportSqlEngineMover(ctx context.Context, dEnv *env.DoltEnv, rdSchema sc
 	rowOperationSchema, err := schema.SchemaFromCols(rowOperationColColl)
 	if err != nil {
 		return nil, &mvdata.DataMoverCreationError{ErrType: mvdata.SchemaErr, Cause: err}
+	}
+
+	// Leave a warning if the import operation is operating on fewer columns than the relevant table's schema.
+	// This can certainly be intentional, but it is often due to typos in the header of a csv file.
+	if rowOperationSchema.GetAllCols().Size() < tableSchema.GetAllCols().Size() {
+		cli.PrintErrln(color.YellowString("Warning: There are fewer columns in the import file's schema than the table's schema.\nIf unintentional, check for any typos in the import file's header."))
 	}
 
 	mv, err := mvdata.NewSqlEngineTableWriter(ctx, dEnv, tableSchema, rowOperationSchema, moveOps, importStatsCB)

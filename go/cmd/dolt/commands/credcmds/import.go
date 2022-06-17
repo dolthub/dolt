@@ -63,10 +63,9 @@ func (cmd ImportCmd) Description() string {
 	return importDocs.ShortDesc
 }
 
-// CreateMarkdown creates a markdown file containing the helptext for the command at the given path
-func (cmd ImportCmd) CreateMarkdown(wr io.Writer, commandStr string) error {
+func (cmd ImportCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
-	return commands.CreateMarkdown(wr, cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	return cli.NewCommandDocumentation(importDocs, ap)
 }
 
 // RequiresRepo should return false if this interface is implemented, and the command does not have the requirement
@@ -92,7 +91,7 @@ func (cmd ImportCmd) ArgParser() *argparser.ArgParser {
 // Exec executes the command
 func (cmd ImportCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
 	ap := cmd.ArgParser()
-	help, usage := cli.HelpAndUsagePrinters(cli.GetCommandDocumentation(commandStr, importDocs, ap))
+	help, usage := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, importDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
 	credsDir, verr := actions.EnsureCredsDir(dEnv)
