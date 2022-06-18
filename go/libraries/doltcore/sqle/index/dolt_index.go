@@ -243,12 +243,12 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 }
 
 type DurableIndexes struct {
-	Primary durable.Index
+	Primary   durable.Index
 	Secondary durable.Index
 }
 
 type cachedDurableIndexes struct {
-	key doltdb.DataCacheKey
+	key     doltdb.DataCacheKey
 	indexes DurableIndexes
 }
 
