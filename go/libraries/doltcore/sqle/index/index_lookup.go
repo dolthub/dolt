@@ -23,7 +23,6 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -44,7 +43,7 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	return RowIterForNomsRanges(ctx, doltIdx, ranges, columns, rp.primary, rp.secondary)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, t *doltdb.Table, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
@@ -126,7 +125,7 @@ func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 	return lookup.(*doltIndexLookup).idx
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t *doltdb.Table, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	dlu := lookup.(*doltIndexLookup)
 	primary, secondary, err := dlu.idx.GetDurableIndexes(ctx, t)
 	if err != nil {
