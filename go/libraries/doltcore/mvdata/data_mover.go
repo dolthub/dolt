@@ -57,6 +57,7 @@ type MoverOptions struct {
 }
 
 type DataMoverOptions interface {
+	IsAutocommitOff() bool
 	IsBatched() bool
 	WritesToTable() bool
 	SrcName() string
