@@ -202,10 +202,6 @@ func (db *SingleTableInfoDatabase) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
-func (db *SingleTableInfoDatabase) IsAnalyzed(ctx *sql.Context) bool {
-	return false
-}
-
 func (db *SingleTableInfoDatabase) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return nil, nil
 }

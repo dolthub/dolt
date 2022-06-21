@@ -127,7 +127,6 @@ type DoltTable struct {
 
 	opts editor.Options
 
-	analyzed  bool
 	doltStats *DoltTableStatistics
 }
 
@@ -402,11 +401,6 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		return err
 	}
 
-	// skip empty table
-	if m.Count() == 0 {
-		return nil
-	}
-
 	// initialize dolt stats
 	cols := t.sch.GetAllCols().GetColumns()
 	t.doltStats = &DoltTableStatistics{
@@ -485,7 +479,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 					hist.DistinctCount++
 				}
 
-				hist.Mean += v / float64(t.doltStats.rowCount)
+				hist.Mean += v
 				hist.Min = math.Min(hist.Min, v)
 				hist.Max = math.Max(hist.Max, v)
 				hist.Count++
@@ -503,6 +497,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		sort.Float64s(keys)
 
 		hist := t.doltStats.histogramMap[colName]
+		hist.Mean /= float64(hist.Count)
 		for _, k := range keys {
 			bucket := &sql.HistogramBucket{
 				LowerBound: k,
@@ -525,32 +520,29 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		dbState.TblStats = make(map[string]sql.TableStatistics)
 	}
 	dbState.TblStats[t.tableName] = t.doltStats
-	t.analyzed = true
 	return nil
 }
 
-func (t *DoltTable) IsAnalyzed(ctx *sql.Context) bool {
-	// TODO: I know this probably isn't great, but I'm lazy
-	// Note for future James iff we continue to place them here: need to expose database state in sql.Session
+func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	if t.doltStats != nil {
+		return t.doltStats, nil
+	}
+
+	// Load stats from the session
 	dSess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
-		return false
+		return nil, nil
 	}
 	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
 	if !ok || err != nil {
-		return false
+		return nil, nil
 	}
 	stats, ok := dbState.TblStats[t.tableName]
 	if !ok {
-		return false
+		return nil, nil
 	}
 	t.doltStats = stats.(*DoltTableStatistics)
-	t.analyzed = true // TODO: probably shouldn't even bother setting this variable
-	return t.analyzed
-}
 
-func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	// TODO: should probably move code from IsAnalyzed here
 	return t.doltStats, nil
 }
 
