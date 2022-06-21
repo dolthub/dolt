@@ -46,6 +46,7 @@ type DoltIndex interface {
 	GetDurableIndexes(*sql.Context, DoltTableable) (durable.Index, durable.Index, error)
 	coversColumns(cols []string) bool
 	lookupTags() map[uint64]int
+	sqlRowConverter() *KVToSqlRowConverter
 }
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -277,6 +278,7 @@ type doltIndex struct {
 	cache            cachedDurableIndexes
 	coversAllCols    *bool
 	cachedLookupTags map[uint64]int
+	cachedSqlRowConverter *KVToSqlRowConverter
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -499,6 +501,13 @@ func (di *doltIndex) coversAllColumns() bool {
 	}
 	di.coversAllCols = &covers
 	return covers
+}
+
+func (di *doltIndex) sqlRowConverter() *KVToSqlRowConverter {
+	if di.cachedSqlRowConverter == nil {
+		di.cachedSqlRowConverter = NewKVToSqlRowConverterForCols(di.Format(), di.Schema())
+	}
+	return di.cachedSqlRowConverter
 }
 
 func (di *doltIndex) lookupTags() map[uint64]int {

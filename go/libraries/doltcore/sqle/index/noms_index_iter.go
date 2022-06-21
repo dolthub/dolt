@@ -58,7 +58,6 @@ type indexLookupRowIterAdapter struct {
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, tableData durable.Index, keyIter nomsKeyIter) (*indexLookupRowIterAdapter, error) {
 	rows := durable.NomsMapFromIndex(tableData)
 
-	conv := NewKVToSqlRowConverterForCols(idx.Format(), idx.Schema())
 	resBuf := resultBufferPool.Get().(*async.RingBuffer)
 	epoch := resBuf.Reset()
 
@@ -68,7 +67,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, tableData dur
 		idx:        idx,
 		keyIter:    keyIter,
 		tableRows:  rows,
-		conv:       conv,
+		conv:       idx.sqlRowConverter(),
 		lookupTags: idx.lookupTags(),
 		cancelF:    cancelF,
 		resultBuf:  resBuf,
