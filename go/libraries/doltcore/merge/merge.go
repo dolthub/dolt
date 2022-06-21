@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/conflict"
@@ -31,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdocs"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
-	json2 "github.com/dolthub/dolt/go/libraries/doltcore/sqle/json"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/valutil"
 	"github.com/dolthub/dolt/go/store/atomicerr"
@@ -186,6 +184,11 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 	}
 
 	if types.IsFormat_DOLT_1(updatedTbl.Format()) {
+		updatedTbl, err = mergeTableArtifacts(ctx, tbl, mergeTbl, ancTbl, updatedTbl)
+		if err != nil {
+			return nil, nil, err
+		}
+
 		var stats *MergeStats
 		updatedTbl, stats, err = mergeTableData(
 			ctx,
@@ -197,14 +200,6 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 			ancIndexSet,
 			merger.theirRootIsh,
 			merger.ancRootIsh)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		// |updatedTbl| is our post data merge table. We use it as our left when
-		// merging artifacts because new artifacts might have been generated
-		// during the data merge.
-		updatedTbl, err = mergeTableArtifacts(ctx, updatedTbl, mergeTbl, ancTbl, updatedTbl)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -489,7 +484,6 @@ func mergeNomsTableData(ctx context.Context, vrw types.ValueReadWriter, tblName 
 				}
 
 				if rowMergeResult.isConflict {
-					stats.Conflicts++
 					conflictTuple, err := conflict.NewConflict(ancRow, r, mergeRow).ToNomsList(vrw)
 					if err != nil {
 						return err
@@ -572,17 +566,15 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 			if err != nil {
 				return err
 			}
-			err = tableEditor.UpdateRow(ctx, oldRow, newRow, handleTableEditorDuplicateErr)
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupErrHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
 			if err != nil {
-				err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
 				if err != nil {
 					return err
 				}
 			}
 		} else {
-			err = tableEditor.InsertRow(ctx, newRow, handleTableEditorDuplicateErr)
+			err = tableEditor.InsertRow(ctx, newRow, makeDupErrHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
 			if err != nil {
-				err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
 				if err != nil {
 					return err
 				}
@@ -590,17 +582,17 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 		}
 		stats.Adds++
 	case types.DiffChangeModified:
-		oldRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.OldValue.(types.Tuple))
+		key, oldVal, newVal := change.Key.(types.Tuple), change.OldValue.(types.Tuple), change.NewValue.(types.Tuple)
+		oldRow, err := row.FromNoms(sch, key, oldVal)
 		if err != nil {
 			return err
 		}
-		newRow, err := row.FromNoms(sch, change.Key.(types.Tuple), change.NewValue.(types.Tuple))
+		newRow, err := row.FromNoms(sch, key, newVal)
 		if err != nil {
 			return err
 		}
-		err = tableEditor.UpdateRow(ctx, oldRow, newRow, handleTableEditorDuplicateErr)
+		err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupErrHandler(ctx, tableEditor, key, newVal))
 		if err != nil {
-			err = applyPkChangeUnqErr(ctx, err, change.Key.(types.Tuple), change.NewValue.(types.Tuple), tableEditor)
 			if err != nil {
 				return err
 			}
@@ -625,51 +617,50 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 	return nil
 }
 
-// applyPkChangeUnqErr handles unique key errors for the applyNomsPkChange if an error is returned from a table editor.
-// If the given error is not a unique key error, then it is returned as-is. Otherwise, it is added to the constraint
-// violations map if applicable.
-func applyPkChangeUnqErr(ctx context.Context, err error, k, v types.Tuple, tableEditor editor.TableEditor) error {
-	if uke, ok := err.(uniqueKeyError); ok {
-		sch := tableEditor.Schema()
-		schCols := sch.GetAllCols()
-		idx := sch.Indexes().GetByName(uke.indexName)
-		idxTags := idx.IndexedColumnTags()
-		colNames := make([]string, len(idxTags))
-		for i, tag := range idxTags {
-			if col, ok := schCols.TagToCol[tag]; !ok {
-				return fmt.Errorf("unique key '%s' references tag '%d' on table '%s' but it cannot be found",
-					idx.Name(), tag, tableEditor.Name())
-			} else {
-				colNames[i] = col.Name
-			}
+func makeDupErrHandler(ctx context.Context, tableEditor editor.TableEditor, newKey, newValue types.Tuple) editor.PKDuplicateErrFunc {
+	return func(keyString, indexName string, existingKey, existingValue types.Tuple, isPk bool) error {
+		if isPk {
+			return fmt.Errorf("duplicate key '%s'", keyString)
 		}
-		jsonStr := fmt.Sprintf(`{`+
-			`"Name":"%s",`+
-			`"Columns":["%s"]`+
-			`}`,
-			uke.indexName,
-			strings.Join(colNames, `','`))
 
-		var doc interface{}
-		if err := json.Unmarshal([]byte(jsonStr), &doc); err != nil {
-			return err
-		}
-		sqlDoc := sql.JSONDocument{Val: doc}
-		nomsJson, err := json2.NomsJSONFromJSONValue(ctx, tableEditor.ValueReadWriter(), sqlDoc)
+		sch := tableEditor.Schema()
+		idx := sch.Indexes().GetByName(indexName)
+		m, err := makeUniqViolMeta(sch, idx)
 		if err != nil {
 			return err
 		}
-		cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_UniqueIndex, types.JSON(nomsJson), k, v)
+		d, err := json.Marshal(m)
 		if err != nil {
 			return err
 		}
-		err = tableEditor.SetConstraintViolation(ctx, cvKey, cvVal)
-		if err != nil {
-			return err
-		}
-	} else {
+
+		return addUniqueViolation(ctx, tableEditor, existingKey, existingValue, newKey, newValue, d)
+	}
+}
+
+func addUniqueViolation(ctx context.Context, tableEditor editor.TableEditor, existingKey, existingVal, newKey, newVal types.Tuple, jsonData []byte) error {
+	nomsJson, err := jsonDataToNomsValue(ctx, tableEditor.ValueReadWriter(), jsonData)
+	if err != nil {
 		return err
 	}
+	cvKey, cvVal, err := toConstraintViolationRow(ctx, CvType_UniqueIndex, nomsJson, newKey, newVal)
+	if err != nil {
+		return err
+	}
+	err = tableEditor.SetConstraintViolation(ctx, cvKey, cvVal)
+	if err != nil {
+		return err
+	}
+
+	cvKey, cvVal, err = toConstraintViolationRow(ctx, CvType_UniqueIndex, nomsJson, existingKey, existingVal)
+	if err != nil {
+		return err
+	}
+	err = tableEditor.SetConstraintViolation(ctx, cvKey, cvVal)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1029,13 +1020,13 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		return nil, nil, err
 	}
 
-	mergedRoot, _, err = AddConstraintViolations(ctx, mergedRoot, ancRoot, nil, theirRootIsh)
+	mergedRoot, _, err = AddForeignKeyViolations(ctx, mergedRoot, ancRoot, nil, theirRootIsh)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	if types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
-		err = calculateViolationStats(ctx, mergedRoot, tblToStats)
+		err = getConflictAndConstraintViolationStats(ctx, mergedRoot, tblToStats)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1048,7 +1039,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		return nil, nil, err
 	}
 
-	err = calculateViolationStats(ctx, mergedRoot, tblToStats)
+	err = getConflictAndConstraintViolationStats(ctx, mergedRoot, tblToStats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1115,18 +1106,24 @@ func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 }
 
 // populates tblToStats with violation statistics
-func calculateViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+func getConflictAndConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
 	for tblName, stats := range tblToStats {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
 		if ok {
-			n, err := tbl.NumConstraintViolations(ctx)
+			n, err := tbl.NumRowsInConflict(ctx)
 			if err != nil {
 				return err
 			}
-			stats.ConstraintViolations = int(n)
+			stats.Conflicts = int(n)
+
+			n2, err := tbl.NumConstraintViolations(ctx)
+			if err != nil {
+				return err
+			}
+			stats.ConstraintViolations = int(n2)
 		}
 	}
 	return nil

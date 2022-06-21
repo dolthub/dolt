@@ -114,7 +114,7 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
 	}
 
-	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet, h)
+	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(ctx, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}

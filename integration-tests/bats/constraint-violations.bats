@@ -11,9 +11,6 @@ teardown() {
 }
 
 @test "constraint-violations: functions blocked with violations" {
-    # TODO: unique key constraint violation
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -36,7 +33,7 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "test,1" ]] || false
+    [[ "$output" =~ "test,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt status
     [ "$status" -eq "0" ]
@@ -64,9 +61,6 @@ SQL
 }
 
 @test "constraint-violations: dolt_force_transaction_commit along with dolt_allow_commit_conflicts ignores constraint violations" {
-    # TODO: unique key constraint violation
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2668,8 +2662,7 @@ SQL
 }
 
 @test "constraint-violations: cyclic foreign keys, illegal deletion" {
-    # TODO: uses dolt constraints verify
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "uses dolt constraints verify"
 
     # We're deleting a reference in a cycle from each table to make sure it properly applies a violation in both instances
     dolt sql <<"SQL"
@@ -2846,9 +2839,6 @@ SQL
 }
 
 @test "constraint-violations: unique keys, insert violation" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2869,13 +2859,14 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "test,1" ]] || false
+    [[ "$output" =~ "test,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
+    [[ "$output" =~ 'unique index,3,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
     [[ "$output" =~ 'unique index,6,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
@@ -2884,13 +2875,11 @@ SQL
     [[ "$output" =~ "3,3" ]] || false
     [[ "$output" =~ "4,4" ]] || false
     [[ "$output" =~ "5,5" ]] || false
-    [[ "${#lines[@]}" = "6" ]] || false
+    [[ "$output" =~ "6,3" ]] || false
+    [[ "${#lines[@]}" = "7" ]] || false
 }
 
 @test "constraint-violations: unique keys, update violation from ours" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
     dolt sql <<"SQL"
 CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
 INSERT INTO test VALUES (1, 1), (2, 2);
@@ -2911,57 +2900,57 @@ SQL
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "test,1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
-    [[ "$output" =~ 'unique index,3,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM test" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "pk,v1" ]] || false
-    [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,3" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "constraint-violations: unique keys, update violation from theirs" {
-    # TODO: unique key checks
-    skip_nbf_dolt_1
-
-    dolt sql <<"SQL"
-CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
-INSERT INTO test VALUES (1, 1), (2, 2);
-SQL
-    dolt add -A
-    dolt commit -m "MC1"
-    dolt branch other
-    dolt sql -q "INSERT INTO test VALUES (3, 3)"
-    dolt add -A
-    dolt commit -m "MC2"
-    dolt checkout other
-    dolt sql -q "UPDATE test SET v1 = 3 WHERE pk = 2"
-    dolt add -A
-    dolt commit -m "OC1"
-    dolt checkout main
-    dolt merge other
-
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "test,1" ]] || false
+    [[ "$output" =~ "test,2" ]] || false
     [[ "${#lines[@]}" = "2" ]] || false
     run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
     [[ "$output" =~ 'unique index,2,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
+    [[ "$output" =~ 'unique index,3,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
     run dolt sql -q "SELECT * FROM test" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "pk,v1" ]] || false
     [[ "$output" =~ "1,1" ]] || false
-    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
+    [[ "$output" =~ "3,3" ]] || false
+    [[ "${#lines[@]}" = "4" ]] || false
+}
+
+@test "constraint-violations: unique keys, update violation from theirs" {
+    dolt sql <<"SQL"
+CREATE TABLE test (pk BIGINT PRIMARY KEY, v1 BIGINT, UNIQUE INDEX(v1));
+INSERT INTO test VALUES (1, 1), (2, 2);
+SQL
+    dolt add -A
+    dolt commit -m "MC1"
+    dolt branch other
+    dolt sql -q "INSERT INTO test VALUES (3, 3)"
+    dolt add -A
+    dolt commit -m "MC2"
+    dolt checkout other
+    dolt sql -q "UPDATE test SET v1 = 3 WHERE pk = 2"
+    dolt add -A
+    dolt commit -m "OC1"
+    dolt checkout main
+    dolt merge other
+
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "table,num_violations" ]] || false
+    [[ "$output" =~ "test,2" ]] || false
+    [[ "${#lines[@]}" = "2" ]] || false
+    run dolt sql -q "SELECT * FROM dolt_constraint_violations_test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "violation_type,pk,v1,violation_info" ]] || false
+    [[ "$output" =~ 'unique index,2,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
+     [[ "$output" =~ 'unique index,3,3,"{""Columns"": [""v1""], ""Name"": ""v1""}"' ]] || false
+    [[ "${#lines[@]}" = "3" ]] || false
+    run dolt sql -q "SELECT * FROM test" -r=csv
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk,v1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,3" ]] || false
     [[ "$output" =~ "3,3" ]] || false
     [[ "${#lines[@]}" = "4" ]] || false
 }

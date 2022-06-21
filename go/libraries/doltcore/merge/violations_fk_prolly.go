@@ -201,7 +201,7 @@ func createCVIfNoPartialKeyMatches(
 
 	meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v}
 
-	err = editor.ReplaceFKConstraintViolation(ctx, k, theirRootIsh, meta)
+	err = editor.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
 	if err != nil {
 		return false, err
 	}
@@ -252,7 +252,7 @@ func createCVsForPartialKeyMatches(
 		}
 		meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value}
 
-		err = editor.ReplaceFKConstraintViolation(ctx, primaryIdxKey, theirRootIsh, meta)
+		err = editor.ReplaceConstraintViolation(ctx, primaryIdxKey, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
 		if err != nil {
 			return false, err
 		}

@@ -313,10 +313,10 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIs
 	return wr.mut.Put(ctx, key, value)
 }
 
-// ReplaceFKConstraintViolation replaces foreign key constraint violations that
+// ReplaceConstraintViolation replaces constraint violations that
 // match the given one but have a different commit hash. If no existing violation
-// exists, the given will be inserted.
-func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, meta ConstraintViolationMeta) error {
+// exists, the given will be inserted. Returns true if a violation was replaced.
+func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
 	itr, err := wr.mut.IterRange(ctx, rng)
 	if err != nil {
@@ -334,7 +334,7 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	var art Artifact
 	var currMeta ConstraintViolationMeta
 	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
-		if art.ArtType != ArtifactTypeForeignKeyViol {
+		if art.ArtType != artType {
 			continue
 		}
 
@@ -359,7 +359,7 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	if err != nil {
 		return err
 	}
-	err = wr.Add(ctx, srcKey, theirRootIsh, ArtifactTypeForeignKeyViol, d)
+	err = wr.Add(ctx, srcKey, theirRootIsh, artType, d)
 	if err != nil {
 		return err
 	}

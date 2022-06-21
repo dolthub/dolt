@@ -125,7 +125,6 @@ type pkTableEditor struct {
 	tea      TableEditAccumulator
 	nbf      *types.NomsBinFormat
 	indexEds []*IndexEditor
-	cvEditor *types.MapEditor
 
 	// TupleFactory is not thread-safe.  writeMutex needs to be acquired before using tf
 	tf *types.TupleFactory
@@ -133,8 +132,12 @@ type pkTableEditor struct {
 	// Whenever any write operation occurs on the table editor, this is set to true for the lifetime of the editor.
 	dirty uint32
 
-	// This mutex blocks on each operation, so that map reads and updates are serialized
+	// This mutex blocks on each operation, so that map reads and updates are serialized. Protects the above data.
 	writeMutex *sync.Mutex
+
+	// protects cvEditor
+	cvMutex  *sync.Mutex
+	cvEditor *types.MapEditor
 }
 
 var _ TableEditor = (*pkTableEditor)(nil)
@@ -152,6 +155,7 @@ func newPkTableEditor(ctx context.Context, t *doltdb.Table, tableSch schema.Sche
 		indexEds:   make([]*IndexEditor, tableSch.Indexes().Count()),
 		tf:         tf,
 		writeMutex: &sync.Mutex{},
+		cvMutex:    &sync.Mutex{},
 	}
 	var err error
 	rowData, err := t.GetNomsRowData(ctx)
@@ -384,7 +388,10 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			return te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			err = te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			if err != nil {
+				return err
+			}
 		} else if err != nil {
 			return err
 		}
@@ -564,7 +571,10 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			return te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			err = te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			if err != nil {
+				return err
+			}
 		} else if err != nil {
 			return err
 		}
@@ -714,8 +724,8 @@ func (te *pkTableEditor) StatementFinished(ctx context.Context, errored bool) er
 
 // SetConstraintViolation implements TableEditor.
 func (te *pkTableEditor) SetConstraintViolation(ctx context.Context, k types.LesserValuable, v types.Valuable) error {
-	te.writeMutex.Lock()
-	defer te.writeMutex.Unlock()
+	te.cvMutex.Lock()
+	defer te.cvMutex.Unlock()
 
 	if te.cvEditor == nil {
 		cvMap, err := te.t.GetConstraintViolations(ctx)
