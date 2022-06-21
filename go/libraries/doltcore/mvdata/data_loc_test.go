@@ -164,6 +164,10 @@ func (t testDataMoverOptions) IsBatched() bool {
 	return false
 }
 
+func (t testDataMoverOptions) IsAutocommitOff() bool {
+	return false
+}
+
 func (t testDataMoverOptions) WritesToTable() bool {
 	return true
 }
