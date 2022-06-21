@@ -732,7 +732,9 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 			}
 		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
 			// we order the columns so that all from_ come first
-			fromLen = i
+			if fromLen == 0 {
+				fromLen = i
+			}
 			baseColName = diffQuerySch[i].Name[3:]
 			if from := diffQuerySch.IndexOfColName("from_"+baseColName); from >= 0 {
 				toFrom[i] = from
