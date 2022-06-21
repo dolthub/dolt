@@ -457,7 +457,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 			for i, col := range cols {
 				hist, ok := t.doltStats.histogramMap[col.Name]
 				if !ok {
-					panic("histogram was not initialiize for this column; shouldn't be possible")
+					panic("histogram was not initialized for this column; shouldn't be possible")
 				}
 
 				if row[i] == nil {
