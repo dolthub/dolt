@@ -6,15 +6,12 @@ import mysql.connector
 from io import StringIO
 from multiprocessing import Process
 
-
 def _connect(user, host, port, database):
     return mysql.connector.connect(user=user, host=host, port=port, database=database, allow_local_infile=True)
-
 
 def _print_err_and_exit(e):
     print(e, file=sys.stderr)
     sys.exit(1)
-
 
 def csv_to_row_maps(csv_str):
     csv_str = csv_str.replace('\\n', '\n')
@@ -24,7 +21,6 @@ def csv_to_row_maps(csv_str):
         rows.append(row)
 
     return rows
-
 
 class DoltConnection(object):
     def __init__(self, user='root', host='127.0.0.1', port=3306, database='dolt', auto_commit=False):
@@ -69,7 +65,6 @@ class DoltConnection(object):
                 _print_err_and_exit(e)
             raise e
 
-
 class InfiniteRetryConnection(DoltConnection):
     def connect(self):
         while True:
@@ -85,7 +80,6 @@ class InfiniteRetryConnection(DoltConnection):
 
             except BaseException:
                 pass
-
 
 def wait_for_connection(user='root', host='127.0.0.1', port=3306, database='dolt', timeout_ms=5000):
     timeoutf = timeout_ms / 1000.0

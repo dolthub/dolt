@@ -1201,7 +1201,6 @@ SELECT DOLT_COMMIT('-a', '-m', 'Insert 60');
 SELECT DOLT_MERGE('feature-branch');
 SQL
 
-
     run dolt status
     [ $status -eq 0 ]
     [[ "$output" =~ "On branch main" ]] || false
@@ -1252,7 +1251,6 @@ UPDATE test SET pk=60 WHERE pk=500000;
 CALL DOLT_COMMIT('-a', '-m', 'Insert 60');
 CALL DOLT_MERGE('feature-branch');
 SQL
-
 
     run dolt status
     [ $status -eq 0 ]

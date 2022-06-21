@@ -99,7 +99,6 @@ CALL DOLT_CHECKOUT('-b', 'new-branch');
 SQL
 }
 
-
 @test "sql-checkout: DOLT_CHECKOUT -b throws error on branches that already exist" {
     run dolt sql -q "SELECT DOLT_CHECKOUT('-b', 'main')"
     [ $status -eq 1 ]

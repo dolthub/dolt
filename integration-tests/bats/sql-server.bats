@@ -35,7 +35,7 @@ teardown() {
 }
 
 @test "sql-server: test autocommit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -69,7 +69,7 @@ teardown() {
 }
 
 @test "sql-server: read-only flag prevents modification" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
 
@@ -96,7 +96,7 @@ teardown() {
 }
 
 @test "sql-server: read-only flag still allows select" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt sql -q "create table t(c0 int)"
@@ -113,7 +113,7 @@ teardown() {
 }
 
 @test "sql-server: read-only flag prevents dolt_commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
 
@@ -129,7 +129,7 @@ teardown() {
 }
 
 @test "sql-server: test command line modification" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -163,7 +163,7 @@ teardown() {
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -224,7 +224,7 @@ teardown() {
 }
 
 @test "sql-server: test basic querying via dolt sql-server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -246,7 +246,7 @@ teardown() {
 }
 
 @test "sql-server: test multiple queries on the same connection" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -265,7 +265,7 @@ teardown() {
 }
 
 @test "sql-server: test reset_hard" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt sql <<SQL
@@ -310,7 +310,7 @@ SQL
 }
 
 @test "sql-server: test multi db with use statements" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     start_multi_db_server repo1
 
@@ -419,7 +419,7 @@ SQL
 }
 
 @test "sql-server: test CREATE and DROP database via sql-server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -437,7 +437,7 @@ SQL
 }
 
 @test "sql-server: DOLT_ADD, DOLT_COMMIT, DOLT_CHECKOUT, DOLT_MERGE work together in server mode" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
      cd repo1
      start_sql_server repo1
@@ -489,7 +489,7 @@ SQL
 }
 
 @test "sql-server: DOLT_MERGE ff works" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
      cd repo1
      start_sql_server repo1
@@ -515,7 +515,7 @@ SQL
 }
 
 @test "sql-server: LOAD DATA LOCAL INFILE works" {
-     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+     skiponwindows "Missing dependencies"
 
      cd repo1
      start_sql_server repo1
@@ -530,7 +530,7 @@ SQL
 }
 
 @test "sql-server: Run queries on database without ever selecting it" {
-     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+     skiponwindows "Missing dependencies"
 
      start_multi_db_server repo1
 
@@ -586,7 +586,7 @@ SQL
 }
 
 @test "sql-server: create database without USE" {
-     skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+     skiponwindows "Missing dependencies"
 
      start_multi_db_server repo1
 
@@ -620,7 +620,7 @@ SQL
 }
 
 @test "sql-server: manual commit table can be dropped (validates superschema structure)" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -657,7 +657,7 @@ SQL
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
     skip_nbf_dolt_1
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -677,7 +677,7 @@ SQL
 }
 
 @test "sql-server: connect to another branch with connection string" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "feature-branch"
@@ -696,7 +696,7 @@ SQL
 }
 
 @test "sql-server: connect to a commit with connection string" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt sql -q "create table test (pk int primary key)"
@@ -721,7 +721,7 @@ SQL
 }
 
 @test "sql-server: select a branch with the USE syntax" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "feature-branch"
@@ -742,7 +742,7 @@ SQL
 }
 
 @test "sql-server: SET GLOBAL default branch as ref" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "new"
@@ -762,7 +762,7 @@ SQL
 }
 
 @test "sql-server: SET GLOBAL default branch as branch name" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b "new"
@@ -782,7 +782,7 @@ SQL
 }
 
 @test "sql-server: require_secure_transport no key or cert" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     let PORT="$$ % (65536-1024) + 1024"
     cat >config.yml <<EOF
@@ -794,7 +794,7 @@ EOF
 }
 
 @test "sql-server: tls_key non-existant" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
@@ -809,7 +809,7 @@ EOF
 }
 
 @test "sql-server: tls_cert non-existant" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
@@ -824,7 +824,7 @@ EOF
 }
 
 @test "sql-server: tls only server" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_key.pem .
     cp "$BATS_TEST_DIRNAME"/../../go/cmd/dolt/commands/sqlserver/testdata/chain_cert.pem .
@@ -868,7 +868,7 @@ while True:
 }
 
 @test "sql-server: disable_client_multi_statements makes create trigger work" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
     let PORT="$$ % (65536-1024) + 1024"
@@ -915,7 +915,7 @@ END""")
 }
 
 @test "sql-server: client_multi_statements work" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     dolt sql -q 'create table test (id int primary key)'
     let PORT="$$ % (65536-1024) + 1024"
@@ -960,7 +960,7 @@ END""")
 }
 
 @test "sql-server: auto increment for a table should reset between drops" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server repo1
@@ -977,7 +977,7 @@ END""")
 }
 
 @test "sql-server: sql-push --set-remote within session" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
 
     mkdir rem1
@@ -997,7 +997,7 @@ END""")
 }
 
 @test "sql-server: replicate to backup after sql-session commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
 
     mkdir bac1
@@ -1026,7 +1026,7 @@ END""")
 }
 
 @test "sql-server: create database with no starting repo" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1081,7 +1081,7 @@ END""")
 }
 
 @test "sql-server: drop database with active connections" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
     
     mkdir no_dolt && cd no_dolt
@@ -1131,7 +1131,7 @@ END""")
 }
 
 @test "sql-server: connect to databases case insensitive" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
 
     mkdir no_dolt && cd no_dolt
@@ -1153,7 +1153,7 @@ END""")
 }
 
 @test "sql-server: create and drop database with --multi-db-dir" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
@@ -1192,7 +1192,7 @@ END""")
 }
 
 @test "sql-server: create database errors" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     mkdir dir_exists
@@ -1210,7 +1210,7 @@ END""")
 }
 
 @test "sql-server: create database with existing repo" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     start_sql_server
@@ -1254,7 +1254,7 @@ END""")
 }
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
 
     mkdir remote1

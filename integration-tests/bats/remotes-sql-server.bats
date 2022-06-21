@@ -37,7 +37,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: sql-push --set-remote within session" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt remote add origin file://../rem1
@@ -55,7 +55,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: push on sql-session commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
@@ -75,7 +75,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: async push on sql-session commit" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote remote1
@@ -99,7 +99,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull new commits on read" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt commit -am "cm"
@@ -114,7 +114,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull remote not found error" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_read_replica_remote unknown
@@ -127,7 +127,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: quiet pull warnings" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
@@ -139,7 +139,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: push remote not found error" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_replicate_to_remote unknown
@@ -151,7 +151,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: quiet push warnings" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt config --local --add sqlserver.global.dolt_skip_replication_errors 1
@@ -162,7 +162,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull multiple heads" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b new_feature
@@ -179,7 +179,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: connect to remote head" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b new_feature
@@ -222,7 +222,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull all heads" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt commit -am "new commit"
@@ -237,7 +237,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull invalid head" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip "query retry prevents error checking"
 
     cd repo2
@@ -252,7 +252,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: pull multiple heads, one invalid" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     skip "query retry prevents error checking"
 
     cd repo2
@@ -267,7 +267,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: quiet pull all heads warnings" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt commit -am "cm"
@@ -283,7 +283,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: connect to missing branch pulls remote" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     cd repo1
     dolt checkout -b feature-branch
@@ -300,7 +300,7 @@ teardown() {
 }
 
 @test "remotes-sql-server: connect to hash works" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     
     cd repo1
     dolt commit -am "cm"

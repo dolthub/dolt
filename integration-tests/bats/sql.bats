@@ -849,7 +849,6 @@ SQL
     [[ "$output" =~ 'branch not found' ]] || false
 }
 
-
 @test "sql: branch qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch

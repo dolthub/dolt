@@ -44,7 +44,6 @@ teardown() {
     [[ "$output" =~ "sqlserver.global.max_connections = 1000" ]] || false
 }
 
-
 @test "sql-config: remove persisted variable with cli engine" {
     skip "TODO parser support for RESET PERSIST"
 
