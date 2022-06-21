@@ -413,7 +413,10 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 
 	// initialize histogram map
 	for _, col := range cols {
-		t.doltStats.histogramMap[col.Name] = new(sql.Histogram)
+		hist := new(sql.Histogram)
+		hist.Min = math.MaxFloat64
+		hist.Max = -math.MaxFloat64
+		t.doltStats.histogramMap[col.Name] = hist
 	}
 
 	// this can be adapted to a histogram with any number of buckets
