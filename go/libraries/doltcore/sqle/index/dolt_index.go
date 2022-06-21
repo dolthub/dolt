@@ -275,9 +275,9 @@ type doltIndex struct {
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
 
-	cache            cachedDurableIndexes
-	coversAllCols    *bool
-	cachedLookupTags map[uint64]int
+	cache                 cachedDurableIndexes
+	coversAllCols         *bool
+	cachedLookupTags      map[uint64]int
 	cachedSqlRowConverter *KVToSqlRowConverter
 }
 
