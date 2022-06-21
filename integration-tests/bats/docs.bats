@@ -208,7 +208,6 @@ SQL
     run cat README.md
     [ "$output" = readme-text ]
 
-
     echo newLicenseText > LICENSE.md
     dolt sql <<SQL
 CREATE TABLE test (
@@ -271,7 +270,6 @@ SQL
     [[ "$output" =~ "Untracked files:" ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*LICENSE.md) ]] || false
     [[ "$output" =~ ([[:space:]]*new doc:[[:space:]]*README.md) ]] || false
-
 
     dolt add .
     dolt commit -m "initial doc commit"
@@ -400,7 +398,6 @@ SQL
     run cat README.md
     [[ "$output" =~ "this is my readme" ]] || false
 
-
     echo "testing-modified-doc" > LICENSE.md
     dolt checkout LICENSE.md
     run cat LICENSE.md
@@ -462,7 +459,6 @@ SQL
     [[ "$output" =~ "README.md" ]] || false
     run cat README.md
     [[ "$output" =~ "a readme" ]] || false
-
 
     echo "new readme" > README.md
     dolt sql <<SQL
@@ -709,7 +705,6 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
  }
-
 
 @test "docs: dolt sql operation on dolt_docs" {
     echo "a readme" > README.md

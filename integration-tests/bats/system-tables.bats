@@ -137,7 +137,6 @@ teardown() {
 }
 
 @test "system-tables: query dolt_remotes system table" {
-    skip "JSON formatting is weird, need to fix"
     skip_nbf_dolt_1 "dolt remote not supported"
     
     run dolt sql -q "select count(*) from dolt_remotes" -r csv
@@ -152,10 +151,14 @@ teardown() {
     [[ "$output" =~ 1 ]] || false
 
     regex='file://.*/remote'
-    run dolt sql -q "select * from dolt_remotes" -r csv
+    run dolt sql -q "select name, fetch_specs, params from dolt_remotes" -r csv
     [ $status -eq 0 ]
-    [[ "${lines[0]}" = name,url,fetch_specs,params ]] || false
-    [[ "${lines[1]}" =~ origin,$regex,[refs/heads/*:refs/remotes/origin/*,{} ]] || false
+    [[ "${lines[0]}" = name,fetch_specs,params ]] || false
+    [[ "${lines[1]}" =~ "origin,\"[\"\"refs/heads/*:refs/remotes/origin/*\"\"]\",{}" ]] || false
+    run dolt sql -q "select url from dolt_remotes" -r csv
+    [ $status -eq 0 ]
+    [[ "${lines[0]}" = url ]] || false
+    [[ "${lines[1]}" =~ $regex ]] || false
 }
 
 @test "system-tables: check unsupported dolt_remote behavior" {
@@ -337,8 +340,6 @@ teardown() {
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
 }
-
-
 
 @test "system-tables: query dolt_history_ system table" {
     dolt sql -q "create table test (pk int, c1 int, primary key(pk))"

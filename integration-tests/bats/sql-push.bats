@@ -208,7 +208,6 @@ teardown() {
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
 
-
     dolt sql -q "select dolt_push('--force', 'origin', 'main')"
 }
 
@@ -222,7 +221,6 @@ teardown() {
     run dolt sql -q "CALL dolt_push('origin', 'main')"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "the tip of your current branch is behind its remote counterpart" ]] || false
-
 
     dolt sql -q "CALL dolt_push('--force', 'origin', 'main')"
 }

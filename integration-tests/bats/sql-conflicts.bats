@@ -94,7 +94,6 @@ SQL
   [ "$status" -eq 0 ]
 }
 
-
 @test "sql-conflicts: modify conflict" {
   skip_nbf_dolt_1
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
