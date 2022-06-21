@@ -92,7 +92,7 @@ Show changes between the working and staged tables, changes between the working 
 
 The diffs displayed can be limited to show the first N by providing the parameter {{.EmphasisLeft}}--limit N{{.EmphasisRight}} where {{.EmphasisLeft}}N{{.EmphasisRight}} is the number of diffs to display.
 
-In order to filter which diffs are displayed {{.EmphasisLeft}}--where key=value{{.EmphasisRight}} can be used.  The key in this case would be either {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME{{.EmphasisRight}}. where {{.EmphasisLeft}}from_COLUMN_NAME=value{{.EmphasisRight}} would filter based on the original value and {{.EmphasisLeft}}to_COLUMN_NAME{{.EmphasisRight}} would select based on its updated value.
+To filter which data rows are displayed, use {{.EmphasisLeft}}--where <SQL expression>{{.EmphasisRight}}. Table column names in the filter expression must be prefixed with {{.EmphasisLeft}}from_{{.EmphasisRight}} or {{.EmphasisLeft}}to_{{.EmphasisRight}}, e.g. {{.EmphasisLeft}}to_COLUMN_NAME > 100{{.EmphasisRight}} or {{.EmphasisLeft}}from_COLUMN_NAME + to_COLUMN_NAME = 0{{.EmphasisRight}}.
 `,
 	Synopsis: []string{
 		`[options] [{{.LessThan}}commit{{.GreaterThan}}] [{{.LessThan}}tables{{.GreaterThan}}...]`,
@@ -601,18 +601,23 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
-	// TODO: need to do anything different for different added / dropped tables?
-	// TODO: where clause
 	columns := getColumnNamesString(td.FromSch, td.ToSch)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", td.ToName, from, to)
+
+	if len(dArgs.where) > 0 {
+		query += " where " + dArgs.where
+	}
+
 	sqlCtx, err := newSqlContext(ctx, engine)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
 	sch, rowIter, err := engine.Query(sqlCtx, query)
-	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+	if sql.ErrSyntaxError.Is(err) {
+		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
+	} else if err != nil {
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
 	defer rowIter.Close(sqlCtx)
@@ -644,7 +649,7 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, resultsWriter)
 	if err != nil {
-		return errhand.VerboseErrorFromError(err)
+		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
 
 	return nil

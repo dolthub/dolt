@@ -382,11 +382,17 @@ SQL
     dolt commit -m "table created"
     dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
-    run dolt diff --where "pk=2"
+
+    run dolt diff --where "to_pk=2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
     ! [[ "$output" =~ "33" ]] || false
 
+    run dolt diff --where "to_pk < 3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "22" ]] || false
+    ! [[ "$output" =~ "33" ]] || false
+    
     dolt add test
     dolt commit -m "added two rows"
 
@@ -407,11 +413,16 @@ SQL
     [[ "$output" =~ "44" ]] || false
     [[ "$output" =~ "55" ]] || false
 
-    run dolt diff test1 test2 --where "pk=4"
+    run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
 
+    run dolt diff test1 test2 --where "from_pk=4 OR to_pk=5"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    [[ "$output" =~ "55" ]] || false
+    
     run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
@@ -441,17 +452,24 @@ SQL
     dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
 
-    run dolt diff --where "poop=0"
+    run dolt diff --where "some nonsense"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to parse where clause" ]] || false
+    [[ "$output" =~ "Failed to parse diff query. Invalid where clause?" ]] || false
+    [[ "$output" =~ "where some nonsense" ]] || false
+
+    run dolt diff --where "poop = 0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where poop = 0" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
 
-    run dolt diff --where "poop=0"
-    skip "Bad where clause not found because the argument parsing logic is only triggered on existance of a diff"
+    run dolt diff --where "poop = 0"
+    skip "Empty diffs don't validate the where clause"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to parse where clause" ]] || false
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where poop = 0" ]] || false
 }
 
 @test "diff: --cached" {
