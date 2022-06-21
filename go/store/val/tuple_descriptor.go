@@ -80,6 +80,16 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 	return
 }
 
+// PrefixDesc returns a descriptor for the first n types.
+func (td TupleDesc) PrefixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[:n]...)
+}
+
+// SuffixDesc returns a descriptor for the last n types.
+func (td TupleDesc) SuffixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[len(td.Types)-n:]...)
+}
+
 // GetField returns the ith field of |tup|.
 func (td TupleDesc) GetField(i int, tup Tuple) []byte {
 	if i < len(td.fast) {

@@ -36,7 +36,6 @@ teardown() {
     ! [[ "$output" =~ "test" ]] || false
 }
 
-
 @test "sql-show: show table status has number of rows correct" {
     dolt sql -q "CREATE TABLE test(pk int NOT NULL AUTO_INCREMENT, c1 int, PRIMARY KEY (pk))"
 

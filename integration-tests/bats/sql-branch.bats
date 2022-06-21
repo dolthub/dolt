@@ -74,12 +74,12 @@ teardown() {
     dolt branch existing_branch
     run dolt sql -q "SELECT DOLT_BRANCH('existing_branch')"
     [ $status -eq 1 ]
-    [ "$output" = "fatal: A branch named 'existing_branch' already exists." ]
+    [[ "$output" =~ "fatal: A branch named 'existing_branch' already exists." ]] || false
 
     # empty branch
     run dolt sql -q "SELECT DOLT_BRANCH('')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot branch empty string" ]
+    [[ "$output" =~ "error: cannot branch empty string" ]] || false
 }
 
 @test "sql-branch: CALL DOLT_BRANCH throws error" {
@@ -164,12 +164,12 @@ SQL
     # branch copying from is empty
     run dolt sql -q "SELECT DOLT_BRANCH('-c','','copy')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot branch empty string" ]
+    [[ "$output" =~ "error: cannot branch empty string" ]] || false
 
     # branch copying to is empty
     run dolt sql -q "SELECT DOLT_BRANCH('-c','main','')"
     [ $status -eq 1 ]
-    [ "$output" = "error: cannot branch empty string" ]
+    [[ "$output" =~ "error: cannot branch empty string" ]] || false
 
     dolt branch 'existing_branch'
     run dolt branch
@@ -180,12 +180,12 @@ SQL
     # branch copying from that don't exist
     run dolt sql -q "SELECT DOLT_BRANCH('-c', 'original', 'copy');"
     [ $status -eq 1 ]
-    [ "$output" = "fatal: A branch named 'original' not found" ]
+    [[ "$output" =~ "fatal: A branch named 'original' not found" ]] || false
 
     # branch copying to that exists
     run dolt sql -q "SELECT DOLT_BRANCH('-c', 'main', 'existing_branch');"
     [ $status -eq 1 ]
-    [ "$output" = "fatal: A branch named 'existing_branch' already exists." ]
+    [[ "$output" =~ "fatal: A branch named 'existing_branch' already exists." ]] || false
 }
 
 @test "sql-branch: CALL DOLT_BRANCH -c throws error on error cases" {

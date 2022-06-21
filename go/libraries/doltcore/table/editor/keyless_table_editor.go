@@ -20,7 +20,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -530,11 +529,6 @@ func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, inde
 				} else {
 					err = indexEd.InsertRow(ctx, fullKey, partialKey, value)
 					if err != nil {
-						if uke, ok := err.(*uniqueKeyErr); ok {
-							keyStr, _ := formatKey(ctx, uke.IndexTuple)
-							return sql.NewUniqueKeyErr(keyStr, false, nil)
-						}
-
 						return err
 					}
 				}

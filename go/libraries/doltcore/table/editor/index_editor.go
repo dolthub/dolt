@@ -19,6 +19,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -40,7 +42,7 @@ type uniqueKeyErr struct {
 // Error implements the error interface.
 func (u *uniqueKeyErr) Error() string {
 	keyStr, _ := formatKey(context.Background(), u.IndexTuple)
-	return fmt.Sprintf("UNIQUE constraint violation on index '%s': %s", u.IndexName, keyStr)
+	return fmt.Sprintf("duplicate unique key given: %s", keyStr)
 }
 
 // NOTE: Regarding partial keys and full keys. For this example, let's say that our table has a primary key W, with
@@ -121,8 +123,9 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 			if err != nil {
 				return err
 			}
+			cause := &uniqueKeyErr{tableTuple, matches[0].key, ie.idx.Name()}
 			// For a UNIQUE key violation, there should only be 1 at max. We still do an "over 0" check for safety though.
-			return &uniqueKeyErr{tableTuple, matches[0].key, ie.idx.Name()}
+			return sql.ErrDuplicateEntry.Wrap(cause, ie.idx.Name())
 		}
 	} else {
 		if rowExists, err := ie.iea.Has(ctx, keyHash, key); err != nil {
