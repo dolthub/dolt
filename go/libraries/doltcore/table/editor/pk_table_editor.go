@@ -25,9 +25,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dolthub/go-mysql-server/sql"
-	errors2 "gopkg.in/src-d/go-errors.v1"
-
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -54,14 +51,14 @@ func init() {
 	}
 }
 
-type PKDuplicateErrFunc func(keyString, indexName string, k, v types.Tuple, isPk bool) error
+type PKDuplicateCb func(keyString, indexName string, k, v types.Tuple, isPk bool) error
 
 type TableEditor interface {
-	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error
+	InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, cb PKDuplicateCb) error
 	DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) error
 
-	InsertRow(ctx context.Context, r row.Row, errFunc PKDuplicateErrFunc) error
-	UpdateRow(ctx context.Context, old, new row.Row, errFunc PKDuplicateErrFunc) error
+	InsertRow(ctx context.Context, r row.Row, cb PKDuplicateCb) error
+	UpdateRow(ctx context.Context, old, new row.Row, cb PKDuplicateCb) error
 	DeleteRow(ctx context.Context, r row.Row) error
 
 	// GetIndexedRows returns all matching rows for the given key on the index. The key is assumed to be in the format
@@ -302,7 +299,7 @@ func (te *pkTableEditor) GetIndexedRows(ctx context.Context, key types.Tuple, in
 	return nil, fmt.Errorf("an index editor for `%s` could not be found on table `%s`", indexName, te.name)
 }
 
-func (te *pkTableEditor) keyErrForKVP(ctx context.Context, indexName string, kvp *doltKVP, isPk bool, errFunc PKDuplicateErrFunc) error {
+func (te *pkTableEditor) maybeReturnErrForKVP(ctx context.Context, indexName string, kvp *doltKVP, isPk bool, cb PKDuplicateCb) error {
 	kVal, err := kvp.k.Value(ctx)
 	if err != nil {
 		return err
@@ -318,15 +315,15 @@ func (te *pkTableEditor) keyErrForKVP(ctx context.Context, indexName string, kvp
 		return err
 	}
 
-	if errFunc != nil {
-		return errFunc(keyStr, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
+	if cb != nil {
+		return cb(keyStr, indexName, kVal.(types.Tuple), vVal.(types.Tuple), isPk)
 	} else {
 		return fmt.Errorf("duplicate key '%s': %w", keyStr, ErrDuplicateKey)
 	}
 }
 
 // InsertKeyVal adds the given tuples to the table.
-func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
+func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, cb PKDuplicateCb) (retErr error) {
 	keyHash, err := key.Hash(te.nbf)
 	if err != nil {
 		return err
@@ -346,11 +343,11 @@ func (te *pkTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple,
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
-	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, cb)
 }
 
 // InsertKeyVal adds the given tuples to the table.
-func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) (retErr error) {
+func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, key, val types.Tuple, tagToVal map[uint64]types.Value, cb PKDuplicateCb) (retErr error) {
 	// Run the index editors first, as we can back out of the changes in the event of an error, but can't do that for
 	// changes made to the table. We create a slice that matches the number of index editors. For each successful
 	// operation, we increment the associated index on the slice, and in the event of an error, we undo that number of
@@ -371,10 +368,7 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf))
-
-		if sql.ErrDuplicateEntry.Is(err) {
-			uke := err.(*errors2.Error).Cause().(*uniqueKeyErr)
+		err = indexEd.InsertRowWithDupCb(ctx, fullKey, partialKey, types.EmptyTuple(te.nbf), func(ctx context.Context, uke *uniqueKeyErr) error {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
 				return err
@@ -388,11 +382,13 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			err = te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+			err = te.maybeReturnErrForKVP(ctx, indexEd.Index().Name(), kvp, false, cb)
 			if err != nil {
 				return err
 			}
-		} else if err != nil {
+			return nil
+		})
+		if err != nil {
 			return err
 		}
 		indexOpsToUndo[i]++
@@ -401,7 +397,7 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 	if kvp, pkExists, err := te.tea.Get(ctx, keyHash, key); err != nil {
 		return err
 	} else if pkExists {
-		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
+		return te.maybeReturnErrForKVP(ctx, "PRIMARY KEY", kvp, true, cb)
 	}
 
 	err := te.tea.Insert(keyHash, key, val)
@@ -415,7 +411,7 @@ func (te *pkTableEditor) insertKeyVal(ctx context.Context, keyHash hash.Hash, ke
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow. This converts the given row into
 // tuples that are then passed to InsertKeyVal.
-func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PKDuplicateErrFunc) error {
+func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, cb PKDuplicateCb) error {
 	tagToVal := make(map[uint64]types.Value)
 	_, err := dRow.IterSchema(te.tSch, func(tag uint64, val types.Value) (stop bool, err error) {
 		if val == nil {
@@ -448,7 +444,7 @@ func (te *pkTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc PK
 		return err
 	}
 
-	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, errFunc)
+	return te.insertKeyVal(ctx, keyHash, key, val, tagToVal, cb)
 }
 
 func (te *pkTableEditor) DeleteByKey(ctx context.Context, key types.Tuple, tagToVal map[uint64]types.Value) (retErr error) {
@@ -500,7 +496,7 @@ func (te *pkTableEditor) DeleteRow(ctx context.Context, dRow row.Row) (retErr er
 }
 
 // UpdateRow takes the current row and new rows, and updates it accordingly.
-func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateErrFunc) (retErr error) {
+func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc PKDuplicateCb) (retErr error) {
 	te.writeMutex.Lock()
 	defer te.writeMutex.Unlock()
 
@@ -555,9 +551,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 		if err != nil {
 			return err
 		}
-		err = indexEd.InsertRow(ctx, newFullKey, newPartialKey, newVal)
-		if sql.ErrDuplicateEntry.Is(err) {
-			uke := err.(*errors2.Error).Cause().(*uniqueKeyErr)
+		err = indexEd.InsertRowWithDupCb(ctx, newFullKey, newPartialKey, newVal, func(ctx context.Context, uke *uniqueKeyErr) error {
 			tableTupleHash, err := uke.TableTuple.Hash(uke.TableTuple.Format())
 			if err != nil {
 				return err
@@ -571,11 +565,9 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 				return fmt.Errorf("UNIQUE constraint violation on index '%s', but could not find row with primary key: %s",
 					indexEd.Index().Name(), keyStr)
 			}
-			err = te.keyErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
+			return te.maybeReturnErrForKVP(ctx, indexEd.Index().Name(), kvp, false, errFunc)
+		})
+		if err != nil {
 			return err
 		}
 		indexOpsToUndo[i]++
@@ -591,7 +583,7 @@ func (te *pkTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow
 	if kvp, pkExists, err := te.tea.Get(ctx, newHash, dNewKeyVal); err != nil {
 		return err
 	} else if pkExists {
-		return te.keyErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
+		return te.maybeReturnErrForKVP(ctx, "PRIMARY KEY", kvp, true, errFunc)
 	}
 
 	return te.tea.Insert(newHash, dNewKeyVal, dNewRowVal)

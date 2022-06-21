@@ -217,6 +217,12 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 			return nil, nil, err
 		}
 
+		n, err := updatedTbl.NumRowsInConflict(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		stats.Conflicts = int(n)
+
 		updatedTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, updatedTbl)
 		if err != nil {
 			return nil, nil, err
@@ -268,6 +274,7 @@ func (merger *Merger) MergeTable(ctx context.Context, tblName string, opts edito
 		if err != nil {
 			return nil, nil, err
 		}
+		stats.Conflicts = int(cons.Len())
 	}
 
 	resultTbl, err = mergeAutoIncrementValues(ctx, tbl, mergeTbl, resultTbl)
@@ -579,14 +586,14 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 			if err != nil {
 				return err
 			}
-			err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupErrHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
+			err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
 			if err != nil {
 				if err != nil {
 					return err
 				}
 			}
 		} else {
-			err = tableEditor.InsertRow(ctx, newRow, makeDupErrHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
+			err = tableEditor.InsertRow(ctx, newRow, makeDupHandler(ctx, tableEditor, change.Key.(types.Tuple), change.NewValue.(types.Tuple)))
 			if err != nil {
 				if err != nil {
 					return err
@@ -604,7 +611,7 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 		if err != nil {
 			return err
 		}
-		err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupErrHandler(ctx, tableEditor, key, newVal))
+		err = tableEditor.UpdateRow(ctx, oldRow, newRow, makeDupHandler(ctx, tableEditor, key, newVal))
 		if err != nil {
 			if err != nil {
 				return err
@@ -630,7 +637,7 @@ func applyNomsPkChange(ctx context.Context, sch schema.Schema, tableEditor edito
 	return nil
 }
 
-func makeDupErrHandler(ctx context.Context, tableEditor editor.TableEditor, newKey, newValue types.Tuple) editor.PKDuplicateErrFunc {
+func makeDupHandler(ctx context.Context, tableEditor editor.TableEditor, newKey, newValue types.Tuple) editor.PKDuplicateCb {
 	return func(keyString, indexName string, existingKey, existingValue types.Tuple, isPk bool) error {
 		if isPk {
 			return fmt.Errorf("duplicate key '%s'", keyString)
@@ -647,7 +654,12 @@ func makeDupErrHandler(ctx context.Context, tableEditor editor.TableEditor, newK
 			return err
 		}
 
-		return addUniqueViolation(ctx, tableEditor, existingKey, existingValue, newKey, newValue, d)
+		err = addUniqueViolation(ctx, tableEditor, existingKey, existingValue, newKey, newValue, d)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
 }
 
@@ -1039,7 +1051,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 	}
 
 	if types.IsFormat_DOLT_1(ourRoot.VRW().Format()) {
-		err = getConflictAndConstraintViolationStats(ctx, mergedRoot, tblToStats)
+		err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1052,7 +1064,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		return nil, nil, err
 	}
 
-	err = getConflictAndConstraintViolationStats(ctx, mergedRoot, tblToStats)
+	err = getConstraintViolationStats(ctx, mergedRoot, tblToStats)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1119,24 +1131,18 @@ func checkForConflicts(tblToStats map[string]*MergeStats) bool {
 }
 
 // populates tblToStats with violation statistics
-func getConflictAndConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
+func getConstraintViolationStats(ctx context.Context, root *doltdb.RootValue, tblToStats map[string]*MergeStats) error {
 	for tblName, stats := range tblToStats {
 		tbl, ok, err := root.GetTable(ctx, tblName)
 		if err != nil {
 			return err
 		}
 		if ok {
-			n, err := tbl.NumRowsInConflict(ctx)
+			n, err := tbl.NumConstraintViolations(ctx)
 			if err != nil {
 				return err
 			}
-			stats.Conflicts = int(n)
-
-			n2, err := tbl.NumConstraintViolations(ctx)
-			if err != nil {
-				return err
-			}
-			stats.ConstraintViolations = int(n2)
+			stats.ConstraintViolations = int(n)
 		}
 	}
 	return nil
