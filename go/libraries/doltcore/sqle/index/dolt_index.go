@@ -42,7 +42,9 @@ type DoltIndex interface {
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
+
 	GetDurableIndexes(*sql.Context, DoltTableable) (durable.Index, durable.Index, error)
+	CoversColumns(cols []string) bool
 }
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -271,7 +273,8 @@ type doltIndex struct {
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
 
-	cache cachedDurableIndexes
+	cache         cachedDurableIndexes
+	coversAllCols *bool
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -465,6 +468,64 @@ RangeLoop:
 		nomsRanges: readRanges,
 		sqlRanges:  ranges,
 	}, nil
+}
+
+func (di *doltIndex) coversAllColumns() bool {
+	if di.coversAllCols != nil {
+		return *di.coversAllCols
+	}
+	cols := di.Schema().GetAllCols()
+	var idxCols *schema.ColCollection
+	if types.IsFormat_DOLT_1(di.Format()) {
+		// prolly indexes can cover an index lookup using
+		// both the key and value fields of the index,
+		// this allows using covering index machinery for
+		// primary key index lookups.
+		idxCols = di.IndexSchema().GetAllCols()
+	} else {
+		// to cover an index lookup, noms indexes must
+		// contain all fields in the index's key.
+		idxCols = di.IndexSchema().GetPKCols()
+	}
+	covers := true
+	for i := 0; i < cols.Size(); i++ {
+		col := cols.GetAtIndex(i)
+		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
+			covers = false
+			break
+		}
+	}
+	di.coversAllCols = &covers
+	return covers
+}
+
+func (di *doltIndex) CoversColumns(cols []string) bool {
+	if cols == nil {
+		return di.coversAllColumns()
+	}
+
+	var idxCols *schema.ColCollection
+	if types.IsFormat_DOLT_1(di.Format()) {
+		// prolly indexes can cover an index lookup using
+		// both the key and value fields of the index,
+		// this allows using covering index machinery for
+		// primary key index lookups.
+		idxCols = di.IndexSchema().GetAllCols()
+	} else {
+		// to cover an index lookup, noms indexes must
+		// contain all fields in the index's key.
+		idxCols = di.IndexSchema().GetPKCols()
+	}
+
+	covers := true
+	for _, colName := range cols {
+		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
+			covers = false
+			break
+		}
+	}
+
+	return covers
 }
 
 func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
