@@ -57,7 +57,6 @@ SQL
     [[ "$output" =~ "TeSt,c1,8201" ]] || false
 }
 
-
 @test "column_tags: Merging two branches that added same tag, name, type, and constraints" {
     dolt sql <<SQL
 CREATE TABLE test (

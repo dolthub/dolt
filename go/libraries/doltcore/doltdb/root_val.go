@@ -83,10 +83,10 @@ type rvStorage interface {
 
 	GetTablesMap(ctx context.Context, vr types.ValueReadWriter) (tableMap, error)
 	GetSuperSchemaMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
-	GetForeignKeyMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error)
+	GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error)
 
 	SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
-	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error)
+	SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Value) (rvStorage, error)
 	SetFeatureVersion(v FeatureVersion) (rvStorage, error)
 
 	EditTablesMap(ctx context.Context, vrw types.ValueReadWriter, edits []tableEdit) (rvStorage, error)
@@ -156,7 +156,7 @@ func (r nomsRvStorage) GetSuperSchemaMap(context.Context, types.ValueReader) (ty
 	return v.(types.Map), true, nil
 }
 
-func (r nomsRvStorage) GetForeignKeyMap(context.Context, types.ValueReader) (types.Map, bool, error) {
+func (r nomsRvStorage) GetForeignKeys(context.Context, types.ValueReader) (types.Value, bool, error) {
 	v, found, err := r.valueSt.MaybeGet(foreignKeyKey)
 	if err != nil {
 		return types.Map{}, false, err
@@ -221,8 +221,8 @@ func (r nomsRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWri
 	return nomsRvStorage{st}, nil
 }
 
-func (r nomsRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
-	st, err := r.valueSt.Set(foreignKeyKey, m)
+func (r nomsRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
+	st, err := r.valueSt.Set(foreignKeyKey, v)
 	if err != nil {
 		return nomsRvStorage{}, err
 	}
@@ -1121,11 +1121,18 @@ func (root *RootValue) RemoveTables(ctx context.Context, skipFKHandling bool, al
 // in-place, each returned collection may freely be altered without affecting future returned collections from this root.
 func (root *RootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKeyCollection, error) {
 	if root.fkc == nil {
-		fkMap, err := root.GetForeignKeyCollectionMap(ctx)
+		fkMap, ok, err := root.st.GetForeignKeys(ctx, root.vrw)
 		if err != nil {
 			return nil, err
 		}
-		root.fkc, err = LoadForeignKeyCollection(ctx, fkMap)
+		if !ok {
+			fkc := &ForeignKeyCollection{
+				foreignKeys: map[string]ForeignKey{},
+			}
+			return fkc, nil
+		}
+
+		root.fkc, err = DeserializeForeignKeys(ctx, root.vrw.Format(), fkMap)
 		if err != nil {
 			return nil, err
 		}
@@ -1133,32 +1140,13 @@ func (root *RootValue) GetForeignKeyCollection(ctx context.Context) (*ForeignKey
 	return root.fkc.copy(), nil
 }
 
-// GetForeignKeyCollectionMap returns the persisted noms Map of the foreign key collection on this root. If the intent
-// is to retrieve a ForeignKeyCollection in particular, it is advised to call GetForeignKeyCollection as it caches the
-// result for performance.
-func (root *RootValue) GetForeignKeyCollectionMap(ctx context.Context) (types.Map, error) {
-	fkMap, found, err := root.st.GetForeignKeyMap(ctx, root.vrw)
-	if err != nil {
-		return types.Map{}, err
-	}
-
-	if !found {
-		fkMap, err = types.NewMap(ctx, root.vrw)
-		if err != nil {
-			return types.Map{}, err
-		}
-	}
-
-	return fkMap, nil
-}
-
 // PutForeignKeyCollection returns a new root with the given foreign key collection.
 func (root *RootValue) PutForeignKeyCollection(ctx context.Context, fkc *ForeignKeyCollection) (*RootValue, error) {
-	fkMap, err := fkc.Map(ctx, root.vrw)
+	value, err := SerializeForeignKeys(ctx, root.vrw, fkc)
 	if err != nil {
 		return nil, err
 	}
-	newStorage, err := root.st.SetForeignKeyMap(ctx, root.vrw, fkMap)
+	newStorage, err := root.st.SetForeignKeyMap(ctx, root.vrw, value)
 	if err != nil {
 		return nil, err
 	}
@@ -1438,16 +1426,16 @@ func (r fbRvStorage) GetSuperSchemaMap(ctx context.Context, vr types.ValueReader
 	return v.(types.Map), true, nil
 }
 
-func (r fbRvStorage) GetForeignKeyMap(ctx context.Context, vr types.ValueReader) (types.Map, bool, error) {
+func (r fbRvStorage) GetForeignKeys(ctx context.Context, vr types.ValueReader) (types.Value, bool, error) {
 	addr := hash.New(r.srv.ForeignKeyAddrBytes())
 	if addr.IsEmpty() {
-		return types.Map{}, false, nil
+		return types.SerialMessage{}, false, nil
 	}
 	v, err := vr.ReadValue(ctx, addr)
 	if err != nil {
-		return types.Map{}, false, err
+		return types.SerialMessage{}, false, err
 	}
-	return v.(types.Map), true, nil
+	return v.(types.SerialMessage), true, nil
 }
 
 func (r fbRvStorage) SetSuperSchemaMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
@@ -1527,10 +1515,10 @@ func (r fbRvStorage) EditTablesMap(ctx context.Context, vrw types.ValueReadWrite
 	return fbRvStorage{serial.GetRootAsRootValue(bs, 0)}, nil
 }
 
-func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, m types.Map) (rvStorage, error) {
+func (r fbRvStorage) SetForeignKeyMap(ctx context.Context, vrw types.ValueReadWriter, v types.Value) (rvStorage, error) {
 	var h hash.Hash
-	if !m.Empty() {
-		ref, err := vrw.WriteValue(ctx, m)
+	if !emptyForeignKeyCollection(v.(types.SerialMessage)) {
+		ref, err := vrw.WriteValue(ctx, v)
 		if err != nil {
 			return nil, err
 		}

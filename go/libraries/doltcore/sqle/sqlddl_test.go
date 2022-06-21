@@ -1112,7 +1112,7 @@ INSERT INTO child_non_unq VALUES ('1', 1), ('2', NULL), ('3', 3), ('4', 3), ('5'
 	require.NoError(t, err)
 	_, err = ExecuteSql(t, dEnv, root, "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);")
 	if assert.Error(t, err) {
-		assert.Contains(t, err.Error(), "UNIQUE constraint violation")
+		assert.Contains(t, err.Error(), "duplicate unique key given")
 	}
 
 	// check foreign keys for updated index (or verify they weren't updated)

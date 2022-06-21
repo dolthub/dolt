@@ -25,6 +25,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor/creation"
 	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
@@ -44,7 +45,7 @@ func prollyParentFkConstraintViolations(
 	postParentIndexData := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	idxDesc := shim.KeyDescriptorFromSchema(postParent.Index.Schema())
-	partialDesc := makePartialDescriptor(idxDesc, len(foreignKey.TableColumns))
+	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
 	artIdx, err := postChild.Table.GetArtifacts(ctx)
@@ -86,7 +87,7 @@ func prollyParentFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			found, err := createCVsForPartialKeyMatches(ctx, partialKeyRange, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh)
+			found, err := createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh)
 			if err != nil {
 				return err
 			}
@@ -127,7 +128,7 @@ func prollyChildFkConstraintViolations(
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
 	idxDesc := shim.KeyDescriptorFromSchema(postChild.Index.Schema())
-	partialDesc := makePartialDescriptor(idxDesc, len(foreignKey.TableColumns))
+	partialDesc := idxDesc.PrefixDesc(len(foreignKey.TableColumns))
 	partialKB := val.NewTupleBuilder(partialDesc)
 
 	artIdx, err := postChild.Table.GetArtifacts(ctx)
@@ -150,8 +151,7 @@ func prollyChildFkConstraintViolations(
 				return nil
 			}
 
-			partialKeyRange := prolly.ClosedRange(partialKey, partialKey, partialDesc)
-			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKeyRange, parentScndryIdx, artEditor, jsonData, ourCmHash)
+			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, partialDesc, parentScndryIdx, artEditor, jsonData, ourCmHash)
 			if err != nil {
 				return err
 			}
@@ -181,13 +181,13 @@ func prollyChildFkConstraintViolations(
 
 func createCVIfNoPartialKeyMatches(
 	ctx context.Context,
-	k, v val.Tuple,
-	partialKeyRange prolly.Range,
+	k, v, partialKey val.Tuple,
+	partialKeyDesc val.TupleDesc,
 	idx prolly.Map,
 	editor prolly.ArtifactsEditor,
 	jsonData []byte,
 	theirRootIsh hash.Hash) (bool, error) {
-	itr, err := idx.IterRange(ctx, partialKeyRange)
+	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return false, err
 	}
@@ -211,7 +211,8 @@ func createCVIfNoPartialKeyMatches(
 
 func createCVsForPartialKeyMatches(
 	ctx context.Context,
-	partialKeyRange prolly.Range,
+	partialKey val.Tuple,
+	partialKeyDesc val.TupleDesc,
 	editor prolly.ArtifactsEditor,
 	primaryKD val.TupleDesc,
 	primaryIdx prolly.Map,
@@ -222,7 +223,7 @@ func createCVsForPartialKeyMatches(
 ) (bool, error) {
 	createdViolation := false
 
-	itr, err := secondaryIdx.IterRange(ctx, partialKeyRange)
+	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, secondaryIdx)
 	if err != nil {
 		return false, err
 	}

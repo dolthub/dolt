@@ -312,7 +312,7 @@ SQL
 }
 
 @test "export-tables: parquet file export check with parquet tools" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     dolt sql -q "CREATE TABLE test_table (pk int primary key, col1 text, col2 int);"
     dolt sql -q "INSERT INTO test_table VALUES (1, 'row1', 22), (2, 'row2', 33), (3, 'row3', 22);"
 
@@ -360,7 +360,7 @@ print(table.to_pandas())
 }
 
 @test "export-tables: table export datetime, bool, enum types to parquet" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     dolt sql <<SQL
 CREATE TABLE diffTypes (
   pk BIGINT PRIMARY KEY,
@@ -391,9 +391,8 @@ SQL
     [[ "$output" =~ "$row3" ]] || false
 }
 
-
 @test "export-tables: table export more types to parquet" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     dolt sql <<SQL
 CREATE TABLE test (
   \`pk\` BIGINT NOT NULL,
@@ -424,7 +423,7 @@ SQL
 }
 
 @test "export-tables: table export decimal and bit types to parquet" {
-    skip "DECIMAL handling in parquet is strange, have to investigate further"
+    skiponwindows "Missing dependencies"
     dolt sql -q "CREATE TABLE more (pk BIGINT NOT NULL,v DECIMAL(9,5),b BIT(10),PRIMARY KEY (pk));"
     dolt sql -q "INSERT INTO more VALUES (1, 1234.56789, 511);"
     dolt sql -q "INSERT INTO more VALUES (2, 5235.66789, 514);"
@@ -436,10 +435,8 @@ SQL
 
     run parquet-tools cat --json more.parquet > output.json
     [ "$status" -eq 0 ]
-    row1='{"pk":1,"v":1234.57,"b":511}'
-    row2='{"pk":2,"v":5235.67,"b":514}'
-    [[ "$output" =~ "$row1" ]] || false
-    [[ "$output" =~ "$row2" ]] || false
+    [[ "$output" =~ '{"pk":1,"v":"1234.56789","b":511}' ]] || false
+    [[ "$output" =~ '{"pk":2,"v":"5235.66789","b":514}' ]] || false
 }
 
 @test "export-tables: table export to sql with null values in different sql types" {
