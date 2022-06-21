@@ -94,6 +94,10 @@ func TestSingleScript(t *testing.T) {
 					Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
 					Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 				},
+				// {
+				// 	Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				// 	ExpectedErr: sql.ErrColumnNotFound,
+				// },
 				{
 					Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'WORKING', 'HEAD')",
 					Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
