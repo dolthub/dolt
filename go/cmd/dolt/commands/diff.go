@@ -601,8 +601,13 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
+	tableName := td.ToName
+	if len(tableName) == 0 {
+		tableName = td.FromName
+	}
+
 	columns := getColumnNamesString(td.FromSch, td.ToSch)
-	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", td.ToName, from, to)
+	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
 
 	if len(dArgs.where) > 0 {
 		query += " where " + dArgs.where
