@@ -83,7 +83,8 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 }
 
 func IsKeyless(sch Schema) bool {
-	return sch.GetPKCols().Size() == 0 &&
+	return sch != nil &&
+		sch.GetPKCols().Size() == 0 &&
 		sch.GetAllCols().Size() != 0
 }
 

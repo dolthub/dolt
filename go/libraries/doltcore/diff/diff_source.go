@@ -49,11 +49,11 @@ type RowDiffSource struct {
 
 func NewRowDiffSource(ad RowDiffer, joiner *rowconv.Joiner, warnFn rowconv.WarnFunction) *RowDiffSource {
 	return &RowDiffSource{
-		ad,
-		joiner,
-		rowconv.IdentityConverter,
-		rowconv.IdentityConverter,
-		warnFn,
+		ad:         ad,
+		joiner:     joiner,
+		oldRowConv: rowconv.IdentityConverter,
+		newRowConv: rowconv.IdentityConverter,
+		warnFn:     warnFn,
 	}
 }
 

@@ -230,7 +230,7 @@ var _ sql.RowIter = prollyDiffIter{}
 // schema of |from| to |targetFromSchema| and the schema of |to| to
 // |targetToSchema|. See the tablediff_prolly package.
 func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, targetFromSchema, targetToSchema schema.Schema) (prollyDiffIter, error) {
-	if schema.IsKeyless(targetToSchema) {
+	if schema.IsKeyless(targetToSchema) || schema.IsKeyless(targetFromSchema) {
 		return prollyDiffIter{}, errors.New("diffs with keyless schema have not been implemented yet")
 	}
 
