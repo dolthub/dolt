@@ -2732,6 +2732,14 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
+				Query: "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type from dolt_diff('t', @Commit4, @Commit3);",
+				Expected: []sql.Row{
+					{1, "one", "two", 1, "uno", "dos", "modified"},
+					{nil, nil, nil, 2, "two", "three", "removed"},
+					{nil, nil, nil, 3, "three", "four", "removed"},
+				},
+			},
+			{
 				// Table t2 had no changes between Commit3 and Commit4, so results should be empty
 				Query:    "SELECT to_pk, to_c1, to_c2, from_pk, from_c1, from_c2, diff_type  from dolt_diff('T2', @Commit3, @Commit4);",
 				Expected: []sql.Row{},
@@ -2751,6 +2759,70 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 					{nil, nil, nil, 1, "uno", "dos", "removed"},
 					{nil, nil, nil, 2, "two", "three", "removed"},
 					{nil, nil, nil, 3, "three", "four", "removed"},
+				},
+			},
+		},
+	},
+	{
+		Name: "WORKING and STAGED",
+		SetUpScript: []string{
+			"set @Commit0 = HashOf('HEAD');",
+
+			"create table t (pk int primary key, c1 text, c2 text);",
+			"insert into t values (1, 'one', 'two'), (2, 'three', 'four');",
+			"set @Commit1 = dolt_commit('-am', 'inserting two rows into table t');",
+
+			"insert into t values (3, 'five', 'six');",
+			"delete from t where pk = 2",
+			"update t set c2 = '100' where pk = 1",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', @Commit1, 'WORKING') order by coalesce(from_pk, to_pk)",
+				Expected: []sql.Row{
+					{1, "one", "two", 1, "one", "100", "modified"},
+					{2, "three", "four", nil, nil, nil, "removed"},
+					{nil, nil, nil, 3, "five", "six", "added"},
+				},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'WORKING') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{1, "one", "two", 1, "one", "100", "modified"},
+					{2, "three", "four", nil, nil, nil, "removed"},
+					{nil, nil, nil, 3, "five", "six", "added"},
+				},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{1, "one", "100", 1, "one", "two", "modified"},
+					{nil, nil, nil, 2, "three", "four", "added"},
+					{3, "five", "six", nil, nil, nil, "removed"},
+				},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'WORKING') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "call dolt_add('.')",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'HEAD', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Expected: []sql.Row{
+					{1, "one", "two", 1, "one", "100", "modified"},
+					{2, "three", "four", nil, nil, nil, "removed"},
+					{nil, nil, nil, 3, "five", "six", "added"},
 				},
 			},
 		},
