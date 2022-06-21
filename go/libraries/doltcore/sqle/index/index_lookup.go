@@ -66,7 +66,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, primary, secondary)
 	}
 
-	covers := idx.CoversColumns(columns)
+	covers := idx.coversColumns(columns)
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, secondary)
 	} else {
@@ -78,7 +78,7 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 	m := durable.NomsMapFromIndex(secondary)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
-	covers := idx.CoversColumns(columns)
+	covers := idx.coversColumns(columns)
 	if covers || idx.ID() == "PRIMARY" {
 		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
 	} else {

@@ -56,16 +56,6 @@ type indexLookupRowIterAdapter struct {
 
 // NewIndexLookupRowIterAdapter returns a new indexLookupRowIterAdapter.
 func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, tableData durable.Index, keyIter nomsKeyIter) (*indexLookupRowIterAdapter, error) {
-	lookupTags := make(map[uint64]int)
-	for i, tag := range idx.Schema().GetPKCols().Tags {
-		lookupTags[tag] = i
-	}
-
-	// handle keyless case, where no columns are pk's and rowIdTag is the only lookup tag
-	if len(lookupTags) == 0 {
-		lookupTags[schema.KeylessRowIdTag] = 0
-	}
-
 	rows := durable.NomsMapFromIndex(tableData)
 
 	conv := NewKVToSqlRowConverterForCols(idx.Format(), idx.Schema())
@@ -79,7 +69,7 @@ func NewIndexLookupRowIterAdapter(ctx *sql.Context, idx DoltIndex, tableData dur
 		keyIter:    keyIter,
 		tableRows:  rows,
 		conv:       conv,
-		lookupTags: lookupTags,
+		lookupTags: idx.lookupTags(),
 		cancelF:    cancelF,
 		resultBuf:  resBuf,
 	}

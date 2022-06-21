@@ -44,7 +44,8 @@ type DoltIndex interface {
 	IsPrimaryKey() bool
 
 	GetDurableIndexes(*sql.Context, DoltTableable) (durable.Index, durable.Index, error)
-	CoversColumns(cols []string) bool
+	coversColumns(cols []string) bool
+	lookupTags() map[uint64]int
 }
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -273,8 +274,9 @@ type doltIndex struct {
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
 
-	cache         cachedDurableIndexes
-	coversAllCols *bool
+	cache            cachedDurableIndexes
+	coversAllCols    *bool
+	cachedLookupTags map[uint64]int
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -499,7 +501,25 @@ func (di *doltIndex) coversAllColumns() bool {
 	return covers
 }
 
-func (di *doltIndex) CoversColumns(cols []string) bool {
+func (di *doltIndex) lookupTags() map[uint64]int {
+	if di.cachedLookupTags == nil {
+		tags := di.Schema().GetPKCols().Tags
+		sz := len(tags)
+		if sz == 0 {
+			sz = 1
+		}
+		di.cachedLookupTags = make(map[uint64]int, sz)
+		for i, tag := range tags {
+			di.cachedLookupTags[tag] = i
+		}
+		if len(di.cachedLookupTags) == 0 {
+			di.cachedLookupTags[schema.KeylessRowIdTag] = 0
+		}
+	}
+	return di.cachedLookupTags
+}
+
+func (di *doltIndex) coversColumns(cols []string) bool {
 	if cols == nil {
 		return di.coversAllColumns()
 	}
