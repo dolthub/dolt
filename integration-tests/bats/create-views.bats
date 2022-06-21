@@ -275,3 +275,15 @@ SQL
     [[ "${lines[1]}" =~ "11,11" ]] || false
     [[ "${lines[2]}" =~ "12,12" ]] || false
 }   
+
+@test "create-views: describe correctly works with complex views" {
+    dolt sql -q "create table t(pk int primary key, val int DEFAULT 5000)"
+    dolt sql -q "create view view1 as select * from t"
+
+    run dolt sql -r csv -q "describe view1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    echo $output
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+    [[ "${lines[2]}" =~ 'val,int,YES,"",5000,""' ]] || false
+}
