@@ -73,7 +73,7 @@ func TestRangeSearch(t *testing.T) {
 		{
 			name: "c0 > 1",
 			testRange: Range{
-				Start: []RangeCut{
+				Start: []RangeField{
 					{Value: intVal(1), Inclusive: false},
 				},
 				Stop: nil,
@@ -86,7 +86,7 @@ func TestRangeSearch(t *testing.T) {
 			name: "c0 < 1",
 			testRange: Range{
 				Start: nil,
-				Stop: []RangeCut{
+				Stop: []RangeField{
 					{Value: intVal(1), Inclusive: false},
 				},
 				Desc: twoCol,
@@ -97,10 +97,10 @@ func TestRangeSearch(t *testing.T) {
 		{
 			name: "2 <= c0 <= 3",
 			testRange: Range{
-				Start: []RangeCut{
+				Start: []RangeField{
 					{Value: intVal(2), Inclusive: true},
 				},
-				Stop: []RangeCut{
+				Stop: []RangeField{
 					{Value: intVal(3), Inclusive: true},
 				},
 				Desc: twoCol,
@@ -111,10 +111,10 @@ func TestRangeSearch(t *testing.T) {
 		{
 			name: "c0 = NULL",
 			testRange: Range{
-				Start: []RangeCut{
+				Start: []RangeField{
 					{Null: true},
 				},
-				Stop: []RangeCut{
+				Stop: []RangeField{
 					{Null: true},
 				},
 				Desc: twoCol,
@@ -127,11 +127,11 @@ func TestRangeSearch(t *testing.T) {
 		{
 			name: "c1 == 2",
 			testRange: Range{
-				Start: []RangeCut{
+				Start: []RangeField{
 					{Value: nil},
 					{Value: intVal(2), Inclusive: true},
 				},
-				Stop: []RangeCut{
+				Stop: []RangeField{
 					{Value: nil},
 					{Value: intVal(2), Inclusive: true},
 				},

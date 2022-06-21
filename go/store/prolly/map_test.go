@@ -234,8 +234,8 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 }
 
 func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
-	start := make([]RangeCut, len(desc.Types))
-	stop := make([]RangeCut, len(desc.Types))
+	start := make([]RangeField, len(desc.Types))
+	stop := make([]RangeField, len(desc.Types))
 	for i := range start {
 		start[i].Value = tup.GetField(i)
 		start[i].Inclusive = true

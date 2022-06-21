@@ -103,7 +103,7 @@ func (mut *MutableMap) DiscardPending(context.Context) {
 
 // IterAll returns a mutableMapIter that iterates over the entire MutableMap.
 func (mut MutableMap) IterAll(ctx context.Context) (MapIter, error) {
-	rng := Range{Start: nil, Stop: nil, Desc: mut.keyDesc}
+	rng := Range{Fields: nil, Desc: mut.keyDesc}
 	return mut.IterRange(ctx, rng)
 }
 

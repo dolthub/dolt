@@ -561,10 +561,11 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 
 func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
 	prollyRange := prolly.Range{
-		Start: make([]prolly.RangeCut, len(rng)),
-		Stop:  make([]prolly.RangeCut, len(rng)),
-		Desc:  tb.Desc,
+		Fields: make([]prolly.RangeField, len(rng)),
+		Desc:   tb.Desc,
 	}
+
+	// todo(andy): construct these more efficiently
 
 	for i, expr := range rng {
 		if !sql.RangeCutIsBinding(expr.LowerBound) {
@@ -588,13 +589,16 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
-		bound := expr.LowerBound.TypeAsLowerBound()
 		_, null := expr.LowerBound.(sql.NullBound)
+		if null {
+			prollyRange.Fields[i].IsNull = true
+			continue
+		}
 
-		prollyRange.Start[i] = prolly.RangeCut{
+		bound := expr.LowerBound.TypeAsLowerBound()
+		prollyRange.Fields[i].Lo = prolly.Bound{
 			Value:     tup.GetField(i),
 			Inclusive: bound == sql.Closed,
-			Null:      null,
 		}
 	}
 
@@ -618,13 +622,27 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 			continue
 		}
 
-		bound := expr.UpperBound.TypeAsUpperBound()
 		_, null := expr.UpperBound.(sql.NullBound)
+		if null {
+			prollyRange.Fields[i].IsNull = true
+		}
 
-		prollyRange.Stop[i] = prolly.RangeCut{
+		bound := expr.UpperBound.TypeAsUpperBound()
+		prollyRange.Fields[i].Hi = prolly.Bound{
 			Value:     tup.GetField(i),
 			Inclusive: bound == sql.Closed,
-			Null:      null,
+		}
+	}
+
+	order := prollyRange.Desc.Comparator()
+	for i := range prollyRange.Fields {
+		f := prollyRange.Fields[i]
+		if f.IsNull {
+			continue
+		}
+		t := prollyRange.Desc.Types[i]
+		if order.CompareValues(f.Lo.Value, f.Hi.Value, t) == 0 {
+			prollyRange.Fields[i].Exact = true
 		}
 	}
 

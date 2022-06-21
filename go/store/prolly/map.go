@@ -193,8 +193,8 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 
 	key := val.Tuple(cur.CurrentKey())
 	value := val.Tuple(cur.CurrentValue())
-	if compareBound(rng.Start, key, m.keyDesc) != 0 {
-		// map does not contain |rng|
+
+	if !rng.matches(key) {
 		return &pointLookup{}, nil
 	}
 
@@ -217,22 +217,12 @@ func treeIterFromRange(
 		stop  *tree.Cursor
 	)
 
-	startSearch := rangeStartSearchFn(rng)
-	if rng.Start == nil {
-		start, err = tree.NewCursorAtStart(ctx, ns, root)
-	} else {
-		start, err = tree.NewCursorFromSearchFn(ctx, ns, root, startSearch)
-	}
+	start, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStartSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
 
-	stopSearch := rangeStopSearchFn(rng)
-	if rng.Stop == nil {
-		stop, err = tree.NewCursorPastEnd(ctx, ns, root)
-	} else {
-		stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, stopSearch)
-	}
+	stop, err = tree.NewCursorFromSearchFn(ctx, ns, root, rangeStopSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
