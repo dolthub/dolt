@@ -442,6 +442,11 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "pk=4"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where pk=4" ]] || false
 }
 
 @test "diff: with where clause errors" {
