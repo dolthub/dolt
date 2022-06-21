@@ -467,7 +467,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 
 				val, err := sql.Float64.Convert(row[i])
 				if err != nil {
-					return err
+					continue // skip unsupported column types for now
 				}
 				v := val.(float64)
 
@@ -497,6 +497,12 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 		sort.Float64s(keys)
 
 		hist := t.doltStats.histogramMap[colName]
+		if hist.Count == 0 {
+			hist.Min = 0
+			hist.Max = 0
+			continue
+		}
+
 		hist.Mean /= float64(hist.Count)
 		for _, k := range keys {
 			bucket := &sql.HistogramBucket{
