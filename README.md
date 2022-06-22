@@ -10,14 +10,14 @@ your changes, push them to a remote, or merge your teammate's changes.
 
 All the commands you know for Git work exactly the same for Dolt. Git
 versions files, Dolt versions tables. It's like Git and MySQL had a
-baby!
+baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
-Dolt databases. We host public data for free! If you want to host
+Dolt databases. We host public data for free. If you want to host
 your own version of DoltHub, we have [DoltLab](https://www.doltlab.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
-ask questions!
+ask questions.
 
 ## What's it for?
 
