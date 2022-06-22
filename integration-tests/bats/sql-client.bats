@@ -42,7 +42,7 @@ teardown() {
 }
 
 @test "sql-client: test sql-client shows tables" {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
     cd repo1
     start_sql_server repo1
     cd ../

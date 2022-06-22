@@ -193,7 +193,6 @@ function setup_write_test {
         [[ "$output" =~ "added" ]] || false
     done
 
-
     for commit in HEAD HEAD~1 HEAD~2; do
         run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv
         [ "$status" -eq 0 ]

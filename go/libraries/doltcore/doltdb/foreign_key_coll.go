@@ -31,7 +31,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/hash"
-	"github.com/dolthub/dolt/go/store/marshal"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -213,26 +212,6 @@ func (fk ForeignKey) ValidateTableSchema(sch schema.Schema) error {
 			fk.Name, fk.TableName, fk.TableIndex)
 	}
 	return nil
-}
-
-// LoadForeignKeyCollection returns a new ForeignKeyCollection using the provided map returned previously by GetMap.
-func LoadForeignKeyCollection(ctx context.Context, fkMap types.Map) (*ForeignKeyCollection, error) {
-	fkc := &ForeignKeyCollection{
-		foreignKeys: make(map[string]ForeignKey),
-	}
-	err := fkMap.IterAll(ctx, func(key, value types.Value) error {
-		foreignKey := &ForeignKey{}
-		err := marshal.Unmarshal(ctx, fkMap.Format(), value, foreignKey)
-		if err != nil {
-			return err
-		}
-		fkc.foreignKeys[string(key.(types.String))] = *foreignKey
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return fkc, nil
 }
 
 func NewForeignKeyCollection(keys ...ForeignKey) (*ForeignKeyCollection, error) {
@@ -503,23 +482,6 @@ func (fkc *ForeignKeyCollection) KeysForTable(tableName string) (declaredFk, ref
 		return referencedByFk[i].Name < referencedByFk[j].Name
 	})
 	return
-}
-
-// Map returns the collection as a Noms Map for persistence.
-func (fkc *ForeignKeyCollection) Map(ctx context.Context, vrw types.ValueReadWriter) (types.Map, error) {
-	fkMap, err := types.NewMap(ctx, vrw)
-	if err != nil {
-		return types.EmptyMap, err
-	}
-	fkMapEditor := fkMap.Edit()
-	for hashOf, foreignKey := range fkc.foreignKeys {
-		val, err := marshal.Marshal(ctx, vrw, foreignKey)
-		if err != nil {
-			return types.EmptyMap, err
-		}
-		fkMapEditor.Set(types.String(hashOf), val)
-	}
-	return fkMapEditor.Map(ctx)
 }
 
 // RemoveKeys removes any Foreign Keys with matching column set from the collection.

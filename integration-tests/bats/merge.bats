@@ -531,7 +531,6 @@ SQL
     [[ "$output" =~ "2,2,2" ]] || false
 }
 
-
 @test "merge: merge branch with table that was deleted" {
     dolt sql << SQL
 INSERT INTO test2 VALUES (0, 0, 0);

@@ -161,7 +161,6 @@ behavior:
     wait_for_connection $PORT 5000
 }
 
-
 start_multi_db_server() {
     DEFAULT_DB="$1"
     let PORT="$$ % (65536-1024) + 1024"

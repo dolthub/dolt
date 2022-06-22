@@ -148,7 +148,6 @@ SQL
     [[ "$output" =~ "|  +  | 3 | 3 | 3    |" ]] || false
 }
 
-
 @test "drop-create: dropped column" {
     dolt sql  <<SQL
 create table test(a int primary key, b int null, c int null);
