@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="index_join_scan"
+SYSBENCH_TEST="oltp_point_select"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366

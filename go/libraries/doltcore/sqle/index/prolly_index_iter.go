@@ -363,7 +363,6 @@ type prollyKeylessIndexIter struct {
 	idx       DoltIndex
 	indexIter prolly.MapIter
 	clustered prolly.Map
-	ns        tree.NodeStore
 
 	// clusteredMap transforms secondary index keys
 	// into clustered index keys
@@ -461,7 +460,7 @@ func (p prollyKeylessIndexIter) queueRows(ctx context.Context) error {
 			return err
 		}
 
-		rows, err := p.keylessRowsFromValueTuple(ctx, p.ns, value)
+		rows, err := p.keylessRowsFromValueTuple(ctx, p.clustered.NodeStore(), value)
 		if err != nil {
 			return err
 		}
