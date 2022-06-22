@@ -188,21 +188,16 @@ func (db *SingleTableInfoDatabase) IsTemporary() bool {
 	return false
 }
 
-func (db *SingleTableInfoDatabase) NumRows(context *sql.Context) (uint64, error) {
-	// TODO: to answer this accurately, we need the table as well as the schema
-	return 0, nil
-}
-
 func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) {
 	// TODO: to answer this accurately, we need the table as well as the schema
 	return 0, nil
 }
 
-func (db *SingleTableInfoDatabase) CalculateStatistics(ctx *sql.Context) error {
+func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
 	return nil
 }
 
-func (db *SingleTableInfoDatabase) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
+func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return nil, nil
 }
 

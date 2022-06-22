@@ -78,7 +78,6 @@ type projected interface {
 
 type DoltTableStatistics struct {
 	rowCount     uint64
-	colCount     uint64
 	nullCount    uint64
 	createdAt    time.Time
 	histogramMap sql.HistogramMap
@@ -88,10 +87,6 @@ var _ sql.TableStatistics = &DoltTableStatistics{}
 
 func (ds *DoltTableStatistics) CreatedAt() time.Time {
 	return ds.createdAt
-}
-
-func (ds *DoltTableStatistics) ColumnCount() uint64 {
-	return ds.colCount
 }
 
 func (ds *DoltTableStatistics) RowCount() uint64 {
@@ -110,6 +105,9 @@ func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error)
 }
 
 func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
+	if len(ds.histogramMap) == 0 {
+		return nil
+	}
 	return ds.histogramMap
 }
 
@@ -311,21 +309,6 @@ func (t *DoltTable) String() string {
 	return t.tableName
 }
 
-// NumRows returns the unfiltered count of rows contained in the table
-func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
-	table, err := t.DoltTable(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	m, err := table.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return m.Count(), nil
-}
-
 // Format returns the NomsBinFormat for the underlying table
 func (t *DoltTable) Format() *types.NomsBinFormat {
 	return t.nbf
@@ -371,6 +354,19 @@ func (t *DoltTable) IsTemporary() bool {
 	return false
 }
 
+// numRows returns the unfiltered count of rows contained in the table
+func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
+	table, err := t.DoltTable(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return m.Count(), nil
+}
+
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -399,7 +395,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		}
 	}
 
-	numRows, err := t.NumRows(ctx)
+	numRows, err := t.numRows(ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -407,8 +403,8 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
-func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
-	table, err := t.doltTable(ctx)
+func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
+	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return err
 	}
@@ -422,7 +418,6 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 	cols := t.sch.GetAllCols().GetColumns()
 	t.doltStats = &DoltTableStatistics{
 		rowCount:     m.Count(),
-		colCount:     uint64(len(cols)),
 		nullCount:    0,
 		createdAt:    time.Now(),
 		histogramMap: make(sql.HistogramMap),
@@ -549,7 +544,7 @@ func (t *DoltTable) CalculateStatistics(ctx *sql.Context) error {
 	return nil
 }
 
-func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error) {
+func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	if t.doltStats != nil {
 		return t.doltStats, nil
 	}
@@ -565,7 +560,13 @@ func (t *DoltTable) GetStatistics(ctx *sql.Context) (sql.TableStatistics, error)
 	}
 	stats, ok := dbState.TblStats[t.tableName]
 	if !ok {
-		return nil, nil
+		numRows, err := t.numRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &DoltTableStatistics{
+			rowCount: numRows,
+		}, nil
 	}
 	t.doltStats = stats.(*DoltTableStatistics)
 
