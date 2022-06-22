@@ -118,6 +118,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 			keyMap:  keyMap,
 			valBld:  val.NewTupleBuilder(valDesc),
 			valMap:  valMap,
+			ns:      t.NodeStore(),
 		}
 	}
 
@@ -236,6 +237,7 @@ func (w *prollyTableWriter) WithIndexLookup(lookup sql.IndexLookup) sql.Table {
 		writer: w,
 		index:  idx,
 		pRange: index.ProllyRangesFromIndexLookup(lookup)[0],
+		ns:     w.tbl.NodeStore(),
 	}
 }
 

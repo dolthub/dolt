@@ -72,6 +72,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 	} else {
 		return newProllyIndexIter(ctx, idx, r, pkSch, durableState.Primary, durableState.Secondary)
 	}
+	return newProllyIndexIter(ctx, idx, r, pkSch, primary, secondary)
 }
 
 func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRange, columns []string, durableState *durableIndexState) (sql.RowIter, error) {

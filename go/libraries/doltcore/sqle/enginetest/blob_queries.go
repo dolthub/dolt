@@ -12,36 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-namespace serial;
+package enginetest
 
-enum Encoding : uint8 {
-  // fixed width
-  Null       = 0,
-  Int8       = 1,
-  Uint8      = 2,
-  Int16      = 3,
-  Uint16     = 4,
-  Int32      = 7,
-  Uint32     = 8,
-  Int64      = 9,
-  Uint64     = 10,
-  Float32    = 11,
-  Float64    = 12,
-  Bit64      = 13,
-  Hash128    = 14,
-  Year       = 15,
-  Date       = 16,
-  Time       = 17,
-  Datetime   = 18,
-  Enum       = 19,
-  Set        = 20,
-  BytesAddr = 21,
-  CommitAddr  = 22,
+import (
+	"github.com/dolthub/go-mysql-server/enginetest/queries"
+	"github.com/dolthub/go-mysql-server/sql"
+)
 
-  // variable width
-  String   = 128,
-  Bytes    = 129,
-  Decimal  = 130,
-  JSON     = 131,
-  Geometry = 133,
+var BigBlobQueries = []queries.WriteQueryTest{
+	{
+		WriteQuery:          "INSERT INTO blobt VALUES(4, LOAD_FILE('testdata/test1.png'))",
+		ExpectedWriteResult: []sql.Row{{sql.NewOkResult(1)}},
+		SelectQuery:         "select sha1(b) from blobt where i = 4",
+		ExpectedSelect:      []sql.Row{{"012bcb75a319f2913614a5170fc046fb6c49ee86"}},
+	},
 }

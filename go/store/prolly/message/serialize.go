@@ -19,7 +19,9 @@ import (
 
 	fb "github.com/google/flatbuffers/go"
 
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const (
@@ -54,6 +56,29 @@ func writeItemOffsets(b *fb.Builder, items [][]byte, sumSz int) fb.UOffsetT {
 		off -= len(items[i])
 		b.PrependUint16(uint16(off))
 		cnt++
+	}
+	return b.EndVector(cnt)
+}
+
+// writeAddrOffests returns offsets into the values array that correspond to addr root
+// hashes that themselves have subtrees
+func writeValAddrOffsets(b *fb.Builder, items [][]byte, sumSz int, valDesc val.TupleDesc) fb.UOffsetT {
+	var cnt int
+	var off = sumSz
+	for i := len(items) - 1; i >= 0; i-- {
+		tup := val.Tuple(items[i])
+		off -= len(tup) // start of tuple
+		for j := range valDesc.Addrs {
+			// get index into value tuple pointing at address
+			o, _ := tup.GetOffset(j)
+			a := tup.GetField(j)
+			if hash.New(a).IsEmpty() {
+				continue
+			}
+			o += off // offset is tuple start plus field start
+			b.PrependUint16(uint16(o))
+			cnt++
+		}
 	}
 	return b.EndVector(cnt)
 }

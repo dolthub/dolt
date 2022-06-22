@@ -51,7 +51,7 @@ func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 		return Map{}, err
 	}
 	tr := mut.tuples.tree
-	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool()}
+	serializer := message.ProllyMapSerializer{Pool: tr.ns.Pool(), ValDesc: mut.valDesc}
 
 	root, err := tree.ApplyMutations(ctx, tr.ns, tr.root, serializer, mut.tuples.mutations(), tr.compareItems)
 	if err != nil {
@@ -67,6 +67,11 @@ func (mut MutableMap) Map(ctx context.Context) (Map, error) {
 		keyDesc: mut.keyDesc,
 		valDesc: mut.valDesc,
 	}, nil
+}
+
+// NodeStore returns the map's NodeStore
+func (mut MutableMap) NodeStore() tree.NodeStore {
+	return mut.tuples.tree.ns
 }
 
 // Put adds the Tuple pair |key|, |value| to the MutableMap.

@@ -101,9 +101,9 @@ func (ti *varBinaryType) ConvertValueToNomsValue(ctx context.Context, vrw types.
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
+	val, ok := strVal.([]byte)
 	if ok {
-		return types.NewBlob(ctx, vrw, strings.NewReader(val))
+		return types.NewBlob(ctx, vrw, strings.NewReader(string(val)))
 	}
 	return nil, fmt.Errorf(`"%v" cannot convert value "%v" of type "%T" as it is invalid`, ti.String(), v, v)
 }
@@ -126,7 +126,8 @@ func (ti *varBinaryType) FormatValue(v types.Value) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &resStr, nil
+		return (*string)(unsafe.Pointer(&resStr)), nil
+		//return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -180,18 +181,18 @@ func (ti *varBinaryType) ToSqlType() sql.Type {
 }
 
 // fromBlob returns a string from a types.Blob.
-func fromBlob(b types.Blob) (string, error) {
+func fromBlob(b types.Blob) ([]byte, error) {
 	strLength := b.Len()
 	if strLength == 0 {
-		return "", nil
+		return []byte{}, nil
 	}
 	str := make([]byte, strLength)
 	n, err := b.ReadAt(context.Background(), str, 0)
 	if err != nil && err != io.EOF {
-		return "", err
+		return []byte{}, err
 	}
 	if uint64(n) != strLength {
-		return "", fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
+		return []byte{}, fmt.Errorf("wanted %d bytes from blob for data, got %d", strLength, n)
 	}
 
 	// For very large byte slices, the standard method of converting a byte slice to a string using "string(str)" will
@@ -200,7 +201,7 @@ func fromBlob(b types.Blob) (string, error) {
 	// testing, performance improved by 40%.
 	// This is inspired by Go's own source code in strings.Builder.String(): https://golang.org/src/strings/builder.go#L48
 	// This is also marked as a valid strategy in unsafe.Pointer's own method documentation.
-	return *(*string)(unsafe.Pointer(&str)), nil
+	return str, nil
 }
 
 // hasPrefix finds out if a Blob has a prefixed integer. Initially blobs for varBinary prepended an integer indicating
@@ -242,7 +243,7 @@ func varBinaryTypeConverter(ctx context.Context, src *varBinaryType, destTi Type
 			if err != nil {
 				return nil, err
 			}
-			newVal, err := strconv.ParseUint(val, 10, int(dest.sqlBitType.NumberOfBits()))
+			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
 			if err != nil {
 				return nil, err
 			}

@@ -122,7 +122,7 @@ func wrapConvertValueToNomsValue(
 			if err != nil {
 				return nil, err
 			}
-			vInt = str
+			vInt = string(str)
 		case types.Bool:
 			vInt = bool(val)
 		case types.Decimal:

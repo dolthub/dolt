@@ -280,7 +280,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -303,7 +303,7 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIs
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
-	wr.artKB.PutAddress(srcKey.Count(), theirRootIsh)
+	wr.artKB.PutCommitAddr(srcKey.Count(), theirRootIsh)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
 	key := wr.artKB.Build(wr.pool)
 
@@ -498,7 +498,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	}
 
 	srcKey := itr.getSrcKeyFromArtKey(artKey)
-	cmHash, _ := itr.artKD.GetAddress(itr.numPks, artKey)
+	cmHash, _ := itr.artKD.GetCommitAddr(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetUint8(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
@@ -539,7 +539,7 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	keyTypes := srcKd.Types
 
 	// target branch commit hash
-	keyTypes = append(keyTypes, val.Type{Enc: val.AddressEnc, Nullable: false})
+	keyTypes = append(keyTypes, val.Type{Enc: val.CommitAddrEnc, Nullable: false})
 
 	// artifact type
 	keyTypes = append(keyTypes, val.Type{Enc: val.Uint8Enc, Nullable: false})

@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -29,6 +30,7 @@ type prollyFkIndexer struct {
 	writer *prollyTableWriter
 	index  index.DoltIndex
 	pRange prolly.Range
+	ns     tree.NodeStore
 }
 
 var _ sql.Table = prollyFkIndexer{}
@@ -84,6 +86,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 			idxToPkMap: idxToPkMap,
 			primary:    primary,
 			sqlSch:     n.writer.sqlSch,
+			ns:         n.ns,
 		}, nil
 	} else {
 		rangeIter, err := idxWriter.(prollyKeylessSecondaryWriter).mut.IterRange(ctx, n.pRange)
@@ -94,6 +97,7 @@ func (n prollyFkIndexer) PartitionRows(ctx *sql.Context, _ sql.Partition) (sql.R
 			rangeIter: rangeIter,
 			primary:   n.writer.primary.(prollyKeylessWriter),
 			sqlSch:    n.writer.sqlSch,
+			ns:        n.ns,
 		}, nil
 	}
 }
@@ -104,6 +108,7 @@ type prollyFkPkRowIter struct {
 	idxToPkMap map[int]int
 	primary    prollyIndexWriter
 	sqlSch     sql.Schema
+	ns         tree.NodeStore
 }
 
 var _ sql.RowIter = prollyFkPkRowIter{}
@@ -128,13 +133,13 @@ func (iter prollyFkPkRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	err = iter.primary.mut.Get(ctx, pkTup, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.keyMap {
 			to := iter.primary.keyMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(iter.primary.keyBld.Desc, from, tblKey); err != nil {
+			if nextRow[to], err = index.GetField(ctx, iter.primary.keyBld.Desc, from, tblKey, iter.ns); err != nil {
 				return err
 			}
 		}
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(iter.primary.valBld.Desc, from, tblVal); err != nil {
+			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from, tblVal, iter.ns); err != nil {
 				return err
 			}
 		}
@@ -156,6 +161,7 @@ type prollyFkKeylessRowIter struct {
 	rangeIter prolly.MapIter
 	primary   prollyKeylessWriter
 	sqlSch    sql.Schema
+	ns        tree.NodeStore
 }
 
 var _ sql.RowIter = prollyFkKeylessRowIter{}
@@ -177,7 +183,7 @@ func (iter prollyFkKeylessRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	err = iter.primary.mut.Get(ctx, primaryKey, func(tblKey, tblVal val.Tuple) error {
 		for from := range iter.primary.valMap {
 			to := iter.primary.valMap.MapOrdinal(from)
-			if nextRow[to], err = index.GetField(iter.primary.valBld.Desc, from+1, tblVal); err != nil {
+			if nextRow[to], err = index.GetField(ctx, iter.primary.valBld.Desc, from+1, tblVal, iter.ns); err != nil {
 				return err
 			}
 		}

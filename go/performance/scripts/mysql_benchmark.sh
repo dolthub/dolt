@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_point_select"
+SYSBENCH_TEST="index_join_scan"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 # parse options
@@ -29,8 +29,8 @@ sleep 1
 sysbench \
   --mysql-host="127.0.0.1" \
   --mysql-user="root" \
-  --mysql-password="toor" \
-  --mysql-port=3316 \
+  --mysql-password="" \
+  --mysql-port=3306 \
   "$SYSBENCH_TEST" prepare
 
 # run benchmark
@@ -39,8 +39,8 @@ echo "benchmark $SYSBENCH_TEST starting at $WORKING_DIR"
 sysbench \
   --mysql-host="127.0.0.1" \
   --mysql-user="root" \
-  --mysql-password="toor" \
-  --mysql-port=3316 \
+  --mysql-password="" \
+  --mysql-port=3306 \
   --db-ps-mode=disable \
   "$SYSBENCH_TEST" run
 

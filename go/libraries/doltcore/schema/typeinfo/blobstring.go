@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/vitess/go/sqltypes"
@@ -73,7 +74,11 @@ func CreateBlobStringTypeFromParams(params map[string]string) (TypeInfo, error) 
 // ConvertNomsValueToValue implements TypeInfo interface.
 func (ti *blobStringType) ConvertNomsValueToValue(v types.Value) (interface{}, error) {
 	if val, ok := v.(types.Blob); ok {
-		return fromBlob(val)
+		b, err := fromBlob(val)
+		if sql.IsBinaryType(ti.sqlStringType) {
+			return b, err
+		}
+		return string(b), err
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -90,7 +95,11 @@ func (ti *blobStringType) ReadFrom(_ *types.NomsBinFormat, reader types.CodecRea
 		if err != nil {
 			return nil, err
 		}
-		return fromBlob(val)
+		b, err := fromBlob(val)
+		if sql.IsBinaryType(ti.sqlStringType) {
+			return b, err
+		}
+		return string(b), err
 	case types.NullKind:
 		_ = reader.ReadKind()
 		return nil, nil
@@ -134,7 +143,8 @@ func (ti *blobStringType) FormatValue(v types.Value) (*string, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &resStr, nil
+		return (*string)(unsafe.Pointer(&resStr)), nil
+		//return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil
@@ -204,7 +214,7 @@ func blobStringTypeConverter(ctx context.Context, src *blobStringType, destTi Ty
 			if err != nil {
 				return nil, err
 			}
-			newVal, err := strconv.ParseUint(val, 10, int(dest.sqlBitType.NumberOfBits()))
+			newVal, err := strconv.ParseUint(string(val), 10, int(dest.sqlBitType.NumberOfBits()))
 			if err != nil {
 				return nil, err
 			}

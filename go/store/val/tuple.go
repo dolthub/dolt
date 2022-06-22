@@ -127,6 +127,29 @@ func allocateTuple(pool pool.BuffPool, bufSz ByteSize, fields int) (tup Tuple, o
 	return
 }
 
+func (tup Tuple) GetOffset(i int) (int, bool) {
+	cnt := tup.Count()
+	if i >= cnt {
+		return 0, false
+	}
+
+	sz := ByteSize(len(tup))
+	split := sz - uint16Size*ByteSize(cnt)
+	offs := tup[split : sz-countSize]
+
+	start, stop := uint16(0), uint16(split)
+	if i*2 < len(offs) {
+		pos := i * 2
+		stop = readUint16(offs[pos : pos+2])
+	}
+	if i > 0 {
+		pos := (i - 1) * 2
+		start = readUint16(offs[pos : pos+2])
+	}
+
+	return int(start), start == stop
+}
+
 // GetField returns the value for field |i|.
 func (tup Tuple) GetField(i int) []byte {
 	cnt := tup.Count()

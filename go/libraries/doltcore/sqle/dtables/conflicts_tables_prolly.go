@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -107,6 +108,7 @@ type prollyConflictRowIter struct {
 	tblName string
 	vrw     types.ValueReadWriter
 	ourRows prolly.Map
+	ns      tree.NodeStore
 
 	kd                       val.TupleDesc
 	baseVD, oursVD, theirsVD val.TupleDesc
@@ -156,6 +158,7 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		o:        o,
 		t:        t,
 		n:        n,
+		ns:       ct.tbl.NodeStore(),
 	}, nil
 }
 
@@ -169,7 +172,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	r[0] = c.h.String()
 
 	for i := 0; i < itr.kd.Count(); i++ {
-		f, err := index.GetField(itr.kd, i, c.k)
+		f, err := index.GetField(ctx, itr.kd, i, c.k, itr.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -186,7 +189,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
-			f, err := index.GetField(itr.baseVD, i, c.bV)
+			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -196,7 +199,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	if c.oV != nil {
 		for i := 0; i < itr.oursVD.Count(); i++ {
-			f, err := index.GetField(itr.oursVD, i, c.oV)
+			f, err := index.GetField(ctx, itr.oursVD, i, c.oV, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -206,7 +209,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
-			f, err := index.GetField(itr.theirsVD, i, c.tV)
+			f, err := index.GetField(ctx, itr.theirsVD, i, c.tV, itr.ns)
 			if err != nil {
 				return nil, err
 			}
@@ -353,7 +356,8 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < cd.kd.Count()-2; i++ {
-		err := index.PutField(cd.kB, i, r[o+i])
+		err := index.PutField(ctx, cd.ct.tbl.NodeStore(), cd.kB, i, r[o+i])
+
 		if err != nil {
 			return err
 		}
@@ -361,7 +365,7 @@ func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 
 	// then the hash follows. It is the first column of the row and the second to last in the key
 	h := hash.Parse(r[0].(string))
-	cd.kB.PutAddress(cd.kd.Count()-2, h)
+	cd.kB.PutCommitAddr(cd.kd.Count()-2, h)
 
 	// Finally the artifact type which is always a conflict
 	cd.kB.PutUint8(cd.kd.Count()-1, uint8(prolly.ArtifactTypeConflict))
