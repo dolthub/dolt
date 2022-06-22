@@ -969,6 +969,7 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		}
 	}
 
+	// ourRoot table names need to be in front of the result array, so pass in as the first RootValue
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
