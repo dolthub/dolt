@@ -713,7 +713,7 @@ SQL
     [ "$status" -eq 0 ]
     [[ ! "$output" =~ "dolt_docs" ]] || false
 
-    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text LONGTEXT, PRIMARY KEY(doc_name))"
+    run dolt sql -q "CREATE TABLE dolt_docs (doc_name TEXT, doc_text varchar(20), PRIMARY KEY(doc_name))"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "reserved" ]] || false
     

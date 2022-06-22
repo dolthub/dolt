@@ -144,7 +144,6 @@ func (ti *blobStringType) FormatValue(v types.Value) (*string, error) {
 			return nil, err
 		}
 		return (*string)(unsafe.Pointer(&resStr)), nil
-		//return &resStr, nil
 	}
 	if _, ok := v.(types.Null); ok || v == nil {
 		return nil, nil

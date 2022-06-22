@@ -19,7 +19,7 @@ setup_repository() {
     dolt sql <<SQL
 CREATE TABLE blame_test (
   pk1 BIGINT NOT NULL COMMENT 'tag:0',
-  pk2 TEXT,
+  pk2 varchar(40),
   name LONGTEXT COMMENT 'tag:1',
   PRIMARY KEY (pk1, pk2)
 );
