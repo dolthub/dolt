@@ -38,7 +38,7 @@ const (
 				                     ORDER BY to_commit_date DESC) row_num
 				             FROM
 				                 dolt_diff_%s 
-				             WHERE %s
+				             WHERE diff_type <> 'removed'
 				            )
 				SELECT
 				    %s
@@ -91,23 +91,20 @@ func createDoltBlameViewExpression(tableName string, pks []schema.Column) (strin
 	}
 
 	allToPks := ""
-	pksNotNullExpression := ""
 	pksOrderByExpression := ""
 	pksSelectExpression := ""
 
 	for i, pk := range pks {
 		if i > 0 {
 			allToPks += ", "
-			pksNotNullExpression += " AND "
 			pksOrderByExpression += ", "
 		}
 
 		allToPks += "to_" + pk.Name
-		pksNotNullExpression += "to_" + pk.Name + " IS NOT NULL "
 		pksOrderByExpression += "sd.to_" + pk.Name + " ASC "
 		pksSelectExpression += "sd.to_" + pk.Name + " AS " + pk.Name + ", "
 	}
 
 	return fmt.Sprintf(viewExpressionTemplate, allToPks, allToPks, tableName,
-		pksNotNullExpression, pksSelectExpression, pksOrderByExpression), nil
+		pksSelectExpression, pksOrderByExpression), nil
 }
