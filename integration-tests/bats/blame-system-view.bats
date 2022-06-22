@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
     setup_repository
 }
 
@@ -70,6 +69,38 @@ SQL
     [[ "$output" =~ "Harry Wombat" ]] || false
     [[ "$output" =~ "Johnny Moolah" ]] || false
     [[ ! "$output" =~ "Richard Tracy" ]] || false
+}
+
+@test "blame-system-view: view works for table with single primary key" {
+    stash_current_dolt_user
+
+    set_dolt_user "Thomas Foolery" "bats-1@fake.horse"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 varchar(120));"
+    dolt add -A && dolt commit -m "added test table"
+
+    dolt sql -q "insert into test values (1,'Tom')"
+    dolt commit -am "added tom test table"
+
+    set_dolt_user "Richard Tracy" "bats-2@fake.horse"
+    dolt sql -q "insert into test values (2,'Richard')"
+    dolt commit -am "add richard to test table"
+
+    set_dolt_user "Harry Wombat" "bats-3@fake.horse"
+    dolt sql -q "update test set c0 = 'Harry' where pk = 2"
+    dolt commit -am "replace richard with harry"
+
+    set_dolt_user "Johnny Moolah" "bats-4@fake.horse"
+    dolt sql -q "insert into test values (3,'Alan'), (4,'Betty')"
+    dolt commit -am "add more people to blame_test"
+
+    restore_stashed_dolt_user
+
+    run dolt sql -q "select pk, committer, message from dolt_blame_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,Thomas Foolery,added tom test table" ]] || false
+    [[ "$output" =~ "2,Harry Wombat,replace richard with harry" ]] || false
+    [[ "$output" =~ "3,Johnny Moolah,add more people to blame_test" ]] || false
+    [[ "$output" =~ "4,Johnny Moolah,add more people to blame_test" ]] || false
 }
 
 @test "blame-system-view: view works for table with compound primary key" {
