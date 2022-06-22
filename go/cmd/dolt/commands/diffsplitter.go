@@ -38,11 +38,14 @@ type rowDiff struct {
 	colDiffs []diff.ChangeType
 }
 
+// newDiffSplitter returns a splitter that knows how to split unified diff query rows with the schema given into
+// |old| and |new| rows in the union schema given. In the diff query schema, all |from| columns are expected to precede
+// all |to| columns
 func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitter, error) {
 	resultToTarget := make(map[int]int)
 	fromTo := make(map[int]int)
 	toFrom := make(map[int]int)
-	fromLen := 0
+	fromLen := -1
 
 	for i := 0; i < len(diffQuerySch)-1; i++ {
 		var baseColName string
@@ -53,7 +56,7 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 			}
 		} else if strings.HasPrefix(diffQuerySch[i].Name, "to_") {
 			// we order the columns so that all from_ come first
-			if fromLen == 0 {
+			if fromLen == -1 {
 				fromLen = i
 			}
 			baseColName = diffQuerySch[i].Name[3:]
@@ -68,6 +71,10 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 		}
 
 		resultToTarget[i] = targetIdx
+	}
+
+	if fromLen == -1 {
+		fromLen = len(diffQuerySch) - 1
 	}
 
 	toLen := len(diffQuerySch) - 1 - fromLen
