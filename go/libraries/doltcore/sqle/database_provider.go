@@ -204,6 +204,13 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
+	// If this is a specific revSpec for a database, we just need to clean up the
+	// database metadata, not delete the whole database.
+	if IsRevisionDatabase(name) {
+		delete(p.databases, dbKey)
+		return nil
+	}
+
 	// Get the DB's directory
 	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
@@ -222,7 +229,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := dbKey + "/"
+	derivativeNamePrefix := dbKey + dbRevisionDelimiter
 	for dbName := range p.databases {
 		if strings.HasPrefix(dbName, derivativeNamePrefix) {
 			delete(p.databases, dbName)
@@ -329,6 +336,12 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
+}
+
+// IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
+// branch or commit from a database (e.g. "dolt/branch1").
+func IsRevisionDatabase(dbName string) bool {
+	return strings.Contains(dbName, dbRevisionDelimiter)
 }
 
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
