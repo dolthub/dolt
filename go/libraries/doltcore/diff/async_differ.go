@@ -28,6 +28,36 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
+const (
+	// DiffTypeProp is the name of a property added to each split row which tells if its added, removed, the modified
+	// old value, or the new value after modification
+	DiffTypeProp = "difftype"
+
+	// ColChangesProp is the name of a property added to each modified row which is a map from column name to the
+	// type of change.
+	ColChangesProp = "colchanges"
+)
+
+// ChangeType is an enum that represents the type of change in a diff
+type ChangeType int
+
+const (
+	// None is no change
+	None ChangeType = iota
+
+	// Inserted is the DiffTypeProp value for a row that was newly added (In new, but not in old)
+	Inserted
+
+	// Deleted is the DiffTypeProp value for a row that was newly deleted (In old, but not in new)
+	Deleted
+
+	// ModifiedOld is the DiffTypeProp value for the row which represents the old value of the row before it was changed.
+	ModifiedOld
+
+	// ModifiedNew is the DiffTypeProp value for the row which represents the new value of the row after it was changed.
+	ModifiedNew
+)
+
 type RowDiffer interface {
 	// Start starts the RowDiffer.
 	Start(ctx context.Context, from, to types.Map)
