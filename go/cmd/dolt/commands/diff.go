@@ -403,7 +403,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
-			verr = diffSummary(ctx, td, numCols)
+			verr = printNomsDiffSummary(ctx, td, numCols)
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -836,7 +836,7 @@ func printTableDiffSummary(td diff.TableDelta) {
 	}
 }
 
-func diffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
+func printNomsDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)
