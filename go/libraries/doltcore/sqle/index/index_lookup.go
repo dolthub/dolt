@@ -23,10 +23,8 @@ import (
 
 	"github.com/dolthub/go-mysql-server/sql"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
-	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/types"
@@ -44,7 +42,7 @@ func PartitionIndexedTableRows(ctx *sql.Context, idx sql.Index, part sql.Partiti
 	return RowIterForNomsRanges(ctx, doltIdx, ranges, columns, rp.primary, rp.secondary)
 }
 
-func RowIterForIndexLookup(ctx *sql.Context, t *doltdb.Table, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
+func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLookup, pkSch sql.PrimaryKeySchema, columns []string) (sql.RowIter, error) {
 	lookup := ilu.(*doltIndexLookup)
 	idx := lookup.idx
 
@@ -68,7 +66,7 @@ func RowIterForProllyRange(ctx *sql.Context, idx DoltIndex, r prolly.Range, pkSc
 		return newProllyKeylessIndexIter(ctx, idx, r, pkSch, primary, secondary)
 	}
 
-	covers := indexCoversCols(idx, columns)
+	covers := idx.coversColumns(columns)
 	if covers {
 		return newProllyCoveringIndexIter(ctx, idx, r, pkSch, secondary)
 	} else {
@@ -80,41 +78,12 @@ func RowIterForNomsRanges(ctx *sql.Context, idx DoltIndex, ranges []*noms.ReadRa
 	m := durable.NomsMapFromIndex(secondary)
 	nrr := noms.NewNomsRangeReader(idx.IndexSchema(), m, ranges)
 
-	covers := indexCoversCols(idx, columns)
+	covers := idx.coversColumns(columns)
 	if covers || idx.ID() == "PRIMARY" {
 		return NewCoveringIndexRowIterAdapter(ctx, idx, nrr, columns), nil
 	} else {
 		return NewIndexLookupRowIterAdapter(ctx, idx, primary, nrr)
 	}
-}
-
-func indexCoversCols(idx DoltIndex, cols []string) bool {
-	if cols == nil {
-		cols = idx.Schema().GetAllCols().GetColumnNames()
-	}
-
-	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(idx.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = idx.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = idx.IndexSchema().GetPKCols()
-	}
-
-	covers := true
-	for _, colName := range cols {
-		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
-			covers = false
-			break
-		}
-	}
-
-	return covers
 }
 
 type IndexLookupKeyIterator interface {
@@ -126,7 +95,7 @@ func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
 	return lookup.(*doltIndexLookup).idx
 }
 
-func NewRangePartitionIter(ctx *sql.Context, t *doltdb.Table, lookup sql.IndexLookup) (sql.PartitionIter, error) {
+func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	dlu := lookup.(*doltIndexLookup)
 	primary, secondary, err := dlu.idx.GetDurableIndexes(ctx, t)
 	if err != nil {

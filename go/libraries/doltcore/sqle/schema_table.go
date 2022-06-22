@@ -170,7 +170,7 @@ func migrateOldSchemasTableToNew(
 ) {
 	// Copy all of the old data over and add an index column and an extra column
 	var rowsToAdd []sql.Row
-	table, err := schemasTable.doltTable(ctx)
+	table, err := schemasTable.DoltTable.DoltTable(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -279,12 +279,7 @@ func fragFromSchemasTable(ctx *sql.Context, tbl *WritableDoltTable, fragType str
 		return nil, false, err
 	}
 
-	dt, err := tbl.doltTable(ctx)
-	if err != nil {
-		return nil, false, err
-	}
-
-	iter, err := index.RowIterForIndexLookup(ctx, dt, lookup, tbl.sqlSch, nil)
+	iter, err := index.RowIterForIndexLookup(ctx, tbl.DoltTable, lookup, tbl.sqlSch, nil)
 	if err != nil {
 		return nil, false, err
 	}
