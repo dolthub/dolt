@@ -37,6 +37,12 @@ type Map struct {
 
 type DiffFn func(context.Context, tree.Diff) error
 
+type DiffSummary struct {
+	Adds, Removes        uint64
+	Changes, CellChanges uint64
+	NewSize, OldSize     uint64
+}
+
 // NewMap creates an empty prolly tree Map
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
@@ -79,6 +85,30 @@ func NewMapFromTuples(ctx context.Context, ns tree.NodeStore, keyDesc, valDesc v
 
 func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
+}
+
+func DiffMapSummary(ctx context.Context, from, to Map) (DiffSummary, error) {
+	s := DiffSummary{
+		OldSize: uint64(from.Count()),
+		NewSize: uint64(to.Count()),
+	}
+
+	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff tree.Diff) error {
+		switch diff.Type {
+		case tree.AddedDiff:
+			s.Adds++
+		case tree.RemovedDiff:
+			s.Removes++
+		case tree.ModifiedDiff:
+			s.Changes++
+			s.CellChanges += val.CellWiseTupleDiff(val.Tuple(diff.From), val.Tuple(diff.To))
+		}
+		return nil
+	})
+	if err != nil {
+		return DiffSummary{}, err
+	}
+	return s, nil
 }
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
