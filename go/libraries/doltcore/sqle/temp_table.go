@@ -179,14 +179,6 @@ func (t *TempTable) String() string {
 	return t.tableName
 }
 
-func (t *TempTable) NumRows(ctx *sql.Context) (uint64, error) {
-	m, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return m.Count(), nil
-}
-
 func (t *TempTable) Format() *types.NomsBinFormat {
 	return t.table.Format()
 }
@@ -217,6 +209,14 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 		return 0, err
 	}
 	return idx.Count(), nil
+}
+
+func (t *TempTable) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+func (t *TempTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	return nil, nil
 }
 
 func (t *TempTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {

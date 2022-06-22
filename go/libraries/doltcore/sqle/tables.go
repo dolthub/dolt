@@ -20,12 +20,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -74,6 +76,41 @@ type projected interface {
 	Project() []string
 }
 
+type DoltTableStatistics struct {
+	rowCount     uint64
+	nullCount    uint64
+	createdAt    time.Time
+	histogramMap sql.HistogramMap
+}
+
+var _ sql.TableStatistics = &DoltTableStatistics{}
+
+func (ds *DoltTableStatistics) CreatedAt() time.Time {
+	return ds.createdAt
+}
+
+func (ds *DoltTableStatistics) RowCount() uint64 {
+	return ds.rowCount
+}
+
+func (ds *DoltTableStatistics) NullCount() uint64 {
+	return ds.nullCount
+}
+
+func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
+	if res, ok := ds.histogramMap[colName]; ok {
+		return res, nil
+	}
+	return &sql.Histogram{}, fmt.Errorf("column %s not found", colName)
+}
+
+func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
+	if len(ds.histogramMap) == 0 {
+		return nil
+	}
+	return ds.histogramMap
+}
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -87,6 +124,8 @@ type DoltTable struct {
 	projectedCols []string
 
 	opts editor.Options
+
+	doltStats *DoltTableStatistics
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -270,21 +309,6 @@ func (t *DoltTable) String() string {
 	return t.tableName
 }
 
-// NumRows returns the unfiltered count of rows contained in the table
-func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
-	table, err := t.DoltTable(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	m, err := table.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-
-	return m.Count(), nil
-}
-
 // Format returns the NomsBinFormat for the underlying table
 func (t *DoltTable) Format() *types.NomsBinFormat {
 	return t.nbf
@@ -330,6 +354,19 @@ func (t *DoltTable) IsTemporary() bool {
 	return false
 }
 
+// numRows returns the unfiltered count of rows contained in the table
+func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
+	table, err := t.DoltTable(ctx)
+	if err != nil {
+		return 0, err
+	}
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return m.Count(), nil
+}
+
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -358,12 +395,182 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		}
 	}
 
-	numRows, err := t.NumRows(ctx)
+	numRows, err := t.numRows(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	return numBytesPerRow * numRows, nil
+}
+
+func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
+	table, err := t.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	// initialize dolt stats
+	cols := t.sch.GetAllCols().GetColumns()
+	t.doltStats = &DoltTableStatistics{
+		rowCount:     m.Count(),
+		nullCount:    0,
+		createdAt:    time.Now(),
+		histogramMap: make(sql.HistogramMap),
+	}
+
+	// initialize histogram map
+	for _, col := range cols {
+		hist := new(sql.Histogram)
+		hist.Min = math.MaxFloat64
+		hist.Max = -math.MaxFloat64
+		t.doltStats.histogramMap[col.Name] = hist
+	}
+
+	// this can be adapted to a histogram with any number of buckets
+	freqMap := make(map[string]map[float64]uint64)
+	for _, col := range cols {
+		freqMap[col.Name] = make(map[float64]uint64)
+	}
+
+	//TODO: async?
+	partIter, err := t.Partitions(ctx)
+	if err != nil {
+		return err
+	}
+
+	for {
+		part, err := partIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		iter, err := t.PartitionRows(ctx, part)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		for {
+			row, err := iter.Next(ctx)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				return err
+			}
+
+			for i, col := range cols {
+				hist, ok := t.doltStats.histogramMap[col.Name]
+				if !ok {
+					panic("histogram was not initialized for this column; shouldn't be possible")
+				}
+
+				if row[i] == nil {
+					hist.NullCount++
+					continue
+				}
+
+				val, err := sql.Float64.Convert(row[i])
+				if err != nil {
+					continue // skip unsupported column types for now
+				}
+				v := val.(float64)
+
+				// place into frequency map
+				if bucket, ok := freqMap[col.Name][v]; ok {
+					bucket++
+				} else {
+					freqMap[col.Name][v] = 1
+					hist.DistinctCount++
+				}
+
+				hist.Mean += v
+				hist.Min = math.Min(hist.Min, v)
+				hist.Max = math.Max(hist.Max, v)
+				hist.Count++
+			}
+		}
+	}
+
+	// TODO: logic to determine ranges for buckets
+	// add buckets to histogram in sorted order
+	for colName, freqs := range freqMap {
+		keys := make([]float64, 0)
+		for k, _ := range freqs {
+			keys = append(keys, k)
+		}
+		sort.Float64s(keys)
+
+		hist := t.doltStats.histogramMap[colName]
+		if hist.Count == 0 {
+			hist.Min = 0
+			hist.Max = 0
+			continue
+		}
+
+		hist.Mean /= float64(hist.Count)
+		for _, k := range keys {
+			bucket := &sql.HistogramBucket{
+				LowerBound: k,
+				UpperBound: k,
+				Frequency:  float64(freqs[k]) / float64(t.doltStats.rowCount),
+			}
+			hist.Buckets = append(hist.Buckets, bucket)
+		}
+	}
+
+	// Persist in stats in dbState
+	// TODO: eventually do something different?
+	dSess := ctx.Session.(*dsess.DoltSession)
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return err
+	}
+
+	if dbState.TblStats == nil {
+		dbState.TblStats = make(map[string]sql.TableStatistics)
+	}
+	dbState.TblStats[t.tableName] = t.doltStats
+	return nil
+}
+
+func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	if t.doltStats != nil {
+		return t.doltStats, nil
+	}
+
+	// Load stats from the session
+	dSess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return nil, nil
+	}
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return nil, nil
+	}
+	stats, ok := dbState.TblStats[t.tableName]
+	if !ok {
+		numRows, err := t.numRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &DoltTableStatistics{
+			rowCount: numRows,
+		}, nil
+	}
+	t.doltStats = stats.(*DoltTableStatistics)
+
+	return t.doltStats, nil
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
