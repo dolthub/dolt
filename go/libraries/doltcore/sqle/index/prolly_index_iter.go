@@ -239,6 +239,7 @@ func newProllyCoveringIndexIter(ctx *sql.Context, idx DoltIndex, rng prolly.Rang
 		keyMap:    keyMap,
 		valMap:    valMap,
 		sqlSch:    pkSch.Schema,
+		ns:        secondary.NodeStore(),
 	}
 
 	return iter, nil

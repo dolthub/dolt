@@ -68,11 +68,11 @@ func writeValAddrOffsets(b *fb.Builder, items [][]byte, sumSz int, valDesc val.T
 	for i := len(items) - 1; i >= 0; i-- {
 		tup := val.Tuple(items[i])
 		off -= len(tup) // start of tuple
-		for j := range valDesc.Addrs {
+		for _, j := range valDesc.Addrs {
 			// get index into value tuple pointing at address
 			o, _ := tup.GetOffset(j)
 			a := tup.GetField(j)
-			if hash.New(a).IsEmpty() {
+			if len(a) == 0 || hash.New(a).IsEmpty() {
 				continue
 			}
 			o += off // offset is tuple start plus field start
