@@ -70,7 +70,7 @@ func (ht *HistoryTable) ShouldParallelizeAccess() bool {
 }
 
 func (ht *HistoryTable) GetIndexes(ctx *sql.Context) ([]sql.Index, error) {
-	tbl, err := ht.doltTable.DoltTable(ctx)
+	tbl, err := ht.doltTable.doltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
