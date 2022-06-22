@@ -17,6 +17,7 @@ package index
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -251,9 +252,25 @@ type DurableIndexes struct {
 	Secondary durable.Index
 }
 
-type cachedDurableIndexes struct {
+type cachedDurableIndexesStore struct {
 	key     doltdb.DataCacheKey
 	indexes DurableIndexes
+}
+
+type cachedDurableIndexes struct {
+	val atomic.Value
+}
+
+func (i *cachedDurableIndexes) load() cachedDurableIndexesStore {
+	l := i.val.Load()
+	if l == nil {
+		return cachedDurableIndexesStore{}
+	}
+	return l.(cachedDurableIndexesStore)
+}
+
+func (i *cachedDurableIndexes) store(key doltdb.DataCacheKey, indexes DurableIndexes) {
+	i.val.Store(cachedDurableIndexesStore{key, indexes})
 }
 
 type doltIndex struct {
@@ -276,9 +293,10 @@ type doltIndex struct {
 	keyBld *val.TupleBuilder
 
 	cache                 cachedDurableIndexes
-	coversAllCols         *bool
-	cachedLookupTags      map[uint64]int
-	cachedSqlRowConverter *KVToSqlRowConverter
+	// 0 - unloaded, 1 - true, 2 - false; atomic.Uint32
+	coversAllCols         uint32
+	cachedLookupTags      atomic.Value
+	cachedSqlRowConverter atomic.Value
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -316,8 +334,12 @@ func (di *doltIndex) GetDurableIndexes(ctx *sql.Context, ti DoltTableable) (prim
 		return nil, nil, err
 	}
 
-	if cancache && di.cache.key == newkey {
-		return di.cache.indexes.Primary, di.cache.indexes.Secondary, nil
+	var cache cachedDurableIndexesStore
+	if cancache {
+		cache = di.cache.load()
+		if cache.key == newkey {
+			return cache.indexes.Primary, cache.indexes.Secondary, nil
+		}
 	}
 
 	var t *doltdb.Table
@@ -340,9 +362,7 @@ func (di *doltIndex) GetDurableIndexes(ctx *sql.Context, ti DoltTableable) (prim
 	}
 
 	if cancache {
-		di.cache.key = newkey
-		di.cache.indexes.Primary = primary
-		di.cache.indexes.Secondary = secondary
+		di.cache.store(newkey, DurableIndexes{Primary: primary, Secondary: secondary})
 	}
 
 	return
@@ -475,8 +495,9 @@ RangeLoop:
 }
 
 func (di *doltIndex) coversAllColumns() bool {
-	if di.coversAllCols != nil {
-		return *di.coversAllCols
+	coversI := atomic.LoadUint32(&di.coversAllCols)
+	if coversI != 0 {
+		return coversI == 1
 	}
 	cols := di.Schema().GetAllCols()
 	var idxCols *schema.ColCollection
@@ -499,33 +520,42 @@ func (di *doltIndex) coversAllColumns() bool {
 			break
 		}
 	}
-	di.coversAllCols = &covers
+	if covers {
+		atomic.StoreUint32(&di.coversAllCols, 1)
+	} else {
+		atomic.StoreUint32(&di.coversAllCols, 2)
+	}
 	return covers
 }
 
 func (di *doltIndex) sqlRowConverter() *KVToSqlRowConverter {
-	if di.cachedSqlRowConverter == nil {
-		di.cachedSqlRowConverter = NewKVToSqlRowConverterForCols(di.Format(), di.Schema())
+	cached := di.cachedSqlRowConverter.Load()
+	if cached == nil {
+		cached = NewKVToSqlRowConverterForCols(di.Format(), di.Schema())
+		di.cachedSqlRowConverter.Store(cached)
 	}
-	return di.cachedSqlRowConverter
+	return cached.(*KVToSqlRowConverter)
 }
 
 func (di *doltIndex) lookupTags() map[uint64]int {
-	if di.cachedLookupTags == nil {
+	cached := di.cachedLookupTags.Load()
+	if cached == nil {
 		tags := di.Schema().GetPKCols().Tags
 		sz := len(tags)
 		if sz == 0 {
 			sz = 1
 		}
-		di.cachedLookupTags = make(map[uint64]int, sz)
+		tocache := make(map[uint64]int, sz)
 		for i, tag := range tags {
-			di.cachedLookupTags[tag] = i
+			tocache[tag] = i
 		}
-		if len(di.cachedLookupTags) == 0 {
-			di.cachedLookupTags[schema.KeylessRowIdTag] = 0
+		if len(tocache) == 0 {
+			tocache[schema.KeylessRowIdTag] = 0
 		}
+		di.cachedLookupTags.Store(tocache)
+		cached = tocache
 	}
-	return di.cachedLookupTags
+	return cached.(map[uint64]int)
 }
 
 func (di *doltIndex) coversColumns(cols []string) bool {
