@@ -166,9 +166,13 @@ func (m Map) IterOrdinalRange(ctx context.Context, start, stop uint64) (MapIter,
 func (m Map) IterRange(ctx context.Context, rng Range) (MapIter, error) {
 	if rng.isPointLookup(m.keyDesc) {
 		return m.pointLookupFromRange(ctx, rng)
-	} else {
-		return m.iterFromRange(ctx, rng)
 	}
+
+	iter, err := treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
+	if err != nil {
+		return nil, err
+	}
+	return filteredIter{iter: iter, rng: rng}, nil
 }
 
 func (m Map) Node() tree.Node {
@@ -180,6 +184,7 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.ns.Pool()
 }
 
+// todo(andy): do we need this point lookup machinery?
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
 	search := pointLookupSearchFn(rng)
 	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, search)
@@ -199,10 +204,6 @@ func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup,
 	}
 
 	return &pointLookup{k: key, v: value}, nil
-}
-
-func (m Map) iterFromRange(ctx context.Context, rng Range) (*orderedTreeIter[val.Tuple, val.Tuple], error) {
-	return treeIterFromRange(ctx, m.tuples.root, m.tuples.ns, rng)
 }
 
 func treeIterFromRange(

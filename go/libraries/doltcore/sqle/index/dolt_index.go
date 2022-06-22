@@ -315,14 +315,9 @@ func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.
 		}
 	}
 
-	// the sql engine provides ranges that are logically disjoint in value space.
-	// however, these ranges may overlap physically within the index. Here we merge
-	// physically overlapping ranges to avoid returning duplicate tuples/rows.
-	merged := prolly.MergeOverlappingRanges(prs...)
-
 	return &doltIndexLookup{
 		idx:          di,
-		prollyRanges: merged,
+		prollyRanges: prs,
 		sqlRanges:    sqlRanges,
 	}, nil
 }
@@ -427,15 +422,10 @@ RangeLoop:
 }
 
 func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
-	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		// todo(andy): handle first column filters
-		return nil
-	} else {
-		if di.constrainedToLookupExpression {
-			return filters
-		}
-		return nil
+	if di.constrainedToLookupExpression {
+		return filters
 	}
+	return nil
 }
 
 func (di doltIndex) Order() sql.IndexOrder {
@@ -637,7 +627,7 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 	order := prollyRange.Desc.Comparator()
 	for i := range prollyRange.Fields {
 		f := prollyRange.Fields[i]
-		if f.IsNull {
+		if f.IsNull || !f.Lo.Binding() || !f.Hi.Binding() {
 			continue
 		}
 		t := prollyRange.Desc.Types[i]

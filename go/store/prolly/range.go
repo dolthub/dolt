@@ -22,43 +22,14 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-// MergeOverlappingRanges merges overlapping ranges.
-func MergeOverlappingRanges(ranges ...Range) (merged []Range) {
-	if len(ranges) <= 1 {
-		return ranges
-	}
-	ranges = SortRanges(ranges...)
-
-	merged = make([]Range, 0, len(ranges))
-	acc := ranges[0]
-
-	for _, rng := range ranges[1:] {
-		if acc.overlaps(rng) {
-			acc = acc.merge(rng)
-		} else {
-			merged = append(merged, acc)
-			acc = rng
-		}
-	}
-	merged = append(merged, acc)
-	return
-}
-
-// SortRanges sorts ranges by start bound.
-func SortRanges(ranges ...Range) []Range {
-	sort.Slice(ranges, func(i, j int) bool {
-		return ranges[i].less(ranges[j])
-	})
-	return ranges
-}
-
-type Bound struct {
-	Value     []byte
-	Inclusive bool
-}
-
-func (b Bound) binding() bool {
-	return b.Value != nil
+// Range defines a contiguous set of Tuples bounded by
+// RangeField predicates.
+// A Range over an index must include all Tuples that
+// satisfy all predicates, but might also include Tuples
+// that fail to satisfy some predicates.
+type Range struct {
+	Fields []RangeField
+	Desc   val.TupleDesc
 }
 
 // RangeField bounds one dimension of a Range.
@@ -68,14 +39,13 @@ type RangeField struct {
 	IsNull bool
 }
 
-// Range defines a contiguous set of Tuples bounded by
-// RangeField predicates.
-// A Range over an index must include all Tuples that
-// satisfy all predicates, but might also include Tuples
-// that fail to satisfy some predicates.
-type Range struct {
-	Fields []RangeField
-	Desc   val.TupleDesc
+type Bound struct {
+	Value     []byte
+	Inclusive bool
+}
+
+func (b Bound) Binding() bool {
+	return b.Value != nil
 }
 
 func (r Range) matches(t val.Tuple) bool {
@@ -100,17 +70,17 @@ func (r Range) matches(t val.Tuple) bool {
 		}
 
 		lo := r.Fields[i].Lo
-		if lo.binding() {
+		if lo.Binding() {
 			cmp := order.CompareValues(field, lo.Value, typ)
 			if cmp < 0 || (cmp == 0 && !lo.Inclusive) {
 				return false
 			}
 		}
 
-		hi := r.Fields[i].Lo
-		if hi.binding() {
+		hi := r.Fields[i].Hi
+		if hi.Binding() {
 			cmp := order.CompareValues(field, hi.Value, typ)
-			if cmp > 0 || (cmp == 0 && !lo.Inclusive) {
+			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
 				return false
 			}
 		}
@@ -126,29 +96,29 @@ func (r Range) aboveStart(t val.Tuple) bool {
 
 		if r.Fields[i].IsNull {
 			if field == nil {
-				// if |field| is equal to an exact
-				// bound, inspect the next field
 				continue
 			}
 			return false
 		}
 
 		bound := r.Fields[i].Lo
-		if !bound.binding() {
+		if !bound.Binding() {
 			return true
 		}
 
 		cmp := order.CompareValues(field, bound.Value, typ)
-		if r.Fields[i].Exact {
-			if cmp == 0 {
-				// if |field| is equal to an exact
-				// bound, inspect the next field
-				continue
-			}
+		if cmp < 0 {
+			// |field| is outside Range
 			return false
 		}
 
-		return cmp > 0 || (bound.Inclusive && cmp == 0)
+		if r.Fields[i].Exact && cmp == 0 {
+			// todo(andy): document exact
+			// predicate subtleties
+			continue
+		}
+
+		return cmp > 0 || bound.Inclusive
 	}
 	return true
 }
@@ -162,132 +132,31 @@ func (r Range) belowStop(t val.Tuple) bool {
 
 		if r.Fields[i].IsNull {
 			if field == nil {
-				// if |field| is equal to an exact
-				// bound, inspect the next field
 				continue
 			}
 			return false
 		}
 
 		bound := r.Fields[i].Hi
-		if !bound.binding() {
+		if !bound.Binding() {
 			return true
 		}
 
 		cmp := order.CompareValues(field, bound.Value, typ)
-		if r.Fields[i].Exact {
-			if cmp == 0 {
-				// if |field| is equal to an exact
-				// bound, inspect the next field
-				continue
-			}
+		if cmp > 0 {
+			// |field| is outside Range
 			return false
 		}
 
-		return cmp < 0 || (bound.Inclusive && cmp == 0)
+		if r.Fields[i].Exact && cmp == 0 {
+			// todo(andy): document exact
+			// predicate subtleties
+			continue
+		}
+
+		return cmp < 0 || bound.Inclusive
 	}
 	return true
-}
-
-func (r Range) less(other Range) bool {
-	assertTrue(len(r.Fields) == len(other.Fields))
-	if len(r.Fields) == 0 {
-		return false
-	}
-
-	order := r.Desc.Comparator()
-	for i := range r.Fields {
-		left := r.Fields[i]
-		right := other.Fields[i]
-		typ := r.Desc.Types[i]
-
-		// order NULL Ranges last
-		if left.IsNull || right.IsNull {
-			return !left.IsNull && right.IsNull
-		}
-
-		if lesserBound(left.Lo, right.Lo, typ, order) {
-			return true
-		}
-	}
-	return false
-}
-
-func (r Range) overlaps(other Range) bool {
-	assertTrue(len(r.Fields) == len(other.Fields))
-	if len(r.Fields) == 0 {
-		return false
-	}
-
-	order := r.Desc.Comparator()
-	for i := range r.Fields {
-		left := r.Fields[i]
-		right := other.Fields[i]
-		typ := r.Desc.Types[i]
-
-		if left.IsNull || right.IsNull {
-			if left.IsNull && right.IsNull {
-				continue
-			}
-			return false
-		}
-
-		if left.Hi.binding() && right.Lo.binding() {
-			if lesserBound(left.Hi, right.Lo, typ, order) {
-				return false
-			}
-		}
-		if right.Hi.binding() && left.Lo.binding() {
-			if lesserBound(right.Hi, left.Lo, typ, order) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-func (r Range) merge(other Range) Range {
-	assertTrue(r.Desc.Equals(other.Desc))
-	assertTrue(len(r.Fields) == len(other.Fields))
-
-	order := r.Desc.Comparator()
-
-	fields := make([]RangeField, len(r.Fields))
-	for i := range fields {
-		left := r.Fields[i]
-		right := other.Fields[i]
-		typ := r.Desc.Types[i]
-
-		lo := Bound{Value: nil}
-		if left.Lo.binding() && right.Lo.binding() {
-			if lesserBound(left.Lo, right.Lo, typ, order) {
-				lo = left.Lo
-			} else {
-				lo = right.Lo
-			}
-		}
-
-		hi := Bound{Value: nil}
-		if left.Hi.binding() && right.Hi.binding() {
-			if lesserBound(left.Hi, right.Hi, typ, order) {
-				hi = right.Hi
-			} else {
-				hi = left.Hi
-			}
-		}
-
-		fields[i] = RangeField{
-			Lo:     lo,
-			Hi:     hi,
-			Exact:  left.Exact && right.Exact,
-			IsNull: left.IsNull && right.IsNull,
-		}
-	}
-
-	return Range{
-		Fields: fields,
-		Desc:   r.Desc,
-	}
 }
 
 func (r Range) isPointLookup(desc val.TupleDesc) bool {
@@ -300,14 +169,6 @@ func (r Range) isPointLookup(desc val.TupleDesc) bool {
 		}
 	}
 	return true
-}
-
-func lesserBound(left, right Bound, typ val.Type, order val.TupleComparator) bool {
-	cmp := order.CompareValues(left.Value, right.Value, typ)
-	if cmp == 0 {
-		return left.Inclusive && !right.Inclusive
-	}
-	return cmp < 0
 }
 
 func rangeStartSearchFn(rng Range) tree.SearchFn {

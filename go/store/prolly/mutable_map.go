@@ -113,14 +113,15 @@ func (mut MutableMap) IterRange(ctx context.Context, rng Range) (MapIter, error)
 	if err != nil {
 		return nil, err
 	}
-
 	memIter := memIterFromRange(mut.tuples.edits, rng)
 
-	return &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
+	iter := &mutableMapIter[val.Tuple, val.Tuple, val.TupleDesc]{
 		memory: memIter,
 		prolly: treeIter,
 		order:  rng.Desc,
-	}, nil
+	}
+
+	return filteredIter{iter: iter, rng: rng}, err
 }
 
 // HasEdits returns true when the MutableMap has performed at least one Put or Delete operation. This does not indicate

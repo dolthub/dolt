@@ -188,3 +188,23 @@ func (e emptyIter) Next(context.Context) (val.Tuple, val.Tuple, error) {
 func (e emptyIter) iterate(ctx context.Context) (err error) { return }
 
 func (e emptyIter) current() (key, value val.Tuple) { return }
+
+type filteredIter struct {
+	iter MapIter
+	rng  Range
+}
+
+var _ MapIter = filteredIter{}
+
+func (f filteredIter) Next(ctx context.Context) (k, v val.Tuple, err error) {
+	for {
+		k, v, err = f.iter.Next(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !f.rng.matches(k) {
+			continue
+		}
+		return
+	}
+}
