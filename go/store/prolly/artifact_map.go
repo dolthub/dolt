@@ -313,9 +313,20 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIs
 	return wr.mut.Put(ctx, key, value)
 }
 
-// ReplaceConstraintViolation replaces constraint violations that
-// match the given one but have a different commit hash. If no existing violation
-// exists, the given will be inserted. Returns true if a violation was replaced.
+type ErrMultipleVInfoForRow struct {
+	Key, Val              val.Tuple
+	ExistingInfo, NewInfo []byte
+}
+
+func (e *ErrMultipleVInfoForRow) Error() string {
+	return "an existing row was found with different violation info json"
+}
+
+// ReplaceConstraintViolation replaces constraint violations that match the
+// given one but have a different commit hash. If no existing violation exists,
+// the given will be inserted. Returns true if a violation was replaced. If an
+// existing violation exists but has a different |meta.VInfo| value then
+// ErrMultipleVInfoForRow is a returned.
 func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
 	itr, err := wr.mut.IterRange(ctx, rng)
@@ -334,6 +345,10 @@ func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey
 	var art Artifact
 	var currMeta ConstraintViolationMeta
 	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
+		// prefix scanning sometimes returns keys not in the range
+		if bytes.Compare(art.Key, srcKey) != 0 {
+			continue
+		}
 		if art.ArtType != artType {
 			continue
 		}
@@ -344,6 +359,14 @@ func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey
 		}
 
 		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
+			if bytes.Compare(currMeta.VInfo, meta.VInfo) != 0 {
+				return &ErrMultipleVInfoForRow{
+					Key:          srcKey,
+					Val:          currMeta.Value,
+					ExistingInfo: currMeta.VInfo,
+					NewInfo:      meta.VInfo,
+				}
+			}
 			// Key and Value is the same, so delete this
 			err = wr.Delete(ctx, art.ArtKey)
 			if err != nil {

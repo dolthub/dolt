@@ -1,3 +1,17 @@
+// Copyright 2022 Dolthub, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package merge
 
 import (
@@ -26,7 +40,8 @@ func addUniqIdxViols(
 	left, right, base prolly.Map,
 	m prolly.Map,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash) error {
+	theirRootIsh hash.Hash,
+	tblName string) error {
 
 	meta, err := makeUniqViolMeta(postMergeSchema, index)
 	if err != nil {
@@ -60,11 +75,11 @@ func addUniqIdxViols(
 			if err == nil {
 				existingPK := getSuffix(suffixKB, p, k)
 				newPK := getSuffix(suffixKB, p, val.Tuple(diff.Key))
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, existingPK, theirRootIsh, vInfo)
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, existingPK, suffixKD, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, newPK, theirRootIsh, vInfo)
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, newPK, suffixKD, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
@@ -128,7 +143,7 @@ func (m UniqCVMeta) PrettyPrint() string {
 	return jsonStr
 }
 
-func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, theirRootIsh hash.Hash, vInfo []byte) error {
+func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, m prolly.Map, k val.Tuple, kd val.TupleDesc, theirRootIsh hash.Hash, vInfo []byte, tblName string) error {
 	var value val.Tuple
 	err := m.Get(ctx, k, func(_, v val.Tuple) error {
 		value = v
@@ -145,6 +160,20 @@ func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, 
 
 	err = edt.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeUniqueKeyViol, meta)
 	if err != nil {
+		if mv, ok := err.(*prolly.ErrMultipleVInfoForRow); ok {
+			var e, n UniqCVMeta
+			err = json.Unmarshal(mv.ExistingInfo, &e)
+			if err != nil {
+				return err
+			}
+			err = json.Unmarshal(mv.NewInfo, &n)
+			if err != nil {
+				return err
+			}
+			return fmt.Errorf("%w: pk %s of table '%s' violates unique keys '%s' and '%s'",
+				ErrMultipleViolationsForRow,
+				kd.Format(mv.Key), tblName, e.Name, n.Name)
+		}
 		return err
 	}
 

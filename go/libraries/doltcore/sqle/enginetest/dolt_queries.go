@@ -1825,6 +1825,78 @@ var MergeArtifactsScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Multiple foreign key violations for a given row not supported",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			`
+			CREATE TABLE parent(
+			  pk int PRIMARY KEY, 
+			  col1 int, 
+			  col2 int, 
+			  INDEX par_col1_idx (col1), 
+			  INDEX par_col2_idx (col2)
+			);`,
+			`
+			CREATE TABLE child(
+			  pk int PRIMARY KEY,
+			  col1 int,
+			  col2 int,
+			  FOREIGN KEY (col1) REFERENCES parent(col1),
+			  FOREIGN KEY (col2) REFERENCES parent(col2)
+			);`,
+			"INSERT INTO parent VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'initial');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO CHILD VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'insert child');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE from parent where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'delete parent');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 'child' violates foreign keys 'parent (col1)' and 'parent (col2)'",
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name: "Multiple unique key violations for a given row not supported",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int UNIQUE, col2 int UNIQUE);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT into t VALUES (2, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:          "CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "multiple violations for row not supported: pk ( 1 ) of table 't' violates unique keys 'col1' and 'col2'",
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1, 1}},
+			},
+		},
+	},
 }
 
 // OldFormatMergeConflictsAndCVsScripts tests old format merge behavior

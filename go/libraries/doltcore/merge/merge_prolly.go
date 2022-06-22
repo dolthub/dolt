@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"golang.org/x/sync/errgroup"
 
@@ -133,7 +134,8 @@ func mergeTableData(
 		tbl, mergeTbl, updatedTbl,
 		ancIndexSet,
 		artifactEditor,
-		mergeRootIsh)
+		mergeRootIsh,
+		tblName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -154,7 +156,7 @@ func mergeTableData(
 	return updatedTbl, stats, nil
 }
 
-func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
 	artsIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
@@ -171,13 +173,19 @@ func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpda
 	mergeArts := durable.ProllyMapFromArtifactIndex(mergeArtsIdx)
 	ancArts := durable.ProllyMapFromArtifactIndex(ancArtsIdx)
 
+	var keyCollision bool
 	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
-		panic("received a conflict when merging sets of conflicts")
+		keyCollision = true
+		return tree.Diff{}, false
 	})
 	if err != nil {
 		return nil, err
 	}
 	idx := durable.ArtifactIndexFromProllyMap(mergedArts)
+
+	if keyCollision {
+		return nil, fmt.Errorf("encountered a key collision when merging the artifacts for table %s", tblName)
+	}
 
 	updatedTable, err := tableToUpdate.SetArtifacts(ctx, idx)
 	if err != nil {

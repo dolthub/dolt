@@ -110,7 +110,8 @@ func mergeProllySecondaryIndexes(
 	tbl, mergeTbl, tableToUpdate *doltdb.Table,
 	ancSet durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash) (*doltdb.Table, error) {
+	theirRootIsh hash.Hash,
+	tblName string) (*doltdb.Table, error) {
 
 	rootSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
@@ -127,7 +128,8 @@ func mergeProllySecondaryIndexes(
 		mergedData,
 		rootSet, mergeSet, ancSet,
 		artEditor,
-		theirRootIsh)
+		theirRootIsh,
+		tblName)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +149,8 @@ func mergeProllyIndexSets(
 	mergedData durable.Index,
 	root, merge, anc durable.IndexSet,
 	artEditor prolly.ArtifactsEditor,
-	theirRootIsh hash.Hash) (durable.IndexSet, error) {
+	theirRootIsh hash.Hash,
+	tblName string) (durable.IndexSet, error) {
 	mergedIndexSet := durable.NewIndexSet(ctx, vrw)
 
 	mergedM := durable.ProllyMapFromIndex(mergedData)
@@ -183,11 +186,11 @@ func mergeProllyIndexSets(
 
 		mergedIndex, err := func() (durable.Index, error) {
 			if !rootOK || !mergeOK || !ancOK {
-				return buildIndex(ctx, vrw, postMergeSchema, index, mergedM, artEditor, theirRootIsh)
+				return buildIndex(ctx, vrw, postMergeSchema, index, mergedM, artEditor, theirRootIsh, tblName)
 			}
 
 			if index.IsUnique() {
-				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootIsh)
+				err = addUniqIdxViols(ctx, postMergeSchema, index, rootI, mergeI, ancI, mergedM, artEditor, theirRootIsh, tblName)
 				if err != nil {
 					return nil, err
 				}
@@ -219,7 +222,7 @@ func mergeProllyIndexSets(
 	return mergedIndexSet, nil
 }
 
-func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash) (durable.Index, error) {
+func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema schema.Schema, index schema.Index, m prolly.Map, artEditor prolly.ArtifactsEditor, theirRootIsh hash.Hash, tblName string) (durable.Index, error) {
 	if index.IsUnique() {
 		meta, err := makeUniqViolMeta(postMergeSchema, index)
 		if err != nil {
@@ -242,11 +245,11 @@ func buildIndex(ctx context.Context, vrw types.ValueReadWriter, postMergeSchema 
 			func(ctx context.Context, existingKey, newKey val.Tuple) (err error) {
 				eK := getSuffix(kb, p, existingKey)
 				nK := getSuffix(kb, p, newKey)
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, theirRootIsh, vInfo)
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, eK, kd, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
-				err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, theirRootIsh, vInfo)
+				err = replaceUniqueKeyViolation(ctx, artEditor, m, nK, kd, theirRootIsh, vInfo, tblName)
 				if err != nil {
 					return err
 				}
