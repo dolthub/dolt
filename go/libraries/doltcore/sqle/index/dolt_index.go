@@ -292,7 +292,7 @@ type doltIndex struct {
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
 
-	cache                 cachedDurableIndexes
+	cache cachedDurableIndexes
 	// 0 - unloaded, 1 - true, 2 - false; atomic.Uint32
 	coversAllCols         uint32
 	cachedLookupTags      atomic.Value
