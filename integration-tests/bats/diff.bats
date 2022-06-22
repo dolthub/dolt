@@ -91,8 +91,7 @@ SQL
 
     dolt diff
     run dolt diff
-    [ "$status" -eq 0 ]
-    
+
     EXPECTED=$(cat <<'EOF'
  CREATE TABLE `test` (
    `pk` int NOT NULL,
@@ -112,7 +111,46 @@ SQL
 EOF
 )
 
+    [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    
+    run dolt diff --schema
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no data changes output
+    [ "${#lines[@]}" -eq 10 ]
+    
+    run dolt diff --data
+    EXPECTED=$(cat <<'EOF'
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no schema changes output
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "diff: data diff only" {
