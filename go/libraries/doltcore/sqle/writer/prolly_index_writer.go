@@ -26,7 +26,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly"
-	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -385,8 +384,6 @@ type prollyKeylessSecondaryWriter struct {
 
 	valBld *val.TupleBuilder
 	valMap val.OrdinalMapping
-
-	ns tree.NodeStore
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
@@ -405,7 +402,7 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.Map,
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.ns, writer.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -447,7 +444,7 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(ctx, writer.ns, writer.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}

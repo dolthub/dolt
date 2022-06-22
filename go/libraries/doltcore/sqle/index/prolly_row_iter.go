@@ -64,14 +64,7 @@ type prollyRowIter struct {
 var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
-func NewProllyRowIter(
-	sch schema.Schema,
-	schSch sql.Schema,
-	rows prolly.Map,
-	iter prolly.MapIter,
-	projections []string,
-	ns tree.NodeStore,
-) (sql.RowIter, error) {
+func NewProllyRowIter(sch schema.Schema, schSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []string) (sql.RowIter, error) {
 
 	// todo(andy): NomsRangeReader seemingly ignores projections
 	//if projections == nil {
@@ -89,7 +82,7 @@ func NewProllyRowIter(
 			valDesc: vd,
 			valProj: valProj,
 			rowLen:  len(projections),
-			ns:      ns,
+			ns:      rows.NodeStore(),
 		}, nil
 	}
 
@@ -101,7 +94,7 @@ func NewProllyRowIter(
 		keyProj: keyProj,
 		valProj: valProj,
 		rowLen:  len(projections),
-		ns:      ns,
+		ns:      rows.NodeStore(),
 	}, nil
 }
 

@@ -118,7 +118,7 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 		sch: sch,
 		kd:  kd,
 		vd:  vd,
-		ns:  cvt.tbl.NodeStore(),
+		ns:  cvt.artM.NodeStore(),
 	}, nil
 }
 
@@ -201,7 +201,7 @@ var _ sql.RowDeleter = (*prollyCVDeleter)(nil)
 func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < d.kd.Count()-2; i++ {
-		err := index.PutField(ctx, d.cvt.tbl.NodeStore(), d.kb, i, r[i+2])
+		err := index.PutField(ctx, d.cvt.artM.NodeStore(), d.kb, i, r[i+2])
 		if err != nil {
 			return err
 		}
