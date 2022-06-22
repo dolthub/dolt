@@ -3081,6 +3081,22 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name:         "dropped table",
+		SetUpScript:  []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1,2)",
+			"call dolt_commit('-am', 'new table')",
+			"drop table t1",
+			"call dolt_commit('-am', 'dropped table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{1, 2, "HEAD~", "HEAD", "removed"}},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{

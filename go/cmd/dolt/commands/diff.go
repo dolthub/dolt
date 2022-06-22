@@ -789,7 +789,6 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 
 	oldRow, newRow := newRowDiff(len(ds.targetSch)), newRowDiff(len(ds.targetSch))
 
-	// TODO: 1st col needs to be reserved for +-><
 	diffTypeStr := diffType.(string)
 	if diffTypeStr == "removed" || diffTypeStr == "modified" {
 		oldRow.row = make(sql.Row, len(ds.targetSch))

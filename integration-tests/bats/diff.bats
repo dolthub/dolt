@@ -704,6 +704,7 @@ SQL
   [[ $output =~ '+CREATE TABLE `a` (' ]] || false
   [[ $output =~ "+ | 1 " ]] || false
 
+  dolt diff HEAD~1 HEAD
   run dolt diff HEAD~1 HEAD
   [[ $output =~ 'deleted table' ]] || false
   [[ $output =~ '-CREATE TABLE `a` (' ]] || false
