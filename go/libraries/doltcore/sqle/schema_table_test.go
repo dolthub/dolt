@@ -58,7 +58,7 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	table, err := sqlTbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	table, err := sqlTbl.(*WritableDoltTable).doltTable(ctx)
 	require.NoError(t, err)
 
 	rowData, err := table.GetNomsRowData(ctx)
@@ -81,7 +81,7 @@ func TestSchemaTableRecreationOlder(t *testing.T) {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
-	table, err = tbl.DoltTable.DoltTable(ctx)
+	table, err = tbl.doltTable(ctx)
 	require.NoError(t, err)
 
 	rowData, err = table.GetNomsRowData(ctx)
@@ -136,7 +136,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	err = inserter.Close(ctx)
 	require.NoError(t, err)
 
-	table, err := sqlTbl.(*WritableDoltTable).DoltTable.DoltTable(ctx)
+	table, err := sqlTbl.(*WritableDoltTable).doltTable(ctx)
 	require.NoError(t, err)
 
 	rowData, err := table.GetNomsRowData(ctx)
@@ -159,7 +159,7 @@ func TestSchemaTableRecreation(t *testing.T) {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db) // removes the old table and recreates it with the new schema
 	require.NoError(t, err)
 
-	table, err = tbl.DoltTable.DoltTable(ctx)
+	table, err = tbl.doltTable(ctx)
 	require.NoError(t, err)
 
 	rowData, err = table.GetNomsRowData(ctx)

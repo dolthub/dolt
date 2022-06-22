@@ -321,7 +321,7 @@ func DoltSchemaFromAlterableTable(t *AlterableDoltTable) schema.Schema {
 
 // DoltTableFromAlterableTable is a utility for integration tests
 func DoltTableFromAlterableTable(ctx *sql.Context, t *AlterableDoltTable) *doltdb.Table {
-	dt, err := t.DoltTable.DoltTable(ctx)
+	dt, err := t.doltTable(ctx)
 	if err != nil {
 		panic(err)
 	}

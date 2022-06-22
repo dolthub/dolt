@@ -1064,7 +1064,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 
-			indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
+			indexIter, err := index.RowIterForIndexLookup(ctx, dt, indexLookup, pkSch, nil)
 			require.NoError(t, err)
 
 			// If this is a primary index assert that a covering index was used
@@ -1083,18 +1083,6 @@ func TestDoltIndexBetween(t *testing.T) {
 			requireUnorderedRowsEqual(t, expectedRows, readRows)
 		})
 	}
-}
-
-type NoCacheTableable struct {
-	dt *doltdb.Table
-}
-
-func (t NoCacheTableable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
-	return t.dt, nil
-}
-
-func (t NoCacheTableable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
-	return doltdb.DataCacheKey{}, false, nil
 }
 
 type rowSlice struct {
@@ -1307,7 +1295,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
 	require.NoError(t, err)
 
-	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
+	indexIter, err := index.RowIterForIndexLookup(ctx, dt, indexLookup, pkSch, nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row

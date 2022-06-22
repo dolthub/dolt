@@ -30,11 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-type DoltTableable interface {
-	DoltTable(*sql.Context) (*doltdb.Table, error)
-	DataCacheKey(*sql.Context) (doltdb.DataCacheKey, bool, error)
-}
-
 type DoltIndex interface {
 	sql.FilteredIndex
 	sql.OrderedIndex
@@ -42,11 +37,7 @@ type DoltIndex interface {
 	IndexSchema() schema.Schema
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
-
-	GetDurableIndexes(*sql.Context, DoltTableable) (durable.Index, durable.Index, error)
-	coversColumns(cols []string) bool
-	lookupTags() map[uint64]int
-	sqlRowConverter() *KVToSqlRowConverter
+	GetDurableIndexes(*sql.Context, *doltdb.Table) (durable.Index, durable.Index, error)
 }
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -95,7 +86,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 
 	// TODO: need to add from_ columns
 
-	return append(indexes, &toIndex), nil
+	return append(indexes, toIndex), nil
 }
 
 func DoltIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -155,7 +146,7 @@ func TableHasIndex(ctx context.Context, db, tbl string, t *doltdb.Table, i sql.I
 // indexesMatch returns whether the two index objects should be considered the same index for the purpose of a lookup,
 // i.e. whether they have the same name and index the same table columns.
 func indexesMatch(a sql.Index, b sql.Index) bool {
-	dia, dib := a.(*doltIndex), b.(*doltIndex)
+	dia, dib := a.(doltIndex), b.(doltIndex)
 	if dia.isPk != dib.isPk || dia.id != dib.id {
 		return false
 	}
@@ -180,7 +171,7 @@ func DoltHistoryIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.
 
 	unorderedIndexes := make([]sql.Index, len(indexes))
 	for i := range indexes {
-		di := indexes[i].(*doltIndex)
+		di := indexes[i].(doltIndex)
 		// History table indexed reads don't come back in order (iterated by commit graph first), and can include rows that
 		// weren't asked for (because the index needed may not exist at all revisions)
 		di.order = sql.IndexOrderNone
@@ -200,7 +191,7 @@ func getPrimaryKeyIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sc
 
 	cols := sch.GetPKCols().GetColumns()
 
-	return &doltIndex{
+	return doltIndex{
 		id:                            "PRIMARY",
 		tblName:                       tbl,
 		dbName:                        db,
@@ -229,7 +220,7 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		cols[i], _ = idx.GetColumn(tag)
 	}
 
-	return &doltIndex{
+	return doltIndex{
 		id:                            idx.Name(),
 		tblName:                       tbl,
 		dbName:                        db,
@@ -244,16 +235,6 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 		order:                         sql.IndexOrderAsc,
 		constrainedToLookupExpression: true,
 	}, nil
-}
-
-type DurableIndexes struct {
-	Primary   durable.Index
-	Secondary durable.Index
-}
-
-type cachedDurableIndexes struct {
-	key     doltdb.DataCacheKey
-	indexes DurableIndexes
 }
 
 type doltIndex struct {
@@ -274,17 +255,12 @@ type doltIndex struct {
 
 	vrw    types.ValueReadWriter
 	keyBld *val.TupleBuilder
-
-	cache                 cachedDurableIndexes
-	coversAllCols         *bool
-	cachedLookupTags      map[uint64]int
-	cachedSqlRowConverter *KVToSqlRowConverter
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
 
 // ColumnExpressionTypes implements the interface sql.Index.
-func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
+func (di doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpressionType {
 	cets := make([]sql.ColumnExpressionType, len(di.columns))
 	for i, col := range di.columns {
 		cets[i] = sql.ColumnExpressionType{
@@ -296,7 +272,7 @@ func (di *doltIndex) ColumnExpressionTypes(ctx *sql.Context) []sql.ColumnExpress
 }
 
 // NewLookup implements the interface sql.Index.
-func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	if len(ranges) == 0 {
 		return nil, nil
 	}
@@ -308,24 +284,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	return di.newNomsLookup(ctx, ranges...)
 }
 
-func (di *doltIndex) GetDurableIndexes(ctx *sql.Context, ti DoltTableable) (primary, secondary durable.Index, err error) {
-	var newkey doltdb.DataCacheKey
-	var cancache bool
-	newkey, cancache, err = ti.DataCacheKey(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if cancache && di.cache.key == newkey {
-		return di.cache.indexes.Primary, di.cache.indexes.Secondary, nil
-	}
-
-	var t *doltdb.Table
-	t, err = ti.DoltTable(ctx)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func (di doltIndex) GetDurableIndexes(ctx *sql.Context, t *doltdb.Table) (primary, secondary durable.Index, err error) {
 	primary, err = t.GetRowData(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -338,17 +297,10 @@ func (di *doltIndex) GetDurableIndexes(ctx *sql.Context, ti DoltTableable) (prim
 			return nil, nil, err
 		}
 	}
-
-	if cancache {
-		di.cache.key = newkey
-		di.cache.indexes.Primary = primary
-		di.cache.indexes.Secondary = secondary
-	}
-
 	return
 }
 
-func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	var err error
 	sqlRanges, err := pruneEmptyRanges(ranges)
 	if err != nil {
@@ -375,7 +327,7 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql
 	}, nil
 }
 
-func (di *doltIndex) newNomsLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di doltIndex) newNomsLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
 	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
 	// cause the lookup to return no rows, which is the desired behavior.
 	var readRanges []*noms.ReadRange
@@ -474,90 +426,7 @@ RangeLoop:
 	}, nil
 }
 
-func (di *doltIndex) coversAllColumns() bool {
-	if di.coversAllCols != nil {
-		return *di.coversAllCols
-	}
-	cols := di.Schema().GetAllCols()
-	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(di.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = di.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = di.IndexSchema().GetPKCols()
-	}
-	covers := true
-	for i := 0; i < cols.Size(); i++ {
-		col := cols.GetAtIndex(i)
-		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
-			covers = false
-			break
-		}
-	}
-	di.coversAllCols = &covers
-	return covers
-}
-
-func (di *doltIndex) sqlRowConverter() *KVToSqlRowConverter {
-	if di.cachedSqlRowConverter == nil {
-		di.cachedSqlRowConverter = NewKVToSqlRowConverterForCols(di.Format(), di.Schema())
-	}
-	return di.cachedSqlRowConverter
-}
-
-func (di *doltIndex) lookupTags() map[uint64]int {
-	if di.cachedLookupTags == nil {
-		tags := di.Schema().GetPKCols().Tags
-		sz := len(tags)
-		if sz == 0 {
-			sz = 1
-		}
-		di.cachedLookupTags = make(map[uint64]int, sz)
-		for i, tag := range tags {
-			di.cachedLookupTags[tag] = i
-		}
-		if len(di.cachedLookupTags) == 0 {
-			di.cachedLookupTags[schema.KeylessRowIdTag] = 0
-		}
-	}
-	return di.cachedLookupTags
-}
-
-func (di *doltIndex) coversColumns(cols []string) bool {
-	if cols == nil {
-		return di.coversAllColumns()
-	}
-
-	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(di.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = di.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = di.IndexSchema().GetPKCols()
-	}
-
-	covers := true
-	for _, colName := range cols {
-		if _, ok := idxCols.GetByNameCaseInsensitive(colName); !ok {
-			covers = false
-			break
-		}
-	}
-
-	return covers
-}
-
-func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
+func (di doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
 		// todo(andy): handle first column filters
 		return nil
@@ -569,17 +438,17 @@ func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
 	}
 }
 
-func (di *doltIndex) Order() sql.IndexOrder {
+func (di doltIndex) Order() sql.IndexOrder {
 	return di.order
 }
 
 // Database implement sql.Index
-func (di *doltIndex) Database() string {
+func (di doltIndex) Database() string {
 	return di.dbName
 }
 
 // Expressions implements sql.Index
-func (di *doltIndex) Expressions() []string {
+func (di doltIndex) Expressions() []string {
 	strs := make([]string, len(di.columns))
 	for i, col := range di.columns {
 		strs[i] = di.tblName + "." + col.Name
@@ -588,57 +457,57 @@ func (di *doltIndex) Expressions() []string {
 }
 
 // ID implements sql.Index
-func (di *doltIndex) ID() string {
+func (di doltIndex) ID() string {
 	return di.id
 }
 
 // IsUnique implements sql.Index
-func (di *doltIndex) IsUnique() bool {
+func (di doltIndex) IsUnique() bool {
 	return di.unique
 }
 
 // IsPrimaryKey implements DoltIndex.
-func (di *doltIndex) IsPrimaryKey() bool {
+func (di doltIndex) IsPrimaryKey() bool {
 	return di.isPk
 }
 
 // Comment implements sql.Index
-func (di *doltIndex) Comment() string {
+func (di doltIndex) Comment() string {
 	return di.comment
 }
 
 // IndexType implements sql.Index
-func (di *doltIndex) IndexType() string {
+func (di doltIndex) IndexType() string {
 	return "BTREE"
 }
 
 // IsGenerated implements sql.Index
-func (di *doltIndex) IsGenerated() bool {
+func (di doltIndex) IsGenerated() bool {
 	return false
 }
 
 // Schema returns the dolt Table schema of this index.
-func (di *doltIndex) Schema() schema.Schema {
+func (di doltIndex) Schema() schema.Schema {
 	return di.tableSch
 }
 
 // IndexSchema returns the dolt index schema.
-func (di *doltIndex) IndexSchema() schema.Schema {
+func (di doltIndex) IndexSchema() schema.Schema {
 	return di.indexSch
 }
 
 // Table implements sql.Index
-func (di *doltIndex) Table() string {
+func (di doltIndex) Table() string {
 	return di.tblName
 }
 
-func (di *doltIndex) Format() *types.NomsBinFormat {
+func (di doltIndex) Format() *types.NomsBinFormat {
 	return di.vrw.Format()
 }
 
 // keysToTuple returns a tuple that indicates the starting point for an index. The empty tuple will cause the index to
 // start at the very beginning.
-func (di *doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
+func (di doltIndex) keysToTuple(ctx *sql.Context, keys []interface{}) (types.Tuple, error) {
 	nbf := di.vrw.Format()
 	if len(keys) > len(di.columns) {
 		return types.EmptyTuple(nbf), errors.New("too many keys for the column count")

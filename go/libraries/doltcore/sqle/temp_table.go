@@ -219,17 +219,9 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return idx.Count(), nil
 }
 
-func (t *TempTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
-	return t.table, nil
-}
-
-func (t *TempTable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
-	return doltdb.DataCacheKey{}, false, nil
-}
-
 func (t *TempTable) PartitionRows(ctx *sql.Context, partition sql.Partition) (sql.RowIter, error) {
 	if t.lookup != nil {
-		return index.RowIterForIndexLookup(ctx, t, t.lookup, t.pkSch, nil)
+		return index.RowIterForIndexLookup(ctx, t.table, t.lookup, t.pkSch, nil)
 	} else {
 		return partitionRows(ctx, t.table, t.sqlSchema().Schema, nil, partition)
 	}

@@ -1554,11 +1554,3 @@ func (r fbRvStorage) DebugString(ctx context.Context) string {
 func (r fbRvStorage) nomsValue() types.Value {
 	return types.SerialMessage(r.srv.Table().Bytes)
 }
-
-type DataCacheKey struct {
-	rv *RootValue
-}
-
-func NewDataCacheKey(rv *RootValue) DataCacheKey {
-	return DataCacheKey{rv}
-}

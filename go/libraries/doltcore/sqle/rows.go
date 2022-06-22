@@ -200,7 +200,7 @@ func ProllyRowIterFromPartition(
 // of |columns|.  Providing a column name which does not appear in the schema
 // is not an error, but no corresponding column will appear in the results.
 func TableToRowIter(ctx *sql.Context, table *WritableDoltTable, columns []string) (sql.RowIter, error) {
-	t, err := table.DoltTable.DoltTable(ctx)
+	t, err := table.doltTable(ctx)
 	if err != nil {
 		return nil, err
 	}
