@@ -50,7 +50,6 @@ type DoltIndex interface {
 	lookupTags(s *durableIndexState) map[uint64]int
 }
 
-
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
 	sch, err := t.GetSchema(ctx)
 	if err != nil {
