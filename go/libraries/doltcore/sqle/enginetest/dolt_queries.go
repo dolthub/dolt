@@ -1331,18 +1331,18 @@ var MergeScripts = []queries.ScriptTest{
 	},
 	// unique indexes
 	{
-		Name: "violation entry created for all matching rows",
+		Name: "unique keys, insert violation",
 		SetUpScript: []string{
 			"SET dolt_force_transaction_commit = on;",
 			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
 			"CALL DOLT_COMMIT('-am', 'create table');",
 
 			"CALL DOLT_CHECKOUT('-b', 'right');",
-			"INSERT INTO t VALUES (2, 1);",
+			"INSERT INTO t VALUES (2, 1), (3, 3);",
 			"CALL DOLT_COMMIT('-am', 'right insert');",
 
 			"CALL DOLT_CHECKOUT('main');",
-			"INSERT INTO t values (1, 1);",
+			"INSERT INTO t values (1, 1), (4, 4);",
 			"CALL DOLT_COMMIT('-am', 'left insert');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -1352,11 +1352,73 @@ var MergeScripts = []queries.ScriptTest{
 			},
 			{
 				Query:    "SELECT * from t;",
-				Expected: []sql.Row{{1, 1}, {2, 1}},
+				Expected: []sql.Row{{1, 1}, {2, 1}, {3, 3}, {4, 4}},
 			},
 			{
 				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
 				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+			},
+		},
+	},
+	{
+		Name: "unique keys, update violation from left",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"INSERT INTO t VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t values (3, 3);",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE t SET col1 = 3 where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 3}, {3, 3}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 2, 3}, {uint64(merge.CvType_UniqueIndex), 3, 3}},
+			},
+		},
+	},
+	{
+		Name: "unique keys, update violation from right",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"INSERT INTO t VALUES (1, 1), (2, 2);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"UPDATE t SET col1 = 3 where pk = 2;",
+			"CALL DOLT_COMMIT('-am', 'right insert');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t values (3, 3);",
+			"CALL DOLT_COMMIT('-am', 'left insert');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT * from t;",
+				Expected: []sql.Row{{1, 1}, {2, 3}, {3, 3}},
+			},
+			{
+				Query:    "SELECT violation_type, pk, col1 from dolt_constraint_violations_t;",
+				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 2, 3}, {uint64(merge.CvType_UniqueIndex), 3, 3}},
 			},
 		},
 	},
@@ -1391,6 +1453,11 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
+	// Behavior between new and old format diverges in the case where right adds
+	// a unique key constraint and resolves existing violations.
+	// In the old format, because the violations exist on the left the merge is aborted.
+	// In the new format, the merge can be completed successfully without error.
+	// See MergeArtifactScripts and OldFormatMergeConflictsAndCVsScripts
 	{
 		Name: "left adds a unique key constraint and resolves existing violations",
 		SetUpScript: []string{
@@ -1419,36 +1486,6 @@ var MergeScripts = []queries.ScriptTest{
 			},
 		},
 	},
-	// behavior between the new format and old format diverges when the left has unique index violations
-
-	// TODO: need a second pass just for tests
-	//{
-	//	Name: "existing violation on right is kept",
-	//	SetUpScript: []string{
-	//		"SET dolt_force_transaction_commit = on;",
-	//		"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
-	//		"CALL DOLT_COMMIT('-am', 'create table');",
-	//
-	//		"CALL DOLT_CHECKOUT('-b', 'right');",
-	//		"CALL DOLT_CHECKOUT('-b', 'right2');",
-	//		"INSERT INTO t VALUES (3, 1);",
-	//		"CALL DOLT_COMMIT('-am', 'right2 insert');",
-	//
-	//		"CALL DOLT_CHECKOUT('right');",
-	//		"INSERT INTO t VALUES (2, 1);",
-	//		"CALL DOLT_COMMIT('-am', 'right insert');",
-	//	},
-	//	Assertions: []queries.ScriptTestAssertion{
-	//		{
-	//			Query:    "CALL DOLT_MERGE('right2');",
-	//			Expected: []sql.Row{{0, 1}},
-	//		},
-	//		{
-	//			Query: "SELECT * from t;",
-	//			Expected:
-	//		},
-	//	},
-	//},
 }
 
 // MergeArtifactsScripts tests new format merge behavior where
