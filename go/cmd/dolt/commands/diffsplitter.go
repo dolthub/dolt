@@ -29,7 +29,6 @@ type diffSplitter struct {
 	fromTo        map[int]int
 	toFrom        map[int]int
 	fromLen       int
-	toLen         int
 }
 
 type rowDiff struct {
@@ -77,13 +76,10 @@ func newDiffSplitter(diffQuerySch sql.Schema, targetSch sql.Schema) (*diffSplitt
 		fromLen = len(diffQuerySch) - 1
 	}
 
-	toLen := len(diffQuerySch) - 1 - fromLen
-
 	return &diffSplitter{
 		diffQuerySch:  diffQuerySch,
 		targetSch:     targetSch,
 		fromLen:       fromLen,
-		toLen:         toLen,
 		queryToTarget: resultToTarget,
 		fromTo:        fromTo,
 		toFrom:        toFrom,

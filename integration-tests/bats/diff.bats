@@ -71,6 +71,50 @@ teardown() {
     [[ "$output" =~ "+ | 0" ]] || false
 }
 
+@test "diff: data and schema changes" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, c1 int, c2 int);
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+alter table test 
+drop column c2,
+add column c3 varchar(10);
+insert into test values (7,8,9);
+delete from test where pk = 1;
+update test set c1 = 100 where pk = 4;
+SQL
+
+    dolt diff
+    run dolt diff
+    [ "$status" -eq 0 ]
+    
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+}
+
 @test "diff: data diff only" {
     dolt commit -am "First commit"
 
@@ -84,7 +128,7 @@ teardown() {
     [[ "$output" =~ "| + | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
 }
 
-@test "diff: schema diff only" {
+@test "diff: schema changes only" {
     dolt commit -am "First commit"
 
     dolt sql <<SQL
@@ -118,7 +162,7 @@ EOF
     # We want to make sure there is no trailing table output, so count the lines of output
     # 3 lines of metadata plus 11 of schema diff
     [ "${#lines[@]}" -eq 14 ]
- }
+}
 
 @test "diff: with table args" {
     dolt sql -q 'create table other (pk int not null primary key)'
@@ -613,7 +657,7 @@ SQL
     [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE (`pk`=1);' ]] || false
 }
 
-@test "diff: run through some keyless sql diffs" {
+@test "diff: keyless sql diffs" {
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "cm1"
 
@@ -669,22 +713,41 @@ SQL
     [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
 }
 
-@test "diff: adding and removing primary key should leave not null constraint" {
-    skip "TODO diff needs a better way to indicate constraint changes"
-    dolt sql -q "create table t(pk int, val int)"
+@test "diff: adding and removing primary key" {
+    dolt sql <<SQL
+create table t(pk int, val int);
+insert into t values (1,1);
+SQL
     dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"
-    run dolt diff -r sql
+    
+    # run dolt diff -r sql
+    # [ $status -eq 0 ]
+    # [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    # [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
+    # [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+
+    dolt diff
+    run dolt diff
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
-    [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
+    
+
+    dolt commit -am 'added primary key'
 
     dolt sql -q "alter table t drop primary key"
-    run dolt diff -r sql
+    
+    # run dolt diff -r sql
+    # [ $status -eq 0 ]
+    # [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+
+    dolt diff
+    run dolt diff
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+    [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
 }
 
 @test "diff: created and dropped tables include schema and data changes in results" {

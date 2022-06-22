@@ -163,7 +163,7 @@ func (cmd DiffCmd) Exec(ctx context.Context, commandStr string, args []string, d
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	verr = diffUserTables(ctx, dEnv, dArgs, apr)
+	verr = diffUserTables(ctx, dEnv, dArgs)
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
@@ -359,7 +359,7 @@ func maybeResolve(ctx context.Context, dEnv *env.DoltEnv, spec string) (*doltdb.
 	return root, true
 }
 
-func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs, apr *argparser.ArgParseResults) (verr errhand.VerboseError) {
+func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (verr errhand.VerboseError) {
 	var err error
 
 	tableDeltas, err := diff.GetTableDeltas(ctx, dArgs.fromRoot, dArgs.toRoot)
@@ -416,6 +416,12 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs, apr
 			} else if td.IsAdd() {
 				fromSch = toSch
 			}
+
+			if !schema.ArePrimaryKeySetsDiffable(fromSch, toSch) {
+				cli.PrintErrf("Primary key sets differ between revisions for table %s, skipping data diff\n", tblName)
+				continue
+			}
+
 			verr = diffRows(ctx, engine, td, dArgs)
 		}
 
