@@ -14,7 +14,7 @@ baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
 Dolt databases. We host public data for free. If you want to host
-your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](hosted.doltdb.com).
+your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions.
@@ -340,7 +340,7 @@ mysql> select * from employees where first_name='Brian';
 +------+------------+------------+
 2 rows in set (0.00 sec)
 
-mysql> mysql> insert into teams values 
+mysql> insert into teams values 
     (0, 'Engineering'), 
     (1, 'Sales');
 Query OK, 2 rows affected (0.00 sec)

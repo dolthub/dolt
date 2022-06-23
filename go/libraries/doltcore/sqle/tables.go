@@ -76,6 +76,7 @@ type projected interface {
 	Project() []string
 }
 
+// DoltTableStatistics holds the statistics for dolt tables
 type DoltTableStatistics struct {
 	rowCount     uint64
 	nullCount    uint64
@@ -309,6 +310,21 @@ func (t *DoltTable) String() string {
 	return t.tableName
 }
 
+// NumRows returns the unfiltered count of rows contained in the table
+func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
+	table, err := t.DoltTable(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return m.Count(), nil
+}
+
 // Format returns the NomsBinFormat for the underlying table
 func (t *DoltTable) Format() *types.NomsBinFormat {
 	return t.nbf
@@ -354,19 +370,7 @@ func (t *DoltTable) IsTemporary() bool {
 	return false
 }
 
-// numRows returns the unfiltered count of rows contained in the table
-func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
-	table, err := t.DoltTable(ctx)
-	if err != nil {
-		return 0, err
-	}
-	m, err := table.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return m.Count(), nil
-}
-
+// DataLength implements the sql.StatisticsTable interface.
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -403,6 +407,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
+// AnalyzeTable implements the sql.StatisticsTable interface.
 func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
@@ -544,6 +549,7 @@ func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 	return nil
 }
 
+// Statistics implements the sql.StatisticsTable interface.
 func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	if t.doltStats != nil {
 		return t.doltStats, nil

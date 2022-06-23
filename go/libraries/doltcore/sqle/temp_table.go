@@ -203,6 +203,7 @@ func (t *TempTable) IsTemporary() bool {
 	return true
 }
 
+// DataLength implements the sql.StatisticsTable interface.
 func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	idx, err := t.table.GetRowData(ctx)
 	if err != nil {
@@ -211,10 +212,12 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return idx.Count(), nil
 }
 
+// AnalyzeTable implements the sql.StatisticsTable interface.
 func (t *TempTable) AnalyzeTable(ctx *sql.Context) error {
 	return nil
 }
 
+// Statistics implements the sql.StatisticsTable interface.
 func (t *TempTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return nil, nil
 }

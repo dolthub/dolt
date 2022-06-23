@@ -193,10 +193,12 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 	return 0, nil
 }
 
+// AnalyzeTable implements the sql.StatisticsTable interface.
 func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
 	return nil
 }
 
+// Statistics implements the sql.StatisticsTable interface.
 func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
 	return nil, nil
 }

@@ -40,7 +40,7 @@ func (ste *sessionedTableEditor) GetIndexedRows(ctx context.Context, key types.T
 	return ste.tableEditor.GetIndexedRows(ctx, key, indexName, idxSch)
 }
 
-func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc editor.PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc editor.PKDuplicateCb) error {
 	ste.tableEditSession.mut.RLock()
 	defer ste.tableEditSession.mut.RUnlock()
 
@@ -57,7 +57,7 @@ func (ste *sessionedTableEditor) DeleteByKey(ctx context.Context, key types.Tupl
 }
 
 // InsertRow adds the given row to the table. If the row already exists, use UpdateRow.
-func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) InsertRow(ctx context.Context, dRow row.Row, errFunc editor.PKDuplicateCb) error {
 	ste.tableEditSession.mut.RLock()
 	defer ste.tableEditSession.mut.RUnlock()
 
@@ -76,7 +76,7 @@ func (ste *sessionedTableEditor) DeleteRow(ctx context.Context, r row.Row) error
 
 // UpdateRow takes the current row and new row, and updates it accordingly. Any applicable rows from tables that have a
 // foreign key referencing this table will also be updated.
-func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc editor.PKDuplicateErrFunc) error {
+func (ste *sessionedTableEditor) UpdateRow(ctx context.Context, dOldRow row.Row, dNewRow row.Row, errFunc editor.PKDuplicateCb) error {
 	ste.tableEditSession.mut.RLock()
 	defer ste.tableEditSession.mut.RUnlock()
 

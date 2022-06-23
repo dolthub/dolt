@@ -30,18 +30,21 @@ const (
 	viewExpressionTemplate = `
 				WITH sorted_diffs_by_pk
 				         AS (SELECT
-				                 %s,
+				                 %s,  -- allToPks
 				                 to_commit,
 				                 to_commit_date,
+								 diff_type,
 				                 ROW_NUMBER() OVER (
-				                     PARTITION BY %s
-				                     ORDER BY to_commit_date DESC) row_num
+				                     PARTITION BY 
+										%s  -- pksPartitionByExpression
+				                     ORDER BY 
+										coalesce(to_commit_date, from_commit_date) DESC
+								) row_num
 				             FROM
-				                 dolt_diff_%s 
-				             WHERE %s
+				                 dolt_diff_%s  -- tableName
 				            )
 				SELECT
-				    %s
+				    %s  -- pksSelectExpression
 				    sd.to_commit as commit,
 				    sd.to_commit_date as commit_date,
 				    dl.committer,
@@ -53,7 +56,9 @@ const (
 				WHERE
 				    dl.commit_hash = sd.to_commit
 				    and sd.row_num = 1
-				ORDER BY %s;
+				    and sd.diff_type <> 'removed'
+				ORDER BY 
+					%s  -- pksOrderByExpression;
 `
 )
 
@@ -91,23 +96,23 @@ func createDoltBlameViewExpression(tableName string, pks []schema.Column) (strin
 	}
 
 	allToPks := ""
-	pksNotNullExpression := ""
+	pksPartitionByExpression := ""
 	pksOrderByExpression := ""
 	pksSelectExpression := ""
 
 	for i, pk := range pks {
 		if i > 0 {
 			allToPks += ", "
-			pksNotNullExpression += " AND "
+			pksPartitionByExpression += ", "
 			pksOrderByExpression += ", "
 		}
 
 		allToPks += "to_" + pk.Name
-		pksNotNullExpression += "to_" + pk.Name + " IS NOT NULL "
+		pksPartitionByExpression += "coalesce(to_" + pk.Name + ", from_" + pk.Name + ")"
 		pksOrderByExpression += "sd.to_" + pk.Name + " ASC "
 		pksSelectExpression += "sd.to_" + pk.Name + " AS " + pk.Name + ", "
 	}
 
-	return fmt.Sprintf(viewExpressionTemplate, allToPks, allToPks, tableName,
-		pksNotNullExpression, pksSelectExpression, pksOrderByExpression), nil
+	return fmt.Sprintf(viewExpressionTemplate, allToPks, pksPartitionByExpression, tableName,
+		pksSelectExpression, pksOrderByExpression), nil
 }

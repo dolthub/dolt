@@ -22,16 +22,7 @@ import (
 
 // doltVerifyConstraints is the stored procedure version of the function `constraints_verify`.
 func doltVerifyConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltConstraintsVerify(ctx, false, args)
-	if err != nil {
-		return nil, err
-	}
-	return rowToIter(int64(res)), nil
-}
-
-// doltVerifyAllConstraints is the stored procedure version of the function `constraints_verify_all`.
-func doltVerifyAllConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltConstraintsVerify(ctx, true, args)
+	res, err := dfunctions.DoDoltConstraintsVerify(ctx, args)
 	if err != nil {
 		return nil, err
 	}
