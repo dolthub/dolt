@@ -137,8 +137,7 @@ func exitWithVerr(verr errhand.VerboseError) int {
 func printConflicts(ctx context.Context, root *doltdb.RootValue, tblNames []string) errhand.VerboseError {
 	if len(tblNames) == 1 && tblNames[0] == "." {
 		var err error
-		tblNames, err = doltdb.UnionTableNames(ctx, root)
-
+		tblNames, err = root.GetTableNames(ctx)
 		if err != nil {
 			return errhand.BuildDError("unable to read tables").AddCause(err).Build()
 		}
