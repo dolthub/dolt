@@ -340,7 +340,7 @@ mysql> select * from employees where first_name='Brian';
 +------+------------+------------+
 2 rows in set (0.00 sec)
 
-mysql> mysql> insert into teams values 
+mysql> insert into teams values 
     (0, 'Engineering'), 
     (1, 'Sales');
 Query OK, 2 rows affected (0.00 sec)
