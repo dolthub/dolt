@@ -221,8 +221,8 @@ func CreateBackupArgParser() *argparser.ArgParser {
 
 func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
-	ap.SupportsFlag(AllFlag, "a", "Verifies constraints against every row.")
-	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing the results to the constraint violations table.")
+	ap.SupportsFlag(AllFlag, "a", "Verifies that all rows in the database do not violate constraints instead of just rows modified or inserted in the working set.")
+	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing violated constraints to the constraint violations table.")
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
 	return ap
 }

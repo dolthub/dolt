@@ -33,10 +33,10 @@ import (
 )
 
 var verifyConstraintsDocs = cli.CommandDocumentationContent{
-	ShortDesc: `Verifies a table's constraints`,
-	LongDesc: `This command verifies that the defined constraints on the given table(s)—such as a foreign key—are correct and satisfied.
-By default, compares the working set to to the HEAD commit. Additionally, by default this updates this table's associated
-dolt_constraint_violations system table. Both of these default behaviors may be changed with the appropriate parameters.`,
+	ShortDesc: `Verifies that working set changes satisfy table constraints`,
+	LongDesc: `Verifies that inserted or modified rows in the working set satisfy the defined table constraints.
+               If any constraints are violated, they are documented in the dolt_constraint_violations system table.
+               By default, this command does not consider row changes that have been previously committed.`,
 	Synopsis: []string{`[--all] [--output-only] [{{.LessThan}}table{{.GreaterThan}}...]`},
 }
 
