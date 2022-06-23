@@ -124,6 +124,14 @@ You can install `dolt` using [Chocolatey](https://chocolatey.org/):
 choco install dolt
 ```
 
+#### MacPorts
+
+On macOS, Dolt can also be installed via a [community-managed port](https://ports.macports.org/port/dolt/) via [MacPorts](https://www.macports.org):
+
+```sh
+sudo port install dolt
+```
+
 ## From Source
 
 Make sure you have Go installed, and that `go` is in your path.
