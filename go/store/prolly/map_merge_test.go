@@ -42,6 +42,7 @@ func Test3WayMapMerge(t *testing.T) {
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 		val.Type{Enc: val.Uint32Enc, Nullable: true},
 	)
+	ns := tree.NewTestNodeStore()
 
 	for _, s := range scales {
 		name := fmt.Sprintf("test proCur map at scale %d", s)
@@ -51,12 +52,12 @@ func Test3WayMapMerge(t *testing.T) {
 			})
 			t.Run("3way merge inserts", func(t *testing.T) {
 				for k := 0; k < 10; k++ {
-					testThreeWayMapMerge(t, kd, vd, s)
+					testThreeWayMapMerge(t, kd, vd, s, ns)
 				}
 			})
 			t.Run("tuple merge fn", func(t *testing.T) {
 				for k := 0; k < 10; k++ {
-					testTupleMergeFn(t, kd, vd, s)
+					testTupleMergeFn(t, kd, vd, s, ns)
 				}
 			})
 		})
@@ -73,8 +74,8 @@ func testEqualMapMerge(t *testing.T, sz int) {
 	assert.Equal(t, m.HashOf(), mm.HashOf())
 }
 
-func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
-	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz)
+func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
+	baseTuples, leftEdits, rightEdits := makeTuplesAndMutations(kd, vd, sz, ns)
 	om := prollyMapFromTuples(t, kd, vd, baseTuples)
 
 	base := om.(Map)
@@ -139,9 +140,9 @@ func testThreeWayMapMerge(t *testing.T, kd, vd val.TupleDesc, sz int) {
 	}
 }
 
-func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int) {
+func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeStore) {
 	ctx := context.Background()
-	tuples := tree.RandomTuplePairs(sz, kd, vd)
+	tuples := tree.RandomTuplePairs(sz, kd, vd, ns)
 	om := prollyMapFromTuples(t, kd, vd, tuples)
 	base := om.(Map)
 
@@ -210,10 +211,10 @@ type mutationSet struct {
 	updates [][3]val.Tuple
 }
 
-func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int) (base [][2]val.Tuple, left, right mutationSet) {
+func makeTuplesAndMutations(kd, vd val.TupleDesc, sz int, ns tree.NodeStore) (base [][2]val.Tuple, left, right mutationSet) {
 	mutSz := sz / 10
 	totalSz := sz + (mutSz * 2)
-	tuples := tree.RandomTuplePairs(totalSz, kd, vd)
+	tuples := tree.RandomTuplePairs(totalSz, kd, vd, ns)
 
 	base = tuples[:sz]
 

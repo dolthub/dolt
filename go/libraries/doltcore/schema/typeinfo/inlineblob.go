@@ -105,9 +105,9 @@ func (ti *inlineBlobType) ConvertValueToNomsValue(ctx context.Context, vrw types
 	if err != nil {
 		return nil, err
 	}
-	val, ok := strVal.(string)
+	val, ok := strVal.([]byte)
 	if ok {
-		return *(*types.InlineBlob)(unsafe.Pointer(&val)), nil
+		return types.InlineBlob(val), nil
 	}
 	return nil, fmt.Errorf(`"%v" has unexpectedly encountered a value of type "%T" from embedded type`, ti.String(), v)
 }

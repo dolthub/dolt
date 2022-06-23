@@ -16,7 +16,7 @@ CREATE TABLE test_int (
   PRIMARY KEY (pk)
 );
 CREATE TABLE test_string (
-  pk LONGTEXT NOT NULL,
+  pk varchar(20) NOT NULL,
   c1 LONGTEXT,
   c2 LONGTEXT,
   c3 LONGTEXT,

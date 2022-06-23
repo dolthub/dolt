@@ -319,6 +319,7 @@ func SqlColToStr(ctx context.Context, sqlType sql.Type, col interface{}) (string
 				return "", err
 			}
 			return res.ToString(), nil
+
 		}
 	}
 
