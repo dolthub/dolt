@@ -22,12 +22,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
+
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
 // DoltBranchMultiSessionScriptTests contain tests that need to be run in a multi-session server environment
