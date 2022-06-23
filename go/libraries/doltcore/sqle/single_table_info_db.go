@@ -193,9 +193,20 @@ func (db *SingleTableInfoDatabase) NumRows(context *sql.Context) (uint64, error)
 	return 0, nil
 }
 
+// DataLength implements the sql.StatisticsTable interface.
 func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) {
 	// TODO: to answer this accurately, we need the table as well as the schema
 	return 0, nil
+}
+
+// AnalyzeTable implements the sql.StatisticsTable interface.
+func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+// Statistics implements the sql.StatisticsTable interface.
+func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	return nil, nil
 }
 
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
