@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 func TestWriteImmutableTree(t *testing.T) {
@@ -195,4 +196,111 @@ func expectedUnfilled(size, chunk int) int {
 		cnt += 1
 	}
 	return cnt
+}
+
+func TestImmutableTreeWalk(t *testing.T) {
+	tests := []struct {
+		blobLen   int
+		chunkSize int
+		keyCnt    int
+	}{
+		{
+			blobLen:   25,
+			chunkSize: 6,
+			keyCnt:    4,
+		},
+		{
+			blobLen:   25,
+			chunkSize: 5,
+			keyCnt:    4,
+		},
+		{
+			blobLen:   378,
+			chunkSize: 5,
+			keyCnt:    12,
+		},
+		{
+			blobLen:   5000,
+			chunkSize: 12,
+			keyCnt:    6,
+		},
+		{
+			blobLen:   1,
+			chunkSize: 12,
+			keyCnt:    6,
+		},
+		{
+			blobLen:   0,
+			chunkSize: 12,
+			keyCnt:    6,
+		},
+	}
+
+	ns := NewTestNodeStore()
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("inputSize=%d; chunkSize=%d; keyCnt=%d", tt.blobLen, tt.chunkSize, tt.keyCnt), func(t *testing.T) {
+			r := newTree(t, ns, tt.keyCnt, tt.blobLen, tt.chunkSize)
+			var cnt int
+			walkOpaqueNodes(context.Background(), r, ns, func(ctx context.Context, n Node) error {
+				cnt++
+				return nil
+			})
+			require.Equal(t, leafAddrCnt(tt.blobLen, tt.chunkSize)*tt.keyCnt+1, cnt)
+		})
+	}
+}
+
+func leafAddrCnt(size, chunk int) int {
+	if size == 0 {
+		return 0
+	}
+	l := 1
+	for size > chunk {
+		size = int(math.Ceil(float64(size) / float64(chunk)))
+		l += size
+	}
+	return l
+}
+
+func newTree(t *testing.T, ns NodeStore, keyCnt, blobLen, chunkSize int) Node {
+	ctx := context.Background()
+
+	keyDesc := val.NewTupleDescriptor(val.Type{Enc: val.Uint32Enc})
+	valDesc := val.NewTupleDescriptor(val.Type{Enc: val.BytesAddrEnc})
+
+	tuples := make([][2]val.Tuple, keyCnt)
+	keyBld := val.NewTupleBuilder(keyDesc)
+	valBld := val.NewTupleBuilder(valDesc)
+	for i := range tuples {
+		keyBld.PutUint32(0, uint32(i))
+		tuples[i][0] = keyBld.Build(sharedPool)
+
+		b := mustNewBlob(ctx, ns, blobLen, chunkSize)
+		valBld.PutBytesAddr(0, b.Addr)
+		tuples[i][1] = valBld.Build(sharedPool)
+	}
+
+	serializer := message.ProllyMapSerializer{Pool: ns.Pool(), ValDesc: valDesc}
+	chunker, err := newEmptyChunker(ctx, ns, serializer)
+	require.NoError(t, err)
+	for _, pair := range tuples {
+		err := chunker.AddPair(ctx, Item(pair[0]), Item(pair[1]))
+		require.NoError(t, err)
+	}
+	root, err := chunker.Done(ctx)
+	require.NoError(t, err)
+	return root
+}
+
+func mustNewBlob(ctx context.Context, ns NodeStore, len, chunkSize int) *ImmutableTree {
+	buf := make([]byte, len)
+	for i := range buf {
+		buf[i] = byte(i)
+	}
+	r := bytes.NewReader(buf)
+	root, err := NewImmutableTreeFromReader(ctx, r, ns, chunkSize)
+	if err != nil {
+		panic(err)
+	}
+	return root
 }

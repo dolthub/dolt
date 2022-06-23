@@ -19,11 +19,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/store/prolly/message"
-
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/message"
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/skip"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 type KeyValueFn[K, V ~[]byte] func(key K, value V) error
@@ -71,9 +71,10 @@ func mergeOrderedTrees[K, V ~[]byte, O ordering[K], S message.Serializer](
 	l, r, base orderedTree[K, V, O],
 	cb tree.CollisionFn,
 	serializer S,
+	valDesc val.TupleDesc,
 ) (orderedTree[K, V, O], error) {
 	cfn := base.compareItems
-	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, serializer)
+	root, err := tree.ThreeWayMerge(ctx, base.ns, l.root, r.root, base.root, cfn, cb, serializer, valDesc)
 	if err != nil {
 		return orderedTree[K, V, O]{}, err
 	}
