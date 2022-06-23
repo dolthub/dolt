@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/row"
@@ -73,6 +74,16 @@ type RowDiffer interface {
 
 	// Close closes the RowDiffer.
 	Close() error
+}
+
+// SqlRowDiffWriter knows how to write diff rows to an arbitrary format and destination.
+type SqlRowDiffWriter interface {
+	// WriteRow writes the diff row given, of the diff type provided. colDiffTypes is guaranteed to be the same length as
+	// the input row.
+	WriteRow(ctx context.Context, row sql.Row, diffType ChangeType, colDiffTypes []ChangeType) error
+
+	// Close finalizes the work of this writer.
+	Close(ctx context.Context) error
 }
 
 func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {

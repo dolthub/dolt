@@ -82,7 +82,7 @@ func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
 	return colors
 }
 
-func (w FixedWidthDiffTableWriter) Close(ctx *sql.Context) error {
+func (w FixedWidthDiffTableWriter) Close(ctx context.Context) error {
 	return w.tableWriter.Close(ctx)
 }
 
