@@ -83,7 +83,7 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return Map{}, err
 	}
@@ -93,6 +93,11 @@ func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) 
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
 	}, nil
+}
+
+// NodeStore returns the map's NodeStore
+func (m Map) NodeStore() tree.NodeStore {
+	return m.tuples.ns
 }
 
 // Mutate makes a MutableMap from a Map.

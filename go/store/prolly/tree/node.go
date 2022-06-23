@@ -58,6 +58,8 @@ func WalkAddresses(ctx context.Context, nd Node, ns NodeStore, cb AddressCb) err
 
 type NodeCb func(ctx context.Context, nd Node) error
 
+// WalkNodes runs a callback function on every node found in the DFS of |nd|
+// that is of the same message type as |nd|.
 func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 	if err := cb(ctx, nd); err != nil {
 		return err
@@ -65,6 +67,22 @@ func WalkNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
 
 	if nd.IsLeaf() {
 		return nil
+	}
+
+	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {
+		child, err := ns.Read(ctx, addr)
+		if err != nil {
+			return err
+		}
+		return WalkNodes(ctx, child, ns, cb)
+	})
+}
+
+// walkOpaqueNodes runs a callback function on every node found in the DFS of |nd|
+// including nested trees.
+func walkOpaqueNodes(ctx context.Context, nd Node, ns NodeStore, cb NodeCb) error {
+	if err := cb(ctx, nd); err != nil {
+		return err
 	}
 
 	return walkAddresses(ctx, nd, func(ctx context.Context, addr hash.Hash) error {

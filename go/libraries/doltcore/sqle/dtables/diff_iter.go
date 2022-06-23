@@ -256,12 +256,12 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 	}
 	to := durable.ProllyMapFromIndex(t)
 
-	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn)
+	fromConverter, err := NewProllyRowConverter(fSch, targetFromSchema, ctx.Warn, nil)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn)
+	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn, dp.to.NodeStore())
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
@@ -312,7 +312,7 @@ func (itr prollyDiffIter) Close(ctx *sql.Context) error {
 
 func (itr prollyDiffIter) queueRows(ctx context.Context) {
 	err := prolly.DiffMaps(ctx, itr.from, itr.to, func(ctx context.Context, d tree.Diff) error {
-		r, err := itr.makeDiffRow(d)
+		r, err := itr.makeDiffRow(ctx, d)
 		if err != nil {
 			return err
 		}
@@ -335,7 +335,7 @@ func (itr prollyDiffIter) queueRows(ctx context.Context) {
 }
 
 // todo(andy): copy string fields
-func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
+func (itr prollyDiffIter) makeDiffRow(ctx context.Context, d tree.Diff) (r sql.Row, err error) {
 
 	n := itr.targetToSch.GetAllCols().Size()
 	m := itr.targetFromSch.GetAllCols().Size()
@@ -345,7 +345,7 @@ func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 	// todo (dhruv): implement warnings for row column value coercions.
 
 	if d.Type != tree.RemovedDiff {
-		err = itr.toConverter.PutConverted(val.Tuple(d.Key), val.Tuple(d.To), r[0:n])
+		err = itr.toConverter.PutConverted(ctx, val.Tuple(d.Key), val.Tuple(d.To), r[0:n])
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +356,7 @@ func (itr prollyDiffIter) makeDiffRow(d tree.Diff) (r sql.Row, err error) {
 	r[o+1] = maybeTime(itr.toCm.ts)
 
 	if d.Type != tree.AddedDiff {
-		err = itr.fromConverter.PutConverted(val.Tuple(d.Key), val.Tuple(d.From), r[n+2:n+2+m])
+		err = itr.fromConverter.PutConverted(ctx, val.Tuple(d.Key), val.Tuple(d.From), r[n+2:n+2+m])
 		if err != nil {
 			return nil, err
 		}

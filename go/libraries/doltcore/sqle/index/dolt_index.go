@@ -27,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -379,7 +381,7 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	}
 
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		return di.newProllyLookup(ctx, ranges...)
+		return di.newProllyLookup(ctx, tree.NewNodeStore(shim.ChunkStoreFromVRW(di.vrw)), ranges...)
 	}
 
 	return di.newNomsLookup(ctx, ranges...)
@@ -436,7 +438,7 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) (sql.IndexLookup, error) {
 	var err error
 	sqlRanges, err := pruneEmptyRanges(ranges)
 	if err != nil {
@@ -445,7 +447,7 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql
 
 	prs := make([]prolly.Range, len(sqlRanges))
 	for i, sr := range sqlRanges {
-		prs[i], err = prollyRangeFromSqlRange(sr, di.keyBld)
+		prs[i], err = prollyRangeFromSqlRange(ctx, ns, sr, di.keyBld)
 		if err != nil {
 			return nil, err
 		}
@@ -732,7 +734,7 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
-func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
+func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
 	prollyRange := prolly.Range{
 		Start: make([]prolly.RangeCut, len(rng)),
 		Stop:  make([]prolly.RangeCut, len(rng)),
@@ -748,7 +750,7 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		if err != nil {
 			return prolly.Range{}, err
 		}
-		if err = PutField(tb, i, v); err != nil {
+		if err = PutField(ctx, ns, tb, i, v); err != nil {
 			return prolly.Range{}, err
 		}
 	}
@@ -780,7 +782,7 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		if err != nil {
 			return prolly.Range{}, err
 		}
-		if err = PutField(tb, i, v); err != nil {
+		if err = PutField(ctx, ns, tb, i, v); err != nil {
 			return prolly.Range{}, err
 		}
 	}
