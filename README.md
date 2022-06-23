@@ -14,7 +14,7 @@ baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
 Dolt databases. We host public data for free. If you want to host
-your own version of DoltHub, we have [DoltLab](https://www.doltlab.com).
+your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](https://hosted.doltdb.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
 ask questions.
@@ -37,6 +37,7 @@ Valid commands for dolt are
                  add - Add table changes to the list of staged table changes.
                 diff - Diff a table.
                reset - Remove table changes from the list of staged table changes.
+               clean - Remove untracked tables from working set.
               commit - Record changes to the repository.
                  sql - Run a SQL query against tables in repository.
           sql-server - Start a MySQL-compatible server.
@@ -46,6 +47,7 @@ Valid commands for dolt are
             checkout - Checkout a branch or overwrite a table from HEAD.
                merge - Merge a branch.
            conflicts - Commands for viewing and resolving merge conflicts.
+         cherry-pick - Apply the changes introduced by an existing commit.
               revert - Undo the changes introduced in a commit.
                clone - Clone from a remote data repository.
                fetch - Update the database from a remote data repository.
@@ -62,7 +64,7 @@ Valid commands for dolt are
                  tag - Create, list, delete tags.
                blame - Show what revision and author last modified each row of a table.
          constraints - Commands for handling constraints.
-             migrate - Executes a repository migration to update to the latest format.
+             migrate - Executes a database migration to use the latest Dolt data format.
          read-tables - Fetch table(s) at a specific commit into a new dolt repo
                   gc - Cleans up unreferenced data from the repository.
        filter-branch - Edits the commit history using the provided query.
@@ -317,7 +319,7 @@ mysql> select * from dolt_log;
 
 There you have it. Your schema is created and you have a Dolt commit tracking the creation, as seen in the `dolt_log` system table.
 
-Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable,[`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
+Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable, [`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
 
 ## Insert some data
 
@@ -340,7 +342,7 @@ mysql> select * from employees where first_name='Brian';
 +------+------------+------------+
 2 rows in set (0.00 sec)
 
-mysql> mysql> insert into teams values 
+mysql> insert into teams values 
     (0, 'Engineering'), 
     (1, 'Sales');
 Query OK, 2 rows affected (0.00 sec)

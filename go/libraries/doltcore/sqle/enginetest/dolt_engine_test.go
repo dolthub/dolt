@@ -700,18 +700,18 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range MergeViolationsAndConflictsMergeScripts {
+	for _, script := range MergeArtifactsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
-func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
+func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
+	for _, script := range OldFormatMergeConflictsAndCVsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
@@ -1205,6 +1205,13 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 		assert.False(t, newIdx.Empty())
 		assert.Equal(t, newIdx.Count(), uint64(2))
 	})
+}
+
+func TestDoltVerifyConstraints(t *testing.T) {
+	for _, script := range DoltVerifyConstraintsTestScripts {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+	}
 }
 
 var newFormatSkippedScripts = []string{

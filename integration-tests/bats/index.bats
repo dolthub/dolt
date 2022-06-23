@@ -2318,23 +2318,22 @@ SQL
 
 @test "index: Merge violates UNIQUE" {
     dolt sql -q "CREATE UNIQUE INDEX idx_v1 ON onepk(v1);"
-    dolt add -A
-    dolt commit -m "baseline commit"
-    dolt checkout -b other
-    dolt checkout main
+    dolt commit -am "baseline commit"
+    dolt branch other
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404)"
-    dolt add -A
-    dolt commit -m "main changes"
+    dolt commit -am "main changes"
+
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (5, 44, 505)"
-    dolt add -A
-    dolt commit -m "other changes"
+    dolt commit -am "other changes"
+
     dolt checkout main
+
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "onepk,1" ]] || false
+    [[ "$output" =~ "onepk,2" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {

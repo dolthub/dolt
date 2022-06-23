@@ -177,12 +177,24 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	}
 	o += itr.vd.Count()
 
-	var m merge.FkCVMeta
-	err = json.Unmarshal(meta.VInfo, &m)
-	if err != nil {
-		return nil, err
+	switch art.ArtType {
+	case prolly.ArtifactTypeForeignKeyViol:
+		var m merge.FkCVMeta
+		err = json.Unmarshal(meta.VInfo, &m)
+		if err != nil {
+			return nil, err
+		}
+		r[o] = m
+	case prolly.ArtifactTypeUniqueKeyViol:
+		var m merge.UniqCVMeta
+		err = json.Unmarshal(meta.VInfo, &m)
+		if err != nil {
+			return nil, err
+		}
+		r[o] = m
+	default:
+		panic("json not implemented for artifact type")
 	}
-	r[o] = m
 
 	return r, nil
 }

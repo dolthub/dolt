@@ -99,6 +99,15 @@ func NewIndexEditor(ctx context.Context, index schema.Index, indexData types.Map
 // InsertRow adds the given row to the index. If the row already exists and the index is unique, then an error is returned.
 // Otherwise, it is a no-op.
 func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tuple, value types.Tuple) error {
+	return ie.InsertRowWithDupCb(ctx, key, partialKey, value, func(ctx context.Context, uke *uniqueKeyErr) error {
+		return sql.ErrDuplicateEntry.Wrap(uke, ie.idx.Name())
+	})
+}
+
+// InsertRowWithDupCb adds the given row to the index. If the row already exists and the
+// index is unique, then a uniqueKeyErr is passed to |cb|. If |cb| returns a non-nil
+// error then the insert is aborted. Otherwise, the insert proceeds.
+func (ie *IndexEditor) InsertRowWithDupCb(ctx context.Context, key, partialKey types.Tuple, value types.Tuple, cb func(ctx context.Context, uke *uniqueKeyErr) error) error {
 	keyHash, err := key.Hash(key.Format())
 	if err != nil {
 		return err
@@ -124,8 +133,10 @@ func (ie *IndexEditor) InsertRow(ctx context.Context, key, partialKey types.Tupl
 				return err
 			}
 			cause := &uniqueKeyErr{tableTuple, matches[0].key, ie.idx.Name()}
-			// For a UNIQUE key violation, there should only be 1 at max. We still do an "over 0" check for safety though.
-			return sql.ErrDuplicateEntry.Wrap(cause, ie.idx.Name())
+			err = cb(ctx, cause)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		if rowExists, err := ie.iea.Has(ctx, keyHash, key); err != nil {
