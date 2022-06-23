@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"runtime"
 	"sort"
@@ -79,7 +78,6 @@ type projected interface {
 // DoltTableStatistics holds the statistics for dolt tables
 type DoltTableStatistics struct {
 	rowCount     uint64
-	nullCount    uint64
 	createdAt    time.Time
 	histogramMap sql.HistogramMap
 }
@@ -92,10 +90,6 @@ func (ds *DoltTableStatistics) CreatedAt() time.Time {
 
 func (ds *DoltTableStatistics) RowCount() uint64 {
 	return ds.rowCount
-}
-
-func (ds *DoltTableStatistics) NullCount() uint64 {
-	return ds.nullCount
 }
 
 func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
@@ -408,6 +402,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 }
 
 // AnalyzeTable implements the sql.StatisticsTable interface.
+// This method will save the stats into the Database state found in the Session.
 func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
@@ -419,129 +414,22 @@ func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 		return err
 	}
 
-	// initialize dolt stats
-	cols := t.sch.GetAllCols().GetColumns()
 	t.doltStats = &DoltTableStatistics{
-		rowCount:     m.Count(),
-		nullCount:    0,
-		createdAt:    time.Now(),
-		histogramMap: make(sql.HistogramMap),
+		rowCount:  m.Count(),
+		createdAt: time.Now(),
 	}
 
-	// initialize histogram map
-	for _, col := range cols {
-		hist := new(sql.Histogram)
-		hist.Min = math.MaxFloat64
-		hist.Max = -math.MaxFloat64
-		t.doltStats.histogramMap[col.Name] = hist
-	}
-
-	// this can be adapted to a histogram with any number of buckets
-	freqMap := make(map[string]map[float64]uint64)
-	for _, col := range cols {
-		freqMap[col.Name] = make(map[float64]uint64)
-	}
-
-	//TODO: async?
-	partIter, err := t.Partitions(ctx)
+	histMap, err := sql.HistogramMapBuilder(ctx, t)
 	if err != nil {
 		return err
 	}
+	t.doltStats.histogramMap = histMap
 
-	for {
-		part, err := partIter.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		iter, err := t.PartitionRows(ctx, part)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return err
-		}
-
-		for {
-			row, err := iter.Next(ctx)
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				return err
-			}
-
-			for i, col := range cols {
-				hist, ok := t.doltStats.histogramMap[col.Name]
-				if !ok {
-					panic("histogram was not initialized for this column; shouldn't be possible")
-				}
-
-				if row[i] == nil {
-					hist.NullCount++
-					continue
-				}
-
-				val, err := sql.Float64.Convert(row[i])
-				if err != nil {
-					continue // skip unsupported column types for now
-				}
-				v := val.(float64)
-
-				// place into frequency map
-				if bucket, ok := freqMap[col.Name][v]; ok {
-					bucket++
-				} else {
-					freqMap[col.Name][v] = 1
-					hist.DistinctCount++
-				}
-
-				hist.Mean += v
-				hist.Min = math.Min(hist.Min, v)
-				hist.Max = math.Max(hist.Max, v)
-				hist.Count++
-			}
-		}
-	}
-
-	// TODO: logic to determine ranges for buckets
-	// add buckets to histogram in sorted order
-	for colName, freqs := range freqMap {
-		keys := make([]float64, 0)
-		for k, _ := range freqs {
-			keys = append(keys, k)
-		}
-		sort.Float64s(keys)
-
-		hist := t.doltStats.histogramMap[colName]
-		if hist.Count == 0 {
-			hist.Min = 0
-			hist.Max = 0
-			continue
-		}
-
-		hist.Mean /= float64(hist.Count)
-		for _, k := range keys {
-			bucket := &sql.HistogramBucket{
-				LowerBound: k,
-				UpperBound: k,
-				Frequency:  float64(freqs[k]) / float64(t.doltStats.rowCount),
-			}
-			hist.Buckets = append(hist.Buckets, bucket)
-		}
-	}
-
-	// Persist in stats in dbState
-	// TODO: eventually do something different?
 	dSess := ctx.Session.(*dsess.DoltSession)
 	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
 	if !ok || err != nil {
 		return err
 	}
-
 	if dbState.TblStats == nil {
 		dbState.TblStats = make(map[string]sql.TableStatistics)
 	}
