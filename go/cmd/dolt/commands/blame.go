@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
