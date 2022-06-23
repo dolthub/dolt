@@ -105,7 +105,7 @@ func DiffMapSummary(ctx context.Context, from, to Map) (DiffSummary, error) {
 		}
 		return nil
 	})
-	if err != nil {
+	if err != nil && err != io.EOF {
 		return DiffSummary{}, err
 	}
 	return s, nil
