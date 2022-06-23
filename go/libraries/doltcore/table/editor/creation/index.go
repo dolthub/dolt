@@ -225,10 +225,13 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, s
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
+// DupEntryCb receives duplicate unique index entries.
+type DupEntryCb func(ctx context.Context, existingKey, newKey val.Tuple) error
+
 // BuildUniqueProllyIndex builds a unique index based on the given |primary| row
 // data. If any duplicate entries are found, they are passed to |cb|. If |cb|
 // returns a non-nil error then the process is stopped.
-func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map, cb func(ctx context.Context, existingKey, newKey val.Tuple) error) (durable.Index, error) {
+func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map, cb DupEntryCb) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
 	if err != nil {
 		return nil, err
