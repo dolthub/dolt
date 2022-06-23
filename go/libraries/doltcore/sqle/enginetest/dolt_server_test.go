@@ -20,14 +20,14 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/gocraft/dbr/v2"
 	"github.com/stretchr/testify/require"
-
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/sqlserver"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 )
 
 // DoltBranchMultiSessionScriptTests contain tests that need to be run in a multi-session server environment
@@ -106,19 +106,117 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 	},
 }
 
+// DoltBranchMultiSessionBranchConnectionScriptTests contain tests that need to be run in a multi-session
+// server environment, with clients connected directly to a <db>/<branch> revision database in order to
+// fully test branch deletion and renaming logic.
+var DoltBranchMultiSessionBranchConnectionScriptTests = []queries.ScriptTest{
+	{
+		Name:        "Test branch deletion when clients are connected to a revision database",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
+				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_BRANCH('-df', 'branch2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Verify that dolt/branch2 doesn't show up in
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+			},
+			{
+				// Call a stored procedure since this searches across all databases.
+				// (This failed in https://github.com/dolthub/dolt/issues/3636)
+				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name:        "Test branch renaming when clients are connected to a revision database",
+		SetUpScript: []string{},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
+				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_BRANCH('-mf', 'branch2', 'newName');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				// Verify that dolt/branch2 doesn't show up in
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+			},
+			{
+				// Call a stored procedure since this searches across all databases.
+				// (This failed in https://github.com/dolthub/dolt/issues/3636)
+				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+}
+
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
 // are sent through the server, from out of process, instead of directly to the in-process engine API.
 func TestDoltMultiSessionBehavior(t *testing.T) {
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
 }
 
-func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
-	sc, serverConfig := startServer(t)
-	defer sc.StopServer()
+func TestDoltMultiSessionBehaviorWithBranchConnection(t *testing.T) {
+	testMultiSessionScriptTestsWithBranches(t, "branch1", "branch2", DoltBranchMultiSessionBranchConnectionScriptTests)
+}
 
+func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
+	testMultiSessionScriptTestsWithBranches(t, "", "", tests)
+}
+
+func testMultiSessionScriptTestsWithBranches(t *testing.T, branch1, branch2 string, tests []queries.ScriptTest) {
 	for _, test := range tests {
-		conn1, sess1 := newConnection(t, serverConfig)
-		conn2, sess2 := newConnection(t, serverConfig)
+		sc, serverConfig := startServer(t)
+
+		// Create any branches that are needed in a connection string
+		for _, branchName := range []string{branch1, branch2} {
+			if len(branchName) > 0 {
+				connection, session := newConnection(t, serverConfig)
+				_, err := session.Query("CALL DOLT_BRANCH(?)", branchName)
+				require.NoError(t, err)
+				session.Close()
+				connection.Close()
+			}
+		}
+
+		conn1, sess1 := newConnectionWithBranch(t, serverConfig, branch1)
+		conn2, sess2 := newConnectionWithBranch(t, serverConfig, branch2)
 
 		t.Run(test.Name, func(t *testing.T) {
 			for _, setupStatement := range test.SetUpScript {
@@ -158,6 +256,8 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 
 		require.NoError(t, conn1.Close())
 		require.NoError(t, conn2.Close())
+
+		sc.StopServer()
 	}
 }
 
@@ -217,6 +317,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 
 func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
+	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
 
@@ -231,8 +332,19 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 }
 
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
+	return newConnectionWithBranch(t, serverConfig, "")
+}
+
+func newConnectionWithBranch(t *testing.T, serverConfig sqlserver.ServerConfig, branchName string) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
-	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig)+dbName, nil)
+	connectionString := sqlserver.ConnectionString(serverConfig) + dbName
+	if len(branchName) > 0 {
+		// go-sql-driver/mysql doesn't support database names with a slash it, so we use a url-encoded
+		// slash and rely on Dolt to decode that and interpret the branch name.
+		connectionString = connectionString + "%2F" + branchName
+	}
+
+	conn, err := dbr.Open("mysql", connectionString, nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess

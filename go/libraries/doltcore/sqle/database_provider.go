@@ -96,6 +96,10 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
+	// For clients/tools that don't support compound database names (i.e. <database>/<branch>)
+	// url-decode slash chars only to allow them to connect to a specific branch.
+	name = strings.ReplaceAll(name, "%2F", "/")
+
 	var ok bool
 	p.mu.RLock()
 	db, ok = p.databases[formatDbMapKeyName(name)]
