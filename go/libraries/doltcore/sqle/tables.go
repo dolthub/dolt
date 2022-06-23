@@ -363,6 +363,7 @@ func (t *DoltTable) IsTemporary() bool {
 	return false
 }
 
+// DataLength implements the sql.StatisticsTable interface.
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
