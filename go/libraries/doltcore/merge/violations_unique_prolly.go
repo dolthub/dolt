@@ -160,7 +160,7 @@ func replaceUniqueKeyViolation(ctx context.Context, edt prolly.ArtifactsEditor, 
 
 	err = edt.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeUniqueKeyViol, meta)
 	if err != nil {
-		if mv, ok := err.(*prolly.ErrMultipleVInfoForRow); ok {
+		if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
 			var e, n UniqCVMeta
 			err = json.Unmarshal(mv.ExistingInfo, &e)
 			if err != nil {

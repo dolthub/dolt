@@ -213,7 +213,7 @@ func createCVIfNoPartialKeyMatches(
 }
 
 func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
-	if mv, ok := err.(*prolly.ErrMultipleVInfoForRow); ok {
+	if mv, ok := err.(*prolly.ErrMergeArtifactCollision); ok {
 		var e, n FkCVMeta
 		err = json.Unmarshal(mv.ExistingInfo, &e)
 		if err != nil {
