@@ -32,11 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	vcAllParam        = "all"
-	vcOutputOnlyParam = "output-only"
-)
-
 var verifyConstraintsDocs = cli.CommandDocumentationContent{
 	ShortDesc: `Verifies a table's constraints`,
 	LongDesc: `This command verifies that the defined constraints on the given table(s)—such as a foreign key—are correct and satisfied.
@@ -67,11 +62,7 @@ func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(vcAllParam, "a", "Verifies constraints against every row.")
-	ap.SupportsFlag(vcOutputOnlyParam, "o", "Disables writing the results to the constraint violations table.")
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
-	return ap
+	return cli.CreateVerifyConstraintsArgParser()
 }
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -79,8 +70,8 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	verifyAllRows := apr.Contains(vcAllParam)
-	outputOnly := apr.Contains(vcOutputOnlyParam)
+	verifyAllRows := apr.Contains(cli.AllFlag)
+	outputOnly := apr.Contains(cli.OutputOnlyFlag)
 	working, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)

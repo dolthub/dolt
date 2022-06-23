@@ -3568,3 +3568,370 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		},
 	},
 }
+
+var verifyConstraintsSetupScript = []string{
+	"CREATE TABLE parent3 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
+	"CREATE TABLE child3 (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name1 FOREIGN KEY (v1) REFERENCES parent3 (v1));",
+	"CREATE TABLE parent4 (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX (v1));",
+	"CREATE TABLE child4 (pk BIGINT PRIMARY KEY, v1 BIGINT, CONSTRAINT fk_name2 FOREIGN KEY (v1) REFERENCES parent4 (v1));",
+	"INSERT INTO parent3 VALUES (1, 1);",
+	"INSERT INTO parent4 VALUES (2, 2);",
+	"SET foreign_key_checks=0;",
+	"INSERT INTO child3 VALUES (1, 1), (2, 2);",
+	"INSERT INTO child4 VALUES (1, 1), (2, 2);",
+	"SET foreign_key_checks=1;",
+	"CALL DOLT_COMMIT('-afm', 'has fk violations');",
+	`
+	CREATE TABLE parent1 (
+  		pk BIGINT PRIMARY KEY,
+  		v1 BIGINT,
+  		INDEX (v1)
+	);`,
+	`
+	CREATE TABLE parent2 (
+	  pk BIGINT PRIMARY KEY,
+	  v1 BIGINT,
+	  INDEX (v1)
+	);`,
+	`
+	CREATE TABLE child1 (
+	  pk BIGINT PRIMARY KEY,
+	  parent1_v1 BIGINT,
+	  parent2_v1 BIGINT,
+	  CONSTRAINT child1_parent1 FOREIGN KEY (parent1_v1) REFERENCES parent1 (v1),
+	  CONSTRAINT child1_parent2 FOREIGN KEY (parent2_v1) REFERENCES parent2 (v1)
+	);`,
+	`
+	CREATE TABLE child2 (
+	  pk BIGINT PRIMARY KEY,
+	  parent2_v1 BIGINT,
+	  CONSTRAINT child2_parent2 FOREIGN KEY (parent2_v1) REFERENCES parent2 (v1)
+	);`,
+	"INSERT INTO parent1 VALUES (1,1), (2,2), (3,3);",
+	"INSERT INTO parent2 VALUES (1,1), (2,2), (3,3);",
+	"INSERT INTO child1 VALUES (1,1,1), (2,2,2);",
+	"INSERT INTO child2 VALUES (2,2), (3,3);",
+	"SET foreign_key_checks=0;",
+	"INSERT INTO child3 VALUES (3, 3);",
+	"INSERT INTO child4 VALUES (3, 3);",
+	"SET foreign_key_checks=1;",
+}
+
+var DoltVerifyConstraintsTestScripts = []queries.ScriptTest{
+	{
+		Name:        "verify-constraints: SQL no violations",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('child1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure no violations",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child1')",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child1');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL no named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY();",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure no named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS();",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL named table",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('child3');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure named table",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('child3');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(1)}, {"child4", uint64(1)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL --all no named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--all');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure --all no named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL --all named table",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child3');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure --all named table",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL --all named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--all', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedure --all named tables",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:            "SET DOLT_FORCE_TRANSACTION_COMMIT = 1;",
+				SkipResultsCheck: true,
+			},
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{{"child3", uint64(2)}, {"child4", uint64(2)}},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL --output-only",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--output-only', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedures --output-only",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--output-only', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: SQL --all --output-only",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "SELECT CONSTRAINTS_VERIFY('--all', '--output-only', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+	{
+		Name:        "verify-constraints: Stored Procedures --all --output-only",
+		SetUpScript: verifyConstraintsSetupScript,
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_VERIFY_CONSTRAINTS('--all', '--output-only', 'child3', 'child4');",
+				Expected: []sql.Row{{1}},
+			},
+			{
+				Query:    "SELECT * from dolt_constraint_violations;",
+				Expected: []sql.Row{},
+			},
+		},
+	},
+}

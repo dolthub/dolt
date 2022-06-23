@@ -1192,6 +1192,13 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 }
 
+func TestDoltVerifyConstraints(t *testing.T) {
+	for _, script := range DoltVerifyConstraintsTestScripts {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",

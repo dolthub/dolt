@@ -94,6 +94,7 @@ const (
 	MoveFlag         = "move"
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
+	OutputOnlyFlag   = "output-only"
 )
 
 const (
@@ -215,6 +216,14 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	return ap
+}
+
+func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(AllFlag, "a", "Verifies constraints against every row.")
+	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing the results to the constraint violations table.")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
 	return ap
 }
 
