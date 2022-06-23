@@ -404,7 +404,7 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 
 // AnalyzeTable implements the sql.StatisticsTable interface.
 func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
-	return nil
+	return fmt.Errorf("analyze not supported on dolt table")
 }
 
 // Statistics implements the sql.StatisticsTable interface.
