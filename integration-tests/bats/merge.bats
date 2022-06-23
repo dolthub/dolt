@@ -786,6 +786,8 @@ SQL
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
 
+    skip_nbf_dolt_1
+
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
     [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]]
