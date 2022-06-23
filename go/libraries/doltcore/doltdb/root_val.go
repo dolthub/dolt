@@ -1260,9 +1260,6 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 // UnionTableNames returns an array of all table names in all roots passed as params.
 // The table names are in order of the RootValues passed in.
 func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error) {
-	if len(roots) < 1 {
-		return nil, nil
-	}
 	seenTblNamesMap := make(map[string]bool)
 	tblNames := []string{}
 	for _, root := range roots {
