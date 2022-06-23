@@ -18,13 +18,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/mysql_db"
-	"github.com/dolthub/vitess/go/vt/proto/query"
 	"gopkg.in/src-d/go-errors.v1"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -36,7 +36,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dtables"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/globalstate"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 )
 
@@ -386,8 +385,7 @@ func (db Database) GetTableInsensitiveWithRoot(ctx *sql.Context, root *doltdb.Ro
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
-	root, err := db.rootAsOf(ctx, asOf)
-
+	root, err := rootAsOf(ctx, db, asOf)
 	if err != nil {
 		return nil, false, err
 	} else if root == nil {
@@ -428,24 +426,25 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 
 // rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
 // expression before the first commit.
-func (db Database) rootAsOf(ctx *sql.Context, asOf interface{}) (*doltdb.RootValue, error) {
+func rootAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.RootValue, error) {
+	head := db.rsr.CWBHeadRef()
 	switch x := asOf.(type) {
 	case string:
-		return db.getRootForCommitRef(ctx, x)
+		return getRootForCommitRef(ctx, db.ddb, head, x)
 	case time.Time:
-		return db.getRootForTime(ctx, x)
+		return getRootForTime(ctx, db.ddb, head, x)
 	default:
 		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
 	}
 }
 
-func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.RootValue, error) {
+func getRootForTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf time.Time) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
 		return nil, err
 	}
 
-	cm, err := db.ddb.Resolve(ctx, cs, db.rsr.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
 		return nil, err
 	}
@@ -455,7 +454,7 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 		return nil, err
 	}
 
-	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, db.ddb, hash)
+	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
 	if err != nil {
 		return nil, err
 	}
@@ -481,13 +480,13 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 	return nil, nil
 }
 
-func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
+func getRootForCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(commitRef)
 	if err != nil {
 		return nil, err
 	}
 
-	cm, err := db.ddb.Resolve(ctx, cs, db.rsr.CWBHeadRef())
+	cm, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
 		return nil, err
 	}
@@ -502,7 +501,7 @@ func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*dol
 
 // GetTableNamesAsOf implements sql.VersionedDatabase
 func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
-	root, err := db.rootAsOf(ctx, time)
+	root, err := rootAsOf(ctx, db, time)
 	if err != nil {
 		return nil, err
 	} else if root == nil {
@@ -597,8 +596,6 @@ func filterDoltInternalTables(tblNames []string) []string {
 	return result
 }
 
-var hashType = sql.MustCreateString(query.Type_TEXT, 32, sql.Collation_ascii_bin)
-
 // GetRoot returns the root value for this database session
 func (db Database) GetRoot(ctx *sql.Context) (*doltdb.RootValue, error) {
 	sess := dsess.DSessFromSess(ctx.Session)
@@ -674,19 +671,7 @@ func (db Database) DropTable(ctx *sql.Context, tableName string) error {
 		return err
 	}
 
-	err = db.dropTableFromAiTracker(ctx, tableName)
-	if err != nil {
-		return err
-	}
-
-	return db.SetRoot(ctx, newRoot)
-}
-
-// dropTableFromAiTracker grabs the auto increment tracker and removes the table named tableName from it.
-func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) error {
-	sess := dsess.DSessFromSess(ctx.Session)
-	ws, err := sess.WorkingSet(ctx, db.Name())
-
+	ws, err := ds.WorkingSet(ctx, db.Name())
 	if err != nil {
 		return err
 	}
@@ -697,7 +682,7 @@ func (db Database) dropTableFromAiTracker(ctx *sql.Context, tableName string) er
 	}
 	ait.DropTable(tableName)
 
-	return nil
+	return db.SetRoot(ctx, newRoot)
 }
 
 // CreateTable creates a table with the name and schema given.
@@ -1008,7 +993,7 @@ func (db Database) GetExternalStoredProcedures(ctx *sql.Context) ([]sql.External
 	return dprocedures.DoltProcedures, nil
 }
 
-func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (retErr error) {
+func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, definition string, created time.Time, existingErr error) (err error) {
 	tbl, err := GetOrCreateDoltSchemasTable(ctx, db)
 	if err != nil {
 		return err
@@ -1022,10 +1007,12 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 		return existingErr
 	}
 
-	ts, err := db.TableEditSession(ctx)
+	sess := dsess.DSessFromSess(ctx.Session)
+	dbState, _, err := sess.LookupDbState(ctx, db.Name())
 	if err != nil {
 		return err
 	}
+	ts := dbState.WriteSession
 
 	ws, err := ts.Flush(ctx)
 	if err != nil {
@@ -1041,9 +1028,9 @@ func (db Database) addFragToSchemasTable(ctx *sql.Context, fragType, name, defin
 	// Insert the new row into the db
 	inserter := tbl.Inserter(ctx)
 	defer func() {
-		err := inserter.Close(ctx)
-		if retErr == nil {
-			retErr = err
+		cErr := inserter.Close(ctx)
+		if err == nil {
+			err = cErr
 		}
 	}()
 	// Encode createdAt time to JSON
@@ -1081,16 +1068,6 @@ func (db Database) dropFragFromSchemasTable(ctx *sql.Context, fragType, name str
 	}
 
 	return deleter.Close(ctx)
-}
-
-// TableEditSession returns the TableEditSession for this database from the given context.
-func (db Database) TableEditSession(ctx *sql.Context) (writer.WriteSession, error) {
-	sess := dsess.DSessFromSess(ctx.Session)
-	dbState, _, err := sess.LookupDbState(ctx, db.Name())
-	if err != nil {
-		return nil, err
-	}
-	return dbState.WriteSession, nil
 }
 
 // GetAllTemporaryTables returns all temporary tables
