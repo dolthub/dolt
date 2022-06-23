@@ -27,6 +27,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/typed/noms"
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -44,10 +46,10 @@ type DoltIndex interface {
 	Format() *types.NomsBinFormat
 	IsPrimaryKey() bool
 
-	GetDurableIndexes(*sql.Context, DoltTableable) (durable.Index, durable.Index, error)
-	coversColumns(cols []string) bool
-	lookupTags() map[uint64]int
-	sqlRowConverter() *KVToSqlRowConverter
+	getDurableState(*sql.Context, DoltTableable) (*durableIndexState, error)
+	coversColumns(s *durableIndexState, columns []string) bool
+	sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter
+	lookupTags(s *durableIndexState) map[uint64]int
 }
 
 func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Table) (indexes []sql.Index, err error) {
@@ -247,30 +249,93 @@ func getSecondaryIndex(ctx context.Context, db, tbl string, t *doltdb.Table, sch
 	}, nil
 }
 
-type DurableIndexes struct {
-	Primary   durable.Index
-	Secondary durable.Index
+type durableIndexState struct {
+	key                   doltdb.DataCacheKey
+	Primary               durable.Index
+	Secondary             durable.Index
+	coversAllCols         uint32
+	cachedLookupTags      atomic.Value
+	cachedSqlRowConverter atomic.Value
 }
 
-type cachedDurableIndexesStore struct {
-	key     doltdb.DataCacheKey
-	indexes DurableIndexes
+func (s *durableIndexState) coversAllColumns(i *doltIndex) bool {
+	coversI := atomic.LoadUint32(&s.coversAllCols)
+	if coversI != 0 {
+		return coversI == 1
+	}
+	cols := i.Schema().GetAllCols()
+	var idxCols *schema.ColCollection
+	if types.IsFormat_DOLT_1(i.Format()) {
+		// prolly indexes can cover an index lookup using
+		// both the key and value fields of the index,
+		// this allows using covering index machinery for
+		// primary key index lookups.
+		idxCols = i.IndexSchema().GetAllCols()
+	} else {
+		// to cover an index lookup, noms indexes must
+		// contain all fields in the index's key.
+		idxCols = i.IndexSchema().GetPKCols()
+	}
+	covers := true
+	for i := 0; i < cols.Size(); i++ {
+		col := cols.GetAtIndex(i)
+		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
+			covers = false
+			break
+		}
+	}
+	if covers {
+		atomic.StoreUint32(&s.coversAllCols, 1)
+	} else {
+		atomic.StoreUint32(&s.coversAllCols, 2)
+	}
+	return covers
+}
+
+func (s *durableIndexState) lookupTags(i *doltIndex) map[uint64]int {
+	cached := s.cachedLookupTags.Load()
+	if cached == nil {
+		tags := i.Schema().GetPKCols().Tags
+		sz := len(tags)
+		if sz == 0 {
+			sz = 1
+		}
+		tocache := make(map[uint64]int, sz)
+		for i, tag := range tags {
+			tocache[tag] = i
+		}
+		if len(tocache) == 0 {
+			tocache[schema.KeylessRowIdTag] = 0
+		}
+		s.cachedLookupTags.Store(tocache)
+		cached = tocache
+	}
+	return cached.(map[uint64]int)
+}
+
+func (s *durableIndexState) sqlRowConverter(i *doltIndex) *KVToSqlRowConverter {
+	cached := s.cachedSqlRowConverter.Load()
+	if cached == nil {
+		cached = NewKVToSqlRowConverterForCols(i.Format(), i.Schema())
+		s.cachedSqlRowConverter.Store(cached)
+	}
+	return cached.(*KVToSqlRowConverter)
 }
 
 type cachedDurableIndexes struct {
 	val atomic.Value
 }
 
-func (i *cachedDurableIndexes) load() cachedDurableIndexesStore {
+func (i *cachedDurableIndexes) load() *durableIndexState {
 	l := i.val.Load()
 	if l == nil {
-		return cachedDurableIndexesStore{}
+		return nil
 	}
-	return l.(cachedDurableIndexesStore)
+	return l.(*durableIndexState)
 }
 
-func (i *cachedDurableIndexes) store(key doltdb.DataCacheKey, indexes DurableIndexes) {
-	i.val.Store(cachedDurableIndexesStore{key, indexes})
+func (i *cachedDurableIndexes) store(v *durableIndexState) {
+	i.val.Store(v)
 }
 
 type doltIndex struct {
@@ -293,10 +358,6 @@ type doltIndex struct {
 	keyBld *val.TupleBuilder
 
 	cache cachedDurableIndexes
-	// 0 - unloaded, 1 - true, 2 - false; atomic.Uint32
-	coversAllCols         uint32
-	cachedLookupTags      atomic.Value
-	cachedSqlRowConverter atomic.Value
 }
 
 var _ DoltIndex = (*doltIndex)(nil)
@@ -320,55 +381,64 @@ func (di *doltIndex) NewLookup(ctx *sql.Context, ranges ...sql.Range) (sql.Index
 	}
 
 	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		return di.newProllyLookup(ctx, ranges...)
+		return di.newProllyLookup(ctx, tree.NewNodeStore(shim.ChunkStoreFromVRW(di.vrw)), ranges...)
 	}
 
 	return di.newNomsLookup(ctx, ranges...)
 }
 
-func (di *doltIndex) GetDurableIndexes(ctx *sql.Context, ti DoltTableable) (primary, secondary durable.Index, err error) {
+func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durableIndexState, error) {
 	var newkey doltdb.DataCacheKey
 	var cancache bool
+	var err error
 	newkey, cancache, err = ti.DataCacheKey(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	var cache cachedDurableIndexesStore
+	var ret *durableIndexState
 	if cancache {
-		cache = di.cache.load()
-		if cache.key == newkey {
-			return cache.indexes.Primary, cache.indexes.Secondary, nil
+		ret = di.cache.load()
+		if ret != nil && ret.key == newkey {
+			return ret, nil
 		}
 	}
+
+	ret = new(durableIndexState)
 
 	var t *doltdb.Table
 	t, err = ti.DoltTable(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
+
+	var primary, secondary durable.Index
 
 	primary, err = t.GetRowData(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	if di.ID() == "PRIMARY" {
 		secondary = primary
 	} else {
 		secondary, err = t.GetIndexRowData(ctx, di.ID())
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
+	ret.key = newkey
+	ret.Primary = primary
+	ret.Secondary = secondary
+
 	if cancache {
-		di.cache.store(newkey, DurableIndexes{Primary: primary, Secondary: secondary})
+		di.cache.store(ret)
 	}
 
-	return
+	return ret, nil
 }
 
-func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) (sql.IndexLookup, error) {
 	var err error
 	sqlRanges, err := pruneEmptyRanges(ranges)
 	if err != nil {
@@ -377,7 +447,7 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ranges ...sql.Range) (sql
 
 	prs := make([]prolly.Range, len(sqlRanges))
 	for i, sr := range sqlRanges {
-		prs[i], err = prollyRangeFromSqlRange(sr, di.keyBld)
+		prs[i], err = prollyRangeFromSqlRange(ctx, ns, sr, di.keyBld)
 		if err != nil {
 			return nil, err
 		}
@@ -494,73 +564,17 @@ RangeLoop:
 	}, nil
 }
 
-func (di *doltIndex) coversAllColumns() bool {
-	coversI := atomic.LoadUint32(&di.coversAllCols)
-	if coversI != 0 {
-		return coversI == 1
-	}
-	cols := di.Schema().GetAllCols()
-	var idxCols *schema.ColCollection
-	if types.IsFormat_DOLT_1(di.Format()) {
-		// prolly indexes can cover an index lookup using
-		// both the key and value fields of the index,
-		// this allows using covering index machinery for
-		// primary key index lookups.
-		idxCols = di.IndexSchema().GetAllCols()
-	} else {
-		// to cover an index lookup, noms indexes must
-		// contain all fields in the index's key.
-		idxCols = di.IndexSchema().GetPKCols()
-	}
-	covers := true
-	for i := 0; i < cols.Size(); i++ {
-		col := cols.GetAtIndex(i)
-		if _, ok := idxCols.GetByNameCaseInsensitive(col.Name); !ok {
-			covers = false
-			break
-		}
-	}
-	if covers {
-		atomic.StoreUint32(&di.coversAllCols, 1)
-	} else {
-		atomic.StoreUint32(&di.coversAllCols, 2)
-	}
-	return covers
+func (di *doltIndex) sqlRowConverter(s *durableIndexState) *KVToSqlRowConverter {
+	return s.sqlRowConverter(di)
 }
 
-func (di *doltIndex) sqlRowConverter() *KVToSqlRowConverter {
-	cached := di.cachedSqlRowConverter.Load()
-	if cached == nil {
-		cached = NewKVToSqlRowConverterForCols(di.Format(), di.Schema())
-		di.cachedSqlRowConverter.Store(cached)
-	}
-	return cached.(*KVToSqlRowConverter)
+func (di *doltIndex) lookupTags(s *durableIndexState) map[uint64]int {
+	return s.lookupTags(di)
 }
 
-func (di *doltIndex) lookupTags() map[uint64]int {
-	cached := di.cachedLookupTags.Load()
-	if cached == nil {
-		tags := di.Schema().GetPKCols().Tags
-		sz := len(tags)
-		if sz == 0 {
-			sz = 1
-		}
-		tocache := make(map[uint64]int, sz)
-		for i, tag := range tags {
-			tocache[tag] = i
-		}
-		if len(tocache) == 0 {
-			tocache[schema.KeylessRowIdTag] = 0
-		}
-		di.cachedLookupTags.Store(tocache)
-		cached = tocache
-	}
-	return cached.(map[uint64]int)
-}
-
-func (di *doltIndex) coversColumns(cols []string) bool {
+func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
 	if cols == nil {
-		return di.coversAllColumns()
+		return s.coversAllColumns(di)
 	}
 
 	var idxCols *schema.ColCollection
@@ -720,7 +734,7 @@ func pruneEmptyRanges(sqlRanges []sql.Range) (pruned []sql.Range, err error) {
 	return pruned, nil
 }
 
-func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
+func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Range, tb *val.TupleBuilder) (prolly.Range, error) {
 	prollyRange := prolly.Range{
 		Start: make([]prolly.RangeCut, len(rng)),
 		Stop:  make([]prolly.RangeCut, len(rng)),
@@ -736,7 +750,7 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		if err != nil {
 			return prolly.Range{}, err
 		}
-		if err = PutField(tb, i, v); err != nil {
+		if err = PutField(ctx, ns, tb, i, v); err != nil {
 			return prolly.Range{}, err
 		}
 	}
@@ -768,7 +782,7 @@ func prollyRangeFromSqlRange(rng sql.Range, tb *val.TupleBuilder) (prolly.Range,
 		if err != nil {
 			return prolly.Range{}, err
 		}
-		if err = PutField(tb, i, v); err != nil {
+		if err = PutField(ctx, ns, tb, i, v); err != nil {
 			return prolly.Range{}, err
 		}
 	}

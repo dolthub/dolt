@@ -10,14 +10,14 @@ your changes, push them to a remote, or merge your teammate's changes.
 
 All the commands you know for Git work exactly the same for Dolt. Git
 versions files, Dolt versions tables. It's like Git and MySQL had a
-baby!
+baby.
 
 We also built [DoltHub](https://www.dolthub.com), a place to share
-Dolt databases. We host public data for free! If you want to host
-your own version of DoltHub, we have [DoltLab](https://www.doltlab.com).
+Dolt databases. We host public data for free. If you want to host
+your own version of DoltHub, we have [DoltLab](https://www.doltlab.com). If you want us to run a Dolt server for you, we have [Hosted Dolt](hosted.doltdb.com).
 
 [Join us on Discord](https://discord.com/invite/RFwfYpu) to say hi and
-ask questions!
+ask questions.
 
 ## What's it for?
 
@@ -317,7 +317,7 @@ mysql> select * from dolt_log;
 
 There you have it. Your schema is created and you have a Dolt commit tracking the creation, as seen in the `dolt_log` system table.
 
-Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable,[`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
+Note, a Dolt commit is different than a standard SQL transaction `COMMIT`. In this case, I am running the database with [`AUTOCOMMIT`](https://dev.mysql.com/doc/refman/5.6/en/innodb-autocommit-commit-rollback.html) on, so each SQL statement is automatically generating a transaction `COMMIT`. If you want system to generate a Dolt commit for every transaction use the system variable, [`@@dolt_transaction_commit`](https://docs.dolthub.com/sql-reference/version-control/dolt-sysvars#dolt_transaction_commit).
 
 ## Insert some data
 

@@ -1258,19 +1258,24 @@ func GetRootValueSuperSchema(ctx context.Context, root *RootValue) (*schema.Supe
 }
 
 // UnionTableNames returns an array of all table names in all roots passed as params.
+// The table names are in order of the RootValues passed in.
 func UnionTableNames(ctx context.Context, roots ...*RootValue) ([]string, error) {
-	allTblNames := make([]string, 0, 16)
+	seenTblNamesMap := make(map[string]bool)
+	tblNames := []string{}
 	for _, root := range roots {
-		tblNames, err := root.GetTableNames(ctx)
-
+		rootTblNames, err := root.GetTableNames(ctx)
 		if err != nil {
 			return nil, err
 		}
-
-		allTblNames = append(allTblNames, tblNames...)
+		for _, tn := range rootTblNames {
+			if _, ok := seenTblNamesMap[tn]; !ok {
+				seenTblNamesMap[tn] = true
+				tblNames = append(tblNames, tn)
+			}
+		}
 	}
 
-	return set.Unique(allTblNames), nil
+	return tblNames, nil
 }
 
 // validateTagUniqueness checks for tag collisions between the given table and the set of tables in then given root.

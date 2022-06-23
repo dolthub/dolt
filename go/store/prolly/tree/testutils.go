@@ -15,6 +15,7 @@
 package tree
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math"
@@ -43,14 +44,14 @@ func NewTupleLeafNode(keys, values []val.Tuple) Node {
 	return newLeafNode(ks, vs)
 }
 
-func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
+func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
 	keyBuilder := val.NewTupleBuilder(keyDesc)
 	valBuilder := val.NewTupleBuilder(valDesc)
 
 	items = make([][2]val.Tuple, count)
 	for i := range items {
-		items[i][0] = RandomTuple(keyBuilder)
-		items[i][1] = RandomTuple(valBuilder)
+		items[i][0] = RandomTuple(keyBuilder, ns)
+		items[i][1] = RandomTuple(valBuilder, ns)
 	}
 
 	dupes := make([]int, 0, count)
@@ -70,14 +71,14 @@ func RandomTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val
 
 		// replace duplicates and validate again
 		for _, d := range dupes {
-			items[d][0] = RandomTuple(keyBuilder)
+			items[d][0] = RandomTuple(keyBuilder, ns)
 		}
 		dupes = dupes[:0]
 	}
 	return items
 }
 
-func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items [][2]val.Tuple) {
+func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc, ns NodeStore) (items [][2]val.Tuple) {
 	// preconditions
 	if count%5 != 0 {
 		panic("expected empty divisible by 5")
@@ -86,7 +87,7 @@ func RandomCompositeTuplePairs(count int, keyDesc, valDesc val.TupleDesc) (items
 		panic("expected composite key")
 	}
 
-	tt := RandomTuplePairs(count, keyDesc, valDesc)
+	tt := RandomTuplePairs(count, keyDesc, valDesc, ns)
 
 	tuples := make([][2]val.Tuple, len(tt)*3)
 	for i := range tuples {
@@ -125,9 +126,9 @@ func AscendingUintTuples(count int) (tuples [][2]val.Tuple, desc val.TupleDesc) 
 	return
 }
 
-func RandomTuple(tb *val.TupleBuilder) (tup val.Tuple) {
+func RandomTuple(tb *val.TupleBuilder, ns NodeStore) (tup val.Tuple) {
 	for i, typ := range tb.Desc.Types {
-		randomField(tb, i, typ)
+		randomField(tb, i, typ, ns)
 	}
 	return tb.Build(sharedPool)
 }
@@ -181,7 +182,7 @@ func deduplicateTuples(desc val.TupleDesc, tups [][2]val.Tuple) (uniq [][2]val.T
 	return
 }
 
-func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
+func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 	// todo(andy): add NULLs
 
 	neg := -1
@@ -230,10 +231,19 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type) {
 		buf := make([]byte, 16)
 		testRand.Read(buf)
 		tb.PutHash128(idx, buf)
-	case val.AddressEnc:
+	case val.CommitAddrEnc:
 		buf := make([]byte, 20)
 		testRand.Read(buf)
-		tb.PutAddress(idx, hash.New(buf))
+		tb.PutCommitAddr(idx, hash.New(buf))
+	case val.BytesAddrEnc:
+		buf := make([]byte, (testRand.Int63()%40)+10)
+		testRand.Read(buf)
+		tree, err := NewImmutableTreeFromReader(context.Background(), bytes.NewReader(buf), ns, DefaultFixedChunkLength)
+		if err != nil {
+			panic("failed to write blob tree")
+		}
+		tb.PutBytesAddr(idx, tree.Addr)
+
 	default:
 		panic("unknown encoding")
 	}
