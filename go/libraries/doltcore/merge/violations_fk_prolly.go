@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -87,7 +88,7 @@ func prollyParentFkConstraintViolations(
 
 			// All equivalent parents were deleted, let's check for dangling children.
 			// We search for matching keys in the child's secondary index
-			found, err := createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh)
+			found, err := createCVsForPartialKeyMatches(ctx, partialKey, partialDesc, artEditor, primaryKD, childPriIdx, childScndryIdx, childPriIdx.Pool(), jsonData, theirRootIsh, postChild.TableName)
 			if err != nil {
 				return err
 			}
@@ -123,7 +124,7 @@ func prollyChildFkConstraintViolations(
 	foreignKey doltdb.ForeignKey,
 	postParent, postChild *constraintViolationsLoadedTable,
 	preChildRowData prolly.Map,
-	ourCmHash hash.Hash,
+	theirRootIsh hash.Hash,
 	jsonData []byte) (*doltdb.Table, bool, error) {
 	postChildRowData := durable.ProllyMapFromIndex(postChild.RowData)
 
@@ -141,6 +142,7 @@ func prollyChildFkConstraintViolations(
 	parentScndryIdx := durable.ProllyMapFromIndex(postParent.IndexData)
 
 	var foundViolation bool
+	kd, vd := postChildRowData.Descriptors()
 
 	err = prolly.DiffMaps(ctx, preChildRowData, postChildRowData, func(ctx context.Context, diff tree.Diff) error {
 		switch diff.Type {
@@ -151,7 +153,7 @@ func prollyChildFkConstraintViolations(
 				return nil
 			}
 
-			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, partialDesc, parentScndryIdx, artEditor, jsonData, ourCmHash)
+			found, err := createCVIfNoPartialKeyMatches(ctx, k, v, partialKey, kd, vd, partialDesc, parentScndryIdx, artEditor, jsonData, theirRootIsh, postChild.TableName)
 			if err != nil {
 				return err
 			}
@@ -182,11 +184,12 @@ func prollyChildFkConstraintViolations(
 func createCVIfNoPartialKeyMatches(
 	ctx context.Context,
 	k, v, partialKey val.Tuple,
-	partialKeyDesc val.TupleDesc,
+	kd, vd, partialKeyDesc val.TupleDesc,
 	idx prolly.Map,
 	editor prolly.ArtifactsEditor,
 	jsonData []byte,
-	theirRootIsh hash.Hash) (bool, error) {
+	theirRootIsh hash.Hash,
+	tblName string) (bool, error) {
 	itr, err := creation.NewPrefixItr(ctx, partialKey, partialKeyDesc, idx)
 	if err != nil {
 		return false, err
@@ -201,12 +204,34 @@ func createCVIfNoPartialKeyMatches(
 
 	meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: v}
 
-	err = editor.ReplaceFKConstraintViolation(ctx, k, theirRootIsh, meta)
+	err = editor.ReplaceConstraintViolation(ctx, k, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
 	if err != nil {
-		return false, err
+		return false, handleFkMultipleViolForRowErr(err, kd, tblName)
 	}
 
 	return true, nil
+}
+
+func handleFkMultipleViolForRowErr(err error, kd val.TupleDesc, tblName string) error {
+	if mv, ok := err.(*prolly.ErrMultipleVInfoForRow); ok {
+		var e, n FkCVMeta
+		err = json.Unmarshal(mv.ExistingInfo, &e)
+		if err != nil {
+			return err
+		}
+		err = json.Unmarshal(mv.NewInfo, &n)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf(`%w: pk %s of table '%s' violates foreign keys '%s' and '%s'`,
+			ErrMultipleViolationsForRow,
+			kd.Format(mv.Key), tblName, getRefTblAndCols(e), getRefTblAndCols(n))
+	}
+	return err
+}
+
+func getRefTblAndCols(m FkCVMeta) string {
+	return fmt.Sprintf("%s (%s)", m.ReferencedTable, strings.Join(m.ReferencedColumns, ", "))
 }
 
 func createCVsForPartialKeyMatches(
@@ -220,6 +245,7 @@ func createCVsForPartialKeyMatches(
 	pool pool.BuffPool,
 	jsonData []byte,
 	theirRootIsh hash.Hash,
+	tblName string,
 ) (bool, error) {
 	createdViolation := false
 
@@ -252,9 +278,9 @@ func createCVsForPartialKeyMatches(
 		}
 		meta := prolly.ConstraintViolationMeta{VInfo: jsonData, Value: value}
 
-		err = editor.ReplaceFKConstraintViolation(ctx, primaryIdxKey, theirRootIsh, meta)
+		err = editor.ReplaceConstraintViolation(ctx, primaryIdxKey, theirRootIsh, prolly.ArtifactTypeForeignKeyViol, meta)
 		if err != nil {
-			return false, err
+			return false, handleFkMultipleViolForRowErr(err, primaryKD, tblName)
 		}
 	}
 	if err != nil && err != io.EOF {

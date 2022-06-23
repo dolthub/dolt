@@ -28,6 +28,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
 )
@@ -163,7 +164,10 @@ func BuildSecondaryIndex(ctx context.Context, tbl *doltdb.Table, idx schema.Inde
 // index row data |primary|. |sch| is the current schema of the table.
 func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
 	if idx.IsUnique() {
-		return buildUniqueIndex(ctx, vrw, sch, idx, primary)
+		kd := shim.KeyDescriptorFromSchema(idx.Schema())
+		return BuildUniqueProllyIndex(ctx, vrw, sch, idx, primary, func(ctx context.Context, existingKey, newKey val.Tuple) error {
+			return sql.ErrDuplicateEntry.Wrap(&prollyUniqueKeyErr{k: newKey, kd: kd, IndexName: idx.Name()}, idx.Name())
+		})
 	}
 
 	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
@@ -221,7 +225,10 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, s
 	return durable.IndexFromProllyMap(secondary), nil
 }
 
-func buildUniqueIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map) (durable.Index, error) {
+// BuildUniqueProllyIndex builds a unique index based on the given |primary| row
+// data. If any duplicate entries are found, they are passed to |cb|. If |cb|
+// returns a non-nil error then the process is stopped.
+func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema.Schema, idx schema.Index, primary prolly.Map, cb func(ctx context.Context, existingKey, newKey val.Tuple) error) (durable.Index, error) {
 	empty, err := durable.NewEmptyIndex(ctx, vrw, idx.Schema())
 	if err != nil {
 		return nil, err
@@ -276,6 +283,9 @@ func buildUniqueIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema
 			}
 		}
 
+		idxKey := keyBld.Build(p)
+		idxVal := val.EmptyTuple
+
 		if !foundNullPrefix {
 			prefixKey := prefixKB.Build(p)
 
@@ -289,13 +299,12 @@ func buildUniqueIndex(ctx context.Context, vrw types.ValueReadWriter, sch schema
 				return nil, err
 			}
 			if err == nil {
-				// we have this prefix already so return error
-				return nil, sql.ErrDuplicateEntry.Wrap(&prollyUniqueKeyErr{k: k, kd: kd, IndexName: idx.Name()}, idx.Name())
+				// We found a duplicate entry so delegate behavior to callback.
+				if err = cb(ctx, k, idxKey); err != nil {
+					return nil, err
+				}
 			}
 		}
-
-		idxKey := keyBld.Build(p)
-		idxVal := val.EmptyTuple
 
 		if err = mut.Put(ctx, idxKey, idxVal); err != nil {
 			return nil, err

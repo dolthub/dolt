@@ -111,7 +111,7 @@ func DoDoltConstraintsVerify(ctx *sql.Context, isAll bool, vals []string) (int, 
 		tableSet.Add(tableName)
 	}
 
-	newRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, workingRoot, comparingRoot, tableSet, h)
+	newRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(ctx, workingRoot, comparingRoot, tableSet, h)
 	if err != nil {
 		return 1, err
 	}

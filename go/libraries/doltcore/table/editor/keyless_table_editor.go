@@ -209,7 +209,7 @@ func (kte *keylessTableEditor) GetIndexedRows(ctx context.Context, key types.Tup
 	return rows, nil
 }
 
-func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateErrFunc) error {
+func (kte *keylessTableEditor) InsertKeyVal(ctx context.Context, key, val types.Tuple, tagToVal map[uint64]types.Value, errFunc PKDuplicateCb) error {
 	dRow, err := row.FromNoms(kte.sch, key, val)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func (kte *keylessTableEditor) DeleteByKey(ctx context.Context, key types.Tuple,
 }
 
 // InsertRow implements TableEditor.
-func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateErrFunc) (err error) {
+func (kte *keylessTableEditor) InsertRow(ctx context.Context, r row.Row, _ PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
@@ -284,7 +284,7 @@ func (kte *keylessTableEditor) DeleteRow(ctx context.Context, r row.Row) (err er
 }
 
 // UpdateRow implements TableEditor.
-func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new row.Row, _ PKDuplicateErrFunc) (err error) {
+func (kte *keylessTableEditor) UpdateRow(ctx context.Context, old row.Row, new row.Row, _ PKDuplicateCb) (err error) {
 	kte.mu.Lock()
 	defer kte.mu.Unlock()
 
@@ -444,7 +444,7 @@ func (kte *keylessTableEditor) flush(ctx context.Context) error {
 	return nil
 }
 
-func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateErrFunc) (_ *doltdb.Table, retErr error) {
+func applyEdits(ctx context.Context, tbl *doltdb.Table, acc keylessEditAcc, indexEds []*IndexEditor, errFunc PKDuplicateCb) (_ *doltdb.Table, retErr error) {
 	rowData, err := tbl.GetNomsRowData(ctx)
 	if err != nil {
 		return nil, err

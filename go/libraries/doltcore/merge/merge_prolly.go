@@ -17,6 +17,7 @@ package merge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"golang.org/x/sync/errgroup"
 
@@ -49,23 +50,20 @@ func mergeTableData(
 	vrw types.ValueReadWriter,
 	tblName string,
 	postMergeSchema, rootSchema, mergeSchema, ancSchema schema.Schema,
-	tbl, mergeTbl, tableToUpdate *doltdb.Table,
+	tbl, mergeTbl, updatedTbl *doltdb.Table,
 	ancRows durable.Index,
 	ancIndexSet durable.IndexSet,
 	mergeRootIsh hash.Hash,
 	ancRootIsh hash.Hash) (*doltdb.Table, *MergeStats, error) {
 	group, gCtx := errgroup.WithContext(ctx)
 
-	stats := &MergeStats{Operation: TableModified}
-
 	indexEdits := make(chan indexEdit, 128)
 	conflicts := make(chan confVals, 128)
-	var updatedTable *doltdb.Table
 	var mergedData durable.Index
 
 	group.Go(func() error {
 		var err error
-		updatedTable, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, tableToUpdate, ancRows, indexEdits, conflicts)
+		updatedTbl, mergedData, err = mergeProllyRowData(gCtx, postMergeSchema, rootSchema, mergeSchema, ancSchema, tbl, mergeTbl, updatedTbl, ancRows, indexEdits, conflicts)
 		if err != nil {
 			return err
 		}
@@ -91,7 +89,7 @@ func mergeTableData(
 		return err
 	})
 
-	artIdx, err := tbl.GetArtifacts(ctx)
+	artIdx, err := updatedTbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -111,7 +109,7 @@ func mergeTableData(
 	}
 
 	group.Go(func() error {
-		return p.process(gCtx, stats, conflicts, artifactEditor)
+		return p.process(gCtx, conflicts, artifactEditor)
 	})
 
 	err = group.Wait()
@@ -128,27 +126,37 @@ func mergeTableData(
 		return nil, nil, err
 	}
 
+	updatedTbl, err = mergeProllySecondaryIndexes(
+		ctx,
+		vrw,
+		postMergeSchema, rootSchema, mergeSchema, ancSchema,
+		mergedData,
+		tbl, mergeTbl, updatedTbl,
+		ancIndexSet,
+		artifactEditor,
+		mergeRootIsh,
+		tblName)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	artifactMap, err := artifactEditor.Flush(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 	artIdx = durable.ArtifactIndexFromProllyMap(artifactMap)
 
-	updatedTable, err = updatedTable.SetArtifacts(ctx, artIdx)
+	updatedTbl, err = updatedTbl.SetArtifacts(ctx, artIdx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	updatedTable, err = mergeProllySecondaryIndexes(ctx, vrw, postMergeSchema, rootSchema, mergeSchema, ancSchema, mergedData, tbl, mergeTbl, updatedTable, ancIndexSet)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// TODO (dhruv): populate merge stats
-	return updatedTable, stats, nil
+	// TODO (dhruv): populate Adds, Deletes, Modifications
+	stats := &MergeStats{Operation: TableModified}
+	return updatedTbl, stats, nil
 }
 
-func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
+func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, ancTbl, tableToUpdate *doltdb.Table) (*doltdb.Table, error) {
 	artsIdx, err := tbl.GetArtifacts(ctx)
 	if err != nil {
 		return nil, err
@@ -165,13 +173,19 @@ func mergeTableArtifacts(ctx context.Context, tbl, mergeTbl, ancTbl, tableToUpda
 	mergeArts := durable.ProllyMapFromArtifactIndex(mergeArtsIdx)
 	ancArts := durable.ProllyMapFromArtifactIndex(ancArtsIdx)
 
+	var keyCollision bool
 	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
-		panic("received a conflict when merging sets of conflicts")
+		keyCollision = true
+		return tree.Diff{}, false
 	})
 	if err != nil {
 		return nil, err
 	}
 	idx := durable.ArtifactIndexFromProllyMap(mergedArts)
+
+	if keyCollision {
+		return nil, fmt.Errorf("encountered a key collision when merging the artifacts for table %s", tblName)
+	}
 
 	updatedTable, err := tableToUpdate.SetArtifacts(ctx, idx)
 	if err != nil {
@@ -389,7 +403,7 @@ func (m *valueMerger) processColumn(i int, left, right, base val.Tuple) ([]byte,
 }
 
 type conflictProcessor interface {
-	process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error
+	process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error
 }
 
 type insertingProcessor struct {
@@ -412,7 +426,7 @@ func newInsertingProcessor(theirRootIsh, baseRootIsh hash.Hash) (*insertingProce
 	return &p, nil
 }
 
-func (p *insertingProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+func (p *insertingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
 OUTER:
 	for {
 		select {
@@ -420,7 +434,6 @@ OUTER:
 			if !ok {
 				break OUTER
 			}
-			stats.Conflicts++
 			err := artEditor.Add(ctx, conflict.key, p.theirRootIsh, prolly.ArtifactTypeConflict, p.jsonMetaData)
 			if err != nil {
 				return err
@@ -435,7 +448,7 @@ OUTER:
 
 type abortingProcessor struct{}
 
-func (p abortingProcessor) process(ctx context.Context, stats *MergeStats, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
+func (p abortingProcessor) process(ctx context.Context, conflictChan chan confVals, artEditor prolly.ArtifactsEditor) error {
 	select {
 	case _, ok := <-conflictChan:
 		if !ok {

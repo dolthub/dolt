@@ -57,8 +57,8 @@ const (
 	CvType_CheckConstraint
 )
 
-// AddConstraintViolations adds all constraint violations to each table.
-func AddConstraintViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
+// AddForeignKeyViolations adds foreign key constraint violations to each table.
+func AddForeignKeyViolations(ctx context.Context, newRoot, baseRoot *doltdb.RootValue, tables *set.StrSet, theirRootIsh hash.Hash) (*doltdb.RootValue, *set.StrSet, error) {
 	fkColl, err := newRoot.GetForeignKeyCollection(ctx)
 	if err != nil {
 		return nil, nil, err
