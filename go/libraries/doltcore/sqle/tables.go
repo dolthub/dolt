@@ -400,6 +400,8 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
+// TODO: Have actual implementations for AnalyzeTable and Statistics; this is just a quick fix to unblock others.
+
 // AnalyzeTable implements the sql.StatisticsTable interface.
 func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 	return nil
