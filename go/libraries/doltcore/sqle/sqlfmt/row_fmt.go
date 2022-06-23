@@ -402,6 +402,8 @@ func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, col
 			if seenOne {
 				b.WriteRune(',')
 			}
+			seenOne = true
+
 			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
 			if err != nil {
 				return true, err
@@ -427,6 +429,8 @@ func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, col
 			if seenOne {
 				b.WriteString(" AND ")
 			}
+			seenOne = true
+
 			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
 			if err != nil {
 				return true, err

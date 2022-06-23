@@ -24,6 +24,7 @@ import (
 	textdiff "github.com/andreyvit/diff"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
@@ -610,7 +611,7 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		tableName = td.FromName
 	}
 
-	columns := getColumnNamesString(td.FromSch, td.ToSch)
+	columns := getColumnNamesString(td.FromSch, td.ToSch, dArgs)
 	query := fmt.Sprintf("select %s, %s from dolt_diff('%s', '%s', '%s')", columns, "diff_type", tableName, from, to)
 
 	if len(dArgs.where) > 0 {
@@ -650,13 +651,22 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 
 	unionSch := unionSchemas(fromSch, toSch)
 
-	// TODO: default sample size
-	resultsWriter := tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
+	var diffWriter diff.SqlRowDiffWriter
+	switch dArgs.diffOutput {
+	case TabularDiffOutput:
+		// TODO: default sample size
+		diffWriter = tabular.NewFixedWidthDiffTableWriter(unionSch, iohelp.NopWrCloser(cli.CliOut), 100)
+	case SQLDiffOutput:
+		targetSch := td.ToSch
+		if targetSch == nil {
+			targetSch = td.FromSch
+		}
+		diffWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
+	default:
+		return errhand.BuildDError("Unrecognized output format: %s", dArgs.diffOutput).Build()
+	}
 
-		// TODO: SQL writer
-		// sink, err = diff.NewSQLDiffSink(iohelp.NopWrCloser(cli.CliOut), td.ToSch, td.CurName())
-
-	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, resultsWriter)
+	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, diffWriter)
 	if err != nil {
 		return errhand.BuildDError("Error running diff query:\n%s", query).AddCause(err).Build()
 	}
@@ -677,8 +687,13 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 	return union
 }
 
-// TODO: SQL writer
-func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.Schema, iter sql.RowIter, writer *tabular.FixedWidthDiffTableWriter, ) error {
+func writeDiffResults(
+		ctx *sql.Context,
+		diffQuerySch sql.Schema,
+		targetSch sql.Schema,
+		iter sql.RowIter,
+		writer diff.SqlRowDiffWriter,
+) error {
 	ds, err := newDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {
 		return err
@@ -715,17 +730,29 @@ func writeDiffResults(ctx *sql.Context, diffQuerySch sql.Schema, targetSch sql.S
 	return nil
 }
 
-func getColumnNamesString(fromSch, toSch schema.Schema) string {
+func getColumnNamesString(fromSch, toSch schema.Schema, args *diffArgs) string {
 	var cols []string
 	if fromSch != nil {
 		fromSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
+			if args.diffOutput == TabularDiffOutput {
+				cols = append(cols, fmt.Sprintf("cast (from_%s as char) as `from_%s`", col.Name, col.Name))
+			} else if args.diffOutput == SQLDiffOutput {
+				cols = append(cols, fmt.Sprintf("from_%s", col.Name))
+			} else {
+				panic("unexpected format")
+			}
 			return false, nil
 		})
 	}
 	if toSch != nil {
 		toSch.GetAllCols().Iter(func(tag uint64, col schema.Column) (stop bool, err error) {
-			cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
+			if args.diffOutput == TabularDiffOutput {
+				cols = append(cols, fmt.Sprintf("cast (to_%s as char) as `to_%s`", col.Name, col.Name))
+			} else if args.diffOutput == SQLDiffOutput {
+				cols = append(cols, fmt.Sprintf("to_%s", col.Name))
+			} else {
+				panic("unexpected format")
+			}
 			return false, nil
 		})
 	}
