@@ -368,7 +368,7 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 		}
 	} else {
 		// TODO: need a different schema here?
-		from, _ = durable.NewEmptyIndex(ctx, td.ToTable.ValueReadWriter(), td.FromSch)
+		from, _ = durable.NewEmptyIndex(ctx, td.ToTable.ValueReadWriter(), td.ToSch)
 	}
 
 	if td.ToTable != nil {
@@ -378,7 +378,7 @@ func (td TableDelta) GetRowData(ctx context.Context) (from, to durable.Index, er
 		}
 	} else {
 		// TODO: need a different schema here?
-		to, _ = durable.NewEmptyIndex(ctx, td.FromTable.ValueReadWriter(), td.ToSch)
+		to, _ = durable.NewEmptyIndex(ctx, td.FromTable.ValueReadWriter(), td.FromSch)
 	}
 
 	return from, to, nil
