@@ -531,7 +531,6 @@ SQL
     [[ "$output" =~ "2,2,2" ]] || false
 }
 
-
 @test "merge: merge branch with table that was deleted" {
     dolt sql << SQL
 INSERT INTO test2 VALUES (0, 0, 0);
@@ -824,4 +823,32 @@ SQL
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
     [[ "$output" =~ "t,1" ]]
+}
+
+@test "merge: ourRoot renames, theirRoot modifies" {
+    dolt checkout -b merge_branch
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+}
+
+@test "merge: ourRoot modifies, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
 }

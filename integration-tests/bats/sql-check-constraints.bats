@@ -9,7 +9,6 @@ teardown() {
     teardown_common
 }
 
-
 @test "sql-check-constraints: basic tests for check constraints" {
     dolt sql <<SQL
 CREATE table t1 (
@@ -184,5 +183,4 @@ SQL
     [[ "$output" =~ "CHECK" ]] || false
     [[ "$output" =~ "`c1` > 3" ]] || false
 }
-
 

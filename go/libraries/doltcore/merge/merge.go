@@ -974,6 +974,12 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 		}
 	}
 
+	// Make sure to pass in ourRoot as the first RootValue so that ourRoot's table names will be merged first.
+	// This helps to avoid non-deterministic error result for table rename cases. Renaming a table creates two changes:
+	// 1. dropping the old name table
+	// 2. adding the new name table
+	// Dropping the old name table will trigger delete/modify conflict, which is the preferred error case over
+	// same column tag used error returned from creating the new name table.
 	tblNames, err := doltdb.UnionTableNames(ctx, ourRoot, theirRoot)
 
 	if err != nil {
@@ -987,7 +993,8 @@ func MergeRoots(ctx context.Context, theirRootIsh, ancRootIsh hash.Hash, ourRoot
 	optsWithFKChecks := opts
 	optsWithFKChecks.ForeignKeyChecksDisabled = true
 
-	// Merge tables one at a time. This is done based on name, so will work badly for things like table renames.
+	// Merge tables one at a time. This is done based on name. With table names from ourRoot being merged first,
+	// renaming a table will return delete/modify conflict error consistently.
 	// TODO: merge based on a more durable table identity that persists across renames
 	merger := NewMerger(ctx, theirRootIsh, ancRootIsh, ourRoot, theirRoot, ancRoot, ourRoot.VRW())
 	for _, tblName := range tblNames {

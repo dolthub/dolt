@@ -24,13 +24,6 @@ import (
 
 // EncodingFromSqlType returns a serial.Encoding for a query.Type.
 func EncodingFromSqlType(typ query.Type) serial.Encoding {
-	// todo(andy): replace temp encodings
-	switch typ {
-	case query.Type_BLOB, query.Type_TEXT:
-		// todo: temporary hack for enginetests
-		return serial.EncodingString
-	}
-
 	switch typ {
 	case query.Type_INT8:
 		return serial.EncodingInt8
@@ -86,6 +79,10 @@ func EncodingFromSqlType(typ query.Type) serial.Encoding {
 		return serial.EncodingJSON
 	case query.Type_GEOMETRY:
 		return serial.EncodingGeometry
+	case query.Type_BLOB:
+		return serial.EncodingBytesAddr
+	case query.Type_TEXT:
+		return serial.EncodingString
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}

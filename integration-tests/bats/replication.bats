@@ -211,7 +211,6 @@ teardown() {
     [[ "$output" =~ "invalid replicate heads setting; cannot set both" ]] || false
 }
 
-
 @test "replication: replica pull multiple heads quiet warnings" {
     dolt clone file://./rem1 repo2
     cd repo2

@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/dolthub/dolt/go/store/hash"
+
+	"github.com/shopspring/decimal"
 )
 
 // TupleDesc describes a Tuple set.
@@ -32,6 +32,7 @@ type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
+	Addrs []int
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -51,10 +52,18 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 		}
 	}
 
+	var addrIdxs []int
+	for i, t := range types {
+		if t.Enc == BytesAddrEnc {
+			addrIdxs = append(addrIdxs, i)
+		}
+	}
+
 	td = TupleDesc{
 		Types: types,
 		cmp:   cmp,
 		fast:  makeFixedAccess(types),
+		Addrs: addrIdxs,
 	}
 
 	return
@@ -399,8 +408,17 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-func (td TupleDesc) GetAddress(i int, tup Tuple) (v hash.Hash, ok bool) {
-	td.expectEncoding(i, AddressEnc)
+func (td TupleDesc) GetBlob(i int, tup Tuple) (BytesAddr, bool) {
+	td.expectEncoding(i, BytesAddrEnc)
+	b := td.GetField(i, tup)
+	if len(b) == 0 {
+		return BytesAddr{}, false
+	}
+	return NewBytesAddr(hash.New(b)), true
+}
+
+func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
+	td.expectEncoding(i, CommitAddrEnc)
 	b := td.GetField(i, tup)
 	if b != nil {
 		v = hash.New(b)
@@ -508,7 +526,9 @@ func formatValue(enc Encoding, value []byte) string {
 		return string(value)
 	case Hash128Enc:
 		return string(value)
-	case AddressEnc:
+	case BytesAddrEnc:
+		return string(value)
+	case CommitAddrEnc:
 		return string(value)
 	default:
 		return string(value)

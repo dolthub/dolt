@@ -29,6 +29,7 @@ import (
 	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/prolly"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -112,7 +113,13 @@ func (cvt *prollyConstraintViolationsTable) PartitionRows(ctx *sql.Context, part
 		return nil, err
 	}
 	kd, vd := shim.MapDescriptorsFromSchema(sch)
-	return prollyCVIter{itr, sch, kd, vd}, nil
+	return prollyCVIter{
+		itr: itr,
+		sch: sch,
+		kd:  kd,
+		vd:  vd,
+		ns:  cvt.artM.NodeStore(),
+	}, nil
 }
 
 func (cvt *prollyConstraintViolationsTable) Deleter(context *sql.Context) sql.RowDeleter {
@@ -134,6 +141,7 @@ type prollyCVIter struct {
 	itr    prolly.ArtifactIter
 	sch    schema.Schema
 	kd, vd val.TupleDesc
+	ns     tree.NodeStore
 }
 
 func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
@@ -154,7 +162,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 
 	o := 2
 	for i := 0; i < itr.kd.Count(); i++ {
-		r[o+i], err = index.GetField(itr.kd, i, art.Key)
+		r[o+i], err = index.GetField(ctx, itr.kd, i, art.Key, itr.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +170,7 @@ func (itr prollyCVIter) Next(ctx *sql.Context) (sql.Row, error) {
 	o += itr.kd.Count()
 
 	for i := 0; i < itr.vd.Count(); i++ {
-		r[o+i], err = index.GetField(itr.vd, i, meta.Value)
+		r[o+i], err = index.GetField(ctx, itr.vd, i, meta.Value, itr.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +213,7 @@ var _ sql.RowDeleter = (*prollyCVDeleter)(nil)
 func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 	// first part of the artifact key is the keys of the source table
 	for i := 0; i < d.kd.Count()-2; i++ {
-		err := index.PutField(d.kb, i, r[i+2])
+		err := index.PutField(ctx, d.cvt.artM.NodeStore(), d.kb, i, r[i+2])
 		if err != nil {
 			return err
 		}
@@ -213,7 +221,7 @@ func (d *prollyCVDeleter) Delete(ctx *sql.Context, r sql.Row) error {
 
 	// then the hash
 	h := hash.Parse(r[0].(string))
-	d.kb.PutAddress(d.kd.Count()-2, h)
+	d.kb.PutCommitAddr(d.kd.Count()-2, h)
 
 	// Finally the artifact type
 	artType := unmapCVType(merge.CvType(r[1].(uint64)))
