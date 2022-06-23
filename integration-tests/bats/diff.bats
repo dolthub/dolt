@@ -316,6 +316,8 @@ SQL
     dolt commit -m "table created"
     dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 11, 0, 0, 0, 0)"
+
+    dolt diff --summary
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (100.00%)" ]] || false
