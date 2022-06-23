@@ -103,6 +103,26 @@ SQL
     [[ "$output" =~ "4,Johnny Moolah,add more people to blame_test" ]] || false
 }
 
+@test "blame-system-view: view does not output deleted rows" {
+    stash_current_dolt_user
+
+    set_dolt_user "Thomas Foolery" "bats-1@fake.horse"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 varchar(120));"
+    dolt sql -q "insert into test values (1,'Tom'), (2,'Richard')"
+    dolt add -A && dolt commit -m "added test table"
+
+    set_dolt_user "Richard Tracy" "bats-2@fake.horse"
+    dolt sql -q "delete from test where pk = 1"
+    dolt commit -am "deleted tom from test table"
+
+    restore_stashed_dolt_user
+
+    run dolt sql -q "select pk, committer, message from dolt_blame_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2,Thomas Foolery,added test table" ]] || false
+}
+
 @test "blame-system-view: view works for table with compound primary key" {
     run dolt sql -q "select * from dolt_blame_blame_test;"
     [ "$status" -eq 0 ]
