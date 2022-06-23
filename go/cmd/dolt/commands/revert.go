@@ -17,8 +17,6 @@ package commands
 import (
 	"context"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -36,7 +34,6 @@ var revertDocs = cli.CommandDocumentationContent{
 		"{{.EmphasisLeft}}HEAD~1..HEAD~2{{.EmphasisRight}}, giving us a patch of what to remove to effectively remove the " +
 		"influence of the specified commit. If multiple commits are specified, then this process is repeated for each " +
 		"commit in the order specified. This requires a clean working set." +
-
 		"\n\nAny conflicts or constraint violations caused by the merge cause the command to fail.",
 	Synopsis: []string{
 		"<revision>...",
@@ -55,10 +52,6 @@ func (cmd RevertCmd) Name() string {
 // Description implements the interface cli.Command.
 func (cmd RevertCmd) Description() string {
 	return "Undo the changes introduced in a commit."
-}
-
-func (cmd RevertCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd RevertCmd) Docs() *cli.CommandDocumentation {

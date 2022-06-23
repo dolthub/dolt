@@ -59,7 +59,7 @@ func (cmd CherryPickCmd) Description() string {
 }
 
 func (cmd CherryPickCmd) Docs() *cli.CommandDocumentation {
-	ap := cli.CreateCheckoutArgParser()
+	ap := cli.CreateCherryPickArgParser()
 	return cli.NewCommandDocumentation(cherryPickDocs, ap)
 }
 
