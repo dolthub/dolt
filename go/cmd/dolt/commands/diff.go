@@ -185,9 +185,7 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 
 	f, _ := apr.GetValue(FormatFlag)
 	switch strings.ToLower(f) {
-	case "tabular":
-	case "sql":
-	case "":
+	case "tabular", "sql", "":
 	default:
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
@@ -403,7 +401,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 
 		if dArgs.diffParts&Summary != 0 {
 			numCols := fromSch.GetAllCols().Size()
-			verr = printNomsDiffSummary(ctx, td, numCols)
+			verr = printDiffSummary(ctx, td, numCols)
 		}
 
 		if dArgs.diffParts&SchemaOnlyDiff != 0 {
@@ -836,7 +834,7 @@ func printTableDiffSummary(td diff.TableDelta) {
 	}
 }
 
-func printNomsDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
+func printDiffSummary(ctx context.Context, td diff.TableDelta, colLen int) errhand.VerboseError {
 	// todo: use errgroup.Group
 	ae := atomicerr.New()
 	ch := make(chan diff.DiffSummaryProgress)

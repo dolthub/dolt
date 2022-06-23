@@ -245,7 +245,7 @@ func SqlRowAsTupleString(ctx context.Context, r sql.Row, tableSch schema.Schema)
 		col := tableSch.GetAllCols().GetAtIndex(i)
 		str := "NULL"
 		if val != nil {
-			str, err = interfaceValueAsSqlString(ctx, col.TypeInfo, val)
+			str, err = interfaceValueAsSqlString(col.TypeInfo, val)
 			if err != nil {
 				return "", err
 			}
@@ -290,6 +290,66 @@ func RowAsDeleteStmt(r row.Row, tableName string, tableSch schema.Schema) (strin
 	}
 
 	b.WriteString(");")
+	return b.String(), nil
+}
+
+func SqlRowAsUpdateStmt(r sql.Row, tableName string, tableSch schema.Schema, colsToUpdate *set.StrSet) (string, error) {
+	var b strings.Builder
+	b.WriteString("UPDATE ")
+	b.WriteString(QuoteIdentifier(tableName))
+	b.WriteString(" ")
+
+	b.WriteString("SET ")
+
+	i := 0
+	seenOne := false
+	err := tableSch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
+		if colsToUpdate.Contains(col.Name) {
+			if seenOne {
+				b.WriteRune(',')
+			}
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+		}
+		i++
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(" WHERE ")
+
+	i = 0
+	seenOne = false
+	err = tableSch.GetAllCols().Iter(func(_ uint64, col schema.Column) (stop bool, err error) {
+		if col.IsPartOfPK {
+			if seenOne {
+				b.WriteString(" AND ")
+			}
+			sqlString, err := interfaceValueAsSqlString(col.TypeInfo, r[i])
+			if err != nil {
+				return true, err
+			}
+			b.WriteString(QuoteIdentifier(col.Name))
+			b.WriteRune('=')
+			b.WriteString(sqlString)
+		}
+		i++
+		return false, nil
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	b.WriteString(";")
 	return b.String(), nil
 }
 
@@ -385,19 +445,18 @@ func valueAsSqlString(ti typeinfo.TypeInfo, value types.Value) (string, error) {
 	}
 }
 
-func interfaceValueAsSqlString(ctx context.Context, ti typeinfo.TypeInfo, value interface{}) (string, error) {
-	str, err := sqlutil.SqlColToStr(ctx, ti.ToSqlType(), value)
+func interfaceValueAsSqlString(ti typeinfo.TypeInfo, value interface{}) (string, error) {
+	str, err := sqlutil.SqlColToStr(ti.ToSqlType(), value)
 	if err != nil {
 		return "", err
 	}
 
 	switch ti.GetTypeIdentifier() {
 	case typeinfo.BoolTypeIdentifier:
-		// todo: unclear if we want this to output with "TRUE/FALSE" or 1/0
 		if value.(bool) {
-			return "TRUE", nil
+			return "1", nil
 		}
-		return "FALSE", nil
+		return "0", nil
 	case typeinfo.UuidTypeIdentifier, typeinfo.TimeTypeIdentifier, typeinfo.YearTypeIdentifier:
 		return singleQuote + str + singleQuote, nil
 	case typeinfo.DatetimeTypeIdentifier:

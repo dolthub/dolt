@@ -30,7 +30,6 @@ type FixedWidthDiffTableWriter struct {
 	tableWriter *FixedWidthTableWriter
 }
 
-
 func NewFixedWidthDiffTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthDiffTableWriter {
 	// leading diff type column with empty name
 	schema = append(sql.Schema{&sql.Column{
