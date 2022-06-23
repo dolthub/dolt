@@ -219,6 +219,14 @@ func (t *TempTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return idx.Count(), nil
 }
 
+func (t *TempTable) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+func (t *TempTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	return nil, nil
+}
+
 func (t *TempTable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
 	return t.table, nil
 }

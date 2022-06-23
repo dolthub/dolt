@@ -198,6 +198,14 @@ func (db *SingleTableInfoDatabase) DataLength(ctx *sql.Context) (uint64, error) 
 	return 0, nil
 }
 
+func (db *SingleTableInfoDatabase) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+func (db *SingleTableInfoDatabase) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	return nil, nil
+}
+
 func (db *SingleTableInfoDatabase) PrimaryKeySchema() sql.PrimaryKeySchema {
 	sqlSch, err := sqlutil.FromDoltSchema(db.tableName, db.sch)
 	if err != nil {
