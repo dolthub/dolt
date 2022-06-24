@@ -409,8 +409,6 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-//todo get JSON and Text from address
-
 func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, JSONAddrEnc)
 	return td.getAddr(i, tup)
