@@ -108,10 +108,9 @@ COPY mysql-client-tests/ruby/Gemfile.lock /mysql-client-tests/ruby/
 WORKDIR /mysql-client-tests/ruby
 RUN gem install bundler -v 2.1.4 && bundle install
 
-# install R
-RUN Rscript -e 'install.packages("RMariaDB")' && \
-    Rscript -e 'install.packages("RMySQL")' && \
-    Rscript -e 'install.packages("DBI")'
+# install R packages
+RUN Rscript -e 'install.packages(c("DBI", "RMySQL", "RMariaDB"), \
+                  repos = c(RSPM="https://packagemanager.rstudio.com/cran/__linux__/bionic/latest"))'
 
 # install postgres and psql
 RUN service postgresql start
