@@ -277,11 +277,9 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 	}
 
 	cols := make([]schema.Column, length)
-	c := new(serial.Column)
+	c := serial.Column{}
 	for i := range cols {
-		ok := s.Columns(c, i)
-		assertTrue(ok)
-
+		s.Columns(&c, i)
 		sqlType, err := typeinfoFromSqlType(ctx, string(c.SqlType()))
 		if err != nil {
 			return nil, err
@@ -295,7 +293,7 @@ func deserializeColumns(ctx context.Context, s *serial.TableSchema) ([]schema.Co
 			string(c.DefaultValue()),
 			c.AutoIncrement(),
 			string(c.Comment()),
-			constraintsFromSerialColumn(c)...)
+			constraintsFromSerialColumn(&c)...)
 		if err != nil {
 			return nil, err
 		}
@@ -348,10 +346,10 @@ func serializeSecondaryIndexes(b *fb.Builder, sch schema.Schema, indexes []schem
 }
 
 func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error {
-	idx := new(serial.Index)
-	col := new(serial.Column)
+	idx := serial.Index{}
+	col := serial.Column{}
 	for i := 0; i < s.SecondaryIndexesLength(); i++ {
-		s.SecondaryIndexes(idx, i)
+		s.SecondaryIndexes(&idx, i)
 		assertTrue(!idx.PrimaryKey())
 
 		name := string(idx.Name())
@@ -364,7 +362,7 @@ func deserializeSecondaryIndexes(sch schema.Schema, s *serial.TableSchema) error
 		tags := make([]uint64, idx.IndexColumnsLength())
 		for j := range tags {
 			pos := idx.IndexColumns(j)
-			s.Columns(col, int(pos))
+			s.Columns(&col, int(pos))
 			tags[j] = col.Tag()
 		}
 
@@ -397,9 +395,9 @@ func serializeChecks(b *fb.Builder, checks []schema.Check) fb.UOffsetT {
 
 func deserializeChecks(sch schema.Schema, s *serial.TableSchema) error {
 	coll := sch.Checks()
-	c := new(serial.CheckConstraint)
+	c := serial.CheckConstraint{}
 	for i := 0; i < s.ChecksLength(); i++ {
-		s.Checks(c, i)
+		s.Checks(&c, i)
 		n, e := string(c.Name()), string(c.Expression())
 		if _, err := coll.AddCheck(n, e, c.Enforced()); err != nil {
 			return err
