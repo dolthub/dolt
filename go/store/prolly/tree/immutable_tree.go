@@ -155,6 +155,8 @@ func _newLeaf(ctx context.Context, ns NodeStore, s message.Serializer, buf []byt
 	}, nil
 }
 
+const bytePeekLength = 128
+
 type ByteArray struct {
 	ImmutableTree
 }
@@ -172,7 +174,7 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	toShow := 128
+	toShow := bytePeekLength
 	if len(buf) < toShow {
 		toShow = len(buf)
 	}
@@ -205,7 +207,7 @@ func (b *JSONArray) ToString(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	toShow := 128
+	toShow := bytePeekLength
 	if len(buf) < toShow {
 		toShow = len(buf)
 	}
@@ -229,10 +231,6 @@ func (b *StringArray) ToString(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	//toShow := 128
-	//if len(buf) < toShow {
-	//	toShow = len(buf)
-	//}
 	return string(buf), nil
 }
 
