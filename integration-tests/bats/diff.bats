@@ -680,18 +680,19 @@ SQL
     dolt sql -q "UPDATE t SET val1=2 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm2"
 
     dolt sql -q "UPDATE t SET val1=3, val2=4 where pk = 1"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm3"
 
-    dolt sql -q "UPDATE t SET val1=3 where (pk=1);"
+    dolt sql -q "UPDATE t SET val1=3 where pk=1;"
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" = '' ]] || false
@@ -702,10 +703,12 @@ SQL
     dolt sql -q "update t set val1=30,val3=4 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
 }
 
 @test "diff: keyless sql diffs" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+    
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "cm1"
 
@@ -724,10 +727,12 @@ SQL
     dolt commit -am "cm3"
 
     dolt sql -q "UPDATE t SET val = 2 where pk = 1"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
+    # TODO: this needs a limit
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
     [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
     [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
 
@@ -736,17 +741,18 @@ SQL
     dolt sql -q "DELETE FROM t WHERE val < 3"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
 
     dolt commit -am "cm5"
 
     dolt sql -q "alter table t add primary key (pk)"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[2]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
 
     dolt commit -am "cm6"
 
@@ -758,7 +764,7 @@ SQL
     [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
-    [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[3]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
 }
 
 @test "diff: adding and removing primary key" {
@@ -770,11 +776,11 @@ SQL
 
     dolt sql -q "alter table t add primary key (pk)"
     
-    # run dolt diff -r sql
-    # [ $status -eq 0 ]
-    # [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
-    # [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    # [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
+    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
 
     dolt diff
     run dolt diff
@@ -787,9 +793,9 @@ SQL
 
     dolt sql -q "alter table t drop primary key"
     
-    # run dolt diff -r sql
-    # [ $status -eq 0 ]
-    # [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+    run dolt diff -r sql
+    [ $status -eq 0 ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
 
     dolt diff
     run dolt diff
