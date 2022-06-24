@@ -115,10 +115,10 @@ func (w *FixedWidthTableWriter) Close(ctx context.Context) error {
 }
 
 var colDiffColors = map[diff.ChangeType]*color.Color{
-	diff.Inserted:    color.New(color.Bold, color.FgGreen),
+	diff.Added:       color.New(color.Bold, color.FgGreen),
 	diff.ModifiedOld: color.New(color.FgRed),
 	diff.ModifiedNew: color.New(color.FgGreen),
-	diff.Deleted:     color.New(color.Bold, color.FgRed),
+	diff.Removed:     color.New(color.Bold, color.FgRed),
 }
 
 func (w *FixedWidthTableWriter) WriteRow(ctx context.Context, r sql.Row, colors []*color.Color) error {

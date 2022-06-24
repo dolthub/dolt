@@ -110,7 +110,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		if diffTypeStr == "modified" {
 			oldRow.rowDiff = diff.ModifiedOld
 		} else {
-			oldRow.rowDiff = diff.Deleted
+			oldRow.rowDiff = diff.Removed
 		}
 
 		for i := 0; i < ds.fromLen; i++ {
@@ -121,7 +121,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 					oldRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedOld
 				}
 			} else {
-				oldRow.colDiffs[ds.queryToTarget[i]] = diff.Deleted
+				oldRow.colDiffs[ds.queryToTarget[i]] = diff.Removed
 			}
 		}
 	}
@@ -131,7 +131,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 		if diffTypeStr == "modified" {
 			newRow.rowDiff = diff.ModifiedNew
 		} else {
-			newRow.rowDiff = diff.Inserted
+			newRow.rowDiff = diff.Added
 		}
 
 		for i := ds.fromLen; i < len(ds.diffQuerySch)-1; i++ {
@@ -142,7 +142,7 @@ func (ds diffSplitter) splitDiffResultRow(row sql.Row) (rowDiff, rowDiff, error)
 					newRow.colDiffs[ds.queryToTarget[i]] = diff.ModifiedNew
 				}
 			} else {
-				newRow.colDiffs[ds.queryToTarget[i]] = diff.Inserted
+				newRow.colDiffs[ds.queryToTarget[i]] = diff.Added
 			}
 		}
 	}

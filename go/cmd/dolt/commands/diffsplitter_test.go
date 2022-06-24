@@ -61,15 +61,15 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(2),
 					new: rowDiff{
 						row:      sql.Row{"1", "2"},
-						rowDiff:  diff.Inserted,
-						colDiffs: []diff.ChangeType{diff.Inserted, diff.Inserted},
+						rowDiff:  diff.Added,
+						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 				{
 					old: rowDiff{
 						row:      sql.Row{"3", "4"},
-						rowDiff:  diff.Deleted,
-						colDiffs: []diff.ChangeType{diff.Deleted, diff.Deleted},
+						rowDiff:  diff.Removed,
+						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 					new: emptyRowDiff(2),
 				},
@@ -111,15 +111,15 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(3),
 					new: rowDiff{
 						row:      sql.Row{nil, "1", "2"},
-						rowDiff:  diff.Inserted,
-						colDiffs: []diff.ChangeType{diff.None, diff.Inserted, diff.Inserted},
+						rowDiff:  diff.Added,
+						colDiffs: []diff.ChangeType{diff.None, diff.Added, diff.Added},
 					},
 				},
 				{
 					old: rowDiff{
 						row:      sql.Row{"3", "4", nil},
-						rowDiff:  diff.Deleted,
-						colDiffs: []diff.ChangeType{diff.Deleted, diff.Deleted, diff.None},
+						rowDiff:  diff.Removed,
+						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed, diff.None},
 					},
 					new: emptyRowDiff(3),
 				},
@@ -157,16 +157,16 @@ func TestDiffSplitter(t *testing.T) {
 					old: emptyRowDiff(2),
 					new: rowDiff{
 						row:      sql.Row{"1", "2"},
-						rowDiff:  diff.Inserted,
-						colDiffs: []diff.ChangeType{diff.Inserted, diff.Inserted},
+						rowDiff:  diff.Added,
+						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 				{
 					old: emptyRowDiff(2),
 					new: rowDiff{
 						row:      sql.Row{"3", "4"},
-						rowDiff:  diff.Inserted,
-						colDiffs: []diff.ChangeType{diff.Inserted, diff.Inserted},
+						rowDiff:  diff.Added,
+						colDiffs: []diff.ChangeType{diff.Added, diff.Added},
 					},
 				},
 			},
@@ -191,16 +191,16 @@ func TestDiffSplitter(t *testing.T) {
 					new: emptyRowDiff(2),
 					old: rowDiff{
 						row:      sql.Row{"1", "2"},
-						rowDiff:  diff.Deleted,
-						colDiffs: []diff.ChangeType{diff.Deleted, diff.Deleted},
+						rowDiff:  diff.Removed,
+						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 				},
 				{
 					new: emptyRowDiff(2),
 					old: rowDiff{
 						row:      sql.Row{"3", "4"},
-						rowDiff:  diff.Deleted,
-						colDiffs: []diff.ChangeType{diff.Deleted, diff.Deleted},
+						rowDiff:  diff.Removed,
+						colDiffs: []diff.ChangeType{diff.Removed, diff.Removed},
 					},
 				},
 			},

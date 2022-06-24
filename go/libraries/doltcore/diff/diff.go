@@ -30,16 +30,16 @@ const (
 	// None is no change
 	None ChangeType = iota
 
-	// Inserted is the DiffTypeProp value for a row that was newly added (In new, but not in old)
-	Inserted
+	// Added is the ChangeType value for a row that was newly added (In new, but not in old)
+	Added
 
-	// Deleted is the DiffTypeProp value for a row that was newly deleted (In old, but not in new)
-	Deleted
+	// Removed is the ChangeTypeProp value for a row that was newly deleted (In old, but not in new)
+	Removed
 
-	// ModifiedOld is the DiffTypeProp value for the row which represents the old value of the row before it was changed.
+	// ModifiedOld is the ChangeType value for the row which represents the old value of the row before it was changed.
 	ModifiedOld
 
-	// ModifiedNew is the DiffTypeProp value for the row which represents the new value of the row after it was changed.
+	// ModifiedNew is the ChangeType value for the row which represents the new value of the row after it was changed.
 	ModifiedNew
 )
 

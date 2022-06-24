@@ -59,14 +59,14 @@ func (w SqlDiffWriter) WriteRow(
 	}
 
 	switch rowDiffType {
-	case diff.Inserted:
+	case diff.Added:
 		stmt, err := sqlfmt.SqlRowAsInsertStmt(row, w.tableName, w.sch)
 		if err != nil {
 			return err
 		}
 
 		return iohelp.WriteLine(w.writeCloser, stmt)
-	case diff.Deleted:
+	case diff.Removed:
 		stmt, err := sqlfmt.SqlRowAsDeleteStmt(row, w.tableName, w.sch)
 		if err != nil {
 			return err

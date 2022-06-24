@@ -56,9 +56,9 @@ func (w FixedWidthDiffTableWriter) WriteRow(
 
 	diffMarker := ""
 	switch rowDiffType {
-	case diff.Deleted:
+	case diff.Removed:
 		diffMarker = "-"
-	case diff.Inserted:
+	case diff.Added:
 		diffMarker = "+"
 	case diff.ModifiedOld:
 		diffMarker = "<"
