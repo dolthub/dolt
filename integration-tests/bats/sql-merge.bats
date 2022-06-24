@@ -481,7 +481,7 @@ SQL
 }
 
 @test "sql-merge: CALL DOLT_MERGE correctly merges branches with differing content in same table without conflicts" {
-    skip "flakey"
+    skip "This test is flaking and needs to be fixed"
     dolt sql << SQL
 CALL DOLT_COMMIT('-a', '-m', 'Step 1');
 CALL DOLT_CHECKOUT('-b', 'feature-branch');
@@ -621,7 +621,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE detects merge conflicts, fails to commit and leaves working set clean when dolt_allow_commit_conflicts = 0" {
-    skip "flakey"
+    skip "This test is flaking and needs to be fixed"
     # The dolt_merge fails here, and leaves the working set clean, no conflicts, no merge in progress
     run dolt sql << SQL
 SET dolt_allow_commit_conflicts = 0;
@@ -931,7 +931,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE can commit unresolved conflicts with dolt_allow_commit_conflicts set" {
-     skip "flakey"
+     skip "This test is flaking and needs to be fixed"
      dolt sql << SQL
 set dolt_allow_commit_conflicts = on;
 CREATE TABLE one_pk (
@@ -990,7 +990,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE during an active merge throws an error" {
-    skip "flakey"
+    skip "This test is flaking and needs to be fixed"
     run dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
@@ -1095,7 +1095,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE with no-ff and squash works." {
-    skip "flakey"
+    skip "This test is flaking and needs to be fixed"
     dolt sql << SQL
 SELECT DOLT_COMMIT('-a', '-m', 'Step 1');
 SELECT DOLT_CHECKOUT('-b', 'feature-branch');
