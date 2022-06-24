@@ -287,24 +287,30 @@ func (db Database) GetTableInsensitive(ctx *sql.Context, tblName string) (sql.Ta
 		return nil, false, err
 	}
 
-	return db.getTableInsensitive(ctx, root, head, tblName)
+	return db.getTableInsensitive(ctx, head, root, tblName)
 }
 
 // GetTableInsensitiveAsOf implements sql.VersionedDatabase
 func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, asOf interface{}) (sql.Table, bool, error) {
-	root, err := rootAsOf(ctx, db, asOf)
+	head, root, err := resolveAsOf(ctx, db, asOf)
 	if err != nil {
 		return nil, false, err
 	} else if root == nil {
 		return nil, false, nil
 	}
 
-	table, ok, err := db.getTable(ctx, root, tableName)
+	table, ok, err := db.getTableInsensitive(ctx, head, root, tableName)
 	if err != nil {
 		return nil, false, err
 	}
 	if !ok {
 		return nil, false, nil
+	}
+
+	if doltdb.HasDoltPrefix(tableName) {
+		// currently, system tables do not need to be "locked to root"
+		//  see comment below in getTableInsensitive
+		return table, ok, nil
 	}
 
 	switch table := table.(type) {
@@ -331,7 +337,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 	}
 }
 
-func (db Database) getTableInsensitive(ctx *sql.Context, root *doltdb.RootValue, head *doltdb.Commit, tblName string) (sql.Table, bool, error) {
+func (db Database) getTableInsensitive(ctx *sql.Context, head *doltdb.Commit, root *doltdb.RootValue, tblName string) (sql.Table, bool, error) {
 	lwrName := strings.ToLower(tblName)
 
 	// TODO: these tables that cache a root value at construction time should not, they need to get it from the session
@@ -416,39 +422,38 @@ func (db Database) getTableInsensitive(ctx *sql.Context, root *doltdb.RootValue,
 	return db.getTable(ctx, root, tblName)
 }
 
-// rootAsOf returns the root of the DB as of the expression given, which may be nil in the case that it refers to an
-// expression before the first commit.
-func rootAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.RootValue, error) {
+// resolveAsOf resolved given expression to a commit, if one exists.
+func resolveAsOf(ctx *sql.Context, db Database, asOf interface{}) (*doltdb.Commit, *doltdb.RootValue, error) {
 	head := db.rsr.CWBHeadRef()
 	switch x := asOf.(type) {
-	case string:
-		return getRootForCommitRef(ctx, db.ddb, head, x)
 	case time.Time:
-		return getRootForTime(ctx, db.ddb, head, x)
+		return resolveAsOfTime(ctx, db.ddb, head, x)
+	case string:
+		return resolveAsOfCommitRef(ctx, db.ddb, head, x)
 	default:
 		panic(fmt.Sprintf("unsupported AS OF type %T", asOf))
 	}
 }
 
-func getRootForTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf time.Time) (*doltdb.RootValue, error) {
+func resolveAsOfTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf time.Time) (*doltdb.Commit, *doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec("HEAD")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cm, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	hash, err := cm.HashOf()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cmItr, err := commitwalk.GetTopologicalOrderIterator(ctx, ddb, hash)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	for {
@@ -456,44 +461,46 @@ func getRootForTime(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, asOf
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		meta, err := curr.GetCommitMeta(ctx)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if meta.Time().Equal(asOf) || meta.Time().Before(asOf) {
-			return curr.GetRootValue(ctx)
+			root, err := curr.GetRootValue(ctx)
+			if err != nil {
+				return nil, nil, err
+			}
+			return curr, root, nil
 		}
 	}
-
-	return nil, nil
+	return nil, nil, nil
 }
 
-func getRootForCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.RootValue, error) {
+func resolveAsOfCommitRef(ctx *sql.Context, ddb *doltdb.DoltDB, head ref.DoltRef, commitRef string) (*doltdb.Commit, *doltdb.RootValue, error) {
 	cs, err := doltdb.NewCommitSpec(commitRef)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	cm, err := ddb.Resolve(ctx, cs, head)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	root, err := cm.GetRootValue(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	return root, nil
+	return cm, root, nil
 }
 
 // GetTableNamesAsOf implements sql.VersionedDatabase
 func (db Database) GetTableNamesAsOf(ctx *sql.Context, time interface{}) ([]string, error) {
-	root, err := rootAsOf(ctx, db, time)
+	_, root, err := resolveAsOf(ctx, db, time)
 	if err != nil {
 		return nil, err
 	} else if root == nil {

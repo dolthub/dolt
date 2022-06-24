@@ -264,7 +264,7 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
 	}
 
-	fromRoot, err := rootAsOf(dtf.ctx, sqledb, fromCommitVal)
+	_, fromRoot, err := resolveAsOf(dtf.ctx, sqledb, fromCommitVal)
 	if err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 		return sql.ErrTableNotFound.New(tableName)
 	}
 
-	toRoot, err := rootAsOf(dtf.ctx, sqledb, toCommitVal)
+	_, toRoot, err := resolveAsOf(dtf.ctx, sqledb, toCommitVal)
 	if err != nil {
 		return err
 	}
