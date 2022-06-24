@@ -660,8 +660,6 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 			targetSch = td.FromSch
 		}
 		diffWriter = sqlexport.NewSqlDiffWriter(tableName, targetSch, iohelp.NopWrCloser(cli.CliOut))
-	default:
-		return errhand.BuildDError("Unrecognized output format: %s", dArgs.diffOutput).Build()
 	}
 
 	err = writeDiffResults(sqlCtx, sch, unionSch, rowIter, diffWriter)
@@ -724,8 +722,6 @@ func writeDiffResults(
 			}
 		}
 	}
-
-	return nil
 }
 
 func getColumnNamesString(fromSch, toSch schema.Schema, args *diffArgs) string {
