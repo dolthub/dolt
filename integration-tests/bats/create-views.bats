@@ -191,7 +191,7 @@ SQL
 }
 
 @test "create-views: database with broken view can be used" {
-    run dolt sql -q 'create table users (id longtext primary key)'
+    run dolt sql -q 'create table users (id varchar(20) primary key)'
     [ "$status" -eq 0 ]
     run dolt sql -q 'create view all_users as select * from users'
     [ "$status" -eq 0 ]

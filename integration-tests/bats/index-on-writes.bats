@@ -12,13 +12,13 @@ teardown() {
     teardown_common
 }
 
-@test "index-on-writes: delete all two_pk" {
-    test_mutation "delete from two_pk" "two_pk" "$two_pk_header"
-}
+#@test "index-on-writes: delete all two_pk" {
+    #test_mutation "delete from two_pk" "two_pk" "$two_pk_header"
+#}
 
-@test "index-on-writes: delete all one_pk" {
-    test_mutation "delete from one_pk" "one_pk" "$one_pk_header"
-}
+#@test "index-on-writes: delete all one_pk" {
+    #test_mutation "delete from one_pk" "one_pk" "$one_pk_header"
+#}
 
 @test "index-on-writes: delete all two_pk, <>, pk" {
     test_mutation "delete from two_pk where pk1 <> 1024 and pk2 <> 1024" "two_pk" "$two_pk_header"  "yes"
