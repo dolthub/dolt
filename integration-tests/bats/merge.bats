@@ -360,6 +360,7 @@ SQL
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+    dolt conflicts resolve --theirs dolt_schemas
     run dolt conflicts resolve --theirs dolt_schemas
     [ "$status" -eq 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
@@ -652,7 +653,6 @@ SQL
 }
 
 @test "merge: non-violating merge succeeds when violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -684,7 +684,6 @@ SQL
 }
 
 @test "merge: non-conflicting / non-violating merge succeeds when conflicts and violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -744,7 +743,6 @@ SQL
 }
 
 @test "merge: conflicting merge should retain previous conflicts and constraint violations" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -787,6 +785,8 @@ SQL
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
+
+    skip_nbf_dolt_1
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
