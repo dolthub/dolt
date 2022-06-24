@@ -103,16 +103,11 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 	return 0
 }
 
-func handleStatusVErr(err error) int {
-	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
-	return 1
-}
-
 // TODO: working docs in conflict param not used here
 func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
 	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
-	err := printRemoteCommitTrackingInfo(ctx, dEnv)
+	err := printRemoteRefTrackingInfo(ctx, dEnv)
 	if err != nil {
 		return err
 	}
@@ -144,7 +139,13 @@ func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTb
 	return nil
 }
 
-func printRemoteCommitTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
+func handleStatusVErr(err error) int {
+	cli.PrintErrln(errhand.VerboseErrorFromError(err).Verbose())
+	return 1
+}
+
+// printRemoteRefTrackingInfo prints remote tracking information if there is a remote branch set upstream from current branch
+func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	localDB := dEnv.DoltDB
 	rsr := dEnv.RepoStateReader()
 	headRef := rsr.CWBHeadRef()
@@ -200,6 +201,7 @@ func printRemoteCommitTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error
 		return err
 	}
 
+	// get common ancestor
 	ancCommit, err := doltdb.GetCommitAncestor(ctx, headCommit, remoteCommit)
 	if err != nil {
 		return err
@@ -239,6 +241,8 @@ func printRemoteCommitTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error
 	return nil
 }
 
+// getNumOfCommitBetweenTwoCommits returns the number of commits between given starting point to trace back to give target point.
+// The starting commit should be the commit made after target commit.
 func getNumOfCommitBetweenTwoCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, targetCommitHash hash.Hash) (uint64, error) {
 	itr, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, startCommitHash)
 	if iErr != nil {
@@ -266,6 +270,7 @@ func getNumOfCommitBetweenTwoCommits(ctx context.Context, ddb *doltdb.DoltDB, st
 	return count, nil
 }
 
+// getRemoteTrackingMsg returns remote tracking information with given remote branch name, number of commits ahead and/or behind.
 func getRemoteTrackingMsg(remoteBranchName string, ahead uint64, behind uint64) string {
 	if ahead > 0 && behind > 0 {
 		return fmt.Sprintf(`Your branch and '%s' have diverged,
