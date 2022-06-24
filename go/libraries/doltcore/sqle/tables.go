@@ -419,7 +419,7 @@ func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
 		createdAt: time.Now(),
 	}
 
-	histMap, err := sql.HistogramMapBuilder(ctx, t)
+	histMap, err := sql.NewHistogramMapFromTable(ctx, t)
 	if err != nil {
 		return err
 	}
