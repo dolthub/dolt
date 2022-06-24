@@ -1,5 +1,4 @@
 #!/usr/bin/env bats
-export DOLT_FORMAT_FEATURE_FLAG=1
 load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
