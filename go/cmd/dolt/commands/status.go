@@ -105,7 +105,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 // TODO: working docs in conflict param not used here
 func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
-	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
+	cli.Printf(branchHeader, rsr.CWBHeadRef().GetPath())
 
 	err := printRemoteRefTrackingInfo(ctx, dEnv)
 	if err != nil {
@@ -146,10 +146,9 @@ func handleStatusVErr(err error) int {
 
 // printRemoteRefTrackingInfo prints remote tracking information if there is a remote branch set upstream from current branch
 func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
-	localDB := dEnv.DoltDB
+	ddb := dEnv.DoltDB
 	rsr := dEnv.RepoStateReader()
 	headRef := rsr.CWBHeadRef()
-
 	branches, err := rsr.GetBranches()
 	if err != nil {
 		return err
@@ -164,7 +163,7 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
-	headCommit, err := localDB.Resolve(ctx, headCommitSpec, rsr.CWBHeadRef())
+	headCommit, err := ddb.Resolve(ctx, headCommitSpec, headRef)
 	if err != nil {
 		return err
 	}
@@ -178,13 +177,11 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
-	remoteName := upstream.Remote
-	remote, remoteOK := remotes[remoteName]
+	remote, remoteOK := remotes[upstream.Remote]
 	if !remoteOK {
 		return nil
 	}
-	remoteRef := upstream.Merge.Ref
-	remoteTrackingRef, err := env.GetTrackingRef(remoteRef, remote)
+	remoteTrackingRef, err := env.GetTrackingRef(upstream.Merge.Ref, remote)
 	if err != nil {
 		return err
 	}
@@ -192,7 +189,7 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	if err != nil {
 		return err
 	}
-	remoteCommit, err := localDB.Resolve(ctx, remoteCommitSpec, rsr.CWBHeadRef())
+	remoteCommit, err := ddb.Resolve(ctx, remoteCommitSpec, remoteTrackingRef)
 	if err != nil {
 		return err
 	}
@@ -211,27 +208,24 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	var ahead uint64
-	var behind uint64
-	if headHash == ancHash && remoteHash == ancHash {
-		ahead = 0
-		behind = 0
-	} else if headHash == ancHash {
-		behind, err = getNumOfCommitBetweenTwoCommits(ctx, localDB, remoteHash, ancHash)
+	var ahead = uint64(0)
+	var behind = uint64(0)
+	if headHash != ancHash && remoteHash != ancHash {
+		behind, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, remoteHash, ancHash)
 		if err != nil {
 			return err
 		}
-	} else if remoteHash == ancHash {
-		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, localDB, headHash, ancHash)
+		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, headHash, ancHash)
 		if err != nil {
 			return err
 		}
-	} else {
-		behind, err = getNumOfCommitBetweenTwoCommits(ctx, localDB, remoteHash, ancHash)
+	} else if remoteHash != ancHash {
+		behind, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, remoteHash, ancHash)
 		if err != nil {
 			return err
 		}
-		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, localDB, headHash, ancHash)
+	} else if headHash != ancHash {
+		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, headHash, ancHash)
 		if err != nil {
 			return err
 		}
