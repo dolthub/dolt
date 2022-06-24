@@ -139,8 +139,8 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		Query: `select row_number() over (order by i desc), mytable.i as i2 
 				from mytable join othertable on i = i2 order by 1`,
 		ExpectedPlan: "Sort(row_number() over (order by i desc) ASC)\n" +
-			" └─ Project(row_number() over ( order by [mytable.i, idx=0, type=BIGINT, nullable=false] DESC) as row_number() over (order by i desc), i2)\n" +
-			"     └─ Window(row_number() over ( order by [mytable.i, idx=0, type=BIGINT, nullable=false] DESC), mytable.i as i2)\n" +
+			" └─ Project(row_number() over ( order by mytable.i DESC) as row_number() over (order by i desc), i2)\n" +
+			"     └─ Window(row_number() over ( order by mytable.i DESC), mytable.i as i2)\n" +
 			"         └─ IndexedJoin(mytable.i = othertable.i2)\n" +
 			"             ├─ Table(mytable)\n" +
 			"             └─ IndexedTableAccess(othertable on [othertable.i2])\n" +
@@ -180,8 +180,8 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 				where mytable.i = 2
 				order by 1`,
 		ExpectedPlan: "Sort(row_number() over (order by i desc) ASC)\n" +
-			" └─ Project(row_number() over ( order by [mytable.i, idx=0, type=BIGINT, nullable=false] DESC) as row_number() over (order by i desc), i2)\n" +
-			"     └─ Window(row_number() over ( order by [mytable.i, idx=0, type=BIGINT, nullable=false] DESC), mytable.i as i2)\n" +
+			" └─ Project(row_number() over ( order by mytable.i DESC) as row_number() over (order by i desc), i2)\n" +
+			"     └─ Window(row_number() over ( order by mytable.i DESC), mytable.i as i2)\n" +
 			"         └─ IndexedJoin(mytable.i = othertable.i2)\n" +
 			"             ├─ Filter(mytable.i = 2)\n" +
 			"             │   └─ IndexedTableAccess(mytable on [mytable.i] with ranges: [{[2, 2]}])\n" +
@@ -2055,8 +2055,8 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 	},
 	{
 		Query: `select i, row_number() over (w1 partition by s) from mytable window w1 as (order by i asc)`,
-		ExpectedPlan: "Project(mytable.i, row_number() over ( partition by mytable.s order by [mytable.i, idx=0, type=BIGINT, nullable=false] ASC) as row_number() over (w1 partition by s))\n" +
-			" └─ Window(mytable.i, row_number() over ( partition by mytable.s order by [mytable.i, idx=0, type=BIGINT, nullable=false] ASC))\n" +
+		ExpectedPlan: "Project(mytable.i, row_number() over ( partition by mytable.s order by mytable.i ASC) as row_number() over (w1 partition by s))\n" +
+			" └─ Window(mytable.i, row_number() over ( partition by mytable.s order by mytable.i ASC))\n" +
 			"     └─ Projected table access on [i s]\n" +
 			"         └─ Table(mytable)\n" +
 			"",
