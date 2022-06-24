@@ -35,7 +35,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 		"set @Commit0 = hashof('main');",
 		"create table a (pk int primary key, c1 int);",
 		"set @Commit1 = dolt_commit('-am', 'creating table a');",
-		"alter table a add column c2 text;",
+		"alter table a add column c2 varchar(20);",
 		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
 		"alter table a drop column c1;",
 		"alter table a add constraint unique_c2 unique(c2);",
@@ -63,7 +63,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 				{"a", "CREATE TABLE `a` (\n" +
 					"  `pk` int NOT NULL,\n" +
 					"  `c1` int,\n" +
-					"  `c2` text,\n" +
+					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
 				},
@@ -74,7 +74,7 @@ var ShowCreateTableAsOfScriptTest = queries.ScriptTest{
 			Expected: []sql.Row{
 				{"a", "CREATE TABLE `a` (\n" +
 					"  `pk` int NOT NULL,\n" +
-					"  `c2` text,\n" +
+					"  `c2` varchar(20),\n" +
 					"  PRIMARY KEY (`pk`),\n" +
 					"  UNIQUE KEY `c2` (`c2`)\n" +
 					") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin",
@@ -90,7 +90,7 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		"set @Commit0 = dolt_commit('--allow-empty', '-m', 'before creating table a');",
 		"create table a (pk int primary key, c1 int);",
 		"set @Commit1 = dolt_commit('-am', 'creating table a');",
-		"alter table a add column c2 text;",
+		"alter table a add column c2 varchar(20);",
 		"set @Commit2 = dolt_commit('-am', 'adding column c2');",
 		"alter table a drop column c1;",
 		"set @Commit3 = dolt_commit('-am', 'dropping column c1');",
@@ -112,14 +112,14 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 			Expected: []sql.Row{
 				{"pk", "int", "NO", "PRI", "NULL", ""},
 				{"c1", "int", "YES", "", "NULL", ""},
-				{"c2", "text", "YES", "", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit3;",
 			Expected: []sql.Row{
 				{"pk", "int", "NO", "PRI", "NULL", ""},
-				{"c2", "text", "YES", "", "NULL", ""},
+				{"c2", "varchar(20)", "YES", "", "NULL", ""},
 			},
 		},
 	},
