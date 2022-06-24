@@ -768,26 +768,26 @@ func TestIndexEditorCapacityExceeded(t *testing.T) {
 func createTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	return createTestRowDataFromTaggedValues(t, vrw, sch,
 		row.TaggedValues{
-			idTag: types.UUID(id0), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
+			idTag: types.InlineBlob(id0[:]), firstTag: types.String("bill"), lastTag: types.String("billerson"), ageTag: types.Uint(53)},
 		row.TaggedValues{
-			idTag: types.UUID(id1), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Bool(true), ageTag: types.Uint(21)},
+			idTag: types.InlineBlob(id1[:]), firstTag: types.String("eric"), lastTag: types.String("ericson"), isMarriedTag: types.Int(1), ageTag: types.Uint(21)},
 		row.TaggedValues{
-			idTag: types.UUID(id2), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Bool(false), ageTag: types.Uint(53)},
+			idTag: types.InlineBlob(id2[:]), firstTag: types.String("john"), lastTag: types.String("johnson"), isMarriedTag: types.Int(0), ageTag: types.Uint(53)},
 		row.TaggedValues{
-			idTag: types.UUID(id3), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
+			idTag: types.InlineBlob(id3[:]), firstTag: types.String("robert"), lastTag: types.String("robertson"), ageTag: types.Uint(36)},
 	)
 }
 
 func createUpdatedTestRowData(t *testing.T, vrw types.ValueReadWriter, sch schema.Schema) (types.Map, []row.Row) {
 	return createTestRowDataFromTaggedValues(t, vrw, sch,
 		row.TaggedValues{
-			idTag: types.UUID(id0), firstTag: types.String("jack"), lastTag: types.String("space"), ageTag: types.Uint(20)},
+			idTag: types.InlineBlob(id0[:]), firstTag: types.String("jack"), lastTag: types.String("space"), ageTag: types.Uint(20)},
 		row.TaggedValues{
-			idTag: types.UUID(id1), firstTag: types.String("rick"), lastTag: types.String("drive"), isMarriedTag: types.Bool(false), ageTag: types.Uint(21)},
+			idTag: types.InlineBlob(id1[:]), firstTag: types.String("rick"), lastTag: types.String("drive"), isMarriedTag: types.Int(0), ageTag: types.Uint(21)},
 		row.TaggedValues{
-			idTag: types.UUID(id2), firstTag: types.String("tyler"), lastTag: types.String("eat"), isMarriedTag: types.Bool(true), ageTag: types.Uint(22)},
+			idTag: types.InlineBlob(id2[:]), firstTag: types.String("tyler"), lastTag: types.String("eat"), isMarriedTag: types.Int(1), ageTag: types.Uint(22)},
 		row.TaggedValues{
-			idTag: types.UUID(id3), firstTag: types.String("moore"), lastTag: types.String("walk"), ageTag: types.Uint(23)},
+			idTag: types.InlineBlob(id3[:]), firstTag: types.String("moore"), lastTag: types.String("walk"), ageTag: types.Uint(23)},
 	)
 }
 
@@ -814,10 +814,10 @@ func createTestRowDataFromTaggedValues(t *testing.T, vrw types.ValueReadWriter, 
 
 func createTestSchema(t *testing.T) schema.Schema {
 	colColl := schema.NewColCollection(
-		schema.NewColumn("id", idTag, types.UUIDKind, true, schema.NotNullConstraint{}),
+		schema.NewColumn("id", idTag, types.InlineBlobKind, true, schema.NotNullConstraint{}),
 		schema.NewColumn("first", firstTag, types.StringKind, false, schema.NotNullConstraint{}),
 		schema.NewColumn("last", lastTag, types.StringKind, false, schema.NotNullConstraint{}),
-		schema.NewColumn("is_married", isMarriedTag, types.BoolKind, false),
+		schema.NewColumn("is_married", isMarriedTag, types.IntKind, false),
 		schema.NewColumn("age", ageTag, types.UintKind, false),
 		schema.NewColumn("empty", emptyTag, types.IntKind, false),
 	)
