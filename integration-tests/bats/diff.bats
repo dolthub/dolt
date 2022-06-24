@@ -780,7 +780,7 @@ SQL
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[2]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
 
     dolt diff
     run dolt diff
@@ -792,10 +792,12 @@ SQL
     dolt commit -am 'added primary key'
 
     dolt sql -q "alter table t drop primary key"
-    
+
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
 
     dolt diff
     run dolt diff

@@ -383,7 +383,7 @@ func SqlRowAsDeleteStmt(r sql.Row, tableName string, tableSch schema.Schema) (st
 		return "", err
 	}
 
-	b.WriteString(");")
+	b.WriteString(";")
 	return b.String(), nil
 }
 
