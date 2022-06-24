@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -74,6 +75,36 @@ type projected interface {
 	Project() []string
 }
 
+// DoltTableStatistics holds the statistics for dolt tables
+type DoltTableStatistics struct {
+	rowCount     uint64
+	nullCount    uint64
+	createdAt    time.Time
+	histogramMap sql.HistogramMap
+}
+
+var _ sql.TableStatistics = &DoltTableStatistics{}
+
+func (ds *DoltTableStatistics) CreatedAt() time.Time {
+	return ds.createdAt
+}
+
+func (ds *DoltTableStatistics) RowCount() uint64 {
+	return ds.rowCount
+}
+
+func (ds *DoltTableStatistics) NullCount() uint64 {
+	return ds.nullCount
+}
+
+func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
+	return &sql.Histogram{}, fmt.Errorf("column %s not found", colName)
+}
+
+func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
+	return ds.histogramMap
+}
+
 // DoltTable implements the sql.Table interface and gives access to dolt table rows and schema.
 type DoltTable struct {
 	tableName    string
@@ -87,6 +118,8 @@ type DoltTable struct {
 	projectedCols []string
 
 	opts editor.Options
+
+	doltStats *DoltTableStatistics
 }
 
 func NewDoltTable(name string, sch schema.Schema, tbl *doltdb.Table, db SqlDatabase, opts editor.Options) (*DoltTable, error) {
@@ -271,7 +304,7 @@ func (t *DoltTable) String() string {
 }
 
 // NumRows returns the unfiltered count of rows contained in the table
-func (t *DoltTable) NumRows(ctx *sql.Context) (uint64, error) {
+func (t *DoltTable) numRows(ctx *sql.Context) (uint64, error) {
 	table, err := t.DoltTable(ctx)
 	if err != nil {
 		return 0, err
@@ -330,6 +363,7 @@ func (t *DoltTable) IsTemporary() bool {
 	return false
 }
 
+// DataLength implements the sql.StatisticsTable interface.
 func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	schema := t.Schema()
 	var numBytesPerRow uint64 = 0
@@ -358,12 +392,30 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 		}
 	}
 
-	numRows, err := t.NumRows(ctx)
+	numRows, err := t.numRows(ctx)
 	if err != nil {
 		return 0, err
 	}
 
 	return numBytesPerRow * numRows, nil
+}
+
+// TODO: Have actual implementations for AnalyzeTable and Statistics; this is just a quick fix to unblock others.
+
+// AnalyzeTable implements the sql.StatisticsTable interface.
+func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
+	return nil
+}
+
+// Statistics implements the sql.StatisticsTable interface.
+func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
+	numRows, err := t.numRows(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &DoltTableStatistics{
+		rowCount: numRows,
+	}, nil
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {

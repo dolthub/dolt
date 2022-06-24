@@ -12,19 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dprocedures
+package val
 
-import (
-	"github.com/dolthub/go-mysql-server/sql"
+import "github.com/dolthub/dolt/go/store/hash"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-)
+type BytesAddr struct {
+	Addr hash.Hash
+}
 
-// doltVerifyConstraints is the stored procedure version of the function `constraints_verify`.
-func doltVerifyConstraints(ctx *sql.Context, args ...string) (sql.RowIter, error) {
-	res, err := dfunctions.DoDoltConstraintsVerify(ctx, args)
-	if err != nil {
-		return nil, err
-	}
-	return rowToIter(int64(res)), nil
+func NewBytesAddr(addr hash.Hash) BytesAddr {
+	return BytesAddr{Addr: addr}
 }

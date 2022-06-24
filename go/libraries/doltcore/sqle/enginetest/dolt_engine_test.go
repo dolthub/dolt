@@ -437,6 +437,21 @@ func TestCreateDatabase(t *testing.T) {
 	enginetest.TestCreateDatabase(t, newDoltHarness(t))
 }
 
+func TestBlobs(t *testing.T) {
+	skipOldFormat(t)
+	enginetest.TestBlobs(t, newDoltHarness(t))
+}
+
+func TestBigBlobs(t *testing.T) {
+	skipOldFormat(t)
+
+	h := newDoltHarness(t)
+	h.Setup(setup.MydbData, setup.BlobData)
+	for _, tt := range BigBlobQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
 func TestDropDatabase(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
 		Name: "Drop database engine tests for Dolt only",
@@ -682,18 +697,18 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range MergeViolationsAndConflictsMergeScripts {
+	for _, script := range MergeArtifactsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
-func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
+func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
+	for _, script := range OldFormatMergeConflictsAndCVsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
@@ -1189,10 +1204,23 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 }
 
+func TestDoltVerifyConstraints(t *testing.T) {
+	for _, script := range DoltVerifyConstraintsTestScripts {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",
 	"Multiple indexes on the same columns in a different order",
+}
+
+func skipOldFormat(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 }
 
 func skipPreparedTests(t *testing.T) {

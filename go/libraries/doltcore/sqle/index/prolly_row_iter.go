@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/prolly"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -50,6 +51,7 @@ var encodingToType [256]query.Type
 
 type prollyRowIter struct {
 	iter prolly.MapIter
+	ns   tree.NodeStore
 
 	sqlSch  sql.Schema
 	keyDesc val.TupleDesc
@@ -62,13 +64,7 @@ type prollyRowIter struct {
 var _ sql.RowIter = prollyRowIter{}
 var _ sql.RowIter2 = prollyRowIter{}
 
-func NewProllyRowIter(
-	sch schema.Schema,
-	schSch sql.Schema,
-	rows prolly.Map,
-	iter prolly.MapIter,
-	projections []string,
-) (sql.RowIter, error) {
+func NewProllyRowIter(sch schema.Schema, schSch sql.Schema, rows prolly.Map, iter prolly.MapIter, projections []string) (sql.RowIter, error) {
 
 	// todo(andy): NomsRangeReader seemingly ignores projections
 	//if projections == nil {
@@ -86,6 +82,7 @@ func NewProllyRowIter(
 			valDesc: vd,
 			valProj: valProj,
 			rowLen:  len(projections),
+			ns:      rows.NodeStore(),
 		}, nil
 	}
 
@@ -97,6 +94,7 @@ func NewProllyRowIter(
 		keyProj: keyProj,
 		valProj: valProj,
 		rowLen:  len(projections),
+		ns:      rows.NodeStore(),
 	}, nil
 }
 
@@ -146,7 +144,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx], err = GetField(it.keyDesc, keyIdx, key)
+		row[rowIdx], err = GetField(ctx, it.keyDesc, keyIdx, key, it.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -155,7 +153,7 @@ func (it prollyRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		if rowIdx == -1 {
 			continue
 		}
-		row[rowIdx], err = GetField(it.valDesc, valIdx, value)
+		row[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
 		if err != nil {
 			return nil, err
 		}
@@ -205,6 +203,7 @@ func (it prollyRowIter) Close(ctx *sql.Context) error {
 
 type prollyKeylessIter struct {
 	iter prolly.MapIter
+	ns   tree.NodeStore
 
 	valDesc val.TupleDesc
 	valProj []int
@@ -243,7 +242,7 @@ func (it *prollyKeylessIter) nextTuple(ctx *sql.Context) error {
 		if rowIdx == -1 {
 			continue
 		}
-		it.curr[rowIdx], err = GetField(it.valDesc, valIdx, value)
+		it.curr[rowIdx], err = GetField(ctx, it.valDesc, valIdx, value, it.ns)
 		if err != nil {
 			return err
 		}

@@ -704,8 +704,7 @@ SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
   v LONGTEXT,
-  PRIMARY KEY (pk),
-  INDEX (v)
+  PRIMARY KEY (pk)
 );
 SQL
     run dolt schema show

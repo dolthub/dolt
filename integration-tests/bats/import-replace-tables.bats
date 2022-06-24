@@ -103,7 +103,7 @@ SQL
 @test "import-replace-tables: replace table using json" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -121,7 +121,7 @@ SQL
 @test "import-replace-tables: replace table using json with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`idz\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first namez\` LONGTEXT COMMENT 'tag:1',
   \`last namez\` LONGTEXT COMMENT 'tag:2',
   \`titlez\` LONGTEXT COMMENT 'tag:3',
@@ -140,7 +140,7 @@ SQL
 @test "import-replace-tables: replace table using schema with json" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`idz\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first namez\` LONGTEXT COMMENT 'tag:1',
   \`last namez\` LONGTEXT COMMENT 'tag:2',
   \`titlez\` LONGTEXT COMMENT 'tag:3',
@@ -182,7 +182,7 @@ SQL
 @test "import-replace-tables: replace table with bad json" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -199,7 +199,7 @@ SQL
 @test "import-replace-tables: replace table using xlsx file" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first\` LONGTEXT COMMENT 'tag:1',
   \`last\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -217,7 +217,7 @@ SQL
 @test "import-replace-tables: replace table using xlsx file with wrong schema" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -253,7 +253,7 @@ SQL
 @test "import-replace-tables: replace table with a json with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -271,7 +271,7 @@ SQL
 @test "import-replace-tables: replace table with a csv with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',

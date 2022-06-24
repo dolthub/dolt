@@ -22,6 +22,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
 const patchBufferSize = 1024
@@ -44,6 +45,7 @@ func ThreeWayMerge[S message.Serializer](
 	compare CompareFn,
 	collide CollisionFn,
 	serializer S,
+	valDesc val.TupleDesc,
 ) (final Node, err error) {
 
 	ld, err := DifferFromRoots(ctx, ns, base, left, compare)
