@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, v varchar(10))"
     dolt commit -am "Created table"
