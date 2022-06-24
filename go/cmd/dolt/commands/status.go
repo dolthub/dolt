@@ -105,7 +105,7 @@ func (cmd StatusCmd) Exec(ctx context.Context, commandStr string, args []string,
 
 // TODO: working docs in conflict param not used here
 func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
-	cli.Printf(branchHeader, rsr.CWBHeadRef().GetPath())
+	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
 
 	err := printRemoteRefTrackingInfo(ctx, dEnv)
 	if err != nil {
