@@ -113,9 +113,13 @@ func compare(typ Type, left, right []byte) int {
 	case Hash128Enc:
 		return compareHash128(readHash128(left), readHash128(right))
 	case BytesAddrEnc:
-		return compareBytesAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right))
 	case CommitAddrEnc:
-		return compareCommitAddr(readAddr(left), readAddr(right))
+		return compareAddr(readAddr(left), readAddr(right))
+	case JSONAddrEnc:
+		return compareAddr(readAddr(left), readAddr(right))
+	case StringAddrEnc:
+		return compareAddr(readAddr(left), readAddr(right))
 	default:
 		panic("unknown encoding")
 	}

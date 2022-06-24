@@ -16,6 +16,7 @@ package val
 
 import "github.com/dolthub/dolt/go/store/hash"
 
+// TODO delete?
 type BytesAddr struct {
 	Addr hash.Hash
 }

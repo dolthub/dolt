@@ -17,7 +17,9 @@ package tree
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"github.com/dolthub/go-mysql-server/sql"
 	"io"
 
 	"github.com/dolthub/dolt/go/store/hash"
@@ -161,27 +163,76 @@ func NewByteArray(addr hash.Hash, ns NodeStore) *ByteArray {
 }
 
 func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
-	if b.buf == nil {
-		err := b.load(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return b.buf[:], nil
+	return b.bytes(ctx)
 }
 
 func (b *ByteArray) ToString(ctx context.Context) (string, error) {
-	if b.buf == nil {
-		err := b.load(ctx)
-		if err != nil {
-			return "", err
-		}
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
 	}
 	toShow := 128
-	if len(b.buf) < toShow {
-		toShow = len(b.buf)
+	if len(buf) < toShow {
+		toShow = len(buf)
 	}
-	return string(b.buf[:toShow]), nil
+	return string(buf[:toShow]), nil
+}
+
+type JSONArray struct {
+	ImmutableTree
+}
+
+func NewJSONArray(addr hash.Hash, ns NodeStore) *JSONArray {
+	return &JSONArray{ImmutableTree{Addr: addr, ns: ns}}
+}
+
+func (b *JSONArray) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return sql.JSONDocument{}, err
+	}
+	var doc sql.JSONDocument
+	err = json.Unmarshal(buf, &doc.Val)
+	if err != nil {
+		return sql.JSONDocument{}, err
+	}
+	return doc, err
+}
+
+func (b *JSONArray) ToString(ctx context.Context) (string, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
+	}
+	toShow := 128
+	if len(buf) < toShow {
+		toShow = len(buf)
+	}
+	return string(buf[:toShow]), nil
+}
+
+type StringArray struct {
+	ImmutableTree
+}
+
+func NewStringArray(addr hash.Hash, ns NodeStore) *StringArray {
+	return &StringArray{ImmutableTree{Addr: addr, ns: ns}}
+}
+
+func (b *StringArray) ToBytes(ctx context.Context) ([]byte, error) {
+	return b.bytes(ctx)
+}
+
+func (b *StringArray) ToString(ctx context.Context) (string, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
+	}
+	//toShow := 128
+	//if len(buf) < toShow {
+	//	toShow = len(buf)
+	//}
+	return string(buf), nil
 }
 
 type ImmutableTree struct {
@@ -218,6 +269,16 @@ func (t *ImmutableTree) load(ctx context.Context) error {
 		return nil
 	})
 	return nil
+}
+
+func (t *ImmutableTree) bytes(ctx context.Context) ([]byte, error) {
+	if t.buf == nil {
+		err := t.load(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return t.buf[:], nil
 }
 
 func (t *ImmutableTree) next() (Node, error) {

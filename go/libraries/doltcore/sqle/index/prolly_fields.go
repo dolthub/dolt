@@ -100,10 +100,22 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 	case val.Hash128Enc:
 		v, ok = td.GetHash128(i, tup)
 	case val.BytesAddrEnc:
-		var b val.BytesAddr
-		b, ok = td.GetBlob(i, tup)
+		var h hash.Hash
+		h, ok = td.GetBytesAddr(i, tup)
 		if ok {
-			v, err = tree.NewByteArray(b.Addr, ns).ToBytes(ctx)
+			v, err = tree.NewByteArray(h, ns).ToBytes(ctx)
+		}
+	case val.JSONAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetJSONAddr(i, tup)
+		if ok {
+			v, err = tree.NewJSONArray(h, ns).ToJSONDocument(ctx)
+		}
+	case val.StringAddrEnc:
+		var h hash.Hash
+		h, ok = td.GetStringAddr(i, tup)
+		if ok {
+			v, err = tree.NewStringArray(h, ns).ToString(ctx)
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
@@ -170,29 +182,37 @@ func PutField(ctx context.Context, ns tree.NodeStore, tb *val.TupleBuilder, i in
 			v = []byte(s)
 		}
 		tb.PutByteString(i, v.([]byte))
+	case val.Hash128Enc:
+		tb.PutHash128(i, v.([]byte))
 	case val.GeometryEnc:
 		geo := serializeGeometry(v)
 		if len(geo) > math.MaxUint16 {
 			return ErrValueExceededMaxFieldSize
 		}
 		tb.PutGeometry(i, serializeGeometry(v))
-	case val.JSONEnc:
+	case val.JSONAddrEnc:
 		buf, err := convJson(v)
-		if len(buf) > math.MaxUint16 {
-			return ErrValueExceededMaxFieldSize
-		}
 		if err != nil {
 			return err
 		}
-		tb.PutJSON(i, buf)
-	case val.Hash128Enc:
-		tb.PutHash128(i, v.([]byte))
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(buf))
+		if err != nil {
+			return err
+		}
+		tb.PutJSONAddr(i, h)
 	case val.BytesAddrEnc:
-		b, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)))
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader(v.([]byte)))
 		if err != nil {
 			return err
 		}
-		tb.PutBytesAddr(i, b.Addr)
+		tb.PutBytesAddr(i, h)
+	case val.StringAddrEnc:
+		//todo: v will be []byte after daylon's changes
+		h, err := serializeBytesToAddr(ctx, ns, bytes.NewReader([]byte(v.(string))))
+		if err != nil {
+			return err
+		}
+		tb.PutStringAddr(i, h)
 	case val.CommitAddrEnc:
 		tb.PutCommitAddr(i, v.(hash.Hash))
 	default:
@@ -282,12 +302,12 @@ func serializeGeometry(v interface{}) []byte {
 	}
 }
 
-func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader) (val.BytesAddr, error) {
+func serializeBytesToAddr(ctx context.Context, ns tree.NodeStore, r io.Reader) (hash.Hash, error) {
 	tree, err := tree.NewImmutableTreeFromReader(ctx, r, ns, tree.DefaultFixedChunkLength)
 	if err != nil {
-		return val.BytesAddr{}, err
+		return hash.Hash{}, err
 	}
-	return val.NewBytesAddr(tree.Addr), nil
+	return tree.Addr, nil
 }
 
 func convJson(v interface{}) (buf []byte, err error) {

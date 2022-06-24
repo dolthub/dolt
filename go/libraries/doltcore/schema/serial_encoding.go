@@ -75,14 +75,14 @@ func EncodingFromSqlType(typ query.Type) serial.Encoding {
 		return serial.EncodingString
 	case query.Type_VARCHAR:
 		return serial.EncodingString
-	case query.Type_JSON:
-		return serial.EncodingJSON
 	case query.Type_GEOMETRY:
 		return serial.EncodingGeometry
+	case query.Type_JSON:
+		return serial.EncodingJSONAddr
 	case query.Type_BLOB:
 		return serial.EncodingBytesAddr
 	case query.Type_TEXT:
-		return serial.EncodingString
+		return serial.EncodingStringAddr
 	default:
 		panic(fmt.Sprintf("unknown encoding %v", typ))
 	}

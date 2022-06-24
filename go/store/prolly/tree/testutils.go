@@ -243,6 +243,10 @@ func randomField(tb *val.TupleBuilder, idx int, typ val.Type, ns NodeStore) {
 			panic("failed to write blob tree")
 		}
 		tb.PutBytesAddr(idx, tree.Addr)
+	case val.StringAddrEnc:
+		//todo
+	case val.JSONAddrEnc:
+		//todo
 
 	default:
 		panic("unknown encoding")
