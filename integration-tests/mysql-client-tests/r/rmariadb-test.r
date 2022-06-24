@@ -17,7 +17,7 @@ queries = list("create table test (pk int, value int, primary key(pk))",
                "select * from test")
 
 responses = list(NULL,
-                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("", ""), Extra = c("", ""), stringsAsFactors = FALSE),
+                 data.frame(Field = c("pk", "value"), Type = c("int", "int"), Null = c("NO", "YES"), Key = c("PRI", ""), Default = c("NULL", "NULL"), Extra = c("", ""), stringsAsFactors = FALSE),
                  NULL,
                  data.frame(pk = c(0), value = c(0), stringsAsFactors = FALSE))
 
