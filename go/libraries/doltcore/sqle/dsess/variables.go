@@ -56,7 +56,7 @@ func init() {
 		},
 		{ // If true, disables the conflict and constraint violation check when you commit a transaction.
 			Name:              ForceTransactionCommit,
-			Scope:             sql.SystemVariableScope_Session,
+			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(ForceTransactionCommit),
