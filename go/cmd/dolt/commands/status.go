@@ -235,18 +235,14 @@ func countCommitsInRange(ctx context.Context, ddb *doltdb.DoltDB, startCommitHas
 	}
 	count := 0
 	for {
-		_, commit, err := itr.Next(ctx)
+		hash, _, err := itr.Next(ctx)
 		if err == io.EOF {
 			return 0, errors.New("no match found to ancestor commit")
 		} else if err != nil {
 			return 0, err
 		}
 
-		h, err := commit.HashOf()
-		if err != nil {
-			return 0, err
-		}
-		if h == targetCommitHash {
+		if hash == targetCommitHash {
 			break
 		}
 		count += 1
