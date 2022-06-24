@@ -21,11 +21,12 @@ import (
 	"io"
 	"strings"
 
+	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/fatih/color"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/fwt"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
-	"github.com/dolthub/go-mysql-server/sql"
-	"github.com/fatih/color"
 )
 
 // FixedWidthTableWriter is a TableWriter that applies a fixed width transform to its fields. All fields are
@@ -256,7 +257,7 @@ func (w *FixedWidthTableWriter) writeRow(row tableRow) error {
 func rowToTableRow(row sql.Row, colors []*color.Color) (tableRow, error) {
 	tRow := tableRow{
 		columns: make([]string, len(row)),
-		colors: colors,
+		colors:  colors,
 	}
 
 	var err error

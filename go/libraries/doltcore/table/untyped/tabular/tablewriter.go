@@ -69,9 +69,9 @@ func NewTextTableWriterWithNumHeaderRows(wr io.WriteCloser, sch schema.Schema, n
 
 	bwr := bufio.NewWriterSize(wr, writeBufSize)
 	return &TextTableWriter{
-		closer: wr,
-		bWr: bwr,
-		sch: sch,
+		closer:        wr,
+		bWr:           bwr,
+		sch:           sch,
 		numHeaderRows: numHeaderRows,
 	}, nil
 }

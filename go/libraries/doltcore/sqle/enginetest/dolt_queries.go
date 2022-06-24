@@ -3181,7 +3181,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 		Assertions: []queries.ScriptTestAssertion{
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', @Commit1, 'WORKING') order by coalesce(from_pk, to_pk)",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', @Commit1, 'WORKING') order by coalesce(from_pk, to_pk)",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -3189,7 +3189,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'WORKING') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'STAGED', 'WORKING') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -3197,7 +3197,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				},
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'WORKING', 'STAGED') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "100", 1, "one", "two", "modified"},
 					{nil, nil, nil, 2, "three", "four", "added"},
@@ -3213,7 +3213,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "call dolt_add('.')",
+				Query:            "call dolt_add('.')",
 				SkipResultsCheck: true,
 			},
 			{
@@ -3221,7 +3221,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:    "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'HEAD', 'STAGED') order by coalesce(from_pk, to_pk);",
+				Query: "SELECT from_pk, from_c1, from_c2, to_pk, to_c1, to_c2, diff_type from dolt_diff('t', 'HEAD', 'STAGED') order by coalesce(from_pk, to_pk);",
 				Expected: []sql.Row{
 					{1, "one", "two", 1, "one", "100", "modified"},
 					{2, "three", "four", nil, nil, nil, "removed"},
@@ -3464,8 +3464,8 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:         "new table",
-		SetUpScript:  []string{
+		Name: "new table",
+		SetUpScript: []string{
 			"create table t1 (a int primary key, b int)",
 			"insert into t1 values (1,2)",
 		},
@@ -3475,7 +3475,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 			},
 			{
-				Query:    "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+				Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
 				ExpectedErr: sql.ErrColumnNotFound,
 			},
 			{
@@ -3485,8 +3485,8 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:         "dropped table",
-		SetUpScript:  []string{
+		Name: "dropped table",
+		SetUpScript: []string{
 			"create table t1 (a int primary key, b int)",
 			"insert into t1 values (1,2)",
 			"call dolt_commit('-am', 'new table')",

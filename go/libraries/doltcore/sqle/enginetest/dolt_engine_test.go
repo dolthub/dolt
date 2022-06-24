@@ -84,8 +84,8 @@ func TestSingleScript(t *testing.T) {
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name:         "new table",
-			SetUpScript:  []string{
+			Name: "new table",
+			SetUpScript: []string{
 				"create table t1 (a int primary key, b int)",
 				"insert into t1 values (1,2)",
 			},

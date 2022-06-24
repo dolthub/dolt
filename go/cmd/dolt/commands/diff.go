@@ -22,15 +22,12 @@ import (
 	"strings"
 
 	textdiff "github.com/andreyvit/diff"
-	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
-	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/go-mysql-server/sql"
 	humanize "github.com/dustin/go-humanize"
 	"github.com/fatih/color"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -42,7 +39,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlfmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/pipeline"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/sqlexport"
+	"github.com/dolthub/dolt/go/libraries/doltcore/table/untyped/tabular"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/iohelp"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
@@ -105,10 +105,10 @@ type diffArgs struct {
 	diffParts  diffPart
 	diffOutput diffOutput
 	fromRoot   *doltdb.RootValue
-	toRoot  *doltdb.RootValue
-	fromRef string
-	toRef   string
-	tableSet *set.StrSet
+	toRoot     *doltdb.RootValue
+	fromRef    string
+	toRef      string
+	tableSet   *set.StrSet
 	docSet     *set.StrSet
 	limit      int
 	where      string
@@ -190,7 +190,6 @@ func (cmd DiffCmd) validateArgs(apr *argparser.ArgParseResults) errhand.VerboseE
 	default:
 		return errhand.BuildDError("invalid output format: %s", f).Build()
 	}
-
 
 	return nil
 }
@@ -450,10 +449,10 @@ func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (*engine.SqlEngine, er
 		mrEnv,
 		engine.FormatCsv,
 		&engine.SqlEngineConfig{
-			InitialDb:    dbName,
-			IsReadOnly:   false,
-			ServerUser:   "root",
-			Autocommit:   false,
+			InitialDb:  dbName,
+			IsReadOnly: false,
+			ServerUser: "root",
+			Autocommit: false,
 		},
 	)
 }
@@ -468,7 +467,6 @@ func newSqlContext(ctx context.Context, se *engine.SqlEngine) (*sql.Context, err
 	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 	return sqlCtx, nil
 }
-
 
 func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	toSchemas, err := toRoot.GetAllSchemas(ctx)
@@ -688,11 +686,11 @@ func unionSchemas(s1 sql.Schema, s2 sql.Schema) sql.Schema {
 }
 
 func writeDiffResults(
-		ctx *sql.Context,
-		diffQuerySch sql.Schema,
-		targetSch sql.Schema,
-		iter sql.RowIter,
-		writer diff.SqlRowDiffWriter,
+	ctx *sql.Context,
+	diffQuerySch sql.Schema,
+	targetSch sql.Schema,
+	iter sql.RowIter,
+	writer diff.SqlRowDiffWriter,
 ) error {
 	ds, err := newDiffSplitter(diffQuerySch, targetSch)
 	if err != nil {

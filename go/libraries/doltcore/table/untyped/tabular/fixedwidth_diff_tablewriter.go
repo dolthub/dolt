@@ -19,9 +19,10 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 )
 
 // FixedWidthDiffTableWriter wraps a |FixedWidthTableWriter| to provide appropriate coloring and a leading diff type
@@ -33,8 +34,8 @@ type FixedWidthDiffTableWriter struct {
 func NewFixedWidthDiffTableWriter(schema sql.Schema, wr io.WriteCloser, numSamples int) *FixedWidthDiffTableWriter {
 	// leading diff type column with empty name
 	schema = append(sql.Schema{&sql.Column{
-		Name:          " ",
-		Type:          sql.Text,
+		Name: " ",
+		Type: sql.Text,
 	}}, schema...)
 
 	tableWriter := NewFixedWidthTableWriter(schema, wr, numSamples)
@@ -44,10 +45,10 @@ func NewFixedWidthDiffTableWriter(schema sql.Schema, wr io.WriteCloser, numSampl
 }
 
 func (w FixedWidthDiffTableWriter) WriteRow(
-		ctx context.Context,
-		row sql.Row,
-		rowDiffType diff.ChangeType,
-		colDiffTypes []diff.ChangeType,
+	ctx context.Context,
+	row sql.Row,
+	rowDiffType diff.ChangeType,
+	colDiffTypes []diff.ChangeType,
 ) error {
 	if len(row) != len(colDiffTypes) {
 		return fmt.Errorf("expected the same size for columns and diff types, got %d and %d", len(row), len(colDiffTypes))
@@ -85,4 +86,3 @@ func colorsForDiffTypes(colDiffTypes []diff.ChangeType) []*color.Color {
 func (w FixedWidthDiffTableWriter) Close(ctx context.Context) error {
 	return w.tableWriter.Close(ctx)
 }
-
