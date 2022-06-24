@@ -275,3 +275,31 @@ SQL
     [[ "${lines[1]}" =~ "11,11" ]] || false
     [[ "${lines[2]}" =~ "12,12" ]] || false
 }   
+
+@test "create-views: describe correctly works with complex views" {
+    dolt sql -q "create table t(pk int primary key, val int)"
+    dolt sql -q "create view view1 as select * from t"
+
+    run dolt sql -r csv -q "describe view1"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+    [[ "${lines[2]}" =~ 'val,int,YES,"",NULL,""' ]] || false
+
+    dolt sql -q "create view view2 as select pk from t"
+    run dolt sql -r csv -q "describe view2"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 2 ]
+    [[ "${lines[1]}" =~ 'pk,int,NO,"",NULL,""' ]] || false
+
+    dolt sql -q "create table t2(pk int primary key, val int)"
+    dolt sql -q "insert into t values (1,1)"
+    dolt sql -q "insert into t2 values (1,2)"
+
+    dolt sql -q "create view view3 as select t.val as v1, t2.val as v2 from t inner join t2 on t.pk=t2.pk"
+    run dolt sql -r csv -q "describe view3"
+    [ "$status" -eq 0 ]
+    [ "${#lines[@]}" -eq 3 ]
+    [[ "${lines[1]}" =~ 'v1,int,YES,"",NULL,""' ]] || false
+    [[ "${lines[2]}" =~ 'v2,int,YES,"",NULL,""' ]] || false
+}

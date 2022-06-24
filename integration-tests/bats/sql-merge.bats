@@ -621,7 +621,7 @@ SQL
 }
 
 @test "sql-merge: DOLT_MERGE detects merge conflicts, fails to commit and leaves working set clean when dolt_allow_commit_conflicts = 0" {
-    skip "This test is flaking and needs to be fixed"
+    skip "This test is flaky in ci/cd. Skipping for now"
     # The dolt_merge fails here, and leaves the working set clean, no conflicts, no merge in progress
     run dolt sql << SQL
 SET dolt_allow_commit_conflicts = 0;
