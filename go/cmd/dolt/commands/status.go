@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -208,24 +209,14 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 		return err
 	}
 
-	var ahead = uint64(0)
-	var behind = uint64(0)
-	if headHash != ancHash && remoteHash != ancHash {
-		behind, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, remoteHash, ancHash)
+	ahead := 0
+	behind := 0
+	if headHash != remoteHash {
+		behind, err = countCommitsInRange(ctx, ddb, remoteHash, ancHash)
 		if err != nil {
 			return err
 		}
-		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, headHash, ancHash)
-		if err != nil {
-			return err
-		}
-	} else if remoteHash != ancHash {
-		behind, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, remoteHash, ancHash)
-		if err != nil {
-			return err
-		}
-	} else if headHash != ancHash {
-		ahead, err = getNumOfCommitBetweenTwoCommits(ctx, ddb, headHash, ancHash)
+		ahead, err = countCommitsInRange(ctx, ddb, headHash, ancHash)
 		if err != nil {
 			return err
 		}
@@ -235,18 +226,18 @@ func printRemoteRefTrackingInfo(ctx context.Context, dEnv *env.DoltEnv) error {
 	return nil
 }
 
-// getNumOfCommitBetweenTwoCommits returns the number of commits between given starting point to trace back to give target point.
-// The starting commit should be the commit made after target commit.
-func getNumOfCommitBetweenTwoCommits(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, targetCommitHash hash.Hash) (uint64, error) {
+// countCommitsInRange returns the number of commits between the given starting point to trace back to the given target point.
+// The starting commit must be a descendant of the target commit. Target commit must be a common ancestor commit.
+func countCommitsInRange(ctx context.Context, ddb *doltdb.DoltDB, startCommitHash, targetCommitHash hash.Hash) (int, error) {
 	itr, iErr := commitwalk.GetTopologicalOrderIterator(ctx, ddb, startCommitHash)
 	if iErr != nil {
 		return 0, iErr
 	}
-	count := uint64(0)
+	count := 0
 	for {
 		_, commit, err := itr.Next(ctx)
 		if err == io.EOF {
-			break
+			return 0, errors.New("no match found to ancestor commit")
 		} else if err != nil {
 			return 0, err
 		}
@@ -265,10 +256,10 @@ func getNumOfCommitBetweenTwoCommits(ctx context.Context, ddb *doltdb.DoltDB, st
 }
 
 // getRemoteTrackingMsg returns remote tracking information with given remote branch name, number of commits ahead and/or behind.
-func getRemoteTrackingMsg(remoteBranchName string, ahead uint64, behind uint64) string {
+func getRemoteTrackingMsg(remoteBranchName string, ahead int, behind int) string {
 	if ahead > 0 && behind > 0 {
 		return fmt.Sprintf(`Your branch and '%s' have diverged,
-and have %v and %v different commits each, respectively."
+and have %v and %v different commits each, respectively.
   (use "dolt pull" to update your local branch)`, remoteBranchName, ahead, behind)
 	} else if ahead > 0 {
 		s := ""
