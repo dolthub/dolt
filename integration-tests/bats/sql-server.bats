@@ -1116,10 +1116,13 @@ END""")
     [ "$status" -ne 0 ]
     [[ "$output" =~ "database not found: test1/newbranch" ]] || false
 
-    # can't drop a branch-qualified database name
+    # dropping a branch-qualified database name removes that branch-qualified
+    # database but not the entire (non-branch-qualified) database
     run server_query "" 1 "drop database \`test2/newbranch\`"
-    [ "$status" -ne 0 ]
-    [[ "$output" =~ "database not found: test2/newbranch" ]] || false
+    [ "$status" -eq 0 ]
+    run server_query "" 1 "show databases"
+    [[ "$output" =~ "test2" ]] || false
+    [[ ! "$output" =~ "test2/newbranch" ]] || false
 
     server_query "" 1 "drop database TEST2"
 
