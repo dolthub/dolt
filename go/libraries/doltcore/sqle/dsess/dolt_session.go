@@ -18,7 +18,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -48,14 +47,6 @@ func NewDoltSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionData
 
 	globals := config.NewPrefixConfig(conf, env.SqlServerGlobalsPrefix)
 	return sess.NewDoltSession(globals), nil
-}
-
-// SetCurrentDatabase implements sql.Session
-func (s *DoltSession) SetCurrentDatabase(db string) {
-	// For clients or tools that don't support compound database names (i.e. <database>/<branch>)
-	// url-decode slash chars only to allow them to connect to a specific branch.
-	db = strings.ReplaceAll(db, "%2F", "/")
-	s.Session.SetCurrentDatabase(db)
 }
 
 // PersistGlobal implements sql.PersistableSession

@@ -331,9 +331,7 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
-	connectionString := sqlserver.ConnectionString(serverConfig) + dbName
-
-	conn, err := dbr.Open("mysql", connectionString, nil)
+	conn, err := dbr.Open("mysql", sqlserver.ConnectionString(serverConfig)+dbName, nil)
 	require.NoError(t, err)
 	sess := conn.NewSession(nil)
 	return conn, sess
