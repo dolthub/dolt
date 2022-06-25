@@ -493,7 +493,7 @@ mysql> show tables;
 
 Dolt makes operating databases less error prone. You can always back out changes you have in progress or rewind to a known good state. You also have the ability to undo specific commits using [`dolt_revert()`](https://docs.dolthub.com/sql-reference/version-control/dolt-sql-procedures#dolt_revert).
 
-Note, the only unrecoverable SQL statement in Dolt is `drop database`. This deletes the database and all of it's history on disk. `drop database` works this way for SQL tool compatibility as it is common for import tools to issue a `drop database` to clear all database state before an import. Dolt implements [remotes](https://docs.dolthub.com/concepts/dolt/remotes) like in Git so you can maintain an offline copy for backup using clone, fetch, push, and pull. Maintaining a remote copy allows you to restore in the case of an errant `drop database` query. 
+Note, the only unrecoverable SQL statement in Dolt is `drop database`. This deletes the database and all of its history on disk. `drop database` works this way for SQL tool compatibility as it is common for import tools to issue a `drop database` to clear all database state before an import. Dolt implements [remotes](https://docs.dolthub.com/concepts/dolt/remotes) like in Git so you can maintain an offline copy for backup using clone, fetch, push, and pull. Maintaining a remote copy allows you to restore in the case of an errant `drop database` query. 
 
 ## See the data in a SQL Workbench
 
