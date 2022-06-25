@@ -105,19 +105,24 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
-}
-
-// DoltBranchMultiSessionBranchConnectionScriptTests contain tests that need to be run in a multi-session
-// server environment, with clients connected directly to a <db>/<branch> revision database in order to
-// fully test branch deletion and renaming logic.
-var DoltBranchMultiSessionBranchConnectionScriptTests = []queries.ScriptTest{
 	{
-		Name:        "Test branch deletion when clients are connected to a revision database",
-		SetUpScript: []string{},
+		Name: "Test branch deletion when clients are connected to a revision database",
+		SetUpScript: []string{
+			"call dolt_branch('branch1');",
+			"call dolt_branch('branch2');",
+		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use dolt/branch1;",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
 				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ use dolt/branch2;",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
@@ -149,12 +154,23 @@ var DoltBranchMultiSessionBranchConnectionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name:        "Test branch renaming when clients are connected to a revision database",
-		SetUpScript: []string{},
+		Name: "Test branch renaming when clients are connected to a revision database",
+		SetUpScript: []string{
+			"call dolt_branch('branch1');",
+			"call dolt_branch('branch2');",
+		},
 		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use dolt/branch1;",
+				Expected: []sql.Row{},
+			},
 			{
 				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
 				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ use dolt/branch2;",
+				Expected: []sql.Row{},
 			},
 			{
 				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
@@ -193,31 +209,12 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 	testMultiSessionScriptTests(t, DoltBranchMultiSessionScriptTests)
 }
 
-func TestDoltMultiSessionBehaviorWithBranchConnection(t *testing.T) {
-	testMultiSessionScriptTestsWithBranches(t, "branch1", "branch2", DoltBranchMultiSessionBranchConnectionScriptTests)
-}
-
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
-	testMultiSessionScriptTestsWithBranches(t, "", "", tests)
-}
-
-func testMultiSessionScriptTestsWithBranches(t *testing.T, branch1, branch2 string, tests []queries.ScriptTest) {
 	for _, test := range tests {
 		sc, serverConfig := startServer(t)
 
-		// Create any branches that are needed in a connection string
-		for _, branchName := range []string{branch1, branch2} {
-			if len(branchName) > 0 {
-				connection, session := newConnection(t, serverConfig)
-				_, err := session.Query("CALL DOLT_BRANCH(?)", branchName)
-				require.NoError(t, err)
-				session.Close()
-				connection.Close()
-			}
-		}
-
-		conn1, sess1 := newConnectionWithBranch(t, serverConfig, branch1)
-		conn2, sess2 := newConnectionWithBranch(t, serverConfig, branch2)
+		conn1, sess1 := newConnection(t, serverConfig)
+		conn2, sess2 := newConnection(t, serverConfig)
 
 		t.Run(test.Name, func(t *testing.T) {
 			for _, setupStatement := range test.SetUpScript {
@@ -333,17 +330,8 @@ func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerCon
 }
 
 func newConnection(t *testing.T, serverConfig sqlserver.ServerConfig) (*dbr.Connection, *dbr.Session) {
-	return newConnectionWithBranch(t, serverConfig, "")
-}
-
-func newConnectionWithBranch(t *testing.T, serverConfig sqlserver.ServerConfig, branchName string) (*dbr.Connection, *dbr.Session) {
 	const dbName = "dolt"
 	connectionString := sqlserver.ConnectionString(serverConfig) + dbName
-	if len(branchName) > 0 {
-		// go-sql-driver/mysql doesn't support database names with a slash it, so we use a url-encoded
-		// slash and rely on Dolt to decode that and interpret the branch name.
-		connectionString = connectionString + "%2F" + branchName
-	}
 
 	conn, err := dbr.Open("mysql", connectionString, nil)
 	require.NoError(t, err)
