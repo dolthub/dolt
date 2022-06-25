@@ -276,29 +276,29 @@ func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	tb.pos += sz
 }
 
-// PutCommitAddr writes an address pointer to an out of band
-// commit to the ith field of the Tuple being built.
+// PutCommitAddr writes a commit's address ref to the ith field
+// of the Tuple being built.
 func (tb *TupleBuilder) PutCommitAddr(i int, v hash.Hash) {
 	tb.Desc.expectEncoding(i, CommitAddrEnc)
 	tb.putAddr(i, v)
 }
 
-// PutBytesAddr writes an address pointer to an out of band
-// []byte to the ith field of the Tuple being built.
+// PutBytesAddr writes a blob's address ref to the ith field
+// of the Tuple being built.
 func (tb *TupleBuilder) PutBytesAddr(i int, v hash.Hash) {
 	tb.Desc.expectEncoding(i, BytesAddrEnc)
 	tb.putAddr(i, v)
 }
 
-// PutStringAddr writes an address pointer to an out of band
-// string to the ith field of the Tuple being built.
+// PutStringAddr writes a string's address ref to the ith field
+// of the Tuple being built.
 func (tb *TupleBuilder) PutStringAddr(i int, v hash.Hash) {
 	tb.Desc.expectEncoding(i, StringAddrEnc)
 	tb.putAddr(i, v)
 }
 
-// PutJSONAddr writes an address pointer to an out of band
-// json string to the ith field of the Tuple being built.
+// PutJSONAddr writes a JSON string's address ref to the ith field
+// of the Tuple being built.
 func (tb *TupleBuilder) PutJSONAddr(i int, v hash.Hash) {
 	tb.Desc.expectEncoding(i, JSONAddrEnc)
 	tb.putAddr(i, v)
