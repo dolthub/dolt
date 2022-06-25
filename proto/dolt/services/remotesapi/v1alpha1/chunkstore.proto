@@ -51,6 +51,12 @@ service ChunkStoreService {
   rpc AddTableFiles(AddTableFilesRequest) returns (AddTableFilesResponse);
 }
 
+enum ChunkStoreClientType {
+  CHUNKSTORE_CLIENT_TYPE_UNSPECIFIED = 0;
+  CHUNKSTORE_CLIENT_TYPE_INTERNAL = 1;
+  CHUNKSTORE_CLIENT_TYPE_EXTERNAL = 2;
+}
+
 message RepoId {
   string org = 1;
   string repo_name = 2;
@@ -104,6 +110,7 @@ message UploadLoc {
 message GetDownloadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes chunk_hashes = 2;
+  ChunkStoreClientType clientType = 3;
 }
 
 message GetDownloadLocsResponse {
@@ -120,6 +127,7 @@ message GetUploadLocsRequest {
   RepoId repo_id = 1;
   repeated bytes table_file_hashes = 2 [deprecated = true];
   repeated TableFileDetails table_file_details = 3;
+  ChunkStoreClientType clientType = 4;
 }
 
 message GetUploadLocsResponse {
@@ -152,6 +160,7 @@ message CommitRequest {
   bytes last = 3;
   repeated ChunkTableInfo chunk_table_info = 4;
   ClientRepoFormat client_repo_format = 14;
+  ChunkStoreClientType clientType = 5;
 }
 
 message CommitResponse {
@@ -183,6 +192,7 @@ message ClientRepoFormat {
 message ListTableFilesRequest  {
   RepoId repo_id = 1;
   bool appendix_only = 2 [deprecated = true];
+  ChunkStoreClientType clientType = 3;
 }
 
 message TableFileInfo {
@@ -196,6 +206,7 @@ message TableFileInfo {
 message RefreshTableFileUrlRequest {
   RepoId repo_id = 1;
   string file_id = 2;
+  ChunkStoreClientType clientType = 3;
 }
 
 message RefreshTableFileUrlResponse {
@@ -226,6 +237,7 @@ message AddTableFilesRequest {
   // are removed from the manifest specs. If `append_option` is `APPEND`, then the
   // supplied table files are added to the appendix and to specs.
   ManifestAppendixOption appendix_option = 4;
+  ChunkStoreClientType clientType = 5;
 }
 
 message AddTableFilesResponse {
