@@ -78,7 +78,7 @@ teardown_common() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
-status_eq() {
+log_status_eq() {
     if ! [ "$status" -eq $1 ]; then
         echo "status: expected $1, received $status"
         printf "output:\n$output"
@@ -86,7 +86,7 @@ status_eq() {
     fi
 }
 
-output_has() {
+log_output_has() {
     if ! [[ "$output" =~ $1 ]]; then
         echo "output did not have $1"
         printf "output:\n$output"
