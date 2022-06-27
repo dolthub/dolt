@@ -29,16 +29,12 @@ type ChangeType int
 const (
 	// None is no change
 	None ChangeType = iota
-
 	// Added is the ChangeType value for a row that was newly added (In new, but not in old)
 	Added
-
 	// Removed is the ChangeTypeProp value for a row that was newly deleted (In old, but not in new)
 	Removed
-
 	// ModifiedOld is the ChangeType value for the row which represents the old value of the row before it was changed.
 	ModifiedOld
-
 	// ModifiedNew is the ChangeType value for the row which represents the new value of the row after it was changed.
 	ModifiedNew
 )

@@ -17,7 +17,6 @@ package sqle
 import (
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
@@ -135,7 +134,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	}
 	ddb := sqledb.GetDoltDB()
 
-	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, toCommitVal, ddb)
+	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, toCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +144,7 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 		return nil, err
 	}
 
-	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, fromCommitVal, ddb)
+	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, fromCommitVal, sqledb)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +160,11 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 }
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
-func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, ref interface{}, ddb *doltdb.DoltDB) (*doltdb.RootValue, string, *types.Timestamp, error) {
+func (dtf *DiffTableFunction) loadDetailsForRef(
+		ctx *sql.Context,
+		ref interface{},
+		ddb Database,
+) (*doltdb.RootValue, string, *types.Timestamp, error) {
 	hashStr, ok := ref.(string)
 	if !ok {
 		return nil, "", nil, fmt.Errorf("received '%v' when expecting commit hash string", ref)
@@ -169,49 +172,10 @@ func (dtf *DiffTableFunction) loadDetailsForRef(ctx *sql.Context, ref interface{
 
 	sess := dsess.DSessFromSess(ctx.Session)
 
-	// TODO: formalize this
-	if hashStr == "WORKING" || hashStr == "STAGED" {
-		// TODO: get from working set / staged update time
-		now := types.Timestamp(time.Now())
-		// TODO: no current database
-		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
-		if hashStr == "WORKING" {
-			return roots.Working, hashStr, &now, nil
-		} else if hashStr == "STAGED" {
-			return roots.Staged, hashStr, &now, nil
-		}
-	}
-
-	var root *doltdb.RootValue
-	var commitTime *types.Timestamp
-	cs, err := doltdb.NewCommitSpec(hashStr)
+	root, commitTime, err := sess.ResolveRootForRef(ctx, ddb.Name(), hashStr)
 	if err != nil {
 		return nil, "", nil, err
 	}
-
-	// TODO: no current database
-	headRef, err := sess.CWBHeadRef(ctx, ctx.GetCurrentDatabase())
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	cm, err := ddb.Resolve(ctx, cs, headRef)
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	root, err = cm.GetRootValue(ctx)
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	meta, err := cm.GetCommitMeta(ctx)
-	if err != nil {
-		return nil, "", nil, err
-	}
-
-	t := meta.Time()
-	commitTime = (*types.Timestamp)(&t)
 
 	return root, hashStr, commitTime, nil
 }
