@@ -141,13 +141,12 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Verify that dolt/branch2 doesn't show up as a database anymore
 				Query:    "/* client a */ SHOW DATABASES;",
 				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
 			},
 			{
-				// Call a stored procedure since this searches across all databases.
-				// (This failed in https://github.com/dolthub/dolt/issues/3636)
+				// Call a stored procedure since this searches across all databases and will
+				// fail if a branch-qualified database exists for a missing branch.
 				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
 				Expected: []sql.Row{{0}},
 			},
@@ -189,13 +188,12 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Verify that dolt/branch2 doesn't show up as a database anymore
 				Query:    "/* client a */ SHOW DATABASES;",
 				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
 			},
 			{
-				// Call a stored procedure since this searches across all databases.
-				// (This failed in https://github.com/dolthub/dolt/issues/3636)
+				// Call a stored procedure since this searches across all databases and will
+				// fail if a branch-qualified database exists for a missing branch.
 				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
 				Expected: []sql.Row{{0}},
 			},
