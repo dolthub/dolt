@@ -261,7 +261,14 @@ func newProllyDiffIter(ctx *sql.Context, dp DiffPartition, ddb *doltdb.DoltDB, t
 		return prollyDiffIter{}, err
 	}
 
-	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn, dp.to.NodeStore())
+	var nodeStore tree.NodeStore
+	if dp.to != nil {
+		nodeStore = dp.to.NodeStore()
+	} else {
+		nodeStore = dp.from.NodeStore()
+	}
+
+	toConverter, err := NewProllyRowConverter(tSch, targetToSchema, ctx.Warn, nodeStore)
 	if err != nil {
 		return prollyDiffIter{}, err
 	}
