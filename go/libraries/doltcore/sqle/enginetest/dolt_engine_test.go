@@ -930,10 +930,18 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 	enginetest.TestPreparedStaticIndexQuery(t, newDoltHarness(t))
 }
 
+func TestStatistics(t *testing.T) {
+	enginetest.TestStatistics(t, newDoltHarness(t))
+}
+
 func TestSpatialQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestPreparedStatistics(t *testing.T) {
+	enginetest.TestStatisticsPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
