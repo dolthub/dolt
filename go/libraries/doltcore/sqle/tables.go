@@ -78,7 +78,6 @@ type projected interface {
 // DoltTableStatistics holds the statistics for dolt tables
 type DoltTableStatistics struct {
 	rowCount     uint64
-	nullCount    uint64
 	createdAt    time.Time
 	histogramMap sql.HistogramMap
 }
@@ -93,15 +92,17 @@ func (ds *DoltTableStatistics) RowCount() uint64 {
 	return ds.rowCount
 }
 
-func (ds *DoltTableStatistics) NullCount() uint64 {
-	return ds.nullCount
-}
-
 func (ds *DoltTableStatistics) Histogram(colName string) (*sql.Histogram, error) {
+	if res, ok := ds.histogramMap[colName]; ok {
+		return res, nil
+	}
 	return &sql.Histogram{}, fmt.Errorf("column %s not found", colName)
 }
 
 func (ds *DoltTableStatistics) HistogramMap() sql.HistogramMap {
+	if len(ds.histogramMap) == 0 {
+		return nil
+	}
 	return ds.histogramMap
 }
 
@@ -400,22 +401,70 @@ func (t *DoltTable) DataLength(ctx *sql.Context) (uint64, error) {
 	return numBytesPerRow * numRows, nil
 }
 
-// TODO: Have actual implementations for AnalyzeTable and Statistics; this is just a quick fix to unblock others.
-
 // AnalyzeTable implements the sql.StatisticsTable interface.
+// This method will save the stats into the Database state found in the Session.
 func (t *DoltTable) AnalyzeTable(ctx *sql.Context) error {
+	table, err := t.DoltTable(ctx)
+	if err != nil {
+		return err
+	}
+
+	m, err := table.GetRowData(ctx)
+	if err != nil {
+		return err
+	}
+
+	t.doltStats = &DoltTableStatistics{
+		rowCount:  m.Count(),
+		createdAt: time.Now(),
+	}
+
+	histMap, err := sql.NewHistogramMapFromTable(ctx, t)
+	if err != nil {
+		return err
+	}
+	t.doltStats.histogramMap = histMap
+
+	dSess := ctx.Session.(*dsess.DoltSession)
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return err
+	}
+	if dbState.TblStats == nil {
+		dbState.TblStats = make(map[string]sql.TableStatistics)
+	}
+	dbState.TblStats[t.tableName] = t.doltStats
 	return nil
 }
 
 // Statistics implements the sql.StatisticsTable interface.
 func (t *DoltTable) Statistics(ctx *sql.Context) (sql.TableStatistics, error) {
-	numRows, err := t.numRows(ctx)
-	if err != nil {
-		return nil, err
+	if t.doltStats != nil {
+		return t.doltStats, nil
 	}
-	return &DoltTableStatistics{
-		rowCount: numRows,
-	}, nil
+
+	// Load stats from the session
+	dSess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return nil, nil
+	}
+	dbState, ok, err := dSess.LookupDbState(ctx, ctx.GetCurrentDatabase())
+	if !ok || err != nil {
+		return nil, nil
+	}
+	stats, ok := dbState.TblStats[t.tableName]
+	if !ok {
+		numRows, err := t.numRows(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return &DoltTableStatistics{
+			rowCount: numRows,
+		}, nil
+	}
+	t.doltStats = stats.(*DoltTableStatistics)
+
+	return t.doltStats, nil
 }
 
 func (t *DoltTable) PrimaryKeySchema() sql.PrimaryKeySchema {
