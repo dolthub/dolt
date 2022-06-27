@@ -19,8 +19,8 @@ import (
 	"gopkg.in/src-d/go-errors.v1"
 )
 
-// ErrRevisionDbDoesNotExist is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
-var ErrRevisionDbDoesNotExist = errors.NewKind("revision database not found: '%s'")
+// ErrRevisionDbNotFound is thrown when a RevisionDatabaseProvider cannot find a specified revision database.
+var ErrRevisionDbNotFound = errors.NewKind("revision database not found: '%s'")
 
 // RevisionDatabaseProvider provides revision databases.
 // In Dolt, commits and branches can be accessed as discrete databases

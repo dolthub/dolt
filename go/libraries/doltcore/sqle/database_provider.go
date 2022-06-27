@@ -318,14 +318,14 @@ func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) err
 	dbKey := formatDbMapKeyName(revDB)
 	_, ok := p.databases[dbKey]
 	if !ok {
-		return dsess.ErrRevisionDbDoesNotExist.New(revDB)
+		return dsess.ErrRevisionDbNotFound.New(revDB)
 	}
 
 	if IsRevisionDatabase(revDB) {
 		delete(p.databases, dbKey)
 		return nil
 	} else {
-		return dsess.ErrRevisionDbDoesNotExist.New(revDB)
+		return dsess.ErrRevisionDbNotFound.New(revDB)
 	}
 }
 

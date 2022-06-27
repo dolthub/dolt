@@ -240,7 +240,8 @@ func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error
 	provider := doltsess.Session.Provider()
 	if provider, ok := provider.(dsess.RevisionDatabaseProvider); ok {
 		err := provider.DropRevisionDb(ctx, revisionDbName)
-		if err != nil {
+		// Try to remove any branch-qualified database, but don't error if it isn't found
+		if err != nil && !dsess.ErrRevisionDbNotFound.Is(err) {
 			return err
 		}
 	}
