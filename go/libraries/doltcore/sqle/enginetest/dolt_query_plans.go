@@ -183,7 +183,8 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 			" └─ Project(row_number() over ( order by mytable.i DESC) as row_number() over (order by i desc), i2)\n" +
 			"     └─ Window(row_number() over ( order by mytable.i DESC), mytable.i as i2)\n" +
 			"         └─ IndexedJoin(mytable.i = othertable.i2)\n" +
-			"             ├─ IndexedTableAccess(mytable on [mytable.i] with ranges: [{[2, 2]}])\n" +
+			"             ├─ Filter(mytable.i = 2)\n" +
+			"             │   └─ IndexedTableAccess(mytable on [mytable.i] with ranges: [{[2, 2]}])\n" +
 			"             └─ IndexedTableAccess(othertable on [othertable.i2])\n" +
 			"",
 	},
@@ -2020,8 +2021,9 @@ var NewFormatQueryPlanTests = []queries.QueryPlanTest{
 		ExpectedPlan: "Sort(othertable.i2 ASC)\n" +
 			" └─ Project(row_number() over ( order by othertable.s2 ASC) as idx, othertable.i2, othertable.s2)\n" +
 			"     └─ Window(row_number() over ( order by othertable.s2 ASC), othertable.i2, othertable.s2)\n" +
-			"         └─ Projected table access on [i2 s2]\n" +
-			"             └─ IndexedTableAccess(othertable on [othertable.i2] with ranges: [{(-∞, 2)}, {(2, ∞)}])\n" +
+			"         └─ Filter((othertable.i2 < 2) OR (othertable.i2 > 2))\n" +
+			"             └─ Projected table access on [i2 s2]\n" +
+			"                 └─ IndexedTableAccess(othertable on [othertable.i2] with ranges: [{(-∞, 2)}, {(2, ∞)}])\n" +
 			"",
 	},
 	{
