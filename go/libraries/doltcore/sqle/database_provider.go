@@ -204,8 +204,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// If this is a specific revSpec for a database, we just need to clean up the
-	// database metadata, not delete the whole database.
+	// If this is a branch-qualified database, we just need to remove the metadata – don't actually delete the database
 	if IsRevisionDatabase(name) {
 		delete(p.databases, dbKey)
 		return nil

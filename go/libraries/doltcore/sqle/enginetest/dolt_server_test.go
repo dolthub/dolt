@@ -106,7 +106,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Test branch deletion when clients are connected to a revision database",
+		Name: "Test branch deletion when clients are using a branch-qualified database",
 		SetUpScript: []string{
 			"call dolt_branch('branch1');",
 			"call dolt_branch('branch2');",
@@ -141,7 +141,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Verify that dolt/branch2 doesn't show up in
+				// Verify that dolt/branch2 doesn't show up as a database anymore
 				Query:    "/* client a */ SHOW DATABASES;",
 				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
 			},
@@ -154,7 +154,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 		},
 	},
 	{
-		Name: "Test branch renaming when clients are connected to a revision database",
+		Name: "Test branch renaming when clients are using a branch-qualified database",
 		SetUpScript: []string{
 			"call dolt_branch('branch1');",
 			"call dolt_branch('branch2');",
@@ -189,7 +189,7 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 				Expected: []sql.Row{{0}},
 			},
 			{
-				// Verify that dolt/branch2 doesn't show up in
+				// Verify that dolt/branch2 doesn't show up as a database anymore
 				Query:    "/* client a */ SHOW DATABASES;",
 				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
 			},

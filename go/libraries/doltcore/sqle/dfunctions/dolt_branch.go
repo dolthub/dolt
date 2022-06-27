@@ -133,7 +133,7 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 	}
 
 	dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
-	return removeBranchRevisionDatabase(ctx, dbName+"/"+oldBranchName)
+	return removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, oldBranchName))
 }
 
 func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
@@ -161,7 +161,7 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 		}
 
 		dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
-		err = removeBranchRevisionDatabase(ctx, dbName+"/"+branchName)
+		err = removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, branchName))
 		if err != nil {
 			return err
 		}
@@ -172,13 +172,12 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	if sqlserver.RunningInServerMode() == false {
+	currentDbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
+	if currentDbName == "" {
 		return nil
 	}
 
-	currentDatabase := ctx.GetCurrentDatabase()
-	currentDbName, _ := parseRevisionDatabaseName(currentDatabase)
-	if currentDatabase == "" {
+	if sqlserver.RunningInServerMode() == false {
 		return nil
 	}
 
@@ -215,8 +214,8 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 	})
 }
 
-// TODO: This method was copied from sqle pkg because of import cycle :-(
-//       Find a better place to put it.
+// parseRevisionDatabaseName parses the database or branch-qualified database name and returns the
+// database name and any specified branch name.
 func parseRevisionDatabaseName(revisionDbName string) (string, string) {
 	parts := strings.SplitN(revisionDbName, "/", 2)
 	if len(parts) == 0 {
@@ -231,10 +230,6 @@ func parseRevisionDatabaseName(revisionDbName string) (string, string) {
 // removeBranchRevisionDatabase updates database provider information to ensure the specified
 // revision DB name is not tracked as a valid database.
 func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error {
-	if sqlserver.RunningInServerMode() == false {
-		return nil
-	}
-
 	dsess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
 		return fmt.Errorf("unexpected session type: %T", ctx.Session)
