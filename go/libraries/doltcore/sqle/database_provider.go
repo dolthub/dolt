@@ -353,6 +353,9 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
 func IsRevisionDatabase(dbName string) bool {
+	// TODO: This is only a heuristic to identify a revision database. Because
+	//       database names and branch names may contain slashes, we need to
+	//       do more work here to accurately check if this is a revision db.
 	return strings.Contains(dbName, dbRevisionDelimiter)
 }
 
