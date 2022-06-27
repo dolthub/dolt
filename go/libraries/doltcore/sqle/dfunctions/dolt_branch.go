@@ -217,31 +217,29 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 // parseRevisionDatabaseName parses the database or branch-qualified database name and returns the
 // database name and any specified branch name.
 func parseRevisionDatabaseName(revisionDbName string) (string, string) {
-	parts := strings.SplitN(revisionDbName, "/", 2)
-	if len(parts) == 0 {
-		return "", ""
-	} else if len(parts) == 1 {
-		return parts[0], ""
-	} else {
-		return parts[0], parts[1]
+	lastIndex := strings.LastIndex(revisionDbName, "/")
+	if lastIndex < 0 {
+		return revisionDbName, ""
 	}
+
+	var revision = ""
+	if len(revisionDbName) > lastIndex {
+		revision = revisionDbName[lastIndex+1:]
+	}
+	return revisionDbName[0:lastIndex], revision
 }
 
 // removeBranchRevisionDatabase updates database provider information to ensure the specified
 // revision DB name is not tracked as a valid database.
 func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error {
-	dsess, ok := ctx.Session.(*dsess.DoltSession)
+	doltsess, ok := ctx.Session.(*dsess.DoltSession)
 	if !ok {
 		return fmt.Errorf("unexpected session type: %T", ctx.Session)
 	}
 
-	provider := dsess.Session.Provider()
-	if provider, ok := provider.(sql.MutableDatabaseProvider); ok {
-		if provider.HasDatabase(ctx, revisionDbName) == false {
-			return nil
-		}
-
-		err := provider.DropDatabase(ctx, revisionDbName)
+	provider := doltsess.Session.Provider()
+	if provider, ok := provider.(dsess.RevisionDatabaseProvider); ok {
+		err := provider.DropRevisionDb(ctx, revisionDbName)
 		if err != nil {
 			return err
 		}

@@ -204,12 +204,6 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
-	// If this is a branch-qualified database, we just need to remove the metadata – don't actually delete the database
-	if IsRevisionDatabase(name) {
-		delete(p.databases, dbKey)
-		return nil
-	}
-
 	// Get the DB's directory
 	exists, isDir := p.fs.Exists(db.Name())
 	if !exists {
@@ -314,6 +308,25 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	}
 
 	return init, nil
+}
+
+// DropRevisionDb implements RevisionDatabaseProvider
+func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	dbKey := formatDbMapKeyName(revDB)
+	_, ok := p.databases[dbKey]
+	if !ok {
+		return dsess.ErrRevisionDbDoesNotExist.New(revDB)
+	}
+
+	if IsRevisionDatabase(revDB) {
+		delete(p.databases, dbKey)
+		return nil
+	} else {
+		return dsess.ErrRevisionDbDoesNotExist.New(revDB)
+	}
 }
 
 // Function implements the FunctionProvider interface
