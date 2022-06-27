@@ -676,9 +676,9 @@ var transactionMergeScripts = []queries.TransactionTest{
 			},
 			{
 				Query: "/* client b */ COMMIT;",
-				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back." +
-					"This constraint violation may be the result of a previous merge or the result of transaction sequencing." +
-					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction." +
+				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
 					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.",
 			},
 			{
