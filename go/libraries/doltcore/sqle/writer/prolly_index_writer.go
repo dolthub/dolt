@@ -106,7 +106,7 @@ func (m prollyIndexWriter) Map(ctx context.Context) (prolly.Map, error) {
 func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -127,7 +127,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(m.valBld, to, sqlRow[from]); err != nil {
+		if err = index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -139,7 +139,7 @@ func (m prollyIndexWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -151,7 +151,7 @@ func (m prollyIndexWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
 func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, oldRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, oldRow[from]); err != nil {
 			return err
 		}
 	}
@@ -165,7 +165,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, newRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, newRow[from]); err != nil {
 			return err
 		}
 	}
@@ -186,7 +186,7 @@ func (m prollyIndexWriter) Update(ctx context.Context, oldRow sql.Row, newRow sq
 
 	for to := range m.valMap {
 		from := m.valMap.MapOrdinal(to)
-		if err = index.PutField(m.valBld, to, newRow[from]); err != nil {
+		if err = index.PutField(ctx, m.mut.NodeStore(), m.valBld, to, newRow[from]); err != nil {
 			return err
 		}
 	}
@@ -211,7 +211,7 @@ func (m prollyIndexWriter) HasEdits(ctx context.Context) bool {
 func (m prollyIndexWriter) UniqueKeyError(ctx context.Context, sqlRow sql.Row) error {
 	for to := range m.keyMap {
 		from := m.keyMap.MapOrdinal(to)
-		if err := index.PutField(m.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, m.mut.NodeStore(), m.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
@@ -226,7 +226,7 @@ func (m prollyIndexWriter) keyError(ctx context.Context, key val.Tuple, isPk boo
 		kd := m.keyBld.Desc
 		for from := range m.keyMap {
 			to := m.keyMap.MapOrdinal(from)
-			if dupe[to], err = index.GetField(kd, from, key); err != nil {
+			if dupe[to], err = index.GetField(ctx, kd, from, key, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -234,7 +234,7 @@ func (m prollyIndexWriter) keyError(ctx context.Context, key val.Tuple, isPk boo
 		vd := m.valBld.Desc
 		for from := range m.valMap {
 			to := m.valMap.MapOrdinal(from)
-			if dupe[to], err = index.GetField(vd, from, value); err != nil {
+			if dupe[to], err = index.GetField(ctx, vd, from, value, m.mut.NodeStore()); err != nil {
 				return err
 			}
 		}
@@ -276,7 +276,7 @@ func (k prollyKeylessWriter) Map(ctx context.Context) (prolly.Map, error) {
 }
 
 func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
-	hashId, value, err := k.tuplesFromRow(sqlRow)
+	hashId, value, err := k.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
 	}
@@ -298,7 +298,7 @@ func (k prollyKeylessWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 }
 
 func (k prollyKeylessWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	hashId, _, err := k.tuplesFromRow(sqlRow)
+	hashId, _, err := k.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
 	}
@@ -355,15 +355,15 @@ func (k prollyKeylessWriter) UniqueKeyError(ctx context.Context, sqlRow sql.Row)
 	return fmt.Errorf("keyless does not yet know how to handle unique key errors")
 }
 
-func (k prollyKeylessWriter) tuplesFromRow(sqlRow sql.Row) (hashId, value val.Tuple, err error) {
+func (k prollyKeylessWriter) tuplesFromRow(ctx context.Context, sqlRow sql.Row) (hashId, value val.Tuple, err error) {
 	// initialize cardinality to 0
-	if err = index.PutField(k.valBld, 0, uint64(0)); err != nil {
+	if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, 0, uint64(0)); err != nil {
 		return nil, nil, err
 	}
 
 	for to := range k.valMap {
 		from := k.valMap.MapOrdinal(to)
-		if err = index.PutField(k.valBld, to+1, sqlRow[from]); err != nil {
+		if err = index.PutField(ctx, k.mut.NodeStore(), k.valBld, to+1, sqlRow[from]); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -402,11 +402,11 @@ func (writer prollyKeylessSecondaryWriter) Map(ctx context.Context) (prolly.Map,
 func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sql.Row) error {
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(writer.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}
-	hashId, _, err := writer.primary.tuplesFromRow(sqlRow)
+	hashId, _, err := writer.primary.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func (writer prollyKeylessSecondaryWriter) Insert(ctx context.Context, sqlRow sq
 
 // Delete implements the interface indexWriter.
 func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sql.Row) error {
-	hashId, cardRow, err := writer.primary.tuplesFromRow(sqlRow)
+	hashId, cardRow, err := writer.primary.tuplesFromRow(ctx, sqlRow)
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,7 @@ func (writer prollyKeylessSecondaryWriter) Delete(ctx context.Context, sqlRow sq
 
 	for to := range writer.keyMap {
 		from := writer.keyMap.MapOrdinal(to)
-		if err := index.PutField(writer.keyBld, to, sqlRow[from]); err != nil {
+		if err := index.PutField(ctx, writer.mut.NodeStore(), writer.keyBld, to, sqlRow[from]); err != nil {
 			return err
 		}
 	}

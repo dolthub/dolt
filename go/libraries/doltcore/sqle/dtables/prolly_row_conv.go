@@ -15,6 +15,8 @@
 package dtables
 
 import (
+	"context"
+
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
@@ -22,6 +24,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -37,9 +40,10 @@ type ProllyRowConverter struct {
 	pkTargetTypes    []sql.Type
 	nonPkTargetTypes []sql.Type
 	warnFn           rowconv.WarnFunction
+	ns               tree.NodeStore
 }
 
-func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction) (ProllyRowConverter, error) {
+func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunction, ns tree.NodeStore) (ProllyRowConverter, error) {
 	keyProj, valProj, err := diff.MapSchemaBasedOnName(inSch, outSch)
 	if err != nil {
 		return ProllyRowConverter{}, err
@@ -89,18 +93,19 @@ func NewProllyRowConverter(inSch, outSch schema.Schema, warnFn rowconv.WarnFunct
 		pkTargetTypes:    pkTargetTypes,
 		nonPkTargetTypes: nonPkTargetTypes,
 		warnFn:           warnFn,
+		ns:               ns,
 	}, nil
 }
 
 // PutConverted converts the |key| and |value| val.Tuple from |inSchema| to |outSchema|
 // and places the converted row in |dstRow|.
-func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interface{}) error {
-	err := c.putFields(key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow)
+func (c ProllyRowConverter) PutConverted(ctx context.Context, key, value val.Tuple, dstRow []interface{}) error {
+	err := c.putFields(ctx, key, c.keyProj, c.keyDesc, c.pkTargetTypes, dstRow)
 	if err != nil {
 		return err
 	}
 
-	err = c.putFields(value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
+	err = c.putFields(ctx, value, c.valProj, c.valDesc, c.nonPkTargetTypes, dstRow)
 	if err != nil {
 		return err
 	}
@@ -108,12 +113,12 @@ func (c ProllyRowConverter) PutConverted(key, value val.Tuple, dstRow []interfac
 	return nil
 }
 
-func (c ProllyRowConverter) putFields(tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow []interface{}) error {
+func (c ProllyRowConverter) putFields(ctx context.Context, tup val.Tuple, proj val.OrdinalMapping, desc val.TupleDesc, targetTypes []sql.Type, dstRow []interface{}) error {
 	for i, j := range proj {
 		if j == -1 {
 			continue
 		}
-		f, err := index.GetField(desc, i, tup)
+		f, err := index.GetField(ctx, desc, i, tup, c.ns)
 		if err != nil {
 			return err
 		}

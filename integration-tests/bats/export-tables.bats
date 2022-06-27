@@ -16,7 +16,7 @@ CREATE TABLE test_int (
   PRIMARY KEY (pk)
 );
 CREATE TABLE test_string (
-  pk LONGTEXT NOT NULL,
+  pk varchar(20) NOT NULL,
   c1 LONGTEXT,
   c2 LONGTEXT,
   c3 LONGTEXT,
@@ -163,6 +163,8 @@ SQL
 }
 
 @test "export-tables: broken SQL escaping" {
+    skip "Export embeds single quote in string without escaping it https://github.com/dolthub/dolt/issues/2197"
+
     dolt sql <<SQL
 create table sets (a varchar(10) primary key, b set('one','two','three\'s'));
 insert into sets values ('abc', 'one,two'), ('def', 'two,three\'s');
@@ -172,7 +174,7 @@ SQL
 
     dolt table export sets -f export.sql
     
-    skip "Export embeds single quote in string without escaping it https://github.com/dolthub/dolt/issues/2197"
+
    
     dolt sql < export.sql
 

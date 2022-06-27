@@ -263,11 +263,11 @@ func (tb *TupleBuilder) PutHash128(i int, v []byte) {
 	tb.pos += hash128Size
 }
 
-func (tb *TupleBuilder) PutAddress(i int, v hash.Hash) {
-	tb.Desc.expectEncoding(i, AddressEnc)
-	tb.fields[i] = tb.buf[tb.pos : tb.pos+addressSize]
-	writeAddress(tb.fields[i], v)
-	tb.pos += addressSize
+func (tb *TupleBuilder) PutCommitAddr(i int, v hash.Hash) {
+	tb.Desc.expectEncoding(i, CommitAddrEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+addrSize]
+	writeAddr(tb.fields[i], v[:])
+	tb.pos += addrSize
 }
 
 // PutRaw writes a []byte to the ith field of the Tuple being built.
@@ -281,4 +281,12 @@ func (tb *TupleBuilder) PutRaw(i int, buf []byte) {
 	tb.fields[i] = tb.buf[tb.pos : tb.pos+sz]
 	writeRaw(tb.fields[i], buf)
 	tb.pos += sz
+}
+
+// PutBytesAddr writes an out of band []byte to the ith field of the Tuple being built.
+func (tb *TupleBuilder) PutBytesAddr(i int, v hash.Hash) {
+	tb.Desc.expectEncoding(i, BytesAddrEnc)
+	tb.fields[i] = tb.buf[tb.pos : tb.pos+addrSize]
+	writeAddr(tb.fields[i], v[:])
+	tb.pos += addrSize
 }

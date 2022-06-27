@@ -5,7 +5,7 @@ setup() {
     setup_common
     dolt sql <<SQL
 CREATE TABLE test (
-  pk LONGTEXT NOT NULL COMMENT 'tag:0',
+  pk varchar(20) NOT NULL COMMENT 'tag:0',
   c1 LONGTEXT COMMENT 'tag:1',
   c2 LONGTEXT COMMENT 'tag:2',
   c3 LONGTEXT COMMENT 'tag:3',

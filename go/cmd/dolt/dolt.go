@@ -53,7 +53,7 @@ import (
 )
 
 const (
-	Version = "0.40.10"
+	Version = "0.40.11"
 )
 
 var dumpDocsCommand = &commands.DumpDocsCmd{}
@@ -74,6 +74,7 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.CheckoutCmd{},
 	commands.MergeCmd{},
 	cnfcmds.Commands,
+	commands.CherryPickCmd{},
 	commands.RevertCmd{},
 	commands.CloneCmd{},
 	commands.FetchCmd{},
@@ -103,7 +104,6 @@ var doltCommand = cli.NewSubCommandHandler("dolt", "it's git for data", []cli.Co
 	commands.InspectCmd{},
 	dumpDocsCommand,
 	dumpZshCommand,
-	commands.CherryPickCmd{},
 })
 
 func init() {

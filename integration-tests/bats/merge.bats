@@ -360,6 +360,7 @@ SQL
     run dolt merge other
     [ "$status" -eq 0 ]
     [[ "$output" =~ "CONFLICT" ]] || false
+    dolt conflicts resolve --theirs dolt_schemas
     run dolt conflicts resolve --theirs dolt_schemas
     [ "$status" -eq 0 ]
     run dolt sql -q "select name from dolt_schemas" -r csv
@@ -652,7 +653,6 @@ SQL
 }
 
 @test "merge: non-violating merge succeeds when violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -684,7 +684,6 @@ SQL
 }
 
 @test "merge: non-conflicting / non-violating merge succeeds when conflicts and violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -744,7 +743,6 @@ SQL
 }
 
 @test "merge: conflicting merge should retain previous conflicts and constraint violations" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -788,6 +786,8 @@ SQL
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
 
+    skip_nbf_dolt_1
+
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
     [[ "$output" =~ "existing unresolved conflicts would be overridden by new conflicts produced by merge" ]]
@@ -823,4 +823,32 @@ SQL
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
     [[ "$output" =~ "t,1" ]]
+}
+
+@test "merge: ourRoot renames, theirRoot modifies" {
+    dolt checkout -b merge_branch
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+}
+
+@test "merge: ourRoot modifies, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    run dolt merge merge_branch
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
 }

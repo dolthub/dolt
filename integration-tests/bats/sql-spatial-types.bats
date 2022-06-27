@@ -75,7 +75,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: create geometry table and insert existing spatial types" {
-    skip_nbf_dolt_1
 
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
@@ -130,7 +129,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use point type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table point_tbl (p int primary key)"
     run dolt sql -q "alter table point_tbl modify column p point primary key"
     [ "$status" -eq 1 ]
@@ -138,7 +136,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use linestring type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table line_tbl (l int primary key)"
     run dolt sql -q "alter table line_tbl modify column l linestring primary key"
     [ "$status" -eq 1 ]
@@ -146,7 +143,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use polygon type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table poly_tbl (p int primary key)"
     run dolt sql -q "alter table poly_tbl modify column p polygon primary key"
     [ "$status" -eq 1 ]
@@ -154,7 +150,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use geometry type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table geom_tbl (g int primary key)"
     run dolt sql -q "alter table geom_tbl modify column g geometry primary key"
     [ "$status" -eq 1 ]
