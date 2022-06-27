@@ -776,7 +776,7 @@ mysql> select to_commit,from_first_name,to_first_name from dolt_diff_employees
 
 Dolt provides powerful data audit capabilities down to individual cells. When, how, and why has each cell in your database changed over time?
 
-# Additonal Reading
+# Additional Reading
 
 Head over to [our documentation](https://docs.dolthub.com/introduction/what-is-dolt) now that you have a feel for Dolt.
 
