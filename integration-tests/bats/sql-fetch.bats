@@ -40,7 +40,7 @@ teardown() {
     cd repo2
     dolt sql -q "select dolt_fetch()"
 
-    dolt diff main origin/main
+    run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "added table" ]] || false
 
@@ -370,6 +370,9 @@ teardown() {
 
     dolt sql -q "select dolt_fetch('--force', 'origin', 'main')"
 
+    skip_nbf_dolt_1 "keyless diff not implemented"
+    
+    dolt diff main origin/main
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "deleted table" ]] || false
@@ -394,6 +397,8 @@ teardown() {
 
     dolt sql -q "CALL dolt_fetch('--force', 'origin', 'main')"
 
+    skip_nbf_dolt_1 "keyless diff not implemented"
+    
     run dolt diff main origin/main
     [ "$status" -eq 0 ]
     [[ "$output" =~ "deleted table" ]] || false
