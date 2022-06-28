@@ -3500,6 +3500,28 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "renamed table",
+		SetUpScript: []string{
+			"create table t1 (a int primary key, b int)",
+			"insert into t1 values (1,2)",
+			"call dolt_commit('-am', 'new table')",
+			"alter table t1 rename to t2",
+			"insert into t2 values (3,4)",
+			"call dolt_commit('-am', 'renamed table')",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t2', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+			{
+				// Maybe confusing? We match the old table name as well
+				Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD~', 'HEAD')",
+				Expected: []sql.Row{{3, 4, "HEAD~", "HEAD", "added"}},
+			},
+		},
+	},
 }
 
 var UnscopedDiffSystemTableScriptTests = []queries.ScriptTest{

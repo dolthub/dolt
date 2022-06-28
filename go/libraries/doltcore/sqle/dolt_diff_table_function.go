@@ -164,8 +164,8 @@ func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDel
 		}
 	}
 
-	// should be impossible
-	panic(fmt.Sprintf("failed to find a table named %s", tableName))
+	// no delta means no diff, or the table doesn't exist
+	return diff.TableDelta{}
 }
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
@@ -306,6 +306,8 @@ func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, tableName string,
 	return nil
 }
 
+// cacheTableDelta caches and returns an appropriate table delta for the table name given, taking renames into
+// consideration. Returns a sql.ErrTableNotFound if the given table name cannot be found in either revision.
 func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string, fromCommitVal interface{}, toCommitVal interface{}, db Database) (diff.TableDelta, error) {
 	fromRoot, _, fromDate, err := loadDetailsForRef(ctx, fromCommitVal, db)
 	if err != nil {
@@ -317,6 +319,20 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string
 		return diff.TableDelta{}, err
 	}
 
+	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(ctx, tableName)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	if !fromTableExists && !toTableExists {
+		return diff.TableDelta{}, sql.ErrTableNotFound.New(tableName)
+	}
+
+	// TODO: it would be nice to limit this to just the table under consideration, not all tables with a diff
 	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
 	if err != nil {
 		return diff.TableDelta{}, err
@@ -326,6 +342,33 @@ func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string
 	dtf.toDate = toDate
 
 	delta := findMatchingDelta(deltas, tableName)
+
+	// We only get a delta if there's a diff. When there isn't one, construct a delta here with table and schema info
+	if delta.FromTable == nil && delta.ToTable == nil {
+		delta.FromName = tableName
+		delta.ToName = tableName
+		delta.FromTable = fromTable
+		delta.ToTable = toTable
+
+		if fromTable != nil {
+			sch, err := fromTable.GetSchema(ctx)
+			if err != nil {
+				return diff.TableDelta{}, err
+			}
+			delta.FromSch = sch
+		}
+
+		if toTable != nil {
+			sch, err := toTable.GetSchema(ctx)
+			if err != nil {
+				return diff.TableDelta{}, err
+			}
+			delta.ToSch = sch
+		}
+
+		// TODO: There are other fields we could set here that we don't
+	}
+
 	dtf.tableDelta = delta
 
 	return delta, nil
