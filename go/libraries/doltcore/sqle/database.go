@@ -307,7 +307,7 @@ func (db Database) GetTableInsensitiveAsOf(ctx *sql.Context, tableName string, a
 		return nil, false, nil
 	}
 
-	if doltdb.HasDoltPrefix(tableName) {
+	if doltdb.IsReadOnlySystemTable(tableName) {
 		// currently, system tables do not need to be "locked to root"
 		//  see comment below in getTableInsensitive
 		return table, ok, nil
