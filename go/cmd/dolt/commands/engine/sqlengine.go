@@ -366,3 +366,42 @@ func getInitialDBStateWithDefaultBranch(ctx context.Context, db dsqle.SqlDatabas
 
 	return init, nil
 }
+
+// NewSqlEngineForEnv returns a SqlEngine configured for the environment provided, with a single root user
+func NewSqlEngineForEnv(ctx context.Context, dEnv *env.DoltEnv) (*SqlEngine, error) {
+	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
+	if err != nil {
+		return nil, err
+	}
+
+	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
+	var dbName string
+	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
+		dbName = name
+		return true, nil
+	})
+
+	return NewSqlEngine(
+		ctx,
+		mrEnv,
+		FormatCsv,
+		&SqlEngineConfig{
+			InitialDb:  dbName,
+			IsReadOnly: false,
+			ServerUser: "root",
+			Autocommit: false,
+		},
+	)
+}
+
+// NewLocalSqlContext returns a new |sql.Context| using the engine provided, with its client set to |root|
+func NewLocalSqlContext(ctx context.Context, se *SqlEngine) (*sql.Context, error) {
+	sqlCtx, err := se.NewContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
+	return sqlCtx, nil
+}
+

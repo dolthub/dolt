@@ -365,7 +365,7 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 		return errhand.BuildDError("error: unable to diff tables").AddCause(err).Build()
 	}
 
-	engine, err := newSqlEngine(ctx, dEnv)
+	engine, err := engine.NewSqlEngineForEnv(ctx, dEnv)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
@@ -429,43 +429,6 @@ func diffUserTables(ctx context.Context, dEnv *env.DoltEnv, dArgs *diffArgs) (ve
 	}
 
 	return nil
-}
-
-func newSqlEngine(ctx context.Context, dEnv *env.DoltEnv) (*engine.SqlEngine, error) {
-	mrEnv, err := env.DoltEnvAsMultiEnv(ctx, dEnv)
-	if err != nil {
-		return nil, err
-	}
-
-	// Choose the first DB as the current one. This will be the DB in the working dir if there was one there
-	var dbName string
-	mrEnv.Iter(func(name string, _ *env.DoltEnv) (stop bool, err error) {
-		dbName = name
-		return true, nil
-	})
-
-	return engine.NewSqlEngine(
-		ctx,
-		mrEnv,
-		engine.FormatCsv,
-		&engine.SqlEngineConfig{
-			InitialDb:  dbName,
-			IsReadOnly: false,
-			ServerUser: "root",
-			Autocommit: false,
-		},
-	)
-}
-
-// TODO: engine should do this for me
-func newSqlContext(ctx context.Context, se *engine.SqlEngine) (*sql.Context, error) {
-	sqlCtx, err := se.NewContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
-	return sqlCtx, nil
 }
 
 func diffSchemas(ctx context.Context, toRoot *doltdb.RootValue, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
@@ -601,7 +564,7 @@ func sqlSchemaDiff(ctx context.Context, td diff.TableDelta, toSchemas map[string
 	return nil
 }
 
-func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
+func diffRows(ctx context.Context, se *engine.SqlEngine, td diff.TableDelta, dArgs *diffArgs) errhand.VerboseError {
 	from, to := dArgs.fromRef, dArgs.toRef
 
 	tableName := td.ToName
@@ -616,12 +579,12 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 		query += " where " + dArgs.where
 	}
 
-	sqlCtx, err := newSqlContext(ctx, engine)
+	sqlCtx, err := engine.NewLocalSqlContext(ctx, se)
 	if err != nil {
 		return errhand.VerboseErrorFromError(err)
 	}
 
-	sch, rowIter, err := engine.Query(sqlCtx, query)
+	sch, rowIter, err := se.Query(sqlCtx, query)
 	if sql.ErrSyntaxError.Is(err) {
 		return errhand.BuildDError("Failed to parse diff query. Invalid where clause?\nDiff query: %s", query).AddCause(err).Build()
 	} else if err != nil {
