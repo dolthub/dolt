@@ -21,7 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
 
@@ -33,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type batchMode int8
