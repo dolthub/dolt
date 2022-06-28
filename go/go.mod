@@ -70,6 +70,7 @@ require (
 	github.com/shirou/gopsutil/v3 v3.22.1
 	github.com/xitongsys/parquet-go v1.6.1
 	github.com/xitongsys/parquet-go-source v0.0.0-20211010230925-397910c5e371
+	github.com/zeebo/blake3 v0.2.3
 	github.com/zeebo/xxh3 v1.0.2
 	golang.org/x/text v0.3.7
 	gonum.org/v1/plot v0.11.0
@@ -117,7 +118,6 @@ require (
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/tklauser/numcpus v0.3.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
-	github.com/zeebo/blake3 v0.2.3 // indirect
 	go.opencensus.io v0.22.4 // indirect
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/multierr v1.5.0 // indirect
