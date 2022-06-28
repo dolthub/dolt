@@ -48,7 +48,7 @@ func (cmd LsCmd) Description() string {
 }
 
 func (cmd LsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return false
 }
 
 func (cmd LsCmd) Docs() *cli.CommandDocumentation {
