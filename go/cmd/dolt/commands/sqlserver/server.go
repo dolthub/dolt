@@ -66,7 +66,7 @@ func Serve(
 	}
 
 	lgr := logrus.StandardLogger()
-	lgr.Out = cli.CliErr
+	lgr.SetOutput(cli.CliErr)
 
 	if serverConfig.LogLevel() != LogLevel_Info {
 		var level logrus.Level
