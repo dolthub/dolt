@@ -45,9 +45,9 @@ type DiffTableFunction struct {
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
 
-	tableDelta     diff.TableDelta
-	fromDate       *types.Timestamp
-	toDate         *types.Timestamp
+	tableDelta diff.TableDelta
+	fromDate   *types.Timestamp
+	toDate     *types.Timestamp
 }
 
 // NewInstance implements the TableFunction interface

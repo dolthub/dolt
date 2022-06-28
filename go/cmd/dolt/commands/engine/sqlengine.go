@@ -404,4 +404,3 @@ func NewLocalSqlContext(ctx context.Context, se *SqlEngine) (*sql.Context, error
 	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 	return sqlCtx, nil
 }
-
