@@ -17,7 +17,9 @@ package sqle
 import (
 	"fmt"
 	"io"
+	"strings"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/rowconv"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
@@ -42,9 +44,10 @@ type DiffTableFunction struct {
 	database       sql.Database
 	sqlSch         sql.Schema
 	joiner         *rowconv.Joiner
-	fromSch        schema.Schema
-	toSch          schema.Schema
-	diffTableSch   schema.Schema
+
+	tableDelta     diff.TableDelta
+	fromDate       *types.Timestamp
+	toDate         *types.Timestamp
 }
 
 // NewInstance implements the TableFunction interface
@@ -105,7 +108,7 @@ func (dtf *DiffTableFunction) WithExpressions(expression ...sql.Expression) (sql
 		return nil, err
 	}
 
-	err = dtf.generateSchema(tableName, fromCommitVal, toCommitVal)
+	err = dtf.generateSchema(dtf.ctx, tableName, fromCommitVal, toCommitVal)
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +123,19 @@ func (dtf *DiffTableFunction) Children() []sql.Node {
 
 // RowIter implements the sql.Node interface
 func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter, error) {
+	// Everything we need to start iterating was cached when we previously determined the schema of the result
 	// TODO: When we add support for joining on table functions, we'll need to evaluate this against the
 	//       specified row. That row is what has the left_table context in a join query.
 	//       This will expand the test cases we need to cover significantly.
-	tableName, fromCommitVal, toCommitVal, err := dtf.evaluateArguments()
+	_, fromCommit, toCommit, err := dtf.evaluateArguments()
 	if err != nil {
 		return nil, err
+	}
+
+	fromHash, fromOk := fromCommit.(string)
+	toHash, toOk := toCommit.(string)
+	if !fromOk || !toOk {
+		return nil, fmt.Errorf("expected strings for from and to revisions, got: %v, %v", fromHash, toHash)
 	}
 
 	sqledb, ok := dtf.database.(Database)
@@ -134,33 +144,32 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 	}
 	ddb := sqledb.GetDoltDB()
 
-	toRoot, toHash, toDate, err := dtf.loadDetailsForRef(ctx, toCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	toTable, _, _, err := toRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return nil, err
-	}
-
-	fromRoot, fromHash, fromDate, err := dtf.loadDetailsForRef(ctx, fromCommitVal, sqledb)
-	if err != nil {
-		return nil, err
-	}
-
-	fromTable, _, _, err := fromRoot.GetTableInsensitive(ctx, tableName)
-	if err != nil {
-		return nil, err
-	}
-
-	dp := dtables.NewDiffPartition(toTable, fromTable, toHash, fromHash, toDate, fromDate, &dtf.toSch, &dtf.fromSch)
+	dp := dtables.NewDiffPartition(dtf.tableDelta.ToTable, dtf.tableDelta.FromTable, toHash, fromHash, dtf.toDate, dtf.fromDate, dtf.tableDelta.ToSch, dtf.tableDelta.FromSch)
 
 	return NewDiffTableFunctionRowIterForSinglePartition(*dp, ddb, dtf.joiner), nil
 }
 
+// findMatchingDelta returns the best matching table delta for the table name given, taking renames into account
+func findMatchingDelta(deltas []diff.TableDelta, tableName string) diff.TableDelta {
+	tableName = strings.ToLower(tableName)
+	for _, d := range deltas {
+		if strings.ToLower(d.ToName) == tableName {
+			return d
+		}
+	}
+
+	for _, d := range deltas {
+		if strings.ToLower(d.FromName) == tableName {
+			return d
+		}
+	}
+
+	// should be impossible
+	panic(fmt.Sprintf("failed to find a table named %s", tableName))
+}
+
 // loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
-func (dtf *DiffTableFunction) loadDetailsForRef(
+func loadDetailsForRef(
 	ctx *sql.Context,
 	ref interface{},
 	ddb Database,
@@ -241,7 +250,7 @@ func (dtf *DiffTableFunction) evaluateArguments() (string, interface{}, interfac
 	return tableName, fromCommitVal, toCommitVal, nil
 }
 
-func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, toCommitVal interface{}) error {
+func (dtf *DiffTableFunction) generateSchema(ctx *sql.Context, tableName string, fromCommitVal, toCommitVal interface{}) error {
 	if !dtf.Resolved() {
 		return nil
 	}
@@ -251,25 +260,13 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 		panic(fmt.Sprintf("unexpected database type: %T", dtf.database))
 	}
 
-	fromRoot, err := sqledb.rootAsOf(dtf.ctx, fromCommitVal)
+	delta, err := dtf.cacheTableDelta(ctx, tableName, fromCommitVal, toCommitVal, sqledb)
 	if err != nil {
 		return err
 	}
 
-	toRoot, err := sqledb.rootAsOf(dtf.ctx, toCommitVal)
-	if err != nil {
-		return err
-	}
-
-	fromTable, _, fromTableExists, err := fromRoot.GetTableInsensitive(dtf.ctx, tableName)
-	if err != nil {
-		return err
-	}
-
-	toTable, _, toTableExists, err := toRoot.GetTableInsensitive(dtf.ctx, tableName)
-	if err != nil {
-		return err
-	}
+	fromTable, fromTableExists := delta.FromTable, delta.FromTable != nil
+	toTable, toTableExists := delta.ToTable, delta.ToTable != nil
 
 	if !toTableExists && !fromTableExists {
 		return sql.ErrTableNotFound.New(tableName)
@@ -279,23 +276,14 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 	var format *types.NomsBinFormat
 
 	if fromTableExists {
-		fromSchema, err = fromTable.GetSchema(dtf.ctx)
-		if err != nil {
-			return err
-		}
+		fromSchema = delta.FromSch
 		format = fromTable.Format()
 	}
 
 	if toTableExists {
-		toSchema, err = toTable.GetSchema(dtf.ctx)
-		if err != nil {
-			return err
-		}
+		toSchema = delta.ToSch
 		format = toTable.Format()
 	}
-
-	dtf.fromSch = fromSchema
-	dtf.toSch = toSchema
 
 	diffTableSch, j, err := dtables.GetDiffTableSchemaAndJoiner(format, fromSchema, toSchema)
 	if err != nil {
@@ -316,6 +304,31 @@ func (dtf *DiffTableFunction) generateSchema(tableName string, fromCommitVal, to
 	dtf.sqlSch = sqlSchema.Schema
 
 	return nil
+}
+
+func (dtf *DiffTableFunction) cacheTableDelta(ctx *sql.Context, tableName string, fromCommitVal interface{}, toCommitVal interface{}, db Database) (diff.TableDelta, error) {
+	fromRoot, _, fromDate, err := loadDetailsForRef(ctx, fromCommitVal, db)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	toRoot, _, toDate, err := loadDetailsForRef(ctx, toCommitVal, db)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	deltas, err := diff.GetTableDeltas(ctx, fromRoot, toRoot)
+	if err != nil {
+		return diff.TableDelta{}, err
+	}
+
+	dtf.fromDate = fromDate
+	dtf.toDate = toDate
+
+	delta := findMatchingDelta(deltas, tableName)
+	dtf.tableDelta = delta
+
+	return delta, nil
 }
 
 // Schema implements the sql.Node interface

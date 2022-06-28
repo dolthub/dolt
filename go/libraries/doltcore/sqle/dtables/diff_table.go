@@ -278,11 +278,11 @@ type DiffPartition struct {
 	toDate   *types.Timestamp
 	fromDate *types.Timestamp
 	// fromSch and toSch are usually identical. It is the schema of the table at head.
-	toSch   *schema.Schema
-	fromSch *schema.Schema
+	toSch   schema.Schema
+	fromSch schema.Schema
 }
 
-func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch *schema.Schema) *DiffPartition {
+func NewDiffPartition(to, from *doltdb.Table, toName, fromName string, toDate, fromDate *types.Timestamp, toSch, fromSch schema.Schema) *DiffPartition {
 	return &DiffPartition{
 		to:       to,
 		from:     from,
@@ -301,7 +301,7 @@ func (dp DiffPartition) Key() []byte {
 
 func (dp DiffPartition) GetRowIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joiner, lookup sql.IndexLookup) (sql.RowIter, error) {
 	if types.IsFormat_DOLT_1(ddb.Format()) {
-		return newProllyDiffIter(ctx, dp, ddb, *dp.fromSch, *dp.toSch)
+		return newProllyDiffIter(ctx, dp, ddb, dp.fromSch, dp.toSch)
 	} else {
 		return newNomsDiffIter(ctx, ddb, joiner, dp, lookup)
 	}
@@ -428,8 +428,8 @@ func (dps *DiffPartitions) processCommit(ctx *sql.Context, cmHash hash.Hash, cm 
 			fromName: cmHashStr,
 			toDate:   toInfoForCommit.date,
 			fromDate: &ts,
-			fromSch:  &dps.fromSch,
-			toSch:    &dps.toSch,
+			fromSch:  dps.fromSch,
+			toSch:    dps.toSch,
 		}
 		selected, err := dps.selectFunc(ctx, partition)
 

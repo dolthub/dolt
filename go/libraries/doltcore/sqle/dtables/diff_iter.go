@@ -66,13 +66,13 @@ func newNomsDiffIter(ctx *sql.Context, ddb *doltdb.DoltDB, joiner *rowconv.Joine
 		return nil, err
 	}
 
-	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.fromSch, fromSch)
+	fromConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), dp.fromSch, fromSch)
 
 	if err != nil {
 		return nil, err
 	}
 
-	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), *dp.toSch, toSch)
+	toConv, err := dp.rowConvForSchema(ctx, ddb.ValueReadWriter(), dp.toSch, toSch)
 
 	if err != nil {
 		return nil, err
