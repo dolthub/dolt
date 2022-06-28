@@ -469,6 +469,30 @@ SQL
     [[ "$output" =~ "\`v\` double" ]] || false
 }
 
+@test "types: Double with precision and scale correctly gets interpreted as a decimal" {
+    skip "Double with precision and scale parsing is incorrect"
+    
+    dolt sql -q "CREATE TABLE t(pk double(5, 1))"
+
+    run dolt sql -q "INSERT INTO t values (33333.1)"
+    [ "$status" -eq "0" ]
+
+    run dolt sql -r csv -q "select * from t"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "pk" ]] || false
+    [[ "$output" =~ "33333.1" ]] || false
+
+    # Should fail
+    run dolt sql -q "INSERT INTO t values (23232.312321)"
+    [ "$status" -eq "1" ]
+
+    # Double with precision and scale should be interpreted as a decimal
+    run dolt sql -r csv "select column_name, numeric_scale, numeric_precision from t"
+    [ "$status" -eq "0" ]
+    [[ "$output" =~ "column_name, numeric_scale, numeric_precision" ]] || false
+    [[ "$output" =~ "pk,5,2" ]] || false
+}
+
 @test "types: ENUM('a','b','c')" {
     dolt sql <<SQL
 CREATE TABLE test (
