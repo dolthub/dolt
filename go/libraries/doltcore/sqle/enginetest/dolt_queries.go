@@ -103,23 +103,23 @@ var DescribeTableAsOfScriptTest = queries.ScriptTest{
 		{
 			Query: "describe a as of @Commit1;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "", ""},
-				{"c1", "int", "YES", "", "", ""},
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c1", "int", "YES", "", "NULL", ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit2;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "", ""},
-				{"c1", "int", "YES", "", "", ""},
-				{"c2", "text", "YES", "", "", ""},
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c1", "int", "YES", "", "NULL", ""},
+				{"c2", "text", "YES", "", "NULL", ""},
 			},
 		},
 		{
 			Query: "describe a as of @Commit3;",
 			Expected: []sql.Row{
-				{"pk", "int", "NO", "PRI", "", ""},
-				{"c2", "text", "YES", "", "", ""},
+				{"pk", "int", "NO", "PRI", "NULL", ""},
+				{"c2", "text", "YES", "", "NULL", ""},
 			},
 		},
 	},
