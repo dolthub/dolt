@@ -20,8 +20,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/dolthub/dolt/go/store/types"
-
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
@@ -81,10 +79,6 @@ func (cmd RemoteCmd) Name() string {
 // Description returns a description of the command
 func (cmd RemoteCmd) Description() string {
 	return "Manage set of tracked repositories."
-}
-
-func (cmd RemoteCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
 }
 
 func (cmd RemoteCmd) Docs() *cli.CommandDocumentation {
