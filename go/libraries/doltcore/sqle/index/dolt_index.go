@@ -438,15 +438,19 @@ func (di *doltIndex) getDurableState(ctx *sql.Context, ti DoltTableable) (*durab
 	return ret, nil
 }
 
-func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, ranges ...sql.Range) (sql.IndexLookup, error) {
-	var err error
-	sqlRanges, err := pruneEmptyRanges(ranges)
+func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, iranges ...sql.Range) (sql.IndexLookup, error) {
+	ranges, err := pruneEmptyRanges(iranges)
 	if err != nil {
 		return nil, err
 	}
 
-	prs := make([]prolly.Range, len(sqlRanges))
-	for i, sr := range sqlRanges {
+	ranges, err = SplitNullsFromRanges(ranges)
+	if err != nil {
+		return nil, err
+	}
+
+	prs := make([]prolly.Range, len(ranges))
+	for i, sr := range ranges {
 		prs[i], err = prollyRangeFromSqlRange(ctx, ns, sr, di.keyBld)
 		if err != nil {
 			return nil, err
@@ -461,14 +465,26 @@ func (di *doltIndex) newProllyLookup(ctx *sql.Context, ns tree.NodeStore, ranges
 	return &doltIndexLookup{
 		idx:          di,
 		prollyRanges: merged,
-		sqlRanges:    sqlRanges,
+		sqlRanges:    iranges,
 	}, nil
 }
 
-func (di *doltIndex) newNomsLookup(ctx *sql.Context, ranges ...sql.Range) (sql.IndexLookup, error) {
+func (di *doltIndex) newNomsLookup(ctx *sql.Context, iranges ...sql.Range) (sql.IndexLookup, error) {
 	// This might remain nil if the given nomsRanges each contain an EmptyRange for one of the columns. This will just
 	// cause the lookup to return no rows, which is the desired behavior.
 	var readRanges []*noms.ReadRange
+
+	ranges := make([]sql.Range, len(iranges))
+
+	for i := range iranges {
+		ranges[i] = DropTrailingAllColumnExprs(iranges[i])
+	}
+
+	ranges, err := SplitNullsFromRanges(ranges)
+	if err != nil {
+		return nil, err
+	}
+
 RangeLoop:
 	for _, rang := range ranges {
 		if len(rang) > len(di.columns) {
@@ -533,7 +549,7 @@ RangeLoop:
 				}
 				cb.upperbound = val
 			}
-			if rangeColumnExpr.Type() == sql.RangeType_Null {
+			if rangeColumnExpr.Type() == sql.RangeType_EqualNull {
 				cb.boundsCase = boundsCase_isNull
 			}
 			rangeCheck[i] = cb
@@ -560,7 +576,7 @@ RangeLoop:
 	return &doltIndexLookup{
 		idx:        di,
 		nomsRanges: readRanges,
-		sqlRanges:  ranges,
+		sqlRanges:  iranges,
 	}, nil
 }
 
@@ -742,64 +758,58 @@ func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Ran
 	}
 
 	for i, expr := range rng {
-		if !sql.RangeCutIsBinding(expr.LowerBound) {
-			continue
-		}
-
-		v, err := getRangeCutValue(expr.LowerBound, rng[i].Typ)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-		if err = PutField(ctx, ns, tb, i, v); err != nil {
-			return prolly.Range{}, err
+		if _, isnull := expr.LowerBound.(sql.BelowNull); isnull {
+			prollyRange.Start[i] = prolly.RangeCut{
+				Inclusive: true,
+				Null:      true,
+			}
+		} else if sql.RangeCutIsBinding(expr.LowerBound) {
+			v, err := getRangeCutValue(expr.LowerBound, rng[i].Typ)
+			if err != nil {
+				return prolly.Range{}, err
+			}
+			bound := expr.LowerBound.TypeAsLowerBound()
+			prollyRange.Start[i] = prolly.RangeCut{
+				Inclusive: bound == sql.Closed,
+			}
+			if err = PutField(ctx, ns, tb, i, v); err != nil {
+				return prolly.Range{}, err
+			}
 		}
 	}
 
 	// BuildPermissive() allows nulls in non-null fields
 	tup := tb.BuildPermissive(sharePool)
-
 	for i, expr := range rng {
-		if !sql.RangeCutIsBinding(expr.LowerBound) {
-			continue
-		}
-
-		bound := expr.LowerBound.TypeAsLowerBound()
-		_, null := expr.LowerBound.(sql.NullBound)
-
-		prollyRange.Start[i] = prolly.RangeCut{
-			Value:     tup.GetField(i),
-			Inclusive: bound == sql.Closed,
-			Null:      null,
+		if sql.RangeCutIsBinding(expr.LowerBound) {
+			prollyRange.Start[i].Value = tup.GetField(i)
 		}
 	}
 
 	for i, expr := range rng {
-		if !sql.RangeCutIsBinding(expr.UpperBound) {
-			continue
-		}
-
-		v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
-		if err != nil {
-			return prolly.Range{}, err
-		}
-		if err = PutField(ctx, ns, tb, i, v); err != nil {
-			return prolly.Range{}, err
+		if _, isnull := expr.UpperBound.(sql.AboveNull); isnull {
+			prollyRange.Stop[i] = prolly.RangeCut{
+				Inclusive: true,
+				Null:      true,
+			}
+		} else if sql.RangeCutIsBinding(expr.UpperBound) {
+			v, err := getRangeCutValue(expr.UpperBound, rng[i].Typ)
+			if err != nil {
+				return prolly.Range{}, err
+			}
+			bound := expr.UpperBound.TypeAsUpperBound()
+			prollyRange.Stop[i] = prolly.RangeCut{
+				Inclusive: bound == sql.Closed,
+			}
+			if err = PutField(ctx, ns, tb, i, v); err != nil {
+				return prolly.Range{}, err
+			}
 		}
 	}
-
 	tup = tb.BuildPermissive(sharePool)
 	for i, expr := range rng {
-		if !sql.RangeCutIsBinding(expr.UpperBound) {
-			continue
-		}
-
-		bound := expr.UpperBound.TypeAsUpperBound()
-		_, null := expr.UpperBound.(sql.NullBound)
-
-		prollyRange.Stop[i] = prolly.RangeCut{
-			Value:     tup.GetField(i),
-			Inclusive: bound == sql.Closed,
-			Null:      null,
+		if sql.RangeCutIsBinding(expr.UpperBound) {
+			prollyRange.Stop[i].Value = tup.GetField(i)
 		}
 	}
 
@@ -808,4 +818,79 @@ func prollyRangeFromSqlRange(ctx context.Context, ns tree.NodeStore, rng sql.Ran
 
 func getRangeCutValue(cut sql.RangeCut, typ sql.Type) (interface{}, error) {
 	return typ.Convert(sql.GetRangeCutKey(cut))
+}
+
+// Returns the Range with any |AllColumnExprs| at the end of it removed.
+//
+// Sometimes when we construct read ranges against laid out index structures,
+// we want to ignore these trailing clauses.
+func DropTrailingAllColumnExprs(r sql.Range) sql.Range {
+	i := len(r)
+	for i > 0 {
+		if r[i-1].Type() != sql.RangeType_All {
+			break
+		}
+		i--
+	}
+	return r[:i]
+}
+
+// Given a sql.Range, split it up into multiple ranges, where each column expr
+// that could be NULL and non-NULL is replaced with two column expressions, one
+// matching only NULL, and one matching the non-NULL component.
+//
+// This is for building physical scans against storage which does not store
+// NULL contiguous and ordered < non-NULL values.
+func SplitNullsFromRange(r sql.Range) ([]sql.Range, error) {
+	res := []sql.Range{{}}
+
+	for _, rce := range r {
+		if _, ok := rce.LowerBound.(sql.BelowNull); ok {
+			// May include NULL. Split it and add each non-empty range.
+			withnull, nullok, err := rce.TryIntersect(sql.NullRangeColumnExpr(rce.Typ))
+			if err != nil {
+				return nil, err
+			}
+			fornull := res[:]
+			withoutnull, withoutnullok, err := rce.TryIntersect(sql.NotNullRangeColumnExpr(rce.Typ))
+			if err != nil {
+				return nil, err
+			}
+			forwithoutnull := res[:]
+			if withoutnullok && nullok {
+				n := len(res)
+				res = append(res, res...)
+				fornull = res[:n]
+				forwithoutnull = res[n:]
+			}
+			if nullok {
+				for j := range fornull {
+					fornull[j] = append(fornull[j], withnull)
+				}
+			}
+			if withoutnullok {
+				for j := range forwithoutnull {
+					forwithoutnull[j] = append(forwithoutnull[j], withoutnull)
+				}
+			}
+		} else {
+			for j := range res {
+				res[j] = append(res[j], rce)
+			}
+		}
+	}
+
+	return res, nil
+}
+
+func SplitNullsFromRanges(rs []sql.Range) ([]sql.Range, error) {
+	var ret []sql.Range
+	for _, r := range rs {
+		nr, err := SplitNullsFromRange(r)
+		if err != nil {
+			return nil, err
+		}
+		ret = append(ret, nr...)
+	}
+	return ret, nil
 }

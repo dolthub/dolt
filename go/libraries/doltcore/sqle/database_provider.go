@@ -222,7 +222,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 
 	// We not only have to delete this database, but any derivative ones that we've stored as a result of USE or
 	// connection strings
-	derivativeNamePrefix := dbKey + "/"
+	derivativeNamePrefix := dbKey + dbRevisionDelimiter
 	for dbName := range p.databases {
 		if strings.HasPrefix(dbName, derivativeNamePrefix) {
 			delete(p.databases, dbName)
@@ -310,6 +310,25 @@ func (p DoltDatabaseProvider) RevisionDbState(ctx *sql.Context, revDB string) (d
 	return init, nil
 }
 
+// DropRevisionDb implements RevisionDatabaseProvider
+func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	dbKey := formatDbMapKeyName(revDB)
+	_, ok := p.databases[dbKey]
+	if !ok {
+		return dsess.ErrRevisionDbNotFound.New(revDB)
+	}
+
+	if IsRevisionDatabase(revDB) {
+		delete(p.databases, dbKey)
+		return nil
+	} else {
+		return dsess.ErrRevisionDbNotFound.New(revDB)
+	}
+}
+
 // Function implements the FunctionProvider interface
 func (p DoltDatabaseProvider) Function(_ *sql.Context, name string) (sql.Function, error) {
 	fn, ok := p.functions[strings.ToLower(name)]
@@ -329,6 +348,15 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 	}
 
 	return nil, sql.ErrTableFunctionNotFound.New(name)
+}
+
+// IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
+// branch or commit from a database (e.g. "dolt/branch1").
+func IsRevisionDatabase(dbName string) bool {
+	// TODO: This is only a heuristic to identify a revision database. Because
+	//       database names and branch names may contain slashes, we need to
+	//       do more work here to accurately check if this is a revision db.
+	return strings.Contains(dbName, dbRevisionDelimiter)
 }
 
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch

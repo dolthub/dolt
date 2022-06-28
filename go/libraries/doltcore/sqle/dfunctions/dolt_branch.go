@@ -127,7 +127,13 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		}
 	}
 
-	return actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	err := actions.RenameBranch(ctx, dbData, loadConfig(ctx), oldBranchName, newBranchName, force)
+	if err != nil {
+		return err
+	}
+
+	dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
+	return removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, oldBranchName))
 }
 
 func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
@@ -153,6 +159,12 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 		if err != nil {
 			return err
 		}
+
+		dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
+		err = removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, branchName))
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -160,8 +172,8 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	dbName := ctx.GetCurrentDatabase()
-	if dbName == "" {
+	currentDbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
+	if currentDbName == "" {
 		return nil
 	}
 
@@ -182,7 +194,13 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 			return false, fmt.Errorf("unexpected session type: %T", session)
 		}
 
-		activeBranchRef, err := dsess.CWBHeadRef(ctx, dbName)
+		sessionDatabase := dsess.Session.GetCurrentDatabase()
+		sessionDbName, _ := parseRevisionDatabaseName(sessionDatabase)
+		if len(sessionDatabase) == 0 || sessionDbName != currentDbName {
+			return false, nil
+		}
+
+		activeBranchRef, err := dsess.CWBHeadRef(ctx, sessionDatabase)
 		if err != nil {
 			return false, err
 		}
@@ -194,6 +212,41 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 
 		return false, nil
 	})
+}
+
+// parseRevisionDatabaseName parses the database or branch-qualified database name and returns the
+// database name and any specified branch name.
+func parseRevisionDatabaseName(revisionDbName string) (string, string) {
+	lastIndex := strings.LastIndex(revisionDbName, "/")
+	if lastIndex < 0 {
+		return revisionDbName, ""
+	}
+
+	var revision = ""
+	if len(revisionDbName) > lastIndex {
+		revision = revisionDbName[lastIndex+1:]
+	}
+	return revisionDbName[0:lastIndex], revision
+}
+
+// removeBranchRevisionDatabase updates database provider information to ensure the specified
+// revision DB name is not tracked as a valid database.
+func removeBranchRevisionDatabase(ctx *sql.Context, revisionDbName string) error {
+	doltsess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return fmt.Errorf("unexpected session type: %T", ctx.Session)
+	}
+
+	provider := doltsess.Session.Provider()
+	if provider, ok := provider.(dsess.RevisionDatabaseProvider); ok {
+		err := provider.DropRevisionDb(ctx, revisionDbName)
+		// Try to remove any branch-qualified database, but don't error if it isn't found
+		if err != nil && !dsess.ErrRevisionDbNotFound.Is(err) {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func loadConfig(ctx *sql.Context) *env.DoltCliConfig {

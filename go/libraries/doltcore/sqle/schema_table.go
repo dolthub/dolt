@@ -45,15 +45,15 @@ type Extra struct {
 
 // The fixed dolt schema for the `dolt_schemas` table.
 func SchemasTableSchema() schema.Schema {
-	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	typeCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesTypeCol, schema.DoltSchemasTypeTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
-	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	nameCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesNameCol, schema.DoltSchemasNameTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}
-	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.LegacyStringDefaultType, false, "", false, "")
+	fragmentCol, err := schema.NewColumnWithTypeInfo(doltdb.SchemasTablesFragmentCol, schema.DoltSchemasFragmentTag, typeinfo.StringDefaultType, false, "", false, "")
 	if err != nil {
 		panic(err)
 	}

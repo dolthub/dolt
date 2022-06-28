@@ -80,7 +80,7 @@ func AddDoltSystemVariables() {
 		},
 		{
 			Name:              AsyncReplicationKey,
-			Scope:             sql.SystemVariableScope_Session,
+			Scope:             sql.SystemVariableScope_Both,
 			Dynamic:           true,
 			SetVarHintApplies: false,
 			Type:              sql.NewSystemBoolType(AsyncReplicationKey),
