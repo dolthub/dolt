@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -241,6 +240,7 @@ SQL
 
     dolt diff -r sql firstbranch newbranch > query
     dolt checkout firstbranch
+
     cat query
     dolt sql < query
     dolt add test
@@ -679,6 +679,8 @@ SQL
 }
 
 @test "sql-diff: sql diff ignores dolt docs" {
+    skip_nbf_dolt_1
+    
     echo "This is a README" > README.md 
     run dolt diff -r sql
     [ "$status" -eq 0 ]
@@ -694,11 +696,12 @@ CREATE TABLE test (
   PRIMARY KEY(pk)
 );
 SQL
-    dolt sql -q "insert into test (pk, c1) values (0, NULL)";
+    dolt sql -q "insert into test (pk, c1) values (0, NULL)"
+    dolt diff -r sql
     run dolt diff -r sql
     [ "$status" -eq 0 ]
-    skip "dolt diff -sql prints out NULL values right now"
-    [[ ! "$output" =~ "NULL" ]] || false;
+    [[ "$output" =~ 'INSERT INTO `test` (`pk`,`c1`) VALUES (0,NULL)' ]] || false
+
     dolt sql -q "drop table test"
     dolt sql <<SQL
 CREATE TABLE test (
@@ -707,9 +710,8 @@ CREATE TABLE test (
   PRIMARY KEY(pk)
 );
 SQL
-    dolt sql -q "insert into test (pk, c1) values (0, NULL)";
+    dolt sql -q "insert into test (pk, c1) values (0, NULL)"
     run dolt diff -r sql
-    skip "dolt diff -sql fails with filed to tranform row pk:0 |"
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "failed to transform" ]] || false 
+    [[ "$output" =~ 'INSERT INTO `test` (`pk`,`c1`) VALUES (0,NULL)' ]] || false
 }
