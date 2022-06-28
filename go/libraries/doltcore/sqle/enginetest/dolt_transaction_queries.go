@@ -151,12 +151,12 @@ var DoltTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{{1, 1}, {2, 2}},
 			},
 			{
-				Query:    "/* client b */ rollback",
-				Expected: []sql.Row{},
-			},
-			{
 				Query:    "/* client b */ select * from t order by x",
 				Expected: []sql.Row{{1, 1}, {2, 2}},
+			},
+			{
+				Query:          "/* client b */ insert into t values (2, 3)",
+				ExpectedErrStr: "duplicate primary key given: [2]",
 			},
 		},
 	},
@@ -1155,6 +1155,75 @@ var DoltConflictHandlingTests = []queries.TransactionTest{
 			},
 		},
 	},
+	{
+		Name: "conflicts from a DOLT_MERGE return an initially unhelpful error in a concurrent write scenario",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t values (1, 100);",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 200);",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+
+			"SET dolt_allow_commit_conflicts = on;",
+			"CALL DOLT_MERGE('right');",
+			"SET dolt_allow_commit_conflicts = off;",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 200, 1, 100}},
+			},
+			{
+				Query:    "/* client b */ SELECT base_pk, base_col1, our_pk, our_col1, their_pk, their_col1 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 200, 1, 100}},
+			},
+			// nominal inserts that will not result in a conflict or constraint violation
+			// They are needed to trigger a three-way transaction merge
+			{
+				Query:    "/* client a */ INSERT into t VALUES (2, 2);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ SET dolt_allow_commit_conflicts = on;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client b */ COMMIT;",
+				// TODO: No it didn't! Client b contains conflicts from an internal merge! Retrying will not help.
+				ExpectedErrStr: "this transaction conflicts with a committed transaction from another client, please retry",
+			},
+			{
+				Query:    "/* client b */ INSERT into t VALUES (3, 3);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query: "/* client b */ COMMIT;",
+				// Retrying did not help. But at-least the error makes sense.
+				ExpectedErrStr: "Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1",
+			},
+		},
+	},
 }
 
 var DoltSqlFuncTransactionTests = []queries.TransactionTest{
@@ -1251,6 +1320,87 @@ var DoltSqlFuncTransactionTests = []queries.TransactionTest{
 
 var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 	{
+		Name: "Constraint violations created by concurrent writes should cause a rollback",
+		SetUpScript: []string{
+			"CREATE table parent (pk int PRIMARY KEY);",
+			"CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent (pk));",
+			"INSERT into parent VALUES (1);",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client b */ SET @@autocommit=0;",
+				Expected: []sql.Row{{}},
+			},
+			{
+				Query:    "/* client a */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ START TRANSACTION;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ DELETE FROM parent where pk = 1;",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client b */ INSERT INTO child VALUES (1, 1);",
+				Expected: []sql.Row{{sql.NewOkResult(1)}},
+			},
+			{
+				Query:    "/* client a */ COMMIT;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query: "/* client b */ COMMIT;",
+				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.",
+			},
+			{
+				Query:          "/* client b */ INSERT INTO child VALUES (1, 1);",
+				ExpectedErrStr: "cannot add or update a child row - Foreign key violation on fk: `nk01br56`, table: `child`, referenced table: `parent`, key: `[1]`",
+			},
+		},
+	},
+	{
+		Name: "Constraint violations created by DOLT_MERGE should cause a roll back",
+		SetUpScript: []string{
+			"CREATE TABLE t (pk int PRIMARY KEY, col1 int UNIQUE);",
+			"CALL DOLT_COMMIT('-am', 'create table');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t values (2, 1);",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query: "/* client a */ CALL DOLT_MERGE('right');",
+				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.",
+			},
+			{
+				Query:    "/* client a */ SELECT * from DOLT_CONSTRAINT_VIOLATIONS;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_MERGE('--abort');",
+				ExpectedErrStr: "fatal: There is no merge to abort",
+			},
+		},
+	},
+	{
 		Name: "a transaction commit that is a fast-forward produces no constraint violations",
 		SetUpScript: []string{
 			"CREATE TABLE parent (pk BIGINT PRIMARY KEY, v1 BIGINT, INDEX(v1));",
@@ -1315,8 +1465,11 @@ var DoltConstraintViolationTransactionTests = []queries.TransactionTest{
 				Expected: []sql.Row{},
 			},
 			{
-				Query:          "/* client b */ COMMIT;",
-				ExpectedErrStr: "Constraint violation from merge detected, cannot commit transaction. Constraint violations from a merge must be resolved using the dolt_constraint_violations table before committing a transaction. To commit transactions with constraint violations set @@dolt_force_transaction_commit=1",
+				Query: "/* client b */ COMMIT;",
+				ExpectedErrStr: "Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+					"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+					"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+					"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.",
 			},
 		},
 	},

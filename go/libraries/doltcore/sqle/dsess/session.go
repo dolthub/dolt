@@ -103,6 +103,11 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 	return sess, nil
 }
 
+// Provider returns the RevisionDatabaseProvider for this session.
+func (sess *Session) Provider() RevisionDatabaseProvider {
+	return sess.provider
+}
+
 // EnableBatchedMode enables batched mode for this session. This is only safe to do during initialization.
 // Sessions operating in batched mode don't flush any edit buffers except when told to do so explicitly, or when a
 // transaction commits. Disable @@autocommit to prevent edit buffers from being flushed prematurely in this mode.
