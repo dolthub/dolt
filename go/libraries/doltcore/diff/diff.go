@@ -18,9 +18,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/store/diff"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // ChangeType is an enum that represents the type of change in a diff
@@ -67,4 +68,4 @@ type SqlRowDiffWriter interface {
 }
 
 // ColorFunc is a function that can color a format string
-type ColorFunc func (a ...interface{}) string
+type ColorFunc func(a ...interface{}) string

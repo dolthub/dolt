@@ -161,9 +161,9 @@ func (dtf *DiffTableFunction) RowIter(ctx *sql.Context, _ sql.Row) (sql.RowIter,
 
 // loadDetailsForRef loads the root, hash, and timestamp for the specified ref value
 func (dtf *DiffTableFunction) loadDetailsForRef(
-		ctx *sql.Context,
-		ref interface{},
-		ddb Database,
+	ctx *sql.Context,
+	ref interface{},
+	ddb Database,
 ) (*doltdb.RootValue, string, *types.Timestamp, error) {
 	hashStr, ok := ref.(string)
 	if !ok {
