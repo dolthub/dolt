@@ -17,6 +17,7 @@ package noms
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -40,6 +41,10 @@ func (InRangeCheckAlways) Check(context.Context, types.Tuple) (valid bool, skip 
 	return true, false, nil
 }
 
+func (InRangeCheckAlways) String() string {
+	return "Always"
+}
+
 // InRangeCheckNever will always return that the given tuple is not valid.
 type InRangeCheckNever struct{}
 
@@ -47,11 +52,19 @@ func (InRangeCheckNever) Check(context.Context, types.Tuple) (valid bool, skip b
 	return false, false, nil
 }
 
+func (InRangeCheckNever) String() string {
+	return "Never"
+}
+
 // InRangeCheckPartial will check if the given tuple contains the aliased tuple as a partial key.
 type InRangeCheckPartial types.Tuple
 
 func (ircp InRangeCheckPartial) Check(_ context.Context, t types.Tuple) (valid bool, skip bool, err error) {
 	return t.StartsWith(types.Tuple(ircp)), false, nil
+}
+
+func (ircp InRangeCheckPartial) String() string {
+	return fmt.Sprintf("StartsWith(%v)", types.Tuple(ircp).HumanReadableString())
 }
 
 // ReadRange represents a range of values to be read
@@ -64,6 +77,10 @@ type ReadRange struct {
 	Reverse bool
 	// Check is a callb made as the reader reads through values to check that the next value being read is in the range.
 	Check InRangeCheck
+}
+
+func (rr *ReadRange) String() string {
+	return fmt.Sprintf("ReadRange[Start: %v, Inclusive: %t, Reverse %t, Check: %v]", rr.Start.HumanReadableString(), rr.Inclusive, rr.Reverse, rr.Check)
 }
 
 // NewRangeEndingAt creates a range with a starting key which will be iterated in reverse
