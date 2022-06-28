@@ -92,7 +92,7 @@ func (cmd BackupCmd) RequiresRepo() bool {
 }
 
 func (cmd BackupCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return false
 }
 
 func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
