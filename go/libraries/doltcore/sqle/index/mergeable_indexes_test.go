@@ -1357,6 +1357,8 @@ func TestMergeableIndexes(t *testing.T) {
 						require.FailNow(t, fmt.Sprintf("Expected: `%v`\nActual:   `%v`", test.finalRanges, finalRanges))
 					}
 				}
+			} else {
+				t.Log(fmt.Sprintf("%v != %v", test.finalRanges, finalRanges))
 			}
 		})
 	}
@@ -1447,9 +1449,8 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NULL OR v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				index.LessThanRange(idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
-				index.NullRange()},
+				index.AllRange(),
+			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
 		{
@@ -1460,17 +1461,14 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL",
 			[]*noms.ReadRange{
-				index.LessThanRange(idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
+				index.NotNullRange(),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
 		{
 			"v1 IS NOT NULL OR v1 IS NULL",
 			[]*noms.ReadRange{
-				index.LessThanRange(idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
-				index.NullRange(),
+				index.AllRange(),
 			},
 			[]int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 		},
@@ -1482,8 +1480,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 = 15",
 			[]*noms.ReadRange{
-				index.LessThanRange(idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
+				index.NotNullRange(),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
@@ -1497,8 +1494,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL OR v1 < 16",
 			[]*noms.ReadRange{
-				index.LessThanRange(idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
+				index.NotNullRange(),
 			},
 			[]int64{0, 1, 3, 5, 7, 8, 9},
 		},
@@ -1512,8 +1508,7 @@ func TestMergeableIndexesNulls(t *testing.T) {
 		{
 			"v1 IS NOT NULL AND v1 > 16",
 			[]*noms.ReadRange{
-				index.OpenRange(idxv1.tuple(16), idxv1.nilTuple()),
-				index.GreaterThanRange(idxv1.nilTuple()),
+				index.GreaterThanRange(idxv1.tuple(16)),
 			},
 			[]int64{7, 8, 9},
 		},
@@ -1574,6 +1569,8 @@ func TestMergeableIndexesNulls(t *testing.T) {
 						require.FailNow(t, fmt.Sprintf("Expected: `%v`\nActual:   `%v`", test.finalRanges, finalRanges))
 					}
 				}
+			} else {
+				t.Log(fmt.Sprintf("%v != %v", test.finalRanges, finalRanges))
 			}
 		})
 	}
