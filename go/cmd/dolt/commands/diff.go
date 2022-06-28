@@ -649,6 +649,14 @@ func diffRows(ctx context.Context, engine *engine.SqlEngine, td diff.TableDelta,
 
 	unionSch := unionSchemas(fromSch, toSch)
 
+	// In some cases we can't print SQL output diffs
+	if dArgs.diffOutput == SQLDiffOutput &&
+			(td.ToSch == nil ||
+				(td.FromSch != nil && !schema.SchemasAreEqual(td.FromSch, td.ToSch))) {
+		_, _ = fmt.Fprintf(cli.CliErr, "Incompatible schema change, skipping data diff")
+		return nil
+	}
+
 	var diffWriter diff.SqlRowDiffWriter
 	switch dArgs.diffOutput {
 	case TabularDiffOutput:
