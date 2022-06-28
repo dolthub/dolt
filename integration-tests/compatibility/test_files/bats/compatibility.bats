@@ -129,27 +129,35 @@ teardown() {
 @test "dolt diff other" {
     dolt diff other
     run dolt diff other
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `abc` (
+   `pk` bigint NOT NULL,
+   `a` longtext,
+   `b` double,
+-  `w` bigint,
+-  `z` bigint,
++  `x` bigint,
++  `y` bigint,
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+------+-----+------+------+------+------+
+|   | pk | a    | b   | w    | z    | x    | y    |
++---+----+------+-----+------+------+------+------+
+| < | 0  | asdf | 1.1 | 0    | 122  | NULL | NULL |
+| > | 0  | asdf | 1.1 | NULL | NULL | 0    | 121  |
+| - | 1  | asdf | 1.1 | 0    | 122  | NULL | NULL |
+| + | 2  | asdf | 1.1 | NULL | NULL | 0    | 121  |
+| + | 3  | data | 1.1 | NULL | NULL | 0    | 121  |
+| - | 4  | data | 1.1 | 0    | 122  | NULL | NULL |
++---+----+------+-----+------+------+------+------+
+EOF
+)
+
     [ "$status" -eq 0 ]
-    [[ "${lines[3]}"  =~ 'CREATE TABLE `abc` ('   ]] || false
-    [[ "${lines[4]}"  =~ "\`pk\` bigint NOT NULL" ]] || false
-    [[ "${lines[5]}"  =~ "\`a\` longtext"         ]] || false
-    [[ "${lines[6]}"  =~ "\`b\` double"           ]] || false
-    [[ "${lines[7]}"  =~ "-  \`w\` bigint"        ]] || false
-    [[ "${lines[8]}"  =~ "-  \`z\` bigint"        ]] || false
-    [[ "${lines[9]}"  =~ "+  \`x\` bigint"        ]] || false
-    [[ "${lines[10]}" =~ "+  \`y\` bigint"        ]] || false
-    [[ "${lines[11]}" =~ 'PRIMARY KEY (`pk`)'     ]] || false
-    [[ "${lines[12]}" =~ ")"                      ]] || false
-    [[ "${lines[13]}" =~ "+---+----+------+-----+------+------+------+------+" ]] || false
-    [[ "${lines[14]}" =~ "| < | pk | a    | b   |      |      | w    | z    |" ]] || false
-    [[ "${lines[15]}" =~ "| > | pk | a    | b   | x    | y    |      |      |" ]] || false
-    [[ "${lines[16]}" =~ "+---+----+------+-----+------+------+------+------+" ]] || false
-    [[ "${lines[17]}" =~ "| < | 0  | asdf | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
-    [[ "${lines[18]}" =~ "| > | 0  | asdf | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
-    [[ "${lines[19]}" =~ "| - | 1  | asdf | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
-    [[ "${lines[20]}" =~ "| + | 2  | asdf | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
-    [[ "${lines[21]}" =~ "| + | 3  | data | 1.1 | 0    | 121  | NULL | NULL |" ]] || false
-    [[ "${lines[22]}" =~ "| - | 4  | data | 1.1 | NULL | NULL | 0    | 122  |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the lines to make sure there are no unexpected output lines
+    [ "${#lines[@]}" -eq 23 ]
 }
 
 @test "big table" {
