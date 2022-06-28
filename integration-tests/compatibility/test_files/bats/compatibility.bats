@@ -130,10 +130,9 @@ teardown() {
     dolt diff other
     run dolt diff other
 
-    EXPECTED=$(cat <<'EOF'
- CREATE TABLE `abc` (
-   `pk` bigint NOT NULL,
-   `a` longtext,
+    # We can't quote the entire schema here because there was a change
+    # in collation output at some point in the past
+    EXPECTED_SCHEMA=$(cat <<'EOF'
    `b` double,
 -  `w` bigint,
 -  `z` bigint,
@@ -141,6 +140,10 @@ teardown() {
 +  `y` bigint,
    PRIMARY KEY (`pk`)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    EXPECTED_DATA=$(cat <<'EOF'
 +---+----+------+-----+------+------+------+------+
 |   | pk | a    | b   | w    | z    | x    | y    |
 +---+----+------+-----+------+------+------+------+
@@ -155,7 +158,8 @@ EOF
 )
 
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "$EXPECTED" ]] || false
+    [[ "$output" =~ "$EXPECTED_SCHEMA" ]] || false
+    [[ "$output" =~ "$EXPECTED_DATA" ]] || false
     # Count the lines to make sure there are no unexpected output lines
     [ "${#lines[@]}" -eq 23 ]
 }
