@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -184,6 +183,8 @@ SQL
 }
 
 @test "schema-changes: changing column types in place works" {
+    skip_nbf_dolt_1 "hangs"
+    
     dolt sql <<SQL
 CREATE TABLE test2(
   pk1 BIGINT,
@@ -358,9 +359,17 @@ SQL
     run dolt diff --data
     [ "$status" -eq 0 ]
 
-    skip "dolt incorrectly considers there to be two different columns named v1"
-    skip "output should have a single column named v1 https://github.com/dolthub/dolt/issues/2430"
+    EXPECTED=$(cat <<'EOF'
++---+-----+-----+------+
+|   | pk1 | pk2 | v1   |
++---+-----+-----+------+
+| < | 1   | 1   | 1    |
+| > | 1   | 1   | NULL |
+| < | 2   | 2   | 2    |
+| > | 2   | 2   | NULL |
++---+-----+-----+------+
+EOF
+)               
     
-    [[ ! "$output" =~ '|  <  | pk1 | pk2 |      | v1   |' ]] || false
-    [[ ! "$output" =~ '|  >  | pk1 | pk2 | v1   |      |' ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }
