@@ -160,8 +160,6 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" =~ "$EXPECTED_SCHEMA" ]] || false
     [[ "$output" =~ "$EXPECTED_DATA" ]] || false
-    # Count the lines to make sure there are no unexpected output lines
-    [ "${#lines[@]}" -eq 23 ]
 }
 
 @test "big table" {
