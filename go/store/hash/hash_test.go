@@ -22,9 +22,10 @@
 package hash
 
 import (
-	"golang.org/x/crypto/blake2b"
 	"math/rand"
 	"testing"
+
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zeebo/blake3"
