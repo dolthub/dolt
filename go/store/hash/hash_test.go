@@ -22,13 +22,13 @@
 package hash
 
 import (
+	"golang.org/x/crypto/blake2b"
 	"math/rand"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/zeebo/blake3"
 	"github.com/zeebo/xxh3"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestParseError(t *testing.T) {
@@ -164,6 +164,13 @@ func BenchmarkSha512(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		j := i % len(benchData)
 		_ = Of(benchData[j])
+	}
+}
+
+func BenchmarkBlake2(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		j := i % len(benchData)
+		_ = blake2b.Sum256(benchData[j])
 	}
 }
 
