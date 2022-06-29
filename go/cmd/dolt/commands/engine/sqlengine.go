@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -64,6 +66,12 @@ func NewSqlEngine(
 	format PrintResultFormat,
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
+
+	serverLockFile := filepath.Join(dbfactory.DoltDir, "sql-server.lock")
+	ok, _ := mrEnv.FileSystem().Exists(serverLockFile)
+	if ok {
+		config.IsReadOnly = true
+	}
 
 	parallelism := runtime.GOMAXPROCS(0)
 

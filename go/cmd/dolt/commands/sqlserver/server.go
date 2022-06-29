@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -30,10 +31,13 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
+
+const serverLock = "sql-server.lock"
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -183,6 +187,10 @@ func Serve(
 			_ = metSrv.ListenAndServe()
 		}()
 	}
+
+	serverLockFile := filepath.Join(dbfactory.DoltDir, serverLock)
+	mrEnv.FileSystem().WriteFile(serverLockFile, []byte{})
+	defer mrEnv.FileSystem().DeleteFile(serverLockFile)
 
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
