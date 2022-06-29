@@ -982,7 +982,14 @@ SQL
     [[ "$output" =~ "c5" ]] || false
 }
 
-@test "sql: decribe bad table name" {
+@test "sql: describe with information_schema correctly works" {
+    skip "describe does not work with information_schema tables"
+    run dolt sql -r csv -q "describe information_schema.columns"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 23 ]
+}
+
+@test "sql: describe bad table name" {
     run dolt sql -q "describe poop"
     [ $status -eq 1 ]
     [[ "$output" =~ "table not found: poop" ]] || false
