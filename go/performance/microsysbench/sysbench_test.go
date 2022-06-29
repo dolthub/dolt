@@ -16,19 +16,16 @@ import (
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dtestutils"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
 	tableSize = 10_000
-	dbName    = "sysbench"
 )
 
 var dEnv *env.DoltEnv
 
 func init() {
-	nbf := types.Format_Default
-	dEnv = dtestutils.CreateTestEnvWithNameAndNbf(dbName, nbf)
+	dEnv = dtestutils.CreateTestEnv()
 	populateRepo(dEnv)
 }
 
