@@ -179,7 +179,7 @@ func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Ta
 	}
 
 	if limitItr.hitLimit {
-		cli.Println("Over 50 constraint violations were found. Please query '%s' to see them all.\\n", doltdb.DoltConstViolTablePrefix+tblName)
+		cli.Printf("Over 50 constraint violations were found. Please query '%s' to see them all.\n", doltdb.DoltConstViolTablePrefix+tblName)
 	}
 
 	return nil
