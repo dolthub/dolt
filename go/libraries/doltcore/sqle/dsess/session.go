@@ -57,6 +57,8 @@ const (
 	ReplicateAllHeadsKey        = "dolt_replicate_all_heads"
 	AsyncReplicationKey         = "dolt_async_replication"
 	TransactionMergeStompEnvKey = "DOLT_TRANSACTION_MERGE_STOMP"
+
+	ServerLockFile = "sql-server.lock"
 )
 
 var transactionMergeStomp = false

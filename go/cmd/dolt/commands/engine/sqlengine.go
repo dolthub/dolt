@@ -67,7 +67,7 @@ func NewSqlEngine(
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 
-	serverLockFile := filepath.Join(dbfactory.DoltDir, "sql-server.lock")
+	serverLockFile := filepath.Join(dbfactory.DoltDir, dsess.ServerLockFile)
 	ok, _ := mrEnv.FileSystem().Exists(serverLockFile)
 	if ok {
 		config.IsReadOnly = true

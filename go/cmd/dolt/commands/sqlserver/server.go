@@ -34,10 +34,9 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
-
-const serverLock = "sql-server.lock"
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -188,7 +187,7 @@ func Serve(
 		}()
 	}
 
-	serverLockFile := filepath.Join(dbfactory.DoltDir, serverLock)
+	serverLockFile := filepath.Join(dbfactory.DoltDir, dsess.ServerLockFile)
 	mrEnv.FileSystem().WriteFile(serverLockFile, []byte{})
 	defer mrEnv.FileSystem().DeleteFile(serverLockFile)
 
