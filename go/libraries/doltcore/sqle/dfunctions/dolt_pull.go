@@ -97,11 +97,13 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	}
 
 	var remoteName string
+	var remoteOnly = false
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
+		remoteOnly = true
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag))
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), remoteOnly)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
@@ -135,7 +137,7 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 
 			rsSeen = true
 			// todo: can we pass nil for either of the channels?
-			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, runProgFuncs, stopProgFuncs)
+			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, branchRef, runProgFuncs, stopProgFuncs)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, err
 			}
