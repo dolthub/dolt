@@ -408,7 +408,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "empty table",
 		SetUpScript: []string{
-			"create table t (n int, c text);",
+			"create table t (n int, c varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 		},
 		Assertions: []queries.ScriptTestAssertion{
@@ -421,7 +421,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "keyless table",
 		SetUpScript: []string{
-			"create table foo1 (n int, de text);",
+			"create table foo1 (n int, de varchar(20));",
 			"insert into foo1 values (1, 'Ein'), (2, 'Zwei'), (3, 'Drei');",
 			"set @Commit1 = dolt_commit('-am', 'inserting into foo1');",
 
@@ -453,11 +453,11 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: basic cases",
 		SetUpScript: []string{
-			"create table t1 (n int primary key, de text);",
+			"create table t1 (n int primary key, de varchar(20));",
 			"insert into t1 values (1, 'Eins'), (2, 'Zwei'), (3, 'Drei');",
 			"set @Commit1 = dolt_commit('-am', 'inserting into t1');",
 
-			"alter table t1 add column fr text;",
+			"alter table t1 add column fr varchar(20);",
 			"insert into t1 values (4, 'Vier', 'Quatre');",
 			"set @Commit2 = dolt_commit('-am', 'adding column and inserting data in t1');",
 
@@ -663,7 +663,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: non-pk column drops and adds",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 int, c2 text);",
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
 			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
 
@@ -702,7 +702,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: non-pk column type changes",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 int, c2 text);",
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
 			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
 			"alter table t modify column c2 int;",
@@ -727,7 +727,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: rename table",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 int, c2 text);",
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
 			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
 
@@ -752,7 +752,7 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "primary key table: delete and recreate table",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 int, c2 text);",
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
 			"insert into t values (1, 2, '3'), (4, 5, '6');",
 			"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
 
@@ -2782,7 +2782,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 			"alter table t drop column c;",
 			"set @Commit2 = (select DOLT_COMMIT('-am', 'dropping column c'));",
 
-			"alter table t add column c text;",
+			"alter table t add column c varchar(20);",
 			"insert into t values (100, '101');",
 			"set @Commit3 = (select DOLT_COMMIT('-am', 're-adding column c'));",
 		},
@@ -2816,7 +2816,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "column drop and recreate with different type that can NOT be coerced (string -> int)",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c text);",
+			"create table t (pk int primary key, c varchar(20));",
 			"insert into t values (1, 'two'), (3, 'four');",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 
@@ -2949,7 +2949,7 @@ var DiffSystemTableScriptTests = []queries.ScriptTest{
 	{
 		Name: "table with commit column should maintain its data in diff",
 		SetUpScript: []string{
-			"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
+			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
 			"CALL dolt_commit('-am', 'creating table t');",
 			"INSERT INTO t VALUES (1, 'hi');",
 			"CALL dolt_commit('-am', 'insert data');",
@@ -3037,7 +3037,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "invalid arguments",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 text, c2 text);",
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
@@ -3103,13 +3103,13 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 		SetUpScript: []string{
 			"set @Commit0 = HashOf('HEAD');",
 
-			"create table t (pk int primary key, c1 text, c2 text);",
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two');",
 			"set @Commit2 = dolt_commit('-am', 'inserting into table t');",
 
-			"create table t2 (pk int primary key, c1 text, c2 text);",
+			"create table t2 (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"insert into t2 values(100, 'hundred', 'hundert');",
 			"set @Commit3 = dolt_commit('-am', 'inserting into table t2');",
 
@@ -3161,7 +3161,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "diff with branch refs",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 text, c2 text);",
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two');",
@@ -3208,7 +3208,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "schema modification: drop and recreate column with same type",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 text, c2 text);",
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'two'), (2, 'two', 'three');",
@@ -3217,7 +3217,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 			"alter table t drop column c2;",
 			"set @Commit3 = dolt_commit('-am', 'dropping column c2');",
 
-			"alter table t add column c2 text;",
+			"alter table t add column c2 varchar(20);",
 			"insert into t values (3, 'three', 'four');",
 			"update t set c2='foo' where pk=1;",
 			"set @Commit4 = dolt_commit('-am', 'adding column c2, inserting, and updating data');",
@@ -3267,7 +3267,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "schema modification: rename columns",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 text, c2 int);",
+			"create table t (pk int primary key, c1 varchar(20), c2 int);",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', -1), (2, 'two', -2);",
@@ -3335,7 +3335,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "schema modification: drop and rename columns with different types",
 		SetUpScript: []string{
-			"create table t (pk int primary key, c1 text, c2 text);",
+			"create table t (pk int primary key, c1 varchar(20), c2 varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 
 			"insert into t values(1, 'one', 'asdf'), (2, 'two', '2');",
@@ -3394,7 +3394,7 @@ var DiffTableFunctionScriptTests = []queries.ScriptTest{
 	{
 		Name: "table with commit column should maintain its data in diff",
 		SetUpScript: []string{
-			"CREATE TABLE t (pk int PRIMARY KEY, commit text);",
+			"CREATE TABLE t (pk int PRIMARY KEY, commit varchar(20));",
 			"set @Commit1 = dolt_commit('-am', 'creating table t');",
 			"INSERT INTO t VALUES (1, 'hi');",
 			"set @Commit2 = dolt_commit('-am', 'insert data');",
@@ -3867,7 +3867,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 			"alter table t drop column c;",
 			"set @Commit2 = DOLT_COMMIT('-am', 'dropping column c');",
 
-			"alter table t add column c text;",
+			"alter table t add column c varchar(20);",
 			"insert into t values (100, '101');",
 			"set @Commit3 = DOLT_COMMIT('-am', 're-adding column c');",
 		},
@@ -3898,7 +3898,7 @@ var CommitDiffSystemTableScriptTests = []queries.ScriptTest{
 		Name: "schema modification: column drop, recreate with different type that can't be coerced (string -> int)",
 		SetUpScript: []string{
 			"set @Commit0 = HASHOF('HEAD');",
-			"create table t (pk int primary key, c text);",
+			"create table t (pk int primary key, c varchar(20));",
 			"insert into t values (1, 'two'), (3, 'four');",
 			"set @Commit1 = (select DOLT_COMMIT('-am', 'creating table t'));",
 

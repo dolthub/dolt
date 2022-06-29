@@ -39,7 +39,10 @@ const (
 
 var ErrRetryTransaction = errors.New("this transaction conflicts with a committed transaction from another client, please retry")
 var ErrUnresolvedConflictsCommit = errors.New("Merge conflict detected, transaction rolled back. Merge conflicts must be resolved using the dolt_conflicts tables before committing a transaction. To commit transactions with merge conflicts, set @@dolt_allow_commit_conflicts = 1")
-var ErrUnresolvedConstraintViolationsCommit = errors.New("Constraint violation from merge detected, cannot commit transaction. Constraint violations from a merge must be resolved using the dolt_constraint_violations table before committing a transaction. To commit transactions with constraint violations set @@dolt_force_transaction_commit=1")
+var ErrUnresolvedConstraintViolationsCommit = errors.New("Committing this transaction resulted in a working set with constraint violations, transaction rolled back. " +
+	"This constraint violation may be the result of a previous merge or the result of transaction sequencing. " +
+	"Constraint violations from a merge can be resolved using the dolt_constraint_violations table before committing the transaction. " +
+	"To allow transactions to be committed with constraint violations from a merge or transaction sequencing set @@dolt_force_transaction_commit=1.")
 
 func TransactionsDisabled(ctx *sql.Context) bool {
 	enabled, err := ctx.GetSessionVariable(ctx, TransactionsDisabledSysVar)
@@ -332,9 +335,26 @@ const (
 	notFfMerge = ffMerge(false)
 )
 
-// validateWorkingSetForCommit validates that the working set given is legal to commit according to the session
-// settings. Returns an error if the given working set has conflicts or constraint violations and the session settings
+// validateWorkingSetForCommit validates that the working set given is legal to
+// commit according to the session settings. Returns an error if the given
+// working set has conflicts or constraint violations and the session settings
 // do not allow them.
+//
+// If dolt_allow_commit_conflicts = 0 and dolt_force_transaction_commit = 0, and
+// a transaction's post-commit working set contains a documented conflict
+// ( either as a result of a merge that occurred inside the transaction, or a
+// result of a transaction merge) that transaction will be rolled back.
+//
+// The justification for this behavior is that we want to protect the working
+// set from conflicts with the above settings.
+//
+// If dolt_force_transaction_commit = 0, and a transaction's post-commit working
+// set contains a documented constraint violation ( either as a result of a merge
+// that occurred inside the transaction, or a result of a transaction merge)
+// that transaction will be rolled back.
+//
+// The justification for this behavior is that we want to protect the working
+// set from constraint violations with the above settings.
 func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, workingSet *doltdb.WorkingSet, isFf ffMerge) error {
 	forceTransactionCommit, err := ctx.GetSessionVariable(ctx, ForceTransactionCommit)
 	if err != nil {
@@ -351,8 +371,20 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 	if err != nil {
 		return err
 	}
+	hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
+	if err != nil {
+		return err
+	}
 
 	if hasConflicts {
+		// TODO: Sometimes this returns the wrong error. Define an internal
+		// merge to be a merge that occurs inside a transaction. Define a
+		// transaction merge to be the merge that resolves changes between two
+		// transactions. If an internal merge creates a documented conflict and
+		// the transaction merge is not a fast-forward, a retry transaction
+		// error will be returned. Instead, an ErrUnresolvedConflictsCommit should
+		// be returned.
+
 		// Conflicts are never acceptable when they resulted from a merge with the existing working set -- it's equivalent
 		// to hitting a write lock (which we didn't take). Always roll back and return an error in this case.
 		if !isFf {
@@ -376,14 +408,20 @@ func (tx *DoltTransaction) validateWorkingSetForCommit(ctx *sql.Context, working
 		}
 	}
 
-	// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
-	// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
-	if forceTransactionCommit.(int8) != 1 {
-		hasConstraintViolations, err := workingRoot.HasConstraintViolations(ctx)
-		if err != nil {
-			return err
-		}
-		if hasConstraintViolations {
+	if hasConstraintViolations {
+		// Constraint violations are acceptable in the working set if force
+		// transaction commit is enabled, regardless if an internal merge ( a
+		// merge that occurs inside a transaction) or a transaction merge
+		// created them.
+
+		// TODO: We need to add more granularity in terms of what types of constraint violations can be committed. For example,
+		// in the case of foreign_key_checks=0 you should be able to commit foreign key violations.
+		if forceTransactionCommit.(int8) != 1 {
+			rollbackErr := tx.rollback(ctx)
+			if rollbackErr != nil {
+				return rollbackErr
+			}
+
 			return ErrUnresolvedConstraintViolationsCommit
 		}
 	}

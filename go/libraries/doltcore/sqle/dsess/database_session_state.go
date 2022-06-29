@@ -55,6 +55,8 @@ type DatabaseSessionState struct {
 	readReplica  *env.Remote
 	tmpFileDir   string
 
+	TblStats map[string]sql.TableStatistics
+
 	// Same as InitialDbState.Err, this signifies that this
 	// DatabaseSessionState is invalid. LookupDbState returning a
 	// DatabaseSessionState with Err != nil will return that err.

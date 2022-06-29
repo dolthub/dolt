@@ -179,14 +179,6 @@ func (t *TempTable) String() string {
 	return t.tableName
 }
 
-func (t *TempTable) NumRows(ctx *sql.Context) (uint64, error) {
-	m, err := t.table.GetRowData(ctx)
-	if err != nil {
-		return 0, err
-	}
-	return m.Count(), nil
-}
-
 func (t *TempTable) Format() *types.NomsBinFormat {
 	return t.table.Format()
 }

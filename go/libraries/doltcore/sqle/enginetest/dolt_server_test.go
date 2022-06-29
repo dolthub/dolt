@@ -20,6 +20,7 @@ import (
 	"math/rand"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/enginetest/queries"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -104,6 +105,100 @@ var DoltBranchMultiSessionScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "Test branch deletion when clients are using a branch-qualified database",
+		SetUpScript: []string{
+			"call dolt_branch('branch1');",
+			"call dolt_branch('branch2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use dolt/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ use dolt/branch2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_BRANCH('-d', 'branch2');",
+				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_BRANCH('-df', 'branch2');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+			},
+			{
+				// Call a stored procedure since this searches across all databases and will
+				// fail if a branch-qualified database exists for a missing branch.
+				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
+	{
+		Name: "Test branch renaming when clients are using a branch-qualified database",
+		SetUpScript: []string{
+			"call dolt_branch('branch1');",
+			"call dolt_branch('branch2');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "/* client a */ use dolt/branch1;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client a */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch1", "branch1"}},
+			},
+			{
+				Query:    "/* client b */ use dolt/branch2;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "/* client b */ SELECT DATABASE(), ACTIVE_BRANCH();",
+				Expected: []sql.Row{{"dolt/branch2", "branch2"}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"dolt/branch2"}, {"information_schema"}},
+			},
+			{
+				Query:          "/* client a */ CALL DOLT_BRANCH('-m', 'branch2', 'newName');",
+				ExpectedErrStr: "Error 1105: unsafe to delete or rename branches in use in other sessions; use --force to force the change",
+			},
+			{
+				Query:    "/* client a */ CALL DOLT_BRANCH('-mf', 'branch2', 'newName');",
+				Expected: []sql.Row{{0}},
+			},
+			{
+				Query:    "/* client a */ SHOW DATABASES;",
+				Expected: []sql.Row{{"dolt"}, {"dolt/branch1"}, {"information_schema"}},
+			},
+			{
+				// Call a stored procedure since this searches across all databases and will
+				// fail if a branch-qualified database exists for a missing branch.
+				Query:    "/* client a */ CALL DOLT_BRANCH('branch3');",
+				Expected: []sql.Row{{0}},
+			},
+		},
+	},
 }
 
 // TestDoltMultiSessionBehavior runs tests that exercise multi-session logic on a running SQL server. Statements
@@ -113,10 +208,10 @@ func TestDoltMultiSessionBehavior(t *testing.T) {
 }
 
 func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
-	sc, serverConfig := startServer(t)
-	defer sc.StopServer()
-
 	for _, test := range tests {
+		sc, serverConfig := startServer(t)
+		sc.WaitForStart()
+
 		conn1, sess1 := newConnection(t, serverConfig)
 		conn2, sess2 := newConnection(t, serverConfig)
 
@@ -158,6 +253,9 @@ func testMultiSessionScriptTests(t *testing.T, tests []queries.ScriptTest) {
 
 		require.NoError(t, conn1.Close())
 		require.NoError(t, conn2.Close())
+
+		sc.StopServer()
+		sc.WaitForClose()
 	}
 }
 
@@ -217,6 +315,7 @@ func assertResultsEqual(t *testing.T, expected []sql.Row, rows *gosql.Rows) {
 
 func startServer(t *testing.T) (*sqlserver.ServerController, sqlserver.ServerConfig) {
 	dEnv := dtestutils.CreateTestEnv()
+	rand.Seed(time.Now().UnixNano())
 	port := 15403 + rand.Intn(25)
 	serverConfig := sqlserver.DefaultServerConfig().WithPort(port)
 
