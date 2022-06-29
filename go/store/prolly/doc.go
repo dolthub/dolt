@@ -24,7 +24,7 @@ NodeStore is the primary interface for building/reading tree data structures:
 - A Node contains at least keys and values
 - A Node can be referenced by an address hashed from its message contents
 - Nodes can store data besides keys/values, like address references
-- Most trees differentiate between 1) internal nodes, whose keys are addresses
+- Most trees differentiate between 1) internal nodes, whose values are addresses
   that reference other nodes, and 2) leaf nodes, whose values are the main storage
   motivation
 - Leaf nodes' values can be addresses.
