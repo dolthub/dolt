@@ -184,7 +184,7 @@ SQL
 
   run dolt sql -r csv -q "SELECT TABLE_NAME,TABLE_SCHEMA,COLUMN_NAME,REFERENCED_TABLE_SCHEMA,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA='test' AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY ORDINAL_POSITION;"
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "table_name,table_schema,column_name,referenced_table_schema,referenced_table_name,referenced_column_name" ]] || false
+  [[ "$output" =~ "TABLE_NAME,TABLE_SCHEMA,COLUMN_NAME,REFERENCED_TABLE_SCHEMA,REFERENCED_TABLE_NAME,REFERENCED_COLUMN_NAME" ]] || false
   [[ "$output" =~ "objects,test,color,test,colors,color" ]] || false
 }
 
