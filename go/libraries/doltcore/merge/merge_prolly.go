@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -175,6 +176,10 @@ func mergeTableArtifacts(ctx context.Context, tblName string, tbl, mergeTbl, anc
 
 	var keyCollision bool
 	mergedArts, err := prolly.MergeArtifactMaps(ctx, arts, mergeArts, ancArts, func(left, right tree.Diff) (tree.Diff, bool) {
+		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+			// convergent edit
+			return left, true
+		}
 		keyCollision = true
 		return tree.Diff{}, false
 	})
@@ -239,6 +244,11 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
 
 	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
+		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+			// convergent edit
+			return left, true
+		}
+
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
 			c := confVals{

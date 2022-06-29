@@ -15,6 +15,7 @@
 package merge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -198,6 +199,11 @@ func mergeProllyIndexSets(
 
 			var collision = false
 			merged, err := prolly.MergeMaps(ctx, rootI, mergeI, ancI, func(left, right tree.Diff) (tree.Diff, bool) {
+				if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+					// convergent edit
+					return left, true
+				}
+
 				collision = true
 				return tree.Diff{}, true
 			})
