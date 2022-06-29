@@ -447,7 +447,6 @@ type ConflictArtifact struct {
 type ConflictMetadata struct {
 	// BaseRootIsh is the target hash of the working set holding the base value for the conflict.
 	BaseRootIsh hash.Hash `json:"bc"`
-	TableName   string    `json:"tn"`
 }
 
 // ConstraintViolationMeta is the json metadata for foreign key constraint violations
