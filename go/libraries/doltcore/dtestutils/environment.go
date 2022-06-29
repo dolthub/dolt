@@ -36,14 +36,14 @@ const (
 // function should generally be preferred over this method, especially when working
 // with tests using multiple databases within a MultiRepoEnv.
 func CreateTestEnv() *env.DoltEnv {
-	return CreateTestEnvWithName("test")
+	return CreateTestEnvWithNameAndNbf("test", types.Format_Default)
 }
 
-// CreateTestEnvWithName creates a new DoltEnv suitable for testing and uses
+// CreateTestEnvWithNameAndNbf creates a new DoltEnv suitable for testing and uses
 // the specified name to distinguish it from other test envs. This function
 // should generally be preferred over CreateTestEnv, especially when working with
 // tests using multiple databases within a MultiRepoEnv.
-func CreateTestEnvWithName(envName string) *env.DoltEnv {
+func CreateTestEnvWithNameAndNbf(envName string, nbf *types.NomsBinFormat) *env.DoltEnv {
 	const name = "billy bob"
 	const email = "bigbillieb@fake.horse"
 	initialDirs := []string{TestHomeDirPrefix + envName, WorkingDirPrefix + envName}
@@ -55,7 +55,7 @@ func CreateTestEnvWithName(envName string) *env.DoltEnv {
 		env.UserNameKey:  name,
 		env.UserEmailKey: email,
 	})
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
+	err := dEnv.InitRepo(context.Background(), nbf, name, email, env.DefaultInitBranch)
 
 	if err != nil {
 		panic("Failed to initialize environment:" + err.Error())

@@ -537,7 +537,7 @@ func execQuery(
 	// Add root client
 	sqlCtx.Session.SetClient(sql.Client{User: "root", Address: "%", Capabilities: 0})
 
-	sqlSch, rowIter, err := processQuery(sqlCtx, query, se)
+	sqlSch, rowIter, err := ProcessQuery(sqlCtx, query, se)
 	if err != nil {
 		return formatQueryError("", err)
 	}
@@ -722,7 +722,7 @@ func runMultiStatementMode(ctx *sql.Context, se *engine.SqlEngine, input io.Read
 			shouldProcessQuery = false
 		}
 		if shouldProcessQuery {
-			sqlSch, rowIter, err := processQuery(ctx, query, se)
+			sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
 			if err != nil {
 				verr := formatQueryError(fmt.Sprintf("error on line %d for query %s", scanner.statementStartLine, query), err)
 				cli.PrintErrln(verr.Verbose())
@@ -906,7 +906,7 @@ func runShell(ctx context.Context, se *engine.SqlEngine, mrEnv *env.MultiRepoEnv
 				return false
 			}
 
-			if sqlSch, rowIter, err = processQuery(sqlCtx, query, se); err != nil {
+			if sqlSch, rowIter, err = ProcessQuery(sqlCtx, query, se); err != nil {
 				verr := formatQueryError("", err)
 				shell.Println(verr.Verbose())
 			} else if rowIter != nil {
@@ -1049,9 +1049,9 @@ func prepend(s string, ss []string) []string {
 	return newSs
 }
 
-// Processes a single query. The Root of the sqlEngine will be updated if necessary.
+// ProcessQuery processes a single query. The Root of the sqlEngine will be updated if necessary.
 // Returns the schema and the row iterator for the results, which may be nil, and an error if one occurs.
-func processQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
+func ProcessQuery(ctx *sql.Context, query string, se *engine.SqlEngine) (sql.Schema, sql.RowIter, error) {
 	sqlStatement, err := sqlparser.Parse(query)
 	if err == sqlparser.ErrEmpty {
 		// silently skip empty statements
@@ -1211,7 +1211,7 @@ func processBatchQuery(ctx *sql.Context, query string, se *engine.SqlEngine) err
 }
 
 func processNonBatchableQuery(ctx *sql.Context, se *engine.SqlEngine, query string, sqlStatement sqlparser.Statement) (returnErr error) {
-	sqlSch, rowIter, err := processQuery(ctx, query, se)
+	sqlSch, rowIter, err := ProcessQuery(ctx, query, se)
 	if err != nil {
 		return err
 	}
