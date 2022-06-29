@@ -181,15 +181,15 @@ func (b *ByteArray) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
-type JSONArray struct {
+type JSONDoc struct {
 	ImmutableTree
 }
 
-func NewJSONArray(addr hash.Hash, ns NodeStore) *JSONArray {
-	return &JSONArray{ImmutableTree{Addr: addr, ns: ns}}
+func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
+	return &JSONDoc{ImmutableTree{Addr: addr, ns: ns}}
 }
 
-func (b *JSONArray) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error) {
+func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
 		return sql.JSONDocument{}, err
@@ -202,7 +202,7 @@ func (b *JSONArray) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error
 	return doc, err
 }
 
-func (b *JSONArray) ToString(ctx context.Context) (string, error) {
+func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
 		return "", err
@@ -214,19 +214,19 @@ func (b *JSONArray) ToString(ctx context.Context) (string, error) {
 	return string(buf[:toShow]), nil
 }
 
-type StringArray struct {
+type TextStorage struct {
 	ImmutableTree
 }
 
-func NewStringArray(addr hash.Hash, ns NodeStore) *StringArray {
-	return &StringArray{ImmutableTree{Addr: addr, ns: ns}}
+func NewTextStorage(addr hash.Hash, ns NodeStore) *TextStorage {
+	return &TextStorage{ImmutableTree{Addr: addr, ns: ns}}
 }
 
-func (b *StringArray) ToBytes(ctx context.Context) ([]byte, error) {
+func (b *TextStorage) ToBytes(ctx context.Context) ([]byte, error) {
 	return b.bytes(ctx)
 }
 
-func (b *StringArray) ToString(ctx context.Context) (string, error) {
+func (b *TextStorage) ToString(ctx context.Context) (string, error) {
 	buf, err := b.bytes(ctx)
 	if err != nil {
 		return "", err

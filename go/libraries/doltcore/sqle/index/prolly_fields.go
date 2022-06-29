@@ -109,13 +109,13 @@ func GetField(ctx context.Context, td val.TupleDesc, i int, tup val.Tuple, ns tr
 		var h hash.Hash
 		h, ok = td.GetJSONAddr(i, tup)
 		if ok {
-			v, err = tree.NewJSONArray(h, ns).ToJSONDocument(ctx)
+			v, err = tree.NewJSONDoc(h, ns).ToJSONDocument(ctx)
 		}
 	case val.StringAddrEnc:
 		var h hash.Hash
 		h, ok = td.GetStringAddr(i, tup)
 		if ok {
-			v, err = tree.NewStringArray(h, ns).ToString(ctx)
+			v, err = tree.NewTextStorage(h, ns).ToString(ctx)
 		}
 	case val.CommitAddrEnc:
 		v, ok = td.GetCommitAddr(i, tup)
