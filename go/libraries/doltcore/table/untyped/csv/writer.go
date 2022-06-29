@@ -97,7 +97,7 @@ func (csvw *CSVWriter) WriteRow(ctx context.Context, r row.Row) error {
 		if val == nil {
 			colValStrs[i] = nil
 		} else {
-			v, err := sqlutil.SqlColToStr(ctx, csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType(), val)
+			v, err := sqlutil.SqlColToStr(csvw.sch.GetAllCols().GetAtIndex(i).TypeInfo.ToSqlType(), val)
 			if err != nil {
 				return err
 			}
@@ -121,7 +121,7 @@ func (csvw *CSVWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			if _, ok := colType.(sql.BitType); ok {
 				v = strconv.FormatUint(val.(uint64), 10)
 			} else {
-				v, err = sqlutil.SqlColToStr(ctx, colType, val)
+				v, err = sqlutil.SqlColToStr(colType, val)
 				if err != nil {
 					return err
 				}

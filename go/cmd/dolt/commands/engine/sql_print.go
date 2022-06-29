@@ -243,7 +243,7 @@ func getCsvProcessStageFunc(sch sql.Schema) pipeline.StageFunc {
 
 			for colNum, col := range r {
 				if col != nil {
-					str, err := sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					str, err := sqlutil.SqlColToStr(sch[colNum].Type, col)
 					if err != nil {
 						return nil, err
 					}
@@ -320,7 +320,7 @@ func getJSONProcessFunc(sch sql.Schema) pipeline.StageFunc {
 					}
 
 					validCols++
-					colStr, err := sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					colStr, err := sqlutil.SqlColToStr(sch[colNum].Type, col)
 					if err != nil {
 						return nil, err
 					}
@@ -424,7 +424,7 @@ func getRowsToStringSlices(sch sql.Schema) pipeline.StageFunc {
 				}
 
 				if !isNull {
-					cols[colNum], err = sqlutil.SqlColToStr(ctx, sch[colNum].Type, col)
+					cols[colNum], err = sqlutil.SqlColToStr(sch[colNum].Type, col)
 					if err != nil {
 						return nil, err
 					}

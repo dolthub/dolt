@@ -304,7 +304,7 @@ func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
 }
 
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string
-func SqlColToStr(ctx context.Context, sqlType sql.Type, col interface{}) (string, error) {
+func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {
 		case bool:

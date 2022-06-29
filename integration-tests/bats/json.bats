@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "works fine but formatting of json strings is different"
 }
 
 teardown() {
@@ -99,14 +99,14 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [ "${lines[0]}"  = 'diff --dolt a/js b/js' ]
-    [ "${lines[3]}"  = '+-----+----+-----------+' ]
-    [ "${lines[4]}"  = '|     | pk | js        |' ]
-    [ "${lines[5]}"  = '+-----+----+-----------+' ]
-    [ "${lines[6]}"  = '|  <  | 1  | {"a": 1}  |' ]
-    [ "${lines[7]}"  = '|  >  | 1  | {"a": 11} |' ]
-    [ "${lines[8]}"  = '|  -  | 2  | {"b": 2}  |' ]
-    [ "${lines[9]}"  = '|  +  | 3  | {"c": 3}  |' ]
-    [ "${lines[10]}" = '+-----+----+-----------+' ]
+    [ "${lines[3]}"  = '+---+----+-----------+' ]
+    [ "${lines[4]}"  = '|   | pk | js        |' ]
+    [ "${lines[5]}"  = '+---+----+-----------+' ]
+    [ "${lines[6]}"  = '| < | 1  | {"a": 1}  |' ]
+    [ "${lines[7]}"  = '| > | 1  | {"a": 11} |' ]
+    [ "${lines[8]}"  = '| - | 2  | {"b": 2}  |' ]
+    [ "${lines[9]}"  = '| + | 3  | {"c": 3}  |' ]
+    [ "${lines[10]}" = '+---+----+-----------+' ]
 }
 
 @test "json: merge JSON values" {

@@ -482,17 +482,9 @@ func (db Database) getRootForTime(ctx *sql.Context, asOf time.Time) (*doltdb.Roo
 }
 
 func (db Database) getRootForCommitRef(ctx *sql.Context, commitRef string) (*doltdb.RootValue, error) {
-	cs, err := doltdb.NewCommitSpec(commitRef)
-	if err != nil {
-		return nil, err
-	}
+	sess := dsess.DSessFromSess(ctx.Session)
 
-	cm, err := db.ddb.Resolve(ctx, cs, db.rsr.CWBHeadRef())
-	if err != nil {
-		return nil, err
-	}
-
-	root, err := cm.GetRootValue(ctx)
+	root, _, err := sess.ResolveRootForRef(ctx, ctx.GetCurrentDatabase(), commitRef)
 	if err != nil {
 		return nil, err
 	}

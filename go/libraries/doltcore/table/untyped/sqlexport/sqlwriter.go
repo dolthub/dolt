@@ -124,7 +124,7 @@ func (w *SqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 		return err
 	}
 
-	stmt, err := sqlfmt.SqlRowAsInsertStmt(ctx, r, w.tableName, w.sch)
+	stmt, err := sqlfmt.SqlRowAsInsertStmt(r, w.tableName, w.sch)
 	if err != nil {
 		return err
 	}

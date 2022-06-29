@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -29,22 +28,27 @@ teardown() {
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt add .
     dolt commit -m row
+
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+
     run dolt diff head
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
+
     dolt diff head^
     run dolt diff head^
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+
     run dolt diff head^ head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+
     run dolt diff head head^
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-  | 0" ]] || false
+    [[ "$output" =~ "- | 0" ]] || false
 }
 
 @test "diff: dirty working set" {
@@ -53,17 +57,99 @@ teardown() {
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     run dolt diff head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     dolt add .
     run dolt diff
     [ "$status" -eq 0 ]
     [ "$output" = "" ]
     run dolt diff head
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+}
+
+@test "diff: data and schema changes" {
+    dolt sql <<SQL
+drop table test;
+create table test (pk int primary key, c1 int, c2 int);
+insert into test values (1,2,3);
+insert into test values (4,5,6);
+SQL
+    dolt commit -am "First commit"
+
+    dolt sql <<SQL
+alter table test 
+drop column c2,
+add column c3 varchar(10);
+insert into test values (7,8,9);
+delete from test where pk = 1;
+update test set c1 = 100 where pk = 4;
+SQL
+
+    dolt diff
+    run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    run dolt diff --data --schema
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    
+    run dolt diff --schema
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` int NOT NULL,
+   `c1` int,
+-  `c2` int,
++  `c3` varchar(10),
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no data changes output
+    [ "${#lines[@]}" -eq 10 ]
+    
+    run dolt diff --data
+    EXPECTED=$(cat <<'EOF'
++---+----+-----+------+------+
+|   | pk | c1  | c2   | c3   |
++---+----+-----+------+------+
+| - | 1  | 2   | 3    | NULL |
+| < | 4  | 5   | 6    | NULL |
+| > | 4  | 100 | NULL | NULL |
+| + | 7  | 8   | NULL | 9    |
++---+----+-----+------+------+
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    # Count the line numbers to make sure there are no schema changes output
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "diff: data diff only" {
@@ -74,25 +160,45 @@ teardown() {
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "CREATE TABLE" ]]
-    [[ "$output" =~ "|     | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
-    [[ "$output" =~ "|  +  | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
+    [[ ! "$output" =~ "CREATE TABLE" ]] || false
+    [[ "$output" =~ "|   | pk | c1   | c2   | c3   | c4   | c5   |" ]] || false
+    [[ "$output" =~ "| + | 10 | NULL | NULL | NULL | NULL | NULL |" ]] || false
 }
 
-@test "diff: schema diff only" {
+@test "diff: schema changes only" {
     dolt commit -am "First commit"
 
-    dolt sql -q "alter table test drop column c1"
+    dolt sql <<SQL
+alter table test 
+drop column c3, 
+add column c6 varchar(10) after c2, 
+modify column c4 tinyint comment 'new comment'
+SQL
 
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "CREATE TABLE" ]]
+    
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` bigint NOT NULL COMMENT 'tag:0',
+   `c1` bigint COMMENT 'tag:1',
+   `c2` bigint COMMENT 'tag:2',
+-  `c3` bigint COMMENT 'tag:3',
+-  `c4` bigint COMMENT 'tag:4',
++  `c6` varchar(10),
++  `c4` tinyint COMMENT 'new comment',
+   `c5` bigint COMMENT 'tag:5',
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
 
-    # TODO: column ordering on the first line should respect original
-    # schema order, seems to be putting non-common columns at end
-    [[ "$output" =~ "|  <  | pk | c2 | c3 | c4 | c5 | c1 |" ]] || false
-    [[ "$output" =~ "|  >  | pk | c2 | c3 | c4 | c5 |    |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # We want to make sure there is no trailing table output, so count the lines of output
+    # 3 lines of metadata plus 11 of schema diff
+    [ "${#lines[@]}" -eq 14 ]
 }
 
 @test "diff: with table args" {
@@ -101,31 +207,38 @@ teardown() {
     dolt commit -m tables
     dolt sql -q 'insert into test values (0,0,0,0,0,0)'
     dolt sql -q 'insert into other values (9)'
+
+    dolt diff test
     run dolt diff test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ ! "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ ! "$output" =~ "+ | 9" ]] || false
+
     run dolt diff other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
+
     run dolt diff test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+
     dolt add .
     run dolt diff head test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+
     dolt commit -m rows
     run dolt diff head^ head test other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+
     run dolt diff head^ head fake
     [ "$status" -ne 0 ]
-    [[ "$output" =~ "table fake does not exist in either diff root" ]] || false
+    [[ "$output" =~ "table fake does not exist in either revision" ]] || false
 }
 
 @test "diff: with table and branch of the same name" {
@@ -140,26 +253,26 @@ teardown() {
     # branch/commit args get preference over tables
     run dolt diff dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     run dolt diff dolomite test
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 0" ]] || false
-    [[ ! "$output" =~ "+  | 9" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
+    [[ ! "$output" =~ "+ | 9" ]] || false
     run dolt diff dolomite head dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
     run dolt diff head^ head dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 9" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 9" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
     dolt branch -D dolomite
     dolt sql -q 'insert into dolomite values (8)'
     run dolt diff dolomite
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  | 8" ]] || false
-    [[ ! "$output" =~ "+  | 0" ]] || false
+    [[ "$output" =~ "+ | 8" ]] || false
+    [[ ! "$output" =~ "+ | 0" ]] || false
 }
 
 @test "diff: with index and foreign key changes" {
@@ -202,6 +315,8 @@ SQL
     dolt commit -m "table created"
     dolt sql -q "insert into test values (2, 11, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 11, 0, 0, 0, 0)"
+
+    dolt diff --summary
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (100.00%)" ]] || false
@@ -284,6 +399,7 @@ SQL
 }
 
 @test "diff: summary shows correct changes after schema change" {
+    
     cat <<DELIM > employees.csv
 "id","first name","last name","title","start date","end date"
 0,tim,sehn,ceo,"",""
@@ -293,8 +409,11 @@ DELIM
     dolt table import -c -pk=id employees employees.csv
     dolt add employees
     dolt commit -m "Added employees table with data"
+    
     dolt sql -q "alter table employees add city longtext"
     dolt sql -q "insert into employees values (3, 'taylor', 'bantle', 'software engineer', '', '', 'Santa Monica')"
+
+    dolt diff --summary
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "3 Rows Unmodified (100.00%)" ]] || false
@@ -303,7 +422,12 @@ DELIM
     [[ "$output" =~ "0 Rows Modified (0.00%)" ]] || false
     [[ "$output" =~ "0 Cells Modified (0.00%)" ]] || false
     [[ "$output" =~ "(3 Entries vs 4 Entries)" ]] || false
+
     dolt sql -q "replace into employees values (0, 'tim', 'sehn', 'ceo', '2 years ago', '', 'Santa Monica')"
+
+    skip_nbf_dolt_1 "invalid cell change count"
+    
+    dolt diff --summary
     run dolt diff --summary
     [ "$status" -eq 0 ]
     [[ "$output" =~ "2 Rows Unmodified (66.67%)" ]] || false
@@ -350,11 +474,17 @@ SQL
     dolt commit -m "table created"
     dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
-    run dolt diff --where "pk=2"
+
+    run dolt diff --where "to_pk=2"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "22" ]] || false
     ! [[ "$output" =~ "33" ]] || false
 
+    run dolt diff --where "to_pk < 3"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "22" ]] || false
+    ! [[ "$output" =~ "33" ]] || false
+    
     dolt add test
     dolt commit -m "added two rows"
 
@@ -375,11 +505,16 @@ SQL
     [[ "$output" =~ "44" ]] || false
     [[ "$output" =~ "55" ]] || false
 
-    run dolt diff test1 test2 --where "pk=4"
+    run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
 
+    run dolt diff test1 test2 --where "from_pk=4 OR to_pk=5"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "44" ]] || false
+    [[ "$output" =~ "55" ]] || false
+    
     run dolt diff test1 test2 --where "from_pk=4"
     [ "$status" -eq 0 ]
     [[ "$output" =~ "44" ]] || false
@@ -399,6 +534,11 @@ SQL
     [ "$status" -eq 0 ]
     ! [[ "$output" =~ "44" ]] || false
     ! [[ "$output" =~ "55" ]] || false
+
+    run dolt diff test1 test2 --where "pk=4"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where pk=4" ]] || false
 }
 
 @test "diff: with where clause errors" {
@@ -409,36 +549,47 @@ SQL
     dolt sql -q "insert into test values (2, 22, 0, 0, 0, 0)"
     dolt sql -q "insert into test values (3, 33, 0, 0, 0, 0)"
 
-    run dolt diff --where "poop=0"
+    run dolt diff --where "some nonsense"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to parse where clause" ]] || false
+    [[ "$output" =~ "Failed to parse diff query. Invalid where clause?" ]] || false
+    [[ "$output" =~ "where some nonsense" ]] || false
+
+    run dolt diff --where "poop = 0"
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where poop = 0" ]] || false
 
     dolt add test
     dolt commit -m "added two rows"
 
-    run dolt diff --where "poop=0"
-    skip "Bad where clause not found because the argument parsing logic is only triggered on existance of a diff"
+    run dolt diff --where "poop = 0"
+    skip "Empty diffs don't validate the where clause"
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "failed to parse where clause" ]] || false
+    [[ "$output" =~ "Error running diff query" ]] || false
+    [[ "$output" =~ "where poop = 0" ]] || false
 }
 
 @test "diff: --cached" {
     run dolt diff --cached
     [ $status -eq 0 ]
     [ "$output" = "" ]
+
     dolt add test
     run dolt diff --cached
     [ $status -eq 0 ]
     [[ $output =~ "added table" ]] || false  
+
     dolt commit -m "First commit"
     dolt sql -q "insert into test values (0, 0, 0, 0, 0, 0)"
     run dolt diff
     [ $status -eq 0 ]
+
     CORRECT_DIFF=$output
     dolt add test
     run dolt diff --cached
     [ $status -eq 0 ]
     [ "$output" = "$CORRECT_DIFF" ]
+
     # Make sure it ignores changes to the working set that aren't staged
     dolt sql -q "create table test2 (pk int, c1 int, primary key(pk))"
     run dolt diff --cached
@@ -529,18 +680,19 @@ SQL
     dolt sql -q "UPDATE t SET val1=2 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=2 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm2"
 
     dolt sql -q "UPDATE t SET val1=3, val2=4 where pk = 1"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=3,`val2`=4 WHERE `pk`=1;' ]] || false
 
     dolt commit -am "cm3"
 
-    dolt sql -q "UPDATE t SET val1=3 where (pk=1);"
+    dolt sql -q "UPDATE t SET val1=3 where pk=1;"
     run dolt diff -r sql
     [ $status -eq 0 ]
     [[ "$output" = '' ]] || false
@@ -551,10 +703,12 @@ SQL
     dolt sql -q "update t set val1=30,val3=4 where pk=1"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE (`pk`=1);' ]] || false
+    [[ "$output" = 'UPDATE `t` SET `val1`=30,`val3`=4 WHERE `pk`=1;' ]] || false
 }
 
-@test "diff: run through some keyless sql diffs" {
+@test "diff: keyless sql diffs" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+    
     dolt sql -q "create table t(pk int, val int)"
     dolt commit -am "cm1"
 
@@ -573,10 +727,12 @@ SQL
     dolt commit -am "cm3"
 
     dolt sql -q "UPDATE t SET val = 2 where pk = 1"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=1);' ]
+    # TODO: this needs a limit
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=1;' ]
     [ "${lines[2]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
     [ "${lines[3]}" = 'INSERT INTO `t` (`pk`,`val`) VALUES (1,2);' ]
 
@@ -585,17 +741,18 @@ SQL
     dolt sql -q "DELETE FROM t WHERE val < 3"
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
-    [ "${lines[1]}" = 'DELETE FROM `t` WHERE (`pk`=1 AND `val`=2);' ]
+    [ "${lines[0]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
+    [ "${lines[1]}" = 'DELETE FROM `t` WHERE `pk`=1 AND `val`=2;' ]
 
     dolt commit -am "cm5"
 
     dolt sql -q "alter table t add primary key (pk)"
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[2]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
 
     dolt commit -am "cm6"
 
@@ -607,25 +764,46 @@ SQL
     [ "${lines[0]}" = 'ALTER TABLE `t` ADD `pk2` INT;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[2]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk,val);' ]
-    [ "${lines[3]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[3]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
 }
 
-@test "diff: adding and removing primary key should leave not null constraint" {
-    skip "TODO diff needs a better way to indicate constraint changes"
-    dolt sql -q "create table t(pk int, val int)"
+@test "diff: adding and removing primary key" {
+    dolt sql <<SQL
+create table t(pk int, val int);
+insert into t values (1,1);
+SQL
     dolt commit -am "creating table"
 
     dolt sql -q "alter table t add primary key (pk)"
+    
     run dolt diff -r sql
     [ $status -eq 0 ]
     [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
     [ "${lines[1]}" = 'ALTER TABLE `t` ADD PRIMARY KEY (pk);' ]
-    [ "${lines[2]}" = 'warning: skipping data diff due to primary key set change' ]
+    [ "${lines[2]}" = 'Primary key sets differ between revisions for table t, skipping data diff' ]
+
+    dolt diff
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ '+  PRIMARY KEY (`pk`)' ]] || false
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
+    
+
+    dolt commit -am 'added primary key'
 
     dolt sql -q "alter table t drop primary key"
+
+    dolt diff -r sql
     run dolt diff -r sql
     [ $status -eq 0 ]
-    [ "${lines[0]}" = 'ALTER TABLE `t` RENAME COLUMN `pk` TO `pk`;' ]
+    [ "${lines[0]}" = 'ALTER TABLE `t` DROP PRIMARY KEY;' ]
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
+
+    dolt diff
+    run dolt diff
+    [ $status -eq 0 ]
+    [[ "$output" =~ '-  PRIMARY KEY (`pk`)' ]] || false
+    [[ "$output" =~ 'Primary key sets differ between revisions for table t, skipping data diff' ]] || false
 }
 
 @test "diff: created and dropped tables include schema and data changes in results" {
@@ -643,12 +821,13 @@ SQL
   run dolt diff HEAD~3 HEAD~1
   [[ $output =~ 'added table' ]] || false
   [[ $output =~ '+CREATE TABLE `a` (' ]] || false
-  [[ $output =~ "+  | 1 " ]] || false
+  [[ $output =~ "+ | 1 " ]] || false
 
+  dolt diff HEAD~1 HEAD
   run dolt diff HEAD~1 HEAD
   [[ $output =~ 'deleted table' ]] || false
   [[ $output =~ '-CREATE TABLE `a` (' ]] || false
-  [[ $output =~ "-  | 1 " ]] || false
+  [[ $output =~ "- | 1 " ]] || false
 }
 
 @test "diff: large diff does not drop rows" {

@@ -27,7 +27,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/store/datas"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 var pullDocs = cli.CommandDocumentationContent{
@@ -51,10 +50,6 @@ func (cmd PullCmd) Name() string {
 // Description returns a description of the command
 func (cmd PullCmd) Description() string {
 	return "Fetch from a dolt remote data repository and merge."
-}
-
-func (cmd PullCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
 }
 
 func (cmd PullCmd) Docs() *cli.CommandDocumentation {

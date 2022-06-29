@@ -28,23 +28,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-type RowDiffer interface {
-	// Start starts the RowDiffer.
-	Start(ctx context.Context, from, to types.Map)
-
-	// StartWithRange starts the RowDiffer with the specified range
-	StartWithRange(ctx context.Context, from, to types.Map, start types.Value, inRange types.ValueInRange)
-
-	// GetDiffs returns the requested number of diff.Differences, or times out.
-	GetDiffs(numDiffs int, timeout time.Duration) ([]*diff.Difference, bool, error)
-
-	// GetDiffsWithFilter returns the requested number of filtered diff.Differences, or times out.
-	GetDiffsWithFilter(numDiffs int, timeout time.Duration, filterByChangeType types.DiffChangeType) ([]*diff.Difference, bool, error)
-
-	// Close closes the RowDiffer.
-	Close() error
-}
-
 func NewRowDiffer(ctx context.Context, fromSch, toSch schema.Schema, buf int) RowDiffer {
 	ad := NewAsyncDiffer(buf)
 
