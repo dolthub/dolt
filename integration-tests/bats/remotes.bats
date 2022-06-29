@@ -189,12 +189,9 @@ teardown() {
 
     cd ../repo2
     dolt checkout other
-    dolt sql -q "DROP TABLE a"
-    dolt commit -am "drop table"
-
     run dolt pull
-    [ "$status" -eq 0 ]
-    [[ ! "$output" =~ "conflict: table with same name deleted and modified" ]] || false
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "There is no tracking information for the current branch." ]] || false
 }
 
 @test "remotes: add a remote using dolt remote" {

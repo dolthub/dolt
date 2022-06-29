@@ -81,13 +81,11 @@ func (cmd PullCmd) Exec(ctx context.Context, commandStr string, args []string, d
 	}
 
 	var remoteName string
-	var remoteOnly = false
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
-		remoteOnly = true
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), remoteOnly)
+	pullSpec, err := env.NewPullSpec(ctx, dEnv.RepoStateReader(), remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}

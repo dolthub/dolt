@@ -97,13 +97,11 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 	}
 
 	var remoteName string
-	var remoteOnly = false
 	if apr.NArg() == 1 {
 		remoteName = apr.Arg(0)
-		remoteOnly = true
 	}
 
-	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), remoteOnly)
+	pullSpec, err := env.NewPullSpec(ctx, dbData.Rsr, remoteName, apr.Contains(cli.SquashParam), apr.Contains(cli.NoFFParam), apr.Contains(cli.ForceFlag), apr.NArg() == 1)
 	if err != nil {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
