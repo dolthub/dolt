@@ -519,7 +519,7 @@ update employees SET first_name='Timothy' where first_name='Tim';
 insert INTO employees (id, first_name, last_name) values (4,'Daylon', 'Wilkins');
 insert into employees_teams(team_id, employee_id) values (0,4);
 delete from employees_teams where employee_id=0 and team_id=1;
-call dolt_commit('-am', 'Modifications on a branch')
+call dolt_commit('-am', 'Modifications on a branch');
 ```
 
 Here's the result in Tableplus.
