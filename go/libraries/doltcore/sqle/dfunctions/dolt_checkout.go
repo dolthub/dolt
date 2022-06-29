@@ -124,7 +124,11 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
 		return errors.New("fatal: unable to read from data repository")
 	} else if refExists {
-		return checkoutNewBranch(ctx, dbName, dbData, roots, branchName, ref.String())
+		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, ref.String())
+		if err == nil {
+			// TODO : set upstream tracking
+		}
+		return err
 	} else {
 		return fmt.Errorf("error: could not find %s", branchName)
 	}

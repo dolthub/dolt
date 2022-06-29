@@ -16,6 +16,8 @@ package commands
 
 import (
 	"context"
+	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
@@ -142,10 +144,14 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 }
 
 func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
+	if remoteRef, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
 	} else if refExists {
-		return checkoutNewBranchFromStartPt(ctx, dEnv, name, ref.String())
+		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRef.String())
+		if verr == nil {
+			verr = setRemoteUpstreamForCheckout(dEnv, remoteRef)
+		}
+		return verr
 	} else {
 		// Check if the user is trying to enter a detached head state
 		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
@@ -245,6 +251,38 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 	}
 
 	cli.Printf("Switched to branch '%s'\n", name)
+
+	return nil
+}
+
+// setRemoteUpstreamForCheckout sets upstream for checked out branch. This applies `dolt checkout <bn>`,
+// if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
+func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, branchRef ref.RemoteRef) errhand.VerboseError {
+	rsr := dEnv.RepoStateReader()
+	currentBranch := rsr.CWBHeadRef()
+
+	refSpec, err := ref.ParseRefSpecForRemote(branchRef.GetRemote(), branchRef.GetBranch())
+	if err != nil {
+		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, branchRef.GetRemote()).Error()).Build()
+	}
+
+	src := refSpec.SrcRef(currentBranch)
+	dest := refSpec.DestRef(src)
+
+	uErr := dEnv.RepoStateWriter().UpdateBranch(currentBranch.GetPath(), env.BranchConfig{
+		Merge: ref.MarshalableRef{
+			Ref: dest,
+		},
+		Remote: branchRef.GetRemote(),
+	})
+	if uErr != nil {
+		return errhand.BuildDError(uErr.Error()).Build()
+	}
+	uErr = dEnv.RepoState.Save(dEnv.FS)
+	if uErr != nil {
+		uErr = errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(uErr).Build()
+	}
+	cli.Printf("branch '%s' set up to track '%s'.\n", currentBranch.GetPath(), branchRef.GetPath())
 
 	return nil
 }

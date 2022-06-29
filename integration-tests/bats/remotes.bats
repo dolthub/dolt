@@ -56,53 +56,145 @@ teardown() {
 
 @test "remotes: pull also fetches, but does not merge other branches" {
     mkdir remote
+    mkdir repo1
 
-    cd remote
+    cd repo1
     dolt init
-    dolt commit --allow-empty -m "first commit on main"
-    dolt branch other
-    dolt commit --allow-empty -m "second commit on main"
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt commit --allow-empty -m "first commit on other"
+    dolt push --set-upstream origin other
 
     cd ..
-    dolt clone file://./remote/.dolt/noms local
+    dolt clone file://./remote repo2
 
-    cd local
+    cd repo2
     run dolt pull
     [ "$status" -eq 0 ]
     [[ "$output" =~ "Everything up-to-date." ]] || false
 
-    run dolt log --oneline -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "second commit on main" ]] || false
+    dolt commit --allow-empty -m "a commit for main from repo2"
+    dolt push
 
-    dolt checkout other
-    run dolt log --oneline -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "first commit on main" ]] || false
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
 
-    cd ../remote
-    dolt checkout other
-    dolt commit --allow-empty -m "first commit on other"
-
-    cd ../local
-    dolt checkout main
-    run dolt pull
+    run dolt checkout other
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Everything up-to-date." ]] || false
-
-    dolt checkout other
-    run dolt log --oneline -n 1
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "first commit on main" ]] || false
-
-    run dolt pull
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Updating" ]] || false
-    [[ "$output" =~ "Fast-forward" ]] || false
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
 
     run dolt log --oneline -n 1
     [ "$status" -eq 0 ]
     [[ "$output" =~ "first commit on other" ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    dolt commit --allow-empty -m "second commit on other from repo2"
+    dolt push
+
+    cd ../repo1
+    dolt checkout other
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "second commit on other from repo2" ]] || false
+
+    dolt checkout main
+    run dolt status
+    [[ "$output" =~ "behind 'origin/main' by 1 commit" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "a commit for main from repo2" ]] || false
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Updating" ]] || false
+
+    run dolt log --oneline -n 1
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "a commit for main from repo2" ]] || false
+}
+
+@test "remotes: 'dolt checkout remote_branch_name' sets upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    dolt commit --allow-empty -m "a commit for main from repo2"
+    dolt push
+
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout other
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt status
+    [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+}
+
+@test "remotes: 'dolt checkout -b remote_branch_name' should not set upstream" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt sql -q "CREATE TABLE a (pk int)"
+    dolt commit -am "add table a"
+    dolt push --set-upstream origin main
+    dolt checkout -b other
+    dolt push --set-upstream origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    run dolt checkout -b other
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "branch 'other' set up to track 'origin/other'." ]] || false
+
+    run dolt status
+    [[ ! "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
+
+    cd ../repo1
+    dolt checkout other
+    dolt sql -q "INSERT INTO a VALUES (1), (2)"
+    dolt commit -am "add table a"
+    dolt push
+
+    cd ../repo2
+    dolt checkout other
+    dolt sql -q "DROP TABLE a"
+    dolt commit -am "drop table"
+
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "conflict: table with same name deleted and modified" ]] || false
 }
 
 @test "remotes: add a remote using dolt remote" {

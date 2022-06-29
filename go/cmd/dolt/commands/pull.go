@@ -130,6 +130,11 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 				return fmt.Errorf("fetch failed; %w", err)
 			}
 
+			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			if branchRef != pullSpec.Branch {
+				continue
+			}
+
 			t := datas.CommitNowFunc()
 
 			roots, err := dEnv.Roots(ctx)
@@ -145,11 +150,6 @@ func pullHelper(ctx context.Context, dEnv *env.DoltEnv, pullSpec *env.PullSpec) 
 					return configErr
 				}
 				name, email = "", ""
-			}
-
-			// Only merge iff branch is current branch
-			if branchRef != pullSpec.Branch {
-				continue
 			}
 
 			// Begin merge

@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 	"strings"
 	"sync"
 
@@ -115,13 +116,24 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 		return noConflictsOrViolations, threeWayMerge, err
 	}
 
+	// Fetch all references
+	branchRefs, err := srcDB.GetHeadRefs(ctx)
+	if err != nil {
+		return noConflictsOrViolations, threeWayMerge, env.ErrFailedToReadDb
+	}
+
 	var conflicts int
 	var fastForward int
 	for _, refSpec := range pullSpec.RefSpecs {
-		remoteTrackRef := refSpec.DestRef(pullSpec.Branch)
+		rsSeen := false // track invalid refSpecs
+		for _, branchRef := range branchRefs {
+			remoteTrackRef := refSpec.DestRef(branchRef)
 
-		if remoteTrackRef != nil {
+			if remoteTrackRef == nil {
+				continue
+			}
 
+			rsSeen = true
 			// todo: can we pass nil for either of the channels?
 			srcDBCommit, err := actions.FetchRemoteBranch(ctx, dbData.Rsw.TempTableFilesDir(), pullSpec.Remote, srcDB, dbData.Ddb, pullSpec.Branch, runProgFuncs, stopProgFuncs)
 			if err != nil {
@@ -132,6 +144,11 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			err = dbData.Ddb.FastForward(ctx, remoteTrackRef, srcDBCommit)
 			if err != nil {
 				return noConflictsOrViolations, threeWayMerge, fmt.Errorf("fetch failed; %w", err)
+			}
+
+			// Only merge iff branch is current branch and there is an upstream set (pullSpec.Branch is set to nil if there is no upstream)
+			if branchRef != pullSpec.Branch {
+				continue
 			}
 
 			roots, ok := sess.GetRoots(ctx, dbName)
@@ -152,6 +169,9 @@ func DoDoltPull(ctx *sql.Context, args []string) (int, int, error) {
 			if err != nil {
 				return conflicts, fastForward, err
 			}
+		}
+		if !rsSeen {
+			return noConflictsOrViolations, threeWayMerge, fmt.Errorf("%w: '%s'", ref.ErrInvalidRefSpec, refSpec.GetRemRefToLocal())
 		}
 	}
 

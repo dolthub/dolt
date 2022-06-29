@@ -133,7 +133,7 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 		return nil, err
 	}
 	upstream, hasUpstream := branches[currentBranch.GetPath()]
-
+	gotRemoteAndBranch := false
 	var refSpec ref.RefSpec
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
@@ -160,6 +160,7 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 		if err != nil {
 			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
 		}
+		gotRemoteAndBranch = true
 	} else if setUpstream {
 		return nil, ErrInvalidSetUpstreamArgs
 	} else if hasUpstream {
@@ -205,6 +206,9 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	switch src.GetType() {
 	case ref.BranchRefType:
 		remoteRef, err = GetTrackingRef(dest, remote)
+		if !setUpstream {
+			setUpstream = gotRemoteAndBranch
+		}
 	case ref.TagRefType:
 		if setUpstream {
 			err = ErrCannotSetUpstreamForTag
@@ -370,6 +374,15 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 
 	if len(refSpecs) == 0 {
 		return nil, ErrNoRefSpecForRemote
+	}
+
+	trackedBranches, err := rsr.GetBranches()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, hasUpstream := trackedBranches[branch.GetPath()]; !hasUpstream {
+		branch = nil
 	}
 
 	remotes, err := rsr.GetRemotes()
