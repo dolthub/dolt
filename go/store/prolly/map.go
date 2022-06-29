@@ -335,8 +335,8 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	return sb.String(), nil
 }
 
-// ConvertToKeylessIndex converts the given map to a keyless index map.
-func ConvertToKeylessIndex(m Map) Map {
+// ConvertToSecondaryKeylessIndex converts the given map to a keyless index map.
+func ConvertToSecondaryKeylessIndex(m Map) Map {
 	keyDesc, valDesc := m.Descriptors()
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)

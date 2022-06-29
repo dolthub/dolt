@@ -296,9 +296,9 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}
 
-		empty, err := types.NewMap(ctx, root.VRW())
+		empty, err := durable.NewEmptyIndex(ctx, root.VRW(), sch)
 		if err != nil {
-			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
+			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}
 
 		var indexSet durable.IndexSet
@@ -307,11 +307,16 @@ func importSchema(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPars
 			if err != nil {
 				return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
 			}
+		} else {
+			indexSet, err = durable.NewIndexSetWithEmptyIndexes(ctx, root.VRW(), sch)
+			if err != nil {
+				return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
+			}
 		}
 
-		tbl, err = doltdb.NewNomsTable(ctx, root.VRW(), sch, empty, indexSet, nil)
+		tbl, err = doltdb.NewTable(ctx, root.VRW(), sch, empty, indexSet, nil)
 		if err != nil {
-			return errhand.BuildDError("error: failed to create table.").AddCause(err).Build()
+			return errhand.BuildDError("error: failed to get table.").AddCause(err).Build()
 		}
 
 		root, err = root.PutTable(ctx, tblName, tbl)

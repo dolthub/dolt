@@ -140,7 +140,54 @@ func validateIndexConsistency(
 	def schema.Index,
 	primary, secondary prolly.Map,
 ) error {
-	// secondary indexes have empty keys
+	if schema.IsKeyless(sch) {
+		return validateKeylessIndex(ctx, sch, def, primary, secondary)
+	}
+
+	return validatePkIndex(ctx, sch, def, primary, secondary)
+}
+
+func validateKeylessIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+	secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
+	idxDesc, _ := secondary.Descriptors()
+	builder := val.NewTupleBuilder(idxDesc)
+	mapping := ordinalMappingsForSecondaryIndex(sch, def)
+
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return err
+	}
+
+	for {
+		hashId, value, err := iter.Next(ctx)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
+		// make secondary index key
+		for i := range mapping {
+			j := mapping.MapOrdinal(i)
+			// first field in |value| is cardinality
+			builder.PutRaw(i, value.GetField(j+1))
+		}
+		builder.PutRaw(idxDesc.Count()-1, hashId.GetField(0))
+		k := builder.Build(primary.Pool())
+
+		ok, err := secondary.Has(ctx, k)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("index key %v not found in index %s", k, def.Name())
+		}
+	}
+}
+
+func validatePkIndex(ctx context.Context, sch schema.Schema, def schema.Index, primary, secondary prolly.Map) error {
+	// secondary indexes have empty values
 	idxDesc, _ := secondary.Descriptors()
 	builder := val.NewTupleBuilder(idxDesc)
 	mapping := ordinalMappingsForSecondaryIndex(sch, def)
