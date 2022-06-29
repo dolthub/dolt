@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -22,27 +24,40 @@ const (
 	dbName    = "sysbench"
 )
 
-var (
-	dEnv *env.DoltEnv
-	prng rand.Source
-)
+var dEnv *env.DoltEnv
 
 func init() {
 	nbf := types.Format_Default
 	dEnv = dtestutils.CreateTestEnvWithNameAndNbf(dbName, nbf)
 	populateRepo(dEnv)
-	prng = rand.New(rand.NewSource(0))
 }
 
 func BenchmarkOltpPointSelect(b *testing.B) {
-	benchmarkSysbenchQuery(b, "SELECT c FROM sbtest1 WHERE id=%d")
+	benchmarkSysbenchQuery(b, func(int) string {
+		q := "SELECT c FROM sbtest1 WHERE id=%d"
+		return fmt.Sprintf(q, rand.Intn(tableSize))
+	})
 }
 
-func benchmarkSysbenchQuery(b *testing.B, template string) {
+func BenchmarkSelectRandomPoints(b *testing.B) {
+	benchmarkSysbenchQuery(b, func(int) string {
+		var sb strings.Builder
+		sb.Grow(120)
+		sb.WriteString("SELECT id, k, c, pad FROM sbtest1 WHERE k IN (")
+		sb.WriteString(strconv.Itoa(rand.Intn(tableSize)))
+		for i := 1; i < 10; i++ {
+			sb.WriteString(", ")
+			sb.WriteString(strconv.Itoa(rand.Intn(tableSize)))
+		}
+		sb.WriteString(");")
+		return sb.String()
+	})
+}
+
+func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 	ctx, eng := setupBenchmark(b, dEnv)
 	for i := 0; i < b.N; i++ {
-		query := fmt.Sprintf(template, prng.Int63()%tableSize)
-		_, iter, err := commands.ProcessQuery(ctx, query, eng)
+		_, iter, err := commands.ProcessQuery(ctx, getQuery(i), eng)
 		require.NoError(b, err)
 		for {
 			if _, err = iter.Next(ctx); err != nil {
@@ -50,7 +65,10 @@ func benchmarkSysbenchQuery(b *testing.B, template string) {
 			}
 		}
 		require.Error(b, io.EOF)
+		err = iter.Close(ctx)
+		require.NoError(b, err)
 	}
+	_ = eng.Close()
 }
 
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {
