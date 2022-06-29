@@ -22,7 +22,6 @@ import (
 	eventsapi "github.com/dolthub/dolt/go/gen/proto/dolt/services/eventsapi/v1alpha1"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -47,10 +46,6 @@ func (cmd BlameCmd) Name() string {
 // Description returns a description of the command
 func (cmd BlameCmd) Description() string {
 	return "Show what revision and author last modified each row of a table."
-}
-
-func (cmd BlameCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
 }
 
 func (cmd BlameCmd) Docs() *cli.CommandDocumentation {

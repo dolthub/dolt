@@ -91,10 +91,6 @@ func (cmd BackupCmd) RequiresRepo() bool {
 	return false
 }
 
-func (cmd BackupCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return false
-}
-
 func (cmd BackupCmd) Docs() *cli.CommandDocumentation {
 	ap := cmd.ArgParser()
 	return cli.NewCommandDocumentation(backupDocs, ap)
