@@ -19,20 +19,20 @@ Package prolly includes:
   2) Traverse and search NodeStore and related data structures
 
 NodeStore is the primary interface for building/reading tree data structures:
-- AddressMap, ProllyTreeNode, CommitClosure are the current Node flatbuffer
-  message types
-- A Node contains at least keys and values
-- A Node can be referenced by an address hashed from its message contents
-- Nodes can store data besides keys/values, like address references
-- Most trees differentiate between 1) internal nodes, whose values are addresses
-  that reference other nodes, and 2) leaf nodes, whose values are the main storage
-  motivation
-- Leaf nodes' values can be addresses.
-  - For example, blobs are stored in ProllyTreeNode leaves as value address.
-    The value address reference is the root hash of a tree stored separated. In
-    these cases, it is important to distinguish between 1) self-contained trees
-    of a single type; and 2) the datastore as a whole, comprised of several types
-    of trees.
+  - AddressMap, ProllyTreeNode, CommitClosure are the current Node flatbuffer
+    message types
+  - A Node contains at least keys and values
+  - A Node can be referenced by an address hashed from its message contents
+  - Nodes can store data besides keys/values, like address references
+  - Most trees differentiate between 1) internal nodes, whose values are addresses
+    that reference other nodes, and 2) leaf nodes, whose values are the main storage
+    motivation
+  - Leaf nodes' values can be addresses.
+    - For example, blobs are stored in ProllyTreeNode leaves as value address.
+      The value address reference is the root hash of a tree stored separated. In
+      these cases, it is important to distinguish between 1) self-contained trees
+      of a single type; and 2) the datastore as a whole, comprised of several types
+      of trees.
 
 // TODO ProllyTreeNode
 
