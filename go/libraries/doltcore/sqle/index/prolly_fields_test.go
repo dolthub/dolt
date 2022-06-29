@@ -114,6 +114,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: "lorem ipsum",
 		},
 		{
+			name:  "string",
+			typ:   val.Type{Enc: val.StringAddrEnc},
+			value: "lorem ipsum",
+		},
+		{
 			name:  "bytes",
 			typ:   val.Type{Enc: val.ByteStringEnc},
 			value: []byte("lorem ipsum"),
@@ -145,7 +150,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "json",
-			typ:   val.Type{Enc: val.JSONEnc},
+			typ:   val.Type{Enc: val.JSONAddrEnc},
 			value: mustParseJson(t, `{"a": 1, "b": false}`),
 		},
 		{

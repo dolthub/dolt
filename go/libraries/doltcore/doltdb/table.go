@@ -110,6 +110,9 @@ func (t *Table) ValueReadWriter() types.ValueReadWriter {
 
 // NodeStore returns the NodeStore for this table.
 func (t *Table) NodeStore() tree.NodeStore {
+	if t == nil {
+		return nil
+	}
 	return tree.NewNodeStore(shim.ChunkStoreFromVRW(t.ValueReadWriter()))
 }
 
