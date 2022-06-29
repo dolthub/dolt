@@ -492,7 +492,7 @@ DELIM
     dolt sql -q "CREATE TABLE test(pk BIGINT PRIMARY KEY, c1 BIGINT, c2 BIGINT, c3 INT)"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "COLUMN_NAME,IS_NULLABLE,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,YES," ]] || false
     [[ "$output" =~ "c2,YES," ]] || false
@@ -503,7 +503,7 @@ DELIM
     dolt sql -q "ALTER TABLE test CHANGE c3 c3 varchar(4) NOT NULL DEFAULT 'ln'"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "COLUMN_NAME,IS_NULLABLE,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,YES," ]] || false
     [[ "$output" =~ "c2,NO," ]] || false
@@ -514,7 +514,7 @@ DELIM
     dolt sql -q "ALTER TABLE test CHANGE c3 c3 BOOLEAN NULL DEFAULT FALSE"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "COLUMN_NAME,IS_NULLABLE,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,NO,4.44" ]] || false
     [[ "$output" =~ "c2,NO,3.333" ]] || false
@@ -524,7 +524,7 @@ DELIM
     dolt sql -q "ALTER TABLE test CHANGE c2 c2 TIMESTAMP NULL DEFAULT '2008-04-22 16:16:16'"
     run dolt sql -q "SELECT column_name, is_nullable, column_default FROM information_schema.columns WHERE table_name = 'test'" -r=csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "column_name,is_nullable,column_default" ]] || false
+    [[ "$output" =~ "COLUMN_NAME,IS_NULLABLE,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk,NO," ]] || false
     [[ "$output" =~ "c1,NO,2020-04-01 16:16:16" ]] || false
     [[ "$output" =~ "c2,YES,2008-04-22 16:16:16" ]] || false
@@ -560,7 +560,7 @@ DELIM
 
     run dolt sql -q "SELECT column_name, column_default FROM information_schema.columns where table_name='test_table'" -r csv
     [ "$status" -eq "0" ]
-    [[ "$output" =~ "column_name,column_default" ]] || false
+    [[ "$output" =~ "COLUMN_NAME,COLUMN_DEFAULT" ]] || false
     [[ "$output" =~ "pk," ]] || false
     [[ "$output" =~ "col2,(RAND() + RAND())" ]] || false
     [[ "$output" =~ "col3,CASE pk WHEN 1 THEN false ELSE true END" ]] || false
