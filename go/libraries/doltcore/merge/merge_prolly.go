@@ -242,35 +242,21 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 
 	m := durable.ProllyMapFromIndex(rootR)
 	vMerger := newValueMerger(postMergeSchema, rootSch, mergeSch, ancSch, m.Pool())
+	keyless := schema.IsKeyless(postMergeSchema)
 
 	mergedRP, err := prolly.MergeMaps(ctx, rootRP, mergeRP, ancRP, func(left, right tree.Diff) (tree.Diff, bool) {
 		if left.Type == right.Type && bytes.Equal(left.To, right.To) {
-			// convergent edit
+			if keyless {
+				// convergent edits are conflicts for keyless tables
+				_ = sendConflict(ctx, conflicts, indexEdits, left, right)
+				return tree.Diff{}, false
+			}
 			return left, true
 		}
 
 		merged, isConflict := vMerger.tryMerge(val.Tuple(left.To), val.Tuple(right.To), val.Tuple(left.From))
 		if isConflict {
-			c := confVals{
-				key:      val.Tuple(left.Key),
-				ourVal:   val.Tuple(left.To),
-				theirVal: val.Tuple(right.To),
-				baseVal:  val.Tuple(left.From),
-			}
-			select {
-			case conflicts <- c:
-			case <-ctx.Done():
-				return tree.Diff{}, false
-			}
-			// Reset the change on the right
-			e := conflictEdit{
-				right: right,
-			}
-			select {
-			case indexEdits <- e:
-			case <-ctx.Done():
-				return tree.Diff{}, false
-			}
+			_ = sendConflict(ctx, conflicts, indexEdits, left, right)
 			return tree.Diff{}, false
 		}
 
@@ -300,6 +286,30 @@ func mergeProllyRowData(ctx context.Context, postMergeSchema, rootSch, mergeSch,
 	}
 
 	return updatedTbl, durable.IndexFromProllyMap(mergedRP), nil
+}
+
+func sendConflict(ctx context.Context, confs chan confVals, edits chan indexEdit, left, right tree.Diff) error {
+	c := confVals{
+		key:      val.Tuple(left.Key),
+		ourVal:   val.Tuple(left.To),
+		theirVal: val.Tuple(right.To),
+		baseVal:  val.Tuple(left.From),
+	}
+	select {
+	case confs <- c:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	// Reset the change on the right
+	e := conflictEdit{
+		right: right,
+	}
+	select {
+	case edits <- e:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	return nil
 }
 
 type valueMerger struct {

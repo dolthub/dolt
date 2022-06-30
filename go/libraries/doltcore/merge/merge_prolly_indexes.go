@@ -163,7 +163,11 @@ func mergeProllyIndexSets(
 			if err != nil {
 				return prolly.Map{}, false, err
 			}
-			return durable.ProllyMapFromIndex(idx), true, nil
+			m := durable.ProllyMapFromIndex(idx)
+			if schema.IsKeyless(sch) {
+				m = prolly.ConvertToSecondaryKeylessIndex(m)
+			}
+			return m, true, nil
 		}
 		return prolly.Map{}, false, nil
 	}
@@ -353,21 +357,24 @@ OUTER:
 
 // getMutableSecondaryIdxs returns a MutableSecondaryIdx for each secondary index
 // defined in |schema| and |tbl|.
-func getMutableSecondaryIdxs(ctx context.Context, schema schema.Schema, tbl *doltdb.Table) ([]MutableSecondaryIdx, error) {
+func getMutableSecondaryIdxs(ctx context.Context, sch schema.Schema, tbl *doltdb.Table) ([]MutableSecondaryIdx, error) {
 	indexSet, err := tbl.GetIndexSet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	mods := make([]MutableSecondaryIdx, schema.Indexes().Count())
-	for i, index := range schema.Indexes().AllIndexes() {
-		idx, err := indexSet.GetIndex(ctx, schema, index.Name())
+	mods := make([]MutableSecondaryIdx, sch.Indexes().Count())
+	for i, index := range sch.Indexes().AllIndexes() {
+		idx, err := indexSet.GetIndex(ctx, sch, index.Name())
 		if err != nil {
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idx)
+		if schema.IsKeyless(sch) {
+			m = prolly.ConvertToSecondaryKeylessIndex(m)
+		}
 
-		mods[i] = NewMutableSecondaryIdx(m, schema, index, m.Pool())
+		mods[i] = NewMutableSecondaryIdx(m, sch, index, m.Pool())
 	}
 
 	return mods, nil
