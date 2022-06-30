@@ -284,7 +284,7 @@ func (d *DoltHarness) NewDatabases(names ...string) []sql.Database {
 	d.databases = nil
 	d.databaseGlobalStates = nil
 	for _, name := range names {
-		dEnv := dtestutils.CreateTestEnvWithNameAndNbf(name, types.Format_Default)
+		dEnv := dtestutils.CreateTestEnvWithName(name)
 
 		store := dEnv.DoltDB.ValueReadWriter().(*types.ValueStore)
 		store.SetValidateContentAddresses(true)
