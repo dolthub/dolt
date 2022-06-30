@@ -36,16 +36,12 @@ type Range struct {
 type RangeField struct {
 	Lo, Hi Bound
 	Exact  bool // Lo.Value == Hi.Value
-	IsNull bool
 }
 
 type Bound struct {
-	Value     []byte
+	Binding   bool
 	Inclusive bool
-}
-
-func (b Bound) Binding() bool {
-	return b.Value != nil
+	Value     []byte
 }
 
 func (r Range) matches(t val.Tuple) bool {
@@ -53,13 +49,6 @@ func (r Range) matches(t val.Tuple) bool {
 	for i := range r.Fields {
 		field := r.Desc.GetField(i, t)
 		typ := r.Desc.Types[i]
-
-		if r.Fields[i].IsNull {
-			if field == nil {
-				continue
-			}
-			return false
-		}
 
 		if r.Fields[i].Exact {
 			v := r.Fields[i].Lo.Value
@@ -70,7 +59,7 @@ func (r Range) matches(t val.Tuple) bool {
 		}
 
 		lo := r.Fields[i].Lo
-		if lo.Binding() {
+		if lo.Binding {
 			cmp := order.CompareValues(field, lo.Value, typ)
 			if cmp < 0 || (cmp == 0 && !lo.Inclusive) {
 				return false
@@ -78,7 +67,7 @@ func (r Range) matches(t val.Tuple) bool {
 		}
 
 		hi := r.Fields[i].Hi
-		if hi.Binding() {
+		if hi.Binding {
 			cmp := order.CompareValues(field, hi.Value, typ)
 			if cmp > 0 || (cmp == 0 && !hi.Inclusive) {
 				return false
@@ -91,20 +80,13 @@ func (r Range) matches(t val.Tuple) bool {
 func (r Range) aboveStart(t val.Tuple) bool {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
-		field := r.Desc.GetField(i, t)
-		typ := r.Desc.Types[i]
-
-		if r.Fields[i].IsNull {
-			if field == nil {
-				continue
-			}
-			return false
-		}
-
 		bound := r.Fields[i].Lo
-		if !bound.Binding() {
+		if !bound.Binding {
 			return true
 		}
+
+		field := r.Desc.GetField(i, t)
+		typ := r.Desc.Types[i]
 
 		cmp := order.CompareValues(field, bound.Value, typ)
 		if cmp < 0 {
@@ -113,8 +95,10 @@ func (r Range) aboveStart(t val.Tuple) bool {
 		}
 
 		if r.Fields[i].Exact && cmp == 0 {
-			// todo(andy): document exact
-			// predicate subtleties
+			// for exact bounds (operators '=' and 'IS')
+			// we can use subsequent columns to narrow
+			// physical index scans.
+			// this is not possible for interval bounds.
 			continue
 		}
 
@@ -127,20 +111,13 @@ func (r Range) aboveStart(t val.Tuple) bool {
 func (r Range) belowStop(t val.Tuple) bool {
 	order := r.Desc.Comparator()
 	for i := range r.Fields {
-		field := r.Desc.GetField(i, t)
-		typ := r.Desc.Types[i]
-
-		if r.Fields[i].IsNull {
-			if field == nil {
-				continue
-			}
-			return false
-		}
-
 		bound := r.Fields[i].Hi
-		if !bound.Binding() {
+		if !bound.Binding {
 			return true
 		}
+
+		field := r.Desc.GetField(i, t)
+		typ := r.Desc.Types[i]
 
 		cmp := order.CompareValues(field, bound.Value, typ)
 		if cmp > 0 {
@@ -149,8 +126,10 @@ func (r Range) belowStop(t val.Tuple) bool {
 		}
 
 		if r.Fields[i].Exact && cmp == 0 {
-			// todo(andy): document exact
-			// predicate subtleties
+			// for exact bounds (operators '=' and 'IS')
+			// we can use subsequent columns to narrow
+			// physical index scans.
+			// this is not possible for interval bounds.
 			continue
 		}
 
@@ -199,94 +178,142 @@ func pointLookupSearchFn(rng Range) tree.SearchFn {
 	return rangeStartSearchFn(rng)
 }
 
-//// GreaterRange defines a Range of Tuples greater than |start|.
-//func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Start: exclusiveBound(start, desc),
-//		Desc:  desc,
-//	}
-//}
-//
-//// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
-//func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Start: inclusiveBound(start, desc),
-//		Desc:  desc,
-//	}
-//}
-//
-//// LesserRange defines a Range of Tuples less than |stop|.
-//func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Stop: exclusiveBound(stop, desc),
-//		Desc: desc,
-//	}
-//}
-//
-//// LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
-//func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Stop: inclusiveBound(stop, desc),
-//		Desc: desc,
-//	}
-//}
-//
-//// OpenRange defines a non-inclusive Range of Tuples from |start| to |stop|.
-//func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Start: exclusiveBound(start, desc),
-//		Stop:  exclusiveBound(stop, desc),
-//		Desc:  desc,
-//	}
-//}
-//
-//// OpenStartRange defines a half-open Range of Tuples from |start| to |stop|.
-//func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Start: exclusiveBound(start, desc),
-//		Stop:  inclusiveBound(stop, desc),
-//		Desc:  desc,
-//	}
-//}
-//
-//// OpenStopRange defines a half-open Range of Tuples from |start| to |stop|.
-//func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-//	return Range{
-//		Start: inclusiveBound(start, desc),
-//		Stop:  exclusiveBound(stop, desc),
-//		Desc:  desc,
-//	}
-//}
+// GreaterRange defines a Range of Tuples greater than |start|.
+func GreaterRange(start val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		rng.Fields[i] = RangeField{
+			Lo: Bound{Binding: true, Inclusive: false, Value: lo},
+		}
+	}
+	return rng
+}
+
+// GreaterOrEqualRange defines a Range of Tuples greater than or equal to |start|.
+func GreaterOrEqualRange(start val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		rng.Fields[i] = RangeField{
+			Lo: Bound{Binding: true, Inclusive: true, Value: lo},
+		}
+	}
+	return rng
+}
+
+// LesserRange defines a Range of Tuples less than |stop|.
+func LesserRange(stop val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	for i := range rng.Fields {
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Hi: Bound{Binding: true, Inclusive: false, Value: hi},
+		}
+	}
+	return rng
+}
+
+// LesserOrEqualRange defines a Range of Tuples less than or equal to |stop|.
+func LesserOrEqualRange(stop val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	for i := range rng.Fields {
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Hi: Bound{Binding: true, Inclusive: true, Value: hi},
+		}
+	}
+	return rng
+}
+
+// OpenRange defines a non-inclusive Range of Tuples from |start| to |stop|.
+func OpenRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	order := desc.Comparator()
+
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Lo:    Bound{Binding: true, Inclusive: false, Value: lo},
+			Hi:    Bound{Binding: true, Inclusive: false, Value: hi},
+			Exact: order.CompareValues(lo, hi, desc.Types[i]) == 0,
+		}
+	}
+	return rng
+}
+
+// OpenStartRange defines a half-open Range of Tuples from |start| to |stop|.
+func OpenStartRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	order := desc.Comparator()
+
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Lo:    Bound{Binding: true, Inclusive: false, Value: lo},
+			Hi:    Bound{Binding: true, Inclusive: true, Value: hi},
+			Exact: order.CompareValues(lo, hi, desc.Types[i]) == 0,
+		}
+	}
+	return rng
+}
+
+// OpenStopRange defines a half-open Range of Tuples from |start| to |stop|.
+func OpenStopRange(start, stop val.Tuple, desc val.TupleDesc) Range {
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
+	}
+	order := desc.Comparator()
+
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Lo:    Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:    Bound{Binding: true, Inclusive: false, Value: hi},
+			Exact: order.CompareValues(lo, hi, desc.Types[i]) == 0,
+		}
+	}
+	return rng
+}
 
 // ClosedRange defines an inclusive Range of Tuples from |start| to |stop|.
 func ClosedRange(start, stop val.Tuple, desc val.TupleDesc) Range {
-	//return Range{
-	//	Start: inclusiveBound(start, desc),
-	//	Stop:  inclusiveBound(stop, desc),
-	//	Desc:  desc,
-	//}
-	panic("unimplemented")
-}
-
-//func inclusiveBound(tup val.Tuple, desc val.TupleDesc) (cut []RangeField) {
-//	cut = make([]RangeField, len(desc.Types))
-//	for i := range cut {
-//		cut[i] = RangeField{
-//			Value:     tup.GetField(i),
-//			Inclusive: true,
-//		}
-//	}
-//	return
-//}
-//
-//func exclusiveBound(tup val.Tuple, desc val.TupleDesc) (cut []RangeField) {
-//	cut = inclusiveBound(tup, desc)
-//	cut[len(cut)-1].Inclusive = false
-//	return
-//}
-
-func assertTrue(b bool) {
-	if !b {
-		panic("assertion failed")
+	rng := Range{
+		Fields: make([]RangeField, len(desc.Types)),
+		Desc:   desc,
 	}
+	order := desc.Comparator()
+
+	for i := range rng.Fields {
+		lo := desc.GetField(i, start)
+		hi := desc.GetField(i, stop)
+		rng.Fields[i] = RangeField{
+			Lo:    Bound{Binding: true, Inclusive: true, Value: lo},
+			Hi:    Bound{Binding: true, Inclusive: true, Value: hi},
+			Exact: order.CompareValues(lo, hi, desc.Types[i]) == 0,
+		}
+	}
+	return rng
 }

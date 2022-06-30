@@ -28,26 +28,29 @@ import (
 )
 
 var rangeTuples = []val.Tuple{
-	intTuple(1, 1),           // 0
-	intTuple(1, 2),           // 1
-	intTuple(1, 3),           // 2
-	intTuple(2, 1),           // 3
-	intTuple(2, 2),           // 4
-	intTuple(2, 3),           // 5
-	intTuple(3, 1),           // 6
-	intTuple(3, 2),           // 7
-	intTuple(3, 3),           // 8
-	intTuple(4, 1),           // 9
-	intTuple(4, 2),           // 10
-	intTuple(4, 3),           // 11
-	intNullTuple(&nine, nil), // 12
-	intNullTuple(nil, &nine), // 13
+	intNullTuple(nil, &nine), // 0
+	intTuple(1, 1),           // 1
+	intTuple(1, 2),           // 2
+	intTuple(1, 3),           // 3
+	intTuple(2, 1),           // 4
+	intTuple(2, 2),           // 5
+	intTuple(2, 3),           // 6
+	intTuple(3, 1),           // 7
+	intTuple(3, 2),           // 8
+	intTuple(3, 3),           // 9
+	intTuple(4, 1),           // 10
+	intTuple(4, 2),           // 11
+	intTuple(4, 3),           // 12
+	intNullTuple(&nine, nil), // 13
 }
 
 var nine = int32(9)
 
 func TestRangeSearch(t *testing.T) {
-	intType := val.Type{Enc: val.Int32Enc}
+	intType := val.Type{
+		Enc:      val.Int32Enc,
+		Nullable: true,
+	}
 	twoCol := val.NewTupleDescriptor(
 		intType, // c0
 		intType, // c1
@@ -56,95 +59,106 @@ func TestRangeSearch(t *testing.T) {
 	tests := []struct {
 		name      string
 		testRange Range
-		hi, lo    int
+		physical  [2]int // physical range scan
+		logical   []int  // logical range scan
 	}{
 		{
 			name: "unbound range",
 			testRange: Range{
-				Start: nil,
-				Stop:  nil,
-				Desc:  twoCol,
+				Fields: []RangeField{
+					{
+						Lo: Bound{Binding: false},
+						Hi: Bound{Binding: false},
+					},
+				},
+				Desc: twoCol,
 			},
-			lo: 0,
-			hi: 14,
+			physical: [2]int{0, 14},
+			logical:  []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
 		},
 
 		// first column ranges
 		{
 			name: "c0 > 1",
 			testRange: Range{
-				Start: []RangeField{
-					{Value: intVal(1), Inclusive: false},
+				Fields: []RangeField{
+					{
+						Lo: Bound{Binding: true, Inclusive: false, Value: intVal(1)},
+					},
 				},
-				Stop: nil,
 				Desc: twoCol,
 			},
-			lo: 3,
-			hi: 14,
+			physical: [2]int{4, 14},
+			logical:  []int{4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14},
 		},
 		{
 			name: "c0 < 1",
 			testRange: Range{
-				Start: nil,
-				Stop: []RangeField{
-					{Value: intVal(1), Inclusive: false},
+				Fields: []RangeField{
+					{
+						Lo: Bound{Binding: true, Inclusive: false, Value: nil},
+						Hi: Bound{Binding: true, Inclusive: false, Value: intVal(1)},
+					},
 				},
 				Desc: twoCol,
 			},
-			lo: 0,
-			hi: 0,
+			physical: [2]int{1, 1},
+			logical:  []int{},
 		},
 		{
 			name: "2 <= c0 <= 3",
 			testRange: Range{
-				Start: []RangeField{
-					{Value: intVal(2), Inclusive: true},
-				},
-				Stop: []RangeField{
-					{Value: intVal(3), Inclusive: true},
+				Fields: []RangeField{
+					{
+						Lo: Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Hi: Bound{Binding: true, Inclusive: true, Value: intVal(3)},
+					},
 				},
 				Desc: twoCol,
 			},
-			lo: 3,
-			hi: 9,
+			physical: [2]int{4, 10},
+			logical:  []int{4, 5, 6, 7, 8, 9, 10, 11},
 		},
 		{
 			name: "c0 = NULL",
 			testRange: Range{
-				Start: []RangeField{
-					{Null: true},
-				},
-				Stop: []RangeField{
-					{Null: true},
+				Fields: []RangeField{
+					{
+						Lo:    Bound{Binding: true, Inclusive: true, Value: nil},
+						Hi:    Bound{Binding: true, Inclusive: true, Value: nil},
+						Exact: true,
+					},
 				},
 				Desc: twoCol,
 			},
-			lo: 13,
-			hi: 14,
+			physical: [2]int{0, 1},
+			logical:  []int{0},
 		},
 
 		// second column ranges
 		{
 			name: "c1 == 2",
 			testRange: Range{
-				Start: []RangeField{
-					{Value: nil},
-					{Value: intVal(2), Inclusive: true},
-				},
-				Stop: []RangeField{
-					{Value: nil},
-					{Value: intVal(2), Inclusive: true},
+				Fields: []RangeField{
+					{
+						Lo: Bound{Binding: true, Inclusive: false, Value: nil},
+					},
+					{
+						Lo:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Hi:    Bound{Binding: true, Inclusive: true, Value: intVal(2)},
+						Exact: true,
+					},
 				},
 				Desc: twoCol,
 			},
-			lo: 0,
-			hi: 14,
+			physical: [2]int{1, 14},
+			logical:  []int{2, 5, 8, 11},
 		},
 	}
 
 	values := make([]val.Tuple, len(rangeTuples))
 	for i := range values {
-		values[i] = make(val.Tuple, 0)
+		values[i] = make(val.Tuple, 2)
 	}
 	testNode := tree.NewTupleLeafNode(rangeTuples, values)
 	tm := NewMap(testNode, nil, twoCol, val.TupleDesc{})
@@ -153,28 +167,47 @@ func TestRangeSearch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			rng := test.testRange
+			lo, hi := test.physical[0], test.physical[1]
 
 			startSearch := rangeStartSearchFn(rng)
 			idx := startSearch(testNode)
-			assert.Equal(t, test.lo, idx, "range should start at index %d", test.lo)
+			assert.Equal(t, lo, idx, "range should start at index %d", lo)
 
 			stopSearch := rangeStopSearchFn(rng)
 			idx = stopSearch(testNode)
-			assert.Equal(t, test.hi, idx, "range should stop before index %d", test.hi)
+			assert.Equal(t, hi, idx, "range should stop before index %d", hi)
 
-			iter, err := tm.IterRange(ctx, rng)
+			// validate physical range (unfiltered iter)
+			iter, err := treeIterFromRange(ctx, testNode, nil, test.testRange)
 			require.NoError(t, err)
-			expected := rangeTuples[test.lo:test.hi]
+			expected := rangeTuples[lo:hi]
 
 			i := 0
 			for {
-				tup, _, err := iter.Next(ctx)
+				act, _, err := iter.Next(ctx)
 				if err == io.EOF {
 					break
 				}
 				require.NoError(t, err)
 				require.True(t, i < len(expected))
-				assert.Equal(t, expected[i], tup)
+				assert.Equal(t, expected[i], act)
+				i++
+			}
+
+			// validate logical range
+			iter2, err := tm.IterRange(ctx, rng)
+			require.NoError(t, err)
+			expected2 := test.logical
+
+			i = 0
+			for {
+				act, _, err := iter2.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				exp := rangeTuples[expected2[i]]
+				require.NoError(t, err)
+				assert.Equal(t, exp, act)
 				i++
 			}
 		})
