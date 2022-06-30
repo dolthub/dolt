@@ -80,30 +80,27 @@ func TestSingleQuery(t *testing.T) {
 
 // Convenience test for debugging a single query. Unskip and set to the desired query.
 func TestSingleScript(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 
 	var scripts = []queries.ScriptTest{
 		{
-			Name: "primary key table: non-pk column type changes",
+			Name: "new table",
 			SetUpScript: []string{
-				"create table t (pk int primary key, c1 int, c2 text);",
-				"insert into t values (1, 2, '3'), (4, 5, '6');",
-				"set @Commit1 = DOLT_COMMIT('-am', 'creating table t');",
-				"alter table t modify column c2 int;",
-				"set @Commit2 = DOLT_COMMIT('-am', 'changed type of c2');",
+				"create table t1 (a int primary key, b int)",
+				"insert into t1 values (1,2)",
 			},
 			Assertions: []queries.ScriptTestAssertion{
 				{
-					Query:    "select count(*) from dolt_history_t;",
-					Expected: []sql.Row{{4}},
+					Query:    "select to_a, to_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+					Expected: []sql.Row{{1, 2, "HEAD", "WORKING", "added"}},
 				},
 				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit1 order by pk;",
-					Expected: []sql.Row{{1, nil}, {4, nil}},
+					Query:       "select to_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'HEAD', 'WORKING')",
+					ExpectedErr: sql.ErrColumnNotFound,
 				},
 				{
-					Query:    "select pk, c2 from dolt_history_t where commit_hash=@Commit2 order by pk;",
-					Expected: []sql.Row{{1, 3}, {4, 6}},
+					Query:    "select from_a, from_b, from_commit, to_commit, diff_type from dolt_diff('t1', 'WORKING', 'HEAD')",
+					Expected: []sql.Row{{1, 2, "WORKING", "HEAD", "removed"}},
 				},
 			},
 		},
@@ -440,6 +437,21 @@ func TestCreateDatabase(t *testing.T) {
 	enginetest.TestCreateDatabase(t, newDoltHarness(t))
 }
 
+func TestBlobs(t *testing.T) {
+	skipOldFormat(t)
+	enginetest.TestBlobs(t, newDoltHarness(t))
+}
+
+func TestBigBlobs(t *testing.T) {
+	skipOldFormat(t)
+
+	h := newDoltHarness(t)
+	h.Setup(setup.MydbData, setup.BlobData)
+	for _, tt := range BigBlobQueries {
+		enginetest.RunWriteQueryTest(t, h, tt)
+	}
+}
+
 func TestDropDatabase(t *testing.T) {
 	enginetest.TestScript(t, newDoltHarness(t), queries.ScriptTest{
 		Name: "Drop database engine tests for Dolt only",
@@ -685,18 +697,18 @@ func TestDoltMergeArtifacts(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range MergeViolationsAndConflictsMergeScripts {
+	for _, script := range MergeArtifactsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
 
 // these tests are temporary while there is a difference between the old format
 // and new format merge behaviors.
-func TestDoltMergeAbortOnConflictsAppendViolations(t *testing.T) {
+func TestOldFormatMergeConflictsAndCVs(t *testing.T) {
 	if types.IsFormat_DOLT_1(types.Format_Default) {
 		t.Skip()
 	}
-	for _, script := range AppendViolationsAbortOnConflictsMergeScripts {
+	for _, script := range OldFormatMergeConflictsAndCVsScripts {
 		enginetest.TestScript(t, newDoltHarness(t), script)
 	}
 }
@@ -915,10 +927,18 @@ func TestPreparedStaticIndexQuery(t *testing.T) {
 	enginetest.TestPreparedStaticIndexQuery(t, newDoltHarness(t))
 }
 
+func TestStatistics(t *testing.T) {
+	enginetest.TestStatistics(t, newDoltHarness(t))
+}
+
 func TestSpatialQueriesPrepared(t *testing.T) {
 	skipPreparedTests(t)
 
 	enginetest.TestSpatialQueriesPrepared(t, newDoltHarness(t))
+}
+
+func TestPreparedStatistics(t *testing.T) {
+	enginetest.TestStatisticsPrepared(t, newDoltHarness(t))
 }
 
 func TestVersionedQueriesPrepared(t *testing.T) {
@@ -1192,10 +1212,23 @@ func TestAddDropPrimaryKeys(t *testing.T) {
 	})
 }
 
+func TestDoltVerifyConstraints(t *testing.T) {
+	for _, script := range DoltVerifyConstraintsTestScripts {
+		harness := newDoltHarness(t)
+		enginetest.TestScript(t, harness, script)
+	}
+}
+
 var newFormatSkippedScripts = []string{
 	// Different query plans
 	"Partial indexes are used and return the expected result",
 	"Multiple indexes on the same columns in a different order",
+}
+
+func skipOldFormat(t *testing.T) {
+	if !types.IsFormat_DOLT_1(types.Format_Default) {
+		t.Skip()
+	}
 }
 
 func skipPreparedTests(t *testing.T) {

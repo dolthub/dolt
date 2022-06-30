@@ -40,17 +40,17 @@ teardown() {
 
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
     run dolt merge merge_branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
     echo -e "\n\noutput: " $output "\n\n"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
@@ -59,7 +59,7 @@ teardown() {
     dolt commit -m "squash merge"
 
     run dolt log
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "add pk 0 to test1" ]] || false
     [[ "$output" =~ "add pk 1 to test1" ]] || false
 }
@@ -84,7 +84,7 @@ teardown() {
     # per Git, working set changes to test2 should remain
     dolt sql -q "SELECT * FROM test2" -r csv
     run dolt sql -q "SELECT * FROM test2" -r csv
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "${lines[1]}" =~ "9,9,9" ]] || false
 }
 
@@ -101,13 +101,13 @@ teardown() {
     dolt checkout main
     dolt merge other
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "still merging" ]] || false
     [[ "$output" =~ "modified:       test" ]] || false
 
     dolt merge --abort
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "${lines[0]}" =~ "On branch main" ]] || false
     [[ "${lines[1]}" =~ "nothing to commit, working tree clean" ]] || false
 }
@@ -125,17 +125,17 @@ teardown() {
 
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
     run dolt merge --squash merge_branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "Squash" ]] || false
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ "$output" =~ "test1" ]] || false
 
@@ -144,7 +144,7 @@ teardown() {
     dolt commit -m "squash merge"
 
     run dolt log
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "add pk 1 to test1" ]] || false
     [[ ! "$output" =~ "add pk 0 to test1" ]] || false
 }
@@ -162,10 +162,10 @@ teardown() {
     dolt checkout main
 
     run dolt merge merge_branch~
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "Fast-forward" ]] || false
     run dolt sql -q 'select count(*) from test1 where pk = 1'
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "| 0 " ]] || false
 }
 
@@ -181,7 +181,7 @@ teardown() {
     dolt commit -m "add pk 0 = 2,2 to test1"
 
     run dolt merge merge_branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
 
     dolt add test1
@@ -204,7 +204,7 @@ teardown() {
     dolt commit -m "add pk 0 = 2,2 to test1"
 
     run dolt merge merge_branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
 
     run dolt commit -m 'create a merge commit'
@@ -222,16 +222,16 @@ teardown() {
     dolt checkout main
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
     run dolt merge merge_branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 }
@@ -244,11 +244,11 @@ teardown() {
 
     dolt checkout main
     run dolt merge merge_branch --no-ff -m "no-ff merge"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt log
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "no-ff merge" ]] || false
 }
 
@@ -261,21 +261,21 @@ teardown() {
     dolt checkout main
     dolt SQL -q "INSERT INTO test2 values (0,1,2)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
     run dolt merge merge_branch --no-ff -m "no-ff merge"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ ! "$output" =~ "Fast-forward" ]] || false
 
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test2" ]] || false
     [[ ! "$output" =~ "test1" ]] || false
 
     run dolt log
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "no-ff merge" ]] || false
 }
 
@@ -292,12 +292,12 @@ teardown() {
 
     dolt SQL -q "INSERT INTO test1 values (1,2,3)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
 
     run dolt merge merge_branch
-    [ "$status" -eq 1 ]
+    log_status_eq 1
 }
 
 @test "merge: ff merge rejected when working changes touch same tables" {
@@ -310,12 +310,12 @@ teardown() {
     dolt ls
     dolt SQL -q "INSERT INTO test1 values (1,2,3)"
     run dolt status
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
 
     run dolt merge merge_branch
-    [ "$status" -eq 1 ]
+    log_status_eq 1
 }
 
 @test "merge: Add tables with same schema on two branches, merge" {
@@ -335,7 +335,7 @@ SQL
 
     dolt checkout main
     run dolt merge other
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     run dolt sql -q "SELECT * FROM quiz ORDER BY pk;" -r csv
     [[ "${lines[0]}" =~ "pk" ]] || false
     [[ "${lines[1]}" =~ "10" ]] || false
@@ -358,12 +358,13 @@ SQL
 
     dolt checkout main
     run dolt merge other
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "CONFLICT" ]] || false
+    dolt conflicts resolve --theirs dolt_schemas
     run dolt conflicts resolve --theirs dolt_schemas
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     run dolt sql -q "select name from dolt_schemas" -r csv
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "c1c1" ]] || false
 }
 
@@ -379,9 +380,9 @@ SQL
     dolt checkout main
     run dolt merge other
     skip "key collision in dolt_schemas"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     run dolt sql -q "select name from dolt_schemas" -r csv
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "pkpk" ]] || false
     [[ "$output" =~ "c1c1" ]] || false
 }
@@ -460,16 +461,16 @@ SQL
 
     # left composite index left-over
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 0;"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [ ${lines[1]} -eq 0 ]
 
     # right composite index left-over
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 0 AND c1 = 1;"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [ ${lines[1]} -eq 0 ]
 
     run dolt sql -r csv -q "SELECT count(*) from test WHERE c0 = 1 AND c1 = 1;"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [ ${lines[1]} -eq 1 ]
 }
 
@@ -492,10 +493,10 @@ SQL
     dolt checkout main
     
     run dolt merge feature-branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
 
     run dolt sql -q "select * from test3"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ 1 ]] || false
 }
 
@@ -517,20 +518,19 @@ SQL
 
     dolt checkout main
     run dolt merge feature-branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
 
     dolt commit -m "merged feature-branch"
 
     run dolt sql -q "show tables"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ ! "$output" =~ "test2" ]] || false
 
     run dolt sql -q "select * from test1" -r csv
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "1,1,1" ]] || false
     [[ "$output" =~ "2,2,2" ]] || false
 }
-
 
 @test "merge: merge branch with table that was deleted" {
     dolt sql << SQL
@@ -558,16 +558,16 @@ SQL
     
     dolt checkout main
     run dolt merge feature-branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
 
     dolt commit -m "merged feature-branch"
 
     run dolt sql -q "show tables"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ ! "$output" =~ "test2" ]] || false
 
     run dolt sql -q "select * from test1" -r csv
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "1,1,1" ]] || false
     [[ "$output" =~ "2,2,2" ]] || false
 }
@@ -592,7 +592,7 @@ SQL
     dolt checkout main
     run dolt merge feature-branch
 
-    [ "$status" -eq 1 ]
+    log_status_eq 1
     [[ "$output" =~ "conflict" ]] || false
 }
 
@@ -616,7 +616,7 @@ SQL
     dolt checkout main
     run dolt merge feature-branch
 
-    [ "$status" -eq 1 ]
+    log_status_eq 1
     [[ "$output" =~ "conflict" ]] || false
 }
 
@@ -643,17 +643,16 @@ SQL
 
     dolt checkout main
     run dolt merge feature-branch
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     dolt commit -m "merged feature-branch"
 
     run dolt sql -q "show tables"
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "test1" ]] || false
     [[ ! "$output" =~ "test2" ]] || false
 }
 
 @test "merge: non-violating merge succeeds when violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -685,7 +684,6 @@ SQL
 }
 
 @test "merge: non-conflicting / non-violating merge succeeds when conflicts and violations already exist" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -745,7 +743,6 @@ SQL
 }
 
 @test "merge: conflicting merge should retain previous conflicts and constraint violations" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE table parent (pk int PRIMARY KEY, col1 int);
 CREATE table child (pk int PRIMARY KEY, parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent(pk));
@@ -771,7 +768,7 @@ SQL
 
     # Create a conflicted state by merging other into main
     run dolt merge other
-    [ "$status" -eq 0 ]
+    log_status_eq 0
     [[ "$output" =~ "CONFLICT" ]]
 
     run dolt sql -r csv -q "SELECT * FROM parent;"
@@ -788,6 +785,8 @@ SQL
 
     # commit it so we can merge again
     dolt commit -afm "committing merge conflicts"
+
+    skip_nbf_dolt_1
 
     # Merge should fail due to conflict and previous conflict and violation state should be retained
     run dolt merge other2
@@ -824,4 +823,32 @@ SQL
     dolt merge other
     run dolt sql -r csv -q "SELECT * from dolt_constraint_violations";
     [[ "$output" =~ "t,1" ]]
+}
+
+@test "merge: ourRoot renames, theirRoot modifies" {
+    dolt checkout -b merge_branch
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    dolt checkout main
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
+}
+
+@test "merge: ourRoot modifies, theirRoot renames" {
+    dolt checkout -b merge_branch
+    dolt sql -q "ALTER TABLE test1 RENAME TO new_name"
+    dolt commit -am "rename test1"
+
+    dolt checkout main
+    dolt sql -q "INSERT INTO test1 VALUES (0,1,2)"
+    dolt commit -am "add pk 0 to test1"
+
+    run dolt merge merge_branch
+    log_status_eq 1
+    [[ "$output" =~ "table with same name deleted and modified" ]] || false
 }

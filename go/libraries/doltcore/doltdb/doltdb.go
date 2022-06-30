@@ -38,6 +38,13 @@ func init() {
 	types.CreateEditAccForMapEdits = edits.NewAsyncSortedEditsWithDefaults
 }
 
+// WORKING and STAGED identifiers refer to the working and staged roots in special circumstances where
+// we expect to resolve a commit spec, but need working or staged
+const (
+	Working = "WORKING"
+	Staged  = "STAGED"
+)
+
 const (
 	creationBranch = "create"
 

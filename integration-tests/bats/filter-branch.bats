@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -192,7 +191,6 @@ function setup_write_test {
         [ "$status" -eq 0 ]
         [[ "$output" =~ "added" ]] || false
     done
-
 
     for commit in HEAD HEAD~1 HEAD~2; do
         run dolt sql -q "SHOW TABLES AS OF '$commit';" -r csv

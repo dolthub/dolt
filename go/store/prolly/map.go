@@ -37,6 +37,12 @@ type Map struct {
 
 type DiffFn func(context.Context, tree.Diff) error
 
+type DiffSummary struct {
+	Adds, Removes        uint64
+	Changes, CellChanges uint64
+	NewSize, OldSize     uint64
+}
+
 // NewMap creates an empty prolly tree Map
 func NewMap(node tree.Node, ns tree.NodeStore, keyDesc, valDesc val.TupleDesc) Map {
 	tuples := orderedTree[val.Tuple, val.Tuple, val.TupleDesc]{
@@ -81,9 +87,33 @@ func DiffMaps(ctx context.Context, from, to Map, cb DiffFn) error {
 	return diffOrderedTrees(ctx, from.tuples, to.tuples, cb)
 }
 
+func DiffMapSummary(ctx context.Context, from, to Map) (DiffSummary, error) {
+	s := DiffSummary{
+		OldSize: uint64(from.Count()),
+		NewSize: uint64(to.Count()),
+	}
+
+	err := DiffMaps(ctx, from, to, func(ctx context.Context, diff tree.Diff) error {
+		switch diff.Type {
+		case tree.AddedDiff:
+			s.Adds++
+		case tree.RemovedDiff:
+			s.Removes++
+		case tree.ModifiedDiff:
+			s.Changes++
+			s.CellChanges += val.CellWiseTupleDiff(val.Tuple(diff.From), val.Tuple(diff.To))
+		}
+		return nil
+	})
+	if err != nil && err != io.EOF {
+		return DiffSummary{}, err
+	}
+	return s, nil
+}
+
 func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) (Map, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return Map{}, err
 	}
@@ -93,6 +123,11 @@ func MergeMaps(ctx context.Context, left, right, base Map, cb tree.CollisionFn) 
 		keyDesc: base.keyDesc,
 		valDesc: base.valDesc,
 	}, nil
+}
+
+// NodeStore returns the map's NodeStore
+func (m Map) NodeStore() tree.NodeStore {
+	return m.tuples.ns
 }
 
 // Mutate makes a MutableMap from a Map.
@@ -291,8 +326,8 @@ func DebugFormat(ctx context.Context, m Map) (string, error) {
 	return sb.String(), nil
 }
 
-// ConvertToKeylessIndex converts the given map to a keyless index map.
-func ConvertToKeylessIndex(m Map) Map {
+// ConvertToSecondaryKeylessIndex converts the given map to a keyless index map.
+func ConvertToSecondaryKeylessIndex(m Map) Map {
 	keyDesc, valDesc := m.Descriptors()
 	newTypes := make([]val.Type, len(keyDesc.Types)+1)
 	copy(newTypes, keyDesc.Types)

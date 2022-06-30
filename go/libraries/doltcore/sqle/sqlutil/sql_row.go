@@ -304,7 +304,7 @@ func WriteEWKBPolyData(p sql.Polygon, buf []byte) {
 }
 
 // SqlColToStr is a utility function for converting a sql column of type interface{} to a string
-func SqlColToStr(ctx context.Context, sqlType sql.Type, col interface{}) (string, error) {
+func SqlColToStr(sqlType sql.Type, col interface{}) (string, error) {
 	if col != nil {
 		switch typedCol := col.(type) {
 		case bool:
@@ -313,31 +313,13 @@ func SqlColToStr(ctx context.Context, sqlType sql.Type, col interface{}) (string
 			} else {
 				return "false", nil
 			}
-		case sql.Point: //TODO: remove these when fixed in GMS
-			buf := make([]byte, 25)
-			WriteEWKBHeader(typedCol, buf)
-			WriteEWKBPointData(typedCol, buf[9:])
-			return string(buf), nil
-		case sql.LineString:
-			buf := make([]byte, 9+4+16*len(typedCol.Points))
-			WriteEWKBHeader(typedCol, buf)
-			WriteEWKBLineData(typedCol, buf[9:])
-			return string(buf), nil
-		case sql.Polygon:
-			size := 0
-			for _, l := range typedCol.Lines {
-				size += 4 + 16*len(l.Points)
-			}
-			buf := make([]byte, 9+4+size)
-			WriteEWKBHeader(typedCol, buf)
-			WriteEWKBPolyData(typedCol, buf[9:])
-			return string(buf), nil
 		default:
 			res, err := sqlType.SQL(nil, col)
 			if err != nil {
 				return "", err
 			}
 			return res.ToString(), nil
+
 		}
 	}
 

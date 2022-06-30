@@ -485,7 +485,7 @@ SQL
 @test "import-create-tables: create a table with null values from json import with json file" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk LONGTEXT NOT NULL,
+  pk varchar(20) NOT NULL,
   headerOne LONGTEXT,
   headerTwo BIGINT,
   PRIMARY KEY (pk)
@@ -512,7 +512,7 @@ SQL
 @test "import-create-tables: fail to create a table with null values from json import with json file" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk LONGTEXT NOT NULL,
+  pk varchar(20) NOT NULL,
   headerOne LONGTEXT NOT NULL,
   headerTwo BIGINT NOT NULL,
   PRIMARY KEY (pk)

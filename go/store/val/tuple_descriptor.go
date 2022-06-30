@@ -20,9 +20,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/shopspring/decimal"
-
 	"github.com/dolthub/dolt/go/store/hash"
+
+	"github.com/shopspring/decimal"
 )
 
 // TupleDesc describes a Tuple set.
@@ -32,6 +32,7 @@ type TupleDesc struct {
 	Types []Type
 	cmp   TupleComparator
 	fast  fixedAccess
+	Addrs []int
 }
 
 // NewTupleDescriptor makes a TupleDescriptor from |types|.
@@ -51,10 +52,19 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 		}
 	}
 
+	var addrIdxs []int
+	for i, t := range types {
+		switch t.Enc {
+		case BytesAddrEnc, StringAddrEnc, JSONAddrEnc:
+			addrIdxs = append(addrIdxs, i)
+		}
+	}
+
 	td = TupleDesc{
 		Types: types,
 		cmp:   cmp,
 		fast:  makeFixedAccess(types),
+		Addrs: addrIdxs,
 	}
 
 	return
@@ -78,6 +88,16 @@ func makeFixedAccess(types []Type) (acc fixedAccess) {
 		off += sz
 	}
 	return
+}
+
+// PrefixDesc returns a descriptor for the first n types.
+func (td TupleDesc) PrefixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[:n]...)
+}
+
+// SuffixDesc returns a descriptor for the last n types.
+func (td TupleDesc) SuffixDesc(n int) TupleDesc {
+	return NewTupleDescriptor(td.Types[len(td.Types)-n:]...)
 }
 
 // GetField returns the ith field of |tup|.
@@ -389,14 +409,32 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-func (td TupleDesc) GetAddress(i int, tup Tuple) (v hash.Hash, ok bool) {
-	td.expectEncoding(i, AddressEnc)
+func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, JSONAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) GetStringAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, StringAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, BytesAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
+	td.expectEncoding(i, CommitAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) getAddr(i int, tup Tuple) (hash.Hash, bool) {
 	b := td.GetField(i, tup)
-	if b != nil {
-		v = hash.New(b)
-		ok = true
+	if b == nil {
+		return hash.Hash{}, false
 	}
-	return
+	return hash.New(b), true
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {
@@ -498,7 +536,9 @@ func formatValue(enc Encoding, value []byte) string {
 		return string(value)
 	case Hash128Enc:
 		return string(value)
-	case AddressEnc:
+	case BytesAddrEnc:
+		return string(value)
+	case CommitAddrEnc:
 		return string(value)
 	default:
 		return string(value)

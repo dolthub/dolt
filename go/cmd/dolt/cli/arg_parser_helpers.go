@@ -94,6 +94,7 @@ const (
 	MoveFlag         = "move"
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
+	OutputOnlyFlag   = "output-only"
 )
 
 const (
@@ -165,6 +166,11 @@ func CreateCheckoutArgParser() *argparser.ArgParser {
 	return ap
 }
 
+func CreateCherryPickArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	return ap
+}
+
 func CreateFetchArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.SupportsFlag(ForceFlag, "f", "Update refs to remote branches with the current state of the remote, overwriting any conflicting history.")
@@ -210,6 +216,14 @@ func CreateBackupArgParser() *argparser.ArgParser {
 	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use")
+	return ap
+}
+
+func CreateVerifyConstraintsArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsFlag(AllFlag, "a", "Verifies that all rows in the database do not violate constraints instead of just rows modified or inserted in the working set.")
+	ap.SupportsFlag(OutputOnlyFlag, "o", "Disables writing violated constraints to the constraint violations table.")
+	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
 	return ap
 }
 

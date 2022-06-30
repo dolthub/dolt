@@ -59,6 +59,7 @@ var (
 var defaultSysbenchParams = []string{
 	"--db-driver=mysql",
 	"--db-ps-mode=disable",
+	"--rand-type=uniform",
 	fmt.Sprintf("--mysql-db=%s", dbName),
 }
 

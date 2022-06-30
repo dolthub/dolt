@@ -15,14 +15,20 @@
 package tree
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
+	"github.com/dolthub/dolt/go/store/hash"
 	"github.com/dolthub/dolt/go/store/prolly/message"
+	"github.com/dolthub/dolt/go/store/val"
 )
 
-const defaultFixedChunkLength = 4000
+const DefaultFixedChunkLength = 4000
 
 var ErrInvalidChunkSize = errors.New("invalid chunkSize; value must be > 1")
 
@@ -147,4 +153,141 @@ func _newLeaf(ctx context.Context, ns NodeStore, s message.Serializer, buf []byt
 		lastKey:   []byte{0},
 		treeCount: 1,
 	}, nil
+}
+
+const bytePeekLength = 128
+
+type ByteArray struct {
+	ImmutableTree
+}
+
+func NewByteArray(addr hash.Hash, ns NodeStore) *ByteArray {
+	return &ByteArray{ImmutableTree{Addr: addr, ns: ns}}
+}
+
+func (b *ByteArray) ToBytes(ctx context.Context) ([]byte, error) {
+	return b.bytes(ctx)
+}
+
+func (b *ByteArray) ToString(ctx context.Context) (string, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
+	}
+	toShow := bytePeekLength
+	if len(buf) < toShow {
+		toShow = len(buf)
+	}
+	return string(buf[:toShow]), nil
+}
+
+type JSONDoc struct {
+	ImmutableTree
+}
+
+func NewJSONDoc(addr hash.Hash, ns NodeStore) *JSONDoc {
+	return &JSONDoc{ImmutableTree{Addr: addr, ns: ns}}
+}
+
+func (b *JSONDoc) ToJSONDocument(ctx context.Context) (sql.JSONDocument, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return sql.JSONDocument{}, err
+	}
+	var doc sql.JSONDocument
+	err = json.Unmarshal(buf, &doc.Val)
+	if err != nil {
+		return sql.JSONDocument{}, err
+	}
+	return doc, err
+}
+
+func (b *JSONDoc) ToString(ctx context.Context) (string, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
+	}
+	toShow := bytePeekLength
+	if len(buf) < toShow {
+		toShow = len(buf)
+	}
+	return string(buf[:toShow]), nil
+}
+
+type TextStorage struct {
+	ImmutableTree
+}
+
+func NewTextStorage(addr hash.Hash, ns NodeStore) *TextStorage {
+	return &TextStorage{ImmutableTree{Addr: addr, ns: ns}}
+}
+
+func (b *TextStorage) ToBytes(ctx context.Context) ([]byte, error) {
+	return b.bytes(ctx)
+}
+
+func (b *TextStorage) ToString(ctx context.Context) (string, error) {
+	buf, err := b.bytes(ctx)
+	if err != nil {
+		return "", err
+	}
+	return string(buf), nil
+}
+
+type ImmutableTree struct {
+	Addr hash.Hash
+	buf  []byte
+	ns   NodeStore
+}
+
+func NewImmutableTreeFromReader(ctx context.Context, r io.Reader, ns NodeStore, chunkSize int) (*ImmutableTree, error) {
+	s := message.ProllyMapSerializer{Pool: ns.Pool(), ValDesc: val.TupleDesc{}}
+	root, err := buildImmutableTree(ctx, r, ns, s, chunkSize)
+	if errors.Is(err, io.EOF) {
+		return &ImmutableTree{Addr: hash.Hash{}}, nil
+	} else if err != nil {
+		return nil, err
+	}
+	return &ImmutableTree{Addr: root.HashOf()}, nil
+}
+
+func (t *ImmutableTree) load(ctx context.Context) error {
+	if t.Addr.IsEmpty() {
+		t.buf = []byte{}
+		return nil
+	}
+	n, err := t.ns.Read(ctx, t.Addr)
+	if err != nil {
+		return err
+	}
+
+	WalkNodes(ctx, n, t.ns, func(ctx context.Context, n Node) error {
+		if n.IsLeaf() {
+			t.buf = append(t.buf, n.getValue(0)...)
+		}
+		return nil
+	})
+	return nil
+}
+
+func (t *ImmutableTree) bytes(ctx context.Context) ([]byte, error) {
+	if t.buf == nil {
+		err := t.load(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return t.buf[:], nil
+}
+
+func (t *ImmutableTree) next() (Node, error) {
+	panic("not implemented")
+}
+
+func (t *ImmutableTree) close() error {
+	panic("not implemented")
+}
+
+func (t *ImmutableTree) Read(buf bytes.Buffer) (int, error) {
+	panic("not implemented")
 }

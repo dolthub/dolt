@@ -57,12 +57,10 @@ teardown() {
 }
 
 @test "verify-constraints: Constraints verified" {
-    skip_nbf_dolt_1
     dolt constraints verify child1 child2
 }
 
 @test "verify-constraints: One table fails" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 SET foreign_key_checks=0;
 DELETE FROM parent1 WHERE pk = 1;
@@ -80,7 +78,6 @@ SQL
 }
 
 @test "verify-constraints: Two tables fail" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 SET foreign_key_checks=0;
 DELETE FROM parent2 WHERE pk = 2;
@@ -101,7 +98,6 @@ SQL
 }
 
 @test "verify-constraints: Ignores NULLs" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE parent (
     id BIGINT PRIMARY KEY,
@@ -131,7 +127,6 @@ SQL
 }
 
 @test "verify-constraints: CLI missing --all and --output-only, no named tables" {
-    skip_nbf_dolt_1
     run dolt constraints verify
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -142,7 +137,6 @@ SQL
 }
 
 @test "verify-constraints: CLI missing --all and --output-only, named tables" {
-    skip_nbf_dolt_1
     run dolt constraints verify child3
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -153,7 +147,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --all" {
-    skip_nbf_dolt_1
     run dolt constraints verify --all child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -165,7 +158,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --output-only" {
-    skip_nbf_dolt_1
     run dolt constraints verify --output-only child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -177,7 +169,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --all and --output-only" {
-    skip_nbf_dolt_1
     run dolt constraints verify --all --output-only child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -188,170 +179,4 @@ SQL
     [[ ! "$output" =~ "child3,2" ]] || false
     [[ ! "$output" =~ "child4,2" ]] || false
     [[ "${#lines[@]}" = "1" ]] || false
-}
-
-@test "verify-constraints: SQL no violations" {
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY('child1')" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY('child1')" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ ! "$output" =~ "child1_parent1" ]] || false
-    [[ ! "$output" =~ "child1_parent2" ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
-
-    run dolt sql -q "SELECT CONSTRAINTS_VERIFY_ALL('child1')" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "CONSTRAINTS_VERIFY_ALL('child1')" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ ! "$output" =~ "child1_parent1" ]] || false
-    [[ ! "$output" =~ "child1_parent2" ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure no violations" {
-    run dolt sql -q "CALL DOLT_VERIFY_CONSTRAINTS('child1')" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "no_violations" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ ! "$output" =~ "child1_parent1" ]] || false
-    [[ ! "$output" =~ "child1_parent2" ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
-
-    run dolt sql -q "CALL DOLT_VERIFY_ALL_CONSTRAINTS('child1')" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "no_violations" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt sql -q "CALL DVERIFY_ALL_CONSTRAINTS('child1')" -r=csv
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "no_violations" ]] || false
-    [[ "$output" =~ "1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ ! "$output" =~ "child1_parent1" ]] || false
-    [[ ! "$output" =~ "child1_parent2" ]] || false
-    [[ "${#lines[@]}" = "1" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY() no named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY();" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY()\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    echo $output
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY() no named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_CONSTRAINTS();" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY() named table" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY('child3');" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY('child3')\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ ! "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY() named table" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_CONSTRAINTS('child3');" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ ! "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY() named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY('child3', 'child4');" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY('child3', 'child4')\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY() named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_CONSTRAINTS('child3', 'child4');" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,1" ]] || false
-    [[ "$output" =~ "child4,1" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() no named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL();" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL()\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY_ALL() no named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_ALL_CONSTRAINTS();" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() named table" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL('child3');" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL('child3')\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ ! "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY_ALL() named table" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_ALL_CONSTRAINTS('child3');" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ ! "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "2" ]] || false
-}
-
-@test "verify-constraints: SQL CONSTRAINTS_VERIFY_ALL() named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;SELECT CONSTRAINTS_VERIFY_ALL('child3', 'child4');" -r=json
-    [ "$status" -eq "0" ]
-    [[ "$output" =~ "{\"CONSTRAINTS_VERIFY_ALL('child3', 'child4')\":0}" ]] || false
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
-}
-
-@test "verify-constraints: Stored Procedure CONSTRAINTS_VERIFY_ALL() named tables" {
-    run dolt sql -b -q "SET dolt_force_transaction_commit = 1;CALL DOLT_VERIFY_ALL_CONSTRAINTS('child3', 'child4');" -r=json
-    [ "$status" -eq "0" ]
-    run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
-    [[ "$output" =~ "child3,2" ]] || false
-    [[ "$output" =~ "child4,2" ]] || false
-    [[ "${#lines[@]}" = "3" ]] || false
 }

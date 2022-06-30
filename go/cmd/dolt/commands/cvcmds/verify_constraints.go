@@ -16,6 +16,9 @@ package cvcmds
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -26,22 +29,16 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
 	"github.com/dolthub/dolt/go/libraries/utils/set"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	vcAllParam        = "all"
-	vcOutputOnlyParam = "output-only"
-)
-
 var verifyConstraintsDocs = cli.CommandDocumentationContent{
-	ShortDesc: `Verifies a table's constraints`,
-	LongDesc: `This command verifies that the defined constraints on the given table(s)—such as a foreign key—are correct and satisfied.
-By default, compares the working set to to the HEAD commit. Additionally, by default this updates this table's associated
-dolt_constraint_violations system table. Both of these default behaviors may be changed with the appropriate parameters.`,
+	ShortDesc: `Verifies that working set changes satisfy table constraints`,
+	LongDesc: `Verifies that inserted or modified rows in the working set satisfy the defined table constraints.
+               If any constraints are violated, they are documented in the dolt_constraint_violations system table.
+               By default, this command does not consider row changes that have been previously committed.`,
 	Synopsis: []string{`[--all] [--output-only] [{{.LessThan}}table{{.GreaterThan}}...]`},
 }
 
@@ -58,7 +55,7 @@ func (cmd VerifyConstraintsCmd) Description() string {
 }
 
 func (cmd VerifyConstraintsCmd) GatedForNBF(nbf *types.NomsBinFormat) bool {
-	return types.IsFormat_DOLT_1(nbf)
+	return false
 }
 
 func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
@@ -67,11 +64,7 @@ func (cmd VerifyConstraintsCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd VerifyConstraintsCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsFlag(vcAllParam, "a", "Verifies constraints against every row.")
-	ap.SupportsFlag(vcOutputOnlyParam, "o", "Disables writing the results to the constraint violations table.")
-	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "The table(s) to check constraints on. If omitted, checks all tables."})
-	return ap
+	return cli.CreateVerifyConstraintsArgParser()
 }
 
 func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int {
@@ -79,8 +72,8 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 	help, _ := cli.HelpAndUsagePrinters(cli.CommandDocsForCommandString(commandStr, verifyConstraintsDocs, ap))
 	apr := cli.ParseArgsOrDie(ap, args, help)
 
-	verifyAllRows := apr.Contains(vcAllParam)
-	outputOnly := apr.Contains(vcOutputOnlyParam)
+	verifyAllRows := apr.Contains(cli.AllFlag)
+	outputOnly := apr.Contains(cli.OutputOnlyFlag)
 	working, err := dEnv.WorkingRoot(ctx)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get working.").AddCause(err).Build(), nil)
@@ -114,55 +107,107 @@ func (cmd VerifyConstraintsCmd) Exec(ctx context.Context, commandStr string, arg
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to get head commit hash.").AddCause(err).Build(), nil)
 	}
 
-	endRoot, tablesWithViolations, err := merge.AddConstraintViolations(ctx, working, comparingRoot, tableSet, h)
+	endRoot, tablesWithViolations, err := merge.AddForeignKeyViolations(ctx, working, comparingRoot, tableSet, h)
 	if err != nil {
 		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to process constraint violations.").AddCause(err).Build(), nil)
 	}
-	if !outputOnly {
-		err = dEnv.UpdateWorkingRoot(ctx, endRoot)
-		if err != nil {
-			return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update working root.").AddCause(err).Build(), nil)
-		}
+
+	err = dEnv.UpdateWorkingRoot(ctx, endRoot)
+	if err != nil {
+		return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to update working root.").AddCause(err).Build(), nil)
 	}
 
 	if tablesWithViolations.Size() > 0 {
 		cli.PrintErrln("All constraints are not satisfied.")
+		eng, err := engine.NewSqlEngineForEnv(ctx, dEnv)
+		if err != nil {
+			return commands.HandleVErrAndExitCode(errhand.BuildDError("Failed to build sql engine.").AddCause(err).Build(), nil)
+		}
+
 		for _, tableName := range tablesWithViolations.AsSortedSlice() {
-			table, ok, err := endRoot.GetTable(ctx, tableName)
+			tbl, ok, err := endRoot.GetTable(ctx, tableName)
 			if err != nil {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading table.").AddCause(err).Build(), nil)
 			}
 			if !ok {
 				return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to load table '%s'.", tableName).Build(), nil)
 			}
-			cvSch, err := table.GetConstraintViolationsSchema(ctx)
-			if err != nil {
-				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading constraint violations schema.").AddCause(err).Build(), nil)
-			}
-			cvMap, err := table.GetConstraintViolations(ctx)
-			if err != nil {
-				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error loading constraint violations data.").AddCause(err).Build(), nil)
-			}
-			sqlSchema, err := sqlutil.FromDoltSchema(tableName, cvSch)
-			if err != nil {
-				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error attempting to convert schema").AddCause(err).Build(), nil)
-			}
-			rowIter, err := sqlutil.MapToSqlIter(ctx, cvSch, cvMap)
-			if err != nil {
-				return commands.HandleVErrAndExitCode(errhand.BuildDError("Error attempting to create row iterator").AddCause(err).Build(), nil)
-			}
 			cli.Println("")
 			cli.Println(doltdb.DoltConstViolTablePrefix + tableName)
-			if cvMap.Len() > 50 {
-				cli.Printf("Over 50 constraint violations were found. Please query '%s' to see them all.\n", doltdb.DoltConstViolTablePrefix+tableName)
-			} else {
-				err = engine.PrettyPrintResults(sql.NewEmptyContext(), engine.FormatTabular, sqlSchema.Schema, rowIter, false)
-				if err != nil {
-					return commands.HandleVErrAndExitCode(errhand.BuildDError("Error outputting rows").AddCause(err).Build(), nil)
-				}
+			dErr := printViolationsForTable(ctx, tableName, tbl, eng)
+			if dErr != nil {
+				return commands.HandleVErrAndExitCode(dErr, nil)
 			}
 		}
+
+		if outputOnly {
+			err = dEnv.UpdateWorkingRoot(ctx, working)
+			if err != nil {
+				return commands.HandleVErrAndExitCode(errhand.BuildDError("Unable to undo written constraint violations").AddCause(err).Build(), nil)
+			}
+		}
+
 		return 1
 	}
+
 	return 0
+}
+
+func printViolationsForTable(ctx context.Context, tblName string, tbl *doltdb.Table, eng *engine.SqlEngine) errhand.VerboseError {
+	sch, err := tbl.GetSchema(ctx)
+	if err != nil {
+		return errhand.BuildDError("Error loading table schema").AddCause(err).Build()
+	}
+
+	colNames := strings.Join(sch.GetAllCols().GetColumnNames(), ", ")
+	query := fmt.Sprintf("SELECT violation_type, %s, violation_info from dolt_constraint_violations_%s", colNames, tblName)
+
+	sCtx, err := engine.NewLocalSqlContext(ctx, eng)
+	if err != nil {
+		return errhand.BuildDError("Error making sql context").AddCause(err).Build()
+	}
+	sqlSch, sqlItr, err := eng.Query(sCtx, query)
+	if err != nil {
+		return errhand.BuildDError("Error querying constraint violations").AddCause(err).Build()
+	}
+
+	limitItr := &sqlLimitIter{itr: sqlItr, limit: 50}
+
+	err = engine.PrettyPrintResults(sCtx, engine.FormatTabular, sqlSch, limitItr, false)
+	if err != nil {
+		return errhand.BuildDError("Error outputting rows").AddCause(err).Build()
+	}
+
+	if limitItr.hitLimit {
+		cli.Printf("Over 50 constraint violations were found. Please query '%s' to see them all.\n", doltdb.DoltConstViolTablePrefix+tblName)
+	}
+
+	return nil
+}
+
+// returns io.EOF and sets hitLimit when |limit|+1 rows have been iterated from |itr|.
+type sqlLimitIter struct {
+	itr      sql.RowIter
+	limit    uint64
+	count    uint64
+	hitLimit bool
+}
+
+var _ sql.RowIter = &sqlLimitIter{}
+
+func (itr *sqlLimitIter) Next(ctx *sql.Context) (sql.Row, error) {
+	r, err := itr.itr.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	itr.count++
+	if itr.count > itr.limit {
+		itr.hitLimit = true
+		return nil, io.EOF
+	}
+	return r, nil
+}
+
+func (itr *sqlLimitIter) Close(ctx *sql.Context) error {
+	return itr.itr.Close(ctx)
 }

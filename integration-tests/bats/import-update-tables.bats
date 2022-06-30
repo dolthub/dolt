@@ -37,7 +37,7 @@ DELIM
 
     cat <<SQL > employees-sch.sql
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -158,7 +158,7 @@ teardown() {
 @test "import-update-tables: update table using csv with newlines" {
     dolt sql <<SQL
 CREATE TABLE test (
-  pk LONGTEXT NOT NULL COMMENT 'tag:0',
+  pk varchar(20) NOT NULL COMMENT 'tag:0',
   c1 LONGTEXT COMMENT 'tag:1',
   c2 LONGTEXT COMMENT 'tag:2',
   c3 LONGTEXT COMMENT 'tag:3',
@@ -182,7 +182,7 @@ SQL
 @test "import-update-tables: update table using wrong json" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`idz\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`idz\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first namez\` LONGTEXT COMMENT 'tag:1',
   \`last namez\` LONGTEXT COMMENT 'tag:2',
   \`titlez\` LONGTEXT COMMENT 'tag:3',
@@ -221,7 +221,7 @@ SQL
 @test "import-update-tables: update table with a json with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',
@@ -247,7 +247,7 @@ SQL
 @test "import-update-tables: update table with a csv with columns in different order" {
     dolt sql <<SQL
 CREATE TABLE employees (
-  \`id\` LONGTEXT NOT NULL COMMENT 'tag:0',
+  \`id\` varchar(20) NOT NULL COMMENT 'tag:0',
   \`first name\` LONGTEXT COMMENT 'tag:1',
   \`last name\` LONGTEXT COMMENT 'tag:2',
   \`title\` LONGTEXT COMMENT 'tag:3',

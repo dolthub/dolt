@@ -110,6 +110,10 @@ func (m ArtifactMap) Node() tree.Node {
 	return m.tuples.root
 }
 
+func (m ArtifactMap) NodeStore() tree.NodeStore {
+	return m.tuples.ns
+}
+
 func (m ArtifactMap) Format() *types.NomsBinFormat {
 	return m.tuples.ns.Format()
 }
@@ -142,7 +146,7 @@ func (m ArtifactMap) Editor() ArtifactsEditor {
 	artKD, artVD := m.Descriptors()
 	return ArtifactsEditor{
 		srcKeyDesc: m.srcKeyDesc,
-		mut: MutableMap{
+		Mut: MutableMap{
 			tuples:  m.tuples.mutate(),
 			keyDesc: m.keyDesc,
 			valDesc: m.valDesc,
@@ -280,7 +284,7 @@ func (m ArtifactMap) iterAllOfTypes(ctx context.Context, artTypes ...ArtifactTyp
 
 func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tree.CollisionFn) (ArtifactMap, error) {
 	serializer := message.ProllyMapSerializer{Pool: left.tuples.ns.Pool()}
-	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer)
+	tuples, err := mergeOrderedTrees(ctx, left.tuples, right.tuples, base.tuples, cb, serializer, base.valDesc)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -293,7 +297,7 @@ func MergeArtifactMaps(ctx context.Context, left, right, base ArtifactMap, cb tr
 }
 
 type ArtifactsEditor struct {
-	mut          MutableMap
+	Mut          MutableMap
 	srcKeyDesc   val.TupleDesc
 	artKB, artVB *val.TupleBuilder
 	pool         pool.BuffPool
@@ -303,29 +307,40 @@ func (wr ArtifactsEditor) Add(ctx context.Context, srcKey val.Tuple, theirRootIs
 	for i := 0; i < srcKey.Count(); i++ {
 		wr.artKB.PutRaw(i, srcKey.GetField(i))
 	}
-	wr.artKB.PutAddress(srcKey.Count(), theirRootIsh)
+	wr.artKB.PutCommitAddr(srcKey.Count(), theirRootIsh)
 	wr.artKB.PutUint8(srcKey.Count()+1, uint8(artType))
 	key := wr.artKB.Build(wr.pool)
 
 	wr.artVB.PutJSON(0, meta)
 	value := wr.artVB.Build(wr.pool)
 
-	return wr.mut.Put(ctx, key, value)
+	return wr.Mut.Put(ctx, key, value)
 }
 
-// ReplaceFKConstraintViolation replaces foreign key constraint violations that
-// match the given one but have a different commit hash. If no existing violation
-// exists, the given will be inserted.
-func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, meta ConstraintViolationMeta) error {
+type ErrMergeArtifactCollision struct {
+	Key, Val              val.Tuple
+	ExistingInfo, NewInfo []byte
+}
+
+func (e *ErrMergeArtifactCollision) Error() string {
+	return "an existing row was found with different violation info json"
+}
+
+// ReplaceConstraintViolation replaces constraint violations that match the
+// given one but have a different commit hash. If no existing violation exists,
+// the given will be inserted. Returns true if a violation was replaced. If an
+// existing violation exists but has a different |meta.VInfo| value then
+// ErrMergeArtifactCollision is a returned.
+func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
 	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
-	itr, err := wr.mut.IterRange(ctx, rng)
+	itr, err := wr.Mut.IterRange(ctx, rng)
 	if err != nil {
 		return err
 	}
 	aItr := artifactIterImpl{
 		itr:    itr,
-		artKD:  wr.mut.keyDesc,
-		artVD:  wr.mut.valDesc,
+		artKD:  wr.Mut.keyDesc,
+		artVD:  wr.Mut.valDesc,
 		pool:   wr.pool,
 		tb:     val.NewTupleBuilder(wr.srcKeyDesc),
 		numPks: wr.srcKeyDesc.Count(),
@@ -334,7 +349,11 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	var art Artifact
 	var currMeta ConstraintViolationMeta
 	for art, err = aItr.Next(ctx); err == nil; art, err = aItr.Next(ctx) {
-		if art.ArtType != ArtifactTypeForeignKeyViol {
+		// prefix scanning sometimes returns keys not in the range
+		if bytes.Compare(art.Key, srcKey) != 0 {
+			continue
+		}
+		if art.ArtType != artType {
 			continue
 		}
 
@@ -344,6 +363,14 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 		}
 
 		if bytes.Compare(currMeta.Value, meta.Value) == 0 {
+			if bytes.Compare(currMeta.VInfo, meta.VInfo) != 0 {
+				return &ErrMergeArtifactCollision{
+					Key:          srcKey,
+					Val:          currMeta.Value,
+					ExistingInfo: currMeta.VInfo,
+					NewInfo:      meta.VInfo,
+				}
+			}
 			// Key and Value is the same, so delete this
 			err = wr.Delete(ctx, art.ArtKey)
 			if err != nil {
@@ -359,7 +386,7 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 	if err != nil {
 		return err
 	}
-	err = wr.Add(ctx, srcKey, theirRootIsh, ArtifactTypeForeignKeyViol, d)
+	err = wr.Add(ctx, srcKey, theirRootIsh, artType, d)
 	if err != nil {
 		return err
 	}
@@ -368,11 +395,11 @@ func (wr ArtifactsEditor) ReplaceFKConstraintViolation(ctx context.Context, srcK
 }
 
 func (wr ArtifactsEditor) Delete(ctx context.Context, key val.Tuple) error {
-	return wr.mut.Delete(ctx, key)
+	return wr.Mut.Delete(ctx, key)
 }
 
 func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
-	m, err := wr.mut.Map(ctx)
+	m, err := wr.Mut.Map(ctx)
 	if err != nil {
 		return ArtifactMap{}, err
 	}
@@ -380,8 +407,8 @@ func (wr ArtifactsEditor) Flush(ctx context.Context) (ArtifactMap, error) {
 	return ArtifactMap{
 		tuples:     m.tuples,
 		srcKeyDesc: wr.srcKeyDesc,
-		keyDesc:    wr.mut.keyDesc,
-		valDesc:    wr.mut.valDesc,
+		keyDesc:    wr.Mut.keyDesc,
+		valDesc:    wr.Mut.valDesc,
 	}, nil
 }
 
@@ -498,7 +525,7 @@ func (itr artifactIterImpl) Next(ctx context.Context) (Artifact, error) {
 	}
 
 	srcKey := itr.getSrcKeyFromArtKey(artKey)
-	cmHash, _ := itr.artKD.GetAddress(itr.numPks, artKey)
+	cmHash, _ := itr.artKD.GetCommitAddr(itr.numPks, artKey)
 	artType, _ := itr.artKD.GetUint8(itr.numPks+1, artKey)
 	metadata, _ := itr.artVD.GetJSON(0, v)
 
@@ -539,7 +566,7 @@ func calcArtifactsDescriptors(srcKd val.TupleDesc) (kd, vd val.TupleDesc) {
 	keyTypes := srcKd.Types
 
 	// target branch commit hash
-	keyTypes = append(keyTypes, val.Type{Enc: val.AddressEnc, Nullable: false})
+	keyTypes = append(keyTypes, val.Type{Enc: val.CommitAddrEnc, Nullable: false})
 
 	// artifact type
 	keyTypes = append(keyTypes, val.Type{Enc: val.Uint8Enc, Nullable: false})

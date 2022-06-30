@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 load $BATS_TEST_DIRNAME/helper/query-server-common.bash
 
 setup() {
-    skiponwindows "Has dependencies that are missing on the Jenkins Windows installation."
+    skiponwindows "Missing dependencies"
 
     setup_common
 }

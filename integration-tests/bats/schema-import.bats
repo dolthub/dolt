@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     cat <<DELIM > 1pk5col-ints.csv
 pk,c1,c2,c3,c4,c5
@@ -258,7 +257,6 @@ DELIM
     run dolt schema import -pks=pk -u test abc-xyz.csv
     [ "$status" -eq 0 ]
 
-    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
@@ -282,7 +280,6 @@ DELIM
     run dolt schema import -pks=pk -r test abc-xyz.csv
     [ "$status" -eq 0 ]
 
-    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ '+  `x` varchar(16383) NOT NULL,' ]] || false
@@ -309,7 +306,6 @@ DELIM
     run dolt schema import -pks=pk -r test xyz.csv
     [ "$status" -eq 0 ]
 
-    dolt diff --schema
     run dolt diff --schema
     [ "$status" -eq 0 ]
     [[ "$output" =~ '-  `a` varchar(16383) NOT NULL,' ]] || false

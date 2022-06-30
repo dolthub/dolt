@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
     setup_repository
 }
 
@@ -19,7 +18,7 @@ setup_repository() {
     dolt sql <<SQL
 CREATE TABLE blame_test (
   pk1 BIGINT NOT NULL COMMENT 'tag:0',
-  pk2 TEXT,
+  pk2 varchar(40),
   name LONGTEXT COMMENT 'tag:1',
   PRIMARY KEY (pk1, pk2)
 );
@@ -72,6 +71,58 @@ SQL
     [[ ! "$output" =~ "Richard Tracy" ]] || false
 }
 
+@test "blame-system-view: view works for table with single primary key" {
+    stash_current_dolt_user
+
+    set_dolt_user "Thomas Foolery" "bats-1@fake.horse"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 varchar(120));"
+    dolt add -A && dolt commit -m "added test table"
+
+    dolt sql -q "insert into test values (1,'Tom')"
+    dolt commit -am "added tom test table"
+
+    set_dolt_user "Richard Tracy" "bats-2@fake.horse"
+    dolt sql -q "insert into test values (2,'Richard')"
+    dolt commit -am "add richard to test table"
+
+    set_dolt_user "Harry Wombat" "bats-3@fake.horse"
+    dolt sql -q "update test set c0 = 'Harry' where pk = 2"
+    dolt commit -am "replace richard with harry"
+
+    set_dolt_user "Johnny Moolah" "bats-4@fake.horse"
+    dolt sql -q "insert into test values (3,'Alan'), (4,'Betty')"
+    dolt commit -am "add more people to blame_test"
+
+    restore_stashed_dolt_user
+
+    run dolt sql -q "select pk, committer, message from dolt_blame_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,Thomas Foolery,added tom test table" ]] || false
+    [[ "$output" =~ "2,Harry Wombat,replace richard with harry" ]] || false
+    [[ "$output" =~ "3,Johnny Moolah,add more people to blame_test" ]] || false
+    [[ "$output" =~ "4,Johnny Moolah,add more people to blame_test" ]] || false
+}
+
+@test "blame-system-view: view does not output deleted rows" {
+    stash_current_dolt_user
+
+    set_dolt_user "Thomas Foolery" "bats-1@fake.horse"
+    dolt sql -q "CREATE TABLE test (pk int PRIMARY KEY, c0 varchar(120));"
+    dolt sql -q "insert into test values (1,'Tom'), (2,'Richard')"
+    dolt add -A && dolt commit -m "added test table"
+
+    set_dolt_user "Richard Tracy" "bats-2@fake.horse"
+    dolt sql -q "delete from test where pk = 1"
+    dolt commit -am "deleted tom from test table"
+
+    restore_stashed_dolt_user
+
+    run dolt sql -q "select pk, committer, message from dolt_blame_test" -r csv
+    [ "$status" -eq 0 ]
+    [[ ! "$output" =~ "1" ]] || false
+    [[ "$output" =~ "2,Thomas Foolery,added test table" ]] || false
+}
+
 @test "blame-system-view: view works for table with compound primary key" {
     run dolt sql -q "select * from dolt_blame_blame_test;"
     [ "$status" -eq 0 ]
@@ -96,19 +147,13 @@ SQL
     run dolt sql -q "describe dolt_blame_blame_test;"
     [ "$status" -eq 0 ]
 
-    # TODO: go-mysql-server doesn't currently support describing views:
-    #       https://github.com/dolthub/go-mysql-server/issues/787
-    #       Enable this test when that issue is fixed
-    skip "BUG: views can't currently be described"
-
-    [[ "$output" =~ "| pk1          | bigint         | NO   | PRI |         |       |" ]]
-    [[ "$output" =~ "| pk1          | longtext       | NO   | PRI |         |       |" ]]
-    [[ "$output" =~ "| name         | longtext       | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| commit       | varchar(16383) | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| commit_date  | datetime       | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| committer    | text           | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| email        | text           | NO   |     |         |       |" ]]
-    [[ "$output" =~ "| message      | text           | NO   |     |         |       |" ]]
+    [[ "$output" =~ "+-------------+----------------+------+-----+---------+-------+" ]] || false
+    [[ "$output" =~ "| pk1         | bigint         | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| commit      | varchar(16383) | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| commit_date | datetime       | YES  |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| committer   | text           | NO   |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| email       | text           | NO   |     | NULL    |       |" ]] || false
+    [[ "$output" =~ "| message     | text           | NO   |     | NULL    |       |" ]] || false
 }
 
 @test "blame-system-view: view is not included in show tables output" {

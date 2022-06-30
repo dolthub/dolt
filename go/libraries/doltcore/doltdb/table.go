@@ -29,6 +29,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema/typeinfo"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/prolly/shim"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 )
 
@@ -104,6 +106,14 @@ func (t *Table) Format() *types.NomsBinFormat {
 // ValueReadWriter returns the ValueReadWriter for this table.
 func (t *Table) ValueReadWriter() types.ValueReadWriter {
 	return durable.VrwFromTable(t.table)
+}
+
+// NodeStore returns the NodeStore for this table.
+func (t *Table) NodeStore() tree.NodeStore {
+	if t == nil {
+		return nil
+	}
+	return tree.NewNodeStore(shim.ChunkStoreFromVRW(t.ValueReadWriter()))
 }
 
 // SetConflicts sets the merge conflicts for this table.

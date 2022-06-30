@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -1064,7 +1065,7 @@ func TestDoltIndexBetween(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, ok)
 
-			indexIter, err := index.RowIterForIndexLookup(ctx, dt, indexLookup, pkSch, nil)
+			indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
 			require.NoError(t, err)
 
 			// If this is a primary index assert that a covering index was used
@@ -1083,6 +1084,18 @@ func TestDoltIndexBetween(t *testing.T) {
 			requireUnorderedRowsEqual(t, expectedRows, readRows)
 		})
 	}
+}
+
+type NoCacheTableable struct {
+	dt *doltdb.Table
+}
+
+func (t NoCacheTableable) DoltTable(ctx *sql.Context) (*doltdb.Table, error) {
+	return t.dt, nil
+}
+
+func (t NoCacheTableable) DataCacheKey(ctx *sql.Context) (doltdb.DataCacheKey, bool, error) {
+	return doltdb.DataCacheKey{}, false, nil
 }
 
 type rowSlice struct {
@@ -1295,7 +1308,7 @@ func testDoltIndex(t *testing.T, ctx *sql.Context, root *doltdb.RootValue, keys 
 	pkSch, err := sqlutil.FromDoltSchema("fake_table", idx.Schema())
 	require.NoError(t, err)
 
-	indexIter, err := index.RowIterForIndexLookup(ctx, dt, indexLookup, pkSch, nil)
+	indexIter, err := index.RowIterForIndexLookup(ctx, NoCacheTableable{dt}, indexLookup, pkSch, nil)
 	require.NoError(t, err)
 
 	var readRows []sql.Row
@@ -1428,4 +1441,70 @@ func convertSqlRowToInt64(sqlRows []sql.Row) []sql.Row {
 		newSqlRows[i] = newSqlRow
 	}
 	return newSqlRows
+}
+
+func TestSplitNullsFromRange(t *testing.T) {
+	t.Run("EmptyRange", func(t *testing.T) {
+		r, err := index.SplitNullsFromRange(sql.Range{})
+		assert.NoError(t, err)
+		assert.NotNil(t, r)
+		assert.Len(t, r, 1)
+		assert.Len(t, r[0], 0)
+	})
+
+	t.Run("ThreeColumnNoNullsRange", func(t *testing.T) {
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.NotNullRangeColumnExpr(sql.Int8)}
+		rs, err := index.SplitNullsFromRange(r)
+		assert.NoError(t, err)
+		assert.NotNil(t, rs)
+		assert.Len(t, rs, 1)
+		assert.Len(t, rs[0], 3)
+		assert.Equal(t, r, rs[0])
+	})
+
+	t.Run("LastColumnOnlyNull", func(t *testing.T) {
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.NullRangeColumnExpr(sql.Int8)}
+		rs, err := index.SplitNullsFromRange(r)
+		assert.NoError(t, err)
+		assert.NotNil(t, rs)
+		assert.Len(t, rs, 1)
+		assert.Len(t, rs[0], 3)
+		assert.Equal(t, r, rs[0])
+	})
+
+	t.Run("LastColumnAll", func(t *testing.T) {
+		r := sql.Range{sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8), sql.AllRangeColumnExpr(sql.Int8)}
+		rs, err := index.SplitNullsFromRange(r)
+		assert.NoError(t, err)
+		assert.NotNil(t, rs)
+		assert.Len(t, rs, 2)
+		assert.Len(t, rs[0], 3)
+		assert.Len(t, rs[1], 3)
+		assert.Equal(t, r[:2], rs[0][:2])
+		assert.Equal(t, r[:2], rs[1][:2])
+		assert.Equal(t, sql.NullRangeColumnExpr(sql.Int8), rs[0][2])
+		assert.Equal(t, sql.NotNullRangeColumnExpr(sql.Int8), rs[1][2])
+	})
+
+	t.Run("FirstColumnAll", func(t *testing.T) {
+		r := sql.Range{sql.AllRangeColumnExpr(sql.Int8), sql.LessThanRangeColumnExpr(10, sql.Int8), sql.GreaterThanRangeColumnExpr(16, sql.Int8)}
+		rs, err := index.SplitNullsFromRange(r)
+		assert.NoError(t, err)
+		assert.NotNil(t, rs)
+		assert.Len(t, rs, 2)
+		assert.Len(t, rs[0], 3)
+		assert.Len(t, rs[1], 3)
+		assert.Equal(t, r[1:], rs[0][1:])
+		assert.Equal(t, r[1:], rs[1][1:])
+		assert.Equal(t, sql.NullRangeColumnExpr(sql.Int8), rs[0][0])
+		assert.Equal(t, sql.NotNullRangeColumnExpr(sql.Int8), rs[1][0])
+	})
+
+	t.Run("AllColumnAll", func(t *testing.T) {
+		r := sql.Range{sql.AllRangeColumnExpr(sql.Int8), sql.AllRangeColumnExpr(sql.Int8), sql.AllRangeColumnExpr(sql.Int8)}
+		rs, err := index.SplitNullsFromRange(r)
+		assert.NoError(t, err)
+		assert.NotNil(t, rs)
+		assert.Len(t, rs, 8)
+	})
 }

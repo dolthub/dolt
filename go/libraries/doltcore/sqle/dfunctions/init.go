@@ -30,7 +30,6 @@ var DoltFunctions = []sql.Function{
 	sql.Function0{Name: ActiveBranchFuncName, Fn: NewActiveBranchFunc},
 	sql.Function2{Name: DoltMergeBaseFuncName, Fn: NewMergeBase},
 	sql.FunctionN{Name: ConstraintsVerifyFuncName, Fn: NewConstraintsVerifyFunc},
-	sql.FunctionN{Name: ConstraintsVerifyAllFuncName, Fn: NewConstraintsVerifyAllFunc},
 	sql.FunctionN{Name: RevertFuncName, Fn: NewRevertFunc},
 	sql.FunctionN{Name: DoltPullFuncName, Fn: NewPullFunc},
 	sql.FunctionN{Name: DoltFetchFuncName, Fn: NewFetchFunc},

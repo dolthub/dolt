@@ -15,6 +15,7 @@
 package index
 
 import (
+	"context"
 	"encoding/json"
 	"math"
 	"testing"
@@ -27,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dolthub/dolt/go/store/pool"
+	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/val"
 )
 
@@ -112,6 +114,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			value: "lorem ipsum",
 		},
 		{
+			name:  "string",
+			typ:   val.Type{Enc: val.StringAddrEnc},
+			value: "lorem ipsum",
+		},
+		{
 			name:  "bytes",
 			typ:   val.Type{Enc: val.ByteStringEnc},
 			value: []byte("lorem ipsum"),
@@ -143,7 +150,7 @@ func TestRoundTripProllyFields(t *testing.T) {
 		},
 		{
 			name:  "json",
-			typ:   val.Type{Enc: val.JSONEnc},
+			typ:   val.Type{Enc: val.JSONAddrEnc},
 			value: mustParseJson(t, `{"a": 1, "b": false}`),
 		},
 		{
@@ -161,6 +168,11 @@ func TestRoundTripProllyFields(t *testing.T) {
 			typ:   val.Type{Enc: val.GeometryEnc},
 			value: mustParseGeometryType(t, "POLYGON((0 0,1 1,1 0,0 0))"),
 		},
+		{
+			name:  "binary",
+			typ:   val.Type{Enc: val.BytesAddrEnc},
+			value: []byte("lorem ipsum"),
+		},
 	}
 
 	for _, test := range tests {
@@ -175,13 +187,14 @@ var testPool = pool.NewBuffPool()
 func testRoundTripProllyFields(t *testing.T, test prollyFieldTest) {
 	desc := val.NewTupleDescriptor(test.typ)
 	builder := val.NewTupleBuilder(desc)
+	ns := tree.NewTestNodeStore()
 
-	err := PutField(builder, 0, test.value)
+	err := PutField(context.Background(), ns, builder, 0, test.value)
 	assert.NoError(t, err)
 
 	tup := builder.Build(testPool)
 
-	v, err := GetField(desc, 0, tup)
+	v, err := GetField(context.Background(), desc, 0, tup, ns)
 	assert.NoError(t, err)
 	assert.Equal(t, test.value, v)
 }

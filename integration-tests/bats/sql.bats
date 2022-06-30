@@ -127,7 +127,6 @@ teardown() {
 }
 
 @test "sql: errors do not write incomplete rows" {
-    skip_nbf_dolt_1
     dolt sql <<"SQL"
 CREATE TABLE test (
     pk BIGINT PRIMARY KEY,
@@ -849,7 +848,6 @@ SQL
     [[ "$output" =~ 'branch not found' ]] || false
 }
 
-
 @test "sql: branch qualified DB name in select" {
     dolt add .; dolt commit -m 'commit tables'
     dolt checkout -b feature-branch
@@ -984,14 +982,20 @@ SQL
     [[ "$output" =~ "c5" ]] || false
 }
 
-@test "sql: decribe bad table name" {
+@test "sql: describe with information_schema correctly works" {
+    skip "describe does not work with information_schema tables"
+    run dolt sql -r csv -q "describe information_schema.columns"
+    [ $status -eq 0 ]
+    [ "${#lines[@]}" -eq 23 ]
+}
+
+@test "sql: describe bad table name" {
     run dolt sql -q "describe poop"
     [ $status -eq 1 ]
     [[ "$output" =~ "table not found: poop" ]] || false
 }
 
 @test "sql: alter table to add and delete a column" {
-    skip_nbf_dolt_1
     run dolt sql -q "alter table one_pk add (c6 int)"
     [ $status -eq 0 ]
     run dolt sql -q "describe one_pk"
@@ -1009,7 +1013,6 @@ SQL
 }
 
 @test "sql: alter table to rename a column" {
-    skip_nbf_dolt_1
     dolt sql -q "alter table one_pk add (c6 int)"
     run dolt sql -q "alter table one_pk rename column c6 to c7"
     [ $status -eq 0 ]
@@ -1020,7 +1023,6 @@ SQL
 }
 
 @test "sql: alter table change column to rename a column" {
-    skip_nbf_dolt_1
     dolt sql -q "alter table one_pk add (c6 int)"
     dolt sql -q "alter table one_pk change column c6 c7 int"
     run dolt sql -q "describe one_pk"
@@ -1110,7 +1112,6 @@ SQL
 }
 
 @test "sql: alter table modify column type failure" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE t1(pk BIGINT PRIMARY KEY, v1 INT, INDEX(v1));
 INSERT INTO t1 VALUES (0,-1),(1,1);
@@ -1639,7 +1640,6 @@ SQL
 }
 
 @test "sql: dolt diff table correctly works with IN" {
-    skip_nbf_dolt_1
     dolt sql -q "CREATE TABLE mytable(pk int primary key);"
     dolt sql -q "INSERT INTO mytable VALUES (1), (2)"
     dolt commit -am "Commit 1"

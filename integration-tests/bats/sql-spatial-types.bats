@@ -74,8 +74,7 @@ teardown() {
     [[ "$output" =~ "POLYGON((0.123 0.456,1.22 1.33,1.11 0.99,0.123 0.456))" ]] || false
 }
 
-@test "sql-spatial-types: create geometry table and insert existing spetial types" {
-    skip_nbf_dolt_1
+@test "sql-spatial-types: create geometry table and insert existing spatial types" {
 
     # create geometry table
     run dolt sql -q "create table geom_tbl (g geometry)"
@@ -105,7 +104,6 @@ teardown() {
     [[ "$output" =~ "POLYGON((1 2,3 4,5 6,1 2))" ]] || false
 }
 
-
 @test "sql-spatial-types: prevent point as primary key" {
     run dolt sql -q "create table point_tbl (p point primary key)"
     [ "$status" -eq 1 ]
@@ -131,7 +129,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use point type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table point_tbl (p int primary key)"
     run dolt sql -q "alter table point_tbl modify column p point primary key"
     [ "$status" -eq 1 ]
@@ -139,7 +136,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use linestring type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table line_tbl (l int primary key)"
     run dolt sql -q "alter table line_tbl modify column l linestring primary key"
     [ "$status" -eq 1 ]
@@ -147,7 +143,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use polygon type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table poly_tbl (p int primary key)"
     run dolt sql -q "alter table poly_tbl modify column p polygon primary key"
     [ "$status" -eq 1 ]
@@ -155,7 +150,6 @@ teardown() {
 }
 
 @test "sql-spatial-types: prevent altering table to use geometry type as primary key" {
-    skip_nbf_dolt_1
     dolt sql -q "create table geom_tbl (g int primary key)"
     run dolt sql -q "alter table geom_tbl modify column g geometry primary key"
     [ "$status" -eq 1 ]
@@ -213,7 +207,7 @@ teardown() {
 
     run dolt sql -q "INSERT INTO pt VALUES (2, ST_GEOMFROMTEXT(ST_ASWKT(POINT(1,2)), 4326))"
     [ "$status" -eq 1 ]
-    [ "$output" = "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]
+    [[ "$output" =~ "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]] || false
 
     run dolt sql -q "SELECT ST_ASWKT(p) FROM pt"
     [[ ! "$output" =~ "POINT(1 2)" ]] || false
@@ -259,4 +253,15 @@ SQL
     run dolt sql -q "ALTER TABLE table1 MODIFY COLUMN p POINT SRID 0"
     [ "$status" -eq 1 ]
     [[ "$output" =~ "The SRID of the geometry does not match the SRID of the column 'p'. The SRID of the geometry is 4326, but the SRID of the column is 0. Consider changing the SRID of the geometry or the SRID property of the column." ]] || false
+}
+
+@test "sql-spatial-types: multistatement exec with unsupported spatial types" {
+    dolt sql -q "CREATE TABLE t1 (i int primary key, g GEOMETRY NOT NULL);"
+
+    run dolt sql << SQL
+INSERT INTO t1 values (0, point(1,2));
+INSERT INTO t1 VALUES (1,0x000000000104000000030000000101000000000000000000F03F000000000000F03F010100000000000000000000400000000000000040010100000000000000000008400000000000000840);
+SQL
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error executing query on line 2: unsupported geospatial type: MultiPoint from value: 0x0" ]] || false
 }

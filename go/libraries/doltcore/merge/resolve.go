@@ -247,7 +247,7 @@ func validateConstraintViolations(ctx context.Context, before, after *doltdb.Roo
 	}
 
 	// TODO: fix resolve in the new storage format
-	_, violators, err := AddConstraintViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
+	_, violators, err := AddForeignKeyViolations(ctx, after, before, set.NewStrSet(tables), hash.Of(nil))
 	if err != nil {
 		return err
 	}

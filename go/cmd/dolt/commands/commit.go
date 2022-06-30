@@ -468,37 +468,6 @@ func getAddedNotStaged(notStagedTbls []diff.TableDelta, notStagedDocs *diff.DocD
 	return lines
 }
 
-// TODO: working docs in conflict param not used here
-func PrintStatus(ctx context.Context, dEnv *env.DoltEnv, stagedTbls, notStagedTbls []diff.TableDelta, workingTblsInConflict, workingTblsWithViolations []string, stagedDocs, notStagedDocs *diff.DocDiffs) error {
-	cli.Printf(branchHeader, dEnv.RepoStateReader().CWBHeadRef().GetPath())
-
-	mergeActive, err := dEnv.IsMergeActive(ctx)
-	if err != nil {
-		return err
-	}
-
-	if mergeActive {
-		if len(workingTblsInConflict) > 0 && len(workingTblsWithViolations) > 0 {
-			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts and constraint violations"))
-		} else if len(workingTblsInConflict) > 0 {
-			cli.Println(fmt.Sprintf(unmergedTablesHeader, "conflicts"))
-		} else if len(workingTblsWithViolations) > 0 {
-			cli.Println(fmt.Sprintf(unmergedTablesHeader, "constraint violations"))
-		} else {
-			cli.Println(allMergedHeader)
-		}
-	}
-
-	n := printStagedDiffs(cli.CliOut, stagedTbls, stagedDocs, true)
-	n = PrintDiffsNotStaged(ctx, dEnv, cli.CliOut, notStagedTbls, notStagedDocs, true, n, workingTblsInConflict, workingTblsWithViolations)
-
-	if !mergeActive && n == 0 {
-		cli.Println("nothing to commit, working tree clean")
-	}
-
-	return nil
-}
-
 const (
 	branchHeader     = "On branch %s\n"
 	stagedHeader     = `Changes to be committed:`

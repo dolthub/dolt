@@ -952,7 +952,6 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-
 @test "remotes: force fetch from main" {
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt push test-remote main
@@ -1622,4 +1621,47 @@ setup_ref_test() {
     dolt checkout other
     run dolt log
     [[ "$output" =~ "adding table from other" ]]
+}
+
+@test "remotes: dolt status on local repo compares with remote tracking" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push --set-upstream origin main
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt sql -q "CREATE TABLE test (id int primary key)"
+    dolt commit -am "create table"
+    run dolt push
+    [ "$status" -eq "0" ]
+    dolt log
+
+    cd ../repo1
+    run dolt status
+    [[ "$output" =~ "nothing to commit, working tree clean" ]] || false
+
+    dolt fetch
+    run dolt status
+    [[ "$output" =~ "behind" ]] || false
+    [[ "$output" =~ "1 commit" ]] || false
+
+    dolt sql -q "CREATE TABLE different (id int primary key)"
+    dolt commit -am "create different table"
+
+    run dolt status
+    [[ "$output" =~ "diverged" ]] || false
+    [[ "$output" =~ "1 and 1" ]] || false
+
+    dolt pull
+    dolt commit -am "merge main"
+
+    run dolt status
+    [[ "$output" =~ "ahead" ]] || false
+    [[ "$output" =~ "2 commit" ]] || false
 }

@@ -122,7 +122,7 @@ func (w *BatchSqlExportWriter) WriteRow(ctx context.Context, r row.Row) error {
 	}
 
 	// Get insert tuple string
-	tuple, err := sqlfmt.RowAsTupleString(ctx, r, w.sch)
+	tuple, err := sqlfmt.RowAsTupleString(r, w.sch)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func (w *BatchSqlExportWriter) WriteSqlRow(ctx context.Context, r sql.Row) error
 	}
 
 	// Get insert tuple string
-	tuple, err := sqlfmt.SqlRowAsTupleString(ctx, r, w.sch)
+	tuple, err := sqlfmt.SqlRowAsTupleString(r, w.sch)
 	if err != nil {
 		return err
 	}

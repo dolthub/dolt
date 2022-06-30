@@ -78,6 +78,22 @@ teardown_common() {
     rm -rf "$BATS_TMPDIR/dolt-repo-$$"
 }
 
+log_status_eq() {
+    if ! [ "$status" -eq $1 ]; then
+        echo "status: expected $1, received $status"
+        printf "output:\n$output"
+        exit 1
+    fi
+}
+
+log_output_has() {
+    if ! [[ "$output" =~ $1 ]]; then
+        echo "output did not have $1"
+        printf "output:\n$output"
+        exit 1
+    fi
+}
+
 nativevar DOLT_ROOT_PATH $BATS_TMPDIR/config-$$ /p
 dolt config --global --add metrics.disabled true > /dev/null 2>&1
 set_dolt_user "Bats Tests" "bats@email.fake" 

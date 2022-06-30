@@ -103,6 +103,7 @@ func nomsSummary(ctx context.Context, ch chan DiffSummaryProgress, from, to dura
 	return nil
 }
 
+// SummaryForTableDelta pushes diff summary progress messages for the table delta given to the channel given
 func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td TableDelta) error {
 	fromSch, toSch, err := td.GetSchemas(ctx)
 	if err != nil {
@@ -118,23 +119,50 @@ func SummaryForTableDelta(ctx context.Context, ch chan DiffSummaryProgress, td T
 		return err
 	}
 
-	fromRows, toRows, err := td.GetMaps(ctx)
+	fromRows, toRows, err := td.GetRowData(ctx)
 	if err != nil {
 		return err
 	}
 
+	if types.IsFormat_DOLT_1(td.Format()) {
+		if keyless {
+			return fmt.Errorf("keyless diff not supported for format %s", td.Format().VersionString())
+		}
+		return diffProllyTrees(ctx, ch, durable.ProllyMapFromIndex(fromRows), durable.ProllyMapFromIndex(toRows))
+	} else {
+		return diffNomsMaps(ctx, ch, keyless, fromRows, toRows)
+	}
+}
+
+func diffNomsMaps(ctx context.Context, ch chan DiffSummaryProgress, keyless bool, fromRows durable.Index, toRows durable.Index) error {
 	var rpr reporter
 	if keyless {
 		rpr = reportKeylessChanges
 	} else {
 		rpr = reportNomsPkChanges
 		ch <- DiffSummaryProgress{
-			OldSize: fromRows.Len(),
-			NewSize: toRows.Len(),
+			OldSize: fromRows.Count(),
+			NewSize: toRows.Count(),
 		}
 	}
 
-	return summaryWithReporter(ctx, ch, fromRows, toRows, rpr)
+	return summaryWithReporter(ctx, ch, durable.NomsMapFromIndex(fromRows), durable.NomsMapFromIndex(toRows), rpr)
+}
+
+func diffProllyTrees(ctx context.Context, ch chan DiffSummaryProgress, from, to prolly.Map) error {
+	diffSummary, err := prolly.DiffMapSummary(ctx, from, to)
+	if err != nil {
+		return err
+	}
+	ch <- DiffSummaryProgress{
+		Adds:        diffSummary.Adds,
+		Removes:     diffSummary.Removes,
+		Changes:     diffSummary.Changes,
+		CellChanges: diffSummary.CellChanges,
+		NewSize:     diffSummary.NewSize,
+		OldSize:     diffSummary.OldSize,
+	}
+	return nil
 }
 
 func summaryWithReporter(ctx context.Context, ch chan DiffSummaryProgress, from, to types.Map, rpr reporter) (err error) {

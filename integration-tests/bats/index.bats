@@ -3,7 +3,7 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "dolt index cat not implemented"
 
     dolt sql <<SQL
 CREATE TABLE onepk (
@@ -2318,23 +2318,22 @@ SQL
 
 @test "index: Merge violates UNIQUE" {
     dolt sql -q "CREATE UNIQUE INDEX idx_v1 ON onepk(v1);"
-    dolt add -A
-    dolt commit -m "baseline commit"
-    dolt checkout -b other
-    dolt checkout main
+    dolt commit -am "baseline commit"
+    dolt branch other
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (4, 44, 404)"
-    dolt add -A
-    dolt commit -m "main changes"
+    dolt commit -am "main changes"
+
     dolt checkout other
     dolt sql -q "INSERT INTO onepk VALUES (1, 11, 101), (2, 22, 202), (3, 33, 303), (5, 44, 505)"
-    dolt add -A
-    dolt commit -m "other changes"
+    dolt commit -am "other changes"
+
     dolt checkout main
+
     dolt merge other
     run dolt sql -q "SELECT * FROM dolt_constraint_violations" -r=csv
     [ "$status" -eq "0" ]
     [[ "$output" =~ "table,num_violations" ]] || false
-    [[ "$output" =~ "onepk,1" ]] || false
+    [[ "$output" =~ "onepk,2" ]] || false
 }
 
 @test "index: Merge into branch with index from branch without index" {
@@ -2449,7 +2448,7 @@ SQL
     dolt sql -q "CREATE UNIQUE INDEX abc_unq ON child_unq (parent_value);"
     run dolt sql -q "CREATE UNIQUE INDEX abc_non_unq ON child_non_unq (parent_value);"
     [ "$status" -eq "1" ]
-    [[ "$output" =~ "UNIQUE constraint violation" ]] || false
+    [[ "$output" =~ "duplicate unique key given" ]] || false
 
     # Verify correct index present in schema
     run dolt schema show child

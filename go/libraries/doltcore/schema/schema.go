@@ -83,7 +83,8 @@ func ExtractAllColNames(sch Schema) (map[uint64]string, error) {
 }
 
 func IsKeyless(sch Schema) bool {
-	return sch.GetPKCols().Size() == 0 &&
+	return sch != nil &&
+		sch.GetPKCols().Size() == 0 &&
 		sch.GetAllCols().Size() != 0
 }
 
@@ -169,10 +170,9 @@ func GetSharedCols(schema Schema, cmpNames []string, cmpKinds []types.NomsKind) 
 func ArePrimaryKeySetsDiffable(fromSch, toSch Schema) bool {
 	if fromSch == nil && toSch == nil {
 		return false
-	} else if fromSch == nil {
-		return true
-	} else if fromSch.GetAllCols().Size() == 0 {
 		// Empty case
+	} else if fromSch == nil || fromSch.GetAllCols().Size() == 0 ||
+		toSch == nil || toSch.GetAllCols().Size() == 0 {
 		return true
 	}
 

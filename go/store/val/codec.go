@@ -53,39 +53,42 @@ const (
 	float64Size  ByteSize = 8
 	bit64Size    ByteSize = 8
 	hash128Size  ByteSize = 16
-	addressSize  ByteSize = 20
 	yearSize     ByteSize = 1
 	dateSize     ByteSize = 4
 	timeSize     ByteSize = 8
 	datetimeSize ByteSize = 8
 	enumSize     ByteSize = 2
 	setSize      ByteSize = 8
+	addrSize     ByteSize = hash.ByteLen
 )
 
 type Encoding byte
 
 // Fixed Width Encodings
 const (
-	NullEnc     = Encoding(serial.EncodingNull)
-	Int8Enc     = Encoding(serial.EncodingInt8)
-	Uint8Enc    = Encoding(serial.EncodingUint8)
-	Int16Enc    = Encoding(serial.EncodingInt16)
-	Uint16Enc   = Encoding(serial.EncodingUint16)
-	Int32Enc    = Encoding(serial.EncodingInt32)
-	Uint32Enc   = Encoding(serial.EncodingUint32)
-	Int64Enc    = Encoding(serial.EncodingInt64)
-	Uint64Enc   = Encoding(serial.EncodingUint64)
-	Float32Enc  = Encoding(serial.EncodingFloat32)
-	Float64Enc  = Encoding(serial.EncodingFloat64)
-	Bit64Enc    = Encoding(serial.EncodingBit64)
-	Hash128Enc  = Encoding(serial.EncodingHash128)
-	AddressEnc  = Encoding(serial.EncodingAddress)
-	YearEnc     = Encoding(serial.EncodingYear)
-	DateEnc     = Encoding(serial.EncodingDate)
-	TimeEnc     = Encoding(serial.EncodingTime)
-	DatetimeEnc = Encoding(serial.EncodingDatetime)
-	EnumEnc     = Encoding(serial.EncodingEnum)
-	SetEnc      = Encoding(serial.EncodingSet)
+	NullEnc       = Encoding(serial.EncodingNull)
+	Int8Enc       = Encoding(serial.EncodingInt8)
+	Uint8Enc      = Encoding(serial.EncodingUint8)
+	Int16Enc      = Encoding(serial.EncodingInt16)
+	Uint16Enc     = Encoding(serial.EncodingUint16)
+	Int32Enc      = Encoding(serial.EncodingInt32)
+	Uint32Enc     = Encoding(serial.EncodingUint32)
+	Int64Enc      = Encoding(serial.EncodingInt64)
+	Uint64Enc     = Encoding(serial.EncodingUint64)
+	Float32Enc    = Encoding(serial.EncodingFloat32)
+	Float64Enc    = Encoding(serial.EncodingFloat64)
+	Bit64Enc      = Encoding(serial.EncodingBit64)
+	Hash128Enc    = Encoding(serial.EncodingHash128)
+	YearEnc       = Encoding(serial.EncodingYear)
+	DateEnc       = Encoding(serial.EncodingDate)
+	TimeEnc       = Encoding(serial.EncodingTime)
+	DatetimeEnc   = Encoding(serial.EncodingDatetime)
+	EnumEnc       = Encoding(serial.EncodingEnum)
+	SetEnc        = Encoding(serial.EncodingSet)
+	BytesAddrEnc  = Encoding(serial.EncodingBytesAddr)
+	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
+	StringAddrEnc = Encoding(serial.EncodingStringAddr)
+	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
 
 	sentinel Encoding = 127
 )
@@ -132,8 +135,8 @@ func sizeFromType(t Type) (ByteSize, bool) {
 		return float64Size, true
 	case Hash128Enc:
 		return hash128Size, true
-	case AddressEnc:
-		return addressSize, true
+	case BytesAddrEnc:
+		return addrSize, true
 	case YearEnc:
 		return yearSize, true
 	case DateEnc:
@@ -559,27 +562,27 @@ func writeHash128(buf, val []byte) {
 	copy(buf, val)
 }
 
-func readAddress(val []byte) []byte {
-	expectSize(val, addressSize)
-	return val
-}
-
-func writeAddress(buf []byte, val hash.Hash) {
-	expectSize(buf, addressSize)
-	copy(buf, val[:])
-}
-
 func compareHash128(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
-func compareAddress(l, r []byte) int {
-	return bytes.Compare(l, r)
+func compareAddr(l, r hash.Hash) int {
+	return l.Compare(r)
 }
 
 func writeRaw(buf, val []byte) {
 	expectSize(buf, ByteSize(len(val)))
 	copy(buf, val)
+}
+
+func writeAddr(buf []byte, v []byte) {
+	expectSize(buf, addrSize)
+	copy(buf, v)
+}
+
+func readAddr(val []byte) hash.Hash {
+	expectSize(val, addrSize)
+	return hash.New(val)
 }
 
 func expectSize(buf []byte, sz ByteSize) {
