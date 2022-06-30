@@ -17,6 +17,7 @@ package commands
 import (
 	"context"
 	"fmt"
+
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
