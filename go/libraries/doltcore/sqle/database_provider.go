@@ -329,12 +329,17 @@ func (p DoltDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) err
 		return dsess.ErrRevisionDbNotFound.New(revDB)
 	}
 
-	if IsRevisionDatabase(revDB) {
-		delete(p.databases, dbKey)
-		return nil
-	} else {
+	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, revDB)
+	if err != nil {
+		return err
+	}
+
+	if isRevisionDatabase == false {
 		return dsess.ErrRevisionDbNotFound.New(revDB)
 	}
+
+	delete(p.databases, dbKey)
+	return nil
 }
 
 // Function implements the FunctionProvider interface
