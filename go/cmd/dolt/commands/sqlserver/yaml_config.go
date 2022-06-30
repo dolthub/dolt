@@ -116,6 +116,7 @@ type YAMLConfig struct {
 	DatabaseConfig    []DatabaseYAMLConfig  `yaml:"databases"`
 	PerformanceConfig PerformanceYAMLConfig `yaml:"performance"`
 	DataDirStr        *string               `yaml:"data_dir"`
+	CfgDirStr         *string               `yaml:"cfg_dir"`
 	MetricsConfig     MetricsYAMLConfig     `yaml:"metrics"`
 	PrivilegeFile     *string               `yaml:"privilege_file"`
 }
@@ -363,6 +364,13 @@ func (cfg YAMLConfig) PersistenceBehavior() string {
 
 func (cfg YAMLConfig) DataDir() string {
 	if cfg.DataDirStr != nil {
+		return *cfg.DataDirStr
+	}
+	return ""
+}
+
+func (cfg YAMLConfig) CfgDir() string {
+	if cfg.CfgDirStr != nil {
 		return *cfg.DataDirStr
 	}
 	return ""

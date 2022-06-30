@@ -91,6 +91,7 @@ const (
 	BatchFlag             = "batch"
 	dataDirFlag           = "data-dir"
 	cfgDirFlag            = "doltcfg-dir"
+	cfgDirName            = ".doltcfg"
 	continueFlag          = "continue"
 	fileInputFlag         = "file"
 	privilegeFilePathFlag = "privilege-file"
@@ -378,6 +379,55 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 
 	// TODO: search parent directory and child directories for existing .doltcfg
 	// TODO: the search should be relative to what $data-dir is
+	cfgDir, ok := apr.GetValue(cfgDirFlag)
+	if ok {
+		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
+		if exists, _ := dEnv.FS.Exists(filepath.Join(dataDir, cfgDir)); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				return nil, errhand.VerboseErrorFromError(err)
+			}
+		} else {
+			// TODO: set path
+		}
+	} else {
+		// No .doltcfg directory specified, look for it in parent or children, or create one in current
+
+		// TODO: ignore if not a directory?
+		// TODO: make a constant for .doltcfg
+		// Is there a .doltcfg in dataDir?
+		var currentExists, parentExists, childExists bool
+		if exists, isDir := dEnv.FS.Exists(filepath.Join(dataDir, cfgDirName)); exists && isDir {
+			currentExists = true
+		}
+
+		// Is there a .doltcfg in parent directory?
+		if exists, isDir := dEnv.FS.Exists(filepath.Join("..", cfgDirName)); exists && isDir {
+			parentExists = true
+		}
+
+		// Are there any .doltcfg in child directories?
+		err := dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
+			if isDir {
+				dirName := filepath.Base(path)
+				if dirName == "." || dirName == ".." {
+					return false
+				}
+				if dirName == cfgDirName {
+					childExists = true
+					return true
+				}
+			}
+			return false
+		})
+		if err != nil {
+			return nil, errhand.VerboseErrorFromError(err)
+		}
+
+		//
+
+	}
+
+	// TODO: add .doltcfg to mrEnv using WithCfgDir
 
 	return mrEnv, nil
 }
