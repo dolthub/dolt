@@ -39,7 +39,7 @@ const (
 	timeoutFlag             = "timeout"
 	readonlyFlag            = "readonly"
 	logLevelFlag            = "loglevel"
-	multiDBDirFlag          = "multi-db-dir"
+	dataDirFlag             = "data-dir"
 	noAutoCommitFlag        = "no-auto-commit"
 	configFileFlag          = "config"
 	queryParallelismFlag    = "query-parallelism"
@@ -137,7 +137,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsInt(timeoutFlag, "t", "connection timeout", fmt.Sprintf("Defines the timeout, in seconds, used for connections\nA value of `0` represents an infinite timeout (default `%v`)", serverConfig.ReadTimeout()))
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
-	ap.SupportsString(multiDBDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
+	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
@@ -152,7 +152,7 @@ func (cmd SqlServerCmd) EventType() eventsapi.ClientEventType {
 }
 
 // RequiresRepo indicates that this command does not have to be run from within a dolt data repository directory.
-// In this case it is because this command supports the multiDBDirFlag which can pass in a directory.  In the event that
+// In this case it is because this command supports the dataDirFlag which can pass in a directory.  In the event that
 // that parameter is not provided there is additional error handling within this command to make sure that this was in
 // fact run from within a dolt data repository directory.
 func (cmd SqlServerCmd) RequiresRepo() bool {
@@ -268,7 +268,7 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		serverConfig.withLogLevel(LogLevel(logLevel))
 	}
 
-	if multiDBDir, ok := apr.GetValue(multiDBDirFlag); ok {
+	if multiDBDir, ok := apr.GetValue(dataDirFlag); ok {
 		dbNamesAndPaths, err := env.DBNamesAndPathsFromDir(dEnv.FS, multiDBDir)
 
 		if err != nil {
