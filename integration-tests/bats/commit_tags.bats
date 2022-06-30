@@ -82,8 +82,8 @@ teardown() {
     dolt tag v1 HEAD^
     run dolt diff v1
     [ $status -eq 0 ]
-    [[ "$output" =~ "-  | 0" ]]
-    [[ "$output" =~ "+  | 3" ]]
+    [[ "$output" =~ "- | 0" ]]
+    [[ "$output" =~ "+ | 3" ]]
 }
 
 @test "commit_tags: use a tag as a ref for merge" {

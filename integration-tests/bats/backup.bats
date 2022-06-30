@@ -6,8 +6,6 @@ setup() {
     TMPDIRS=$(pwd)/tmpdirs
     mkdir -p $TMPDIRS/{rem1,bac1,repo1}
 
-    skip_nbf_dolt_1
-
     # repo1 -> rem1 -> repo2
     cd $TMPDIRS/repo1
     dolt init
@@ -27,7 +25,6 @@ teardown() {
 }
 
 @test "backup: add named backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt backup -v
@@ -37,7 +34,6 @@ teardown() {
 }
 
 @test "backup: remove named backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt backup -v
@@ -54,7 +50,6 @@ teardown() {
 }
 
 @test "backup: rm named backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt backup -v
@@ -71,7 +66,6 @@ teardown() {
 }
 
 @test "backup: removing a backup with the same name as a remote does not impact remote tracking refs" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add origin file://../bac1
     dolt backup remove origin
@@ -84,7 +78,6 @@ teardown() {
 }
 
 @test "backup: sync master to backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -99,7 +92,6 @@ teardown() {
 }
 
 @test "backup: sync feature to backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -115,7 +107,6 @@ teardown() {
 }
 
 @test "backup: sync tag to backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -130,7 +121,6 @@ teardown() {
 }
 
 @test "backup: sync remote ref to backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -145,7 +135,6 @@ teardown() {
 }
 
 @test "backup: sync working set to backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt sql -q "create table t2 (a int)"
     dolt add t2
@@ -161,7 +150,6 @@ teardown() {
 }
 
 @test "backup: no origin on restore" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -176,7 +164,6 @@ teardown() {
 }
 
 @test "backup: backup already up to date" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     dolt backup sync bac1
@@ -184,7 +171,6 @@ teardown() {
 }
 
 @test "backup: no backup exists" {
-    skip_nbf_dolt_1
     cd repo1
     run dolt backup sync bac1
     [ "$status" -eq 1 ]
@@ -193,7 +179,6 @@ teardown() {
 }
 
 @test "backup: cannot override another client's backup" {
-    skip_nbf_dolt_1
     skip "todo implement backup lock file"
     cd repo1
     dolt backup add bac1 file://../bac1
@@ -212,7 +197,6 @@ teardown() {
 }
 
 @test "backup: cannot clone a backup" {
-    skip_nbf_dolt_1
     skip "todo implement backup lock file"
 
     cd repo1
@@ -227,7 +211,6 @@ teardown() {
 }
 
 @test "backup: cannot add backup with address of existing remote" {
-    skip_nbf_dolt_1
     cd repo1
     dolt remote add rem1 file://../bac1
     run dolt backup add bac1 file://../bac1
@@ -237,7 +220,6 @@ teardown() {
 }
 
 @test "backup: cannot add backup with address of existing backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt backup add bac2 file://../bac1
@@ -247,7 +229,6 @@ teardown() {
 }
 
 @test "backup: cannot add remote with address of existing backup" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup add bac1 file://../bac1
     run dolt remote add rem1 file://../bac1
@@ -257,7 +238,6 @@ teardown() {
 }
 
 @test "backup: sync-url" {
-    skip_nbf_dolt_1
     cd repo1
     dolt backup sync-url file://../bac1
 

@@ -54,7 +54,8 @@ func NewTupleDescriptorWithComparator(cmp TupleComparator, types ...Type) (td Tu
 
 	var addrIdxs []int
 	for i, t := range types {
-		if t.Enc == BytesAddrEnc {
+		switch t.Enc {
+		case BytesAddrEnc, StringAddrEnc, JSONAddrEnc:
 			addrIdxs = append(addrIdxs, i)
 		}
 	}
@@ -408,23 +409,32 @@ func (td TupleDesc) GetHash128(i int, tup Tuple) (v []byte, ok bool) {
 	return
 }
 
-func (td TupleDesc) GetBlob(i int, tup Tuple) (BytesAddr, bool) {
+func (td TupleDesc) GetJSONAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, JSONAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) GetStringAddr(i int, tup Tuple) (hash.Hash, bool) {
+	td.expectEncoding(i, StringAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) GetBytesAddr(i int, tup Tuple) (hash.Hash, bool) {
 	td.expectEncoding(i, BytesAddrEnc)
-	b := td.GetField(i, tup)
-	if len(b) == 0 {
-		return BytesAddr{}, false
-	}
-	return NewBytesAddr(hash.New(b)), true
+	return td.getAddr(i, tup)
 }
 
 func (td TupleDesc) GetCommitAddr(i int, tup Tuple) (v hash.Hash, ok bool) {
 	td.expectEncoding(i, CommitAddrEnc)
+	return td.getAddr(i, tup)
+}
+
+func (td TupleDesc) getAddr(i int, tup Tuple) (hash.Hash, bool) {
 	b := td.GetField(i, tup)
-	if b != nil {
-		v = hash.New(b)
-		ok = true
+	if b == nil {
+		return hash.Hash{}, false
 	}
-	return
+	return hash.New(b), true
 }
 
 func (td TupleDesc) expectEncoding(i int, encodings ...Encoding) {

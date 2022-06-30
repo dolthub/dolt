@@ -19,6 +19,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	goerrors "gopkg.in/src-d/go-errors.v1"
@@ -31,6 +32,7 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/writer"
 	"github.com/dolthub/dolt/go/libraries/doltcore/table/editor"
 	"github.com/dolthub/dolt/go/libraries/utils/config"
+	"github.com/dolthub/dolt/go/store/types"
 )
 
 type batchMode int8
@@ -560,6 +562,60 @@ func (sess *Session) GetRoots(ctx *sql.Context, dbName string) (doltdb.Roots, bo
 	}
 
 	return dbState.GetRoots(), true
+}
+
+// ResolveRootForRef returns the root value for the ref given, which refers to either a commit spec or is one of the
+// special identifiers |WORKING| or |STAGED|
+// Returns the root value associated with the identifier given and its commit time
+func (sess *Session) ResolveRootForRef(ctx *sql.Context, dbName, hashStr string) (*doltdb.RootValue, *types.Timestamp, error) {
+	if hashStr == doltdb.Working || hashStr == doltdb.Staged {
+		// TODO: get from working set / staged update time
+		now := types.Timestamp(time.Now())
+		// TODO: no current database
+		roots, _ := sess.GetRoots(ctx, ctx.GetCurrentDatabase())
+		if hashStr == doltdb.Working {
+			return roots.Working, &now, nil
+		} else if hashStr == doltdb.Staged {
+			return roots.Staged, &now, nil
+		}
+	}
+
+	var root *doltdb.RootValue
+	var commitTime *types.Timestamp
+	cs, err := doltdb.NewCommitSpec(hashStr)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	dbData, ok := sess.GetDbData(ctx, dbName)
+	if !ok {
+		return nil, nil, sql.ErrDatabaseNotFound.New(dbName)
+	}
+
+	headRef, err := sess.CWBHeadRef(ctx, dbName)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cm, err := dbData.Ddb.Resolve(ctx, cs, headRef)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	root, err = cm.GetRootValue(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	meta, err := cm.GetCommitMeta(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	t := meta.Time()
+	commitTime = (*types.Timestamp)(&t)
+
+	return root, commitTime, nil
 }
 
 // SetRoot sets a new root value for the session for the database named. This is the primary mechanism by which data

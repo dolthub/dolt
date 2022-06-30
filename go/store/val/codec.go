@@ -87,6 +87,8 @@ const (
 	SetEnc        = Encoding(serial.EncodingSet)
 	BytesAddrEnc  = Encoding(serial.EncodingBytesAddr)
 	CommitAddrEnc = Encoding(serial.EncodingCommitAddr)
+	StringAddrEnc = Encoding(serial.EncodingStringAddr)
+	JSONAddrEnc   = Encoding(serial.EncodingJSONAddr)
 
 	sentinel Encoding = 127
 )
@@ -564,12 +566,7 @@ func compareHash128(l, r []byte) int {
 	return bytes.Compare(l, r)
 }
 
-func compareBytesAddr(l, r hash.Hash) int {
-	// TODO sort
-	return l.Compare(r)
-}
-
-func compareCommitAddr(l, r hash.Hash) int {
+func compareAddr(l, r hash.Hash) int {
 	return l.Compare(r)
 }
 

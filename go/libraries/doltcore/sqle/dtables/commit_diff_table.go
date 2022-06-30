@@ -46,7 +46,7 @@ type CommitDiffTable struct {
 	fromCommitFilter  *expression.Equals
 	toCommitFilter    *expression.Equals
 	requiredFilterErr error
-	targetSchema      *schema.Schema
+	targetSchema      schema.Schema
 }
 
 func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, root *doltdb.RootValue) (sql.Table, error) {
@@ -81,7 +81,7 @@ func NewCommitDiffTable(ctx *sql.Context, tblName string, ddb *doltdb.DoltDB, ro
 		workingRoot:  root,
 		joiner:       j,
 		sqlSch:       sqlSch,
-		targetSchema: &sch,
+		targetSchema: sch,
 	}, nil
 }
 

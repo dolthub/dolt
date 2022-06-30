@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package val
+/*
+Package datas includes interfaces bridging database transactions and versioned
+commit graph logic.
 
-import "github.com/dolthub/dolt/go/store/hash"
+Datas includes logic for manipulating a versioned database through a backing
+chunks.ChunkStore. In the old storage format, that was the NomsBlockStore. In
+the new storage format, this is the NodeStore.
 
-type BytesAddr struct {
-	Addr hash.Hash
-}
+// TODO database
 
-func NewBytesAddr(addr hash.Hash) BytesAddr {
-	return BytesAddr{Addr: addr}
-}
+// TODO commit transactions
+
+// TODO commit closures
+
+// TODO refwalks
+
+*/
+package datas

@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -95,27 +94,46 @@ teardown() {
     dolt add test
     dolt commit -m "committed table so we can see diffs"
     dolt sql -q "alter table test add c0 bigint"
+
+    dolt diff
     run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `pk` bigint NOT NULL COMMENT 'tag:0',
+   `c1` bigint COMMENT 'tag:1',
+   `c2` bigint COMMENT 'tag:2',
+   `c3` bigint COMMENT 'tag:3',
+   `c4` bigint COMMENT 'tag:4',
+   `c5` bigint COMMENT 'tag:5',
++  `c0` bigint,
+   PRIMARY KEY (`pk`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)    
+
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ "$output" =~ "| c0 |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # no data diff
+    [ "${#lines[@]}" -eq 13 ]
+    
     run dolt diff --schema
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ ! "$output" =~ "| c0 |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+    [ "${#lines[@]}" -eq 13 ]
+
     run dolt diff --data
     [ "$status" -eq 0 ]
-    [[ ! "$output" =~ \+[[:space:]]+\`c0\` ]] || false
-    [[ "$output" =~ "| c0 |" ]] || false
-    [[ "$output" =~ ">" ]] || false
-    [[ "$output" =~ "<" ]] || false
-    # Check for a blank column in the diff output
-    [[ "$output" =~ \|[[:space:]]+\| ]] || false
+    [ "${#lines[@]}" -eq 3 ]
+    [[ ! "$output" =~ ">" ]] || false
+
     dolt sql -q "insert into test (pk,c0,c1,c2,c3,c4,c5) values (0,0,0,0,0,0,0)"
+
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ \|[[:space:]]+c0[[:space:]]+\| ]] || false
-    [[ "$output" =~ \+[[:space:]]+[[:space:]]+\|[[:space:]]+0 ]] || false
+    [[ "$output" =~ "| c0" ]] || false
+    [[ "$output" =~ "+ | 0" ]] || false
     dolt sql -q "alter table test drop column c0"
     dolt diff
 }
@@ -165,6 +183,8 @@ SQL
 }
 
 @test "schema-changes: changing column types in place works" {
+    skip_nbf_dolt_1 "hangs"
+    
     dolt sql <<SQL
 CREATE TABLE test2(
   pk1 BIGINT,
@@ -339,9 +359,17 @@ SQL
     run dolt diff --data
     [ "$status" -eq 0 ]
 
-    skip "dolt incorrectly considers there to be two different columns named v1"
-    skip "output should have a single column named v1 https://github.com/dolthub/dolt/issues/2430"
+    EXPECTED=$(cat <<'EOF'
++---+-----+-----+------+
+|   | pk1 | pk2 | v1   |
++---+-----+-----+------+
+| < | 1   | 1   | 1    |
+| > | 1   | 1   | NULL |
+| < | 2   | 2   | 2    |
+| > | 2   | 2   | NULL |
++---+-----+-----+------+
+EOF
+)               
     
-    [[ ! "$output" =~ '|  <  | pk1 | pk2 |      | v1   |' ]] || false
-    [[ ! "$output" =~ '|  >  | pk1 | pk2 | v1   |      |' ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
 }

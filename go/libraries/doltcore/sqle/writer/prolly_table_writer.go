@@ -104,7 +104,7 @@ func getSecondaryKeylessProllyWriters(ctx context.Context, t *doltdb.Table, sqlS
 			return nil, err
 		}
 		m := durable.ProllyMapFromIndex(idxRows)
-		m = prolly.ConvertToKeylessIndex(m)
+		m = prolly.ConvertToSecondaryKeylessIndex(m)
 
 		keyMap, valMap := ordinalMappingsFromSchema(sqlSch, def.Schema())
 		keyDesc, valDesc := m.Descriptors()

@@ -122,7 +122,7 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			case typeinfo.BitTypeIdentifier:
 				sqlType = sql.Uint64
 			}
-			v, err := sqlutil.SqlColToStr(ctx, sqlType, val)
+			v, err := sqlutil.SqlColToStr(sqlType, val)
 			if err != nil {
 				return err
 			}

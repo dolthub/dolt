@@ -192,12 +192,12 @@ SQL
     run dolt diff
     [ $status -eq 0 ]
     # output order is random
-    [[ "${lines[6]}"  =~ "|  +  | 8  | 8  |" ]] || false
-    [[ "${lines[7]}"  =~ "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[8]}"  =~ "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[9]}"  =~ "|  +  | 1  | 9  |" ]] || false
-    [[ "${lines[10]}" =~ "|  +  | 1  | 9  |" ]] || false
-    [[ "${lines[11]}" =~ "|  -  | 0  | 0  |" ]] || false
+    [[ "${lines[6]}"  =~ "| + | 8  | 8  |" ]] || false
+    [[ "${lines[7]}"  =~ "| - | 1  | 1  |" ]] || false
+    [[ "${lines[8]}"  =~ "| - | 1  | 1  |" ]] || false
+    [[ "${lines[9]}"  =~ "| + | 1  | 9  |" ]] || false
+    [[ "${lines[10]}" =~ "| + | 1  | 9  |" ]] || false
+    [[ "${lines[11]}" =~ "| - | 0  | 0  |" ]] || false
 }
 
 @test "keyless: diff --summary" {
@@ -255,8 +255,8 @@ SQL
     [[ "${lines[7]}"  =~ "     PRIMARY KEY ()"    ]] || false
     [[ "${lines[8]}"  =~ ");"                     ]] || false
 
-    [[ "${lines[10]}" =~ "|  <  | c1 |    | c0 |" ]] || false
-    [[ "${lines[11]}" =~ "|  >  | c1 | c2 |    |" ]] || false
+    [[ "${lines[10]}" =~ "| < | c1 |    | c0 |" ]] || false
+    [[ "${lines[11]}" =~ "| > | c1 | c2 |    |" ]] || false
 }
 
 @test "keyless: merge fast-forward" {
@@ -315,7 +315,7 @@ SQL
 
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
+    [[ "$output" =~ "| - | 0  | 0  |" ]] || false
 
     dolt checkout left
     dolt sql -q "DELETE FROM keyless WHERE c0 = 2;"
@@ -323,7 +323,7 @@ SQL
 
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
+    [[ "$output" =~ "| - | 2  | 2  |" ]] || false
 }
 
 @test "keyless: merge deletes from two branches" {
@@ -341,8 +341,8 @@ SQL
     [ $status -eq 0 ]
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  -  | 0  | 0  |" ]] || false
-    [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
+    [[ "$output" =~ "| - | 0  | 0  |" ]] || false
+    [[ "$output" =~ "| - | 2  | 2  |" ]] || false
 }
 
 function make_dupe_table() {
@@ -371,8 +371,8 @@ SQL
     run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 9 ] # 2 diffs + 6 header + 1 footer
-    [[ "${lines[6]}" =~ "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[7]}" =~ "|  -  | 1  | 1  |" ]] || false
+    [[ "${lines[6]}" =~ "| - | 1  | 1  |" ]] || false
+    [[ "${lines[7]}" =~ "| - | 1  | 1  |" ]] || false
 
     dolt checkout left
     dolt sql -q "DELETE FROM dupe LIMIT 4;"
@@ -381,10 +381,10 @@ SQL
     run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 11 ] # 4 diffs + 6 header + 1 footer
-    [[ "${lines[6]}" = "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[7]}" = "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[8]}" = "|  -  | 1  | 1  |" ]] || false
-    [[ "${lines[9]}" = "|  -  | 1  | 1  |" ]] || false
+    [[ "${lines[6]}" = "| - | 1  | 1  |" ]] || false
+    [[ "${lines[7]}" = "| - | 1  | 1  |" ]] || false
+    [[ "${lines[8]}" = "| - | 1  | 1  |" ]] || false
+    [[ "${lines[9]}" = "| - | 1  | 1  |" ]] || false
 
 }
 
@@ -527,7 +527,7 @@ CSV
     [ $status -eq 0 ]
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  +  | 9  | 9  |" ]] || false
+    [[ "$output" =~ "| + | 9  | 9  |" ]] || false
 }
 
 # in-place updates create become drop/add
@@ -535,8 +535,8 @@ CSV
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  -  | 2  | 2  |" ]] || false
-    [[ "$output" =~ "|  +  | 2  | 9  |" ]] || false
+    [[ "$output" =~ "| - | 2  | 2  |" ]] || false
+    [[ "$output" =~ "| + | 2  | 9  |" ]] || false
 }
 
 # in-place updates create become drop/add
@@ -588,12 +588,12 @@ CSV
     dolt diff main
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "$output" =~ "|  -  | 7  | 17 |" ]] || false
-    [[ "$output" =~ "|  +  | 7  | 27 |" ]] || false
-    [[ "$output" =~ "|  -  | 9  | 19 |" ]] || false
-    [[ "$output" =~ "|  +  | 9  | 29 |" ]] || false
-    [[ "$output" =~ "|  -  | 8  | 18 |" ]] || false
-    [[ "$output" =~ "|  +  | 8  | 28 |" ]] || false
+    [[ "$output" =~ "| - | 7  | 17 |" ]] || false
+    [[ "$output" =~ "| + | 7  | 27 |" ]] || false
+    [[ "$output" =~ "| - | 9  | 19 |" ]] || false
+    [[ "$output" =~ "| + | 9  | 29 |" ]] || false
+    [[ "$output" =~ "| - | 8  | 18 |" ]] || false
+    [[ "$output" =~ "| + | 8  | 28 |" ]] || false
 }
 
 @test "keyless: merge with in-place updates (branches)" {
@@ -728,7 +728,7 @@ SQL
     run dolt diff main
     [ $status -eq 0 ]
     [ "${#lines[@]}" -eq 8 ] # 1 diffs + 6 header + 1 footer
-    [[ "${lines[6]}" =~ "|  +  | 7  | 7  |" ]] || false
+    [[ "${lines[6]}" =~ "| + | 7  | 7  |" ]] || false
 }
 
 @test "keyless: merge branches with offset mutation history" {
@@ -775,7 +775,7 @@ SQL
 
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "${lines[6]}" = "|  -  | 2  | 2  |" ]] || false
+    [[ "${lines[6]}" = "| - | 2  | 2  |" ]] || false
 
     dolt checkout left
     dolt sql -q "INSERT INTO keyless VALUES (2,2);"
@@ -783,7 +783,7 @@ SQL
 
     run dolt diff main
     [ $status -eq 0 ]
-    [[ "${lines[6]}" = "|  +  | 2  | 2  |" ]] || false
+    [[ "${lines[6]}" = "| + | 2  | 2  |" ]] || false
 }
 
 @test "keyless: merge delete+add on two branches" {

@@ -135,12 +135,17 @@ func ToDoltCol(tag uint64, col *sql.Column) (schema.Column, error) {
 	return schema.NewColumnWithTypeInfo(col.Name, tag, typeInfo, col.PrimaryKey, col.Default.String(), col.AutoIncrement, col.Comment, constraints...)
 }
 
-func GetColNamesFromSqlSchema(sqlSch sql.Schema) []string {
-	colNames := make([]string, len(sqlSch))
-
-	for i, col := range sqlSch {
-		colNames[i] = col.Name
+// ToDoltResultSchema returns a dolt Schema from the sql schema given, suitable for use as a result set
+func ToDoltResultSchema(sqlSchema sql.Schema) (schema.Schema, error) {
+	var cols []schema.Column
+	for i, col := range sqlSchema {
+		convertedCol, err := ToDoltCol(uint64(i), col)
+		if err != nil {
+			return nil, err
+		}
+		cols = append(cols, convertedCol)
 	}
 
-	return colNames
+	colColl := schema.NewColCollection(cols...)
+	return schema.UnkeyedSchemaFromCols(colColl), nil
 }

@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 }
 
 teardown() {
@@ -103,11 +102,31 @@ SQL
 
     dolt diff
     run dolt diff
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+   `a` int NOT NULL,
+   `b` int,
++  `c` int,
+   PRIMARY KEY (`a`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "+  \`c\` int," ]] || false
-    [[ "$output" =~ "|  <  | a | b |   |" ]] || false
-    [[ "$output" =~ "|  >  | a | b | c |" ]] || false
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # No data diff
+    skip_nbf_dolt_1 "data diff shown inappropriately"
+    [ "${#lines[@]}" -eq 9 ]
+
+    run dolt sql -r csv -q "select * from test as of 'HEAD'"
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ ! "$output" =~ "1,1," ]] || false
+    [[ ! "$output" =~ "2,2," ]] || false
 }
+
 
 @test "drop-create: added column with data modifications" {
     dolt sql  <<SQL
@@ -139,13 +158,11 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "+  \`c\` int," ]] || false
-    [[ "$output" =~ "|  <  | a | b |      |" ]] || false
-    [[ "$output" =~ "|  >  | a | b | c    |" ]] || false
-    [[ "$output" =~ "|  <  | 1 | 1 | NULL |" ]] || false
-    [[ "$output" =~ "|  <  | 2 | 2 | NULL |" ]] || false
-    [[ "$output" =~ "|  >  | 1 | 2 | 1    |" ]] || false
-    [[ "$output" =~ "|  >  | 2 | 3 | 2    |" ]] || false
-    [[ "$output" =~ "|  +  | 3 | 3 | 3    |" ]] || false
+    [[ "$output" =~ "| < | 1 | 1 | NULL |" ]] || false
+    [[ "$output" =~ "| < | 2 | 2 | NULL |" ]] || false
+    [[ "$output" =~ "| > | 1 | 2 | 1    |" ]] || false
+    [[ "$output" =~ "| > | 2 | 3 | 2    |" ]] || false
+    [[ "$output" =~ "| + | 3 | 3 | 3    |" ]] || false
 }
 
 @test "drop-create: dropped column" {
@@ -178,12 +195,10 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-  \`c\` int," ]] || false
-    [[ "$output" =~ "|  <  | a | b | c    |" ]] || false
-    [[ "$output" =~ "|  >  | a | b |      |" ]] || false
-    [[ "$output" =~ "|  <  | 1 | 2 | 3    |" ]] || false
-    [[ "$output" =~ "|  >  | 1 | 2 | NULL |" ]] || false
-    [[ "$output" =~ "|  <  | 4 | 5 | 6    |" ]] || false
-    [[ "$output" =~ "|  >  | 4 | 5 | NULL |" ]] || false
+    [[ "$output" =~ "| < | 1 | 2 | 3    |" ]] || false
+    [[ "$output" =~ "| > | 1 | 2 | NULL |" ]] || false
+    [[ "$output" =~ "| < | 4 | 5 | 6    |" ]] || false
+    [[ "$output" =~ "| > | 4 | 5 | NULL |" ]] || false
 }
 
 @test "drop-create: dropped column with data modifications" {
@@ -216,13 +231,11 @@ SQL
     run dolt diff
     [ "$status" -eq 0 ]
     [[ "$output" =~ "-  \`c\` int," ]] || false
-    [[ "$output" =~ "|  <  | a | b  | c    |" ]] || false
-    [[ "$output" =~ "|  >  | a | b  |      |" ]] || false
-    [[ "$output" =~ "|  <  | 1 | 2  | 3    |" ]] || false
-    [[ "$output" =~ "|  >  | 1 | 7  | NULL |" ]] || false
-    [[ "$output" =~ "|  <  | 4 | 5  | 6    |" ]] || false
-    [[ "$output" =~ "|  >  | 4 | 8  | NULL |" ]] || false
-    [[ "$output" =~ "|  +  | 9 | 10 | NULL |" ]] || false
+    [[ "$output" =~ "| < | 1 | 2  | 3    |" ]] || false
+    [[ "$output" =~ "| > | 1 | 7  | NULL |" ]] || false
+    [[ "$output" =~ "| < | 4 | 5  | 6    |" ]] || false
+    [[ "$output" =~ "| > | 4 | 8  | NULL |" ]] || false
+    [[ "$output" =~ "| + | 9 | 10 | NULL |" ]] || false
 }
 
 @test "drop-create: added column, modified column" {
@@ -254,13 +267,24 @@ SQL
     dolt diff
     run dolt diff
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "-  \`a\` int NOT NULL," ]] || false
-    [[ "$output" =~ "-  \`b\` int," ]] || false
-    [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
-    [[ "$output" =~ "+  \`b\` tinyint," ]] || false
-    [[ "$output" =~ "+  \`c\` int," ]] || false
-    [[ "$output" =~ "|  <  | a | b |   |" ]] || false
-    [[ "$output" =~ "|  >  | a | b | c |" ]] || false
+
+    EXPECTED=$(cat <<'EOF'
+ CREATE TABLE `test` (
+-  `a` int NOT NULL,
+-  `b` int,
++  `a` bigint NOT NULL,
++  `b` tinyint,
++  `c` int,
+   PRIMARY KEY (`a`)
+ ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;
+EOF
+)
+
+    [[ "$output" =~ "$EXPECTED" ]] || false
+
+    # no data diff
+    skip_nbf_dolt_1 "data diff shown inappropriately"
+    [ "${#lines[@]}" -eq 11 ]
 }
 
 @test "drop-create: constraint changes" {
@@ -301,8 +325,6 @@ SQL
     [[ "$output" =~ "+  \`c\` varchar(10)," ]] || false
     [[ "$output" =~ "+  PRIMARY KEY (\`a\`)," ]] || false
     [[ "$output" =~ "+  CONSTRAINT \`chk_vk8cbuqc\` CHECK ((\`b\` > 0))" ]] || false
-    [[ "$output" =~ "|  <  | a | b |   |" ]] || false
-    [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
 
 @test "drop-create: default changes" {
@@ -340,8 +362,6 @@ SQL
     [[ "$output" =~ "+  \`a\` bigint NOT NULL," ]] || false
     [[ "$output" =~ "+  \`b\` tinyint NOT NULL DEFAULT '50'," ]] || false
     [[ "$output" =~ "+  \`c\` varchar(10)" ]] || false
-    [[ "$output" =~ "|  <  | a | b |   |" ]] || false
-    [[ "$output" =~ "|  >  | a | b | c |" ]] || false
 }
 
 @test "drop-create: drop table from different database" {

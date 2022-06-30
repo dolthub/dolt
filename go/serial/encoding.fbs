@@ -35,8 +35,10 @@ enum Encoding : uint8 {
   Datetime   = 18,
   Enum       = 19,
   Set        = 20,
-  BytesAddr = 21,
-  CommitAddr  = 22,
+  BytesAddr  = 21,
+  CommitAddr = 22,
+  StringAddr = 23,
+  JSONAddr   = 24,
 
   // variable width
   String   = 128,
