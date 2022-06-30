@@ -54,6 +54,11 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 		return 1, fmt.Errorf("Empty database name.")
 	}
 
+	dbName, _, err := getRevisionForRevisionDatabase(ctx, dbName)
+	if err != nil {
+		return -1, err
+	}
+
 	apr, err := cli.CreateCheckoutArgParser().Parse(args)
 	if err != nil {
 		return 1, err
@@ -165,6 +170,10 @@ func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData 
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err
+	}
+
+	if ctx.GetCurrentDatabase() != dbName {
+		ctx.SetCurrentDatabase(dbName)
 	}
 
 	dSess := dsess.DSessFromSess(ctx.Session)
