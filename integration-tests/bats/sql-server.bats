@@ -1152,12 +1152,12 @@ END""")
     multi_query "" 1 "use test2; drop database TEST2; select database();" "null"
 }
 
-@test "sql-server: create and drop database with --multi-db-dir" {
+@test "sql-server: create and drop database with --data-dir" {
     skiponwindows "Missing dependencies"
 
     mkdir no_dolt && cd no_dolt
     mkdir db_dir
-    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
 
     server_query "" 1 "create database test1"
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest1"
@@ -1187,7 +1187,7 @@ END""")
     
     # make sure the databases exist on restart
     stop_sql_server
-    start_sql_server_with_args --host 0.0.0.0 --user dolt --multi-db-dir=db_dir
+    start_sql_server_with_args --host 0.0.0.0 --user dolt --data-dir=db_dir
     server_query "" 1 "show databases" "Database\ninformation_schema\ntest3"
 }
 

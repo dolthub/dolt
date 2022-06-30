@@ -164,7 +164,7 @@ behavior:
 start_multi_db_server() {
     DEFAULT_DB="$1"
     let PORT="$$ % (65536-1024) + 1024"
-    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --multi-db-dir ./ &
+    dolt sql-server --host 0.0.0.0 --port=$PORT --user dolt --data-dir ./ &
     SERVER_PID=$!
     wait_for_connection $PORT 5000
 }
