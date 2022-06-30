@@ -32,13 +32,35 @@ type RevisionDatabaseProvider interface {
 	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
 	// DropRevisionDb removes the specified revision database from the databases this provider is tracking.
 	DropRevisionDb(ctx *sql.Context, revDB string) error
+	// IsRevisionDatabase validates the specified dbName and returns true if it is a valid revision database.
+	IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error)
+	// GetRevisionForRevisionDatabase looks up the named database and returns the root database name as well as the revision and any errors encountered.
+	// If the specified database is not a revision database, the root database name will still be returned, and the revision will be an empty string.
+	GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error)
+}
+
+// RevisionDatabase allows callers to query a revision database for the
+// commit or branch it is pinned to.
+type RevisionDatabase interface {
+	// Revision returns the branch or commit to which this revision database is pinned. If there is no pinned revision, empty string is returned.
+	Revision() string
 }
 
 func EmptyDatabaseProvider() RevisionDatabaseProvider {
 	return emptyRevisionDatabaseProvider{}
 }
 
-type emptyRevisionDatabaseProvider struct{}
+type emptyRevisionDatabaseProvider struct {
+	sql.DatabaseProvider
+}
+
+func (e emptyRevisionDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+	return "", "", nil
+}
+
+func (e emptyRevisionDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	return false, nil
+}
 
 func (e emptyRevisionDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	return nil

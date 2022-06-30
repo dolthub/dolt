@@ -90,10 +90,7 @@ type Database struct {
 	drw      env.DocsReadWriter
 	gs       globalstate.GlobalState
 	editOpts editor.Options
-}
-
-func (db Database) EditOptions() editor.Options {
-	return db.editOpts
+	revision string
 }
 
 var _ sql.Database = Database{}
@@ -101,6 +98,7 @@ var _ sql.TableCreator = Database{}
 var _ sql.ViewDatabase = Database{}
 var _ sql.TemporaryTableCreator = Database{}
 var _ sql.TemporaryTableDatabase = Database{}
+var _ dsess.RevisionDatabase = Database{}
 
 type ReadOnlyDatabase struct {
 	Database
@@ -153,6 +151,15 @@ func (db Database) RollbackToSavepoint(ctx *sql.Context, tx sql.Transaction, nam
 func (db Database) ReleaseSavepoint(ctx *sql.Context, tx sql.Transaction, name string) error {
 	dsession := dsess.DSessFromSess(ctx.Session)
 	return dsession.ReleaseSavepoint(ctx, name, db.name, tx)
+}
+
+// Revision implements dsess.RevisionDatabase
+func (db Database) Revision() string {
+	return db.revision
+}
+
+func (db Database) EditOptions() editor.Options {
+	return db.editOpts
 }
 
 var _ SqlDatabase = Database{}

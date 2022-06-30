@@ -350,13 +350,34 @@ func (p DoltDatabaseProvider) TableFunction(ctx *sql.Context, name string) (sql.
 	return nil, sql.ErrTableFunctionNotFound.New(name)
 }
 
+// GetRevisionForRevisionDatabase implements dsess.RevisionDatabaseProvider
+func (p DoltDatabaseProvider) GetRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+	db, err := p.Database(ctx, dbName)
+	if err != nil {
+		return "", "", err
+	}
+
+	sqldb, ok := db.(dsess.RevisionDatabase)
+	if !ok {
+		return "", "", fmt.Errorf("unexpected database type: %T", db)
+	}
+
+	if sqldb.Revision() != "" {
+		dbName = strings.TrimSuffix(dbName, dbRevisionDelimiter+sqldb.Revision())
+	}
+
+	return dbName, sqldb.Revision(), nil
+}
+
 // IsRevisionDatabase returns true if the specified dbName represents a database that is tied to a specific
 // branch or commit from a database (e.g. "dolt/branch1").
-func IsRevisionDatabase(dbName string) bool {
-	// TODO: This is only a heuristic to identify a revision database. Because
-	//       database names and branch names may contain slashes, we need to
-	//       do more work here to accurately check if this is a revision db.
-	return strings.Contains(dbName, dbRevisionDelimiter)
+func (p DoltDatabaseProvider) IsRevisionDatabase(ctx *sql.Context, dbName string) (bool, error) {
+	dbName, revision, err := p.GetRevisionForRevisionDatabase(ctx, dbName)
+	if err != nil {
+		return false, err
+	}
+
+	return revision != "", nil
 }
 
 // switchAndFetchReplicaHead tries to pull the latest version of a branch. Will fail if the branch
@@ -469,6 +490,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 			drw:      static,
 			gs:       v.gs,
 			editOpts: v.editOpts,
+			revision: revSpec,
 		}
 	case ReadReplicaDatabase:
 		db = ReadReplicaDatabase{
@@ -480,6 +502,7 @@ func dbRevisionForBranch(ctx context.Context, srcDb SqlDatabase, revSpec string)
 				drw:      static,
 				gs:       v.gs,
 				editOpts: v.editOpts,
+				revision: revSpec,
 			},
 			remote: v.remote,
 			srcDB:  v.srcDB,
@@ -521,6 +544,7 @@ func dbRevisionForCommit(ctx context.Context, srcDb Database, revSpec string) (R
 		rsr:      srcDb.DbData().Rsr,
 		drw:      srcDb.DbData().Drw,
 		editOpts: srcDb.editOpts,
+		revision: revSpec,
 	}}
 	init := dsess.InitialDbState{
 		Db:         db,
