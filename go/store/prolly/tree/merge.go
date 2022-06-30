@@ -27,9 +27,9 @@ import (
 
 const patchBufferSize = 1024
 
-// CollisionFn is a callback that handles 3-way merging of NodeItems.
-// A typical implementation will attempt a cell-wise merge of the tuples,
-// or register a conflict if such a merge is not possible.
+// CollisionFn is a callback that handles 3-way merging of NodeItems when any
+// key collision occurs. A typical implementation will attempt a cell-wise merge
+// of the tuples, or register a conflict if such a merge is not possible.
 type CollisionFn func(left, right Diff) (Diff, bool)
 
 // ThreeWayMerge implements a three-way merge algorithm using |base| as the common ancestor, |right| as
@@ -177,14 +177,12 @@ func sendPatches(ctx context.Context, l, r Differ, buf patchBuffer, cb Collision
 			}
 
 		case cmp == 0:
-			if !equalDiffVals(left, right) {
-				resolved, ok := cb(left, right)
-				if ok {
-					err = buf.sendPatch(ctx, resolved)
-				}
-				if err != nil {
-					return err
-				}
+			resolved, ok := cb(left, right)
+			if ok {
+				err = buf.sendPatch(ctx, resolved)
+			}
+			if err != nil {
+				return err
 			}
 
 			left, err = l.Next(ctx)

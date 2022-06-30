@@ -107,6 +107,7 @@ type prollyConflictRowIter struct {
 	tblName string
 	vrw     types.ValueReadWriter
 	ourRows prolly.Map
+	keyless bool
 
 	kd                       val.TupleDesc
 	baseVD, oursVD, theirsVD val.TupleDesc
@@ -133,21 +134,31 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 		return nil, err
 	}
 
+	keyless := schema.IsKeyless(ct.ourSch)
+
 	kd := shim.KeyDescriptorFromSchema(ct.baseSch)
 	baseVD := shim.ValueDescriptorFromSchema(ct.baseSch)
 	oursVD := shim.ValueDescriptorFromSchema(ct.ourSch)
 	theirsVD := shim.ValueDescriptorFromSchema(ct.theirSch)
 
 	b := 1
-	o := b + kd.Count() + baseVD.Count()
-	t := o + kd.Count() + oursVD.Count()
-	n := t + kd.Count() + theirsVD.Count()
+	var o, t, n int
+	if !keyless {
+		o = b + kd.Count() + baseVD.Count()
+		t = o + kd.Count() + oursVD.Count()
+		n = t + kd.Count() + theirsVD.Count()
+	} else {
+		o = b + baseVD.Count() - 1
+		t = o + oursVD.Count() - 1
+		n = t + theirsVD.Count() - 1
+	}
 
 	return &prollyConflictRowIter{
 		itr:      itr,
 		tblName:  ct.tblName,
 		vrw:      ct.tbl.ValueReadWriter(),
 		ourRows:  ourRows,
+		keyless:  keyless,
 		kd:       kd,
 		baseVD:   baseVD,
 		oursVD:   oursVD,
@@ -168,27 +179,43 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 	r := make(sql.Row, itr.n)
 	r[0] = c.h.String()
 
-	for i := 0; i < itr.kd.Count(); i++ {
-		f, err := index.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+	if !itr.keyless {
+		for i := 0; i < itr.kd.Count(); i++ {
+			f, err := index.GetField(ctx, itr.kd, i, c.k, itr.baseRows.NodeStore())
+			if err != nil {
+				return nil, err
+			}
+			if c.bV != nil {
+				r[itr.b+i] = f
+			}
+			if c.oV != nil {
+				r[itr.o+i] = f
+			}
+			if c.tV != nil {
+				r[itr.t+i] = f
+			}
+		}
+
+		err = itr.putConflictRowVals(ctx, c, r)
 		if err != nil {
 			return nil, err
 		}
-		if c.bV != nil {
-			r[itr.b+i] = f
-		}
-		if c.oV != nil {
-			r[itr.o+i] = f
-		}
-		if c.tV != nil {
-			r[itr.t+i] = f
+	} else {
+		err = itr.putKeylessConflictRowVals(ctx, c, r)
+		if err != nil {
+			return nil, err
 		}
 	}
 
+	return r, nil
+}
+
+func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
 	if c.bV != nil {
 		for i := 0; i < itr.baseVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.baseVD, i, c.bV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.b+itr.kd.Count()+i] = f
 		}
@@ -198,7 +225,7 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for i := 0; i < itr.oursVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.oursVD, i, c.oV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.o+itr.kd.Count()+i] = f
 		}
@@ -208,13 +235,47 @@ func (itr *prollyConflictRowIter) Next(ctx *sql.Context) (sql.Row, error) {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
 			f, err := index.GetField(ctx, itr.theirsVD, i, c.tV, itr.baseRows.NodeStore())
 			if err != nil {
-				return nil, err
+				return err
 			}
 			r[itr.t+itr.kd.Count()+i] = f
 		}
 	}
 
-	return r, nil
+	return nil
+}
+
+func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
+	if c.bV != nil {
+		for i := 0; i < itr.baseVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.baseVD, i+1, c.bV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.b+i] = f
+		}
+	}
+
+	if c.oV != nil {
+		for i := 0; i < itr.oursVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.oursVD, i+1, c.oV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.o+i] = f
+		}
+	}
+
+	if c.tV != nil {
+		for i := 0; i < itr.theirsVD.Count()-1; i++ {
+			f, err := index.GetField(ctx, itr.theirsVD, i+1, c.tV, itr.baseRows.NodeStore())
+			if err != nil {
+				return err
+			}
+			r[itr.t+i] = f
+		}
+	}
+
+	return nil
 }
 
 type conf struct {
@@ -337,6 +398,9 @@ func newProllyConflictDeleter(ct ProllyConflictsTable) *prollyConflictDeleter {
 }
 
 func (cd *prollyConflictDeleter) Delete(ctx *sql.Context, r sql.Row) error {
+	if schema.IsKeyless(cd.ct.ourSch) {
+		panic("conflict deleter for keyless tables not implemented")
+	}
 
 	// get keys from either base, ours, or theirs
 	o := func() int {
