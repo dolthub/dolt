@@ -116,6 +116,17 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	return 0, nil
 }
 
+// getRevisionForRevisionDatabase returns the root database name and revision for a database, or just the root database name if the specified db name is not a revision database.
+func getRevisionForRevisionDatabase(ctx *sql.Context, dbName string) (string, string, error) {
+	doltsess, ok := ctx.Session.(*dsess.DoltSession)
+	if !ok {
+		return "", "", fmt.Errorf("unexpected session type: %T", ctx.Session)
+	}
+
+	provider := doltsess.Session.Provider()
+	return provider.GetRevisionForRevisionDatabase(ctx, dbName)
+}
+
 func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
 	if len(branchName) == 0 {
 		return ErrEmptyBranchName

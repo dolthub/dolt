@@ -132,8 +132,16 @@ func renameBranch(ctx *sql.Context, dbData env.DbData, apr *argparser.ArgParseRe
 		return err
 	}
 
-	dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
-	return removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, oldBranchName))
+	dbName, revision, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+
+	if revision != "" {
+		return removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, oldBranchName))
+	}
+
+	return nil
 }
 
 func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env.DbData) error {
@@ -160,10 +168,16 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 			return err
 		}
 
-		dbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
-		err = removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, branchName))
+		dbName, revision, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
 		if err != nil {
 			return err
+		}
+
+		if revision != "" {
+			err = removeBranchRevisionDatabase(ctx, fmt.Sprintf("%s/%s", dbName, branchName))
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -172,7 +186,11 @@ func deleteBranches(ctx *sql.Context, apr *argparser.ArgParseResults, dbData env
 // validateBranchNotActiveInAnySessions returns an error if the specified branch is currently
 // selected as the active branch for any active server sessions.
 func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) error {
-	currentDbName, _ := parseRevisionDatabaseName(ctx.GetCurrentDatabase())
+	currentDbName, _, err := getRevisionForRevisionDatabase(ctx, ctx.GetCurrentDatabase())
+	if err != nil {
+		return err
+	}
+
 	if currentDbName == "" {
 		return nil
 	}
@@ -195,7 +213,11 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 		}
 
 		sessionDatabase := dsess.Session.GetCurrentDatabase()
-		sessionDbName, _ := parseRevisionDatabaseName(sessionDatabase)
+		sessionDbName, _, err := getRevisionForRevisionDatabase(ctx, dsess.GetCurrentDatabase())
+		if err != nil {
+			return false, err
+		}
+
 		if len(sessionDatabase) == 0 || sessionDbName != currentDbName {
 			return false, nil
 		}
@@ -212,21 +234,6 @@ func validateBranchNotActiveInAnySession(ctx *sql.Context, branchName string) er
 
 		return false, nil
 	})
-}
-
-// parseRevisionDatabaseName parses the database or branch-qualified database name and returns the
-// database name and any specified branch name.
-func parseRevisionDatabaseName(revisionDbName string) (string, string) {
-	lastIndex := strings.LastIndex(revisionDbName, "/")
-	if lastIndex < 0 {
-		return revisionDbName, ""
-	}
-
-	var revision = ""
-	if len(revisionDbName) > lastIndex {
-		revision = revisionDbName[lastIndex+1:]
-	}
-	return revisionDbName[0:lastIndex], revision
 }
 
 // removeBranchRevisionDatabase updates database provider information to ensure the specified
