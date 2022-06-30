@@ -34,7 +34,7 @@ func TestRunner(t *testing.T) {
 	}
 
 	conf := &Config{
-		Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_delete"),
+		Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_delete_insert"),
 		//Tests: selectTests("oltp_read_write", "oltp_update_index", "oltp_update_non_index", "oltp_insert", "bulk_insert", "oltp_write_only", "oltp_delete"),
 		Servers: []*ServerConfig{
 			{
