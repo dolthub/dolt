@@ -194,13 +194,21 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
+	isRevisionDatabase, err := p.IsRevisionDatabase(ctx, name)
+	if err != nil {
+		return err
+	}
+	if isRevisionDatabase {
+		return fmt.Errorf("unable to drop revision database: %s", name)
+	}
 
 	// get the case-sensitive name for case-sensitive file systems
 	// TODO: there are still cases (not server-first) where we rename databases because the directory name would need
 	//  quoting if used as a database name, and that breaks here. We either need the database name to match the directory
 	//  name in all cases, or else keep a mapping from database name to directory on disk.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	dbKey := formatDbMapKeyName(name)
 	db := p.databases[dbKey]
 
@@ -213,7 +221,7 @@ func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error 
 		return fmt.Errorf("unexpected error: %s exists but is not a directory", dbKey)
 	}
 
-	err := p.fs.Delete(db.Name(), true)
+	err = p.fs.Delete(db.Name(), true)
 	if err != nil {
 		return err
 	}
