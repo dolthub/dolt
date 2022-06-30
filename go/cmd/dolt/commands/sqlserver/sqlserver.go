@@ -40,6 +40,7 @@ const (
 	readonlyFlag            = "readonly"
 	logLevelFlag            = "loglevel"
 	dataDirFlag             = "data-dir"
+	cfgDirFlag              = "doltcfg-dir"
 	noAutoCommitFlag        = "no-auto-commit"
 	configFileFlag          = "config"
 	queryParallelismFlag    = "query-parallelism"
@@ -138,6 +139,7 @@ func (cmd SqlServerCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsFlag(readonlyFlag, "r", "Disable modification of the database")
 	ap.SupportsString(logLevelFlag, "l", "log level", fmt.Sprintf("Defines the level of logging provided\nOptions are: `trace', `debug`, `info`, `warning`, `error`, `fatal` (default `%v`)", serverConfig.LogLevel()))
 	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases.")
+	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configura.")
 	ap.SupportsFlag(noAutoCommitFlag, "", "Set @@autocommit = off for the server")
 	ap.SupportsInt(queryParallelismFlag, "", "num-go-routines", fmt.Sprintf("Set the number of go routines spawned to handle each query (default `%d`)", serverConfig.QueryParallelism()))
 	ap.SupportsInt(maxConnectionsFlag, "", "max-connections", fmt.Sprintf("Set the number of connections handled by the server (default `%d`)", serverConfig.MaxConnections()))
@@ -276,6 +278,12 @@ func getCommandLineServerConfig(dEnv *env.DoltEnv, apr *argparser.ArgParseResult
 		}
 
 		serverConfig.withDBNamesAndPaths(dbNamesAndPaths).withDataDir(dataDir)
+	}
+
+	// TODO: check for existence of this directory in parent and child here?
+	if cfgDir, ok := apr.GetValue(cfgDirFlag); ok {
+		if cfgDir == "" {
+		}
 	}
 
 	if queryParallelism, ok := apr.GetInt(queryParallelismFlag); ok {

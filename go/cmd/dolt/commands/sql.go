@@ -90,6 +90,7 @@ const (
 	messageFlag           = "message"
 	BatchFlag             = "batch"
 	dataDirFlag           = "data-dir"
+	cfgDirFlag            = "doltcfg-dir"
 	continueFlag          = "continue"
 	fileInputFlag         = "file"
 	privilegeFilePathFlag = "privilege-file"
@@ -141,6 +142,7 @@ func (cmd SqlCmd) ArgParser() *argparser.ArgParser {
 	ap.SupportsString(messageFlag, "m", "saved query description", "Used with --query and --save, saves the query with the descriptive message given. See also --name")
 	ap.SupportsFlag(BatchFlag, "b", "Use to enable more efficient batch processing for large SQL import scripts consisting of only INSERT statements. Other statements types are not guaranteed to work in this mode.")
 	ap.SupportsString(dataDirFlag, "", "directory", "Defines a directory whose subdirectories should all be dolt data repositories accessible as independent databases within ")
+	ap.SupportsString(cfgDirFlag, "", "directory", "Defines a directory that contains configuration files for dolt ")
 	ap.SupportsFlag(continueFlag, "c", "Continue running queries on an error. Used for batch mode only.")
 	ap.SupportsString(fileInputFlag, "", "input file", "Execute statements from the file given")
 	ap.SupportsString(privilegeFilePathFlag, "", "privilege file", "Path to a file to load and store users and grants. Without this flag, the database has a single user with all permissions, and more cannot be added.")
@@ -373,6 +375,9 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	}
+
+	// TODO: search parent directory and child directories for existing .doltcfg
+	// TODO: the search should be relative to what $data-dir is
 
 	return mrEnv, nil
 }
