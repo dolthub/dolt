@@ -17,6 +17,7 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
@@ -121,12 +122,26 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		return ErrEmptyBranchName
 	}
 
-	if ref, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
+	if remoteRef, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
 		return errors.New("fatal: unable to read from data repository")
 	} else if refExists {
-		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, ref.String())
+		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
 		if err == nil {
-			// TODO : set upstream tracking
+			refSpec, err := ref.ParseRefSpecForRemote(remoteRef.GetRemote(), remoteRef.GetBranch())
+			if err != nil {
+				return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remoteRef.GetRemote()).Error()).Build()
+			}
+
+			src := refSpec.SrcRef(dbData.Rsr.CWBHeadRef())
+			dest := refSpec.DestRef(src)
+
+			err = dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
+				Merge: ref.MarshalableRef{
+					Ref: dest,
+				},
+				Remote: remoteRef.GetRemote(),
+			})
+			// TODO : set upstream should be persisted outside of session
 		}
 		return err
 	} else {

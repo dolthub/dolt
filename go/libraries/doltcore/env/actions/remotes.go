@@ -132,6 +132,7 @@ func DoPush(ctx context.Context, rsr env.RepoStateReader, rsw env.RepoStateWrite
 			if err != nil {
 				return err
 			}
+			// TODO : set upstream should be persisted outside of session
 		}
 	}
 

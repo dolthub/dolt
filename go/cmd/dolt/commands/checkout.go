@@ -259,18 +259,15 @@ func checkoutBranch(ctx context.Context, dEnv *env.DoltEnv, name string, force b
 // setRemoteUpstreamForCheckout sets upstream for checked out branch. This applies `dolt checkout <bn>`,
 // if <bn> matches any remote branch name. This should not happen for `dolt checkout -b <bn>` case.
 func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, branchRef ref.RemoteRef) errhand.VerboseError {
-	rsr := dEnv.RepoStateReader()
-	currentBranch := rsr.CWBHeadRef()
-
 	refSpec, err := ref.ParseRefSpecForRemote(branchRef.GetRemote(), branchRef.GetBranch())
 	if err != nil {
 		return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, branchRef.GetRemote()).Error()).Build()
 	}
 
-	src := refSpec.SrcRef(currentBranch)
+	src := refSpec.SrcRef(dEnv.RepoStateReader().CWBHeadRef())
 	dest := refSpec.DestRef(src)
 
-	uErr := dEnv.RepoStateWriter().UpdateBranch(currentBranch.GetPath(), env.BranchConfig{
+	uErr := dEnv.RepoStateWriter().UpdateBranch(src.GetPath(), env.BranchConfig{
 		Merge: ref.MarshalableRef{
 			Ref: dest,
 		},
@@ -283,7 +280,7 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, branchRef ref.RemoteRef) er
 	if uErr != nil {
 		uErr = errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(uErr).Build()
 	}
-	cli.Printf("branch '%s' set up to track '%s'.\n", currentBranch.GetPath(), branchRef.GetPath())
+	cli.Printf("branch '%s' set up to track '%s'.\n", src.GetPath(), branchRef.GetPath())
 
 	return nil
 }

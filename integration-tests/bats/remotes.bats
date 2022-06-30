@@ -1090,7 +1090,12 @@ SQL
     [ "$status" -eq 0 ]
 }
 
-@test "remotes: DOLT_CHECKOUT to checkout to a remote branch." {
+@test "remotes: DOLT_CHECKOUT new branch without '-b' to checkout to set upstream to a remote branch." {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
     CREATE TABLE test (
@@ -1100,17 +1105,26 @@ SQL
 SQL
     dolt commit -a -m "main commit"
     dolt push test-remote main
+
+    cd ..
+    run dolt clone http://localhost:50051/test-org/test-repo repo2
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
+
+    cd repo2
+    run dolt pull
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Everything up-to-date." ]] || false
+
+    cd ../repo1
     dolt checkout -b test-branch
     dolt sql -q "INSERT INTO test VALUES (1);"
     dolt commit -a -m "test commit"
     dolt push test-remote test-branch
-    cd "dolt-repo-clones"
 
-    run dolt clone http://localhost:50051/test-org/test-repo
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "cloning http://localhost:50051/test-org/test-repo" ]] || false
-    cd test-repo
 
+    cd ../repo2
+    dolt fetch
     # Checkout with DOLT_CHECKOUT and confirm the table has the row added in the remote
     run dolt sql << SQL
 SELECT DOLT_CHECKOUT('test-branch');
@@ -1119,6 +1133,12 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "pk" ]] || false
     [[ "$output" =~ "1" ]] || false
+
+    skip # above checkout command should set upstream persisting outside of session
+    dolt checkout test-branch
+    run dolt status
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "branch 'test-branch' set up to track 'origin/test-branch'." ]] || false
 }
 
 @test "remotes: validate that a config isn't needed for a pull." {
