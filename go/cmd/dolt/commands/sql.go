@@ -68,7 +68,7 @@ Multiple SQL statements must be separated by semicolons. Use {{.EmphasisLeft}}-b
 
 Queries can be saved to the query catalog with {{.EmphasisLeft}}-s{{.EmphasisRight}}. Alternatively {{.EmphasisLeft}}-x{{.EmphasisRight}} can be used to execute a saved query by name.
 
-By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--multi-db-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
+By default this command uses the dolt database in the current working directory, as well as any dolt databases that are found in the current directory. Any databases created with CREATE DATABASE are placed in the current directory as well. Running with {{.EmphasisLeft}}--data-dir <directory>{{.EmphasisRight}} uses each of the subdirectories of the supplied directory (each subdirectory must be a valid dolt data repository) as databases. Subdirectories starting with '.' are ignored.`,
 
 	Synopsis: []string{
 		"",
@@ -359,10 +359,10 @@ func queryMode(
 // getMultiRepoEnv returns an appropriate MultiRepoEnv for this invocation of the command
 func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv, cmd SqlCmd) (*env.MultiRepoEnv, errhand.VerboseError) {
 	var mrEnv *env.MultiRepoEnv
-	multiDir, multiDbMode := apr.GetValue(dataDirFlag)
+	dataDir, multiDbMode := apr.GetValue(dataDirFlag)
 	if multiDbMode {
 		var err error
-		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, multiDir, cmd.VersionStr)
+		mrEnv, err = env.LoadMultiEnvFromDir(ctx, env.GetCurrentUserHomeDir, dEnv.Config.WriteableConfig(), dEnv.FS, dataDir, cmd.VersionStr)
 		if err != nil {
 			return nil, errhand.VerboseErrorFromError(err)
 		}
@@ -635,7 +635,7 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 	_, batch := apr.GetValue(BatchFlag)
 	_, list := apr.GetValue(listSavedFlag)
 	_, execute := apr.GetValue(executeFlag)
-	_, multiDB := apr.GetValue(dataDirFlag)
+	_, dataDir := apr.GetValue(dataDirFlag)
 
 	if len(apr.Args) > 0 && !query {
 		return errhand.BuildDError("Invalid Argument: use --query or -q to pass inline SQL queries").Build()
@@ -650,8 +650,8 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
@@ -664,13 +664,13 @@ func validateSqlArgs(apr *argparser.ArgParseResults) error {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --message|-m").Build()
 		} else if save {
 			return errhand.BuildDError("Invalid Argument: --list-saved is not compatible with --save|-s").Build()
-		} else if multiDB {
-			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --multi-db-dir").Build()
+		} else if dataDir {
+			return errhand.BuildDError("Invalid Argument: --execute|-x is not compatible with --data-dir").Build()
 		}
 	}
 
-	if save && multiDB {
-		return errhand.BuildDError("Invalid Argument: --multi-db-dir queries cannot be saved").Build()
+	if save && dataDir {
+		return errhand.BuildDError("Invalid Argument: --data-dir queries cannot be saved").Build()
 	}
 
 	if batch {
