@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 remotesrv_pid=
 setup() {
-    skip_nbf_dolt_1
     skiponwindows "tests are flaky on Windows"
     setup_common
     cd $BATS_TMPDIR
@@ -194,6 +193,8 @@ teardown() {
 }
 
 @test "remotes: push and pull with docs from remote" {
+    skip_nbf_dolt_1 "uses docs"
+
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
@@ -389,6 +390,8 @@ SQL
 }
 
 @test "remotes: clone a remote with docs" {
+    skip_nbf_dolt_1 "uses docs"
+
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     echo "license-text" > LICENSE.md
     echo "readme-text" > README.md
@@ -602,6 +605,8 @@ SQL
 }
 
 @test "remotes: dolt fetch with docs" {
+    skip_nbf_dolt_1 "uses docs"
+
     # Initial commit of docs on remote
     echo "initial-license" > LICENSE.md
     echo "initial-readme" > README.md
@@ -794,6 +799,7 @@ SQL
 }
 
 @test "remotes: generate a merge with a conflict with a remote branch" {
+    skip_nbf_dolt_1 "uses dolt conflicts resolve"
     dolt remote add test-remote http://localhost:50051/test-org/test-repo
     dolt sql <<SQL
 CREATE TABLE test (

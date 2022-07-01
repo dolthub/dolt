@@ -656,7 +656,6 @@ SQL
 
 # TODO: Need to update testing logic allow queries for a multiple session.
 @test "sql-server: Create a temporary table and validate that it doesn't persist after a session closes" {
-    skip_nbf_dolt_1
     skiponwindows "Missing dependencies"
 
     cd repo1
@@ -978,7 +977,6 @@ END""")
 
 @test "sql-server: sql-push --set-remote within session" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir rem1
     cd repo1
@@ -998,7 +996,6 @@ END""")
 
 @test "sql-server: replicate to backup after sql-session commit" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir bac1
     cd repo1
@@ -1083,7 +1080,7 @@ END""")
 @test "sql-server: drop database with active connections" {
     skiponwindows "Missing dependencies"
     skip_nbf_dolt_1
-    
+
     mkdir no_dolt && cd no_dolt
     start_sql_server
 
@@ -1132,7 +1129,6 @@ END""")
 
 @test "sql-server: connect to databases case insensitive" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir no_dolt && cd no_dolt
     start_sql_server
@@ -1255,7 +1251,6 @@ END""")
 
 @test "sql-server: fetch uses database tempdir from different working directory" {
     skiponwindows "Missing dependencies"
-    skip_nbf_dolt_1
 
     mkdir remote1
     cd repo2

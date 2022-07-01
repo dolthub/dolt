@@ -128,7 +128,6 @@ SQL
 }
 
 @test "triggers: Merge with manual resolution" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE x(a BIGINT PRIMARY KEY);
 CREATE TRIGGER trigger1 BEFORE INSERT ON x FOR EACH ROW SET new.a = new.a + 1;
@@ -158,6 +157,7 @@ SQL
     run dolt commit -am "can't commit conflicts"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "dolt_schemas" ]] || false
+    skip_nbf_dolt_1
     run dolt conflicts cat dolt_schemas
     [ "$status" -eq "0" ]
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false

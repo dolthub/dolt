@@ -353,8 +353,8 @@ teardown() {
 }
 
 @test "primary-key-changes: dolt diff on working set shows correct status diff" {
-    skip_nbf_dolt_1
-    
+    skip_nbf_dolt_1 "keyless diff"
+
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
     run dolt sql -q "ALTER TABLE t DROP PRIMARY key"
@@ -372,7 +372,7 @@ teardown() {
 }
 
 @test "primary-key-changes: dolt diff table returns top-down diff until schema change" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "keyless diff"
 
     dolt sql -q "CREATE TABLE t (pk int PRIMARY KEY, val int)"
     dolt sql -q "INSERT INTO t VALUES (1, 1)"
@@ -458,8 +458,7 @@ SQL
 }
 
 @test "primary-key-changes: dolt constraints verify works gracefully with schema violations" {
-    skip_nbf_dolt_1
-    
+
     dolt sql -q "CREATE table t (pk int primary key, val int)"
     dolt commit -am "cm1"
 
