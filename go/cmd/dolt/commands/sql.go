@@ -93,6 +93,7 @@ const (
 	dataDirFlag           = "data-dir"
 	cfgDirFlag            = "doltcfg-dir"
 	cfgDirName            = ".doltcfg"
+	defaultPrivsName      = "privileges.db"
 	continueFlag          = "continue"
 	fileInputFlag         = "file"
 	privilegeFilePathFlag = "privilege-file"
@@ -177,8 +178,6 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 	}
 
-	privsFp, _ := apr.GetValue(privilegeFilePathFlag)
-
 	// We need a username and password for many SQL commands, so set defaults if they don't exist
 	dEnv.Config.SetFailsafes(env.DefaultFailsafeConfig)
 
@@ -187,69 +186,66 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 		return HandleVErrAndExitCode(verr, usage)
 	}
 
-	// TODO: helper function getCfgDir
-
-	// TODO: search parent directory and child directories for existing .doltcfg
-	// TODO: the search should be relative to what $data-dir is
+	// Handle doltcfg directory
+	var cfgDirPath string
 	dataDir, _ := apr.GetValue(dataDirFlag)
-	cfgDir, ok := apr.GetValue(cfgDirFlag)
-	if ok {
+	cfgDir, hasCfg := apr.GetValue(cfgDirFlag)
+	if hasCfg {
 		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
-		if exists, _ := dEnv.FS.Exists(filepath.Join(dataDir, cfgDir)); !exists {
+		path := filepath.Join(dataDir, cfgDir)
+		if exists, _ := dEnv.FS.Exists(path); exists {
+			cfgDirPath = path
+		} else {
 			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
 				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 			}
-		} else {
-			// TODO: set path
 		}
 	} else {
-		// No .doltcfg directory specified, look for it in parent or children, or create one in current
-
-		// TODO: ignore if not a directory?
-		// TODO: make a constant for .doltcfg
-		// Is there a .doltcfg in dataDir?
-		var currentExists, parentExists, childExists bool
+		// Look in current directory for doltcfg
 		if exists, isDir := dEnv.FS.Exists(filepath.Join(dataDir, cfgDirName)); exists && isDir {
-			currentExists = true
+			cfgDirPath = filepath.Join(dataDir, cfgDirName)
 		}
 
-		// Is there a .doltcfg in parent directory?
+		// Look in parent directory for doltcfg
 		if exists, isDir := dEnv.FS.Exists(filepath.Join("..", cfgDirName)); exists && isDir {
-			parentExists = true
+			if len(cfgDirPath) != 0 {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")), usage)
+			}
+			cfgDirPath = filepath.Join("..", cfgDirName)
 		}
 
-		// detect .doltcfg conflicts
-		if parentExists && currentExists {
-			// TODO: make an error variable somewhere
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")))
-		}
-
-		// Are there any .doltcfg in child directories?
-		err := dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
+		// Look through each child directory for doltcfg
+		iterErr := dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
 			if isDir {
 				dirName := filepath.Base(path)
 				if dirName == "." || dirName == ".." {
 					return false
 				}
 				if dirName == cfgDirName {
-					childExists = true
-					return true
+					if len(cfgDirPath) == 0 {
+						err = errors.New("multiple .doltcfg directories detected")
+						return true
+					}
+					cfgDirPath = filepath.Join(path, cfgDirName)
 				}
 			}
 			return false
 		})
+		if iterErr != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(iterErr), usage)
+		}
 		if err != nil {
 			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
 		}
-
-		// Detect .doltcfg conflicts
-		if childExists && (parentExists || currentExists) {
-			// TODO: make an error variable somewhere else
-			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")), usage)
-		}
 	}
 
-	// TODO: all execShell, execBatch, etc need to know about
+	// TODO: all execShell, execBatch, etc need to know about the cfg directory
+
+	// If no privilege filepath specified, default to cfg directory
+	privsFp, hasPrivsFp := apr.GetValue(privilegeFilePathFlag)
+	if !hasPrivsFp {
+		privsFp = filepath.Join(dataDir, cfgDirName, defaultPrivsName)
+	}
 
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
 	if err != nil {
