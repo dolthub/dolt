@@ -396,7 +396,7 @@ func GetAbsRemoteUrl(fs filesys2.Filesys, cfg config.ReadableConfig, urlArg stri
 		return "", "", err
 	}
 
-	if u.Scheme != "" &&  fs != nil {
+	if u.Scheme != "" && fs != nil {
 		if u.Scheme == dbfactory.FileScheme || u.Scheme == dbfactory.LocalBSScheme {
 			absUrl, err := getAbsFileRemoteUrl(u.Host+u.Path, u.Scheme, fs)
 

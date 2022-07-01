@@ -95,8 +95,8 @@ const (
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
 	OutputOnlyFlag   = "output-only"
-	RemoteParam = "remote"
-	BranchParam = "branch"
+	RemoteParam      = "remote"
+	BranchParam      = "branch"
 )
 
 const (

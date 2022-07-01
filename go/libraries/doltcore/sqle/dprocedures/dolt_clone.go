@@ -17,6 +17,8 @@ package dprocedures
 import (
 	"path"
 
+	"github.com/dolthub/go-mysql-server/sql"
+
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
@@ -28,7 +30,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/types"
-	"github.com/dolthub/go-mysql-server/sql"
 )
 
 // doltClone is a stored procedure to clone a database from a remote
@@ -38,7 +39,6 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 	if err != nil {
 		return nil, err
 	}
-
 
 	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
 	branch := apr.GetValueOrDefault(cli.BranchParam, "")
