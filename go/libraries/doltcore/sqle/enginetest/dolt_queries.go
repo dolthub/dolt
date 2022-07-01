@@ -1624,6 +1624,50 @@ var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
 	},
 }
 
+var DoltConflictDiffTypeScripts = []queries.ScriptTest{
+	{
+		Name: "conflict diff types",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (pk int PRIMARY KEY, col1 int);",
+			"INSERT INTO t VALUES (1, 1);",
+			"INSERT INTO t VALUES (2, 2);",
+			"INSERT INTO t VALUES (3, 3);",
+			"CALL DOLT_COMMIT('-am', 'create table with row');",
+
+			"CALL DOLT_CHECKOUT('-b', 'other');",
+			"UPDATE t set col1 = 3 where pk = 1;",
+			"UPDATE t set col1 = 0 where pk = 2;",
+			"DELETE FROM t where pk = 3;",
+			"INSERT INTO t VALUES (4, -4);",
+			"CALL DOLT_COMMIT('-am', 'right edit');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"UPDATE t set col1 = 2 where pk = 1;",
+			"DELETE FROM t where pk = 2;",
+			"UPDATE t set col1 = 0 where pk = 3;",
+			"INSERT INTO t VALUES (4, 4);",
+			"CALL DOLT_COMMIT('-am', 'left edit');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('other');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query: "SELECT base_pk, base_col1, our_pk, our_col1, our_diff_type, their_pk, their_col1, their_diff_type" +
+					" from dolt_conflicts_t ORDER BY COALESCE(base_pk, our_pk, their_pk) ASC;",
+				Expected: []sql.Row{
+					{1, 1, 1, 2, "modified", 1, 3, "modified"},
+					{2, 2, nil, nil, "removed", 2, 0, "modified"},
+					{3, 3, 3, 0, "modified", nil, nil, "removed"},
+					{nil, nil, 4, 4, "added", 4, -4, "added"},
+				},
+			},
+		},
+	},
+}
+
 // MergeArtifactsScripts tests new format merge behavior where
 // existing violations and conflicts are merged together.
 var MergeArtifactsScripts = []queries.ScriptTest{
