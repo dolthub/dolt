@@ -28,11 +28,12 @@ import (
 )
 
 type result struct {
-	name    string
-	format  string
-	rows    int
-	columns int
-	br      testing.BenchmarkResult
+	name             string
+	format           string
+	rows             int
+	columns          int
+	garbageGenerated float64
+	br               testing.BenchmarkResult
 }
 
 // RDSImpl is a Dataset containing results of benchmarking
@@ -123,9 +124,11 @@ func getResultsRow(res result, cols []*SeedColumn) []string {
 	row[9] = fmt.Sprintf("%v", res.br.AllocedBytesPerOp())
 	//set allocs_per_op
 	row[10] = fmt.Sprintf("%v", res.br.AllocsPerOp())
+	// set garbage_generaged
+	row[11] = fmt.Sprintf("%v", res.garbageGenerated)
 	// set datetime
 	t := time.Now()
-	row[11] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
+	row[12] = fmt.Sprintf("%04d-%02d-%02d %02d:%02d", t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute())
 	return row
 }
 
@@ -142,6 +145,7 @@ func genResultsCols() []*SeedColumn {
 		NewSeedColumn("mem_bytes", false, types.IntKind, supplied),
 		NewSeedColumn("alloced_bytes_per_op", false, types.StringKind, supplied),
 		NewSeedColumn("allocs_per_op", false, types.StringKind, supplied),
+		NewSeedColumn("garbage_generated(MB)", false, types.StringKind, supplied),
 		NewSeedColumn("date_time", false, types.StringKind, supplied),
 	}
 }

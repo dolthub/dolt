@@ -162,3 +162,43 @@ func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	e := exec.CommandContext(ctx, name, arg...)
 	return e
 }
+
+func getAmountOfGarbageGenerated() float64 {
+	// 1. Get the size of the current .dolt directory
+	originalSize, err := dirSizeMB(getWorkingDir())
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// 2. Execute Garbage Collection
+	init := execCommand(context.Background(), "dolt", "gc")
+	init.Dir = getWorkingDir()
+	err = init.Run()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	// 3. Get the new size of the current .dolt directory
+	newSize, err := dirSizeMB(getWorkingDir())
+
+	// 4. Return result
+	return originalSize - newSize
+}
+
+// cc: https://stackoverflow.com/questions/32482673/how-to-get-directory-total-size
+func dirSizeMB(path string) (float64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+
+	sizeMB := float64(size) / 1024.0 / 1024.0
+
+	return sizeMB, err
+}

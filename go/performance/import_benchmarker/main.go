@@ -51,11 +51,12 @@ func main() {
 		benchmarkFunc := BenchmarkDoltImport(test)
 		br := testing.Benchmark(benchmarkFunc)
 		res := result{
-			name:    config.Jobs[i].Name,
-			format:  config.Jobs[i].Format,
-			rows:    config.Jobs[i].NumRows,
-			columns: len(genSampleCols()),
-			br:      br,
+			name:             config.Jobs[i].Name,
+			format:           config.Jobs[i].Format,
+			rows:             config.Jobs[i].NumRows,
+			columns:          len(genSampleCols()),
+			garbageGenerated: getAmountOfGarbageGenerated(),
+			br:               br,
 		}
 		results = append(results, res)
 	}
