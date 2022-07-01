@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE parent (
@@ -1260,6 +1259,8 @@ SQL
 }
 
 @test "foreign-keys: Resolve catches violations" {
+    skip_nbf_dolt_1 "resolve not implemented"
+
     dolt sql <<SQL
 ALTER TABLE child ADD CONSTRAINT fk_v1 FOREIGN KEY (v1) REFERENCES parent(v1);
 INSERT INTO parent VALUES (0,0,0);

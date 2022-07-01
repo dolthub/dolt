@@ -57,12 +57,10 @@ teardown() {
 }
 
 @test "verify-constraints: Constraints verified" {
-    skip_nbf_dolt_1
     dolt constraints verify child1 child2
 }
 
 @test "verify-constraints: One table fails" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 SET foreign_key_checks=0;
 DELETE FROM parent1 WHERE pk = 1;
@@ -80,7 +78,6 @@ SQL
 }
 
 @test "verify-constraints: Two tables fail" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 SET foreign_key_checks=0;
 DELETE FROM parent2 WHERE pk = 2;
@@ -101,7 +98,6 @@ SQL
 }
 
 @test "verify-constraints: Ignores NULLs" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE parent (
     id BIGINT PRIMARY KEY,
@@ -131,7 +127,6 @@ SQL
 }
 
 @test "verify-constraints: CLI missing --all and --output-only, no named tables" {
-    skip_nbf_dolt_1
     run dolt constraints verify
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -142,7 +137,6 @@ SQL
 }
 
 @test "verify-constraints: CLI missing --all and --output-only, named tables" {
-    skip_nbf_dolt_1
     run dolt constraints verify child3
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -153,7 +147,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --all" {
-    skip_nbf_dolt_1
     run dolt constraints verify --all child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -165,7 +158,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --output-only" {
-    skip_nbf_dolt_1
     run dolt constraints verify --output-only child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false
@@ -177,7 +169,6 @@ SQL
 }
 
 @test "verify-constraints: CLI --all and --output-only" {
-    skip_nbf_dolt_1
     run dolt constraints verify --all --output-only child3 child4
     [ "$status" -eq "1" ]
     [[ "$output" =~ "fk_name1" ]] || false

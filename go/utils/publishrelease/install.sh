@@ -52,8 +52,13 @@ assert_linux_or_macos() {
     fail "E_UNSUPPORTED_OS" "dolt install.sh only supports macOS and Linux."
   fi
 
-  if [ "$ARCH-$OS" != "x86_64-Linux" -a "$ARCH-$OS" != "x86_64-Darwin" -a "$ARCH-$OS" != "arm64-Darwin" ]; then
-    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64 or x86 or Darwin-arm64."
+  # Translate aarch64 to arm64, since that's what GOARCH calls it
+  if [ "$ARCH" == "aarch64" ]; then
+    ARCH="arm64"
+  fi
+
+  if [ "$ARCH-$OS" != "x86_64-Linux" -a "$ARCH-$OS" != "x86_64-Darwin" -a "$ARCH-$OS" != "arm64-Darwin" -a "$ARCH-$OS" != "arm64-Linux" ]; then
+    fail "E_UNSUPPOSED_ARCH" "dolt install.sh only supports installing dolt on x86_64, x86, Linux-aarch64, or Darwin-arm64."
   fi
 
   if [ "$OS" == Linux ]; then

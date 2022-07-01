@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE keyless (
@@ -161,10 +160,12 @@ CSV
     run dolt table export keyless
     [ $status -eq 0 ]
     [[ "${lines[0]}" = "c0,c1" ]] || false
-    [[ "${lines[1]}" = "1,1" ]] || false
-    [[ "${lines[2]}" = "1,1" ]] || false
-    [[ "${lines[3]}" = "0,0" ]] || false
-    [[ "${lines[4]}" = "2,2" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "1,1" ]] || false
+    [[ "$output" =~ "0,0" ]] || false
+    [[ "$output" =~ "2,2" ]] || false
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [[ "${#lines[@]}" = "6" ]] || false
 }
 
 @test "keyless: table export SQL" {
@@ -176,14 +177,16 @@ CSV
     [[ "${lines[2]}" = "  \`c0\` int,"  ]] || false
     [[ "${lines[3]}" = "  \`c1\` int"   ]] || false
     [[ "${lines[4]}" = ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_bin;"     ]] || false
-    [[ "${lines[5]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
-    [[ "${lines[6]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
-    [[ "${lines[7]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false
-    [[ "${lines[8]}" = "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (2,2);" ]] || false
-
+    [[ "$output" =~ "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "$output" =~ "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (1,1);" ]] || false
+    [[ "$output" =~ "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (0,0);" ]] || false
+    [[ "$output" =~ "INSERT INTO \`keyless\` (\`c0\`,\`c1\`) VALUES (2,2);" ]] || false
+    [[ "${#lines[@]}" = "9" ]] || false
 }
 
 @test "keyless: diff against working set" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -201,6 +204,8 @@ SQL
 }
 
 @test "keyless: diff --summary" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -213,6 +218,8 @@ SQL
 }
 
 @test "keyless: dolt_diff_ table" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 0;
 INSERT INTO keyless VALUES (8,8);
@@ -272,6 +279,8 @@ SQL
 }
 
 @test "keyless: diff branches with identical mutation history" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -307,6 +316,8 @@ SQL
 }
 
 @test "keyless: diff deletes from two branches" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch left
     dolt checkout -b right
 
@@ -327,6 +338,8 @@ SQL
 }
 
 @test "keyless: merge deletes from two branches" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch left
     dolt checkout -b right
 
@@ -359,6 +372,8 @@ SQL
 }
 
 @test "keyless: diff duplicate deletes" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     make_dupe_table
 
     dolt branch left
@@ -389,6 +404,8 @@ SQL
 }
 
 @test "keyless: merge duplicate deletes" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
+
     make_dupe_table
 
     dolt branch left
@@ -414,6 +431,8 @@ SQL
 }
 
 @test "keyless: diff duplicate updates" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     make_dupe_table
 
     dolt branch left
@@ -436,6 +455,8 @@ SQL
 }
 
 @test "keyless: merge duplicate updates" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
+
     make_dupe_table
 
     dolt branch left
@@ -501,6 +522,8 @@ SQL
 }
 
 @test "keyless: table replace" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     cat <<CSV > data.csv
 c0,c1
 0,0
@@ -532,6 +555,8 @@ CSV
 
 # in-place updates create become drop/add
 @test "keyless: diff with in-place updates (working set)" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql -q "UPDATE keyless SET c1 = 9 where c0 = 2;"
     run dolt diff
     [ $status -eq 0 ]
@@ -574,6 +599,8 @@ CSV
 
 # in-place updates diff as drop/add
 @test "keyless: diff with in-place updates (branches)" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -597,6 +624,8 @@ CSV
 }
 
 @test "keyless: merge with in-place updates (branches)" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
+
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
     dolt commit -am "added rows"
     dolt branch other
@@ -631,6 +660,8 @@ CSV
 }
 
 @test "keyless: diff branches with reordered mutation history" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -668,6 +699,8 @@ CSV
 }
 
 @test "keyless: diff branches with convergent mutation history" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -688,6 +721,7 @@ SQL
 }
 
 @test "keyless: merge branches with convergent mutation history" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -716,6 +750,7 @@ SQL
 }
 
 @test "keyless: diff branches with offset mutation history" {
+     skip_nbf_dolt_1 "keyless diff not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -732,6 +767,7 @@ SQL
 }
 
 @test "keyless: merge branches with offset mutation history" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch other
 
     dolt sql -q "INSERT INTO keyless VALUES (7,7),(8,8),(9,9);"
@@ -757,6 +793,8 @@ SQL
 }
 
 @test "keyless: diff delete+add against working" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt sql <<SQL
 DELETE FROM keyless WHERE c0 = 2;
 INSERT INTO keyless VALUES (2,2)
@@ -767,6 +805,8 @@ SQL
 }
 
 @test "keyless: diff delete+add on two branches" {
+    skip_nbf_dolt_1 "keyless diff not implemented"
+
     dolt branch left
     dolt checkout -b right
 
@@ -787,6 +827,7 @@ SQL
 }
 
 @test "keyless: merge delete+add on two branches" {
+    skip_nbf_dolt_1 "conflicts resolve not implemented"
     dolt branch left
     dolt checkout -b right
 
@@ -977,6 +1018,8 @@ SQL
 }
 
 @test "keyless: insert into keyless table with unique index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE mytable (pk int UNIQUE)";
 
     run dolt sql -q "INSERT INTO mytable values (1),(2),(3),(4)"
@@ -1017,6 +1060,8 @@ SQL
 }
 
 @test "keyless: insert into keyless table with unique index and auto increment" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE gis (pk INT UNIQUE NOT NULL AUTO_INCREMENT, shape GEOMETRY NOT NULL)"
     dolt sql -q "INSERT INTO gis VALUES (1, POINT(1,1))"
 
@@ -1037,6 +1082,8 @@ SQL
 }
 
 @test "keyless: string type unique key index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE mytable (pk int, val varchar(6) UNIQUE)"
     dolt sql -q "INSERT INTO mytable VALUES (1, 'nekter')"
 
@@ -1055,6 +1102,8 @@ SQL
 }
 
 @test "keyless: compound unique key index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
     dolt sql -q "INSERT INTO mytable values (1, 2, 2)"
@@ -1075,6 +1124,8 @@ SQL
 }
 
 @test "keyless: replace into and unique key index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     skip "Keyless tables with unique indexes do not properly support replace into semantics"
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"
@@ -1085,6 +1136,8 @@ SQL
 }
 
 @test "keyless: batch import with keyless unique index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
 
@@ -1114,6 +1167,8 @@ SQL
 }
 
 @test "keyless: batch import with keyless unique index and secondary index" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1)"
     dolt sql -q "ALTER TABLE mytable ADD INDEX myidx (v2)"
@@ -1152,6 +1207,8 @@ SQL
 }
 
 @test "keyless: batch import into the unique key correctly works" {
+    skip_nbf_dolt_1 "keyless table with unique index does not throw errors"
+
     skip "index error handling does not work with bulk import"
     dolt sql -q "CREATE TABLE mytable (pk int, v1 int, v2 int)"
     dolt sql -q "ALTER TABLE mytable ADD CONSTRAINT ux UNIQUE (v1, v2)"

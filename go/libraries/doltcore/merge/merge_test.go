@@ -16,6 +16,7 @@ package merge
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"testing"
 
@@ -306,7 +307,7 @@ func TestMergeCommits(t *testing.T) {
 		t.Skip()
 	}
 
-	vrw, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedConflicts := setupMergeTest(t)
+	vrw, rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, expectedRows, expectedArtifacts := setupMergeTest(t)
 	merger := NewMerger(context.Background(), rightCommitHash, ancCommitHash, root, mergeRoot, ancRoot, vrw)
 	opts := editor.TestEditorOptions(vrw)
 	// TODO: stats
@@ -323,16 +324,16 @@ func TestMergeCommits(t *testing.T) {
 	assert.NoError(t, err)
 	expected, err = rebuildAllProllyIndexes(context.Background(), expected)
 	assert.NoError(t, err)
-	expected, err = expected.SetConflicts(context.Background(), conflict.ConflictSchema{Base: sch, Schema: sch, MergeSchema: sch}, durable.ConflictIndexFromProllyMap(expectedConflicts))
+	expected, err = expected.SetArtifacts(context.Background(), durable.ArtifactIndexFromProllyMap(expectedArtifacts))
 	require.NoError(t, err)
 
 	mergedRows, err := merged.GetRowData(context.Background())
 	assert.NoError(t, err)
 
-	_, conflictIdx, err := merged.GetConflicts(context.Background())
+	artIdx, err := merged.GetArtifacts(context.Background())
 	require.NoError(t, err)
-	conflicts := durable.ProllyMapFromConflictIndex(conflictIdx)
-	MustEqualConflictMap(t, expectedConflicts, conflicts)
+	artifacts := durable.ProllyMapFromArtifactIndex(artIdx)
+	MustEqualArtifactMap(t, expectedArtifacts, artifacts)
 
 	MustEqualProlly(t, durable.ProllyMapFromIndex(expectedRows), durable.ProllyMapFromIndex(mergedRows))
 
@@ -417,7 +418,7 @@ func sortTests(t []testRow) {
 	})
 }
 
-func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ConflictMap) {
+func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, durable.Index, prolly.ArtifactMap) {
 	ddb := mustMakeEmptyRepo(t)
 	vrw := ddb.ValueReadWriter()
 	sortTests(testRows)
@@ -426,14 +427,8 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, 
 
 	var initialKVs []val.Tuple
 	var expectedKVs []val.Tuple
-	conflictMap := prolly.NewEmptyConflictMap(ns, kD, vD, vD, vD)
-	confEdit := conflictMap.Editor()
-	for _, testCase := range testRows {
-		if testCase.conflict {
-			err := confEdit.Add(context.Background(), key(testCase.key), unwrap(testCase.leftValue), unwrap(testCase.rightValue), unwrap(testCase.initialValue))
-			require.NoError(t, err)
-		}
 
+	for _, testCase := range testRows {
 		if testCase.initialValue != nil {
 			initialKVs = append(initialKVs, key(testCase.key), testCase.initialValue.value())
 		}
@@ -445,8 +440,6 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, 
 	initialRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, initialKVs...)
 	require.NoError(t, err)
 	expectedRows, err := prolly.NewMapFromTuples(context.Background(), ns, kD, vD, expectedKVs...)
-	require.NoError(t, err)
-	expectedConflicts, err := confEdit.Flush(context.Background())
 	require.NoError(t, err)
 
 	leftMut := initialRows.Mutate()
@@ -498,7 +491,27 @@ func setupMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, 
 
 	rightCmHash, baseCmHash, root, mergeRoot, ancRoot := buildLeftRightAncCommitsAndBranches(t, ddb, rootTbl, mergeTbl, ancTbl)
 
-	return vrw, rightCmHash, baseCmHash, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedConflicts
+	artifactMap, err := prolly.NewArtifactMapFromTuples(context.Background(), ns, kD)
+	require.NoError(t, err)
+	artEditor := artifactMap.Editor()
+
+	m := prolly.ConflictMetadata{
+		BaseRootIsh: baseCmHash,
+	}
+	d, err := json.Marshal(m)
+	require.NoError(t, err)
+
+	for _, testCase := range testRows {
+		if testCase.conflict {
+			err = artEditor.Add(context.Background(), key(testCase.key), rightCmHash, prolly.ArtifactTypeConflict, d)
+			require.NoError(t, err)
+		}
+	}
+
+	expectedArtifacts, err := artEditor.Flush(context.Background())
+	require.NoError(t, err)
+
+	return vrw, rightCmHash, baseCmHash, root, mergeRoot, ancRoot, durable.IndexFromProllyMap(expectedRows), expectedArtifacts
 }
 
 func setupNomsMergeTest(t *testing.T) (types.ValueReadWriter, hash.Hash, hash.Hash, *doltdb.RootValue, *doltdb.RootValue, *doltdb.RootValue, types.Map, types.Map, *MergeStats) {
@@ -817,6 +830,11 @@ func MustEqualProlly(t *testing.T, expected prolly.Map, actual prolly.Map) {
 func MustEqualConflictMap(t *testing.T, expected prolly.ConflictMap, actual prolly.ConflictMap) {
 	require.Equal(t, expected.HashOf(), actual.HashOf(),
 		"conflict map hashes differed. expected: %s\nactual: %s", MustDebugFormatConflictMap(t, expected), MustDebugFormatConflictMap(t, actual))
+}
+
+func MustEqualArtifactMap(t *testing.T, expected prolly.ArtifactMap, actual prolly.ArtifactMap) {
+	require.Equal(t, expected.HashOf(), actual.HashOf(),
+		"artifact map hashes differed.")
 }
 
 //func diffStr(t tree.Diff, kD val.TupleDesc) string {

@@ -105,7 +105,7 @@ SQL
     dolt sql -q "INSERT INTO mytable (id, col3) VALUES (1, TIMESTAMP('2003-12-31'));"
     run dolt sql -q "SELECT * FROM myview;" -r csv
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "1,999,2003-12-31 00:00:00 +0000 UTC" ]] || false
+    [[ "$output" =~ "1,999,2003-12-31 00:00:00" ]] || false
 
     run dolt sql -q "SHOW CREATE VIEW myview;" -r csv
     [ "$status" -eq 0 ]
@@ -344,7 +344,7 @@ SQL
     run dolt sql <<SQL
 CREATE TABLE polygon_type (
   pk int NOT NULL,
-  p polygon DEFAULT polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0))),
+  p polygon DEFAULT (polygon(linestring(point(0,0),point(8,0),point(12,9),point(0,9),point(0,0)))),
   PRIMARY KEY (pk)
 );
 SQL

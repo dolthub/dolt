@@ -39,13 +39,14 @@ type MutableSecondaryIdx struct {
 // NewMutableSecondaryIdx returns a MutableSecondaryIdx. |m| is the secondary idx data.
 func NewMutableSecondaryIdx(m prolly.Map, sch schema.Schema, index schema.Index, syncPool pool.BuffPool) MutableSecondaryIdx {
 	kD, _ := m.Descriptors()
+	pkLen, keyMap := creation.GetIndexKeyMapping(sch, index)
 	return MutableSecondaryIdx{
-		index.Name(),
-		m.Mutate(),
-		creation.GetIndexKeyMapping(sch, index),
-		sch.GetPKCols().Size(),
-		val.NewTupleBuilder(kD),
-		syncPool,
+		Name:     index.Name(),
+		mut:      m.Mutate(),
+		keyMap:   keyMap,
+		pkLen:    pkLen,
+		keyBld:   val.NewTupleBuilder(kD),
+		syncPool: syncPool,
 	}
 }
 

@@ -2662,7 +2662,6 @@ SQL
 }
 
 @test "constraint-violations: cyclic foreign keys, illegal deletion" {
-    skip_nbf_dolt_1 "uses dolt constraints verify"
 
     # We're deleting a reference in a cycle from each table to make sure it properly applies a violation in both instances
     dolt sql <<"SQL"
