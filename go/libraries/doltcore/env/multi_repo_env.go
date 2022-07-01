@@ -139,6 +139,7 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 	return roots, err
 }
 
+// IsLocked returns true if any env is locked
 func (mrEnv *MultiRepoEnv) IsLocked() bool {
 	for _, e := range mrEnv.envs {
 		if e.env.IsLocked() {
@@ -148,6 +149,8 @@ func (mrEnv *MultiRepoEnv) IsLocked() bool {
 	return false
 }
 
+// Lock locks all child envs. If an error is returned, all
+// child envs will be returned with their initial lock state.
 func (mrEnv *MultiRepoEnv) Lock() error {
 	if mrEnv.IsLocked() {
 		return ErrActiveServerLock
@@ -157,12 +160,14 @@ func (mrEnv *MultiRepoEnv) Lock() error {
 	for _, e := range mrEnv.envs {
 		err = e.env.Lock()
 		if err != nil {
+			mrEnv.Unlock()
 			return err
 		}
 	}
 	return nil
 }
 
+// Unlock unlocks all child envs.
 func (mrEnv *MultiRepoEnv) Unlock() error {
 	var err, retErr error
 	for _, e := range mrEnv.envs {
