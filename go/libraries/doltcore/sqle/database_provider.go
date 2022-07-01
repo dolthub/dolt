@@ -241,35 +241,27 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		Remote: remoteName,
 	})
 
-	// // TODO: fill in version appropriately
-	// dsess := dsess.DSessFromSess(ctx.Session)
-	// newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
-	// err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// opts := editor.Options{
-	// 	Deaf: newEnv.DbEaFactory(),
-	// 	// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
-	// 	ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
-	// }
-	//
-	// db := NewDatabase(name, newEnv.DbData(), opts)
-	// p.databases[formatDbMapKeyName(db.Name())] = db
-	//
-	// dbstate, err := GetInitialDBState(ctx, db)
-	// if err != nil {
-	// 	return err
-	// }
-	//
-	// return dsess.AddDB(ctx, dbstate)
-	return nil
+	dsess := dsess.DSessFromSess(ctx.Session)
+	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	if err != nil {
+		return err
+	}
+
+	opts := editor.Options{
+		Deaf: dEnv.DbEaFactory(),
+		// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
+		ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
+	}
+
+	db := NewDatabase(dbName, dEnv.DbData(), opts)
+	p.databases[formatDbMapKeyName(db.Name())] = db
+
+	dbstate, err := GetInitialDBState(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	return dsess.AddDB(ctx, dbstate)
 }
 
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
