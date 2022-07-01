@@ -66,11 +66,7 @@ func ProceduresTableSchema() schema.Schema {
 // DoltProceduresGetOrCreateTable returns the `dolt_procedures` table from the given db, creating it in the db's
 // current root if it doesn't exist
 func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.ProceduresTableName)
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -78,15 +74,16 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 		return tbl.(*WritableDoltTable), nil
 	}
 
+	root, err := db.GetRoot(ctx)
+	if err != nil {
+		return nil, err
+	}
 	err = db.createDoltTable(ctx, doltdb.ProceduresTableName, root, ProceduresTableSchema())
 	if err != nil {
 		return nil, err
 	}
-	root, err = db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err = db.GetTableInsensitiveWithRoot(ctx, root, doltdb.ProceduresTableName)
+
+	tbl, found, err = db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}
@@ -99,11 +96,7 @@ func DoltProceduresGetOrCreateTable(ctx *sql.Context, db Database) (*WritableDol
 
 // DoltProceduresGetTable returns the `dolt_procedures` table from the given db, or nil if the table doesn't exist
 func DoltProceduresGetTable(ctx *sql.Context, db Database) (*WritableDoltTable, error) {
-	root, err := db.GetRoot(ctx)
-	if err != nil {
-		return nil, err
-	}
-	tbl, found, err := db.GetTableInsensitiveWithRoot(ctx, root, doltdb.ProceduresTableName)
+	tbl, found, err := db.GetTableInsensitive(ctx, doltdb.ProceduresTableName)
 	if err != nil {
 		return nil, err
 	}

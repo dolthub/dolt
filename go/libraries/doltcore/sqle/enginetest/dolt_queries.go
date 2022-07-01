@@ -776,6 +776,47 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table with AS OF",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"call dolt_commit('-am', 'added values');",
+			"insert into t values (11, 22, '3'), (44, 55, '6');",
+			"call dolt_commit('-am', 'added values again');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_history_t;",
+				Expected: []sql.Row{{6}}, // 2 + 4
+			},
+			{
+				Query:    "select count(*) from dolt_history_t AS OF 'head^';",
+				Expected: []sql.Row{{2}}, // 2
+			},
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"added values again"},
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log AS OF 'head^';",
+				Expected: []sql.Row{
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
 }
 
 var MergeScripts = []queries.ScriptTest{
@@ -1483,6 +1524,101 @@ var MergeScripts = []queries.ScriptTest{
 			{
 				Query:    "SELECT * from t;",
 				Expected: []sql.Row{{1, 1}, {2, 2}, {3, 3}},
+			},
+		},
+	},
+}
+
+var KeylessMergeCVsAndConflictsScripts = []queries.ScriptTest{
+	{
+		Name: "Keyless merge with unique indexes documents violations",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE table t (col1 int, col2 int UNIQUE);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (2, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t values (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, col1, col2 from dolt_constraint_violations_t ORDER BY col1 ASC;",
+				Expected: []sql.Row{{uint64(merge.CvType_UniqueIndex), 1, 1}, {uint64(merge.CvType_UniqueIndex), 2, 1}},
+			},
+			{
+				Query:    "SELECT * from t ORDER BY col1 ASC;",
+				Expected: []sql.Row{{1, 1}, {2, 1}},
+			},
+		},
+	},
+	{
+		Name: "Keyless merge with foreign keys documents violations",
+		SetUpScript: []string{
+			"SET dolt_force_transaction_commit = on;",
+			"CREATE table parent (pk int PRIMARY KEY);",
+			"CREATE table child (parent_fk int, FOREIGN KEY (parent_fk) REFERENCES parent (pk));",
+			"INSERT INTO parent VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO child VALUES (1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"DELETE from parent where pk = 1;",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT violation_type, parent_fk from dolt_constraint_violations_child;",
+				Expected: []sql.Row{{uint64(merge.CvType_ForeignKey), 1}},
+			},
+			{
+				Query:    "SELECT * from parent;",
+				Expected: []sql.Row{},
+			},
+			{
+				Query:    "SELECT * from child;",
+				Expected: []sql.Row{{1}},
+			},
+		},
+	},
+	{
+		Name: "Keyless merge documents conflicts",
+		SetUpScript: []string{
+			"SET dolt_allow_commit_conflicts = on;",
+			"CREATE table t (col1 int, col2 int);",
+			"CALL DOLT_COMMIT('-am', 'setup');",
+
+			"CALL DOLT_CHECKOUT('-b', 'right');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'right');",
+
+			"CALL DOLT_CHECKOUT('main');",
+			"INSERT INTO t VALUES (1, 1);",
+			"CALL DOLT_COMMIT('-am', 'left');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "CALL DOLT_MERGE('right');",
+				Expected: []sql.Row{{0, 1}},
+			},
+			{
+				Query:    "SELECT base_col1, base_col2, our_col1, our_col2, their_col1, their_col2 from dolt_conflicts_t;",
+				Expected: []sql.Row{{nil, nil, 1, 1, 1, 1}},
 			},
 		},
 	},
