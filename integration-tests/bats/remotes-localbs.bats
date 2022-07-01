@@ -36,7 +36,7 @@ SQL
     # push to a localbs based remote
     mkdir remotedir
     dolt remote add origin localbs://remotedir
-    dolt push origin main
+    dolt push --set-upstream origin main
 
     # clone from a directory
     cd dolt-repo-clones
