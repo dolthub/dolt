@@ -90,6 +90,7 @@ func benchmarkSysbenchQuery(b *testing.B, getQuery func(int) string) {
 		require.NoError(b, err)
 	}
 	_ = eng.Close()
+	b.ReportAllocs()
 }
 
 func setupBenchmark(t *testing.B, dEnv *env.DoltEnv) (*sql.Context, *engine.SqlEngine) {

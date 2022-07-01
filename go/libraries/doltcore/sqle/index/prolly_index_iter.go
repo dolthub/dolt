@@ -27,7 +27,7 @@ import (
 	"github.com/dolthub/dolt/go/store/val"
 )
 
-const indexLookupBufSize = 1024
+const indexLookupBufSize = 8
 
 type prollyIndexIter struct {
 	idx       DoltIndex
