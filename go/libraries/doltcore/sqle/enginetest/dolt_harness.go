@@ -256,7 +256,7 @@ func (d *DoltHarness) newSessionWithClient(client sql.Client) *dsess.DoltSession
 	dSession, err := dsess.NewDoltSession(
 		enginetest.NewContext(d),
 		sql.NewBaseSessionWithClientServer("address", client, 1),
-		pro.(dsess.RevisionDatabaseProvider),
+		pro.(dsess.DoltDatabaseProvider),
 		localConfig,
 		states...,
 	)
