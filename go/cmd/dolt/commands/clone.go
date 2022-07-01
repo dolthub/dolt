@@ -33,11 +33,6 @@ import (
 	"github.com/dolthub/dolt/go/store/types"
 )
 
-const (
-	remoteParam = "remote"
-	branchParam = "branch"
-)
-
 var cloneDocs = cli.CommandDocumentationContent{
 	ShortDesc: "Clone a data repository into a new directory",
 	LongDesc: `Clones a repository into a newly created directory, creates remote-tracking branches for each branch in the cloned repository (visible using {{.LessThan}}dolt branch -a{{.GreaterThan}}), and creates and checks out an initial branch that is forked from the cloned repository's currently active branch.
@@ -75,14 +70,7 @@ func (cmd CloneCmd) Docs() *cli.CommandDocumentation {
 }
 
 func (cmd CloneCmd) ArgParser() *argparser.ArgParser {
-	ap := argparser.NewArgParser()
-	ap.SupportsString(remoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
-	ap.SupportsString(branchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
-	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
-	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
-	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
-	return ap
+	return cli.CreateCloneArgParser()
 }
 
 // EventType returns the type of the event to log
@@ -105,8 +93,8 @@ func (cmd CloneCmd) Exec(ctx context.Context, commandStr string, args []string, 
 }
 
 func clone(ctx context.Context, apr *argparser.ArgParseResults, dEnv *env.DoltEnv) errhand.VerboseError {
-	remoteName := apr.GetValueOrDefault(remoteParam, "origin")
-	branch := apr.GetValueOrDefault(branchParam, "")
+	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
+	branch := apr.GetValueOrDefault(cli.BranchParam, "")
 	dir, urlStr, verr := parseArgs(apr)
 	if verr != nil {
 		return verr

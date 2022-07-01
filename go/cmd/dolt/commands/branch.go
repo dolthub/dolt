@@ -138,7 +138,7 @@ func printBranches(ctx context.Context, dEnv *env.DoltEnv, apr *argparser.ArgPar
 	branchSet := set.NewStrSet(apr.Args)
 
 	verbose := apr.Contains(verboseFlag)
-	printRemote := apr.Contains(remoteParam)
+	printRemote := apr.Contains(RemoteParam)
 	printAll := apr.Contains(allFlag)
 
 	branches, err := dEnv.DoltDB.GetHeadRefs(ctx)

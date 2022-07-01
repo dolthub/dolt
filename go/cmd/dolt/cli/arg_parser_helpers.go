@@ -95,6 +95,8 @@ const (
 	DeleteFlag       = "delete"
 	DeleteForceFlag  = "D"
 	OutputOnlyFlag   = "output-only"
+	RemoteParam = "remote"
+	BranchParam = "branch"
 )
 
 const (
@@ -143,6 +145,17 @@ func CreateAddArgParser() *argparser.ArgParser {
 	ap := argparser.NewArgParser()
 	ap.ArgListHelp = append(ap.ArgListHelp, [2]string{"table", "Working table(s) to add to the list tables staged to be committed. The abbreviation '.' can be used to add all tables."})
 	ap.SupportsFlag("all", "A", "Stages any and all changes (adds, deletes, and modifications).")
+	return ap
+}
+
+func CreateCloneArgParser() *argparser.ArgParser {
+	ap := argparser.NewArgParser()
+	ap.SupportsString(RemoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
+	ap.SupportsString(BranchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
+	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
+	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
+	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	return ap
 }
 
