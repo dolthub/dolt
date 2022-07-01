@@ -776,6 +776,47 @@ var HistorySystemTableScriptTests = []queries.ScriptTest{
 			},
 		},
 	},
+	{
+		Name: "dolt_history table with AS OF",
+		SetUpScript: []string{
+			"create table t (pk int primary key, c1 int, c2 varchar(20));",
+			"call dolt_add('-A');",
+			"call dolt_commit('-m', 'creating table t');",
+			"insert into t values (1, 2, '3'), (4, 5, '6');",
+			"call dolt_commit('-am', 'added values');",
+			"insert into t values (11, 22, '3'), (44, 55, '6');",
+			"call dolt_commit('-am', 'added values again');",
+		},
+		Assertions: []queries.ScriptTestAssertion{
+			{
+				Query:    "select count(*) from dolt_history_t;",
+				Expected: []sql.Row{{6}}, // 2 + 4
+			},
+			{
+				Query:    "select count(*) from dolt_history_t AS OF 'head^';",
+				Expected: []sql.Row{{2}}, // 2
+			},
+			{
+				Query: "select message from dolt_log;",
+				Expected: []sql.Row{
+					{"added values again"},
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+			{
+				Query: "select message from dolt_log AS OF 'head^';",
+				Expected: []sql.Row{
+					{"added values"},
+					{"creating table t"},
+					{"checkpoint enginetest database mydb"},
+					{"Initialize data repository"},
+				},
+			},
+		},
+	},
 }
 
 var MergeScripts = []queries.ScriptTest{
