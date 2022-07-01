@@ -16,6 +16,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -185,6 +186,70 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	if verr != nil {
 		return HandleVErrAndExitCode(verr, usage)
 	}
+
+	// TODO: helper function getCfgDir
+
+	// TODO: search parent directory and child directories for existing .doltcfg
+	// TODO: the search should be relative to what $data-dir is
+	dataDir, _ := apr.GetValue(dataDirFlag)
+	cfgDir, ok := apr.GetValue(cfgDirFlag)
+	if ok {
+		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
+		if exists, _ := dEnv.FS.Exists(filepath.Join(dataDir, cfgDir)); !exists {
+			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
+				return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+			}
+		} else {
+			// TODO: set path
+		}
+	} else {
+		// No .doltcfg directory specified, look for it in parent or children, or create one in current
+
+		// TODO: ignore if not a directory?
+		// TODO: make a constant for .doltcfg
+		// Is there a .doltcfg in dataDir?
+		var currentExists, parentExists, childExists bool
+		if exists, isDir := dEnv.FS.Exists(filepath.Join(dataDir, cfgDirName)); exists && isDir {
+			currentExists = true
+		}
+
+		// Is there a .doltcfg in parent directory?
+		if exists, isDir := dEnv.FS.Exists(filepath.Join("..", cfgDirName)); exists && isDir {
+			parentExists = true
+		}
+
+		// detect .doltcfg conflicts
+		if parentExists && currentExists {
+			// TODO: make an error variable somewhere
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")))
+		}
+
+		// Are there any .doltcfg in child directories?
+		err := dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
+			if isDir {
+				dirName := filepath.Base(path)
+				if dirName == "." || dirName == ".." {
+					return false
+				}
+				if dirName == cfgDirName {
+					childExists = true
+					return true
+				}
+			}
+			return false
+		})
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
+
+		// Detect .doltcfg conflicts
+		if childExists && (parentExists || currentExists) {
+			// TODO: make an error variable somewhere else
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(errors.New("multiple .doltcfg directories detected")), usage)
+		}
+	}
+
+	// TODO: all execShell, execBatch, etc need to know about
 
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
 	if err != nil {
@@ -376,58 +441,6 @@ func getMultiRepoEnv(ctx context.Context, apr *argparser.ArgParseResults, dEnv *
 			return nil, errhand.VerboseErrorFromError(err)
 		}
 	}
-
-	// TODO: search parent directory and child directories for existing .doltcfg
-	// TODO: the search should be relative to what $data-dir is
-	cfgDir, ok := apr.GetValue(cfgDirFlag)
-	if ok {
-		// doltcfg directory specified; create at path if DNE, else add it to mrEnv
-		if exists, _ := dEnv.FS.Exists(filepath.Join(dataDir, cfgDir)); !exists {
-			if err := dEnv.FS.MkDirs(cfgDir); err != nil {
-				return nil, errhand.VerboseErrorFromError(err)
-			}
-		} else {
-			// TODO: set path
-		}
-	} else {
-		// No .doltcfg directory specified, look for it in parent or children, or create one in current
-
-		// TODO: ignore if not a directory?
-		// TODO: make a constant for .doltcfg
-		// Is there a .doltcfg in dataDir?
-		var currentExists, parentExists, childExists bool
-		if exists, isDir := dEnv.FS.Exists(filepath.Join(dataDir, cfgDirName)); exists && isDir {
-			currentExists = true
-		}
-
-		// Is there a .doltcfg in parent directory?
-		if exists, isDir := dEnv.FS.Exists(filepath.Join("..", cfgDirName)); exists && isDir {
-			parentExists = true
-		}
-
-		// Are there any .doltcfg in child directories?
-		err := dEnv.FS.Iter(dataDir, false, func(path string, size int64, isDir bool) (stop bool) {
-			if isDir {
-				dirName := filepath.Base(path)
-				if dirName == "." || dirName == ".." {
-					return false
-				}
-				if dirName == cfgDirName {
-					childExists = true
-					return true
-				}
-			}
-			return false
-		})
-		if err != nil {
-			return nil, errhand.VerboseErrorFromError(err)
-		}
-
-		//
-
-	}
-
-	// TODO: add .doltcfg to mrEnv using WithCfgDir
 
 	return mrEnv, nil
 }
