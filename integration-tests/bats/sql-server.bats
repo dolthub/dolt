@@ -1318,3 +1318,36 @@ databases:
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
 }
+
+@test "sql-server: sql-server lock cleanup" {
+    cd repo1
+    start_sql_server
+    stop_sql_server
+    start_sql_server
+    stop_sql_server
+}
+
+@test "sql-server: sql-server locks database" {
+    cd repo1
+    start_sql_server
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: multi dir sql-server locks out childen" {
+    start_sql_server
+    cd repo2
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server child locks out parent multi dir" {
+    cd repo2
+    start_sql_server
+    cd ..
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}

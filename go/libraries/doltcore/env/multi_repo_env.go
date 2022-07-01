@@ -16,6 +16,7 @@ package env
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -31,6 +32,8 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
+
+var ErrActiveServerLock = errors.New("database locked by another sql-server; either clone the database to run a second server, or delete the '.dolt/sql-server.lock' if no other sql-servers are active")
 
 // EnvNameAndPath is a simple tuple of the name of an environment and the path to where it is on disk
 type EnvNameAndPath struct {
@@ -134,6 +137,41 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 	}
 
 	return roots, err
+}
+
+func (mrEnv *MultiRepoEnv) IsLocked() bool {
+	for _, e := range mrEnv.envs {
+		if e.env.IsLocked() {
+			return true
+		}
+	}
+	return false
+}
+
+func (mrEnv *MultiRepoEnv) Lock() error {
+	if mrEnv.IsLocked() {
+		return ErrActiveServerLock
+	}
+
+	var err error
+	for _, e := range mrEnv.envs {
+		err = e.env.Lock()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (mrEnv *MultiRepoEnv) Unlock() error {
+	var err, retErr error
+	for _, e := range mrEnv.envs {
+		err = e.env.Unlock()
+		if err != nil && retErr == nil {
+			retErr = err
+		}
+	}
+	return retErr
 }
 
 func getRepoRootDir(path, pathSeparator string) string {

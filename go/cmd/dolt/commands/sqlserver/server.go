@@ -16,10 +16,10 @@ package sqlserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -31,12 +31,12 @@ import (
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/engine"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
-	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
+
+var ErrActiveServerLock = errors.New("database locked by another sql-server; either clone the database to run a second server, or delete the '.dolt/sql-server.lock' if no other sql-servers are active")
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -187,9 +187,11 @@ func Serve(
 		}()
 	}
 
-	serverLockFile := filepath.Join(dbfactory.DoltDir, dsess.ServerLockFile)
-	mrEnv.FileSystem().WriteFile(serverLockFile, []byte{})
-	defer mrEnv.FileSystem().DeleteFile(serverLockFile)
+	if mrEnv.IsLocked() {
+		startError = ErrActiveServerLock
+		return
+	}
+	mrEnv.Lock()
 
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
@@ -202,8 +204,11 @@ func Serve(
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)
-		return
 	}
+	if err := mrEnv.Unlock(); err != nil {
+		cli.PrintErr(err)
+	}
+
 	return
 }
 

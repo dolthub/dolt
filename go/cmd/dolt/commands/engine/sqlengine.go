@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -29,7 +28,6 @@ import (
 	"github.com/dolthub/vitess/go/vt/sqlparser"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/ref"
@@ -67,9 +65,7 @@ func NewSqlEngine(
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 
-	serverLockFile := filepath.Join(dbfactory.DoltDir, dsess.ServerLockFile)
-	ok, _ := mrEnv.FileSystem().Exists(serverLockFile)
-	if ok {
+	if mrEnv.IsLocked() {
 		config.IsReadOnly = true
 	}
 
