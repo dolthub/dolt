@@ -174,10 +174,9 @@ teardown() {
     run dolt branch
     [[ ! "$output" =~ "other" ]] || false
 
-    # guessing the remote branch fails since there are two remotes with branch 'other'
     run dolt checkout other
     [ "$status" -eq 1 ]
-    [[ "$output" =~ "error: could not find other" ]] || false
+    [[ "$output" =~ "'other' matched multiple (2) remote tracking branches" ]] || false
 }
 
 @test "remotes: cli 'dolt checkout -b new_branch' should not set upstream if there is a remote branch with matching name" {

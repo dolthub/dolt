@@ -93,6 +93,9 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 	}
 
 	name := apr.Arg(0)
+	if len(name) == 0 {
+		return 1, ErrEmptyBranchName
+	}
 
 	// Check if user wants to checkout branch.
 	if isBranch, err := actions.IsBranch(ctx, dbData.Ddb, name); err != nil {
@@ -118,13 +121,15 @@ func DoDoltCheckout(ctx *sql.Context, args []string) (int, error) {
 }
 
 func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots doltdb.Roots, branchName string) error {
-	if len(branchName) == 0 {
-		return ErrEmptyBranchName
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName)
+	if err != nil {
+		return errors.New("fatal: unable to read from data repository")
 	}
 
-	if remoteRef, refExists, err := actions.GetRemoteBranchRef(ctx, dbData.Ddb, branchName); err != nil {
-		return errors.New("fatal: unable to read from data repository")
-	} else if refExists {
+	if len(remoteRefs) == 0 {
+		return fmt.Errorf("error: could not find %s", branchName)
+	} else if len(remoteRefs) == 1 {
+		remoteRef := remoteRefs[0]
 		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
 		if err != nil {
 			return err
@@ -147,7 +152,7 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		// TODO : set upstream should be persisted outside of session
 		return err
 	} else {
-		return fmt.Errorf("error: could not find %s", branchName)
+		return fmt.Errorf("'%s' matched multiple (%v) remote tracking branches", branchName, len(remoteRefs))
 	}
 }
 
@@ -169,9 +174,6 @@ func checkoutNewBranch(ctx *sql.Context, dbName string, dbData env.DbData, roots
 }
 
 func checkoutBranch(ctx *sql.Context, dbName string, roots doltdb.Roots, dbData env.DbData, branchName string) error {
-	if len(branchName) == 0 {
-		return ErrEmptyBranchName
-	}
 	wsRef, err := ref.WorkingSetRefForHead(ref.NewBranchRef(branchName))
 	if err != nil {
 		return err

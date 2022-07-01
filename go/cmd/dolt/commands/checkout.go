@@ -144,16 +144,15 @@ func (cmd CheckoutCmd) Exec(ctx context.Context, commandStr string, args []strin
 	return HandleVErrAndExitCode(verr, usagePrt)
 }
 
+// checkoutRemoteBranchOrSuggestNew checks out a new branch guessing the remote branch,
+// if there is a branch with matching name from exactly one remote.
 func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, name string) errhand.VerboseError {
-	if remoteRef, refExists, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name); err != nil {
+	remoteRefs, err := actions.GetRemoteBranchRef(ctx, dEnv.DoltDB, name)
+	if err != nil {
 		return errhand.BuildDError("fatal: unable to read from data repository.").AddCause(err).Build()
-	} else if refExists {
-		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRef.String())
-		if verr == nil {
-			verr = setRemoteUpstreamForCheckout(dEnv, remoteRef)
-		}
-		return verr
-	} else {
+	}
+
+	if len(remoteRefs) == 0 {
 		// Check if the user is trying to enter a detached head state
 		commit, _ := actions.MaybeGetCommit(ctx, dEnv, name)
 		if commit != nil {
@@ -166,6 +165,15 @@ func checkoutRemoteBranchOrSuggestNew(ctx context.Context, dEnv *env.DoltEnv, na
 			return errhand.BuildDError(str, name).Build()
 		}
 		return errhand.BuildDError("error: could not find %s", name).Build()
+	} else if len(remoteRefs) == 1 {
+		verr := checkoutNewBranchFromStartPt(ctx, dEnv, name, remoteRefs[0].String())
+		if verr == nil {
+			verr = setRemoteUpstreamForCheckout(dEnv, remoteRefs[0])
+		}
+		return verr
+	} else {
+		// TODO : add hint of using `dolt checkout --track <remote>/<branch>` when --track flag is supported
+		return errhand.BuildDError("'%s' matched multiple (%v) remote tracking branches", name, len(remoteRefs)).Build()
 	}
 }
 
