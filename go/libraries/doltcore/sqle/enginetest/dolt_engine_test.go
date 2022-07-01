@@ -217,14 +217,7 @@ func TestDoltDiffQueryPlans(t *testing.T) {
 	require.NoError(t, err)
 	defer e.Close()
 
-	var planTests []queries.QueryPlanTest
-	if types.IsFormat_DOLT_1(types.Format_Default) {
-		planTests = DoltDiffPlanNewFormatTests
-	} else {
-		planTests = DoltDiffPlanTests
-	}
-
-	for _, tt := range planTests {
+	for _, tt := range DoltDiffPlanTests {
 		enginetest.TestQueryPlan(t, harness, e, tt.Query, tt.ExpectedPlan)
 	}
 }
