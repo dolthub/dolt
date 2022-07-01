@@ -175,19 +175,21 @@ func BuildSecondaryProllyIndex(ctx context.Context, vrw types.ValueReadWriter, s
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
-
-	iter, err := primary.IterAll(ctx)
-	if err != nil {
-		return nil, err
+	if schema.IsKeyless(sch) {
+		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
 	}
-	pkLen := sch.GetPKCols().Size()
 
 	// create a key builder for index key tuples
 	kd, _ := secondary.Descriptors()
 	keyBld := val.NewTupleBuilder(kd)
-	keyMap := GetIndexKeyMapping(sch, idx)
+	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
 
 	mut := secondary.Mutate()
+	iter, err := primary.IterAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	for {
 		k, v, err := iter.Next(ctx)
 		if err == io.EOF {
@@ -237,17 +239,19 @@ func BuildUniqueProllyIndex(ctx context.Context, vrw types.ValueReadWriter, sch 
 		return nil, err
 	}
 	secondary := durable.ProllyMapFromIndex(empty)
+	if schema.IsKeyless(sch) {
+		secondary = prolly.ConvertToSecondaryKeylessIndex(secondary)
+	}
 
 	iter, err := primary.IterAll(ctx)
 	if err != nil {
 		return nil, err
 	}
-	pkLen := sch.GetPKCols().Size()
 
 	// create a key builder for index key tuples
 	kd, _ := secondary.Descriptors()
 	keyBld := val.NewTupleBuilder(kd)
-	keyMap := GetIndexKeyMapping(sch, idx)
+	pkLen, keyMap := GetIndexKeyMapping(sch, idx)
 
 	// key builder for the indexed columns only which is a prefix of the index key
 	prefixKD := kd.PrefixDesc(idx.Count())
@@ -366,19 +370,33 @@ type rangeIterator interface {
 	IterRange(ctx context.Context, rng prolly.Range) (prolly.MapIter, error)
 }
 
-func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (m val.OrdinalMapping) {
+// GetIndexKeyMapping returns a mapping from primary row data to index data. It can handle keyless schema.
+func GetIndexKeyMapping(sch schema.Schema, idx schema.Index) (keyLen int, m val.OrdinalMapping) {
 	m = make(val.OrdinalMapping, len(idx.AllTags()))
+
+	if schema.IsKeyless(sch) {
+		// the only key is the hash of the values
+		keyLen = 1
+	} else {
+		keyLen = sch.GetPKCols().Size()
+	}
 
 	for i, tag := range idx.AllTags() {
 		j, ok := sch.GetPKCols().TagToIdx[tag]
 		if !ok {
 			j = sch.GetNonPKCols().TagToIdx[tag]
-			j += sch.GetPKCols().Size()
+			j += keyLen
 		}
 		m[i] = j
 	}
 
-	return
+	if schema.IsKeyless(sch) {
+		// last key in index is hash which is the only column in the key
+		m = append(m, 0)
+		return keyLen, m
+	}
+
+	return keyLen, m
 }
 
 var _ error = (*prollyUniqueKeyErr)(nil)

@@ -15,6 +15,7 @@
 package prolly
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -173,6 +174,11 @@ func testTupleMergeFn(t *testing.T, kd, vd val.TupleDesc, sz int, ns tree.NodeSt
 
 	idx := 0
 	final, err := MergeMaps(ctx, leftMap, rightMap, base, func(l, r tree.Diff) (merged tree.Diff, ok bool) {
+		if l.Type == r.Type && bytes.Equal(l.To, r.To) {
+			// convergent edit
+			return l, true
+		}
+
 		assert.Equal(t, l.Key, r.Key)
 		assert.Equal(t, l.From, r.From)
 
@@ -270,5 +276,9 @@ func applyMutationSet(t *testing.T, base Map, edits mutationSet) (m Map) {
 }
 
 func panicOnConflict(left, right tree.Diff) (tree.Diff, bool) {
+	if left.Type == right.Type && bytes.Equal(left.To, right.To) {
+		// convergent edit
+		return left, true
+	}
 	panic("cannot merge cells")
 }

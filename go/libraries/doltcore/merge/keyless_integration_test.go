@@ -16,6 +16,7 @@ package merge_test
 
 import (
 	"context"
+	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,25 +30,17 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/store/hash"
+	"github.com/dolthub/dolt/go/store/pool"
 	"github.com/dolthub/dolt/go/store/types"
+	"github.com/dolthub/dolt/go/store/val"
 )
-
-const tblName = "noKey"
-
-var sch = dtu.MustSchema(
-	schema.NewColumn("c1", 1, types.IntKind, false),
-	schema.NewColumn("c2", 2, types.IntKind, false),
-)
-var c1Tag = types.Uint(1)
-var c2Tag = types.Uint(2)
-var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
 
 func TestKeylessMerge(t *testing.T) {
 
 	tests := []struct {
 		name     string
 		setup    []testCommand
-		expected tupleSet
+		expected keylessEntries
 	}{
 		{
 			name: "fast-forward merge",
@@ -60,10 +53,10 @@ func TestKeylessMerge(t *testing.T) {
 				{cmd.CheckoutCmd{}, []string{env.DefaultInitBranch}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			expected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-			),
+			expected: []keylessEntry{
+				{2, 1, 2},
+				{1, 3, 4},
+			},
 		},
 		{
 			name: "3-way merge",
@@ -78,11 +71,11 @@ func TestKeylessMerge(t *testing.T) {
 				{cmd.CommitCmd{}, []string{"-am", "added rows on main"}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			expected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(5), c2Tag, types.Int(6)),
-			),
+			expected: []keylessEntry{
+				{2, 1, 2},
+				{1, 3, 4},
+				{1, 5, 6},
+			},
 		},
 		{
 			name: "3-way merge with duplicates",
@@ -97,11 +90,11 @@ func TestKeylessMerge(t *testing.T) {
 				{cmd.CommitCmd{}, []string{"-am", "added rows on main"}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			expected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(5), c2Tag, types.Int(6)),
-			),
+			expected: []keylessEntry{
+				{2, 1, 2},
+				{2, 3, 4},
+				{2, 5, 6},
+			},
 		},
 	}
 
@@ -142,10 +135,10 @@ func TestKeylessMergeConflicts(t *testing.T) {
 		//    Tuple(val)
 		//    Tuple(mergeVal)
 		// )
-		conflicts tupleSet
+		conflicts conflictEntries
 
-		oursExpected   tupleSet
-		theirsExpected tupleSet
+		oursExpected   keylessEntries
+		theirsExpected keylessEntries
 	}{
 		{
 			name: "identical parallel changes",
@@ -160,21 +153,21 @@ func TestKeylessMergeConflicts(t *testing.T) {
 				{cmd.CommitCmd{}, []string{"-am", "added rows on main"}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			conflicts: mustTupleSet(
-				dtu.MustTuple(
-					types.NullValue,
-					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-				),
-			),
-			oursExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-			),
-			theirsExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(3), c2Tag, types.Int(4)),
-			),
+			conflicts: []conflictEntry{
+				{
+					base:   nil,
+					ours:   &keylessEntry{1, 3, 4},
+					theirs: &keylessEntry{1, 3, 4},
+				},
+			},
+			oursExpected: []keylessEntry{
+				{2, 1, 2},
+				{1, 3, 4},
+			},
+			theirsExpected: []keylessEntry{
+				{2, 1, 2},
+				{1, 3, 4},
+			},
 		},
 		{
 			name: "asymmetric parallel deletes",
@@ -189,19 +182,19 @@ func TestKeylessMergeConflicts(t *testing.T) {
 				{cmd.CommitCmd{}, []string{"-am", "deleted 2 rows on main"}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			conflicts: mustTupleSet(
-				dtu.MustTuple(
-					dtu.MustTuple(cardTag, types.Uint(4), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-					dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				),
-			),
-			oursExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-			),
-			theirsExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-			),
+			conflicts: []conflictEntry{
+				{
+					base:   &keylessEntry{4, 1, 2},
+					ours:   &keylessEntry{2, 1, 2},
+					theirs: &keylessEntry{3, 1, 2},
+				},
+			},
+			oursExpected: []keylessEntry{
+				{2, 1, 2},
+			},
+			theirsExpected: []keylessEntry{
+				{3, 1, 2},
+			},
 		},
 		{
 			name: "asymmetric parallel updates",
@@ -216,26 +209,26 @@ func TestKeylessMergeConflicts(t *testing.T) {
 				{cmd.CommitCmd{}, []string{"-am", "deleted 2 rows on main"}},
 				{cmd.MergeCmd{}, []string{"other"}},
 			},
-			conflicts: mustTupleSet(
-				dtu.MustTuple(
-					dtu.MustTuple(cardTag, types.Uint(4), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-					dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				),
-				dtu.MustTuple(
-					types.NullValue,
-					dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(9)),
-					dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(1), c2Tag, types.Int(9)),
-				),
-			),
-			oursExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(2), c1Tag, types.Int(1), c2Tag, types.Int(9)),
-			),
-			theirsExpected: mustTupleSet(
-				dtu.MustTuple(cardTag, types.Uint(3), c1Tag, types.Int(1), c2Tag, types.Int(2)),
-				dtu.MustTuple(cardTag, types.Uint(1), c1Tag, types.Int(1), c2Tag, types.Int(9)),
-			),
+			conflicts: []conflictEntry{
+				{
+					base:   &keylessEntry{4, 1, 2},
+					ours:   &keylessEntry{2, 1, 2},
+					theirs: &keylessEntry{3, 1, 2},
+				},
+				{
+					base:   nil,
+					ours:   &keylessEntry{2, 1, 9},
+					theirs: &keylessEntry{1, 1, 9},
+				},
+			},
+			oursExpected: []keylessEntry{
+				{2, 1, 2},
+				{2, 1, 9},
+			},
+			theirsExpected: []keylessEntry{
+				{3, 1, 2},
+				{1, 1, 9},
+			},
 		},
 	}
 
@@ -263,32 +256,16 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			require.NoError(t, err)
 			tbl, _, err := root.GetTable(ctx, tblName)
 			require.NoError(t, err)
-			_, confIdx, err := tbl.GetConflicts(ctx)
-			require.NoError(t, err)
-			conflicts := durable.NomsMapFromConflictIndex(confIdx)
-
-			assert.True(t, conflicts.Len() > 0)
-			assert.Equal(t, int(conflicts.Len()), len(test.conflicts))
-
-			actual, err := conflicts.Iterator(ctx)
-			require.NoError(t, err)
-			for {
-				_, act, err := actual.Next(ctx)
-				if act == nil {
-					return
-				}
-				assert.NoError(t, err)
-				h, err := act.Hash(types.Format_Default)
-				assert.NoError(t, err)
-				exp, ok := test.conflicts[h]
-				assert.True(t, ok)
-				assert.True(t, exp.Equals(act))
-			}
+			assertConflicts(t, ctx, tbl, test.conflicts)
 		})
 
 		// conflict resolution
 
 		t.Run(test.name+"_resolved_ours", func(t *testing.T) {
+			if types.IsFormat_DOLT_1(types.Format_Default) {
+				// TODO (dhruv): unskip when resolve command is implemented
+				t.Skip()
+			}
 			dEnv := dtu.CreateTestEnv()
 
 			setupTest(t, ctx, dEnv, test.setup)
@@ -306,6 +283,10 @@ func TestKeylessMergeConflicts(t *testing.T) {
 			assertKeylessRows(t, ctx, tbl, test.oursExpected)
 		})
 		t.Run(test.name+"_resolved_theirs", func(t *testing.T) {
+			if types.IsFormat_DOLT_1(types.Format_Default) {
+				// TODO (dhruv): unskip when resolve command is implemented
+				t.Skip()
+			}
 			dEnv := dtu.CreateTestEnv()
 
 			setupTest(t, ctx, dEnv, test.setup)
@@ -325,14 +306,71 @@ func TestKeylessMergeConflicts(t *testing.T) {
 	}
 }
 
-// |expected| is a tupleSet to compensate for random storage order
-func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected tupleSet) {
-	rowData, err := tbl.GetNomsRowData(ctx)
+func assertConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		assertProllyConflicts(t, ctx, tbl, expected)
+		return
+	}
+	assertNomsConflicts(t, ctx, tbl, expected)
+}
+
+func assertProllyConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
+	artIdx, err := tbl.GetArtifacts(ctx)
+	require.NoError(t, err)
+	artM := durable.ProllyMapFromArtifactIndex(artIdx)
+
+	itr, err := artM.IterAllConflicts(ctx)
 	require.NoError(t, err)
 
-	assert.Equal(t, int(rowData.Len()), len(expected))
+	expectedSet := expected.toConflictSet()
 
-	actual, err := rowData.Iterator(ctx)
+	var c int
+	var h [16]byte
+	for {
+		conf, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		c++
+
+		ours := mustGetRowValueFromTable(t, ctx, tbl, conf.Key)
+		theirs := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), conf.TheirRootIsh, tblName, conf.Key)
+		base := mustGetRowValueFromRootIsh(t, ctx, tbl.ValueReadWriter(), conf.Metadata.BaseRootIsh, tblName, conf.Key)
+
+		copy(h[:], conf.Key.GetField(0))
+		expectedConf, ok := expectedSet[h]
+		require.True(t, ok)
+
+		if expectedConf.base != nil {
+			_, value := expectedConf.base.HashAndValue()
+			require.Equal(t, valDesc.Format(value), valDesc.Format(base))
+		}
+		if expectedConf.ours != nil {
+			_, value := expectedConf.ours.HashAndValue()
+			require.Equal(t, valDesc.Format(value), valDesc.Format(ours))
+		}
+		if expectedConf.theirs != nil {
+			_, value := expectedConf.theirs.HashAndValue()
+			require.Equal(t, valDesc.Format(value), valDesc.Format(theirs))
+		}
+	}
+
+	require.Equal(t, len(expected), c)
+
+}
+
+func assertNomsConflicts(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected conflictEntries) {
+	_, confIdx, err := tbl.GetConflicts(ctx)
+	require.NoError(t, err)
+	conflicts := durable.NomsMapFromConflictIndex(confIdx)
+
+	assert.True(t, conflicts.Len() > 0)
+	assert.Equal(t, int(conflicts.Len()), len(expected))
+
+	expectedSet := expected.toTupleSet()
+
+	actual, err := conflicts.Iterator(ctx)
 	require.NoError(t, err)
 	for {
 		_, act, err := actual.Next(ctx)
@@ -342,10 +380,196 @@ func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, exp
 		assert.NoError(t, err)
 		h, err := act.Hash(types.Format_Default)
 		assert.NoError(t, err)
-		exp, ok := expected[h]
+		exp, ok := expectedSet[h]
 		assert.True(t, ok)
 		assert.True(t, exp.Equals(act))
 	}
+}
+
+func mustGetRowValueFromTable(t *testing.T, ctx context.Context, tbl *doltdb.Table, key val.Tuple) val.Tuple {
+	idx, err := tbl.GetRowData(ctx)
+	require.NoError(t, err)
+	m := durable.ProllyMapFromIndex(idx)
+
+	var value val.Tuple
+	err = m.Get(ctx, key, func(_, v val.Tuple) error {
+		value = v
+		return nil
+	})
+	require.NoError(t, err)
+
+	return value
+}
+
+func mustGetRowValueFromRootIsh(t *testing.T, ctx context.Context, vrw types.ValueReadWriter, rootIsh hash.Hash, tblName string, key val.Tuple) val.Tuple {
+	rv, err := doltdb.LoadRootValueFromRootIshAddr(ctx, vrw, rootIsh)
+	require.NoError(t, err)
+	tbl, ok, err := rv.GetTable(ctx, tblName)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	return mustGetRowValueFromTable(t, ctx, tbl, key)
+}
+
+// |expected| is a tupleSet to compensate for random storage order
+func assertKeylessRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
+	if types.IsFormat_DOLT_1(tbl.Format()) {
+		assertKeylessProllyRows(t, ctx, tbl, expected)
+		return
+	}
+
+	assertKeylessNomsRows(t, ctx, tbl, expected)
+}
+
+func assertKeylessProllyRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected []keylessEntry) {
+	idx, err := tbl.GetRowData(ctx)
+	require.NoError(t, err)
+	m := durable.ProllyMapFromIndex(idx)
+
+	expectedSet := mustHash128Set(expected...)
+
+	itr, err := m.IterAll(ctx)
+	require.NoError(t, err)
+
+	var c int
+	var h [16]byte
+	for {
+		hashId, value, err := itr.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		c++
+		require.NoError(t, err)
+		copy(h[:], hashId.GetField(0))
+		expectedVal, ok := expectedSet[h]
+		assert.True(t, ok)
+		assert.Equal(t, valDesc.Format(expectedVal), valDesc.Format(value))
+	}
+
+	require.Equal(t, len(expected), c)
+}
+
+func assertKeylessNomsRows(t *testing.T, ctx context.Context, tbl *doltdb.Table, expected keylessEntries) {
+	rowData, err := tbl.GetNomsRowData(ctx)
+	require.NoError(t, err)
+
+	assert.Equal(t, int(rowData.Len()), len(expected))
+
+	expectedSet := expected.toTupleSet()
+
+	actual, err := rowData.Iterator(ctx)
+	require.NoError(t, err)
+	for {
+		_, act, err := actual.Next(ctx)
+		if act == nil {
+			break
+		}
+		assert.NoError(t, err)
+		h, err := act.Hash(types.Format_Default)
+		assert.NoError(t, err)
+		exp, ok := expectedSet[h]
+		assert.True(t, ok)
+		assert.True(t, exp.Equals(act))
+	}
+}
+
+const tblName = "noKey"
+
+var sch = dtu.MustSchema(
+	schema.NewColumn("c1", 1, types.IntKind, false),
+	schema.NewColumn("c2", 2, types.IntKind, false),
+)
+var c1Tag = types.Uint(1)
+var c2Tag = types.Uint(2)
+var cardTag = types.Uint(schema.KeylessRowCardinalityTag)
+
+var valDesc = val.NewTupleDescriptor(val.Type{Enc: val.Uint64Enc}, val.Type{Enc: val.Int64Enc, Nullable: true}, val.Type{Enc: val.Int64Enc, Nullable: true})
+var valBld = val.NewTupleBuilder(valDesc)
+var sharePool = pool.NewBuffPool()
+
+type keylessEntries []keylessEntry
+type keylessEntry struct {
+	card int
+	c1   int
+	c2   int
+}
+
+func (e keylessEntries) toTupleSet() tupleSet {
+	tups := make([]types.Tuple, len(e))
+	for i, t := range e {
+		tups[i] = t.ToNomsTuple()
+	}
+	return mustTupleSet(tups...)
+}
+
+func (e keylessEntry) ToNomsTuple() types.Tuple {
+	return dtu.MustTuple(cardTag, types.Uint(e.card), c1Tag, types.Int(e.c1), c2Tag, types.Int(e.c2))
+}
+
+func (e keylessEntry) HashAndValue() ([]byte, val.Tuple) {
+	valBld.PutUint64(0, uint64(e.card))
+	valBld.PutInt64(1, int64(e.c1))
+	valBld.PutInt64(2, int64(e.c2))
+
+	value := valBld.Build(sharePool)
+	hashTup := val.HashTupleFromValue(sharePool, value)
+	return hashTup.GetField(0), value
+}
+
+type conflictSet map[[16]byte]conflictEntry
+type conflictEntries []conflictEntry
+type conflictEntry struct {
+	base, ours, theirs *keylessEntry
+}
+
+func (e conflictEntries) toConflictSet() conflictSet {
+	s := make(conflictSet, len(e))
+	for _, t := range e {
+		s[t.Key()] = t
+	}
+	return s
+}
+
+func (e conflictEntries) toTupleSet() tupleSet {
+	tups := make([]types.Tuple, len(e))
+	for i, t := range e {
+		tups[i] = t.ToNomsTuple()
+	}
+	return mustTupleSet(tups...)
+}
+
+func (e conflictEntry) Key() (h [16]byte) {
+	if e.base != nil {
+		h2, _ := e.base.HashAndValue()
+		copy(h[:], h2[:])
+		return
+	}
+	if e.ours != nil {
+		h2, _ := e.ours.HashAndValue()
+		copy(h[:], h2[:])
+		return
+	}
+	if e.theirs != nil {
+		h2, _ := e.theirs.HashAndValue()
+		copy(h[:], h2[:])
+		return
+	}
+
+	return
+}
+
+func (e conflictEntry) ToNomsTuple() types.Tuple {
+	var b, o, t types.Value = types.NullValue, types.NullValue, types.NullValue
+	if e.base != nil {
+		b = e.base.ToNomsTuple()
+	}
+	if e.ours != nil {
+		o = e.ours.ToNomsTuple()
+	}
+	if e.theirs != nil {
+		t = e.theirs.ToNomsTuple()
+	}
+	return dtu.MustTuple(b, o, t)
 }
 
 type tupleSet map[hash.Hash]types.Tuple
@@ -360,4 +584,19 @@ func mustTupleSet(tt ...types.Tuple) (s tupleSet) {
 		s[h] = tup
 	}
 	return
+}
+
+type hash128Set map[[16]byte]val.Tuple
+
+func mustHash128Set(entries ...keylessEntry) (s hash128Set) {
+	var h [16]byte
+	s = make(hash128Set, len(entries))
+
+	for _, e := range entries {
+		h2, value := e.HashAndValue()
+		copy(h[:], h2)
+		s[h] = value
+	}
+
+	return s
 }
