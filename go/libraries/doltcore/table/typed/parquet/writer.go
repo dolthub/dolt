@@ -46,7 +46,7 @@ var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=DATE",
+	typeinfo.YearTypeIdentifier:       "type=INT32, convertedtype=INT_32",
 	typeinfo.UnknownTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.JSONTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.BlobStringTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -119,8 +119,8 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			case typeinfo.TimeTypeIdentifier:
 				v := int64(val.(sql.Timespan))
 				// take abs(val) TODO : negative timespan goes out of range when imported into pandas
-				shift := v >> 63
-				val = (v ^ shift) - shift
+				//shift := v >> 63
+				val = v //(v ^ shift) - shift
 				sqlType = sql.Int64
 			case typeinfo.BitTypeIdentifier:
 				sqlType = sql.Uint64

@@ -383,14 +383,64 @@ SQL
     [[ "$output" =~ "Successfully exported data." ]] || false
     [ -f dt.parquet ]
 
-    run parquet-tools cat --json dt.parquet > output.json
+    run parquet-tools cat --json dt.parquet
     [ "$status" -eq 0 ]
-    row1='{"pk":1,"v1":1586304000,"v2":40271000000,"v3":2020,"v4":1586344271,"v5":1,"v6":"one"}'
-    row2='{"pk":2,"v1":1586304000,"v2":43932000000,"v3":2020,"v4":1586347932,"v5":0,"v6":"three"}'
-    row3='{"pk":3,"v1":1633737600,"v2":15154000000,"v3":2019,"v4":1570594354,"v5":1}'
-    [[ "$output" =~ "$row1" ]] || false
-    [[ "$output" =~ "$row2" ]] || false
-    [[ "$output" =~ "$row3" ]] || false
+    [[ "$output" =~ '{"pk":1,"v1":1586304000000000,"v2":40271000000,"v3":2020,"v4":1586344271000000,"v5":1,"v6":"one"}' ]] || false
+    [[ "$output" =~ '{"pk":2,"v1":1586304000000000,"v2":43932000000,"v3":2020,"v4":1586347932000000,"v5":0,"v6":"three"}' ]] || false
+    [[ "$output" =~ '{"pk":3,"v1":1633737600000000,"v2":15154000000,"v3":2019,"v4":1570594354000000,"v5":1}' ]] || false
+
+    echo "import pandas as pd
+df = pd.read_parquet('dt.parquet')
+print(df)
+" > pandas_test.py
+    python3 pandas_test.py > pandas.txt
+    [ -f pandas.txt ]
+
+    echo "import pyarrow.parquet as pq
+table = pq.read_table('dt.parquet')
+print(table.to_pandas())
+" > arrow_test.py
+    python3 arrow_test.py > pyarrow.txt
+    [ -f pyarrow.txt ]
+
+    run diff pandas.txt pyarrow.txt
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
+}
+
+@test "export-tables: table export negative time type to parquet" {
+    skip "TODO : negative time type in parquet export fails for importing to pandas"
+    dolt sql <<SQL
+CREATE TABLE diffTypes (pk BIGINT PRIMARY KEY,v2 TIME);
+INSERT INTO diffTypes VALUES (1,'-11:11:11'), (2,NULL);
+SQL
+    run dolt table export diffTypes dt.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "Successfully exported data." ]] || false
+    [ -f dt.parquet ]
+
+    run parquet-tools cat --json dt.parquet
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ '{"pk":1,"v2":-40271000000}' ]] || false
+    [[ "$output" =~ '{"pk":2}' ]] || false
+
+    echo "import pandas as pd
+df = pd.read_parquet('dt.parquet')
+print(df)
+" > pandas_test.py
+    python3 pandas_test.py > pandas.txt
+    [ -f pandas.txt ]
+
+    echo "import pyarrow.parquet as pq
+table = pq.read_table('dt.parquet')
+print(table.to_pandas())
+" > arrow_test.py
+    python3 arrow_test.py > pyarrow.txt
+    [ -f pyarrow.txt ]
+
+    run diff pandas.txt pyarrow.txt
+    [ "$status" -eq 0 ]
+    [ "$output" = "" ]
 }
 
 @test "export-tables: table export more types to parquet" {
