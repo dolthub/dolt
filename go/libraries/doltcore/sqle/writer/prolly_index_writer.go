@@ -381,9 +381,6 @@ type prollyKeylessSecondaryWriter struct {
 
 	keyBld *val.TupleBuilder
 	keyMap val.OrdinalMapping
-
-	valBld *val.TupleBuilder
-	valMap val.OrdinalMapping
 }
 
 var _ indexWriter = prollyKeylessSecondaryWriter{}
