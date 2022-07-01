@@ -59,21 +59,14 @@ func TestQueries(t *testing.T) {
 }
 
 func TestSingleQuery(t *testing.T) {
-	t.Skip()
-
 	var test queries.QueryTest
 	test = queries.QueryTest{
-		Query: `select i from mytable where i = 1`,
-		Expected: []sql.Row{
-			{1},
-		},
+		Query:    `SELECT * FROM comp_index_t2 WHERE ((v1<=5) OR (v1=53));`,
+		Expected: []sql.Row{sql.Row{62, 53, 48, 19, 36}, sql.Row{9, 5, 17, 52, 13}, sql.Row{11, 5, 76, 70, 46}, sql.Row{10, 5, 32, 30, 48}, sql.Row{0, 0, 33, 2, 67}, sql.Row{2, 1, 43, 13, 36}, sql.Row{8, 4, 27, 77, 5}, sql.Row{5, 3, 31, 22, 81}, sql.Row{3, 1, 72, 29, 21}, sql.Row{1, 0, 55, 14, 32}, sql.Row{7, 4, 10, 53, 69}, sql.Row{61, 53, 6, 53, 89}, sql.Row{4, 2, 27, 1, 75}, sql.Row{6, 4, 6, 67, 80}},
 	}
 
 	harness := newDoltHarness(t)
-	engine := enginetest.NewEngine(t, harness)
-	enginetest.CreateIndexes(t, harness, engine)
-	//engine.Analyzer.Debug = true
-	//engine.Analyzer.Verbose = true
+	harness.Setup(setup.ComplexIndexSetup...)
 
 	enginetest.TestQuery(t, harness, test.Query, test.Expected, test.ExpectedColumns, nil)
 }
