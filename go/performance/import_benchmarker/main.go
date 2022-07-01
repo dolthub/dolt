@@ -16,102 +16,49 @@ package main
 
 import (
 	"flag"
-	"log"
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"os"
 	"testing"
-
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
-	smallSet  = 1000
-	mediumSet = 100000
-	largeSet  = 10000000
+	smallSet         = 100000
+	mediumSet        = 1000
+	largeSet         = 10000000
+	resultsTableName = "results"
 )
 
-var outputPath = flag.String("outputPath", "./", "the path where the serialized results file will be stored.")
-var outputFormat = flag.String("outputFormat", ".csv", "the format used to serialize the benchmarking results.")
-var resultsTableName = flag.String("resultsTableName", "results", "the name of the results table.")
-var csvFlag = flag.Bool("csv", false, "test importing .csv file into dolt")
-var jsonFlag = flag.Bool("json", false, "test importing .json file into dolt")
-var sqlFlag = flag.Bool("sql", false, "test importing .sql file into dolt")
-
-var flagStrs = []flagStr{
-	{b: csvFlag, s: csvExt},
-	{b: jsonFlag, s: jsonExt},
-	{b: sqlFlag, s: sqlExt},
-}
-
-type flagStr struct {
-	b *bool
-	s string
-}
+var configPath = flag.String("config", "", "the path to a config file")
 
 func main() {
 	flag.Parse()
 
+	config := NewDefaultImportBenchmarkConfig()
+	var err error
+	if *configPath != "" {
+		config, err = FromFileConfig(*configPath)
+	}
+
+	if err != nil {
+		panic(err.Error())
+	}
+
+	test := NewImportBenchmarkTest(config)
+
+	benchmarkFunc := BenchmarkDoltImport(test)
+	br := testing.Benchmark(benchmarkFunc)
+	res := result{
+		name:    config.Name,
+		format:  config.Format,
+		rows:    config.NumRows,
+		columns: len(genSampleCols()),
+		br:      br,
+	}
 	results := make([]result, 0)
-
-	testFmts := make([]string, 0)
-	for _, fs := range flagStrs {
-		if *fs.b {
-			if fs.s == sqlExt {
-				log.Fatal("benchmarking dolt sql imports currently disabled")
-			}
-			testFmts = append(testFmts, fs.s)
-		}
-	}
-
-	if len(testFmts) == 0 {
-		log.Fatal("must provide flag(s) format for testing dolt imports, ie -csv, -json, -sql \n")
-	}
-
-	for _, frmt := range testFmts {
-		benchmarks := []struct {
-			Name    string
-			Format  string
-			Rows    int
-			Columns int
-			BM      func(b *testing.B)
-		}{
-			{
-				Name:    "dolt_import_small",
-				Format:  frmt,
-				Rows:    smallSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltImport(smallSet, genSampleCols(), frmt),
-			},
-			//{
-			//	Name:    "dolt_import_medium",
-			//	Format:  frmt,
-			//	Rows:    mediumSet,
-			//	Columns: len(genSampleCols()),
-			//	BM:      BenchmarkDoltImport(mediumSet, genSampleCols(), frmt),
-			//},
-			//{
-			//	Name:    "dolt_import_large",
-			//	Format:  frmt,
-			//	Rows:    largeSet,
-			//	Columns: len(genSampleCols()),
-			//	BM:      BenchmarkDoltImport(largeSet, genSampleCols(), frmt),
-			//},
-		}
-
-		for _, b := range benchmarks {
-			br := testing.Benchmark(b.BM)
-			res := result{
-				name:    b.Name,
-				format:  b.Format,
-				rows:    b.Rows,
-				columns: b.Columns,
-				br:      br,
-			}
-			results = append(results, res)
-		}
-	}
+	results = append(results, res)
 
 	// write results data
-	serializeResults(results, *outputPath, *resultsTableName, *outputFormat)
+	serializeResults(results, getWorkingDir(), resultsTableName, csvExt)
 
 	// cleanup temp dolt data dir
 	removeTempDoltDataDir(filesys.LocalFS)

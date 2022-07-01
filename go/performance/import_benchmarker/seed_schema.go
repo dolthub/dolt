@@ -148,18 +148,18 @@ func getColSchemaJSON(seedCols []*SeedColumn) []byte {
 	return []byte(strings.Join(statement, ""))
 }
 
+// TODO: Support autogeneration for a wider variety of types
 func genSampleCols() []*SeedColumn {
 	return []*SeedColumn{
-		NewSeedColumn("id", true, types.IntKind, increment),
-		NewSeedColumn("int1", false, types.IntKind, random),
-		NewSeedColumn("int2", false, types.IntKind, increment),
-		NewSeedColumn("int3", false, types.IntKind, random),
-		NewSeedColumn("int4", false, types.IntKind, increment),
-		NewSeedColumn("int5", false, types.IntKind, increment),
-		NewSeedColumn("str1", false, types.StringKind, random),
-		NewSeedColumn("str2", false, types.StringKind, random),
-		NewSeedColumn("str3", false, types.StringKind, random),
-		NewSeedColumn("str4", false, types.StringKind, random),
-		NewSeedColumn("str5", false, types.StringKind, random),
+		NewSeedColumn("pk", true, types.IntKind, increment),
+		NewSeedColumn("c1", false, types.IntKind, random),
+		NewSeedColumn("c2", false, types.IntKind, increment),
+		NewSeedColumn("c3", false, types.IntKind, random),
+		NewSeedColumn("c4", false, types.IntKind, increment),
+		NewSeedColumn("c5", false, types.IntKind, increment),
+		NewSeedColumn("c6", false, types.StringKind, random),
+		NewSeedColumn("c7", false, types.StringKind, random),
+		NewSeedColumn("c8", false, types.StringKind, random),
+		NewSeedColumn("c9", false, types.StringKind, random),
 	}
 }

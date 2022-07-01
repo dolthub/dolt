@@ -32,10 +32,6 @@ import (
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-const (
-	testHomeDir = "/user/tester"
-)
-
 type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 
 func removeTempDoltDataDir(fs filesys.Filesys) {
@@ -72,11 +68,11 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
 
 // BenchmarkDoltImport returns a function that runs benchmarks for importing
 // a test dataset into Dolt
-func BenchmarkDoltImport(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
+func BenchmarkDoltImport(importTest *ImportBenchmarkTest) func(b *testing.B) {
 	fs := filesys.LocalFS
 	wd := getWorkingDir()
 	return func(b *testing.B) {
-		doltImport(b, fs, rows, cols, wd, format)
+		doltImport(b, fs, importTest.sch.Rows, importTest.sch.Columns, wd, importTest.sch.FileFormatExt)
 	}
 }
 
@@ -162,7 +158,6 @@ func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, 
 }
 
 func getBenchmarkingTools(fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, pathToImportFile, format string) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
-	testTable := "testTable"
 	sch := NewSeedSchema(rows, cols, format)
 
 	switch format {
