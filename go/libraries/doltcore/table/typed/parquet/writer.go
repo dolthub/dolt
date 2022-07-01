@@ -37,7 +37,7 @@ type ParquetWriter struct {
 }
 
 var typeMap = map[typeinfo.Identifier]string{
-	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIME_MICROS",
+	typeinfo.DatetimeTypeIdentifier:   "type=INT64, convertedtype=TIMESTAMP_MICROS",
 	typeinfo.DecimalTypeIdentifier:    "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -114,10 +114,13 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			// convert datetime and time types to int64
 			switch colT.TypeInfo.GetTypeIdentifier() {
 			case typeinfo.DatetimeTypeIdentifier:
-				val = val.(time.Time).Unix()
+				val = val.(time.Time).UnixMicro()
 				sqlType = sql.Int64
 			case typeinfo.TimeTypeIdentifier:
-				val = int64(val.(sql.Timespan))
+				v := int64(val.(sql.Timespan))
+				// take abs(val) TODO : negative timespan goes out of range when imported into pandas
+				shift := v >> 63
+				val = (v ^ shift) - shift
 				sqlType = sql.Int64
 			case typeinfo.BitTypeIdentifier:
 				sqlType = sql.Uint64
