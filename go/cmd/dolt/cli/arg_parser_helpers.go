@@ -153,7 +153,7 @@ func CreateCloneArgParser() *argparser.ArgParser {
 	ap.SupportsString(RemoteParam, "", "name", "Name of the remote to be added. Default will be 'origin'.")
 	ap.SupportsString(BranchParam, "b", "branch", "The branch to be cloned.  If not specified all branches will be cloned.")
 	ap.SupportsString(dbfactory.AWSRegionParam, "", "region", "")
-	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, credTypes))
+	ap.SupportsValidatedString(dbfactory.AWSCredsTypeParam, "", "creds-type", "", argparser.ValidatorFromStrList(dbfactory.AWSCredsTypeParam, dbfactory.AWSCredTypes))
 	ap.SupportsString(dbfactory.AWSCredsFileParam, "", "file", "AWS credentials file.")
 	ap.SupportsString(dbfactory.AWSCredsProfile, "", "profile", "AWS profile to use.")
 	return ap
