@@ -62,7 +62,7 @@ type Session struct {
 	username   string
 	email      string
 	dbStates   map[string]*DatabaseSessionState
-	provider   RevisionDatabaseProvider
+	provider   DoltDatabaseProvider
 	tempTables map[string][]sql.Table
 }
 
@@ -82,7 +82,7 @@ func DefaultSession() *Session {
 }
 
 // NewSession creates a Session object from a standard sql.Session and 0 or more Database objects.
-func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
+func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro DoltDatabaseProvider, conf config.ReadableConfig, dbs ...InitialDbState) (*Session, error) {
 	username := conf.GetStringOrDefault(env.UserNameKey, "")
 	email := conf.GetStringOrDefault(env.UserEmailKey, "")
 	sess := &Session{
@@ -106,7 +106,7 @@ func NewSession(ctx *sql.Context, sqlSess *sql.BaseSession, pro RevisionDatabase
 }
 
 // Provider returns the RevisionDatabaseProvider for this session.
-func (sess *Session) Provider() RevisionDatabaseProvider {
+func (sess *Session) Provider() DoltDatabaseProvider {
 	return sess.provider
 }
 

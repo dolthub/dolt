@@ -57,7 +57,7 @@ type DoltDatabaseProvider struct {
 var _ sql.DatabaseProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.FunctionProvider = (*DoltDatabaseProvider)(nil)
 var _ sql.MutableDatabaseProvider = (*DoltDatabaseProvider)(nil)
-var _ dsess.RevisionDatabaseProvider = (*DoltDatabaseProvider)(nil)
+var _ dsess.DoltDatabaseProvider = (*DoltDatabaseProvider)(nil)
 
 // NewDoltDatabaseProvider returns a provider for the databases given
 func NewDoltDatabaseProvider(defaultBranch string, fs filesys.Filesys, databases ...sql.Database) DoltDatabaseProvider {
@@ -100,9 +100,14 @@ func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider 
 	return p
 }
 
+// WithRemoteDialer returns a copy of this provider with the dialer provided
 func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) DoltDatabaseProvider {
 	p.remoteDialer = provider
 	return p
+}
+
+func (p DoltDatabaseProvider) FileSystem() filesys.Filesys {
+	return p.fs
 }
 
 func (p DoltDatabaseProvider) Database(ctx *sql.Context, name string) (db sql.Database, err error) {
@@ -211,17 +216,16 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 	if exists && isDir {
 		return sql.ErrDatabaseExists.New(dbName)
 	} else if exists {
-		return fmt.Errorf("Cannot create DB, file exists at %s", dbName)
+		return fmt.Errorf("cannot create DB, file exists at %s", dbName)
 	}
-
-	// err := p.fs.MkDirs(dbName)
-	// if err != nil {
-	// 	return err
-	// }
 
 	var r env.Remote
 	var srcDB *doltdb.DoltDB
-	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, p.remoteDialer)
+	dialer := p.remoteDialer
+	if dialer == nil {
+
+	}
+	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, dialer)
 	if err != nil {
 		return err
 	}
@@ -241,7 +245,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		Remote: remoteName,
 	})
 
-	dsess := dsess.DSessFromSess(ctx.Session)
+	sess := dsess.DSessFromSess(ctx.Session)
 	fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
 	if err != nil {
 		return err
@@ -261,7 +265,7 @@ func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, 
 		return err
 	}
 
-	return dsess.AddDB(ctx, dbstate)
+	return sess.AddDB(ctx, dbstate)
 }
 
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {

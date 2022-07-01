@@ -39,6 +39,7 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
+
 	remoteName := apr.GetValueOrDefault(cli.RemoteParam, "origin")
 	branch := apr.GetValueOrDefault(cli.BranchParam, "")
 	dir, urlStr, err := parseArgs(apr)
@@ -46,8 +47,8 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	// TODO: empty config here
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(nil, emptyConfig(), urlStr)
+	sess := dsess.DSessFromSess(ctx.Session)
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(sess.Provider().FileSystem(), emptyConfig(), urlStr)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
@@ -58,14 +59,10 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	sess := dsess.DSessFromSess(ctx.Session)
-	sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, params)
-
-	//
-	// err = dEnv.RepoState.Save(dEnv.FS)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	err = sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, params)
+	if err != nil {
+		return nil, err
+	}
 
 	return rowToIter(int64(0)), nil
 }
