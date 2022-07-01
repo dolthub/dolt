@@ -45,7 +45,8 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
-var ErrPullOnlyNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.")
+var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch on the command line.")
+var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -134,7 +135,7 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 		return nil, err
 	}
 	upstream, hasUpstream := branches[currentBranch.GetPath()]
-	gotRemoteAndBranch := false
+
 	var refSpec ref.RefSpec
 	if remoteOK && len(args) == 1 {
 		refSpecStr := args[0]
@@ -161,7 +162,6 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 		if err != nil {
 			return nil, fmt.Errorf("%w: '%s'", err, refSpecStr)
 		}
-		gotRemoteAndBranch = true
 	} else if setUpstream {
 		return nil, ErrInvalidSetUpstreamArgs
 	} else if hasUpstream {
@@ -207,9 +207,6 @@ func NewPushOpts(ctx context.Context, apr *argparser.ArgParseResults, rsr RepoSt
 	switch src.GetType() {
 	case ref.BranchRefType:
 		remoteRef, err = GetTrackingRef(dest, remote)
-		if !setUpstream {
-			setUpstream = gotRemoteAndBranch
-		}
 	case ref.TagRefType:
 		if setUpstream {
 			err = ErrCannotSetUpstreamForTag
@@ -384,9 +381,9 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 
 	if _, hasUpstream := trackedBranches[branch.GetPath()]; !hasUpstream {
 		if remoteOnly {
-			return nil, fmt.Errorf("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch on the command line.", remoteName)
+			return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
 		} else {
-			return nil, ErrPullOnlyNoUpstream
+			return nil, ErrPullWithNoRemoteAndNoUpstream
 		}
 	}
 

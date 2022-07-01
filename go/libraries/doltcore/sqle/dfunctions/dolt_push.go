@@ -102,5 +102,6 @@ func DoDoltPush(ctx *sql.Context, args []string) (int, error) {
 			return cmdFailure, err
 		}
 	}
+	// TODO : set upstream should be persisted outside of session
 	return cmdSuccess, nil
 }

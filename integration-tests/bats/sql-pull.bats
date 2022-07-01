@@ -192,7 +192,7 @@ teardown() {
 @test "sql-pull: dolt_pull feature branch" {
     cd repo1
     dolt checkout feature
-    dolt push origin feature
+    dolt push --set-upstream origin feature
 
     cd ../repo2
     dolt checkout feature
@@ -214,7 +214,7 @@ teardown() {
 @test "sql-pull: CALL dolt_pull feature branch" {
     cd repo1
     dolt checkout feature
-    dolt push origin feature
+    dolt push --set-upstream origin feature
 
     cd ../repo2
     dolt checkout feature
@@ -460,7 +460,7 @@ teardown() {
 
     cd ../repo1
     dolt merge main
-    dolt push
+    dolt push origin feature
     dolt checkout other
     dolt commit --allow-empty -m "new commit on other"
     dolt push

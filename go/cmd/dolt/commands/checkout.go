@@ -267,18 +267,18 @@ func setRemoteUpstreamForCheckout(dEnv *env.DoltEnv, branchRef ref.RemoteRef) er
 	src := refSpec.SrcRef(dEnv.RepoStateReader().CWBHeadRef())
 	dest := refSpec.DestRef(src)
 
-	uErr := dEnv.RepoStateWriter().UpdateBranch(src.GetPath(), env.BranchConfig{
+	err = dEnv.RepoStateWriter().UpdateBranch(src.GetPath(), env.BranchConfig{
 		Merge: ref.MarshalableRef{
 			Ref: dest,
 		},
 		Remote: branchRef.GetRemote(),
 	})
-	if uErr != nil {
-		return errhand.BuildDError(uErr.Error()).Build()
+	if err != nil {
+		return errhand.BuildDError(err.Error()).Build()
 	}
-	uErr = dEnv.RepoState.Save(dEnv.FS)
-	if uErr != nil {
-		uErr = errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(uErr).Build()
+	err = dEnv.RepoState.Save(dEnv.FS)
+	if err != nil {
+		return errhand.BuildDError(actions.ErrFailedToSaveRepoState.Error()).AddCause(err).Build()
 	}
 	cli.Printf("branch '%s' set up to track '%s'.\n", src.GetPath(), branchRef.GetPath())
 

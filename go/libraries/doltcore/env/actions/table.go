@@ -141,11 +141,18 @@ func GetRemoteBranchRef(ctx context.Context, ddb *doltdb.DoltDB, name string) (r
 		return ref.RemoteRef{}, false, err
 	}
 
+	// This will only do this behavior of guessing the remote branch if there is exactly one remote tracking branch with the matching branch name.
+	var found = false
+	var remoteRef ref.RemoteRef
 	for _, rf := range refs {
 		if remRef, ok := rf.(ref.RemoteRef); ok && remRef.GetBranch() == name {
-			return remRef, true, nil
+			if found {
+				return ref.RemoteRef{}, false, nil
+			}
+			found = true
+			remoteRef = remRef
 		}
 	}
 
-	return ref.RemoteRef{}, false, nil
+	return remoteRef, found, nil
 }

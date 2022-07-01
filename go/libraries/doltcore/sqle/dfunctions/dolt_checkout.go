@@ -17,13 +17,13 @@ package dfunctions
 import (
 	"errors"
 	"fmt"
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"strings"
 
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/dolthub/go-mysql-server/sql/expression"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
-	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
@@ -126,23 +126,25 @@ func checkoutRemoteBranch(ctx *sql.Context, dbName string, dbData env.DbData, ro
 		return errors.New("fatal: unable to read from data repository")
 	} else if refExists {
 		err = checkoutNewBranch(ctx, dbName, dbData, roots, branchName, remoteRef.String())
-		if err == nil {
-			refSpec, err := ref.ParseRefSpecForRemote(remoteRef.GetRemote(), remoteRef.GetBranch())
-			if err != nil {
-				return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remoteRef.GetRemote()).Error()).Build()
-			}
-
-			src := refSpec.SrcRef(dbData.Rsr.CWBHeadRef())
-			dest := refSpec.DestRef(src)
-
-			err = dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
-				Merge: ref.MarshalableRef{
-					Ref: dest,
-				},
-				Remote: remoteRef.GetRemote(),
-			})
-			// TODO : set upstream should be persisted outside of session
+		if err != nil {
+			return err
 		}
+
+		refSpec, err := ref.ParseRefSpecForRemote(remoteRef.GetRemote(), remoteRef.GetBranch())
+		if err != nil {
+			return errhand.BuildDError(fmt.Errorf("%w: '%s'", err, remoteRef.GetRemote()).Error()).Build()
+		}
+
+		src := refSpec.SrcRef(dbData.Rsr.CWBHeadRef())
+		dest := refSpec.DestRef(src)
+
+		err = dbData.Rsw.UpdateBranch(src.GetPath(), env.BranchConfig{
+			Merge: ref.MarshalableRef{
+				Ref: dest,
+			},
+			Remote: remoteRef.GetRemote(),
+		})
+		// TODO : set upstream should be persisted outside of session
 		return err
 	} else {
 		return fmt.Errorf("error: could not find %s", branchName)
