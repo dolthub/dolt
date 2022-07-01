@@ -224,7 +224,10 @@ func (cmd SqlCmd) Exec(ctx context.Context, commandStr string, args []string, dE
 	// If no privilege filepath specified, default to cfg directory
 	privsFp, hasPrivsFp := apr.GetValue(privilegeFilePathFlag)
 	if !hasPrivsFp {
-		privsFp = filepath.Join(cfgDirPath, defaultPrivsName)
+		privsFp, err = dEnv.FS.Abs(filepath.Join(cfgDirPath, defaultPrivsName))
+		if err != nil {
+			return HandleVErrAndExitCode(errhand.VerboseErrorFromError(err), usage)
+		}
 	}
 
 	initialRoots, err := mrEnv.GetWorkingRoots(ctx)
