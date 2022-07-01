@@ -149,6 +149,37 @@ teardown() {
     [[ "$output" =~ "Your branch is up to date with 'origin/other'." ]] || false
 }
 
+@test "remotes: guessing the remote branch fails if there are multiple remotes with branches with matching name" {
+    mkdir remote
+    mkdir repo1
+
+    cd repo1
+    dolt init
+    dolt remote add origin file://../remote
+    dolt push origin main
+    dolt checkout -b other
+    dolt push origin other
+
+    cd ..
+    dolt clone file://./remote repo2
+
+    cd repo2
+    dolt remote add test-remote file://../remote
+    dolt push test-remote main
+    dolt checkout -b other
+    dolt push test-remote other
+    dolt branch -a
+    dolt checkout main
+    dolt branch -d other
+    run dolt branch
+    [[ ! "$output" =~ "other" ]] || false
+
+    # guessing the remote branch fails since there are two remotes with branch 'other'
+    run dolt checkout other
+    [ "$status" -eq 1 ]
+    [[ "$output" =~ "error: could not find other" ]] || false
+}
+
 @test "remotes: cli 'dolt checkout -b new_branch' should not set upstream if there is a remote branch with matching name" {
     mkdir remote
     mkdir repo1
