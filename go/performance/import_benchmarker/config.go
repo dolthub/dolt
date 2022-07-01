@@ -33,9 +33,9 @@ type ImportBenchmarkJob struct {
 
 	Sorted bool
 
-	Preset bool
-
 	Format string
+
+	Filepath string
 }
 
 type ImportBenchmarkConfig struct {
@@ -50,14 +50,12 @@ func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
 			Name:    "dolt_import_small",
 			NumRows: smallSet,
 			Sorted:  false,
-			Preset:  false,
 			Format:  csvExt,
 		},
 		{
 			Name:    "dolt_import_medium",
 			NumRows: mediumSet,
 			Sorted:  false,
-			Preset:  false,
 			Format:  csvExt,
 		},
 	}
@@ -87,7 +85,7 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 }
 
 type ImportBenchmarkTest struct {
-	sch *SeedSchema // should only be needed in generated test cases
+	fileFormat string
 
 	filePath string // path to file
 }
@@ -98,24 +96,29 @@ func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTe
 	ret := make([]*ImportBenchmarkTest, len(config.Jobs))
 
 	for i, job := range config.Jobs {
-		if job.Preset {
-			panic("Unsupported")
-		}
-
-		sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
-		testFile := generateTestFile(job, filesys.LocalFS, sch)
-
-		ret[i] = &ImportBenchmarkTest{
-			sch:      sch,
-			filePath: testFile,
+		// Preset csv path
+		if job.Filepath != "" {
+			ret[i] = &ImportBenchmarkTest{fileFormat: job.Format, filePath: job.Filepath}
+		} else {
+			ret[i] = getGeneratedBenchmarkTest(job)
 		}
 	}
 
 	return ret
 }
 
-func generateTestFile(job *ImportBenchmarkJob, fs filesys.Filesys, sch *SeedSchema) string {
-	pathToImportFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testData.%s", job.Format))
+func getGeneratedBenchmarkTest(job *ImportBenchmarkJob) *ImportBenchmarkTest {
+	sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
+	testFile := generateTestFile(filesys.LocalFS, sch)
+
+	return &ImportBenchmarkTest{
+		fileFormat: sch.FileFormatExt,
+		filePath:   testFile,
+	}
+}
+
+func generateTestFile(fs filesys.Filesys, sch *SeedSchema) string {
+	pathToImportFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testData.%s", sch.FileFormatExt))
 	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		panic(err.Error())

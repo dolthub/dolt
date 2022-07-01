@@ -54,7 +54,6 @@ func getWorkingDir() string {
 	return wd
 }
 
-// TODO: Think about the nbf type here
 func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
 	removeTempDoltDataDir(fs)
 
@@ -94,7 +93,7 @@ func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, 
 }
 
 func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
-	switch importTest.sch.FileFormatExt {
+	switch importTest.fileFormat {
 	case csvExt:
 		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
 		args = []string{"-c", "-f", testTable, importTest.filePath}
@@ -109,13 +108,13 @@ func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltComm
 		stdin := getStdinForSQLBenchmark(filesys.LocalFS, importTest.filePath)
 		os.Stdin = stdin
 	case jsonExt:
-		pathToSchemaFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testSchema%s", importTest.sch.FileFormatExt))
+		pathToSchemaFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testSchema%s", importTest.fileFormat))
 		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
 		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
 	default:
-		log.Fatalf("cannot import file, unsupported file format %s \n", importTest.sch.FileFormatExt)
+		log.Fatalf("cannot import file, unsupported file format %s \n", importTest.fileFormat)
 	}
 
 	return commandFunc, commandStr, args, dEnv
