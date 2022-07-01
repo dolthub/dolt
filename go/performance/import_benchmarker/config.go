@@ -17,15 +17,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const testTable = "testTable"
 
-type ImportBenchmarkConfig struct {
+type ImportBenchmarkJob struct {
 	Name string
 
 	NumRows int
@@ -37,15 +38,32 @@ type ImportBenchmarkConfig struct {
 	Format string
 }
 
+type ImportBenchmarkConfig struct {
+	Jobs []*ImportBenchmarkJob
+}
+
 // NewDefaultImportBenchmarkConfig returns a default import configuration where data is generated with accordance to
 // the medium set.
 func NewDefaultImportBenchmarkConfig() *ImportBenchmarkConfig {
+	jobs := []*ImportBenchmarkJob{
+		{
+			Name:    "dolt_import_small",
+			NumRows: smallSet,
+			Sorted:  false,
+			Preset:  false,
+			Format:  csvExt,
+		},
+		{
+			Name:    "dolt_import_medium",
+			NumRows: mediumSet,
+			Sorted:  false,
+			Preset:  false,
+			Format:  csvExt,
+		},
+	}
+
 	return &ImportBenchmarkConfig{
-		Name:    "dolt_import_medium",
-		NumRows: mediumSet,
-		Sorted:  false,
-		Preset:  false,
-		Format:  csvExt,
+		Jobs: jobs,
 	}
 }
 
@@ -56,7 +74,10 @@ func FromFileConfig(configPath string) (*ImportBenchmarkConfig, error) {
 		return nil, err
 	}
 
-	config := &ImportBenchmarkConfig{}
+	config := &ImportBenchmarkConfig{
+		Jobs: make([]*ImportBenchmarkJob, 0),
+	}
+
 	err = json.Unmarshal(data, config)
 	if err != nil {
 		return nil, err
@@ -71,24 +92,30 @@ type ImportBenchmarkTest struct {
 	filePath string // path to file
 }
 
-// NewImportBenchmarkTest creates the test conditions for an import benchmark to execute. In the case that the config
+// NewImportBenchmarkTests creates the test conditions for an import benchmark to execute. In the case that the config
 // dictates that data needs to be generated, this function handles that
-func NewImportBenchmarkTest(config *ImportBenchmarkConfig) *ImportBenchmarkTest {
-	if config.Preset {
-		panic("Unsupported")
+func NewImportBenchmarkTests(config *ImportBenchmarkConfig) []*ImportBenchmarkTest {
+	ret := make([]*ImportBenchmarkTest, len(config.Jobs))
+
+	for i, job := range config.Jobs {
+		if job.Preset {
+			panic("Unsupported")
+		}
+
+		sch := NewSeedSchema(job.NumRows, genSampleCols(), job.Format)
+		testFile := generateTestFile(job, filesys.LocalFS, sch)
+
+		ret[i] = &ImportBenchmarkTest{
+			sch:      sch,
+			filePath: testFile,
+		}
 	}
 
-	sch := NewSeedSchema(config.NumRows, genSampleCols(), config.Format)
-	testFile := generateTestFile(config, filesys.LocalFS, sch)
-
-	return &ImportBenchmarkTest{
-		sch:      sch,
-		filePath: testFile,
-	}
+	return ret
 }
 
-func generateTestFile(config *ImportBenchmarkConfig, fs filesys.Filesys, sch *SeedSchema) string {
-	pathToImportFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testData.%s", config.Format))
+func generateTestFile(job *ImportBenchmarkJob, fs filesys.Filesys, sch *SeedSchema) string {
+	pathToImportFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testData.%s", job.Format))
 	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
 	if err != nil {
 		panic(err.Error())

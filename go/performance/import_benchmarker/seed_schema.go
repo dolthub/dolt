@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	csvExt  = ".csv"
-	jsonExt = ".json"
-	sqlExt  = ".sql"
+	csvExt  = "csv"
+	jsonExt = "json"
+	sqlExt  = "sql"
 
 	increment = GenType("increment")
 	random    = GenType("random")

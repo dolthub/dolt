@@ -69,82 +69,18 @@ func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
 // BenchmarkDoltImport returns a function that runs benchmarks for importing
 // a test dataset into Dolt
 func BenchmarkDoltImport(importTest *ImportBenchmarkTest) func(b *testing.B) {
-	fs := filesys.LocalFS
-	wd := getWorkingDir()
 	return func(b *testing.B) {
-		doltImport(b, fs, importTest.sch.Rows, importTest.sch.Columns, wd, importTest.sch.FileFormatExt)
+		doltImport(b, importTest)
 	}
 }
 
-// BenchmarkDoltExport returns a function that runs benchmarks for exporting
-// a test dataset out of Dolt
-func BenchmarkDoltExport(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
-	fs := filesys.LocalFS
-	wd := getWorkingDir()
-	return func(b *testing.B) {
-		doltExport(b, fs, rows, cols, wd, format)
-	}
-}
-
-// BenchmarkDoltSQLSelect returns a function that runs benchmarks for executing a sql query
-// against a Dolt table
-func BenchmarkDoltSQLSelect(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
-	fs := filesys.LocalFS
-	wd := getWorkingDir()
-	return func(b *testing.B) {
-		doltSQLSelect(b, fs, rows, cols, wd, format)
-	}
-}
-
-func doltImport(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, format string) {
-	pathToImportFile := filepath.Join(workingDir, fmt.Sprintf("testData%s", format))
-
+func doltImport(b *testing.B, importTest *ImportBenchmarkTest) {
 	oldStdin := os.Stdin
 	defer func() { os.Stdin = oldStdin }()
 
-	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(fs, rows, cols, workingDir, pathToImportFile, format)
+	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(importTest)
 
 	runBenchmark(b, commandFunc, commandStr, args, dEnv)
-}
-
-func doltExport(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, format string) {
-	pathToImportFile := filepath.Join(workingDir, fmt.Sprintf("testData%s", format))
-	oldStdin := os.Stdin
-
-	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(fs, rows, cols, workingDir, pathToImportFile, format)
-
-	// import
-	status := commandFunc(context.Background(), commandStr, args, dEnv)
-	if status != 0 {
-		log.Fatalf("failed to import table successfully with exit code %d \n", status)
-	}
-
-	// revert stdin
-	os.Stdin = oldStdin
-
-	args = []string{"-f", "testTable", pathToImportFile}
-	runBenchmark(b, tblcmds.ExportCmd{}.Exec, "dolt table export", args, dEnv)
-}
-
-func doltSQLSelect(b *testing.B, fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, format string) {
-	testTable := "testTable"
-	pathToImportFile := filepath.Join(workingDir, fmt.Sprintf("testData%s", format))
-
-	oldStdin := os.Stdin
-
-	commandFunc, commandStr, args, dEnv := getBenchmarkingTools(fs, rows, cols, workingDir, pathToImportFile, format)
-
-	// import
-	status := commandFunc(context.Background(), commandStr, args, dEnv)
-	if status != 0 {
-		log.Fatalf("failed to import table successfully with exit code %d \n", status)
-	}
-
-	// revert stdin
-	os.Stdin = oldStdin
-
-	args = []string{"-q", fmt.Sprintf("select count(*) from %s", testTable)}
-	runBenchmark(b, commands.SqlCmd{}.Exec, "dolt sql", args, dEnv)
 }
 
 func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
@@ -157,57 +93,38 @@ func runBenchmark(b *testing.B, commandFunc doltCommandFunc, commandStr string, 
 	}
 }
 
-func getBenchmarkingTools(fs filesys.Filesys, rows int, cols []*SeedColumn, workingDir, pathToImportFile, format string) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
-	sch := NewSeedSchema(rows, cols, format)
-
-	switch format {
+func getBenchmarkingTools(importTest *ImportBenchmarkTest) (commandFunc doltCommandFunc, commandStr string, args []string, dEnv *env.DoltEnv) {
+	switch importTest.sch.FileFormatExt {
 	case csvExt:
-		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, "", pathToImportFile)
-		args = []string{"-c", "-f", testTable, pathToImportFile}
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
+		args = []string{"-c", "-f", testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
 	case sqlExt:
-		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, "", pathToImportFile)
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
 		args = []string{}
 		commandStr = "dolt sql"
 		commandFunc = commands.SqlCmd{}.Exec
 
-		stdin := getStdinForSQLBenchmark(fs, pathToImportFile)
+		stdin := getStdinForSQLBenchmark(filesys.LocalFS, importTest.filePath)
 		os.Stdin = stdin
 	case jsonExt:
-		pathToSchemaFile := filepath.Join(workingDir, fmt.Sprintf("testSchema%s", format))
-		dEnv = setupDEnvImport(fs, sch, workingDir, testTable, pathToSchemaFile, pathToImportFile)
-		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, pathToImportFile}
+		pathToSchemaFile := filepath.Join(getWorkingDir(), fmt.Sprintf("testSchema%s", importTest.sch.FileFormatExt))
+		dEnv = getImportEnv(filesys.LocalFS, getWorkingDir())
+		args = []string{"-c", "-f", "-s", pathToSchemaFile, testTable, importTest.filePath}
 		commandStr = "dolt table import"
 		commandFunc = tblcmds.ImportCmd{}.Exec
 	default:
-		log.Fatalf("cannot import file, unsupported file format %s \n", format)
+		log.Fatalf("cannot import file, unsupported file format %s \n", importTest.sch.FileFormatExt)
 	}
 
 	return commandFunc, commandStr, args, dEnv
 }
 
-func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName, pathToSchemaFile, pathToImportFile string) *env.DoltEnv {
-	wc, err := fs.OpenForWrite(pathToImportFile, os.ModePerm)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer wc.Close()
-
-	ds := NewDSImpl(wc, sch, seedRandom, tableName)
-
-	if pathToSchemaFile != "" {
-		// write schema file
-		err := fs.WriteFile(pathToSchemaFile, sch.Bytes())
-		if err != nil {
-			panic("unable to write data file to filesystem")
-		}
-	}
-
-	ds.GenerateData()
+func getImportEnv(fs filesys.Filesys, workingDir string) *env.DoltEnv {
 	initializeDoltRepoAtWorkingDir(fs, workingDir)
 
-	err = os.Chdir(workingDir)
+	err := os.Chdir(workingDir)
 	if err != nil {
 		panic(err.Error())
 	}

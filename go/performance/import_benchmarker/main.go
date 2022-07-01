@@ -16,14 +16,15 @@ package main
 
 import (
 	"flag"
-	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 	"os"
 	"testing"
+
+	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
 const (
 	smallSet         = 100000
-	mediumSet        = 1000
+	mediumSet        = 1000000
 	largeSet         = 10000000
 	resultsTableName = "results"
 )
@@ -43,19 +44,21 @@ func main() {
 		panic(err.Error())
 	}
 
-	test := NewImportBenchmarkTest(config)
-
-	benchmarkFunc := BenchmarkDoltImport(test)
-	br := testing.Benchmark(benchmarkFunc)
-	res := result{
-		name:    config.Name,
-		format:  config.Format,
-		rows:    config.NumRows,
-		columns: len(genSampleCols()),
-		br:      br,
-	}
+	tests := NewImportBenchmarkTests(config)
 	results := make([]result, 0)
-	results = append(results, res)
+
+	for i, test := range tests {
+		benchmarkFunc := BenchmarkDoltImport(test)
+		br := testing.Benchmark(benchmarkFunc)
+		res := result{
+			name:    config.Jobs[i].Name,
+			format:  config.Jobs[i].Format,
+			rows:    config.Jobs[i].NumRows,
+			columns: len(genSampleCols()),
+			br:      br,
+		}
+		results = append(results, res)
+	}
 
 	// write results data
 	serializeResults(results, getWorkingDir(), resultsTableName, csvExt)
