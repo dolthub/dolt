@@ -92,10 +92,6 @@ type IndexLookupKeyIterator interface {
 	NextKey(ctx *sql.Context) (row.TaggedValues, error)
 }
 
-func DoltIndexFromLookup(lookup sql.IndexLookup) DoltIndex {
-	return lookup.(*doltIndexLookup).idx
-}
-
 func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLookup) (sql.PartitionIter, error) {
 	dlu := lookup.(*doltIndexLookup)
 	durableState, err := dlu.idx.getDurableState(ctx, t)

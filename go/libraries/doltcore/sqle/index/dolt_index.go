@@ -18,9 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/dolthub/go-mysql-server/sql/expression"
 	"sync/atomic"
-
-	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
@@ -32,6 +31,7 @@ import (
 	"github.com/dolthub/dolt/go/store/prolly/tree"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/dolt/go/store/val"
+	"github.com/dolthub/go-mysql-server/sql"
 )
 
 type DoltTableable interface {
@@ -94,7 +94,7 @@ func DoltDiffIndexesFromTable(ctx context.Context, db, tbl string, t *doltdb.Tab
 		vrw:                           t.ValueReadWriter(),
 		keyBld:                        keyBld,
 		order:                         sql.IndexOrderAsc,
-		constrainedToLookupExpression: true,
+		constrainedToLookupExpression: false,
 	}
 
 	// TODO: need to add from_ columns
@@ -609,15 +609,18 @@ func (di *doltIndex) coversColumns(s *durableIndexState, cols []string) bool {
 }
 
 func (di *doltIndex) HandledFilters(filters []sql.Expression) []sql.Expression {
-	if types.IsFormat_DOLT_1(di.vrw.Format()) {
-		// todo(andy): handle first column filters
-		return nil
-	} else {
-		if di.constrainedToLookupExpression {
-			return filters
-		}
+	if !di.constrainedToLookupExpression {
 		return nil
 	}
+
+	var handled []sql.Expression
+	for _, f := range filters {
+		if expression.ContainsImpreciseComparison(f) {
+			continue
+		}
+		handled = append(handled, f)
+	}
+	return handled
 }
 
 func (di *doltIndex) Order() sql.IndexOrder {
