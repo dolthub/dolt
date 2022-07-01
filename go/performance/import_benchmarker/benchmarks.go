@@ -19,19 +19,17 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
-
-	"github.com/dolthub/dolt/go/libraries/utils/file"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 	"github.com/dolthub/dolt/go/cmd/dolt/commands/tblcmds"
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
+	"github.com/dolthub/dolt/go/libraries/utils/file"
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
-	"github.com/dolthub/dolt/go/libraries/utils/test"
-	"github.com/dolthub/dolt/go/store/types"
 )
 
 const (
@@ -55,33 +53,28 @@ func removeTempDoltDataDir(fs filesys.Filesys) {
 	}
 }
 
-func getWorkingDir(fs filesys.Filesys) string {
-	workingDir := test.TestDir(testHomeDir)
-	err := fs.MkDirs(workingDir)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return workingDir
+func getWorkingDir() string {
+	wd, _ := os.Getwd()
+	return wd
 }
 
-func createTestEnvWithFS(fs filesys.Filesys, workingDir string) *env.DoltEnv {
+// TODO: Think about the nbf type here
+func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
 	removeTempDoltDataDir(fs)
-	testHomeDirFunc := func() (string, error) { return workingDir, nil }
-	const name = "test mcgibbins"
-	const email = "bigfakeytester@fake.horse"
-	dEnv := env.Load(context.Background(), testHomeDirFunc, fs, doltdb.LocalDirDoltDB, "test")
-	err := dEnv.InitRepo(context.Background(), types.Format_Default, name, email, env.DefaultInitBranch)
+
+	init := execCommand(context.Background(), "dolt", "init")
+	init.Dir = workingDir
+	err := init.Run()
 	if err != nil {
-		panic("Failed to initialize environment")
+		panic(err.Error()) // Fix
 	}
-	return dEnv
 }
 
 // BenchmarkDoltImport returns a function that runs benchmarks for importing
 // a test dataset into Dolt
 func BenchmarkDoltImport(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
 	fs := filesys.LocalFS
-	wd := getWorkingDir(fs)
+	wd := getWorkingDir()
 	return func(b *testing.B) {
 		doltImport(b, fs, rows, cols, wd, format)
 	}
@@ -91,7 +84,7 @@ func BenchmarkDoltImport(rows int, cols []*SeedColumn, format string) func(b *te
 // a test dataset out of Dolt
 func BenchmarkDoltExport(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
 	fs := filesys.LocalFS
-	wd := getWorkingDir(fs)
+	wd := getWorkingDir()
 	return func(b *testing.B) {
 		doltExport(b, fs, rows, cols, wd, format)
 	}
@@ -101,7 +94,7 @@ func BenchmarkDoltExport(rows int, cols []*SeedColumn, format string) func(b *te
 // against a Dolt table
 func BenchmarkDoltSQLSelect(rows int, cols []*SeedColumn, format string) func(b *testing.B) {
 	fs := filesys.LocalFS
-	wd := getWorkingDir(fs)
+	wd := getWorkingDir()
 	return func(b *testing.B) {
 		doltSQLSelect(b, fs, rows, cols, wd, format)
 	}
@@ -217,7 +210,14 @@ func setupDEnvImport(fs filesys.Filesys, sch *SeedSchema, workingDir, tableName,
 	}
 
 	ds.GenerateData()
-	return createTestEnvWithFS(fs, workingDir)
+	initializeDoltRepoAtWorkingDir(fs, workingDir)
+
+	err = os.Chdir(workingDir)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	return env.Load(context.Background(), env.GetCurrentUserHomeDir, filesys.LocalFS, doltdb.LocalDirDoltDB, "test")
 }
 
 func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.File {
@@ -245,4 +245,9 @@ func getStdinForSQLBenchmark(fs filesys.Filesys, pathToImportFile string) *os.Fi
 	}
 
 	return f
+}
+
+func execCommand(ctx context.Context, name string, arg ...string) *exec.Cmd {
+	e := exec.CommandContext(ctx, name, arg...)
+	return e
 }

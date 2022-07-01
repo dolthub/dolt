@@ -81,86 +81,20 @@ func main() {
 				Columns: len(genSampleCols()),
 				BM:      BenchmarkDoltImport(smallSet, genSampleCols(), frmt),
 			},
-			{
-				Name:    "dolt_import_medium",
-				Format:  frmt,
-				Rows:    mediumSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltImport(mediumSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_import_large",
-				Format:  frmt,
-				Rows:    largeSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltImport(largeSet, genSampleCols(), frmt),
-			},
-		}
-
-		for _, b := range benchmarks {
-			br := testing.Benchmark(b.BM)
-			res := result{
-				name:    b.Name,
-				format:  b.Format,
-				rows:    b.Rows,
-				columns: b.Columns,
-				br:      br,
-			}
-			results = append(results, res)
-		}
-	}
-
-	// benchmark other dolt commands with and just use a single import format
-	for _, frmt := range []string{csvExt} {
-		benchmarks := []struct {
-			Name    string
-			Format  string
-			Rows    int
-			Columns int
-			BM      func(b *testing.B)
-		}{
-			{
-				Name:    "dolt_export_small",
-				Format:  frmt,
-				Rows:    smallSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltExport(smallSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_export_medium",
-				Format:  frmt,
-				Rows:    mediumSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltExport(mediumSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_export_large",
-				Format:  frmt,
-				Rows:    largeSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltExport(largeSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_sql_select_small",
-				Format:  frmt,
-				Rows:    smallSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltSQLSelect(smallSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_sql_select_medium",
-				Format:  frmt,
-				Rows:    mediumSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltSQLSelect(mediumSet, genSampleCols(), frmt),
-			},
-			{
-				Name:    "dolt_sql_select_large",
-				Format:  frmt,
-				Rows:    largeSet,
-				Columns: len(genSampleCols()),
-				BM:      BenchmarkDoltSQLSelect(largeSet, genSampleCols(), frmt),
-			},
+			//{
+			//	Name:    "dolt_import_medium",
+			//	Format:  frmt,
+			//	Rows:    mediumSet,
+			//	Columns: len(genSampleCols()),
+			//	BM:      BenchmarkDoltImport(mediumSet, genSampleCols(), frmt),
+			//},
+			//{
+			//	Name:    "dolt_import_large",
+			//	Format:  frmt,
+			//	Rows:    largeSet,
+			//	Columns: len(genSampleCols()),
+			//	BM:      BenchmarkDoltImport(largeSet, genSampleCols(), frmt),
+			//},
 		}
 
 		for _, b := range benchmarks {
