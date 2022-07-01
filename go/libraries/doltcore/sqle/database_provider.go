@@ -20,6 +20,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dolthub/dolt/go/cmd/dolt/errhand"
+	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
+	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -45,6 +49,7 @@ type DoltDatabaseProvider struct {
 	defaultBranch string
 	dataRootDir   string
 	fs            filesys.Filesys
+	remoteDialer  dbfactory.GRPCDialProvider
 
 	dbFactoryUrl string
 }
@@ -92,6 +97,11 @@ func (p DoltDatabaseProvider) WithFunctions(fns []sql.Function) DoltDatabaseProv
 // See doltdb.InMemDoltDB, doltdb.LocalDirDoltDB
 func (p DoltDatabaseProvider) WithDbFactoryUrl(url string) DoltDatabaseProvider {
 	p.dbFactoryUrl = url
+	return p
+}
+
+func (p DoltDatabaseProvider) WithRemoteDialer(provider dbfactory.GRPCDialProvider) DoltDatabaseProvider {
+	p.remoteDialer = provider
 	return p
 }
 
@@ -191,6 +201,94 @@ func (p DoltDatabaseProvider) CreateDatabase(ctx *sql.Context, name string) erro
 	}
 
 	return dsess.AddDB(ctx, dbstate)
+}
+
+func (p DoltDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	exists, isDir := p.fs.Exists(dbName)
+	if exists && isDir {
+		return sql.ErrDatabaseExists.New(dbName)
+	} else if exists {
+		return fmt.Errorf("Cannot create DB, file exists at %s", dbName)
+	}
+
+	// err := p.fs.MkDirs(dbName)
+	// if err != nil {
+	// 	return err
+	// }
+
+	var r env.Remote
+	var srcDB *doltdb.DoltDB
+	r, srcDB, err := createRemote(ctx, remoteName, remoteUrl, remoteParams, p.remoteDialer)
+	if err != nil {
+		return err
+	}
+
+	dEnv, err := actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dbName, p.fs, "VERSION", env.GetCurrentUserHomeDir)
+	if err != nil {
+		return err
+	}
+
+	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
+	if err != nil {
+		return err
+	}
+
+	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
+		Merge:  dEnv.RepoState.Head,
+		Remote: remoteName,
+	})
+
+	// // TODO: fill in version appropriately
+	// dsess := dsess.DSessFromSess(ctx.Session)
+	// newEnv := env.Load(ctx, env.GetCurrentUserHomeDir, newFs, p.dbFactoryUrl, "TODO")
+	// err = newEnv.InitRepo(ctx, types.Format_Default, dsess.Username(), dsess.Email(), p.defaultBranch)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// fkChecks, err := ctx.GetSessionVariable(ctx, "foreign_key_checks")
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// opts := editor.Options{
+	// 	Deaf: newEnv.DbEaFactory(),
+	// 	// TODO: this doesn't seem right, why is this getting set in the constructor to the DB
+	// 	ForeignKeyChecksDisabled: fkChecks.(int8) == 0,
+	// }
+	//
+	// db := NewDatabase(name, newEnv.DbData(), opts)
+	// p.databases[formatDbMapKeyName(db.Name())] = db
+	//
+	// dbstate, err := GetInitialDBState(ctx, db)
+	// if err != nil {
+	// 	return err
+	// }
+	//
+	// return dsess.AddDB(ctx, dbstate)
+	return nil
+}
+
+func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dialer dbfactory.GRPCDialProvider) (env.Remote, *doltdb.DoltDB, error) {
+	r := env.NewRemote(remoteName, remoteUrl, params, dialer)
+
+	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)
+
+	if err != nil {
+		bdr := errhand.BuildDError("error: failed to get remote db").AddCause(err)
+
+		if err == remotestorage.ErrInvalidDoltSpecPath {
+			urlObj, _ := earl.Parse(remoteUrl)
+			bdr.AddDetails("'%s' should be in the format 'organization/repo'", urlObj.Path)
+		}
+
+		return env.NoRemote, nil, bdr.Build()
+	}
+
+	return r, ddb, nil
 }
 
 func (p DoltDatabaseProvider) DropDatabase(ctx *sql.Context, name string) error {

@@ -15,7 +15,6 @@
 package dprocedures
 
 import (
-	"os"
 	"path"
 
 	"github.com/dolthub/dolt/go/cmd/dolt/cli"
@@ -23,9 +22,10 @@ import (
 	"github.com/dolthub/dolt/go/libraries/doltcore/dbfactory"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/env"
-	"github.com/dolthub/dolt/go/libraries/doltcore/env/actions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/remotestorage"
+	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/dsess"
 	"github.com/dolthub/dolt/go/libraries/utils/argparser"
+	"github.com/dolthub/dolt/go/libraries/utils/config"
 	"github.com/dolthub/dolt/go/libraries/utils/earl"
 	"github.com/dolthub/dolt/go/store/types"
 	"github.com/dolthub/go-mysql-server/sql"
@@ -46,12 +46,8 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	// TODO: fill in from database provider
-	userDirExists := false
-
-	var dEnv *env.DoltEnv
-
-	scheme, remoteUrl, err := env.GetAbsRemoteUrl(dEnv.FS, dEnv.Config, urlStr)
+	// TODO: empty config here
+	scheme, remoteUrl, err := env.GetAbsRemoteUrl(nil, emptyConfig(), urlStr)
 
 	if err != nil {
 		return nil, errhand.BuildDError("error: '%s' is not valid.", urlStr).Build()
@@ -62,47 +58,20 @@ func doltClone(ctx *sql.Context, args ...string) (sql.RowIter, error) {
 		return nil, err
 	}
 
-	var r env.Remote
-	var srcDB *doltdb.DoltDB
-	r, srcDB, err = createRemote(ctx, remoteName, remoteUrl, params, dEnv)
-	if err != nil {
-		return nil, err
-	}
+	sess := dsess.DSessFromSess(ctx.Session)
+	sess.Provider().CloneDatabaseFromRemote(ctx, dir, branch, remoteName, remoteUrl, params)
 
-	dEnv, err = actions.EnvForClone(ctx, srcDB.ValueReadWriter().Format(), r, dir, dEnv.FS, dEnv.Version, env.GetCurrentUserHomeDir)
-	if err != nil {
-		return nil, errhand.VerboseErrorFromError(err)
-	}
-
-	err = actions.CloneRemote(ctx, srcDB, remoteName, branch, dEnv)
-	if err != nil {
-		// If we're cloning into a directory that already exists do not erase it. Otherwise
-		// make best effort to delete the directory we created.
-		if userDirExists {
-			// Set the working dir to the parent of the .dolt folder so we can delete .dolt
-			_ = os.Chdir(dir)
-			_ = dEnv.FS.Delete(dbfactory.DoltDir, true)
-		} else {
-			_ = os.Chdir("../")
-			_ = dEnv.FS.Delete(dir, true)
-		}
-		return nil, err
-	}
-
-	err = dEnv.RepoStateWriter().UpdateBranch(dEnv.RepoState.CWBHeadRef().GetPath(), env.BranchConfig{
-		Merge:  dEnv.RepoState.Head,
-		Remote: remoteName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	err = dEnv.RepoState.Save(dEnv.FS)
-	if err != nil {
-		return nil, err
-	}
+	//
+	// err = dEnv.RepoState.Save(dEnv.FS)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return rowToIter(int64(0)), nil
+}
+
+func emptyConfig() config.ReadableConfig {
+	return &config.MapConfig{}
 }
 
 // TODO: lifted from clone cmd
@@ -153,8 +122,6 @@ func parseRemoteArgs(apr *argparser.ArgParseResults, scheme, remoteUrl string) (
 
 // TODO: lifted from clone cmd
 func createRemote(ctx *sql.Context, remoteName, remoteUrl string, params map[string]string, dEnv *env.DoltEnv) (env.Remote, *doltdb.DoltDB, errhand.VerboseError) {
-	cli.Printf("cloning %s\n", remoteUrl)
-
 	r := env.NewRemote(remoteName, remoteUrl, params, dEnv)
 
 	ddb, err := r.GetRemoteDB(ctx, types.Format_Default)

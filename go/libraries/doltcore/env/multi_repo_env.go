@@ -56,6 +56,13 @@ func (mrEnv *MultiRepoEnv) FileSystem() filesys.Filesys {
 	return mrEnv.fs
 }
 
+func (mrEnv *MultiRepoEnv) RemoteDialProvider() dbfactory.GRPCDialProvider {
+	for _, env := range mrEnv.envs {
+		return env.env
+	}
+	return nil
+}
+
 func (mrEnv *MultiRepoEnv) Config() config.ReadWriteConfig {
 	return mrEnv.cfg
 }

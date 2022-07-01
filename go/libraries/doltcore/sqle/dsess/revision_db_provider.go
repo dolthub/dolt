@@ -32,6 +32,8 @@ type RevisionDatabaseProvider interface {
 	RevisionDbState(ctx *sql.Context, revDB string) (InitialDbState, error)
 	// DropRevisionDb removes the specified revision database from the databases this provider is tracking.
 	DropRevisionDb(ctx *sql.Context, revDB string) error
+	// CloneDatabaseFromRemote clones the database from the remote given as a new database in this provider
+	CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error
 }
 
 func EmptyDatabaseProvider() RevisionDatabaseProvider {
@@ -39,6 +41,10 @@ func EmptyDatabaseProvider() RevisionDatabaseProvider {
 }
 
 type emptyRevisionDatabaseProvider struct{}
+
+func (e emptyRevisionDatabaseProvider) CloneDatabaseFromRemote(ctx *sql.Context, dbName, branch, remoteName, remoteUrl string, remoteParams map[string]string) error {
+	return nil
+}
 
 func (e emptyRevisionDatabaseProvider) DropRevisionDb(ctx *sql.Context, revDB string) error {
 	return nil

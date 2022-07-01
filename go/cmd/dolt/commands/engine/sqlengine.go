@@ -82,7 +82,7 @@ func NewSqlEngine(
 	all := append(dsqleDBsAsSqlDBs(dbs), infoDB)
 
 	b := env.GetDefaultInitBranch(mrEnv.Config())
-	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...)
+	pro := dsqle.NewDoltDatabaseProvider(b, mrEnv.FileSystem(), all...).WithRemoteDialer(mrEnv.RemoteDialProvider())
 
 	// Load in privileges from file, if it exists
 	persister := mysql_file_handler.NewPersister(config.PrivFilePath)
