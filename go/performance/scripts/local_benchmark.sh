@@ -2,7 +2,7 @@
 set -e
 set -o pipefail
 
-SYSBENCH_TEST="oltp_write_only"
+SYSBENCH_TEST="oltp_point_select"
 WORKING_DIR=`mktemp -d`
 PPROF=0
 PORT=3366

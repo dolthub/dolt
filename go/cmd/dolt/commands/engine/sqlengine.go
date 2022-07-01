@@ -65,7 +65,7 @@ func NewSqlEngine(
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 
-	if mrEnv.IsLocked() {
+	if ok, _ := mrEnv.IsLocked(); ok {
 		config.IsReadOnly = true
 	}
 

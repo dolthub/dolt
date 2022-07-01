@@ -140,20 +140,20 @@ func (mrEnv *MultiRepoEnv) GetWorkingRoots(ctx context.Context) (map[string]*dol
 }
 
 // IsLocked returns true if any env is locked
-func (mrEnv *MultiRepoEnv) IsLocked() bool {
+func (mrEnv *MultiRepoEnv) IsLocked() (bool, string) {
 	for _, e := range mrEnv.envs {
 		if e.env.IsLocked() {
-			return true
+			return true, e.env.lockFile()
 		}
 	}
-	return false
+	return false, ""
 }
 
 // Lock locks all child envs. If an error is returned, all
 // child envs will be returned with their initial lock state.
 func (mrEnv *MultiRepoEnv) Lock() error {
-	if mrEnv.IsLocked() {
-		return ErrActiveServerLock
+	if ok, f := mrEnv.IsLocked(); ok {
+		return fmt.Errorf("%w: '%s'", ErrActiveServerLock, f)
 	}
 
 	var err error

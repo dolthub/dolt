@@ -16,7 +16,6 @@ package sqlserver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -35,8 +34,6 @@ import (
 	_ "github.com/dolthub/dolt/go/libraries/doltcore/sqle/dfunctions"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqlserver"
 )
-
-var ErrActiveServerLock = errors.New("database locked by another sql-server; either clone the database to run a second server, or delete the '.dolt/sql-server.lock' if no other sql-servers are active")
 
 // Serve starts a MySQL-compatible server. Returns any errors that were encountered.
 func Serve(
@@ -187,11 +184,14 @@ func Serve(
 		}()
 	}
 
-	if mrEnv.IsLocked() {
-		startError = ErrActiveServerLock
+	if ok, f := mrEnv.IsLocked(); ok {
+		startError = fmt.Errorf("%w: '%s'", env.ErrActiveServerLock, f)
 		return
 	}
-	mrEnv.Lock()
+	if err = mrEnv.Lock(); err != nil {
+		startError = err
+		return
+	}
 
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
