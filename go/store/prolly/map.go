@@ -219,7 +219,6 @@ func (m Map) Pool() pool.BuffPool {
 	return m.tuples.ns.Pool()
 }
 
-// todo(andy): do we need this point lookup machinery?
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
 	search := pointLookupSearchFn(rng)
 	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, search)
