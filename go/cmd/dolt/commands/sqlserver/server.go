@@ -184,6 +184,15 @@ func Serve(
 		}()
 	}
 
+	if ok, f := mrEnv.IsLocked(); ok {
+		startError = fmt.Errorf("%w: '%s'", env.ErrActiveServerLock, f)
+		return
+	}
+	if err = mrEnv.Lock(); err != nil {
+		startError = err
+		return
+	}
+
 	serverController.registerCloseFunction(startError, func() error {
 		if metSrv != nil {
 			metSrv.Close()
@@ -195,8 +204,11 @@ func Serve(
 	closeError = mySQLServer.Start()
 	if closeError != nil {
 		cli.PrintErr(closeError)
-		return
 	}
+	if err := mrEnv.Unlock(); err != nil {
+		cli.PrintErr(err)
+	}
+
 	return
 }
 

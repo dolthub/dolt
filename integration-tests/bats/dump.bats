@@ -68,11 +68,8 @@ teardown() {
     dolt sql -q "INSERT INTO new_table VALUES (1);"
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
-    if [ "$DOLT_FORMAT_FEATURE_FLAG" != "true" ] ; then
-      # V1 storage format does not support keyless tables yet
-      dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-      dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
-    fi
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
     dolt add .
     dolt commit -m "create tables"
 
@@ -85,7 +82,6 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -99,11 +95,8 @@ teardown() {
     dolt sql -q "CREATE TABLE warehouse(warehouse_id int primary key, warehouse_name longtext);"
     dolt sql -q "INSERT into warehouse VALUES (1, 'UPS'), (2, 'TV'), (3, 'Table');"
 
-    if ["$DOLT_FORMAT_FEATURE_FLAG" != true]
-    then
-      dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
-      dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
-    fi
+    dolt sql -q "CREATE TABLE keyless (c0 int, c1 int);"
+    dolt sql -q "INSERT INTO keyless VALUES (0,0),(2,2),(1,1),(1,1);"
 
     dolt add .
     dolt commit -m "create tables"
@@ -120,7 +113,6 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -246,7 +238,6 @@ teardown() {
 }
 
 @test "dump: SQL type - with keyless tables" {
-    skip_nbf_dolt_1
 
     dolt sql -q "CREATE TABLE new_table(pk int primary key);"
     dolt sql -q "INSERT INTO new_table VALUES (1);"
@@ -405,7 +396,6 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -432,7 +422,6 @@ teardown() {
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 
-    skip_nbf_dolt_1
     run dolt diff --summary main new_branch
     [ "$status" -eq 0 ]
     [[ "$output" = "" ]] || false
@@ -543,7 +532,6 @@ teardown() {
 
     dolt checkout new_branch
 
-    skip_nbf_dolt_1
     import_tables "json"
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
@@ -570,7 +558,6 @@ teardown() {
 
     import_tables "json"
 
-    skip_nbf_dolt_1
     dolt add .
     dolt commit --allow-empty -m "create tables from doltdump"
 

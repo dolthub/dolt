@@ -243,7 +243,6 @@ SQL
 }
 
 @test "types: DATE" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,
@@ -289,7 +288,6 @@ SQL
 }
 
 @test "types: DATETIME" {
-    skip_nbf_dolt_1
     dolt sql <<SQL
 CREATE TABLE test (
   pk BIGINT NOT NULL,

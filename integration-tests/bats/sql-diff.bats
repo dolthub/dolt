@@ -679,7 +679,7 @@ SQL
 }
 
 @test "sql-diff: sql diff ignores dolt docs" {
-    skip_nbf_dolt_1
+    skip_nbf_dolt_1 "uses docs"
     
     echo "This is a README" > README.md 
     run dolt diff -r sql

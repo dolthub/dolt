@@ -98,6 +98,11 @@ func NewSqlEngineTableWriter(ctx context.Context, dEnv *env.DoltEnv, createTable
 	}
 	defer se.Close()
 
+	if se.GetUnderlyingEngine().IsReadOnly {
+		// SqlEngineTableWriter does not respect read only mode
+		return nil, analyzer.ErrReadOnlyDatabase.New(dbName)
+	}
+
 	sqlCtx, err := se.NewContext(ctx)
 	if err != nil {
 		return nil, err

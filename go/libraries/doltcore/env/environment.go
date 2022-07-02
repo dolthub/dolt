@@ -55,6 +55,8 @@ const (
 	DefaultRemotesApiPort = "443"
 
 	tempTablesDir = "temptf"
+
+	ServerLockFile = "sql-server.lock"
 )
 
 var zeroHashStr = (hash.Hash{}).String()
@@ -1277,4 +1279,27 @@ func (dEnv *DoltEnv) DbEaFactory() editor.DbEaFactory {
 
 func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
+}
+
+func (dEnv *DoltEnv) lockFile() string {
+	return filepath.Join(dbfactory.DoltDir, ServerLockFile)
+}
+
+// IsLocked returns true if this database's lockfile exists
+func (dEnv *DoltEnv) IsLocked() bool {
+	ok, _ := dEnv.FS.Exists(dEnv.lockFile())
+	return ok
+}
+
+// Lock writes this database's lockfile or errors if it already exists
+func (dEnv *DoltEnv) Lock() error {
+	if dEnv.IsLocked() {
+		return ErrActiveServerLock
+	}
+	return dEnv.FS.WriteFile(dEnv.lockFile(), []byte{})
+}
+
+// Unlock deletes this database's lockfile
+func (dEnv *DoltEnv) Unlock() error {
+	return dEnv.FS.DeleteFile(dEnv.lockFile())
 }
