@@ -65,6 +65,10 @@ func NewSqlEngine(
 	config *SqlEngineConfig,
 ) (*SqlEngine, error) {
 
+	if ok, _ := mrEnv.IsLocked(); ok {
+		config.IsReadOnly = true
+	}
+
 	parallelism := runtime.GOMAXPROCS(0)
 
 	dbs, err := CollectDBs(ctx, mrEnv, config.Bulk)

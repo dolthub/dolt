@@ -151,15 +151,17 @@ teardown() {
     [[ "$output" =~ "one_pk" ]] || false
 
     # Add rows on the command line
-    dolt sql -q "insert into one_pk values (1,1,1)"
+    run dolt sql -q "insert into one_pk values (1,1,1)"
+    [ "$status" -eq 1 ]
 
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1"
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 
     # Test import as well (used by doltpy)
     echo 'pk,c1,c2' > import.csv
     echo '2,2,2' >> import.csv
-    dolt table import -u one_pk import.csv
-    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" "pk,c1,c2\n1,1,1\n2,2,2"
+    run dolt table import -u one_pk import.csv
+    [ "$status" -eq 1 ]
+    server_query repo1 1 "SELECT * FROM one_pk ORDER by pk" ""
 }
 
 @test "sql-server: test dolt sql interface works properly with autocommit" {
@@ -646,7 +648,10 @@ SQL
     [ "$status" -eq 0 ]
     [[ "$output" =~ "one_pk" ]] || false
 
-    dolt sql -q "drop table one_pk"
+    run dolt sql -q "drop table one_pk"
+    [ "$status" -eq 1 ]
+
+    server_query repo1 1 "drop table one_pk" ""
     dolt commit -am "Dropped table one_pk"
 
     run dolt ls
@@ -1307,4 +1312,37 @@ databases:
 
     run expect $BATS_TEST_DIRNAME/sql-server-mysql.expect $PORT repo1
     [ "$status" -eq 0 ]
+}
+
+@test "sql-server: sql-server lock cleanup" {
+    cd repo1
+    start_sql_server
+    stop_sql_server
+    start_sql_server
+    stop_sql_server
+}
+
+@test "sql-server: sql-server locks database" {
+    cd repo1
+    start_sql_server
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: multi dir sql-server locks out childen" {
+    start_sql_server
+    cd repo2
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
+}
+
+@test "sql-server: sql-server child locks out parent multi dir" {
+    cd repo2
+    start_sql_server
+    cd ..
+    let PORT="$$ % (65536-1024) + 1024"
+    run dolt sql-server -P $PORT
+    [ "$status" -eq 1 ]
 }
