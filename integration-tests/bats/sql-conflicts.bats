@@ -31,7 +31,6 @@ teardown() {
 }
 
 @test "sql-conflicts: read from empty table" {
-    skip_nbf_dolt_1
     dolt sql -q "SELECT * FROM dolt_conflicts_empty"
 }
 
@@ -213,7 +212,6 @@ SQL
 }
 
 @test "sql-conflicts: multiple conflicts" {
-  skip_nbf_dolt_1
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (0,0,0)"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (1,0,0)"
   dolt SQL -q "INSERT INTO one_pk (pk1,c1,c2) VALUES (2,0,0)"
