@@ -39,6 +39,12 @@ const (
 	baseStr   = "base"
 )
 
+const (
+	ConflictDiffTypeAdded    = "added"
+	ConflictDiffTypeModified = "modified"
+	ConflictDiffTypeRemoved  = "removed"
+)
+
 // ConflictReader is a class providing a NextConflict function which can be used in a pipeline as a pipeline.SourceFunc,
 // or it can be used to read each conflict
 type ConflictReader struct {
@@ -187,12 +193,12 @@ func (cr *ConflictReader) NextConflict(ctx context.Context) (row.Row, pipeline.I
 
 func getDiffType(base types.Value, other types.Value) string {
 	if types.IsNull(base) {
-		return "added"
+		return ConflictDiffTypeAdded
 	} else if types.IsNull(other) {
-		return "removed"
+		return ConflictDiffTypeRemoved
 	}
 
-	return "modified"
+	return ConflictDiffTypeModified
 }
 
 // GetKeyForConflicts returns the pk for a conflict row

@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/go-mysql-server/sql"
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
@@ -249,13 +250,13 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 
 func getDiffType(base val.Tuple, other val.Tuple) string {
 	if base == nil {
-		return "added"
+		return merge.ConflictDiffTypeAdded
 	} else if other == nil {
-		return "removed"
+		return merge.ConflictDiffTypeRemoved
 	}
 
 	// There has to be some edit, otherwise it wouldn't be a conflict...
-	return "modified"
+	return merge.ConflictDiffTypeModified
 }
 
 func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
