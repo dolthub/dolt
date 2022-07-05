@@ -51,7 +51,9 @@ func RowIterForIndexLookup(ctx *sql.Context, t DoltTableable, ilu sql.IndexLooku
 	}
 
 	if types.IsFormat_DOLT_1(idx.Format()) {
-		// todo(andy)
+		if len(lookup.prollyRanges) > 1 {
+			return nil, fmt.Errorf("expected a single index range")
+		}
 		return RowIterForProllyRange(ctx, idx, lookup.prollyRanges[0], pkSch, columns, durableState)
 	} else {
 		return RowIterForNomsRanges(ctx, idx, lookup.nomsRanges, columns, durableState)
