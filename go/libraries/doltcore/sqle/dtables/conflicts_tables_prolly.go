@@ -22,6 +22,7 @@ import (
 
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb"
 	"github.com/dolthub/dolt/go/libraries/doltcore/doltdb/durable"
+	"github.com/dolthub/dolt/go/libraries/doltcore/merge"
 	"github.com/dolthub/dolt/go/libraries/doltcore/schema"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/index"
 	"github.com/dolthub/dolt/go/libraries/doltcore/sqle/sqlutil"
@@ -122,6 +123,7 @@ type prollyConflictRowIter struct {
 
 var _ sql.RowIter = &prollyConflictRowIter{}
 
+// base_cols, our_cols, our_diff_type, their_cols, their_diff_type
 func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*prollyConflictRowIter, error) {
 	idx, err := ct.tbl.GetRowData(ctx)
 	if err != nil {
@@ -145,12 +147,12 @@ func newProllyConflictRowIter(ctx *sql.Context, ct ProllyConflictsTable) (*proll
 	var o, t, n int
 	if !keyless {
 		o = b + kd.Count() + baseVD.Count()
-		t = o + kd.Count() + oursVD.Count()
-		n = t + kd.Count() + theirsVD.Count()
+		t = o + kd.Count() + oursVD.Count() + 1
+		n = t + kd.Count() + theirsVD.Count() + 1
 	} else {
 		o = b + baseVD.Count() - 1
-		t = o + oursVD.Count() - 1
-		n = t + theirsVD.Count() - 1
+		t = o + oursVD.Count()
+		n = t + theirsVD.Count()
 	}
 
 	return &prollyConflictRowIter{
@@ -230,6 +232,7 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			r[itr.o+itr.kd.Count()+i] = f
 		}
 	}
+	r[itr.o+itr.kd.Count()+itr.oursVD.Count()] = getDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count(); i++ {
@@ -240,8 +243,20 @@ func (itr *prollyConflictRowIter) putConflictRowVals(ctx *sql.Context, c conf, r
 			r[itr.t+itr.kd.Count()+i] = f
 		}
 	}
+	r[itr.t+itr.kd.Count()+itr.theirsVD.Count()] = getDiffType(c.bV, c.tV)
 
 	return nil
+}
+
+func getDiffType(base val.Tuple, other val.Tuple) string {
+	if base == nil {
+		return merge.ConflictDiffTypeAdded
+	} else if other == nil {
+		return merge.ConflictDiffTypeRemoved
+	}
+
+	// There has to be some edit, otherwise it wouldn't be a conflict...
+	return merge.ConflictDiffTypeModified
 }
 
 func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c conf, r sql.Row) error {
@@ -264,6 +279,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 			r[itr.o+i] = f
 		}
 	}
+	r[itr.o+itr.oursVD.Count()-1] = getDiffType(c.bV, c.oV)
 
 	if c.tV != nil {
 		for i := 0; i < itr.theirsVD.Count()-1; i++ {
@@ -274,6 +290,7 @@ func (itr *prollyConflictRowIter) putKeylessConflictRowVals(ctx *sql.Context, c 
 			r[itr.t+i] = f
 		}
 	}
+	r[itr.t+itr.theirsVD.Count()-1] = getDiffType(c.bV, c.tV)
 
 	return nil
 }
@@ -478,7 +495,7 @@ func (cd *prollyConflictDeleter) Close(ctx *sql.Context) error {
 }
 
 func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, error) {
-	cols := make([]schema.Column, 1+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
+	cols := make([]schema.Column, 3+ours.GetAllCols().Size()+theirs.GetAllCols().Size()+base.GetAllCols().Size())
 
 	// the commit hash or working set hash of the right side during merge
 	cols[0] = schema.NewColumn("from_root_ish", 0, types.StringKind, false)
@@ -517,10 +534,13 @@ func CalculateConflictSchema(base, ours, theirs schema.Schema) (schema.Schema, e
 	if err != nil {
 		return nil, err
 	}
+	cols[i] = schema.NewColumn("our_diff_type", uint64(i), types.StringKind, false)
+	i++
 	err = putWithPrefix("their_", theirs)
 	if err != nil {
 		return nil, err
 	}
+	cols[i] = schema.NewColumn("their_diff_type", uint64(i), types.StringKind, false)
 
 	return schema.UnkeyedSchemaFromCols(schema.NewColCollection(cols...)), nil
 }

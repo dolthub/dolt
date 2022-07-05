@@ -45,6 +45,8 @@ var ErrCannotPushRef = errors.New("cannot push ref")
 var ErrNoRefSpecForRemote = errors.New("no refspec for remote")
 var ErrInvalidSetUpstreamArgs = errors.New("invalid set-upstream arguments")
 var ErrInvalidFetchSpec = errors.New("invalid fetch spec")
+var ErrPullWithRemoteNoUpstream = errors.New("You asked to pull from the remote '%s', but did not specify a branch. Because this is not the default configured remote for your current branch, you must specify a branch on the command line.")
+var ErrPullWithNoRemoteAndNoUpstream = errors.New("There is no tracking information for the current branch.\nPlease specify which branch you want to merge with.\n\n\tdolt pull <remote> <branch>\n\nIf you wish to set tracking information for this branch you can do so with:\n\n\t dolt push --set-upstream <remote> <branch>\n")
 
 func IsEmptyRemote(r Remote) bool {
 	return len(r.Name) == 0 && len(r.Url) == 0 && r.FetchSpecs == nil && r.Params == nil
@@ -360,7 +362,7 @@ type PullSpec struct {
 	Branch     ref.DoltRef
 }
 
-func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force bool) (*PullSpec, error) {
+func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, squash, noff, force, remoteOnly bool) (*PullSpec, error) {
 	branch := rsr.CWBHeadRef()
 
 	refSpecs, err := GetRefSpecs(rsr, remoteName)
@@ -370,6 +372,19 @@ func NewPullSpec(ctx context.Context, rsr RepoStateReader, remoteName string, sq
 
 	if len(refSpecs) == 0 {
 		return nil, ErrNoRefSpecForRemote
+	}
+
+	trackedBranches, err := rsr.GetBranches()
+	if err != nil {
+		return nil, err
+	}
+
+	if _, hasUpstream := trackedBranches[branch.GetPath()]; !hasUpstream {
+		if remoteOnly {
+			return nil, fmt.Errorf(ErrPullWithRemoteNoUpstream.Error(), remoteName)
+		} else {
+			return nil, ErrPullWithNoRemoteAndNoUpstream
+		}
 	}
 
 	remotes, err := rsr.GetRemotes()

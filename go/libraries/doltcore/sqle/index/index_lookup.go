@@ -19,7 +19,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/dolthub/go-mysql-server/sql"
 
@@ -102,7 +101,6 @@ func NewRangePartitionIter(ctx *sql.Context, t DoltTableable, lookup sql.IndexLo
 		nomsRanges:   dlu.nomsRanges,
 		prollyRanges: dlu.prollyRanges,
 		curr:         0,
-		mu:           &sync.Mutex{},
 		durableState: durableState,
 	}, nil
 }
@@ -111,7 +109,6 @@ type rangePartitionIter struct {
 	nomsRanges   []*noms.ReadRange
 	prollyRanges []prolly.Range
 	curr         int
-	mu           *sync.Mutex
 	durableState *durableIndexState
 }
 
@@ -122,9 +119,6 @@ func (itr *rangePartitionIter) Close(*sql.Context) error {
 
 // Next returns the next partition if there is one, or io.EOF if there isn't.
 func (itr *rangePartitionIter) Next(_ *sql.Context) (sql.Partition, error) {
-	itr.mu.Lock()
-	defer itr.mu.Unlock()
-
 	if types.IsFormat_DOLT_1(itr.durableState.Secondary.Format()) {
 		return itr.nextProllyPartition()
 	}

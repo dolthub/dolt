@@ -677,6 +677,12 @@ func TestDoltMerge(t *testing.T) {
 	}
 }
 
+func TestDoltConflictsTableNameTable(t *testing.T) {
+	for _, script := range DoltConflictDiffTypeScripts {
+		enginetest.TestScript(t, newDoltHarness(t), script)
+	}
+}
+
 // tests new format behavior for keyless merges that create CVs and conflicts
 func TestKeylessDoltMergeCVsAndConflicts(t *testing.T) {
 	if !types.IsFormat_DOLT_1(types.Format_Default) {
