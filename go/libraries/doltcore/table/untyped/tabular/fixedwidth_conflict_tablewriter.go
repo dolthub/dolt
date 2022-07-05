@@ -18,9 +18,10 @@ import (
 	"context"
 	"io"
 
-	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 	"github.com/dolthub/go-mysql-server/sql"
 	"github.com/fatih/color"
+
+	"github.com/dolthub/dolt/go/libraries/doltcore/diff"
 )
 
 type FixedWidthConflictTableWriter struct {
