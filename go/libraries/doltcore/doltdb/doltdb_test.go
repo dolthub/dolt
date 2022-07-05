@@ -167,6 +167,11 @@ func TestSystemTableTags(t *testing.T) {
 		assert.Equal(t, doltSchemasMin+3, schema.DoltSchemasFragmentTag)
 		assert.Equal(t, doltSchemasMin+4, schema.DoltSchemasExtraTag)
 	})
+	t.Run("dolt_conflicts_ tags", func(t *testing.T) {
+		doltConflictsMin := sysTableMin + uint64(7000)
+		assert.Equal(t, doltConflictsMin+0, schema.DoltConflictsOurDiffTypeTag)
+		assert.Equal(t, doltConflictsMin+1, schema.DoltConflictsTheirDiffTypeTag)
+	})
 }
 
 func TestEmptyInMemoryRepoCreation(t *testing.T) {
