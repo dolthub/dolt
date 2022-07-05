@@ -1282,7 +1282,8 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 }
 
 func (dEnv *DoltEnv) LockFile() string {
-	return filepath.Join(dbfactory.DoltDir, ServerLockFile)
+	f, _ := dEnv.FS.Abs(filepath.Join(dbfactory.DoltDir, ServerLockFile))
+	return f
 }
 
 // IsLocked returns true if this database's lockfile exists
