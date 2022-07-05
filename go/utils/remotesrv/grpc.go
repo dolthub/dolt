@@ -267,7 +267,7 @@ func (rs *RemoteChunkStore) Rebase(ctx context.Context, req *remotesapi.RebaseRe
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred during processing of Rebace rpc of %s/%s details: %v", req.RepoId.Org, req.RepoId.RepoName, err))
-		return nil, status.Error(codes.Internal, "Failed to rebase")
+		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
 	}
 
 	return &remotesapi.RebaseResponse{}, nil
@@ -315,7 +315,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred updating the manifest: %s", err.Error()))
-		return nil, status.Error(codes.Internal, "manifest update error")
+		return nil, status.Errorf(codes.Internal, "manifest update error: %v", err)
 	}
 
 	currHash := hash.New(req.Current)
@@ -326,7 +326,7 @@ func (rs *RemoteChunkStore) Commit(ctx context.Context, req *remotesapi.CommitRe
 
 	if err != nil {
 		logger(fmt.Sprintf("error occurred during processing of Commit of %s/%s last %s curr: %s details: %v", req.RepoId.Org, req.RepoId.RepoName, lastHash.String(), currHash.String(), err))
-		return nil, status.Error(codes.Internal, "Failed to rebase")
+		return nil, status.Errorf(codes.Internal, "failed to rebase: %v", err)
 	}
 
 	logger(fmt.Sprintf("committed %s/%s moved from %s -> %s", req.RepoId.Org, req.RepoId.RepoName, currHash.String(), lastHash.String()))
