@@ -138,3 +138,5 @@ replace (
 )
 
 go 1.18
+
+replace github.com/dolthub/go-mysql-server => /Users/max-hoffman/go/src/github.com/dolthub/go-mysql-server/
