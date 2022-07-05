@@ -78,6 +78,7 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: go/out/dolt-linux-arm64.tar.gz
           asset_name: dolt-linux-arm64.tar.gz
+          asset_content_type: application/zip
       - name: Upload OSX AMD64 Distro
         id: upload-osx-amd64-distro
         uses: actions/upload-release-asset@v1

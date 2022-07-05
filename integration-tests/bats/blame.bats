@@ -173,7 +173,7 @@ SQL
     dolt add .
     dolt commit -m "add more rows"
 
-    dolt blame t
+    skip_nbf_dolt_1 "flaky"
     run dolt blame t
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "| pk   | val | commit                           | commit_date             | committer  | email           | message       |" ]] || false

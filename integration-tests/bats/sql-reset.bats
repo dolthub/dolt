@@ -3,7 +3,6 @@ load $BATS_TEST_DIRNAME/helper/common.bash
 
 setup() {
     setup_common
-    skip_nbf_dolt_1
 
     dolt sql <<SQL
 CREATE TABLE test (
@@ -125,6 +124,7 @@ teardown() {
 }
 
 @test "sql-reset: DOLT_RESET --hard does not ignore staged docs" {
+    skip_nbf_dolt_1 "uses docs"
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
     dolt add .
@@ -153,6 +153,7 @@ teardown() {
 }
 
 @test "sql-reset: CALL DOLT_RESET --hard does not ignore staged docs" {
+    skip_nbf_dolt_1 "uses docs"
     # New docs gets referred as untracked file.
     echo ~license~ > LICENSE.md
     dolt add .
@@ -227,6 +228,7 @@ teardown() {
 }
 
 @test "sql-reset: DOLT_RESET --soft ignores staged docs" {
+    skip_nbf_dolt_1 "uses docs"
     echo ~license~ > LICENSE.md
     dolt add .
 
@@ -245,6 +247,7 @@ teardown() {
 }
 
 @test "sql-reset: CALL DOLT_RESET --soft ignores staged docs" {
+    skip_nbf_dolt_1 "uses docs"
     echo ~license~ > LICENSE.md
     dolt add .
 

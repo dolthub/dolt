@@ -157,6 +157,7 @@ SQL
     run dolt commit -am "can't commit conflicts"
     [ "$status" -eq "1" ]
     [[ "$output" =~ "dolt_schemas" ]] || false
+    skip_nbf_dolt_1
     run dolt conflicts cat dolt_schemas
     [ "$status" -eq "0" ]
     [[ "$output" =~ "CREATE TRIGGER trigger2 BEFORE INSERT ON x FOR EACH ROW SET new.a = (new.a * 2) + 10" ]] || false

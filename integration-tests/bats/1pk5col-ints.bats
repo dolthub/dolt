@@ -23,7 +23,7 @@ teardown() {
 
 # Create a single primary key table and do stuff
 @test "1pk5col-ints: create a table with a schema file and examine repo" {
-    skip_nbf_dolt_1
+
     run dolt ls
     [ "$status" -eq 0 ]
     [[ "${lines[1]}" =~ "test" ]] || false
@@ -72,7 +72,6 @@ teardown() {
 }
 
 @test "1pk5col-ints: add a row to a created table using dolt table put-row" {
-    skip_nbf_dolt_1
     dolt add test
     dolt commit -m "create table"
     run dolt sql -q "insert into test values (0, 1, 2, 3, 4, 5)"
@@ -661,7 +660,6 @@ DELIM
 }
 
 @test "1pk5col-ints: display correct merge stats" {
-    skip_nbf_dolt_1
     dolt checkout -b test-branch
     dolt add test
     dolt commit -m "added test table"
@@ -684,7 +682,6 @@ DELIM
     dolt commit -m "added row to test"
     dolt checkout test-branch-m
     run dolt merge test-branch
-    echo $output
     [ "$status" -eq 0 ]
     [ "${lines[1]}" = "test | 1 +" ]
     [ "${lines[2]}" = "1 tables changed, 1 rows added(+), 0 rows modified(*), 0 rows deleted(-)" ]
