@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package import_benchmarker
 
 import (
 	"context"
@@ -34,12 +34,8 @@ import (
 
 type doltCommandFunc func(ctx context.Context, commandStr string, args []string, dEnv *env.DoltEnv) int
 
-func removeTempDoltDataDir(fs filesys.Filesys) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-	doltDir := filepath.Join(cwd, dbfactory.DoltDir)
+func RemoveTempDoltDataDir(fs filesys.Filesys, dir string) {
+	doltDir := filepath.Join(dir, dbfactory.DoltDir)
 	exists, _ := fs.Exists(doltDir)
 	if exists {
 		err := fs.Delete(doltDir, true)
@@ -55,7 +51,7 @@ func getWorkingDir() string {
 }
 
 func initializeDoltRepoAtWorkingDir(fs filesys.Filesys, workingDir string) {
-	removeTempDoltDataDir(fs)
+	RemoveTempDoltDataDir(fs, workingDir)
 
 	init := execCommand(context.Background(), "dolt", "init")
 	init.Dir = workingDir

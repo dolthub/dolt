@@ -17,15 +17,12 @@ package main
 import (
 	"flag"
 	"os"
-	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
+	"github.com/dolthub/dolt/go/performance/import_benchmarker"
 )
 
 const (
-	smallSet         = 100000
-	mediumSet        = 1000000
-	largeSet         = 10000000
 	resultsTableName = "results"
 )
 
@@ -34,38 +31,29 @@ var configPath = flag.String("config", "", "the path to a config file")
 func main() {
 	flag.Parse()
 
-	config := NewDefaultImportBenchmarkConfig()
+	config := import_benchmarker.NewDefaultImportBenchmarkConfig()
 	var err error
 	if *configPath != "" {
-		config, err = FromFileConfig(*configPath)
+		config, err = import_benchmarker.FromFileConfig(*configPath)
 	}
 
 	if err != nil {
 		panic(err.Error())
 	}
 
-	tests := NewImportBenchmarkTests(config)
-	results := make([]result, 0)
-
-	for i, test := range tests {
-		benchmarkFunc := BenchmarkDoltImport(test)
-		br := testing.Benchmark(benchmarkFunc)
-		res := result{
-			name:             config.Jobs[i].Name,
-			format:           config.Jobs[i].Format,
-			rows:             config.Jobs[i].NumRows,
-			columns:          len(genSampleCols()),
-			garbageGenerated: getAmountOfGarbageGenerated(),
-			br:               br,
-		}
-		results = append(results, res)
-	}
+	tests := import_benchmarker.NewImportBenchmarkTests(config)
+	results := import_benchmarker.RunBenchmarkTests(config, tests)
 
 	// write results data
-	serializeResults(results, getWorkingDir(), resultsTableName, csvExt)
+	wd, err := os.Getwd()
+	if err != nil {
+		panic(err.Error())
+	}
+
+	import_benchmarker.SerializeResults(results, wd, resultsTableName, "csv")
 
 	// cleanup temp dolt data dir
-	removeTempDoltDataDir(filesys.LocalFS)
+	import_benchmarker.RemoveTempDoltDataDir(filesys.LocalFS, wd)
 
 	os.Exit(0)
 }

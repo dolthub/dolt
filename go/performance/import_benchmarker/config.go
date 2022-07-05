@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package import_benchmarker
 
 import (
 	"encoding/json"
@@ -20,11 +20,17 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"testing"
 
 	"github.com/dolthub/dolt/go/libraries/utils/filesys"
 )
 
-const testTable = "testTable"
+const (
+	smallSet  = 100000
+	mediumSet = 1000000
+	largeSet  = 10000000
+	testTable = "testTable"
+)
 
 type ImportBenchmarkJob struct {
 	Name string
@@ -130,4 +136,24 @@ func generateTestFile(fs filesys.Filesys, sch *SeedSchema) string {
 	ds.GenerateData()
 
 	return pathToImportFile
+}
+
+func RunBenchmarkTests(config *ImportBenchmarkConfig, tests []*ImportBenchmarkTest) []result {
+	results := make([]result, 0)
+
+	for i, test := range tests {
+		benchmarkFunc := BenchmarkDoltImport(test)
+		br := testing.Benchmark(benchmarkFunc)
+		res := result{
+			name:             config.Jobs[i].Name,
+			format:           config.Jobs[i].Format,
+			rows:             config.Jobs[i].NumRows,
+			columns:          len(genSampleCols()),
+			garbageGenerated: getAmountOfGarbageGenerated(),
+			br:               br,
+		}
+		results = append(results, res)
+	}
+
+	return results
 }

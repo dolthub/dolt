@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package import_benchmarker
 
 import (
 	"fmt"
@@ -150,7 +150,7 @@ func genResultsCols() []*SeedColumn {
 	}
 }
 
-func serializeResults(results []result, path, tableName, format string) {
+func SerializeResults(results []result, path, tableName, format string) string {
 	var sch *SeedSchema
 	switch format {
 	case csvExt:
@@ -169,4 +169,6 @@ func serializeResults(results []result, path, tableName, format string) {
 
 	ds := NewRSImpl(wc, sch, results, tableName)
 	ds.GenerateData()
+
+	return resultsFile
 }
