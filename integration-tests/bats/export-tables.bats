@@ -418,41 +418,6 @@ print(pd.to_timedelta(df.at[0, 'v2']))
     [[ "$output" =~ "-1 days +12:48:49" ]] || false
 }
 
-@test "export-tables: table export negative time type to parquet" {
-    skip "TODO : negative time type in parquet export fails for importing to pandas"
-    dolt sql <<SQL
-CREATE TABLE diffTypes (pk BIGINT PRIMARY KEY,v2 TIME);
-INSERT INTO diffTypes VALUES (1,'-11:11:11'), (2,NULL);
-SQL
-    run dolt table export diffTypes dt.parquet
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "Successfully exported data." ]] || false
-    [ -f dt.parquet ]
-
-    run parquet-tools cat --json dt.parquet
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ '{"pk":1,"v2":-40271000000}' ]] || false
-    [[ "$output" =~ '{"pk":2}' ]] || false
-
-    echo "import pandas as pd
-df = pd.read_parquet('dt.parquet')
-print(df)
-" > pandas_test.py
-    python3 pandas_test.py > pandas.txt
-    [ -f pandas.txt ]
-
-    echo "import pyarrow.parquet as pq
-table = pq.read_table('dt.parquet')
-print(table.to_pandas())
-" > arrow_test.py
-    python3 arrow_test.py > pyarrow.txt
-    [ -f pyarrow.txt ]
-
-    run diff pandas.txt pyarrow.txt
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
-}
-
 @test "export-tables: table export more types to parquet" {
     skiponwindows "Missing dependencies"
     dolt sql <<SQL
