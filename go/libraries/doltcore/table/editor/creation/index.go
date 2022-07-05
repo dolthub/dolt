@@ -335,7 +335,7 @@ type PrefixItr struct {
 }
 
 func NewPrefixItr(ctx context.Context, p val.Tuple, d val.TupleDesc, m rangeIterator) (PrefixItr, error) {
-	rng := prolly.ClosedRange(p, p, d)
+	rng := prolly.PrefixRange(p, d)
 	itr, err := m.IterRange(ctx, rng)
 	if err != nil {
 		return PrefixItr{}, err

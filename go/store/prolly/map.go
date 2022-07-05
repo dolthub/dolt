@@ -220,8 +220,7 @@ func (m Map) Pool() pool.BuffPool {
 }
 
 func (m Map) pointLookupFromRange(ctx context.Context, rng Range) (*pointLookup, error) {
-	search := pointLookupSearchFn(rng)
-	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, search)
+	cur, err := tree.NewCursorFromSearchFn(ctx, m.tuples.ns, m.tuples.root, rangeStartSearchFn(rng))
 	if err != nil {
 		return nil, err
 	}
