@@ -44,6 +44,7 @@ var tableName = "people"
 
 // Smoke test: Console opens and exits
 func TestSqlConsole(t *testing.T) {
+	t.Skip("The test is run relative to where this file is...")
 	t.Run("SQL console opens and exits", func(t *testing.T) {
 		dEnv := dtestutils.CreateEnvWithSeedData(t)
 		args := []string{}
