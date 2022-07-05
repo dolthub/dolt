@@ -42,7 +42,7 @@ var typeMap = map[typeinfo.Identifier]string{
 	typeinfo.EnumTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.InlineBlobTypeIdentifier: "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.SetTypeIdentifier:        "type=BYTE_ARRAY, convertedtype=UTF8",
-	typeinfo.TimeTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
+	typeinfo.TimeTypeIdentifier:       "type=INT64, convertedtype=TIMESPAN",
 	typeinfo.TupleTypeIdentifier:      "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.UuidTypeIdentifier:       "type=BYTE_ARRAY, convertedtype=UTF8",
 	typeinfo.VarBinaryTypeIdentifier:  "type=BYTE_ARRAY, convertedtype=UTF8",
@@ -116,10 +116,9 @@ func (pwr *ParquetWriter) WriteSqlRow(ctx context.Context, r sql.Row) error {
 			case typeinfo.DatetimeTypeIdentifier:
 				val = val.(time.Time).UnixMicro()
 				sqlType = sql.Int64
-			//case typeinfo.TimeTypeIdentifier:
-			//	v := int32(val.(sql.Timespan))
-			//	val = v
-			//	sqlType = sql.Int32
+			case typeinfo.TimeTypeIdentifier:
+				val = int64(val.(sql.Timespan).AsTimeDuration())
+				sqlType = sql.Int64
 			case typeinfo.BitTypeIdentifier:
 				sqlType = sql.Uint64
 			}

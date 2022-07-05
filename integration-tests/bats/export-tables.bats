@@ -385,9 +385,9 @@ SQL
 
     run parquet-tools cat --json dt.parquet
     [ "$status" -eq 0 ]
-    [[ "$output" =~ '{"pk":1,"v1":1586304000000000,"v2":"-11:11:11","v3":2020,"v4":1586344271000000,"v5":1,"v6":"one"}' ]] || false
-    [[ "$output" =~ '{"pk":2,"v1":1586304000000000,"v2":"12:12:12","v3":2020,"v4":1586347932000000,"v5":0,"v6":"three"}' ]] || false
-    [[ "$output" =~ '{"pk":3,"v1":1633737600000000,"v2":"04:12:34","v3":2019,"v4":1570594354000000,"v5":1}' ]] || false
+    [[ "$output" =~ '{"pk":1,"v1":1586304000000000,"v2":-40271000000000,"v3":2020,"v4":1586344271000000,"v5":1,"v6":"one"}' ]] || false
+    [[ "$output" =~ '{"pk":2,"v1":1586304000000000,"v2":43932000000000,"v3":2020,"v4":1586347932000000,"v5":0,"v6":"three"}' ]] || false
+    [[ "$output" =~ '{"pk":3,"v1":1633737600000000,"v2":15154000000000,"v3":2019,"v4":1570594354000000,"v5":1}' ]] || false
 
     run dolt sql -q "SELECT * FROM diffTypes"
     result=$output
@@ -400,19 +400,22 @@ SQL
 df = pd.read_parquet('dt.parquet')
 print(df)
 " > pandas_test.py
-    python3 pandas_test.py > pandas.txt
-    [ -f pandas.txt ]
+    run python3 pandas_test.py
+    panda_result=$output
 
     echo "import pyarrow.parquet as pq
 table = pq.read_table('dt.parquet')
 print(table.to_pandas())
 " > arrow_test.py
-    python3 arrow_test.py > pyarrow.txt
-    [ -f pyarrow.txt ]
+    run python3 arrow_test.py
+    [ "$output" = "$panda_result" ]
 
-    run diff pandas.txt pyarrow.txt
-    [ "$status" -eq 0 ]
-    [ "$output" = "" ]
+    echo "import pandas as pd
+df = pd.read_parquet('dt.parquet')
+print(pd.to_timedelta(df.at[0, 'v2']))
+" > timespan_test.py
+    run python3 timespan_test.py
+    [[ "$output" =~ "-1 days +12:48:49" ]] || false
 }
 
 @test "export-tables: table export negative time type to parquet" {
