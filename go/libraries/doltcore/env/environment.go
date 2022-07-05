@@ -1281,25 +1281,25 @@ func (dEnv *DoltEnv) BulkDbEaFactory() editor.DbEaFactory {
 	return editor.NewBulkImportTEAFactory(dEnv.DoltDB.Format(), dEnv.DoltDB.ValueReadWriter(), dEnv.TempTableFilesDir())
 }
 
-func (dEnv *DoltEnv) lockFile() string {
+func (dEnv *DoltEnv) LockFile() string {
 	return filepath.Join(dbfactory.DoltDir, ServerLockFile)
 }
 
 // IsLocked returns true if this database's lockfile exists
 func (dEnv *DoltEnv) IsLocked() bool {
-	ok, _ := dEnv.FS.Exists(dEnv.lockFile())
+	ok, _ := dEnv.FS.Exists(dEnv.LockFile())
 	return ok
 }
 
 // Lock writes this database's lockfile or errors if it already exists
 func (dEnv *DoltEnv) Lock() error {
 	if dEnv.IsLocked() {
-		return ErrActiveServerLock
+		return ErrActiveServerLock.New(dEnv.LockFile())
 	}
-	return dEnv.FS.WriteFile(dEnv.lockFile(), []byte{})
+	return dEnv.FS.WriteFile(dEnv.LockFile(), []byte{})
 }
 
 // Unlock deletes this database's lockfile
 func (dEnv *DoltEnv) Unlock() error {
-	return dEnv.FS.DeleteFile(dEnv.lockFile())
+	return dEnv.FS.DeleteFile(dEnv.LockFile())
 }

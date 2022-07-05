@@ -16,6 +16,7 @@ package indexcmds
 
 import (
 	"context"
+	"github.com/dolthub/dolt/go/cmd/dolt/commands"
 
 	"github.com/dolthub/dolt/go/store/types"
 
@@ -72,6 +73,10 @@ func (cmd RebuildCmd) Exec(ctx context.Context, commandStr string, args []string
 		return 0
 	} else if apr.NArg() != 2 {
 		return HandleErr(errhand.BuildDError("Both the table and index names must be provided.").Build(), usage)
+	}
+
+	if dEnv.IsLocked() {
+		return commands.HandleVErrAndExitCode(errhand.VerboseErrorFromError(env.ErrActiveServerLock.New(dEnv.LockFile())), usage)
 	}
 
 	working, err := dEnv.WorkingRoot(context.Background())
