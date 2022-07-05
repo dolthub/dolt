@@ -235,5 +235,5 @@ func testIterAll(t *testing.T, om testMap, tuples [][2]val.Tuple) {
 }
 
 func pointRangeFromTuple(tup val.Tuple, desc val.TupleDesc) Range {
-	return ClosedRange(tup, tup, desc)
+	return closedRange(tup, tup, desc)
 }

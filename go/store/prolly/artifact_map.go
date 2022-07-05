@@ -332,8 +332,7 @@ func (e *ErrMergeArtifactCollision) Error() string {
 // existing violation exists but has a different |meta.VInfo| value then
 // ErrMergeArtifactCollision is a returned.
 func (wr ArtifactsEditor) ReplaceConstraintViolation(ctx context.Context, srcKey val.Tuple, theirRootIsh hash.Hash, artType ArtifactType, meta ConstraintViolationMeta) error {
-	rng := ClosedRange(srcKey, srcKey, wr.srcKeyDesc)
-	itr, err := wr.Mut.IterRange(ctx, rng)
+	itr, err := wr.Mut.IterRange(ctx, PrefixRange(srcKey, wr.srcKeyDesc))
 	if err != nil {
 		return err
 	}
