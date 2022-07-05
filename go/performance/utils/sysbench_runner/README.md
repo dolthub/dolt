@@ -36,7 +36,6 @@ oltp_insert
 oltp_point_select
 select_random_points
 select_random_ranges
-oltp_delete
 oltp_write_only
 oltp_read_write
 oltp_update_index

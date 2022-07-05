@@ -25,7 +25,15 @@ fi
 
 pushd sysbench-lua-scripts
 
-sleep 1
+
+sysbench \
+  --mysql-host="127.0.0.1" \
+  --mysql-user="root" \
+  --mysql-password="toor" \
+  --mysql-port=3316 \
+  --db-ps-mode=disable \
+  "$SYSBENCH_TEST" cleanup
+
 sysbench \
   --mysql-host="127.0.0.1" \
   --mysql-user="root" \
@@ -42,6 +50,7 @@ sysbench \
   --mysql-password="toor" \
   --mysql-port=3316 \
   --db-ps-mode=disable \
+  --rand-type="uniform" \
   "$SYSBENCH_TEST" run
 
 popd
