@@ -73,8 +73,8 @@ type DoltDB struct {
 // DoltDBFromCS creates a DoltDB from a noms chunks.ChunkStore
 func DoltDBFromCS(cs chunks.ChunkStore) *DoltDB {
 	vrw := types.NewValueStore(cs)
-	db := datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(cs)
+	db := datas.NewTypesDatabase(vrw, ns)
 
 	return &DoltDB{hooksDatabase{Database: db}, vrw, ns}
 }
@@ -575,7 +575,7 @@ func (ddb *DoltDB) CommitDanglingWithParentCommits(ctx context.Context, valHash 
 	}
 
 	commitOpts := datas.CommitOptions{Parents: parents, Meta: cm}
-	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, val, commitOpts)
+	dcommit, err := datas.NewCommitForValue(ctx, datas.ChunkStoreFromDatabase(ddb.db), ddb.vrw, ddb.ns, val, commitOpts)
 	if err != nil {
 		return nil, err
 	}

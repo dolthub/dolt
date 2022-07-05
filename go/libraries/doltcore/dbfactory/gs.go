@@ -50,8 +50,8 @@ func (fact GSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, ur
 	}
 
 	vrw := types.NewValueStore(gcsStore)
-	db = datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(gcsStore)
+	db = datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, nil
 }
@@ -78,8 +78,8 @@ func (fact LocalBSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinForma
 	}
 
 	vrw := types.NewValueStore(bsStore)
-	db = datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(bsStore)
+	db = datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, err
 }

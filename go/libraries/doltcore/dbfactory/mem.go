@@ -34,8 +34,8 @@ func (fact MemFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 	storage := &chunks.MemoryStorage{}
 	cs := storage.NewViewWithDefaultFormat()
 	vrw := types.NewValueStore(cs)
-	db = datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(cs)
+	db = datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, nil
 }

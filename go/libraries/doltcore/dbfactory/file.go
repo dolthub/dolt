@@ -90,7 +90,7 @@ func (fact FileFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, 
 	vrw := types.NewValueStore(st)
 	ns := tree.NewNodeStore(st)
 
-	return datas.NewTypesDatabase(vrw), vrw, ns, nil
+	return datas.NewTypesDatabase(vrw, ns), vrw, ns, nil
 }
 
 func validateDir(path string) error {

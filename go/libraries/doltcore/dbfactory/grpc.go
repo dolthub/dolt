@@ -71,8 +71,8 @@ func (fact DoltRemoteFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFo
 	}
 
 	vrw := types.NewValueStore(cs)
-	db = datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(cs)
+	db = datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, err
 }

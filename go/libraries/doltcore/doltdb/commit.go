@@ -96,7 +96,7 @@ func (c *Commit) GetParent(ctx context.Context, idx int) (*Commit, error) {
 var ErrNoCommonAncestor = errors.New("no common ancestor")
 
 func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
-	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw)
+	addr, err := getCommitAncestorAddr(ctx, cm1.dCommit, cm2.dCommit, cm1.vrw, cm2.vrw, cm1.ns, cm2.ns)
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +109,8 @@ func GetCommitAncestor(ctx context.Context, cm1, cm2 *Commit) (*Commit, error) {
 	return NewCommit(ctx, cm1.vrw, cm1.ns, targetCommit)
 }
 
-func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter) (hash.Hash, error) {
-	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2)
+func getCommitAncestorAddr(ctx context.Context, c1, c2 *datas.Commit, vrw1, vrw2 types.ValueReadWriter, ns1, ns2 tree.NodeStore) (hash.Hash, error) {
+	ancestorAddr, ok, err := datas.FindCommonAncestor(ctx, c1, c2, vrw1, vrw2, ns1, ns2)
 	if err != nil {
 		return hash.Hash{}, err
 	}

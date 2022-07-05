@@ -117,8 +117,8 @@ func (fact AWSFactory) CreateDB(ctx context.Context, nbf *types.NomsBinFormat, u
 	}
 
 	vrw := types.NewValueStore(cs)
-	db = datas.NewTypesDatabase(vrw)
 	ns := tree.NewNodeStore(cs)
+	db = datas.NewTypesDatabase(vrw, ns)
 
 	return db, vrw, ns, nil
 }
